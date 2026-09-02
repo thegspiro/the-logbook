@@ -15,6 +15,8 @@ const {
   addCheckItemsBulk,
   deleteCheckItemsBulk,
   deleteCheckItem,
+  replaceCompartments,
+  addCompartment,
   createEquipmentCheckTemplate,
   updateEquipmentCheckTemplate,
   toastSuccess,
@@ -29,6 +31,8 @@ const {
   addCheckItemsBulk: vi.fn(),
   deleteCheckItemsBulk: vi.fn(),
   deleteCheckItem: vi.fn(),
+  replaceCompartments: vi.fn(),
+  addCompartment: vi.fn(),
   createEquipmentCheckTemplate: vi.fn(),
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
@@ -57,6 +61,8 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
     deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
     deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
+    replaceCompartments: (...args: unknown[]) => replaceCompartments(...args),
+    addCompartment: (...args: unknown[]) => addCompartment(...args),
     createEquipmentCheckTemplate: (...args: unknown[]) => createEquipmentCheckTemplate(...args),
     updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
@@ -168,6 +174,10 @@ async function confirm(label: string | RegExp) {
  * viewport set by one `describe` survives into the next one unless it is set
  * again. Tests that depend on a width should say which one they mean.
  */
+// The autosave debounce in EquipmentCheckTemplateBuilder. Mirrored here so a
+// test that has to outwait it says why, rather than carrying a bare number.
+const AUTOSAVE_DEBOUNCE_MS = 1500;
+
 const VIEWPORT_WIDTHS = { phone: 390, tablet: 900, laptop: 1440 } as const;
 
 const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
@@ -342,6 +352,96 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
       { timeout: 6000 }
     );
   }, 15_000);
+
+  it('reports a failed pre-save flush instead of dropping the edits silently', async () => {
+    // Save overtakes the 1.5s autosave debounce by cancelling those timers and
+    // sending the patches itself. That flush ran before handleSave's try/catch,
+    // so a failure escaped as an unhandled rejection — no toast, no error
+    // state, and the cancelled edits gone — while the indicator stayed on
+    // "Saving…" for the rest of the session because the timer that would have
+    // cleared it had been cancelled.
+    mockViewport('laptop');
+    updateCheckItem.mockRejectedValue({ response: { data: { detail: 'Item is locked' } } });
+    const user = userEvent.setup();
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(String(toastError.mock.calls[0]?.[0])).toContain('Item is locked');
+    // The template write never ran: saving stopped at the failed flush rather
+    // than committing a payload built from edits the server had rejected.
+    expect(updateEquipmentCheckTemplate).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('does not undo a newer edit when rearming a failed flush', async () => {
+    // Save cancels the autosave debounce and sends the pending patches itself,
+    // but the form stays editable until setSaving(true) runs — which is on the
+    // far side of that flush. So a member can change the same field again
+    // while it is in the air. Rearming the captured patch through
+    // scheduleAutoSaveItem then merged it *over* the newer pending one,
+    // because that helper lets the supplied patch win: right for an ordinary
+    // edit, backwards for a retry of an older one. The member's latest change
+    // silently reverted on the automatic retry.
+    mockViewport('laptop');
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Radio selection checkbox' });
+
+    // Drain before arming, not tolerate afterwards. A debounce timer left
+    // running by an earlier test in this file fires up to AUTOSAVE_DEBOUNCE_MS
+    // into this one, and if it lands *after* the one-shot below is installed
+    // it consumes the deferred rejection: the flush then succeeds on the
+    // resolved fallback, the retry path never runs, `rejectFlush` rejects
+    // some other test's request whose error is swallowed, and the level edit
+    // arrives by its own ordinary debounce. Every assertion below would still
+    // pass, against a run that never exercised the failure this test is named
+    // for. Waiting the window out first is what makes that unreachable.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+
+    updateCheckItem.mockReset();
+    let rejectFlush!: (reason: unknown) => void;
+    updateCheckItem.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFlush = reject;
+        })
+    );
+    updateCheckItem.mockResolvedValue({});
+
+    // Filtered rather than counted or indexed: a debounce timer left running
+    // by an earlier test in this file can land its own patch among these, so
+    // neither the number of writes nor the position of any one of them is
+    // stable. Both assertions below are about which *type* edit reached the
+    // server, which is the thing this test is actually about.
+    //
+    // The count form is what took main red on 2026-09-02. It held for as long
+    // as the flush happened to win its race with the 1.5s autosave debounce,
+    // and under `--coverage` — which is how CI runs this suite, and only CI —
+    // the run is slow enough that the timer lands first and a second write
+    // appears. Passing without coverage and failing with it is the signature.
+    const typeWrites = (): Record<string, unknown>[] =>
+      (updateCheckItem.mock.calls as unknown[][])
+        .map((call) => call[1] as Record<string, unknown> | undefined)
+        .filter((patch): patch is Record<string, unknown> => patch?.check_type !== undefined);
+
+    // Laptop width: the row carries its own type buttons and a selection
+    // checkbox; `Edit Radio` is the phone editor's label (pitfall #28a).
+    fireEvent.click(screen.getAllByRole('button', { name: 'Count' })[0] as HTMLElement);
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(typeWrites()).toContainEqual(expect.objectContaining({ check_type: 'count' })));
+
+    // The newer edit, made while the flush is still in the air.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Level' })[0] as HTMLElement);
+    rejectFlush({ response: { data: { detail: 'Item is locked' } } });
+
+    const countWrites = typeWrites().length;
+    await waitFor(() => expect(typeWrites().length).toBeGreaterThan(countWrites), { timeout: 8000 });
+    const written = typeWrites();
+    expect(written[written.length - 1]).toMatchObject({ check_type: 'level' });
+  }, 20_000);
 
   it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
     vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
@@ -550,6 +650,75 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder clearing a field on save', () => {
+  // Update payloads are dumped with exclude_unset on the backend, so an
+  // omitted key means "leave this alone". handleSave omitted every blank
+  // field, so clearing one reported success and changed nothing — while the
+  // auto-save path in the same component already sent explicit nulls.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    reorderItems.mockResolvedValue(undefined);
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  });
+
+  it('sends explicit nulls rather than omitting the fields it cleared', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Edit Radio' });
+
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    // The values must be null, not undefined. `{ a: undefined }` still HAS
+    // property 'a' in JS — it is JSON.stringify that drops the key — so an
+    // existence check cannot tell the two apart and passes against the bug.
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
+        'template-1',
+        expect.objectContaining({
+          apparatus_id: null,
+          apparatus_type: null,
+          description: null,
+          // An empty array is meaningful here: "no position restriction".
+          assigned_positions: [],
+        })
+      )
+    );
+  });
+
+  it('sends compartment and item clears explicitly too', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Edit Radio' });
+
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    await waitFor(() =>
+      expect(updateCompartment).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ parent_compartment_id: null, description: null })
+      )
+    );
+    expect(updateCheckItem).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ serial_number: null, lot_number: null })
+    );
   });
 });
 
@@ -1382,6 +1551,121 @@ describe('EquipmentCheckTemplateBuilder tablet keeps the preview reachable', () 
   });
 });
 
+describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents', () => {
+  // All three bulk-replacement paths — vehicle preset, JSON import, CSV
+  // import — promise "discards every compartment and item currently on this
+  // template", and all three delivered that to local state only. handleSave
+  // creates the new compartments and updates the ones still listed; nothing
+  // deleted the rows no longer mentioned, so a saved template ended up
+  // holding both sets and the next crew got a doubled checklist.
+  const vehicleTemplate = { ...template, templateType: 'vehicle' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(vehicleTemplate));
+    // Echoes the request back as saved rows, which is what the endpoint does:
+    // the replacement is persisted in the same transaction as the discard and
+    // comes back with ids, so Save updates those rows instead of creating a
+    // second copy beside them.
+    replaceCompartments.mockReset();
+    replaceCompartments.mockImplementation((_templateId: unknown, payload: unknown) =>
+      Promise.resolve(
+        (payload as { name: string; items?: { name: string; check_type: string }[] }[]).map((comp, idx) => ({
+          id: `saved-${idx}`,
+          name: comp.name,
+          items: (comp.items ?? []).map((item, itemIdx) => ({
+            id: `saved-${idx}-${itemIdx}`,
+            name: item.name,
+            checkType: item.check_type,
+            isRequired: true,
+          })),
+        }))
+      )
+    );
+    updateEquipmentCheckTemplate.mockResolvedValue(vehicleTemplate);
+    mockViewport('phone');
+  });
+
+  const loadEnginePreset = async (user: ReturnType<typeof userEvent.setup>) => {
+    await screen.findByRole('button', { name: 'Edit Radio' });
+    await user.click(screen.getByRole('button', { name: /Vehicle preset/ }));
+    await user.click(await screen.findByRole('button', { name: /Engine \/ Pumper/ }));
+    await user.click(await screen.findByRole('button', { name: 'Load preset' }));
+  };
+
+  it('sends the replacement in the same request as the discard', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await loadEnginePreset(user);
+
+    // One request carrying both halves. A discard on its own commits an empty
+    // template while the preset exists only in this tab until Save, so a
+    // closed lid in between costs the department the checklist it had.
+    await waitFor(() => expect(replaceCompartments).toHaveBeenCalledTimes(1));
+    const [templateArg, payload] = replaceCompartments.mock.calls[0] as [string, { name: string }[]];
+    expect(templateArg).toBe('template-1');
+    expect(payload.length).toBeGreaterThan(0);
+    expect(payload.every((comp) => Boolean(comp.name))).toBe(true);
+    // The old contents are named nowhere in the request: the server discards
+    // whatever the template holds, so a stale id in this tab cannot make the
+    // retry fail.
+    expect(JSON.stringify(payload)).not.toContain('"cab"');
+  });
+
+  it('adopts the saved ids so a later save does not duplicate the preset', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await loadEnginePreset(user);
+    await waitFor(() => expect(replaceCompartments).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    // Persisted already, so Save updates them. Creating them again would leave
+    // the template holding the preset twice.
+    await waitFor(() => expect(updateEquipmentCheckTemplate).toHaveBeenCalled());
+    expect(addCompartment).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('marks the template unsaved so the preset is not lost on navigation', async () => {
+    // The JSON and CSV import branches marked it; the vehicle preset did not.
+    // On a published template that is masked, because
+    // ensureDraftBeforeStructureEdit demotes it to a draft and marks dirty on
+    // the way — so this starts from a template that is ALREADY a draft, where
+    // that helper returns early and nothing else marks anything. The old
+    // compartments are deleted by this point, so navigating away after the
+    // success toast left the server-side template empty and discarded the
+    // preset on screen, with the guard never firing.
+    getTemplate.mockResolvedValue({ ...structuredClone(vehicleTemplate), isActive: false });
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await loadEnginePreset(user);
+    await screen.findByRole('button', { name: /Vehicle preset/ });
+
+    await user.click(screen.getByRole('button', { name: 'Back to templates' }));
+
+    expect(await screen.findByText('Leave without saving?')).toBeInTheDocument();
+  }, 15_000);
+
+  it('keeps the template intact when the replacement fails', async () => {
+    // Nothing is deleted until the whole replacement has been accepted, so a
+    // failure leaves the template as it was rather than half-replaced with no
+    // way back.
+    replaceCompartments.mockReset();
+    replaceCompartments.mockRejectedValue({ response: { data: { detail: 'Compartment is in use' } } });
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await loadEnginePreset(user);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(String(toastError.mock.calls[0]?.[0])).toContain('Compartment is in use');
+    expect(await screen.findByRole('button', { name: 'Edit Radio' })).toBeInTheDocument();
+  });
+});
+
 describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1501,4 +1785,143 @@ describe('EquipmentCheckTemplateBuilder duplication identity', () => {
       .map((input) => input.closest('[id^="item-row-"]')?.id ?? '');
     expect(new Set(rowIds).size).toBe(2);
   }, 15_000);
+});
+
+describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () => {
+  // The flush of the 1.5s auto-save window used to run before setSaving and
+  // outside the try/catch, so a failure escaped as an unhandled rejection:
+  // no error toast, and the pending edits had already been consumed on the
+  // way out with nothing left to retry.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
+    updateEquipmentCheckTemplate.mockReset();
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    reorderItems.mockResolvedValue(undefined);
+  });
+
+  /** Queue a debounced item edit, then press Save inside the debounce window. */
+  const editThenSaveImmediately = async () => {
+    mockViewport('laptop');
+    renderBuilder();
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+  };
+
+  it('sends the pending edit rather than letting Save race it', async () => {
+    await editThenSaveImmediately();
+
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false }));
+  });
+
+  it('reports a failed flush through the save error toast', async () => {
+    updateCheckItem.mockRejectedValue(new Error('Network Error'));
+
+    await editThenSaveImmediately();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    // The bulk action raises a success toast of its own; the save must not.
+    expect(toastSuccess).not.toHaveBeenCalledWith('Draft saved');
+  });
+
+  it('leaves the save button usable again after a failed flush', async () => {
+    updateCheckItem.mockRejectedValue(new Error('Network Error'));
+
+    await editThenSaveImmediately();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save draft/ })).toBeEnabled());
+  });
+
+  it('does not save the template when the flush failed', async () => {
+    // The flush is the first thing inside the try, so a failure there must
+    // abort the save rather than persisting a template built from state the
+    // server never received.
+    updateCheckItem.mockRejectedValue(new Error('Network Error'));
+
+    await editThenSaveImmediately();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(updateEquipmentCheckTemplate).not.toHaveBeenCalled();
+  });
+
+  it('keeps a newer edit when the in-flight flush that raced it fails', async () => {
+    // Save is pressed while the form is still editable (setSaving runs only
+    // after the flush resolves), so a second edit to the same field can land
+    // while the first flush's request is still on the wire. If that request
+    // then fails, the retry must not resend the value it already sent and
+    // clobber the edit made in between.
+    //
+    // A handful of tests above this one deliberately fail their flush and
+    // let it re-arm on the normal (real, un-mocked) 1.5s debounce without
+    // ever pressing Save again to consume it — that retry timer outlives
+    // its own test and can fire during this one. Draining it here, before
+    // wiring up this test's own mock behaviour, keeps that unrelated retry
+    // from being mistaken for the one this test controls.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    updateCheckItem.mockClear();
+
+    let releaseFirstFlush: (() => void) | null = null;
+    // The very first call this mock receives from here is guaranteed to be
+    // this test's own flush: it is driven by a microtask chain
+    // (fireEvent -> handleSave -> flushPendingAutoSaves), which the JS event
+    // loop always finishes draining before it moves on to any macrotask —
+    // including a leftover real `setTimeout`-based debounce from another
+    // test, however close to due it already is.
+    updateCheckItem.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          releaseFirstFlush = () => reject(new Error('Network Error'));
+        })
+    );
+    updateCheckItem.mockResolvedValue({});
+
+    mockViewport('laptop');
+    renderBuilder();
+    // Selected once and left selected — the toolbar's "Set Required/Optional"
+    // button reads current state off it each render, so toggling it twice
+    // needs the checkbox clicked only the first time.
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    const toggleRequired = () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+    };
+
+    // Radio starts required; this queues { is_required: false }.
+    toggleRequired();
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    // The flush's request is in flight (deferred above) but the form is not
+    // yet marked saving, so the same field can be edited again.
+    await waitFor(() => expect(releaseFirstFlush).not.toBeNull());
+    toggleRequired(); // now queues the newer { is_required: true }
+
+    releaseFirstFlush?.();
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+
+    // Pressing Save again flushes whatever is now pending for 'radio'. Once
+    // that flush succeeds, Save's own per-item persistence step follows and
+    // sends the item's full field set — filtered out here by shape, since
+    // this assertion is only about the small autosave patch itself.
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    await waitFor(() => {
+      const calls = updateCheckItem.mock.calls as [string, Record<string, unknown>][];
+      const patches = calls
+        .filter(([id, patch]) => id === 'radio' && Object.keys(patch).length === 1 && 'is_required' in patch)
+        .map(([, patch]) => patch);
+      expect(patches[patches.length - 1]).toEqual({ is_required: true });
+    });
+    // Spends AUTOSAVE_DEBOUNCE_MS draining before it starts, then waits out
+    // two more real debounce windows. That does not fit vitest's 5s default,
+    // and it was only ever passing because it landed just under it — 4.7s on
+    // an idle machine. Under `--coverage`, which is how CI runs this suite,
+    // it tips over and the job fails on a timeout rather than an assertion.
+  }, 20_000);
 });

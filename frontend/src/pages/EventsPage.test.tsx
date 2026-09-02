@@ -10,6 +10,7 @@ import type { EventListItem } from '../types/event';
 vi.mock('../services/api', () => ({
   eventService: {
     getEvents: vi.fn(),
+    createOrUpdateRSVP: vi.fn(),
     getMissedMandatoryEvents: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi
       .fn()
@@ -565,6 +566,66 @@ describe('EventsPage', () => {
       await waitFor(() => {
         expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Events');
         expect(screen.getByText(/department events, meetings, training sessions/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Quick RSVP refresh', () => {
+    // Pitfall #28: this block installs the mocks it depends on rather than
+    // inheriting whatever a previous block configured.
+    beforeEach(() => {
+      vi.mocked(eventService.getEvents).mockReset();
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+      vi.mocked(eventService.createOrUpdateRSVP).mockReset();
+      vi.mocked(eventService.createOrUpdateRSVP).mockResolvedValue({ status: 'going' } as never);
+    });
+
+    it('keeps the saved response on screen when the refresh fails', async () => {
+      // The RSVP succeeded; a transient refresh failure must not replace it
+      // with the full-page "Failed to load events" state, nor swap the grid
+      // for skeletons. The only casualty of a failed background refresh is a
+      // slightly stale seat count.
+      const user = userEvent.setup();
+      renderWithRouter(<EventsPage />);
+
+      // Let the initial load settle first, then break only the refresh. The
+      // mount effect can fire fetchEvents more than once (canManage resolves
+      // after auth), so a `...Once` chain would arm the rejection against a
+      // foreground load and prove nothing about background mode.
+      const [goingButton] = await screen.findAllByRole('button', { name: /^going$/i });
+      expect(goingButton).toBeDefined();
+      vi.mocked(eventService.getEvents).mockRejectedValue(new Error('network'));
+      await user.click(goingButton as HTMLElement);
+
+      await waitFor(() => {
+        expect(eventService.createOrUpdateRSVP).toHaveBeenCalled();
+      });
+      expect(screen.queryByText(/failed to load events/i)).not.toBeInTheDocument();
+      expect(await screen.findAllByRole('button', { name: /^going$/i })).not.toHaveLength(0);
+    });
+
+    it('refetches the list so the seat aggregates do not go stale', async () => {
+      // going_count, occupied_seats and waitlist_count are interdependent, and
+      // the client cannot derive occupied_seats at all — it does not know the
+      // member's prior guest count. Patching two of three and guessing the
+      // third is how the capacity label drifts.
+      const user = userEvent.setup();
+      renderWithRouter(<EventsPage />);
+
+      await waitFor(() => {
+        expect(eventService.getEvents).toHaveBeenCalled();
+      });
+      const initialCalls = vi.mocked(eventService.getEvents).mock.calls.length;
+
+      const [goingButton] = await screen.findAllByRole('button', { name: /^going$/i });
+      // Asserted rather than `!`-ed: noUncheckedIndexedAccess types this as
+      // possibly-undefined, and an assertion documents the expectation without
+      // a non-null operator or a conditional in the test body.
+      expect(goingButton).toBeDefined();
+      await user.click(goingButton as HTMLElement);
+
+      await waitFor(() => {
+        expect(vi.mocked(eventService.getEvents).mock.calls.length).toBeGreaterThan(initialCalls);
       });
     });
   });

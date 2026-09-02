@@ -96,10 +96,10 @@ Recommended crontab (add to host or container cron):
 import copy
 import html as _html
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.call_tracking import CallTrackingMode
@@ -324,6 +324,12 @@ SCHEDULE = {
         "frequency": "every 15 minutes",
         "recommended_time": "*/15",
         "cron": "*/15 * * * *",
+    },
+    "recover_stranded_message_deliveries": {
+        "description": "Re-deliver department messages whose per-recipient claims were left pending by an interrupted worker",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30",
+        "cron": "*/30 * * * *",
     },
     "series_end_reminders": {
         "description": "Send email reminders 6 months before recurring event series end dates",
@@ -3831,10 +3837,210 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
 
     if published:
         logger.info(f"Published {published} scheduled department message(s)")
+    if failed:
+        logger.warning(f"{failed} scheduled department message(s) failed to publish")
     return {
         "task": "publish_scheduled_messages",
         "published": published,
         "expired": expired,
+        "failed": failed,
+    }
+
+
+# A claim older than this is treated as abandoned by the worker that wrote it.
+# Kept a little above MessageDeliveryService's own reclaim window so the sweep
+# never hands the service a row it will refuse.
+_STRANDED_CLAIM_AFTER_MINUTES = 35
+
+# One pass re-delivers at most this many stranded claims. A department message
+# fan-out is network work per recipient; a runaway backlog is better worked
+# down across several ticks than in one pass that outlives its own worker.
+_STRANDED_CLAIM_SCAN_LIMIT = 500
+
+
+async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str, Any]:
+    """Re-deliver department messages whose claims were never resolved.
+
+    ``MessageDeliveryService._claim_delivery`` writes one ``pending`` row per
+    recipient and commits it *before* the send, which is what makes a delivery
+    auditable and stops two workers emailing the same member twice. The cost
+    is a window: a worker that dies between claiming and recording the result
+    leaves rows nothing revisits, and the unique idempotency key then makes
+    every later attempt skip those members. Nobody is emailed, the audit row
+    says an attempt is still in flight, and the message is suppressed
+    permanently — on the channel of record (CLAUDE.md pitfall #18).
+
+    Sending the batch through one connection widened that window from a single
+    member to a whole department, which is what makes a sweep necessary rather
+    than merely tidy.
+
+    Re-delivery is safe to repeat: the in-app write is guarded by its unique
+    (message, recipient, channel) key, and the delivery claim is reclaimed
+    rather than duplicated. A member may receive a second copy if the original
+    worker was merely slow past the cutoff; that is the deliberate direction to
+    err, since the alternative is a notice they never get.
+    """
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
+    from app.models.notification import DepartmentMessage, DepartmentMessageDelivery
+    from app.services.message_delivery_service import MessageDeliveryService
+    from app.services.messaging_service import MessagingService
+
+    cutoff = datetime.now(dt_timezone.utc) - timedelta(
+        minutes=_STRANDED_CLAIM_AFTER_MINUTES
+    )
+
+    # Claims on a message that can no longer go out are retired rather than
+    # skipped. Skipping left them `pending` forever, and because the scan below
+    # is oldest-first and bounded, one deactivated message with enough stranded
+    # claims would fill the window on every sweep and starve the recoverable
+    # ones behind it — a fix for one suppressed message suppressing others.
+    # They are recorded as failed with the reason, which is also more honest
+    # than an audit row that says an attempt is still in flight.
+    undeliverable = (
+        (
+            await db.execute(
+                select(DepartmentMessageDelivery.id)
+                .join(
+                    DepartmentMessage,
+                    DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+                )
+                .where(
+                    DepartmentMessageDelivery.status == "pending",
+                    DepartmentMessageDelivery.attempted_at < cutoff,
+                    or_(
+                        DepartmentMessage.is_active.is_(False),
+                        DepartmentMessage.deleted_at.isnot(None),
+                    ),
+                )
+                .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    retired = list(undeliverable)
+    if retired:
+        await db.execute(
+            update(DepartmentMessageDelivery)
+            .where(DepartmentMessageDelivery.id.in_(retired))
+            .values(
+                status="failed",
+                error="Message is no longer active; delivery abandoned",
+            )
+        )
+        await db.commit()
+
+    result = await db.execute(
+        select(
+            DepartmentMessageDelivery.message_id,
+            DepartmentMessageDelivery.recipient_id,
+        )
+        .join(
+            DepartmentMessage,
+            DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+        )
+        .where(
+            DepartmentMessageDelivery.status == "pending",
+            DepartmentMessageDelivery.attempted_at < cutoff,
+            # Filtered here, not just at the per-message load below, so the
+            # bounded window is only ever spent on claims that can be recovered.
+            DepartmentMessage.is_active.is_(True),
+            DepartmentMessage.deleted_at.is_(None),
+        )
+        .order_by(DepartmentMessageDelivery.attempted_at.asc())
+        .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+    )
+    stranded: Dict[str, Set[str]] = {}
+    for message_id, recipient_id in result.all():
+        stranded.setdefault(str(message_id), set()).add(str(recipient_id))
+
+    if not stranded:
+        return {
+            "task": "recover_stranded_message_deliveries",
+            "messages": 0,
+            "retired": len(retired),
+        }
+
+    delivery = MessageDeliveryService(db)
+    recovered = 0
+    failed = 0
+    for message_id, user_ids in stranded.items():
+        try:
+            message = (
+                await db.execute(
+                    select(DepartmentMessage).where(
+                        DepartmentMessage.id == message_id,
+                        # Both, matching deliver_department_message: a message
+                        # leadership deactivated is gone from the live inbox,
+                        # and recovering a claim is no reason to mail out a
+                        # notice they took down.
+                        DepartmentMessage.is_active.is_(True),
+                        DepartmentMessage.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            if message is None:
+                continue
+
+            # deliver() re-resolves the audience and silently drops anybody no
+            # longer in it, which is right — but their claim stays `pending`,
+            # so the sweep would re-select the same rows on every pass, report
+            # the message recovered without changing anything, and eventually
+            # fill the bounded window with claims that can never resolve.
+            # Resolved here rather than by retiring whatever is still pending
+            # afterwards: deliver() also returns early when the email
+            # escalation is throttled, and those claims must stay pending for
+            # the next sweep rather than being written off as un-targeted.
+            targeted = await MessagingService(db)._targeted_users(
+                message, str(message.organization_id)
+            )
+            still_targeted = {
+                str(u.id) for u in targeted if str(u.id) != str(message.posted_by)
+            }
+            dropped = sorted(user_ids - still_targeted)
+            if dropped:
+                await db.execute(
+                    update(DepartmentMessageDelivery)
+                    .where(
+                        DepartmentMessageDelivery.message_id == message_id,
+                        DepartmentMessageDelivery.recipient_id.in_(dropped),
+                        DepartmentMessageDelivery.status == "pending",
+                    )
+                    .values(
+                        status="failed",
+                        error="Recipient is no longer in the message audience",
+                    )
+                )
+                await db.commit()
+                retired.extend(dropped)
+
+            deliverable = user_ids & still_targeted
+            if not deliverable:
+                continue
+            await delivery.deliver(message, only_user_ids=deliverable)
+            recovered += 1
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(
+                "Failed to recover stranded deliveries for message {}: {}",
+                message_id,
+                e,
+            )
+            failed += 1
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    if recovered:
+        logger.info(
+            "Re-delivered {} department message(s) with abandoned claims", recovered
+        )
+    return {
+        "task": "recover_stranded_message_deliveries",
+        "messages": recovered,
+        "retired": len(retired),
         "failed": failed,
     }
 
@@ -5738,6 +5944,7 @@ TASK_RUNNERS = {
     "compliance_auto_reports": run_compliance_auto_reports,
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
+    "recover_stranded_message_deliveries": run_recover_stranded_message_deliveries,
     "series_end_reminders": run_series_end_reminders,
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
@@ -5779,6 +5986,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "end_of_shift_checklist_reminders": 1800,
     "end_of_shift_summary": 1800,
     "external_training_auto_sync": 1800,
+    "recover_stranded_message_deliveries": 1800,
     "salesforce_auto_sync": 1800,
     # Daily (checked each loop tick; runs at most once per interval)
     "cert_expiration_alerts": 86400,

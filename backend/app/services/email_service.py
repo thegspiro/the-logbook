@@ -340,6 +340,30 @@ def wrap_email_body(
     return build_email_document(title, body)
 
 
+def _summarize_recipients(to_emails: List[str]) -> str:
+    """Fit a batch's addresses into MessageHistory.to_email (VARCHAR(320)).
+
+    A joined list overflows that column as soon as a send has more than a
+    handful of recipients, and a department message goes to the whole roster in
+    one batch. Under strict MySQL the insert is rejected, which is a 1406 on
+    the shared session — see the savepoint below. ``recipient_count`` carries
+    the true number, so the addresses are a legible sample, not the record.
+    """
+    joined = ", ".join(to_emails)
+    if len(joined) <= 320:
+        return joined
+    kept: List[str] = []
+    used = 0
+    for address in to_emails:
+        # 40 characters of headroom for the "… (+N more)" suffix.
+        if used + len(address) + 2 > 280:
+            break
+        kept.append(address)
+        used += len(address) + 2
+    suffix = f"… (+{len(to_emails) - len(kept)} more)"
+    return (", ".join(kept) + suffix)[:320]
+
+
 class EmailService:
     """Service for sending emails"""
 
@@ -980,6 +1004,7 @@ class EmailService:
         sent_by: Optional[str] = None,
         reply_to: Optional[str] = None,
         list_unsubscribe: Optional[str] = None,
+        results_out: Optional[List[bool]] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -1069,7 +1094,16 @@ class EmailService:
 
             # Build one MIME message per recipient
             batch: List[Tuple[List[str], str]] = []
-            for to_email in to_emails:
+            # Which address each batch entry was built for. A message that
+            # fails to build is dropped from the batch, and the send answers
+            # per batch entry — so without this the answers close up over the
+            # gap. results_out promises one entry per address in order and the
+            # delivery service indexes it against the recipients it claimed, so
+            # a shifted list files the failed address under its neighbour's
+            # outcome (marking it delivered) and leaves the last member with no
+            # answer at all.
+            built_for: List[int] = []
+            for position, to_email in enumerate(to_emails):
                 try:
                     if attachment_parts:
                         msg = MIMEMultipart("mixed")
@@ -1115,6 +1149,7 @@ class EmailService:
                         all_recipients.extend(bcc_emails)
 
                     batch.append((all_recipients, msg.as_string()))
+                    built_for.append(position)
                 except Exception as e:
                     logger.error(
                         f"Failed to build email for {_redact_email(to_email)}: {e}"
@@ -1140,6 +1175,23 @@ class EmailService:
                     results = [False] * len(batch)
             else:
                 results = []
+
+            # Back onto the address list. A message that never built has no
+            # answer of its own and is not sent.
+            aligned = [False] * len(to_emails)
+            for position, sent in zip(built_for, results):
+                aligned[position] = sent
+            results = aligned
+
+        # One entry per address in `to_emails`, in order. A caller that tracks
+        # delivery per recipient needs this: the (sent, failed) counts alone
+        # cannot say *which* member was not reached, which is what pushed the
+        # department-message fan-out into one send_email call per person — and
+        # that takes the single-message SMTP path, opening and closing a
+        # connection per member with no pacing and no reconnect-retry.
+        if results_out is not None:
+            results_out.clear()
+            results_out.extend(results)
 
         success_count = sum(1 for r in results if r)
         failure_count = len(to_emails) - success_count
@@ -1194,7 +1246,7 @@ class EmailService:
         history = MessageHistory(
             id=generate_uuid(),
             organization_id=org_id,
-            to_email=", ".join(to_emails),
+            to_email=_summarize_recipients(to_emails),
             cc_emails=cc_emails,
             bcc_emails=bcc_emails,
             subject=subject,
@@ -1207,8 +1259,20 @@ class EmailService:
             history.error_message = (
                 f"Failed to deliver to all {failure_count} recipient(s)"
             )
-        db.add(history)
-        await db.flush()
+        # The add goes INSIDE the savepoint, not before it. Entering
+        # begin_nested() flushes whatever is already pending, so an add placed
+        # above it has its INSERT rejected before the savepoint exists — which
+        # is the whole failure this is here to contain.
+        #
+        # And it has to be contained: this is a log write on a session the
+        # caller owns, and an exception at flush leaves that session needing an
+        # explicit rollback — every later statement raises
+        # PendingRollbackError until one runs. send_email catches and warns, so
+        # without this the send reports success while the delivery-status
+        # writes and the urgent-SMS escalation that follow it silently abort.
+        async with db.begin_nested():
+            db.add(history)
+            await db.flush()
         self.last_message_history_id = history.id
 
     async def render_ballot_notification(

@@ -362,26 +362,33 @@ export interface CheckTemplateItemBulkDeleteResult {
   replayed: boolean;
 }
 
+/**
+ * Update payloads distinguish three states, because the backend dumps them
+ * with `exclude_unset` and clears on an explicit null: omit the key to leave
+ * a field alone, send `null` to clear it, send a value to set it. A nullable
+ * field typed without `| null` cannot express the middle case, which is how
+ * clearing one came to be silently dropped behind a success toast.
+ */
 export interface CheckTemplateItemUpdate {
   name?: string | undefined;
-  description?: string | undefined;
-  compartment_id?: string | undefined;
+  description?: string | null | undefined;
+  compartment_id?: string | null | undefined;
   sort_order?: number | undefined;
   check_type?: string | undefined;
   is_required?: boolean | undefined;
-  required_quantity?: number | undefined;
-  expected_quantity?: number | undefined;
-  critical_minimum_quantity?: number | undefined;
-  min_level?: number | undefined;
-  level_unit?: string | undefined;
-  serial_number?: string | undefined;
-  lot_number?: string | undefined;
-  image_url?: string | undefined;
-  equipment_id?: string | undefined;
-  inventory_item_id?: string | undefined;
+  required_quantity?: number | null | undefined;
+  expected_quantity?: number | null | undefined;
+  critical_minimum_quantity?: number | null | undefined;
+  min_level?: number | null | undefined;
+  level_unit?: string | null | undefined;
+  serial_number?: string | null | undefined;
+  lot_number?: string | null | undefined;
+  image_url?: string | null | undefined;
+  equipment_id?: string | null | undefined;
+  inventory_item_id?: string | null | undefined;
   has_expiration?: boolean | undefined;
-  expiration_date?: string | undefined;
-  expiration_warning_days?: number | undefined;
+  expiration_date?: string | null | undefined;
+  expiration_warning_days?: number | null | undefined;
 }
 
 // ============================================================================
@@ -425,13 +432,13 @@ export interface CheckTemplateCompartmentCreate {
 
 export interface CheckTemplateCompartmentUpdate {
   name?: string | undefined;
-  description?: string | undefined;
+  description?: string | null | undefined;
   sort_order?: number | undefined;
-  image_url?: string | undefined;
+  image_url?: string | null | undefined;
   is_header?: boolean | undefined;
-  container_type?: string | undefined;
+  container_type?: string | null | undefined;
   is_sealed?: boolean | undefined;
-  parent_compartment_id?: string | undefined;
+  parent_compartment_id?: string | null | undefined;
 }
 
 // ============================================================================
@@ -472,9 +479,9 @@ export interface EquipmentCheckTemplateCreate {
 
 export interface EquipmentCheckTemplateUpdate {
   name?: string | undefined;
-  description?: string | undefined;
-  apparatus_id?: string | undefined;
-  apparatus_type?: string | undefined;
+  description?: string | null | undefined;
+  apparatus_id?: string | null | undefined;
+  apparatus_type?: string | null | undefined;
   check_timing?: string | undefined;
   template_type?: string | undefined;
   assigned_positions?: string[] | undefined;

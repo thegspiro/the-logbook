@@ -3,6 +3,8 @@ import { ArrowLeft, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useConfirm } from '@/contexts/ConfirmContext';
+import { DialogPortal } from '@/components/DialogPortal';
+import { DialogPanel } from '@/components/ux/DialogPanel';
 import { facilitiesService } from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import type { FacilityStatus, FacilityType, MaintenanceType } from '../types';
@@ -33,7 +35,9 @@ export default function FacilitiesSettingsPage() {
       const [types, statuses, maintenance] = await Promise.all([
         facilitiesService.getTypes(),
         facilitiesService.getStatuses(),
-        facilitiesService.getMaintenanceTypes({ limit: 500 }),
+        // Both states: this screen is the only one that can reactivate a
+        // deactivated type, and the endpoint filters to active by default.
+        facilitiesService.getMaintenanceTypes({ limit: 500, include_inactive: true }),
       ]);
       setData({ types, statuses, maintenance });
     } catch (error) {
@@ -209,12 +213,15 @@ function LookupDialog({
 }) {
   const [name, setName] = useState(item?.name ?? ''),
     [active, setActive] = useState(item?.isActive !== false),
-    [order, setOrder] = useState(item?.sortOrder ?? 0),
     [saving, setSaving] = useState(false);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
-    const payload = { name: name.trim(), is_active: active, sort_order: order };
+    // No sort_order: none of the three lookup models has that column and no
+    // schema declares it, so Pydantic dropped it and the ordering the dialog
+    // appeared to offer was never stored. The control is gone rather than
+    // left writing nothing (CLAUDE.md pitfall #19).
+    const payload = { name: name.trim(), is_active: active };
     try {
       if (kind === 'types') {
         if (item) await facilitiesService.updateType(item.id, payload);
@@ -235,43 +242,55 @@ function LookupDialog({
       setSaving(false);
     }
   };
+  // Through DialogPortal/DialogPanel rather than a hand-rolled fixed overlay:
+  // that shell had no focus trap, no Escape handling, no body scroll lock, and
+  // never registered with useOverlaySurface — so on a phone the bottom nav bar
+  // painted over its buttons.
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="lookup-title"
-    >
-      <form className="card modal-panel-scroll w-full max-w-md space-y-4 p-5" onSubmit={(event) => void submit(event)}>
-        <h2 id="lookup-title" className="text-lg font-semibold">
-          {item ? 'Edit' : 'Add'} {definitions[kind].singular}
-        </h2>
-        <label className="block text-sm">
-          Name
-          <input className="input mt-1 w-full" required value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="block text-sm">
-          Order
-          <input
-            className="input mt-1 w-full"
-            type="number"
-            min="0"
-            value={order}
-            onChange={(e) => setOrder(Number(e.target.value))}
-          />
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active
-        </label>
-        <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn-primary" disabled={saving || !name.trim()}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </form>
-    </div>
+    <DialogPortal>
+      <div className="modal-overlay z-50 flex items-center justify-center p-4">
+        <DialogPanel
+          onClose={onClose}
+          className="card modal-panel-scroll w-full max-w-md space-y-4 p-5"
+          aria-labelledby="lookup-title"
+        >
+          <form className="space-y-4" onSubmit={(event) => void submit(event)}>
+            <h2 id="lookup-title" className="text-lg font-semibold">
+              {item ? 'Edit' : 'Add'} {definitions[kind].singular}
+            </h2>
+            <label className="form-label block">
+              Name
+              {/* form-input, not "input": no such utility exists in this
+                  project or in Tailwind, so both controls rendered with
+                  browser default styling — no theme colours, no focus ring,
+                  and none of the 44px mobile floor. */}
+              <input
+                className="form-input mt-1 w-full"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label className="mobile-touch-target flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="form-checkbox"
+                checked={active}
+                onChange={(e) => setActive(e.target.checked)}
+              />{' '}
+              Active
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={onClose}>
+                Cancel
+              </button>
+              <button className="btn-primary" disabled={saving || !name.trim()}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </DialogPanel>
+      </div>
+    </DialogPortal>
   );
 }

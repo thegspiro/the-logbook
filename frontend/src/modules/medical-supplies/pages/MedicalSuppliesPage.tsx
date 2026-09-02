@@ -9,7 +9,7 @@
  * know what is about to lapse before they want an inventory count.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -38,6 +38,7 @@ import { SkeletonCard } from '../../../components/ux/Skeleton';
 import { MedicalItemFormModal } from '../components/MedicalItemFormModal';
 import { ReceiveDeliveryModal } from '../components/ReceiveDeliveryModal';
 import { EXPIRY_WINDOW_DAYS } from '../types';
+import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
 
@@ -127,7 +128,6 @@ const MedicalSuppliesPage: React.FC = () => {
   useRegisterPullToRefresh(load);
 
   /** Lot stock is the real count for dated items; quantity is what's left over. */
-  const onHand = (item: InventoryItem): number => (item.is_lot_stocked ? (item.lot_stock ?? 0) : (item.quantity ?? 0));
 
   /**
    * Resolve the category from the list this page already loaded.
@@ -138,11 +138,6 @@ const MedicalSuppliesPage: React.FC = () => {
    * response model shared with the gear endpoints.
    */
   const categoryName = (item: InventoryItem): string => categories.find((c) => c.id === item.category_id)?.name ?? '—';
-
-  const lowStockItems = useMemo(
-    () => items.filter((i) => i.reorder_point !== undefined && onHand(i) <= (i.reorder_point ?? 0)),
-    [items]
-  );
 
   const handleSaved = () => {
     setShowItemModal(false);
@@ -397,7 +392,7 @@ const MedicalSuppliesPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {items.map((item) => {
-                    const isLow = item.reorder_point !== undefined && onHand(item) <= (item.reorder_point ?? 0);
+                    const isLow = item.reorder_point !== undefined && onHandQuantity(item) <= (item.reorder_point ?? 0);
                     return (
                       <tr key={item.id} className="border-theme-surface-border border-b last:border-0">
                         <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
@@ -415,7 +410,7 @@ const MedicalSuppliesPage: React.FC = () => {
                             isLow ? 'font-semibold text-orange-700 dark:text-orange-400' : 'text-theme-text-primary'
                           }`}
                         >
-                          {formatNumber(onHand(item))}
+                          {formatNumber(onHandQuantity(item))}
                         </td>
                         <td data-label="Reorder at" className="text-theme-text-muted px-4 py-3 text-right tabular-nums">
                           {item.reorder_point === undefined ? '—' : formatNumber(item.reorder_point)}
@@ -441,12 +436,6 @@ const MedicalSuppliesPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          )}
-
-          {lowStockItems.length > 0 && (
-            <p className="text-theme-text-muted mt-3 text-xs">
-              {formatNumber(lowStockItems.length)} item(s) at or below their reorder point.
-            </p>
           )}
         </section>
       )}

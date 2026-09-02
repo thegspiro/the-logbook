@@ -22,6 +22,7 @@ import { FloatingActionButton } from '../../../components/ux/FloatingActionButto
 import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem, InventoryItem } from '../types';
 import { REQUEST_STATUS_BADGES } from '../types';
+import { onHandQuantity } from '../utils/onHand';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -140,7 +141,7 @@ const EquipmentRequestsPage: React.FC = () => {
       : false;
 
   const availableQuantity = (item: InventoryItem) =>
-    item.tracking_type === 'pool' ? item.quantity : item.status === 'available' ? 1 : 0;
+    item.tracking_type === 'pool' ? onHandQuantity(item) : item.status === 'available' ? 1 : 0;
 
   const handleApproveAndFulfill = async () => {
     if (!reviewModal.request) return;

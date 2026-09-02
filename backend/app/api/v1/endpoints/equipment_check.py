@@ -40,6 +40,7 @@ from app.schemas.equipment_check import (
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
+    CompartmentReplaceRequest,
     ComplianceReportResponse,
     DeployedLotUpdateRequest,
     EquipmentCheckCompleteItems,
@@ -494,6 +495,66 @@ async def delete_compartment(
             entity_name=comp_name,
         )
         await db.commit()
+
+
+@router.post(
+    "/templates/{template_id}/compartments/replace",
+    response_model=List[CheckTemplateCompartmentResponse],
+)
+async def replace_compartments(
+    template_id: str,
+    data: CompartmentReplaceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Swap a template's contents for the ones supplied, atomically.
+
+    Backs the builder's bulk-replacement paths, which promise to clear the
+    template before loading a preset or an import. Discarding without the
+    replacement in the same request commits an empty template and leaves the
+    new contents in the browser until the next Save — so a closed tab in
+    between costs the department the checklist it had.
+    """
+    service = EquipmentCheckService(db)
+    org_id = str(current_user.organization_id)
+
+    try:
+        result = await service.replace_compartments(
+            template_id,
+            org_id,
+            [entry.model_dump(exclude_unset=True) for entry in data.compartments],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    discarded, created = result
+
+    for compartment_id, name in discarded:
+        await service.log_template_change(
+            organization_id=org_id,
+            template_id=template_id,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="delete",
+            entity_type="compartment",
+            entity_id=compartment_id,
+            entity_name=name,
+        )
+    for compartment in created:
+        await service.log_template_change(
+            organization_id=org_id,
+            template_id=template_id,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="create",
+            entity_type="compartment",
+            entity_id=str(compartment.id),
+            entity_name=compartment.name,
+        )
+    if discarded or created:
+        await db.commit()
+    return created
 
 
 @router.post(

@@ -576,8 +576,22 @@ def _reconcile_membership(_mapper, _connection, target: "User") -> None:
 
     if legacy_written or target.member_class is None or target.member_status is None:
         member_class, member_status = split_membership_type(target.membership_type)
-        target.member_class = member_class
-        target.member_status = member_status
+        # Keep what is already recorded when the split cannot answer.
+        #
+        # An unrecognised value is a membership *tier* — org-configurable, and
+        # the shipped defaults include `senior`. `split_membership_type`
+        # returns (None, None) there because it must not guess a class. But
+        # refusing to guess is not the same as erasing: a member advanced onto
+        # the senior tier is the same operational firefighter they were the
+        # moment before, and overwriting their class with None dropped the only
+        # affirmative answer anything downstream had. Every rule that asks "is
+        # this member operational?" then had to choose between excluding them
+        # and treating an unknown class as a yes — which is how an open-to-all
+        # shift came to waive rank, training and qualification checks for any
+        # custom tier, including one a department created for members who do
+        # not ride.
+        target.member_class = member_class or target.member_class
+        target.member_status = member_status or target.member_status
 
 
 event.listen(User, "before_insert", _reconcile_membership)

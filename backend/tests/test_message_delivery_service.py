@@ -16,8 +16,25 @@ import pytest
 
 from app.models.user import Organization
 from app.services.consent_service import ConsentService
-from app.services.message_delivery_service import MessageDeliveryService
+from app.services.message_delivery_service import (
+    MessageDeliveryService,
+    _MessageFacts,
+    _RecipientFacts,
+)
 from app.services.messaging_service import MessagingService
+
+
+def _facts(priority="normal", requires_ack=False):
+    """The plain-value snapshot deliver() builds and hands to each channel."""
+    return _MessageFacts(
+        id="m1",
+        organization_id="org1",
+        title="Roof collapse drill",
+        body="Report to the training tower at 0900.",
+        expires_at=None,
+        priority=priority,
+        requires_acknowledgment=requires_ack,
+    )
 
 
 def _msg(priority="normal", requires_ack=False, posted_by="author"):
@@ -49,18 +66,24 @@ def _db():
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     db.flush = AsyncMock()
+    # run_publish_scheduled_messages refreshes a pre-fetched message after a
+    # prior one rolled back, so this has to await like the real session's does.
+    db.refresh = AsyncMock()
     nested = MagicMock()
     nested.__aenter__ = AsyncMock()
     nested.__aexit__ = AsyncMock(return_value=False)
     db.begin_nested = MagicMock(return_value=nested)
-    # org lookup during escalation
-    db.execute = AsyncMock(
-        return_value=MagicMock(
-            scalar_one_or_none=MagicMock(
-                return_value=SimpleNamespace(name="Falls Church FD")
-            )
+    # Covers both reads deliver() makes: the org lookup during escalation
+    # (scalar_one_or_none) and the recipient re-read before the SMS channel
+    # (scalars().all()). The re-read exists because an earlier channel's
+    # rollback expires the instances resolve_sms_recipients has to read.
+    result = MagicMock(
+        scalar_one_or_none=MagicMock(
+            return_value=SimpleNamespace(name="Falls Church FD")
         )
     )
+    result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+    db.execute = AsyncMock(return_value=result)
     return db
 
 
@@ -182,6 +205,52 @@ class TestChannelRouting:
         fake_sms.send_bulk_sms.assert_not_awaited()
 
 
+class TestNarrowedDelivery:
+    """Widening a published message's audience tells only the members added.
+
+    `reconcile_recipients` used to add their rows and stop: no email, no
+    bell, no SMS. They then showed in the acknowledgment report as owing an
+    acknowledgment, and counted against `total_targeted`, for a notice that
+    had never reached them by the channel of record.
+    """
+
+    @staticmethod
+    async def _deliver(only_user_ids):
+        svc = MessageDeliveryService(_db())
+        svc._create_in_app = AsyncMock()
+        svc._send_email = AsyncMock()
+        svc._send_sms = AsyncMock()
+        audience = [
+            _user("original", email="orig@fd.co"),
+            _user("added", email="added@fd.co"),
+        ]
+        with _patch_recipients(audience):
+            await svc.deliver(_msg(priority="normal"), only_user_ids=only_user_ids)
+        return svc
+
+    async def test_only_the_added_members_are_told(self):
+        svc = await self._deliver({"added"})
+
+        told = [p.id for p in svc._create_in_app.await_args.args[1]]
+        assert told == ["added"]
+        assert [p.id for p in svc._send_email.await_args.args[1]] == ["added"]
+
+    async def test_the_whole_audience_is_told_when_no_narrowing_is_asked_for(self):
+        svc = await self._deliver(None)
+
+        assert [p.id for p in svc._create_in_app.await_args.args[1]] == [
+            "original",
+            "added",
+        ]
+
+    async def test_an_empty_narrowing_delivers_to_nobody(self):
+        """Not "everybody": an empty set is an answer, not a missing one."""
+        svc = await self._deliver(set())
+
+        svc._create_in_app.assert_not_awaited()
+        svc._send_email.assert_not_awaited()
+
+
 class TestEmailRecipientFiltering:
     async def test_email_ignores_opt_out_and_reaches_everyone_with_an_address(self):
         # Email is the record-of-notice channel, so the email_notifications
@@ -213,6 +282,122 @@ class TestEmailRecipientFiltering:
 
         # Both addressable members are emailed, including the opted-out one.
         assert sent["to"] == ["in@fd.co", "out@fd.co"]
+
+
+class TestEmailGoesOutInOneBatch:
+    """One SMTP connection for the department, one claim per member.
+
+    A claim per member is what makes a delivery auditable and retryable, but
+    sending per member routed each one down EmailService's single-message
+    path: connect and quit per person, with none of the batch path's RSET,
+    0.25s pacing or reconnect-and-retry. Against a relay that caps
+    connections per interval, a 300-member department starts being refused
+    partway through and the back half is never emailed — on the channel of
+    record.
+    """
+
+    @staticmethod
+    def _svc_with(email_cls):
+        svc = MessageDeliveryService(_db())
+        claimed = []
+
+        async def _claim(message_id, user_id, channel):
+            attempt = SimpleNamespace(
+                status="pending",
+                error=None,
+                delivered_at=None,
+                channel=channel,
+                user_id=user_id,
+            )
+            claimed.append(attempt)
+            return attempt
+
+        svc._claim_delivery = _claim
+        return svc, claimed
+
+    @staticmethod
+    async def _run(svc, recipients, email_cls):
+        with patch("app.services.email_service.EmailService", email_cls), patch(
+            "app.services.email_service.wrap_email_body",
+            return_value="<html></html>",
+        ):
+            await svc._send_email(_facts(priority="urgent"), recipients, org=None)
+
+    async def test_one_send_carries_the_whole_department(self):
+        calls = []
+
+        class _Batching:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, results_out=None, **kwargs):
+                calls.append(list(to_emails))
+                if results_out is not None:
+                    results_out.extend([True] * len(to_emails))
+                return (len(to_emails), 0)
+
+        svc, claimed = self._svc_with(_Batching)
+        people = [_RecipientFacts(id=f"u{n}", email=f"m{n}@fd.co") for n in range(3)]
+
+        await self._run(svc, people, _Batching)
+
+        assert len(calls) == 1
+        assert calls[0] == ["m0@fd.co", "m1@fd.co", "m2@fd.co"]
+        # Still one auditable claim each.
+        assert [a.user_id for a in claimed] == ["u0", "u1", "u2"]
+        assert {a.status for a in claimed} == {"delivered"}
+
+    async def test_a_per_address_failure_lands_on_that_member(self):
+        class _PartlyFailing:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, results_out=None, **kwargs):
+                if results_out is not None:
+                    results_out.extend([True, False, True])
+                return (2, 1)
+
+        svc, claimed = self._svc_with(_PartlyFailing)
+        people = [_RecipientFacts(id=f"u{n}", email=f"m{n}@fd.co") for n in range(3)]
+
+        await self._run(svc, people, _PartlyFailing)
+
+        assert [a.status for a in claimed] == ["delivered", "failed", "delivered"]
+
+    async def test_a_raise_leaves_every_claim_retryable(self):
+        class _Exploding:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, results_out=None, **kwargs):
+                raise RuntimeError("relay refused the connection")
+
+        svc, claimed = self._svc_with(_Exploding)
+        people = [_RecipientFacts(id=f"u{n}", email=f"m{n}@fd.co") for n in range(2)]
+
+        await self._run(svc, people, _Exploding)
+
+        assert [a.status for a in claimed] == ["failed", "failed"]
+        assert all(a.delivered_at is None for a in claimed)
+
+    async def test_a_short_results_list_is_not_read_as_delivered(self):
+        """Fewer answers than addresses means unanswered, not sent."""
+
+        class _Terse:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, results_out=None, **kwargs):
+                if results_out is not None:
+                    results_out.append(True)
+                return (1, 0)
+
+        svc, claimed = self._svc_with(_Terse)
+        people = [_RecipientFacts(id=f"u{n}", email=f"m{n}@fd.co") for n in range(3)]
+
+        await self._run(svc, people, _Terse)
+
+        assert [a.status for a in claimed] == ["delivered", "failed", "failed"]
 
 
 class TestReportedFailuresAreNotRecordedAsDelivered:
@@ -327,6 +512,45 @@ class TestSmsGating:
         numbers = [call.args[0][0] for call in fake_sms.send_bulk_sms.await_args_list]
         assert numbers == ["+1555mobile", "+1555phone"]
 
+    async def test_a_shared_handset_is_recorded_against_whoever_consented(self):
+        """Two members on one number is ordinary in a volunteer department.
+
+        The consent filter returned bare numbers, so the send path rebuilt the
+        pairing by matching on the number — and matched the first recipient
+        carrying it, who here is the member who never granted TCPA consent.
+        The text went out correctly; the delivery record named the wrong
+        person, and the one who did consent got no audit row at all.
+        """
+        db = _db()
+        shared = "+15550000000"
+        recipients = [
+            _user("no-consent", mobile=shared),
+            _user("consented", mobile=shared),
+        ]
+        svc = MessageDeliveryService(db)
+        claimed = []
+
+        async def _claim(message, user, channel):
+            claimed.append(user)
+            return SimpleNamespace(
+                status="pending", error=None, delivered_at=None, channel=channel
+            )
+
+        svc._claim_delivery = _claim
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock(return_value=1)
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent("consented"):
+            await svc._send_sms(
+                _msg(priority="urgent"),
+                recipients,
+                org=SimpleNamespace(name="FD"),
+            )
+
+        assert claimed == ["consented"]
+
     async def test_sms_requires_consent_even_when_the_channel_is_on(self):
         # TCPA: the recorded consent gates the send independently of the
         # member's channel preference. u2 never granted consent, so despite
@@ -414,6 +638,84 @@ class TestEscalationRateLimit:
         fake_sms.send_bulk_sms.assert_not_awaited()
 
 
+class TestChannelsRunOnPlainValues:
+    """Each channel rolls back on failure, and a rollback expires every
+    instance in the session. Passing ORM objects between channels meant a
+    later one read `message.title` off an expired instance, issued a lazy
+    refresh from a sync context, and raised MissingGreenlet — inside its own
+    `except Exception` handler, so it was logged as a delivery failure. Email
+    is the channel of record, so an in-app failure took the email with it.
+    """
+
+    async def test_deliver_hands_channels_snapshots_not_orm_instances(self):
+        seen: dict = {}
+        db = _db()
+        db.execute.return_value.scalars.return_value.all.return_value = []
+
+        class Recording(MessageDeliveryService):
+            async def _create_in_app(self, message, recipients):
+                seen["in_app"] = (message, recipients)
+
+            async def _send_email(self, message, recipients, org):
+                seen["email"] = (message, recipients)
+
+        svc = Recording(db)
+        target = MessagingService(db)
+        target._targeted_users = AsyncMock(return_value=[_user("u1", email="a@b.co")])
+        with patch(
+            "app.services.messaging_service.MessagingService", return_value=target
+        ):
+            await svc.deliver(_msg())
+
+        for channel in ("in_app", "email"):
+            message, recipients = seen[channel]
+            assert isinstance(message, _MessageFacts), channel
+            assert all(isinstance(r, _RecipientFacts) for r in recipients), channel
+        # The values still have to be right, not merely the right type.
+        assert seen["email"][0].title == "Roof collapse drill"
+        assert [r.id for r in seen["email"][1]] == ["u1"]
+
+    async def test_claim_delivery_takes_ids(self):
+        """It rolls back on a duplicate key, which expires whatever it was
+        handed — so it must not be handed anything it would then read."""
+        import inspect
+
+        params = list(
+            inspect.signature(MessageDeliveryService._claim_delivery).parameters
+        )
+        assert params == ["self", "message_id", "user_id", "channel"]
+
+
+class TestSmsAttribution:
+    async def test_two_members_sharing_a_number_are_claimed_separately(self):
+        """A married couple on one handset is ordinary in a volunteer
+        department. Keying the recipients by phone number collapsed them, and
+        the delivery row was attributed to whichever came last — including one
+        who had never given TCPA consent."""
+        shared = "+15550000000"
+        recipients = [_user("u1", mobile=shared), _user("u2", mobile=shared)]
+        db = _db()
+        svc = MessageDeliveryService(db)
+        claims: list = []
+
+        async def record(message_id, user_id, channel):
+            claims.append((user_id, channel))
+            return None  # already claimed; the send itself is not the point
+
+        svc._claim_delivery = record
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock(return_value=1)
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent("u1", "u2"):
+            await svc._send_sms(
+                _facts(priority="urgent"), recipients, org=SimpleNamespace(name="FD")
+            )
+
+        assert sorted(claims) == [("u1", "sms"), ("u2", "sms")]
+
+
 class TestPublishScheduledMessages:
     """The publish task marks due messages live (clears scheduled_at) and then
     delivers them via the shared escalation path."""
@@ -448,6 +750,52 @@ class TestPublishScheduledMessages:
         claim_statement = db.execute.await_args.args[0]
         assert claim_statement._for_update_arg.skip_locked is True
 
+    async def test_one_bad_message_does_not_abandon_the_rest_of_the_batch(self):
+        """The claim (scheduled_at = NULL) is committed for the whole batch
+        before any delivery. So an exception mid-loop did not just skip that
+        message — every remaining one was already claimed and would never be
+        picked up again, going live with no email, ever."""
+        from app.services import scheduled_tasks
+
+        good, bad = _msg(), _msg()
+        good.id, bad.id = "ok", "boom"
+        good.is_active = bad.is_active = True
+        good.scheduled_at = bad.scheduled_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        db = _db()
+        db.execute = AsyncMock(
+            return_value=MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=[bad, good]))
+                )
+            )
+        )
+        delivered: list = []
+
+        class Delivery:
+            def __init__(self, _db):
+                pass
+
+            async def deliver(self, message):
+                delivered.append(message.id)
+
+        class Messaging:
+            def __init__(self, _db):
+                pass
+
+            async def materialize_recipients(self, message):
+                if message.id == "boom":
+                    raise RuntimeError("audience resolution failed")
+
+        # Imported inside the function, so patch them where they are defined.
+        with patch(
+            "app.services.message_delivery_service.MessageDeliveryService", Delivery
+        ), patch("app.services.messaging_service.MessagingService", Messaging):
+            result = await scheduled_tasks.run_publish_scheduled_messages(db)
+
+        assert delivered == ["ok"], "the healthy message must still go out"
+        assert result["published"] == 1
+        assert result["failed"] == 1
+
     async def test_two_publishers_and_retry_deliver_each_channel_once(self):
         """A second publisher/retry loses the same durable delivery keys."""
         recipient = _user("u1", email="member@fd.co", mobile="+15551234567")
@@ -474,6 +822,12 @@ class TestPublishScheduledMessages:
                     channel_sends["sms"] += 1
 
         first, second = RacingDelivery(_db()), RacingDelivery(_db())
+        for worker in (first, second):
+            # deliver() re-reads the recipients before the SMS channel; hand
+            # the same member back so the racing subclass sees them.
+            worker.db.execute.return_value.scalars.return_value.all.return_value = [
+                recipient
+            ]
         target = MessagingService(first.db)
         target._targeted_users = AsyncMock(return_value=[recipient])
         # One shared patch encloses both workers, avoiding concurrent patch

@@ -27,6 +27,11 @@ vi.mock('@/modules/scheduling/components/shiftTemplateTypes', () => ({
 
 vi.mock('@/modules/scheduling/services/shiftSettingsApi', () => ({
   ensureShiftSettingsLoaded: () => Promise.resolve({}),
+  // positionLabel() reads the same custom seats from here, so the department's
+  // own label reaches a seat wherever it is shown, not only this dropdown.
+  getCachedShiftSettings: () => ({
+    customPositions: [{ value: 'rescue_tech', label: 'Rescue Technician' }],
+  }),
 }));
 
 const store = {

@@ -435,6 +435,7 @@ evergreen reference:
 - **[RELEASE_CANDIDATE_PLAN.md](./RELEASE_CANDIDATE_PLAN.md)** — path from `main` to a tagged 1.0.0-rc.1, with per-item status
 - **[DEPARTMENT_TEMPLATE_EXPORT_IMPORT_PLAN.md](./DEPARTMENT_TEMPLATE_EXPORT_IMPORT_PLAN.md)** — design proposal for structure-only department template export/import (no implementation yet)
 - **[SHIFT_SCHEDULING_UX_REVIEW.md](./SHIFT_SCHEDULING_UX_REVIEW.md)** — 2026-08-11 clarity review of the shift scheduling screens
+- **[MOBILE_QUICK_ENTRY_REVIEW.md](./MOBILE_QUICK_ENTRY_REVIEW.md)** — 2026-09-01 review of phone use and how quickly information can be entered
 - **[SKILLS_TESTING_DATA_REVIEW.md](./SKILLS_TESTING_DATA_REVIEW.md)** — seed data and data-lifecycle review of the skills-testing module
 - **[scheduling-module-audit.md](./scheduling-module-audit.md)** — 2026-06-18 scheduling module audit (see [review-log.md](./review-log.md) for items closed since)
 - **[module-audit/](./module-audit/)** — rotating module-by-module tenant-isolation and security audit

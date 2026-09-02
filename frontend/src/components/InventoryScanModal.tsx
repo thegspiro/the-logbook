@@ -108,6 +108,27 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [transferCondition, setTransferCondition] = useState('good');
   const [transferReason, setTransferReason] = useState('');
   const [holderConfirmed, setHolderConfirmed] = useState(false);
+
+  // One dialog is reused for every conflicting scan result, and its
+  // attestation is per-holder: "I confirm the current holder is <name>". Left
+  // ticked from the previous item, it re-opens already agreed to — naming a
+  // different member, with the previous reason prefilled and Confirm already
+  // enabled — so a single click files a custody-chain attestation the
+  // quartermaster never actually made about a holder they never saw. Both
+  // entry points clear the fields; neither caller can forget.
+  const resetTransferFields = () => {
+    setHolderConfirmed(false);
+    setTransferReason('');
+    setTransferCondition('good');
+  };
+  const openTransfer = (result: ResultItem) => {
+    resetTransferFields();
+    setTransferResult(result);
+  };
+  const closeTransfer = () => {
+    resetTransferFields();
+    setTransferResult(null);
+  };
   const canTransfer = useAuthStore((state) => state.checkPermission)('inventory.manage');
   const [searchResults, setSearchResults] = useState<ScanLookupResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -657,7 +678,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
             return { ...completed, success: true, action: 'transferred' };
           }) ?? null
       );
-      setTransferResult(null);
+      closeTransfer();
     } catch {
       setLookupError(
         'Transfer failed because custody changed or the operation could not be completed. Rescan the item.'
@@ -797,7 +818,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                               <p>Expected return: {formatDateTime(r.conflict.expected_return_date, tz)}</p>
                             )}
                             {canTransfer && (
-                              <button type="button" className="btn-secondary mt-2" onClick={() => setTransferResult(r)}>
+                              <button type="button" className="btn-secondary mt-2" onClick={() => openTransfer(r)}>
                                 Transfer item
                               </button>
                             )}
@@ -1126,7 +1147,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         )}
         {transferResult?.conflict && (
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-black/50">
-            <DialogPanel onClose={() => setTransferResult(null)} className="mx-4 max-w-md space-y-3 p-5">
+            <DialogPanel onClose={() => closeTransfer()} className="mx-4 max-w-md space-y-3 p-5">
               <h4 className="text-theme-text-primary font-bold">Confirm custody transfer</h4>
               <label className="flex gap-2 text-sm">
                 <input
@@ -1160,7 +1181,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 />
               </label>
               <div className="flex justify-end gap-2">
-                <button className="btn-secondary" onClick={() => setTransferResult(null)}>
+                <button className="btn-secondary" onClick={() => closeTransfer()}>
                   Cancel
                 </button>
                 <button

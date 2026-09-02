@@ -40,20 +40,32 @@ class TestingChecklistService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def current_run(self, organization_id: str) -> Optional[TestingRun]:
+    async def current_run(
+        self, organization_id: str, *, for_update: bool = False
+    ) -> Optional[TestingRun]:
         """The newest run, which is what "the current run" means here.
 
         No active flag: starting a run archives the previous one by existing.
         Ordered by ``sequence`` rather than by time — MySQL DATETIME keeps
         whole seconds, so two runs opened in the same second would tie and the
         answer would depend on the tie-break.
+
+        ``for_update`` makes it a locking read, which is the only form that
+        answers from the latest committed state rather than the transaction's
+        snapshot (CLAUDE.md pitfall #27). ``populate_existing`` goes with it:
+        the run may already sit in this session's identity map from the plain
+        read that preceded the lock, and without it the refreshed row would be
+        discarded in favour of the stale instance.
         """
-        result = await self.db.execute(
+        query = (
             select(TestingRun)
             .where(TestingRun.organization_id == organization_id)
             .order_by(TestingRun.sequence.desc())
             .limit(1)
         )
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def get_run(self, organization_id: str, run_id: str) -> Optional[TestingRun]:
@@ -104,7 +116,12 @@ class TestingChecklistService:
             # one each would file their marks in different runs — hiding one of
             # them in history the moment it was made. Re-checked *inside* the
             # lock, which is the only place the answer is stable.
-            existing_run = await self.current_run(organization_id)
+            # Locking, for the same reason the sequence read below is: a plain
+            # SELECT here answers from the snapshot taken at this transaction's
+            # first read, which predates the lock — so the loser of the race
+            # still saw no run and opened a second one, splitting the
+            # department's marks across a pair nobody meant to have.
+            existing_run = await self.current_run(organization_id, for_update=True)
             if existing_run is not None:
                 return existing_run
         # A locking read, not a plain one: under REPEATABLE READ a plain SELECT
@@ -212,8 +229,10 @@ class TestingChecklistService:
         self, organization_id: str, entries: Sequence[TestingChecklistEntry]
     ) -> dict[str, str]:
         """Names for the accounts that made these marks."""
+        # A mark whose author was hard-deleted carries user_id NULL (the row is
+        # kept on purpose). There is no name to resolve for it.
         return await self.resolve_user_names(
-            organization_id, {entry.user_id for entry in entries}
+            organization_id, {entry.user_id for entry in entries if entry.user_id}
         )
 
     async def upsert_entry(
@@ -228,9 +247,15 @@ class TestingChecklistService:
         what was found then, and a mark made today does not belong in it.
         """
         run = await self._run_for_writing(organization_id, user, payload.build_id)
+        # Captured now, while the instances are live. The IntegrityError
+        # recovery below runs after a rollback(), which expires them.
+        run_id_value = str(run.id)
+        user_id_value = str(user.id)
         positions = await self._positions_of(user)
 
-        entry = await self._find_entry(organization_id, run.id, str(user.id), payload)
+        entry = await self._find_entry(
+            organization_id, run_id_value, user_id_value, payload
+        )
         if entry is None:
             count = len(
                 await self.list_entries(organization_id, str(user.id), run_id=run.id)
@@ -264,8 +289,12 @@ class TestingChecklistService:
             # raises the very error being recovered from.
             if entry in self.db:
                 self.db.expunge(entry)
+            # Locals, not attributes: rollback() expired every instance loaded
+            # in this transaction, so reading run.id here issued a lazy refresh
+            # from a sync context and raised MissingGreenlet — turning a
+            # recoverable duplicate insert into an unhandled 500.
             entry = await self._find_entry(
-                organization_id, run.id, str(user.id), payload
+                organization_id, run_id_value, user_id_value, payload
             )
             if entry is None:
                 raise

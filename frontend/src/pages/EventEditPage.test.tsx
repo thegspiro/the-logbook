@@ -144,6 +144,27 @@ describe('EventEditPage', () => {
       expect(screen.getByLabelText(/who should receive reminders/i)).toHaveValue('all');
     });
 
+    it("hydrates the event's attendee-visibility override", async () => {
+      // initialData is built field by field, and omitting this left the select
+      // showing "Use organization default" for an event that actually
+      // overrode it. Worse, because that option was already displayed,
+      // choosing it fired no change event — so the override could not be
+      // cleared either, on the one screen that edits it.
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, attendee_visibility: 'members' });
+
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByLabelText(/who can see who's going/i)).toHaveValue('members');
+    });
+
+    it('shows the inherit state when the event sets no override', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, attendee_visibility: null });
+
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByLabelText(/who can see who's going/i)).toHaveValue('');
+    });
+
     it('should show Save Changes as submit button label', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
 

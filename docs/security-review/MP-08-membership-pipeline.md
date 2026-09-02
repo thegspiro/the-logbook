@@ -1,6 +1,361 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), (this PR) (pass 2)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3)
+
+---
+
+## Pass 3 (2026-09-02) — 5 fixed, 2 flagged (Codex review on PR #2176)
+
+> **Revision note:** the pass as first drafted (below, unedited) concluded
+> "no new findings" from a byte-identical diff against pass 2. Codex's review
+> of that draft found the diff being byte-identical proved nothing about the
+> code's _soundness_ — only that nothing had changed since a pass that never
+> looked at this angle either. It posted 6 findings, plus a 7th (mirroring
+> MP-10) restated in a review comment: unvalidated cross-tenant form ids in
+> step config, an N+1 query in the event-link list, election-package PII
+> over-collection ignoring a stage's configured field toggles, an
+> election-package assignment race with no row lock, a document-deletion
+> path that could orphan a file on disk, no server-side state machine on
+> election-package status, and unbounded prospect reads on two endpoints.
+> Independently re-traced against the actual current code (not Codex's
+> say-so): all 7 were real. 5 were fixed; 2 were flagged as needing a
+> migration/product decision, per this rotation's standing discipline. See
+> Findings below for what was actually done; the original "no new findings"
+> draft is left intact afterward for the record.
+
+### Findings (Codex review on PR #2176)
+
+#### MP-13 — P2 — unvalidated cross-tenant `form_id` in step config — ✅ FIXED
+
+**What:** `add_step`/`update_step` (`membership_pipeline_service.py`) wrote
+and committed a step's `config` — including a client-supplied `form_id` — to
+the database _before_ calling `_ensure_membership_form_integration`, and
+that helper only logs a warning and returns when its own org-scoped lookup
+fails; it never rejects the write. `create_pipeline`'s inline steps loop
+didn't call the integration helper at all. A manager could submit another
+org's form UUID in `config.form_id` and have it persist unchecked — CLAUDE.md
+Pitfall #14c (validate client-supplied FK ids belong to the org before
+storing them), the same shape already fixed for `email_template_id` on the
+same two methods.
+**Where:** `add_step` (~line 420), `update_step` (~line 497), `create_pipeline`'s
+inline steps loop (~line 249).
+**Fix:** added `_assert_form_in_org`, mirroring `_assert_email_template_in_org`
+exactly (`assert_in_org` against `Form`, `allow_none=True` since a step need
+not reference a form) — called in all three write paths _before_ the step is
+persisted. `_ensure_membership_form_integration` is unchanged; it remains a
+best-effort bookkeeping call that now only ever runs against an
+already-validated in-org form. Covered by `TestStepFormIdOrgValidation` in
+`tests/test_membership_pipeline_pass3_codex.py` (all three paths, plus
+regression guards that a legitimate same-org `form_id` and a step with no
+form config are unaffected).
+
+#### MP-14 — P2 — N+1 query in `list_event_links` — ✅ FIXED
+
+**What:** `list_event_links` (backing `GET /prospects/{id}/event-links`)
+loaded every link for a prospect, then issued a separate `Event` query and
+(when `linked_by` was set) a separate `User` query per row — a 2N+1 shape.
+**Where:** `membership_pipeline_service.py`, `list_event_links`.
+**Fix:** batch-fetch every referenced `Event`/`User` with two `.in_()`
+queries before the loop, then build the response from `dict` lookups — same
+output shape, no behavior change. Covered by a source-inspection test
+(`TestEventLinkListBatching.test_list_event_links_does_not_query_per_row`,
+walks the function's AST and fails if any `db.execute` call sits inside a
+`for` loop) and a behavioral test asserting the enriched output is still
+correct with two links, one with a linker and one without.
+
+#### MP-15 — P1 — election-package PII over-collection ignored `package_fields` — ✅ FIXED
+
+**What:** the election-vote stage's config (`ElectionVoteConfig.tsx`'s
+"Election Package Contents" panel — `include_email`/`include_phone`/
+`include_address`/`include_date_of_birth`/`include_documents`/
+`include_stage_history`) had **no backend reader at all** — grepped zero
+hits for `package_fields` anywhere under `backend/`. `create_election_package`
+unconditionally captured DOB, full address, phone, and documents into
+`applicant_snapshot` regardless of what a coordinator configured, and
+`ElectionPackageResponse` returns that whole dict to any `elections.manage`
+caller. This is CLAUDE.md Pitfall #19 (a config switch shipped with no
+reader) applied to a PII-minimization control rather than a notification
+toggle.
+**Where:** `create_election_package`, `membership_pipeline_service.py`.
+**Fix:** the step referenced by a package's `step_id` (when set) is
+consulted for `config.package_fields`; each of the six toggled fields is
+included in the snapshot only when its flag is true (matching the frontend's
+own defaults for a key present in the dict but not itself set). Critically,
+`package_fields is None` (no step, or a step whose config was never touched
+by a coordinator) preserves the **prior capture-everything behavior exactly**
+— this is additive, not a default change, so no existing pipeline's data
+collection is altered. Fields with no toggle on the stage-config UI (name,
+interest reason, notes, referral source) are always captured, unaffected.
+Verified the frontend never reads `address_*`/`date_of_birth` from the
+mapped response (`services/api.ts`'s `mapElectionPackageResponse`), so
+omitting them carries no frontend regression risk. Covered by
+`TestElectionPackagePIIFields` (configured exclusions honored; unconfigured
+steps and no-step-id packages both still capture everything).
+
+#### MP-16 — P1 — election-package assignment race, no row lock — ✅ FIXED
+
+**What:** `assign_package_to_election` read the package via a plain
+(unlocked) `get_election_package`, checked `pkg.status == "ready"`, then
+wrote `election.ballot_items`/`pkg.election_id`/`pkg.status` — a
+check-before-write with no lock or version check, CLAUDE.md Pitfall #27's
+exact shape (already fixed once in this same file, for
+`transfer_to_membership`, in pass 2). Two concurrent assignment calls for
+the same package could both observe `"ready"` before either commits and both
+append a ballot item to their own (possibly different) elections, landing
+the applicant on two ballots with the second write to `pkg.election_id`
+silently overwriting the first.
+**Where:** `get_election_package`/`assign_package_to_election`,
+`membership_pipeline_service.py`.
+**Fix:** added `lock_for_update: bool = False` to `get_election_package`
+(same signature shape as `get_prospect`'s existing parameter), and
+`assign_package_to_election` now locks the package row and runs the
+`"ready"` check against that locked read — the lock and the decision are the
+same statement, so there is no snapshot gap between acquiring the lock and
+reading the value it protects (per Pitfall #27's "the count itself must be a
+locking read" requirement). Also locks the target `Election` row for the
+same reason: two _different_ packages assigned to the _same_ election
+concurrently would otherwise race the identical read-modify-write on
+`ballot_items` and silently lose one ballot item. Covered by
+`TestElectionPackageAssignmentLocking` — source-inspection tests (matching
+this rotation's established pattern for lock-wiring guards,
+`test_transfer_locks_the_prospect_before_checking_status`) confirming the
+lock is acquired before the status check and that `get_election_package`'s
+`lock_for_update` actually calls `with_for_update`, plus a behavioral test
+confirming the ordinary path still works and a second assignment attempt is
+still refused.
+
+#### MP-17 — P1 — no state machine on election-package `status` — ✅ FIXED
+
+**What:** `ElectionPackageUpdate.status` is an unrestricted `str`, and
+`update_election_package` applied it directly with no allowed-value or
+valid-transition check. A caller holding only `members.manage` could PUT
+`{"status": "ready"}` on a package already `added_to_ballot`, then call
+`assign_package_to_election` again — landing the same applicant on a second
+ballot with **no race required** (a serial escalation, independent of and
+compounding MP-16). A caller could also write `"elected"` directly (no vote
+tally behind it) or an arbitrary unknown string, breaking the documented
+five-state contract (`draft` → `ready` → `added_to_ballot` →
+`elected`/`not_elected`, the last three set only by
+`assign_package_to_election` and `election_service._sync_package_statuses`).
+**Where:** `update_election_package`, `membership_pipeline_service.py`;
+`ElectionPackageUpdate`, `schemas/membership_pipeline.py` (type left
+unchanged — see below).
+**Fix:** added `ELECTION_PACKAGE_CALLER_STATUSES = {"draft", "ready"}` and
+`ELECTION_PACKAGE_SYSTEM_STATUSES = {"added_to_ballot", "elected",
+"not_elected"}` module-level constants. `update_election_package` now
+refuses a `status` update when the target isn't caller-settable, **or** when
+the package's current status is already system-only — mirroring MP-9's fix
+for `ProspectStatus.TRANSFERRED` exactly (a status the system derives must
+not be settable _or clearable_ through the generic update). The Pydantic
+schema field is deliberately left as `Optional[str]` rather than a `Literal`
+— the existing module docstring already explains election-package status
+was left off the request-schema enum validator list because it isn't a
+strict MySQL `ENUM` column (unlike `step_type`/`action_type`/prospect
+`status`), and duplicating the caller-settable set as a second literal in
+the schema would only invite drift from the service-layer constants that are
+now the single source of truth. Covered by
+`TestElectionPackageStatusStateMachine`: every system/unknown status is
+refused, `draft`/`ready` remain settable, a package already
+`added_to_ballot` refuses _any_ status change (the specific compounding
+scenario Codex described), and unrelated-field updates (`coordinator_notes`)
+are unaffected.
+
+#### MP-18 — P2 — document deletion could orphan the file on `OSError` — ✅ FIXED
+
+**What:** `delete_prospect_document` deleted the `ProspectDocument` metadata
+row and **committed** before attempting `os.remove()`; the code comment
+directly above claimed the opposite order ("Remove the stored file from disk
+before dropping the DB row"). A caught `OSError` (permissions, transient
+filesystem error) was logged and swallowed, and the method still returned
+`True` — the applicant's file, which can carry PII, survives on disk with no
+database row left to retry cleanup against.
+**Where:** `delete_prospect_document`, `membership_pipeline_service.py`.
+**Fix:** reordered so the file removal is attempted first; a missing file
+(`os.path.exists` false — already cleaned up by some earlier partial
+failure) is not an error and the metadata delete proceeds as before, but a
+file that exists and fails to remove now **raises** `ValueError` instead of
+being swallowed — the metadata row survives specifically so it remains the
+one record telling an operator this file still needs cleaning up. Added the
+matching `except ValueError` → 400 in the endpoint (`membership_pipeline.py`,
+which had no error handling on this call at all previously). Covered by
+`TestDocumentDeletionDoesNotOrphanTheFile`: normal deletion still removes
+both the file and the row; an already-missing file still deletes cleanly; a
+mocked `os.remove` failure raises and leaves the metadata row (and the file)
+in place.
+
+#### MP-19 — P2 — unbounded prospect reads (`/widget-summary`, `/pipelines`) — PARTIALLY FIXED, PARTIALLY 🚩 FLAGGED
+
+**What:** two read paths materialize every prospect row in an org rather
+than aggregating in SQL — the same abuse-resistance class already tracked
+as MP-10 for election packages. `GET /pipelines` (`list_pipelines`)
+eager-loaded the full `MembershipPipeline.prospects` relationship (every
+column of every historical applicant, across every pipeline) solely to
+`len()` it per pipeline. `GET /widget-summary` (`pipeline_widget_summary`)
+loads every full `ProspectiveMember` row in the org to compute status
+counts, aging buckets, and (for managers) a full id/name/status `details`
+list.
+**Where:** `list_pipelines`, `membership_pipeline_service.py`;
+`pipeline_widget_summary`, `membership_pipeline.py:118-168`.
+**Disposition — `/pipelines`: FIXED.** Replaced the eager-loaded
+`prospects` relationship with one aggregate `GROUP BY pipeline_id` count
+query, attached as a non-mapped `prospect_count` attribute (same pattern as
+`pipeline_name` on `ProspectiveMember`) — the response shape is unchanged,
+so this is a pure efficiency fix with no API contract change, unlike MP-10.
+Covered by `TestPipelineListProspectCount` (correct counts, including zero;
+asserts via `sqlalchemy.inspect(...).unloaded` that the `prospects`
+collection itself is never materialized).
+**Disposition — `/widget-summary`: FLAGGED**, mirrored to
+`docs/KNOWN_LIMITATIONS.md`. The aggregate counts here could similarly move
+to SQL, but the `details` list is a full, uncapped enumeration in the
+response contract itself — capping it silently truncates what a manager
+sees (a behavior change) and paginating it is a response-envelope/frontend
+contract change, the same category of decision MP-10 already declined to
+make unilaterally rather than guess at.
+
+### Completion gate (Codex-fix pass)
+
+| Check                                                          | Result                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                  | pass, 0 violations                                                                                                                                                                                                                                                 |
+| `black --check app/ tests/ alembic/`                           | pass (2 files needed reformatting, applied, re-check pass)                                                                                                                                                                                                         |
+| `isort --check-only app/ tests/ alembic/`                      | pass, 0 violations                                                                                                                                                                                                                                                 |
+| `python3 scripts/validate_migrations.py --strict`              | pass — 409 revisions, single head (no schema change)                                                                                                                                                                                                               |
+| new guard tests (`test_membership_pipeline_pass3_codex.py`)    | 26 passed; independently confirmed to fail against the pre-fix code (`git stash` on the two changed source files — 15 of the 26 fail, matching the 5 fixed findings plus MP-19's fixed half; the other 11 are regression guards that correctly still pass pre-fix) |
+| scoped election/membership/prospect/pipeline pytest (49 files) | 808 passed / 0 failed                                                                                                                                                                                                                                              |
+| full backend suite (`pytest tests/ -q`)                        | 9859 passed / 21 skipped (pre-existing/environmental) / 0 failed (9833 baseline + 26 new guard tests)                                                                                                                                                              |
+
+No frontend file changed in this pass, so `tsc`/`eslint` were not re-run.
+
+### Original pass 3 draft (superseded above)
+
+**Zero code diff, no new findings** — see the Revision note above; the
+"no new findings" conclusion below did not hold once Codex's review looked
+for the classes of defect this draft's checklist pass didn't specifically
+probe (config switches with no reader, read-then-write races, error-path
+ordering, and per-row query loops).
+
+**Scope.** Diffed the full domain against pass 2's merge commit (`58535700`,
+PR #1950): `endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
+`models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, `frontend/src/modules/prospective-members/`, and
+`frontend/src/utils/membership.ts` are all **byte-identical** to pass 2
+(`git diff --stat`, not assumed — confirmed for both the declared backend
+files and a broad `git diff --name-only` over all of `frontend/src/`, which
+turned up one incidental hit, `RoleSetup.membership.test.ts` in the
+onboarding module — a substring match on "membership" in an unrelated test
+file, not this feature). Every new migration since pass 2 (24 files) was
+content-grepped for `prospect|membership_pipeline|pipeline_stage`; the one
+hit, `20260901_1320_f7b3c8d2e569_restore_seeded_position_grants.py`, is the
+same class of false positive pass 2 already documented — every match is a
+`"prospective_members.*"` permission-string literal in an unrelated
+position-grant backfill, not a schema change to any table this feature owns.
+
+Given the zero diff, this pass did not re-derive conclusions from the prior
+write-up — it independently re-read the current code against all seven
+`CHECKLIST.md` dimensions and re-verified, at the cited line, that every
+prior fix is still in place:
+
+- **MP-8/MP-9** (`update_prospect`, `membership_pipeline_service.py:1166`) —
+  confirmed `apply_updates` is still the write path (explicit `null` clears a
+  field rather than being silently dropped) and the `TRANSFERRED`-status
+  guard (`:1195-1204`) still refuses to set or clear that status through the
+  generic update.
+- **MP-11** (`approve-step`, `membership_pipeline.py:1160-1216`) — confirmed
+  the route still returns `StepApprovalResponse` (id/step/`step_completed`
+  only), not the full `ProspectResponse`.
+- **MP-12** (interview self-access, `membership_pipeline.py:2200-2258`) —
+  confirmed both `PUT`/`DELETE /interviews/{interview_id}` still carry
+  `dependencies=[Depends(block_self_interview_access)]`.
+- **Pass 2's two Codex findings** (role-grant ceiling and the transfer row
+  lock) — confirmed in `membership_pipeline.py:1543-1561` (role ids resolved
+  in-org and run through `_enforce_role_grant_ceiling` before
+  `transfer_to_membership` is called) and
+  `membership_pipeline_service.py:2402-2404` (`get_prospect(...,
+lock_for_update=True)` ahead of the `TRANSFERRED` check).
+- **MP-10** (unbounded election-package list/create,
+  `membership_pipeline_service.py:4698-4718` /
+  `:4512-4631`) — confirmed still open exactly as flagged: `list_election_packages`
+  is still a bare `.scalars().all()` with no `limit`/`offset`, and
+  `create_election_package` still has no per-prospect ready-package cap. No
+  change — still a product decision, already mirrored in
+  `KNOWN_LIMITATIONS.md`.
+
+**Fresh checks, not previously written up explicitly, all clean:**
+
+- **Route inventory** re-enumerated from source (51 routes across both
+  files): every route carries `Depends(get_current_user)` at minimum, every
+  route but `approve-step` (intentional — see pass 1's Verified good) carries
+  a `require_permission(...)` gate matching its sensitivity, and every by-id
+  route is either explicitly org-scoped in its service call or resolved
+  through an org-scoped parent. No new route since pass 1's inventory.
+- **Client-supplied FKs** — re-checked every write path that accepts one:
+  `update_prospect`'s `referred_by` (`assert_in_org`,
+  `membership_pipeline_service.py:1181-1188`), `create_election_package`'s
+  `pipeline_id`/`step_id` (`:4535-4544`), `assign_package_to_election`'s
+  `election_id` (org-scoped `select`, `:4755-4763`), `link_event`'s
+  `event_id` (org-scoped `select`, `:5571-5581`), and
+  `transfer_prospect`'s `role_ids` (see above). All validated in-org before
+  being stored; none found unvalidated.
+- **`ondelete="SET NULL"` nullability** (Pitfall #2) — every `SET NULL`
+  foreign key in `models/membership_pipeline.py` (11 occurrences) carries
+  `nullable=True`. Read in full, not sampled.
+- **LIKE escaping** (Pitfall #25) — the two `.ilike()` call sites in this
+  service (`:751-755` name/email search, `:2752` an unrelated
+  `TrainingProgram.name` lookup used by a stage-config helper) both pass
+  `escape=LIKE_ESCAPE_CHAR`.
+- **JSON-column mutation** (Pitfall #12) — `assign_package_to_election`'s
+  writes to `election.ballot_items` and `pkg.package_config`
+  (`:4814-4825`) both go through `copy.deepcopy()` before reassignment.
+- **Injection & output encoding** — no raw SQL (`text()`/f-string `.execute`)
+  anywhere in the service; every user-controlled value interpolated into the
+  applicant-notification email HTML (title, format, location, org name,
+  first name, custom welcome message, FAQ link, status-check URL) is
+  `html.escape`d before use (`:2859-2969`).
+- **File upload/download** (`add_prospect_document`,
+  `download_prospect_document`, `membership_pipeline.py:1706-1857`) — magic-byte
+  MIME detection (not the client `Content-Type`), UUID filename with a
+  MIME-derived extension, 50 MB size cap, and org+prospect-scoped storage
+  path. Download re-validates the stored path resolves inside
+  `PROSPECT_DOCUMENT_DIR` via `os.path.realpath` before serving. A failed
+  document-metadata write cleans up the file it already wrote to disk
+  (`except ValueError` / `except Exception` both call
+  `_remove_prospect_document_file`), so a rejected upload cannot leave an
+  orphaned file.
+- **Bulk actions bounded** — `BulkAdvanceRequest`/`BulkStatusRequest.prospect_ids`
+  both declare `max_length=_MAX_BULK_PROSPECTS` (`schemas/membership_pipeline.py:529,561`).
+- **Frontend module axios instance** (Pitfall #7) — `services/api.ts` builds
+  its client via the shared `createApiClient` factory
+  (`frontend/src/utils/createApiClient.ts`), which sets
+  `withCredentials: true` and the CSRF header interceptor; not a hand-rolled
+  instance missing either.
+- **`UNCACHEABLE_PREFIXES`** — `/prospective-members/` is listed in
+  `frontend/src/utils/apiCache.ts`, and that is the exact router prefix this
+  feature is mounted under (`api/v1/api.py:267-271`).
+- **No banned frontend patterns** — zero `window.confirm`/`alert`/`prompt`,
+  zero `dangerouslySetInnerHTML`, zero banned `.toLocale*` calls, zero direct
+  `fetch()` in `modules/prospective-members/` or `modules/membership/`
+  (grepped).
+
+**Conclusion:** no new findings. Every prior finding's fix is intact at its
+original mechanism; MP-10 remains correctly OPEN/FLAGGED, unchanged.
+Completion gate below. Rotation row 08 -> awaiting PR merge. Next: 09 medical
+screening (PHI).
+
+### Completion gate (pass 3)
+
+| Check                                                        | Result                                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | pass, 0 violations                                               |
+| `black --check app/ tests/ alembic/`                         | pass, 1387 files unchanged                                       |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned) | pass, 0 violations                                               |
+| `python3 scripts/validate_migrations.py --strict`            | pass — 409 revisions, single head                                |
+| scoped pytest (20 membership/prospect/pipeline test files)   | 322 passed / 0 failed                                            |
+| full backend suite (`pytest tests/ -q`)                      | 9833 passed / 21 skipped (pre-existing/environmental) / 0 failed |
+| `npx tsc --noEmit`                                           | pass, 0 errors                                                   |
+| `npx eslint .`                                               | pass, 0 errors (see below)                                       |
+
+No frontend file in this feature changed, so `tsc`/`eslint` are whole-repo
+runs, not a scoped diff check.
 
 ---
 

@@ -305,10 +305,13 @@ describe('TestingChecklistPage', () => {
   });
 
   it('jumps to the next page carrying no mark', async () => {
+    // 'u', not 'n': the app-wide set binds 'n' to /notifications, and both
+    // hooks attach their own document listener, so the key did both — and
+    // leaving the page is what the tester saw.
     const user = userEvent.setup();
     renderWithRouter(<TestingChecklistPage />);
 
-    await user.keyboard('n');
+    await user.keyboard('u');
 
     // The group holding the first untested page opens so the card is reachable.
     expect(await screen.findByText('Dashboard')).toBeInTheDocument();

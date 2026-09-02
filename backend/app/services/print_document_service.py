@@ -21,7 +21,6 @@ the purpose; a roster printed in UTC at a station in Virginia would have every
 shift starting at the wrong time.
 """
 
-import re
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -68,16 +67,20 @@ def _seat_column(position: Any) -> Optional[str]:
     """The seat's name for the roster's right-hand column.
 
     The seat is named the way every screen names it — the ``ems`` seat prints
-    as EMT — but a label wider than the column is cut mid-word by the
-    renderer, and "DRIVER/OPERA" reads as a printer fault rather than as a
-    seat. One that will not fit falls back to its first word, which is what a
-    crew calls the seat out loud anyway.
+    as EMT. A slash separates two names for one seat ("Driver/Operator"), so
+    dropping the alternative when the label will not fit costs nothing and
+    avoids "DRIVER/OPERA", which reads as a printer fault.
+
+    What is left is truncated rather than reduced to its first word. Two seats
+    a department named "Assistant Chief" and "Assistant Driver" would both
+    print as ASSISTANT that way, and a column that cannot tell two seats apart
+    defeats the reason the roster names them at all.
     """
     label = position_label(position)
     if not label:
         return None
     if len(label) > _SEAT_COLUMN_WIDTH:
-        label = re.split(r"[/ ]", label)[0]
+        label = label.split("/", 1)[0].strip()
     return label.upper()[:_SEAT_COLUMN_WIDTH] or None
 
 

@@ -221,6 +221,34 @@ describe('MyEquipmentPage', () => {
     });
   });
 
+  it('offers a lot-stocked pool item the stock it actually has', async () => {
+    // `quantity` is emptied into an opening-balance lot the moment an item
+    // crosses onto the lot ledger, and nothing maintains it afterwards. Read
+    // on its own it tells the member a shelf full of gloves is out of stock,
+    // and hands them a `min=1 max=0` quantity box they cannot submit — for
+    // stock issue_from_pool would dispense without complaint.
+    const lotStocked: InventoryItem = {
+      ...availableItem,
+      id: 'pool-1',
+      name: 'Structural Gloves',
+      tracking_type: 'pool',
+      quantity: 0,
+      is_lot_stocked: true,
+      lot_stock: 40,
+    };
+    mockGetItems.mockResolvedValue({ items: [lotStocked], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByRole('heading', { name: 'My Issued Gear' });
+
+    await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+    await user.type(screen.getByPlaceholderText('Search available items...'), 'Gloves');
+    await user.click(await screen.findByRole('button', { name: /Structural Gloves/ }));
+
+    expect(screen.getByText(/40 available/)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/quantity/i)).toHaveAttribute('max', '40');
+  });
+
   it('submits ongoing duration intent independently of fulfillment', async () => {
     mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
     const user = userEvent.setup();

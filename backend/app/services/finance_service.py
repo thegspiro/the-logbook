@@ -32,6 +32,9 @@ from sqlalchemy.orm import aliased, contains_eager, selectinload
 
 from app.api.dependencies import PaginationParams
 from app.core.config import settings
+from app.models.apparatus import Apparatus
+from app.models.email_template import EmailTemplate
+from app.models.facilities import Facility
 from app.models.finance import (
     ApprovalChain,
     ApprovalChainStep,
@@ -65,7 +68,20 @@ from app.services.separation_of_duties import (
 )
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import assert_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
+
+# The statuses that genuinely resolve a step, so a later step may become
+# reachable. Deliberately an allowlist: DENIED and SKIPPED are terminal states
+# that mean the chain stopped, not that it advanced, and a blocklist of "not
+# PENDING" silently read both of them as progress.
+_PRIOR_STEP_SATISFIED = frozenset(
+    {
+        ApprovalStepStatus.APPROVED,
+        ApprovalStepStatus.AUTO_APPROVED,
+        ApprovalStepStatus.SENT,
+    }
+)
 
 
 class BudgetLimitExceededError(Exception):
@@ -242,6 +258,7 @@ class FinanceService:
         return result.scalar_one_or_none()
 
     async def create_budget_category(self, org_id: str, **kwargs) -> BudgetCategory:
+        await self._validate_budget_category_fks(org_id, kwargs)
         cat = BudgetCategory(organization_id=org_id, **kwargs)
         self.db.add(cat)
         await self.db.flush()
@@ -251,6 +268,7 @@ class FinanceService:
     async def update_budget_category(
         self, cat_id: str, org_id: str, **kwargs
     ) -> BudgetCategory:
+        await self._validate_budget_category_fks(org_id, kwargs)
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
@@ -258,6 +276,23 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(cat, ["updated_at"])
         return cat
+
+    async def _validate_budget_category_fks(self, org_id: str, data: dict) -> None:
+        """Reject a client-supplied ``parent_category_id`` outside the org.
+
+        Self-referential, ``ondelete="SET NULL"`` (Pitfall 14c). Same shape
+        as ``_validate_finance_fks``, kept separate because a budget category
+        create/update never carries the fields that helper checks.
+        """
+        parent_category_id = data.get("parent_category_id")
+        if parent_category_id:
+            await assert_in_org(
+                self.db,
+                BudgetCategory,
+                parent_category_id,
+                org_id,
+                label="Parent category",
+            )
 
     async def delete_budget_category(self, cat_id: str, org_id: str) -> None:
         cat = await self.get_budget_category(cat_id, org_id)
@@ -391,12 +426,14 @@ class FinanceService:
     async def create_approval_chain(
         self, org_id: str, created_by: str, steps: Optional[list] = None, **kwargs
     ) -> ApprovalChain:
+        await self._validate_approval_chain_fks(org_id, kwargs)
         chain = ApprovalChain(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(chain)
         await self.db.flush()
 
         if steps:
             for step_data in steps:
+                await self._validate_chain_step_fks(org_id, step_data)
                 step = ApprovalChainStep(chain_id=chain.id, **step_data)
                 self.db.add(step)
             await self.db.flush()
@@ -408,6 +445,7 @@ class FinanceService:
     async def update_approval_chain(
         self, chain_id: str, org_id: str, **kwargs
     ) -> ApprovalChain:
+        await self._validate_approval_chain_fks(org_id, kwargs)
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
@@ -415,6 +453,36 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(chain, ["updated_at"])
         return chain
+
+    async def _validate_approval_chain_fks(self, org_id: str, data: dict) -> None:
+        """Reject a client-supplied ``budget_category_id`` outside the org.
+
+        ``ondelete="SET NULL"`` (Pitfall 14c) — see ``_validate_finance_fks``.
+        """
+        budget_category_id = data.get("budget_category_id")
+        if budget_category_id:
+            await assert_in_org(
+                self.db,
+                BudgetCategory,
+                budget_category_id,
+                org_id,
+                label="Budget category",
+            )
+
+    async def _validate_chain_step_fks(self, org_id: str, data: dict) -> None:
+        """Reject a client-supplied ``email_template_id`` outside the org.
+
+        ``ondelete="SET NULL"`` (Pitfall 14c) — see ``_validate_finance_fks``.
+        """
+        email_template_id = data.get("email_template_id")
+        if email_template_id:
+            await assert_in_org(
+                self.db,
+                EmailTemplate,
+                email_template_id,
+                org_id,
+                label="Email template",
+            )
 
     async def delete_approval_chain(self, chain_id: str, org_id: str) -> None:
         chain = await self.get_approval_chain(chain_id, org_id)
@@ -429,6 +497,7 @@ class FinanceService:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
+        await self._validate_chain_step_fks(org_id, kwargs)
         step = ApprovalChainStep(chain_id=chain_id, **kwargs)
         self.db.add(step)
         await self.db.flush()
@@ -441,6 +510,7 @@ class FinanceService:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
+        await self._validate_chain_step_fks(org_id, kwargs)
         result = await self.db.execute(
             select(ApprovalChainStep).where(
                 ApprovalChainStep.id == step_id,
@@ -689,11 +759,68 @@ class FinanceService:
         weighed in, defeating the point of a multi-step chain. Called with
         `record` already status==PENDING and already locked by the caller.
         """
+        # A denial is terminal for the whole entity, and this is the guard that
+        # makes that true for the chains already in a department's database.
+        # ``_terminate_pending_steps`` closes the rest of a chain from the
+        # moment it shipped, but an installation can already hold a DENIED step
+        # followed by PENDING ones — and approving the last of those made
+        # ``_check_all_steps_complete()`` true, reversing the denial and
+        # encumbering budget against a request the department refused.
+        # Enforced here as well as backfilled (20260901_1300_d5e1f6a8b037) so
+        # it holds whether or not that migration has run.
+        if await self._chain_is_denied(record, org_id):
+            raise ValueError("This request has already been denied")
+
         current = await self.get_current_pending_step(
             record.entity_type, record.entity_id, org_id
         )
         if current is None or current.id != record.id:
             raise ValueError("An earlier approval step is still pending")
+
+    async def _chain_is_denied(self, record: ApprovalStepRecord, org_id: str) -> bool:
+        """Whether any step on this entity has already denied it."""
+        result = await self.db.execute(
+            select(ApprovalStepRecord.id)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
+            .where(
+                ApprovalStepRecord.entity_type == record.entity_type,
+                ApprovalStepRecord.entity_id == record.entity_id,
+                ApprovalStepRecord.status == ApprovalStepStatus.DENIED,
+                ApprovalChain.organization_id == org_id,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def _terminate_pending_steps(
+        self, record: ApprovalStepRecord, org_id: str
+    ) -> int:
+        """Close the rest of the chain once one step denies the entity.
+
+        A denial finalizes the whole entity, so no later step is actionable —
+        but leaving those records PENDING meant the opposite in practice. The
+        next PENDING record became the "current" step, so the denied request
+        was still listed as awaiting approval, and approving the remaining
+        steps walked it to APPROVED and encumbered budget against it.
+
+        Tokens are cleared alongside: an email approver holding a live link for
+        a later step must not be able to act on a request the department has
+        already refused.
+        """
+        records = await self.get_approval_records(
+            record.entity_type, record.entity_id, org_id
+        )
+        terminated = 0
+        for other in records:
+            if other.id == record.id:
+                continue
+            if other.status != ApprovalStepStatus.PENDING:
+                continue
+            other.status = ApprovalStepStatus.SKIPPED
+            other.approval_token = None
+            other.token_expires_at = None
+            terminated += 1
+        return terminated
 
     async def approve_step(
         self,
@@ -793,6 +920,10 @@ class FinanceService:
         record.acted_by = denier_id
         record.acted_at = now
         record.notes = notes
+
+        # Terminate the rest of the chain first: _finalize_denial only writes
+        # the entity's own status and never touches the step records.
+        await self._terminate_pending_steps(record, org_id)
 
         # Deny the entire entity
         await self._finalize_denial(
@@ -907,6 +1038,8 @@ class FinanceService:
         record.acted_at = datetime.now(timezone.utc)
         record.notes = notes
         record.approval_token = None
+
+        await self._terminate_pending_steps(record, org_id)
 
         await self._finalize_denial(
             record.entity_type, record.entity_id, None, notes, org_id
@@ -1075,6 +1208,15 @@ class FinanceService:
         the whole entity, so there is no "next" step to reach).
         """
         records = await self.get_approval_records(entity_type, entity_id, org_id)
+
+        # A denial anywhere in the chain is terminal for the entity, so nothing
+        # downstream is reachable. This paragraph's docstring has always said
+        # so, but the reachability test below only rejected a PENDING prior —
+        # a DENIED one read as "resolved", which minted a fresh 7-day token and
+        # emailed an external approver a live link for a refused request.
+        if any(r.status == ApprovalStepStatus.DENIED for r in records):
+            return
+
         for record in records:
             if record.status != ApprovalStepStatus.PENDING:
                 continue
@@ -1084,7 +1226,10 @@ class FinanceService:
             prior_complete = True
             for prior in records:
                 if prior.step and prior.step.step_order < record.step.step_order:
-                    if prior.status == ApprovalStepStatus.PENDING:
+                    # Name what counts as satisfied rather than what does not:
+                    # the statuses that block are open-ended, the ones that
+                    # genuinely resolve a step are these four.
+                    if prior.status not in _PRIOR_STEP_SATISFIED:
                         prior_complete = False
                         break
             if not prior_complete:
@@ -2670,9 +2815,13 @@ class FinanceService:
         ``budget_id`` would otherwise be silently ignored by the org-scoped
         budget write-helpers on approval/payment (encumbrance/spend never
         recorded, so the PR looks approved but the budget is untouched), and
-        (2) a foreign ``category_id``/``fiscal_year_id`` would leave a dangling
-        cross-tenant reference that skews category/fiscal-year rollups. Only
-        keys actually present in ``data`` are checked (update paths pass
+        (2) a foreign ``category_id``/``fiscal_year_id``/``station_id``/
+        ``apparatus_id``/``facility_id`` would leave a dangling cross-tenant
+        reference that skews category, fiscal-year, per-station or per-asset
+        rollups. Each of the latter three is worse than a skewed rollup: all
+        are ``ondelete="SET NULL"`` FKs, so the *other* org deleting that
+        facility/apparatus silently nulls this org's attribution. Only keys
+        actually present in ``data`` are checked (update paths pass
         ``exclude_unset`` dumps and a null clears rather than sets), so this
         never rejects an omitted or explicitly-cleared field.
         """
@@ -2685,3 +2834,16 @@ class FinanceService:
         fiscal_year_id = data.get("fiscal_year_id")
         if fiscal_year_id and not await self.get_fiscal_year(fiscal_year_id, org_id):
             raise ValueError("Fiscal year not found")
+        station_id = data.get("station_id")
+        if station_id:
+            await assert_in_org(self.db, Facility, station_id, org_id, label="Station")
+        apparatus_id = data.get("apparatus_id")
+        if apparatus_id:
+            await assert_in_org(
+                self.db, Apparatus, apparatus_id, org_id, label="Apparatus"
+            )
+        facility_id = data.get("facility_id")
+        if facility_id:
+            await assert_in_org(
+                self.db, Facility, facility_id, org_id, label="Facility"
+            )

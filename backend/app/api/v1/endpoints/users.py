@@ -78,6 +78,7 @@ from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
     DEFAULT_CLASS,
     is_administrative,
+    split_membership_type,
 )
 from app.utils.security_notifications import notify_security_event
 
@@ -1549,6 +1550,47 @@ async def update_user_profile(
                     "number, or membership class and status"
                 ),
             )
+
+        # The two membership columns are one statement, not two independent
+        # fields: `_reconcile_membership` treats a write to either as a
+        # statement about both, filling the unwritten half with the column
+        # default and re-deriving `membership_type` from the pair. That is
+        # right when the missing half can be resolved — an operational member
+        # moved to administrative keeps a status the legacy value implies.
+        #
+        # It is wrong when it has to invent one. A member on an org-configured
+        # tier is stored as `membership_type='senior'` with both columns NULL
+        # (what the tier endpoint and the backfill migration produce), and
+        # `split_membership_type` deliberately refuses to guess a class for an
+        # id it does not know. Sending `member_status` alone therefore invents
+        # `member_class='operational'` and rewrites the tier to 'active',
+        # enrolling them in the operational body. Verified against the live
+        # schema: ('senior', None, None) becomes ('active', 'operational',
+        # 'regular') on a status-only flush, and the audit event names only the
+        # field that was sent, so the tier's loss goes unrecorded.
+        #
+        # Refused rather than guessed, which is the rule create_member already
+        # follows: it declines to write "a standing nobody stated".
+        stated = {"member_class", "member_status"} & update_data.keys()
+        if len(stated) == 1:
+            missing = ({"member_class", "member_status"} - stated).pop()
+            implied = dict(
+                zip(
+                    ("member_class", "member_status"),
+                    split_membership_type(user.membership_type),
+                )
+            )
+            if getattr(user, missing) is None and implied[missing] is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "This member is on a membership tier, so their "
+                        f"{missing.replace('_', ' ')} is not on file. Send "
+                        "member_class and member_status together, or their "
+                        "membership type would be rewritten from a value "
+                        "nobody supplied."
+                    ),
+                )
 
         # members.manage lets you set rank, but a rank grants its own
         # permissions — so a rank change must also clear the permission-grant

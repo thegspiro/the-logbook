@@ -178,6 +178,23 @@ class MembershipTierService:
         """
         Scan every active/probationary member and promote them to the
         highest tier they qualify for.  Returns a summary of changes.
+
+        **A member is only advanced along a ladder they are already on.** A
+        ``membership_type`` that is not one of this organization's configured
+        tiers used to be treated as sort_order 0 — the bottom rung — so this
+        unattended nightly job promoted the four legacy types that are not
+        tiers in the shipped defaults (``administrative``, ``honorary``,
+        ``retired``, ``prospective``) into an operational tier. Setting
+        ``membership_type`` fires ``_reconcile_membership``, which rewrote
+        ``member_class`` to ``operational`` with it: an administrative member
+        became an operational one overnight, could self-sign up for shifts,
+        matched operational ballots, and slipped past the rank-clearing guard
+        below, which asks ``is_administrative`` of the *new* type.
+
+        Skipping is the conservative direction. An organization whose ladder
+        uses ids none of its members hold yet advances nobody until an admin
+        sets a starting tier, rather than sorting its whole roster onto rung
+        zero and climbing from there.
         """
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
@@ -209,6 +226,11 @@ class MembershipTierService:
         members = result.scalars().all()
 
         advanced = []
+        # Members whose current membership_type is not one of this
+        # organization's tiers. Counted rather than silently dropped: an
+        # unattended job that quietly declines to touch part of the roster
+        # should say how much of it.
+        off_ladder = 0
         now = datetime.now(timezone.utc)
 
         for candidate in members:
@@ -221,12 +243,14 @@ class MembershipTierService:
             if current_type == target_tier["id"]:
                 continue
 
-            # Only advance (don't demote)
+            # Only advance (don't demote), and only along this ladder
             current_tier_def = self.get_tier_by_id(tiers, current_type)
-            current_order = (
-                current_tier_def.get("sort_order", 0) if current_tier_def else 0
-            )
-            if target_tier.get("sort_order", 0) <= current_order:
+            if current_tier_def is None:
+                off_ladder += 1
+                continue
+            if target_tier.get("sort_order", 0) <= current_tier_def.get(
+                "sort_order", 0
+            ):
                 continue
 
             # Lock this member's row before mutating it: this is another
@@ -255,10 +279,12 @@ class MembershipTierService:
             if current_type == target_tier["id"]:
                 continue
             current_tier_def = self.get_tier_by_id(tiers, current_type)
-            current_order = (
-                current_tier_def.get("sort_order", 0) if current_tier_def else 0
-            )
-            if target_tier.get("sort_order", 0) <= current_order:
+            if current_tier_def is None:
+                off_ladder += 1
+                continue
+            if target_tier.get("sort_order", 0) <= current_tier_def.get(
+                "sort_order", 0
+            ):
                 continue
 
             previous_type = current_type
@@ -304,11 +330,13 @@ class MembershipTierService:
                 )
 
         logger.info(
-            f"Membership tier advance: {len(advanced)} members advanced in org {organization_id}"
+            f"Membership tier advance: {len(advanced)} members advanced, "
+            f"{off_ladder} not on the tier ladder, in org {organization_id}"
         )
 
         return {
             "organization_id": organization_id,
             "advanced": len(advanced),
             "members": advanced,
+            "off_ladder": off_ladder,
         }

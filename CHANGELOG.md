@@ -7,6 +7,421 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The member roster silently dropped platoon (and other) assignments from every response (2026-09-02)
+
+**Fixed**
+
+- **`GET /users` declared `platoon`, `member_class`, `member_status` and
+  `compliance_exempt` on its response schema but never populated them from
+  the real member record.** The Platoon Roster Panel reads platoon straight
+  from this endpoint to show each member's current assignment, so it always
+  rendered every member as unassigned regardless of their real platoon.
+  Fixed for `platoon`, which had a real consumer; the other three are left
+  unset pending a decision on which roster fields belong at which
+  permission tier (see below).
+
+Full write-up: `docs/security-review/USR-07-users-organizations.md`
+(USR-7).
+
+### Flagged: the member directory's new reduced view for non-managers is not backed by a matching API change (2026-09-02)
+
+**Not fixed — flagged for a product decision.** A recent change gave members
+without `members.manage` a visibly reduced "Member Directory" (no username,
+no hire date, no export/bulk actions) instead of the full management table.
+The underlying `GET /users` API was not changed to match: every member
+already receives the full field set in the JSON response regardless of the
+UI's rendering choice, so the reduced view is a display preference, not an
+access boundary. Not a cross-tenant leak. See `docs/KNOWN_LIMITATIONS.md`
+and `docs/security-review/USR-07-users-organizations.md` (USR-8) for detail
+and why a straightforward fix isn't safe (25+ other call sites depend on the
+current, unfiltered response).
+
+### A double vote through the full-ballot link's backward-compatible single-choice form could slip past the database's own safety net (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing multiple approvals on one contest
+  while the rest of the ballot allows only one), **submitting through the
+  full-ballot link's older single-choice form computed a different
+  internal fingerprint than the single-vote link would for the identical
+  vote**, so the database's own safety-net check for a near-simultaneous
+  double vote could not recognize the two as the same vote. Fixed so both
+  routes compute the same fingerprint for that contest regardless of which
+  submission form was used.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-39).
+
+### A double vote on an unusually-configured contest could slip past the database's own safety net, and a legitimate vote could be wrongly rejected as a duplicate of an unrelated contest (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing several selections on one contest
+  while the rest of the ballot allows only one), **the database's own
+  safety-net check for a near-simultaneous double vote no longer
+  recognized two vote attempts on that contest as the same vote** when
+  they arrived through the single-vote link and the full-ballot link at
+  (or near) the same moment — even though every other duplicate-vote
+  protection in the system treats them as identical. Fixed so both routes
+  compute the same internal fingerprint for that contest, restoring the
+  safety net.
+- **A legitimate vote on one contest could be wrongly rejected as a
+  duplicate of a completely different contest,** when one contest's
+  displayed title happened to be identical to another contest's internal
+  identifier. Fixed so the duplicate check no longer confuses two distinct
+  contests that merely share a name this way.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-37, ELEC-38).
+
+### A colliding position name could bypass eligibility on the full-ballot submission route, and a legacy contest's votes could be double-counted across routes (2026-09-02)
+
+**Fixed**
+
+- **Submitting a full ballot in one request could vote on a restricted
+  election position using a token that was never granted that
+  permission,** the same naming-collision bypass fixed for the
+  single-vote and ballot-preview routes previously — the full-ballot
+  route checked only the ballot-item permission and never the position's
+  own eligibility rule when the two happened to share a name. Fixed by
+  applying the same collision-aware check, now defined once and reused by
+  every vote-submission route so it cannot drift between them again.
+- **A voter holding two separate unused ballot links for the same election
+  could cast one vote through the single-vote link and a second through
+  the full-ballot link for the very same legacy contest, and have both
+  counted,** because the two routes recorded that contest under two
+  different internal labels and neither route's duplicate check — nor the
+  database's own safety-net constraint — recognized the other's label as
+  the same contest. Fixed by making both routes recognize every label a
+  legacy contest can be recorded under, and by making both routes record
+  the same canonical label going forward so the database-level safety net
+  also closes the gap for a near-simultaneous submission.
+- **A member whose membership tier is configured as ineligible to vote
+  could still receive a live, emailed ballot credential for a plain
+  position, specifically on an election that set no position-specific
+  eligibility rules at all** — a narrower prior fix only closed this gap
+  when the election configured an (empty) rule for that position. Fixed so
+  the tier-wide ban applies to every election with plain positions,
+  regardless of whether position-specific rules are configured.
+- **The fix for the naming-collision bypass above had a gap of its own:**
+  when a legacy contest happened to share a name with two different
+  restricted positions at once (via its internal id and its displayed
+  title respectively), the check picked one of the two names to verify —
+  effectively at random — instead of requiring the vote to clear both. A
+  token granted access to only one of the two names could, depending on
+  that random pick, still bypass the other. Fixed to require clearing
+  every colliding name, not just one.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-33, ELEC-34, ELEC-35).
+
+### A mixed election's plain-position ballots ignored a global voting ban and an admin override, and a token could be closed with a legitimate vote still pending (2026-09-02)
+
+**Fixed**
+
+- **A member whose membership tier is configured as ineligible to vote
+  (e.g. a probationary tier) could still receive a live, emailed ballot
+  credential for a plain-position contest in a mixed election,** even
+  though the same global ban already correctly excluded them from every
+  structured ballot item on the same election. Fixed by applying the same
+  tier check to both kinds of contest.
+- **An administrator's per-voter override — meant to grant a specific
+  member eligibility for every contest on a ballot — was honored for
+  structured ballot items but silently ignored for plain positions,** so an
+  overridden member could still be denied a position vote their override
+  was supposed to guarantee. Fixed by applying the override to both kinds
+  of contest identically.
+- **In a mixed election, casting a vote for a plain position could
+  prematurely mark a voter's ballot as fully submitted while a legitimate
+  ballot-item vote was still outstanding,** causing that second, valid vote
+  to be rejected as a duplicate submission. Fixed so a ballot is only
+  considered complete once every contest the voter is eligible for —
+  positions and items alike — has actually been voted on.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-30, ELEC-31, ELEC-32).
+
+### A colliding position name let an emailed ballot bypass its own eligibility restriction (2026-09-02)
+
+**Fixed**
+
+- **A restricted election position could be voted on by a token that was
+  never granted that permission,** if an unrelated, unrestricted ballot
+  contest happened to share its exact name. Voting eligibility sent by
+  email is checked per-candidate against one of two independent rule sets
+  depending on how that candidate is classified; a naming collision between
+  the two caused the classification to pick only one rule set and skip the
+  other entirely, so a voter authorized for the unrestricted contest could
+  cast a vote for the restricted one under the same name. Fixed by
+  detecting the collision and requiring both rule sets to authorize the
+  vote whenever a candidate's name matches both.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-29).
+
+### A mixed election could skip an eligible voter entirely, and a legacy title-keyed vote could be double-counted (2026-09-02)
+
+**Fixed**
+
+- **A member eligible only for a plain position (not any ballot item) on a
+  mixed election never received a ballot at all** — the decision to skip a
+  member with zero eligible ballot items ran before their position
+  eligibility was even checked, so an otherwise-eligible voter for a
+  restricted position was excluded outright whenever they also failed an
+  unrelated ballot item's voter-type rules. Fixed by checking both forms of
+  eligibility before deciding whether a member's ballot would be empty.
+- **A vote cast before positions were normalized could fail to block a
+  second vote for the same contest,** if that vote's candidate was one of the
+  older ones keyed by title rather than by the ballot item's id: the
+  duplicate-vote check only recognized the newer id-based match. Fixed by
+  using the same broadened match already used elsewhere in the same
+  submission path, so an old title-keyed vote is recognized as a duplicate
+  everywhere it needs to be.
+
+**Known limitation (flagged, not fixed):** an eligible member's plain
+position vote in a mixed election has no way to be cast today — see
+`KNOWN_LIMITATIONS.md`.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-26, ELEC-27, ELEC-28).
+
+### A member moved to a custom membership tier kept voting rights a restricted ballot meant to exclude, and four token-ballot races/gaps (2026-09-02)
+
+**Fixed**
+
+- **A member moved onto a department's own custom membership tier (e.g.
+  "Senior") kept counting as an operational/regular voter for ballots
+  restricted to that category,** even though a custom tier is documented to
+  match none of the built-in voter categories. Caused by an unrelated,
+  correct fix for shift scheduling that started preserving a member's prior
+  class/status across a tier switch — election eligibility read the same two
+  columns and inherited the carryover. Fixed by re-checking the member's
+  live membership tier before trusting those columns for ballot eligibility.
+- **Officer attestation of a paper-ballot batch could race a concurrent
+  election close:** the attestation only locked the batch, not the election,
+  so a batch attested moments before close could be confirmed after the
+  election had already generated its certified results excluding it. Fixed
+  with a locking read on the election status.
+- **A vote submitted through an emailed ballot link could read stale
+  election/token state past its own row lock:** the lock was acquired
+  correctly, but the already-cached (pre-lock) Python objects were returned
+  instead of the freshly locked row's values, the same class of bug
+  previously fixed once in this release for meeting quorum. Fixed by
+  refreshing the locked objects from the row lock.
+- **Voiding a paper-ballot batch was not safe against two officers voiding
+  the same batch at once** — both could load the same votes before either
+  committed, and the second commit silently overwrote the first officer's
+  recorded reason and timestamp. Fixed by locking the batch first and
+  refusing a second void of an already-voided one.
+- **A single-candidate selection on one ballot item could be bound to a
+  different ballot item in the same election** via a crafted vote-bulk
+  submission, letting an ineligible candidate appear in the wrong contest.
+  Fixed by requiring the candidate to belong to the named item, matching the
+  check already applied to ranked and multi-select ballot items.
+- **The single-vote ballot-link endpoint didn't check which ballot items a
+  voter's token was actually restricted to,** only a position restriction
+  that's never set for item-based elections — so a token limited to one
+  ballot item could still vote on a different, possibly restricted item.
+  Fixed by enforcing the same per-item restriction the bulk vote-submission
+  endpoint already enforced, and by no longer showing a restricted item's
+  candidates to a token that can't vote for them.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-13, ELEC-15, ELEC-17, ELEC-18, ELEC-20, ELEC-21).
+
+### A legacy ballot item lost its candidates, and a positional candidate outside any ballot item could bypass eligibility entirely (2026-09-02)
+
+**Fixed**
+
+- **A candidate-selection ballot item created before ballot items carried
+  their own "position" field lost every one of its candidates on the ballot
+  link,** and rejected them if submitted anyway: the eligibility checks
+  added for the previous fix above only recognized a candidate as belonging
+  to an item by the item's id, dropping the by-title matching the voting
+  page and eligibility checks elsewhere in the app already relied on for
+  these older items. Fixed by matching a candidate to its item by title
+  when the item has no explicit position, consistently everywhere that
+  match is made.
+- **A candidate running for a plain position that isn't tied to any ballot
+  item had no eligibility check at all, on an election that also had
+  ballot items** — an org could restrict a position (e.g. "Secretary") to
+  a particular membership category, and a member outside that category
+  could still vote for it, because the restriction was never captured on
+  their ballot link in the first place whenever the election also used
+  ballot items. Fixed by capturing that restriction regardless of whether
+  the election also has ballot items, and by checking each candidate
+  against the one restriction that actually applies to it.
+- **Attesting a paper-ballot batch and deleting its election could deadlock
+  against each other** under heavy concurrent use, because the two
+  operations locked the batch and the election in opposite orders. Fixed
+  by locking them in the same order everywhere.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-22, ELEC-23, ELEC-24).
+
+### Voiding a paper-ballot batch could deadlock against a concurrent election deletion (2026-09-02)
+
+**Fixed**
+
+- **Voiding a paper-ballot batch and deleting its election could deadlock
+  against each other** under heavy concurrent use, the same lock-order
+  problem already fixed for batch attestation — voiding locked the batch
+  before the election, while deletion locks the election before its
+  batches. Fixed by locking them in the same order everywhere.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-25).
+
+### Four more finance foreign keys are now scoped to the caller's organization (2026-09-02)
+
+**Fixed**
+
+- **A purchase request's linked apparatus/facility, a budget category's
+  parent, an approval chain's budget category, and an approval step's email
+  template could all be set to another organization's row.** Each is an
+  `ondelete="SET NULL"` foreign key exposed as a free client-supplied string,
+  and none was checked against the caller's own organization before being
+  saved — so the other organization later deleting its own apparatus,
+  facility, budget category or email template would silently null out this
+  organization's reference. Fixed the same way an earlier pass fixed the
+  identical gap on a budget's station: every one of these fields is now
+  validated against the caller's organization before it is persisted, on
+  both create and update.
+
+### A denied purchase request, expense report or check request could still be approved and paid (2026-09-02)
+
+**Fixed**
+
+- **Denying one step in a multi-step approval chain didn't stop the rest of
+  the chain.** The remaining steps stayed pending, so the request kept
+  showing up as awaiting approval — and approving the last of them reversed
+  the denial and charged the budget for a request the department had
+  refused. This was already fixed on `main` (also closing a follow-on token-
+  expiry gap and a gap for chains that were denied before the fix shipped);
+  this pass independently re-verified the fix is complete and correct.
+
+### Quick Add: starting a log entry on a phone is now two taps from anywhere (2026-09-01)
+
+**Added**
+
+- **The centre of the phone bottom bar is an Add button.** It opens a short
+  list of the things a member actually logs — training hours, a rig check, an
+  action item, a shift report, clocking in, checking into a shift, scanning a
+  member ID, and for officers requesting equipment, creating an event or adding
+  a member. Before this, every one of them was reached the same way: tap More,
+  wait for the drawer, find the module, find the page, find its button. Four
+  taps and two page loads before the first field.
+- **Each row goes to the screen that already owns that entry.** Quick Add adds
+  no forms of its own, so there is no second path for the same data to drift
+  down and nothing that can fall behind a form's own validation rules.
+- **Rows appear only where the page behind them would actually open.** A row
+  gated more widely than its route is a link to Access Denied placed there by
+  the app itself. `navGateIntegrity.test.ts` now resolves every row against the
+  real route definition — the route must exist, the row's permissions must be a
+  subset of what the route accepts, and a route's module gate must be repeated
+  on the row.
+
+**Changed**
+
+- **The phone bar keeps five items; the configurable slots go from three to
+  two.** Six items on a 390px phone is 65px each and puts the action at an edge
+  rather than under the thumb. A bar layout saved before this shipped keeps its
+  first two destinations and is left intact on disk — the third is still one tap
+  away under More.
+
+**Documentation**
+
+- **[MOBILE_QUICK_ENTRY_REVIEW.md](docs/MOBILE_QUICK_ENTRY_REVIEW.md)** records
+  the review this came out of. Eleven findings remain open, each with its
+  evidence: the command palette is still keyboard-only and so unreachable on a
+  phone; no image input opens the camera directly; the offline queue carries two
+  kinds of write while replay protection exists on one create schema out of
+  many; a fuel log asks for eleven fields where the API needs four; and a phone
+  home screen still needs about a dozen requests to answer "what is waiting for
+  me". Nothing found blocks work.
+
+### A member can now see who's going, RSVP without being asked, and know where they stand on a waitlist (2026-09-01)
+
+**Added**
+
+- **The going list is visible to members.** An event's attendee list was
+  reachable only with `events.manage`, so an ordinary member saw aggregate
+  counts and nothing else. It is now shareable — names and going status only,
+  never contact details, RSVP notes, dietary restrictions, accessibility needs,
+  guest counts or check-in times, which stay in the organizer view. Who may see
+  it is an organization default with a per-event override in either direction.
+  **The default ships as managers-only**, so nothing changes for an existing
+  department until it opts in.
+- **A member can respond to an event that does not require a response.**
+  `requires_rsvp` now means "a response is expected" — it still drives the
+  Required badge, the deadline and the non-respondent reminder audience — and
+  no longer means "responses are permitted". Previously the API refused
+  outright, which left members with nothing to do on the majority of events.
+- **Waitlist standing.** The detail page says "You're #2 of 5 on the waitlist"
+  rather than only that a waitlist exists, ordered by the same column the
+  server actually promotes on.
+- **Inline RSVP from the dashboard**, matching the sign-up open shifts already
+  offered there.
+
+**Fixed**
+
+- **Guests occupy seats.** `allow_guests` had been on the model since the
+  beginning and was read nowhere, so guests were accepted on events that forbade
+  them; and capacity counted going _rows_, leaving guests out entirely, so a
+  capped event could be oversubscribed by however many guests attendees brought.
+  Capacity is now a sum of seats. **A capped event will fill sooner than it used
+  to** — that is the correction, not a regression — and existing events already
+  over the seat count are left alone rather than retroactively waitlisted; they
+  simply admit nobody new.
+- **The waitlist queue moves.** Releasing several seats now promotes several
+  members rather than one, and a party larger than the whole event is refused at
+  RSVP time instead of sitting at the head of the queue blocking everyone behind
+  it.
+- **"Apply to all future events" works on an optional series**, and now goes
+  through the same guarded write path as a single RSVP, so capacity, guests and
+  deadlines are enforced on every occurrence rather than none.
+- The RSVP modal opens with the member's existing response rather than blank —
+  which had quietly discarded their notes, and, once guests consumed capacity,
+  silently released the seats those guests were holding.
+
+### The dashboard's seven-day list is now thirty days, and its control says where it goes (2026-09-01)
+
+**Changed**
+
+- The dashboard card that merges a member's own shifts, open slots and events
+  covers **thirty days** rather than seven, and is titled **Next 30 Days**. It
+  was already a rolling window anchored to today, so it simply reaches further;
+  the six-row cap and the "N more through <date>" footer are unchanged.
+- **Its control is now "All Shifts", not "Full Schedule", and it opens the
+  month view.** The card lists drills and events alongside shifts, but
+  `/scheduling` holds shifts only — every tab there is shift-scoped and the
+  calendar endpoints return shifts — so a member who saw Thursday's drill on
+  the card and followed a promise of the _full_ schedule arrived somewhere it
+  could not be. Opening on the month view also fixes a phone mismatch: that
+  grid draws a month at every width, while the week view fetched only seven
+  days to fill it.
+- **Drills stop being crowded off the list.** The card's events and own-shifts
+  requests were capped at five records each, and the cap applied _before_ the
+  window filter rather than after — so five socials spread across the next six
+  months were enough to hide every drill in the coming month, on a card whose
+  own subtitle promises drills. Both requests now ask for the window the card
+  renders.
+- The footer's "N more open shifts" line **names the horizon it counts**. The
+  open-shift request deliberately reaches past the visible window so that line
+  has something to report, but it stops at sixty days; the wording no longer
+  implies it covers everything beyond the window.
+
+**Fixed**
+
+- The **"Take a Shift"** quick action counted open shifts up to sixty days out,
+  well past the window the card advertises — a number members read as "what is
+  open now", attached to a button that opens a schedule not showing those
+  shifts. Its count, and the short-staffed tally beside it, are now scoped to
+  the visible window; only the footer's "more later" line reads the longer
+  reach it was added for.
+
 ### A hire date, an expiry or any other calendar date read one day early west of UTC (2026-09-01)
 
 **Fixed**
@@ -91,18 +506,22 @@ boundary.
   screen you were standing on, and "EMS" reads as a different seat rather than
   as the same one spelled another way. Every screen that shows a seat name now
   resolves it through one helper (`positionLabel`), so there is no second copy
-  of the mapping left to drift. Custom seats a department defines itself are
-  not in that mapping — their labels live in the department's scheduling
-  settings, read by the screens that offer them — and are unchanged.
+  of the mapping left to drift. A seat a department defined itself resolves
+  through the same `customPositions` the template form's dropdown is built
+  from, so its admin-chosen label now reaches the board and the roster too
+  rather than showing there as its slug.
 - **The same token reached print and email.** A printed shift roster's
   right-hand column and the shift-reminder emails' crew list were built from
   the token as well ("EMS", "Ems"), and a shift assignment notification told a
   member they had been assigned to the "ems position". These now go through
   `position_label` in `app/utils/positions.py`, the backend half of the same
   mapping, asserted against the frontend's copy from source so the two cannot
-  disagree. On a 32-character receipt a label wider than the seat column falls
-  back to its first word, because the renderer's mid-word cut
-  ("DRIVER/OPERA") reads as a printer fault.
+  disagree. On a 32-character receipt a label wider than the seat column drops
+  the alternative after a slash — "Driver/Operator" is two names for one seat,
+  and the renderer's mid-word cut ("DRIVER/OPERA") reads as a printer fault —
+  and is otherwise truncated rather than reduced to its first word, which
+  would print a department's "Assistant Chief" and "Assistant Driver"
+  identically.
 - **`POSITION_LABELS` held three keys for one seat** — `EMS`, `ems` and `EMT`,
   all mapping to "EMT" — which is also why the shift assign dropdown, built by
   iterating that map, offered "EMT" three times, two of them tokens no member

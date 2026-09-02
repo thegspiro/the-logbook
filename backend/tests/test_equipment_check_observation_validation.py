@@ -151,3 +151,67 @@ class TestSubmissionObservationValidation:
                 [item],
                 {"item-1": self.template_item("count", required_quantity=2)},
             )
+
+    def test_a_crew_may_fail_an_item_the_numbers_say_is_fine(self):
+        """A measurement can refute a pass. It cannot refute a fail.
+
+        An AED-pad packet is torn open a year before the pads expire; a
+        regulator is cracked on a full cylinder; a full drawer holds the wrong
+        size. Rejecting those answers 400s the entire checklist — every other
+        answer on a sixty-item form goes with it — and the message names no
+        action the crew can take. Offline the same payload is retried to the
+        queue ceiling and then discarded, so the finding is lost rather than
+        filed.
+        """
+        item = self.submission(status="fail", level_reading=2000.0)
+
+        EquipmentCheckService._validate_and_snapshot_submission(
+            [item], {"item-1": self.template_item("level", min_level=1500.0)}
+        )
+
+        assert item["status"] == "fail"
+
+    def test_a_crew_may_fail_an_unexpired_item(self):
+        from datetime import date, timedelta
+
+        item = self.submission(status="fail")
+
+        EquipmentCheckService._validate_and_snapshot_submission(
+            [item],
+            {
+                "item-1": self.template_item(
+                    "expiry",
+                    has_expiration=True,
+                    expiration_date=date.today() + timedelta(days=365),
+                )
+            },
+        )
+
+        assert item["status"] == "fail"
+
+    def test_a_crew_may_fail_an_item_that_is_fully_stocked(self):
+        item = self.submission(status="fail", quantity_found=4)
+
+        EquipmentCheckService._validate_and_snapshot_submission(
+            [item], {"item-1": self.template_item("count", required_quantity=2)}
+        )
+
+        assert item["status"] == "fail"
+
+    def test_an_expired_item_still_cannot_be_passed(self):
+        """The direction that is safety-critical is untouched."""
+        from datetime import date, timedelta
+
+        item = self.submission(status="pass")
+
+        with pytest.raises(ValueError, match="contradicts"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [item],
+                {
+                    "item-1": self.template_item(
+                        "expiry",
+                        has_expiration=True,
+                        expiration_date=date.today() - timedelta(days=1),
+                    )
+                },
+            )

@@ -20,12 +20,15 @@ vi.mock('../../modules/scheduling/services/api', () => ({
   },
 }));
 
-vi.mock('../../stores/authStore', () => ({
-  useAuthStore: () => ({
+vi.mock('../../stores/authStore', () => {
+  // Callable and carrying getState, as the real store is: consumers that read
+  // it outside React (the org-scoped scheduling settings cache) use the latter.
+  const state = () => ({
     checkPermission: () => false,
     user: { id: 'user-1', first_name: 'Test', last_name: 'User' },
-  }),
-}));
+  });
+  return { useAuthStore: Object.assign(() => state(), { getState: state }) };
+});
 
 vi.mock('../../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
