@@ -83,7 +83,7 @@ describe('DocumentsPage', () => {
     await user.click(allDocsButton);
 
     await waitFor(() => {
-      expect(mockGetDocuments).toHaveBeenCalledWith({});
+      expect(mockGetDocuments).toHaveBeenCalledWith({ skip: 0, limit: 50 });
     });
     expect(await screen.findByText('Org-level notice.pdf')).toBeInTheDocument();
   });
@@ -136,5 +136,117 @@ describe('DocumentsPage', () => {
     await waitFor(() => {
       expect(mockDownloadDocument).toHaveBeenCalledWith('d1');
     });
+  });
+
+  it('retains the total and loads the next result set', async () => {
+    const user = userEvent.setup();
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      makeDocument({ id: `d-${index + 1}`, name: `Document ${index + 1}` })
+    );
+    mockGetDocuments
+      .mockResolvedValueOnce({ documents: firstPage, total: 51, skip: 0, limit: 50 })
+      .mockResolvedValueOnce({
+        documents: [makeDocument({ id: 'd-51', name: 'Document 51' })],
+        total: 51,
+        skip: 50,
+        limit: 50,
+      });
+
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+
+    expect(await screen.findByText('Showing 1–50 of 51')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
+
+    expect(await screen.findByText('Document 51')).toBeInTheDocument();
+    expect(screen.getByText('Showing 1–51 of 51')).toBeInTheDocument();
+    expect(mockGetDocuments).toHaveBeenLastCalledWith({ folder_id: 'f1', skip: 50, limit: 50 });
+  });
+
+  it('sends a trimmed, debounced search and resets pagination', async () => {
+    const user = userEvent.setup();
+    mockGetDocuments
+      .mockResolvedValueOnce({
+        documents: [makeDocument({ id: 'first', name: 'First page' })],
+        total: 75,
+        skip: 0,
+        limit: 50,
+      })
+      .mockResolvedValueOnce({
+        documents: [makeDocument({ id: 'match', name: 'Incident report' })],
+        total: 1,
+        skip: 0,
+        limit: 50,
+      });
+
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await screen.findByText('First page');
+    await user.type(screen.getByRole('textbox', { name: 'Search documents' }), '  incident  ');
+
+    await waitFor(
+      () => {
+        expect(mockGetDocuments).toHaveBeenLastCalledWith({
+          folder_id: 'f1',
+          skip: 0,
+          limit: 50,
+          search: 'incident',
+        });
+      },
+      { timeout: 1500 }
+    );
+    expect(await screen.findByText('Incident report')).toBeInTheDocument();
+    expect(screen.getByText('Showing 1–1 of 1')).toBeInTheDocument();
+  });
+
+  it('resets to the first page when the selected folder changes', async () => {
+    const user = userEvent.setup();
+    mockGetFolders.mockResolvedValue({
+      folders: [
+        { id: 'f1', name: 'SOPs', document_count: 1 },
+        { id: 'f2', name: 'Policies', document_count: 0 },
+      ],
+      total: 2,
+    });
+    mockGetDocuments
+      .mockResolvedValueOnce({ documents: [makeDocument({ name: 'SOP' })], total: 1, skip: 0, limit: 50 })
+      .mockResolvedValueOnce({ documents: [], total: 0, skip: 0, limit: 50 });
+
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await waitFor(() => expect(mockGetDocuments).toHaveBeenCalledWith({ folder_id: 'f1', skip: 0, limit: 50 }));
+    await user.click(screen.getByRole('button', { name: 'All Folders' }));
+    await user.click(screen.getByRole('button', { name: /policies/i }));
+
+    expect(await screen.findByText('No Documents in This Folder')).toBeInTheDocument();
+    expect(mockGetDocuments).toHaveBeenLastCalledWith({ folder_id: 'f2', skip: 0, limit: 50 });
+  });
+
+  it('does not allow an older search response to replace newer results', async () => {
+    const user = userEvent.setup();
+    let resolveInitial: ((value: object) => void) | undefined;
+    const initialResponse = new Promise<object>((resolve) => {
+      resolveInitial = resolve;
+    });
+    mockGetDocuments.mockReturnValueOnce(initialResponse).mockResolvedValueOnce({
+      documents: [makeDocument({ id: 'new', name: 'Newest result' })],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await user.type(screen.getByRole('textbox', { name: 'Search documents' }), 'new');
+    expect(await screen.findByText('Newest result', {}, { timeout: 1500 })).toBeInTheDocument();
+
+    resolveInitial?.({
+      documents: [makeDocument({ id: 'old', name: 'Stale result' })],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+    await waitFor(() => expect(screen.queryByText('Stale result')).not.toBeInTheDocument());
+    expect(screen.getByText('Newest result')).toBeInTheDocument();
   });
 });
