@@ -979,6 +979,81 @@ describe('Dashboard', () => {
       expect(mockGetOpenShifts.mock.calls.length).toBe(callsAfterRetry);
     });
 
+    it('honours module gates that landed after the first render on a pull-to-refresh', async () => {
+      // useEnabledModules answers permissively until the configuration lands,
+      // so a refresh closure frozen at first render calls gated endpoints for
+      // modules the organisation has disabled -- taking a 403 and raising an
+      // error the module-aware initial load correctly avoided.
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: ['scheduling'] });
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('region', { name: 'Next 30 Days' });
+      const screeningCallsBefore = mockGetMyCompliance.mock.calls.length;
+
+      await act(async () => {
+        await registeredPullToRefresh?.();
+      });
+
+      // Medical screening is disabled, so the refresh must not call it.
+      expect(mockGetMyCompliance.mock.calls.length).toBe(screeningCallsBefore);
+    });
+
+    it('refreshes the unread count even when an inbox retry is already running', async () => {
+      // One key for both message subrequests made the refresh return the
+      // in-flight inbox promise and skip the unread half entirely, leaving the
+      // badge stale.
+      mockGetInbox.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Updates could not be fully verified.');
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+      const unreadCallsBefore = mockGetUnreadCount.mock.calls.length;
+
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(mockGetUnreadCount.mock.calls.length).toBeGreaterThan(unreadCallsBefore);
+      });
+    });
+
+    it('serialises the post-signup refresh with an open-shift request already running', async () => {
+      // A member can sign up from a row that survived a failed load while its
+      // Retry is still in flight. handleSignup used to call the loaders
+      // directly, so if its pair settled first the older request would land
+      // last and put the shift they just took back on the open list.
+      mockGetOpenShifts
+        .mockResolvedValueOnce([makeShift({ id: 'open-1' })])
+        .mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /sign up/i }));
+
+      // A refresh is left hanging on the openShifts key before the signup.
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      const callsBeforeSignup = mockGetOpenShifts.mock.calls.length;
+
+      await user.click(await screen.findByRole('button', { name: /confirm/i }));
+      await waitFor(() => {
+        expect(mockSignupForShift).toHaveBeenCalledWith('open-1', { position: 'firefighter' });
+      });
+
+      // The post-signup refresh joins the in-flight request rather than
+      // starting a competing one.
+      expect(mockGetOpenShifts.mock.calls.length).toBe(callsBeforeSignup);
+    });
+
     it('re-enables the Retry control once its request settles', async () => {
       // The guard must not be a one-way door: a retry that fails has to be
       // retryable again.

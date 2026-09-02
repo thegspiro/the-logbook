@@ -633,12 +633,13 @@ const Dashboard: React.FC = () => {
   };
 
   // The retry the Updates card offers: whichever half actually failed.
-  const retryDeptMessages = () => {
-    if (inboxError && unreadCountError) return loadDeptMessages('both');
-    if (inboxError) return loadDeptMessages('inbox');
-    if (unreadCountError) return loadDeptMessages('unread');
-    return Promise.resolve();
-  };
+  // Keyed per subrequest for the same reason the refresh is: whichever half is
+  // already running, the other still gets its own turn.
+  const retryDeptMessages = () =>
+    Promise.all([
+      ...(inboxError ? [runRetry('messages:inbox', () => loadDeptMessages('inbox'))] : []),
+      ...(unreadCountError ? [runRetry('messages:unread', () => loadDeptMessages('unread'))] : []),
+    ]);
 
   const markMessageRead = async (msgId: string) => {
     try {
@@ -764,9 +765,16 @@ const Dashboard: React.FC = () => {
       await schedulingService.signupForShift(shiftId, { position: dashboardSignupPosition });
       toast.success('Signed up for shift');
       setSignupExpandedId(null);
-      // Refresh both lists: the signed-up shift moves from open to my shifts
-      void loadMyShifts();
-      void loadOpenShifts();
+      // Refresh both lists: the signed-up shift moves from open to my shifts.
+      //
+      // Through the same keyed guard as the Retry controls and the refresh
+      // gesture. A member can sign up from a row that survived a failed load
+      // while its Retry is still running; if this pair settled first, the older
+      // retry would land last and put the shift they just took back on the open
+      // list. Every non-initial call to these loaders goes through the guard,
+      // which is what makes "last write wins" mean the newest request.
+      void runRetry('myShifts', () => loadMyShifts(true));
+      void runRetry('openShifts', () => loadOpenShifts(true));
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
     } finally {
@@ -1257,7 +1265,17 @@ const Dashboard: React.FC = () => {
 
   const anyBusy = useCallback((...keys: string[]) => keys.some((key) => busyLoaders.has(key)), [busyLoaders]);
 
-  const refreshDashboard = useCallback(async () => {
+  // Held in a ref and rewritten every render, then exposed through a stable
+  // callback. useRegisterPullToRefresh wants one identity for the lifetime of
+  // the page, and a useCallback with suppressed deps gives it that by freezing
+  // the closure from first render -- when useEnabledModules() is still
+  // answering permissively because the configuration has not landed. Pulling to
+  // refresh then called gated endpoints for modules the organization has
+  // disabled, took the 403, and raised an error the module-aware initial load
+  // had correctly avoided. The ref keeps the identity stable and the body
+  // current.
+  const refreshImpl = useRef<() => Promise<void>>(async () => {});
+  refreshImpl.current = async () => {
     // `true` throughout: a pull-to-refresh runs with the page already on
     // screen, so it is a refresh rather than a first load. Clearing the error
     // flags up front here would do what it did on the inline Retry -- the
@@ -1270,7 +1288,12 @@ const Dashboard: React.FC = () => {
     // the same race the keyed guard was added to stop, arriving by a different
     // door. Sharing the keys makes a concurrent gesture join the retry instead.
     await Promise.all([
-      runRetry('messages', () => loadDeptMessages('both')),
+      // The two message subrequests are keyed apart, so a refresh that joins an
+      // inbox-only retry still refreshes the unread count. Sharing one key made
+      // the refresh return that partial promise and skip the other half,
+      // leaving the badge stale.
+      runRetry('messages:inbox', () => loadDeptMessages('inbox')),
+      runRetry('messages:unread', () => loadDeptMessages('unread')),
       runRetry('hours', () => loadHours(true)),
       runRetry('events', () => loadUpcomingEvents(true)),
       runRetry('notifications', () => loadNotifications(true)),
@@ -1284,8 +1307,9 @@ const Dashboard: React.FC = () => {
       ...(activeTab === 'department' && canViewChiefOperations ? [loadOperations()] : []),
       ...(activeTab === 'department' && canViewAssets ? [loadAssetWidgets()] : []),
     ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, canViewAssets, canViewChiefOperations, canViewLegacyAdmin]);
+  };
+
+  const refreshDashboard = useCallback(() => refreshImpl.current(), []);
 
   useRegisterPullToRefresh(refreshDashboard);
 
@@ -1824,7 +1848,8 @@ const Dashboard: React.FC = () => {
                       message="Updates could not be fully verified."
                       source="updates"
                       busy={anyBusy(
-                        ...(messagesError ? ['messages'] : []),
+                        ...(inboxError ? ['messages:inbox'] : []),
+                        ...(unreadCountError ? ['messages:unread'] : []),
                         ...(notificationsError ? ['notifications'] : [])
                       )}
                       onRetry={() => {
@@ -1845,7 +1870,8 @@ const Dashboard: React.FC = () => {
                         // reader the button refreshes a healthy feed.
                         source={messagesError ? 'updates' : 'notifications'}
                         busy={anyBusy(
-                          ...(messagesError ? ['messages'] : []),
+                          ...(inboxError ? ['messages:inbox'] : []),
+                          ...(unreadCountError ? ['messages:unread'] : []),
                           ...(notificationsError ? ['notifications'] : [])
                         )}
                         onRetry={() => {
