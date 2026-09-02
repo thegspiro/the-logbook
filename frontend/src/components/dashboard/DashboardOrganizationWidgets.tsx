@@ -75,7 +75,7 @@ export default function DashboardOrganizationWidgets() {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value as WidgetPeriod)}
-            className="input ml-2 min-h-11"
+            className="form-input ml-2 min-h-11 w-auto"
             aria-label="Dashboard widget period"
           >
             {periods.map((p) => (

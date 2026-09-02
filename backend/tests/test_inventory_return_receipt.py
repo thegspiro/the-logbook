@@ -206,7 +206,12 @@ async def test_partial_pool_return_reduces_open_holding_and_validates_quantity()
         quantity_issued=5,
         is_returned=False,
     )
-    svc, _ = service_with(req, item, issuance)
+    # The trailing None is the lot lookup: the receipt asks which ledger this
+    # item keeps its stock in, and this one has no lots, so the units go back
+    # into `quantity`. An item WITH lots takes the lot path instead — covered
+    # against a real database in test_inventory_pool_lot_ledger.py, because
+    # that answer has to come from real rows.
+    svc, _ = service_with(req, item, issuance, None)
     ok, _ = await svc.review_return_request(
         uuid4(),
         uuid4(),

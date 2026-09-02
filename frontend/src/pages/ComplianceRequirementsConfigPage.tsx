@@ -571,18 +571,34 @@ export default function ComplianceRequirementsConfigPage() {
               </>
             )}
 
+            {/* Stored but not yet consulted. `compliance_configs.grace_period_days`
+                has no reader anywhere in the backend — its siblings on this
+                screen (`at_risk_threshold`, `include_current_month`) are read
+                by the compliance calculation and this one is not. Labelled
+                rather than removed or silently wired: an officer who sets it
+                and is told nothing believes late work is being forgiven, which
+                is the failure CLAUDE.md pitfall #19 describes. Delete this
+                notice in the change that makes the calculation read it. */}
             <div>
-              <label className={labelClass}>Grace Period (days)</label>
+              <label className={labelClass} htmlFor="grace-period-days">
+                Grace Period (days)
+              </label>
               <input
+                id="grace-period-days"
                 type="number"
                 className={inputClass}
                 min={0}
                 max={365}
                 value={gracePeriodDays}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setGracePeriodDays(Number(e.target.value))}
+                aria-describedby="grace-period-days-help"
               />
-              <p className="text-theme-text-secondary mt-1 text-xs">
-                Days after a requirement deadline before marking non-compliant
+              <p id="grace-period-days-help" className="text-theme-text-secondary mt-1 text-xs">
+                Days after a requirement deadline before marking non-compliant.
+              </p>
+              <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+                Not in effect yet — this value is saved but no compliance calculation reads it, so a deadline is not
+                extended by it.
               </p>
             </div>
 

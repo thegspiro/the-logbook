@@ -1113,18 +1113,22 @@ class TestUniqueConstraints:
             found
         ), "users table must have a unique index on (organization_id, username)"
 
-    def test_role_slug_unique_per_org(self):
-        """Role slug should be unique within an organization."""
-        roles = _tables.get("roles")
-        if roles is None:
-            pytest.skip("roles table not found")
-        found = False
-        for idx in roles.indexes:
-            idx_cols = {c.name for c in idx.columns}
-            if "organization_id" in idx_cols and "slug" in idx_cols and idx.unique:
-                found = True
-                break
-        assert found, "roles table must have a unique index on (organization_id, slug)"
+    def test_position_slug_unique_per_org(self):
+        """Position slug must be unique within an organization.
+
+        The table is ``positions``. ``Role`` is an alias of ``Position``
+        (``Role = Position`` in app/models/user.py), so there is no ``roles``
+        table in ``Base.metadata`` — and this test, written against that name,
+        skipped on every run since it was added. The invariant it describes is
+        real and does hold; nothing was checking it.
+        """
+        positions = _tables.get("positions")
+        assert positions is not None, "positions table not found in metadata"
+        found = any(
+            idx.unique and {"organization_id", "slug"} <= {c.name for c in idx.columns}
+            for idx in positions.indexes
+        )
+        assert found, "positions must have a unique index on (organization_id, slug)"
 
     def test_session_token_is_unique(self):
         """Session tokens must be globally unique."""

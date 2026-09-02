@@ -130,12 +130,27 @@ describe('EventListCard', () => {
     });
 
     it('reports roster progress when the event has a cap', () => {
+      renderCard(makeEvent({ max_attendees: 14, going_count: 9, occupied_seats: 9 }));
+      expect(screen.getByText('9 of 14 slots filled')).toBeInTheDocument();
+    });
+
+    it('counts guests against the cap, because the server does', () => {
+      // max_attendees caps seats, not members. Eight members who brought two
+      // guests fill a ten-seat event; reporting "8 of 10" promised room the
+      // RSVP path would then refuse.
+      renderCard(makeEvent({ max_attendees: 10, going_count: 8, occupied_seats: 10 }));
+      expect(screen.getByText("Roster full — you'd be waitlisted")).toBeInTheDocument();
+      expect(screen.queryByText('8 of 10 slots filled')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the member count when no seat total was sent', () => {
+      // Payloads predating the aggregate still have to render something sane.
       renderCard(makeEvent({ max_attendees: 14, going_count: 9 }));
       expect(screen.getByText('9 of 14 slots filled')).toBeInTheDocument();
     });
 
     it('warns that a full roster means the waitlist', () => {
-      renderCard(makeEvent({ max_attendees: 14, going_count: 14 }));
+      renderCard(makeEvent({ max_attendees: 14, going_count: 14, occupied_seats: 14 }));
       expect(screen.getByText("Roster full — you'd be waitlisted")).toBeInTheDocument();
     });
   });
@@ -187,9 +202,44 @@ describe('EventListCard', () => {
       expect(screen.queryByRole('button', { name: /change rsvp/i })).not.toBeInTheDocument();
     });
 
-    it('offers no RSVP controls on an event that takes none', () => {
-      renderCard(makeEvent({ requires_rsvp: false }));
+    it('offers only the responses the event accepts', () => {
+      // Hardcoding Going/Not Going rendered a button the API rejects
+      // deterministically on an event configured for a narrower set.
+      renderCard(makeEvent({ allowed_rsvp_statuses: ['going'] }));
+      expect(screen.getByRole('button', { name: /^going$/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /not going/i })).not.toBeInTheDocument();
+    });
+
+    it('falls back to no RSVP controls when it accepts neither', () => {
+      // This card only ever submits going / not_going, so a 'maybe'-only event
+      // has nothing here that can succeed.
+      renderCard(makeEvent({ allowed_rsvp_statuses: ['maybe'] }));
       expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /not going/i })).not.toBeInTheDocument();
+    });
+
+    it('offers both when the payload names no statuses', () => {
+      // Absent means the server default pair, not "nothing allowed".
+      renderCard(makeEvent());
+      expect(screen.getByRole('button', { name: /^going$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /not going/i })).toBeInTheDocument();
+    });
+
+    it('offers no RSVP controls on a draft', () => {
+      // EventsPage includes drafts for managers, and the API refuses every
+      // draft RSVP outright, so these controls could never succeed.
+      renderCard(makeEvent({ is_draft: true, requires_rsvp: false }));
+      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+    });
+
+    it('still offers RSVP controls when a response is not required', () => {
+      // requires_rsvp means a response is *expected* — it drives the deadline
+      // and the Needs You band. It does not mean responses are accepted, and
+      // gating the controls on it left a member with nothing to do on the
+      // majority of events, which never set the flag.
+      renderCard(makeEvent({ requires_rsvp: false }));
+      expect(screen.getByRole('button', { name: /^going$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /not going/i })).toBeInTheDocument();
     });
 
     it('disables both RSVP buttons while a response is in flight', () => {

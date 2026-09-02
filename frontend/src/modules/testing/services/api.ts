@@ -35,7 +35,12 @@ export interface TestingCheckEntry {
   note?: string | null;
   params?: Record<string, string> | null;
   checkedAt?: string | null;
-  userId: string;
+  /**
+   * Null once the account that made the mark is hard-deleted. The row is kept
+   * on purpose — an archived run is the record of what was found then — so the
+   * FK is ON DELETE SET NULL and this has to tolerate it.
+   */
+  userId: string | null;
   /** Resolved from the users table; absent if the account has since gone. */
   userName?: string | null;
   /** The positions the tester held when the mark was made. */

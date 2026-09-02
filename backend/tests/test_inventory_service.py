@@ -149,6 +149,88 @@ class TestValidateItemState:
 # ============================================
 
 
+class TestStateInvariantRepair:
+    """The pair rule arrived as a write-time validator after rows carrying the
+    forbidden combinations already existed, and several write paths kept
+    producing more. These cover the two halves that make it hold."""
+
+    def test_retired_condition_maps_to_retired_status(self):
+        """Omitting RETIRED from the mapping produced AVAILABLE + retired —
+        a pair _VALID_STATE_COMBOS itself rejects."""
+        assert (
+            InventoryService._status_from_condition(ItemCondition.RETIRED)
+            == ItemStatus.RETIRED
+        )
+
+    def test_unsafe_conditions_map_to_maintenance(self):
+        for cond in (
+            ItemCondition.POOR,
+            ItemCondition.DAMAGED,
+            ItemCondition.OUT_OF_SERVICE,
+        ):
+            assert (
+                InventoryService._status_from_condition(cond)
+                == ItemStatus.IN_MAINTENANCE
+            ), cond
+
+    def test_enforce_quarantines_an_unsafe_available_item(self):
+        item = _make_item(status=ItemStatus.AVAILABLE, condition=ItemCondition.DAMAGED)
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.IN_MAINTENANCE
+        assert item.condition == ItemCondition.DAMAGED
+
+    def test_enforce_leaves_a_legal_pair_alone(self):
+        item = _make_item(status=ItemStatus.AVAILABLE, condition=ItemCondition.GOOD)
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.AVAILABLE
+
+    def test_enforce_leaves_issued_gear_assigned(self):
+        """ASSIGNED is only invalid when nobody holds the item.
+
+        The helper defaults assigned_to_user_id to None, so passing the item's
+        status and condition alone made every assigned item fail the
+        "requires an assigned user" rule. Completing a maintenance record on
+        gear that is out with a member then rewrote its status to AVAILABLE
+        while the assignment stayed on the row — the turnout coat is listed as
+        ready to issue and is on somebody's back.
+        """
+        item = _make_item(
+            status=ItemStatus.ASSIGNED,
+            condition=ItemCondition.GOOD,
+            assigned_to_user_id=str(uuid4()),
+        )
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.ASSIGNED
+
+    def test_enforce_still_rescues_an_assigned_item_with_no_holder(self):
+        """The rule is not disabled, only given the assignee it asks about."""
+        item = _make_item(
+            status=ItemStatus.ASSIGNED,
+            condition=ItemCondition.GOOD,
+            assigned_to_user_id=None,
+        )
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.AVAILABLE
+
+    def test_combination_check_can_be_skipped_but_the_user_rule_cannot(self):
+        """check_combination=False is for an update that touches neither field.
+        The assigned-user rule is about the resulting state, so it still runs."""
+        assert (
+            InventoryService._validate_item_state(
+                ItemStatus.AVAILABLE,
+                ItemCondition.DAMAGED,
+                check_combination=False,
+            )
+            is None
+        )
+        assert InventoryService._validate_item_state(
+            ItemStatus.ASSIGNED,
+            ItemCondition.GOOD,
+            assigned_to_user_id=None,
+            check_combination=False,
+        )
+
+
 class TestValidateCategoryRequirements:
 
     @pytest.mark.asyncio
@@ -611,6 +693,48 @@ class TestUpdateItem:
         )
         assert result is None
         assert err is not None
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_item_allows_an_unrelated_edit_on_a_legacy_pair(
+        self, service, mock_db
+    ):
+        """A row stored with a combination that predates the pair rule must stay
+        editable. Applying the rule to the resulting state of every partial
+        update made a storage-location change fail with "Invalid state" naming
+        two fields the edit never touched."""
+        item = _make_item(status=ItemStatus.AVAILABLE, condition=ItemCondition.DAMAGED)
+        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
+        service._assert_item_fks_in_org = AsyncMock()
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"name": "Relocated spare"},
+        )
+        assert err is None
+        assert result is item
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_item_still_rejects_moving_into_an_invalid_pair(
+        self, service, mock_db
+    ):
+        """Skipping the rule for an unchanged pair must not let a caller
+        deliberately write one."""
+        item = _make_item(status=ItemStatus.AVAILABLE, condition=ItemCondition.GOOD)
+        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
+        service._assert_item_fks_in_org = AsyncMock()
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"condition": "damaged"},
+        )
+        assert result is None
+        assert "Invalid state" in err
 
     @pytest.mark.unit
     @pytest.mark.asyncio

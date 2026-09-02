@@ -125,6 +125,13 @@ class AckReportRecipient(BaseModel):
     read_at: str | None = None
     is_acknowledged: bool
     acknowledged_at: str | None = None
+    # Declared, not incidental: the report lists a member whose audience
+    # membership was withdrawn after they had already read or acknowledged,
+    # because that receipt is the only record they saw the notice — but the
+    # totals exclude them. Without this field Pydantic drops the distinction
+    # on the way out and the row reads as current audience, leaving the list
+    # longer than its own denominator with nothing to explain the gap.
+    removed_from_audience: bool = False
 
 
 class AckReportResponse(BaseModel):
@@ -354,6 +361,20 @@ async def update_message(
         background_tasks.add_task(
             deliver_department_message, message.id, current_user.organization_id
         )
+    else:
+        # An already-published message whose audience just widened: tell the
+        # members who were added, and only them. Without this they were given
+        # a recipient row and nothing else — counted as owing an
+        # acknowledgment for a notice that never reached them by email, the
+        # channel of record.
+        newly_targeted = getattr(message, "_newly_targeted", None)
+        if newly_targeted:
+            background_tasks.add_task(
+                deliver_department_message,
+                message.id,
+                current_user.organization_id,
+                set(newly_targeted),
+            )
     await log_audit_event(
         db=db,
         event_type="message_updated",

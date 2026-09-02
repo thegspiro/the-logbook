@@ -214,6 +214,41 @@ describe('LabelPrintPage', () => {
       );
     });
 
+    it('does not pin the organization default as the role\u2019s destination', async () => {
+      // The resolution effect picks a printer for the member — the position's
+      // remembered one, or the org default, or whichever row sorts first.
+      // Persisting that as a decision wrote it into the position's shared
+      // settings with nobody touching a control, and from then on an admin
+      // marking a different printer as the org default was ignored for good.
+      mockListPrinters.mockResolvedValue([zebra]);
+      mockGetPreset.mockResolvedValue({ preset: 'zebra_2x1' });
+      renderPage('?ids=a1');
+      await screen.findByRole('button', { name: 'Print to Quartermaster Zebra' });
+
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      expect(mockSetPreset).not.toHaveBeenCalled();
+    });
+
+    it('omits the printer from a save that is about the label size', async () => {
+      // Omitted is not the same wire value as null: the backend reads absence
+      // as "leave the remembered destination alone". Sending an empty printer
+      // while the list was still in flight is what erased one.
+      mockListPrinters.mockResolvedValue([zebra]);
+      mockGetPreset.mockResolvedValue({ preset: 'zebra_2x1', printer_id: 'p1' });
+      const user = userEvent.setup();
+      renderPage('?ids=a1');
+      await screen.findAllByText('Engine 5');
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: /Rollo 4" x 6"/ }));
+
+      await waitFor(() => expect(mockSetPreset).toHaveBeenCalled());
+      const payload = mockSetPreset.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(payload.preset).toBe('rollo_4x6');
+      expect('printer_id' in payload).toBe(false);
+    });
+
     it('blocks direct printing until selected stock matches the printer', async () => {
       mockListPrinters.mockResolvedValue([zebra]);
       mockGetPreset.mockResolvedValue({ preset: 'rollo_4x6' });

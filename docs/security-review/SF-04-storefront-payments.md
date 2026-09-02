@@ -1,6 +1,254 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 3 (2026-09-01) — re-verified, no new findings
+
+**Scope, using `git diff` between tree states rather than `git log` commit
+enumeration.** Pass 2 documented that this repo's history for this path was
+squashed/rewritten at some point, so `git log --since`/ancestry traversal
+can silently miss real commits — the exact mechanism that caused pass 2's
+own first draft to under-scope and then need a correction. `git diff`
+between two known commits doesn't have that failure mode: it compares tree
+content directly, independent of how the commit graph between them is
+shaped. Diffed pass 2's own closing merge (`d8c5e39e`) against current
+`HEAD` across the full domain pass 2 established — not the narrower list
+pass 1's header literally named, which is what caused pass 2's own
+under-scoping — all ten backend files (`storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`email_templates_storefront.py`, `storefront_preview_service.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`), **plus two artifacts a
+filename-only filter missed on the first pass of this correction, caught by
+a second Codex round**: `app/utils/embroidery.py` (imported by both
+`storefront_service.py` and `schemas/storefront.py`, so part of this
+feature's real dependency graph even though its name doesn't match a
+storefront/embroidery/personalization/thread filename filter applied to
+`alembic/versions/` — it isn't a migration) and the
+`settle_variant_size_order` migration
+(`20260825_1520_c6a3f8b41e29_settle_variant_size_order.py`, named for what
+it does rather than for "storefront"), the entire
+`frontend/src/modules/storefront/` tree, and every other migration whose
+filename matches storefront/embroidery/personalization/thread. **Zero
+changes across that domain** — `git diff --stat` returns nothing for any of
+it. SF-5 and SF-6's fixes, and every pass-1/2 "Verified good" item, stand
+unmodified and unre-derived.
+
+**Correction (Codex review on this PR, round 3): two more shared
+dependencies this feature actually calls had changed, and "zero changes"
+needed to become "reviewed the changes that exist," not another attempt at
+an ever-widening enumeration.** `paypal_webhook.py` imports and calls
+`public_rate_limit` from `app/core/security_middleware.py`, which changed
+(both hunks carry a `Codex, PR #2106` comment, so already reviewed and
+merged once independently of this rotation): a `RateLimiter` bug fix where
+`lockout_seconds=0` — `public_rate_limit`'s own in-memory-fallback value —
+made an expired-lockout check unconditionally clear the caller's whole
+request history, so every `max_requests+1`th over-limit hit reset the
+sliding window and defeated the limit entirely; now gated on
+`lockout_seconds > 0`, so a real lockout still clears its history the same
+way it always did, and a zero-second one no longer resets anything. Strictly
+tightens enforcement — nothing this feature's webhook relies on got weaker.
+A second, unrelated hunk in the same file self-heals a missing Redis TTL on
+`daily_cap_exceeded`'s counter key so a transient `EXPIRE` failure can't
+leave a scope blocked past its intended day. Frontend:
+`frontend/src/modules/storefront/services/api.ts` builds its axios instance
+via `createApiClient()`, which changed to decode a JSON error body that
+arrives as a `Blob` (because axios applies a `blob` `responseType` to error
+responses too, not just success ones — relevant here because storefront's
+own order-export flow is exactly this shape) so the real backend error
+message reaches the user instead of a generic fallback; parsed JSON only
+feeds existing error-message plumbing, never a `dangerouslySetInnerHTML` or
+similar sink. Both changes are defensive corrections to shared
+infrastructure, not new surface, and neither weakens anything this feature
+depends on.
+
+**Correction (Codex review on this PR, two rounds): the router-level module
+gate does reach every storefront request, and the routing/auth inventory had
+two errors.** Round 1 of this correction claimed `a518957e`'s
+`get_request_enabled_modules` change "doesn't reach this feature's routes at
+all," reasoning only from a grep of `storefront.py` itself. Round 2 found
+the real wiring: `app/api/v1/api.py` mounts `storefront.router` with
+`dependencies=module_gate("storefront", "The Department Store")`, and
+`module_gate` returns `[Depends(require_module(module, label))]` —
+`require_module`'s inner check depends on `get_request_enabled_modules`
+directly. So `a518957e` runs on **every** storefront request, contrary to
+round 1's claim.
+
+Re-verified what that actually means rather than repeating the same class of
+error: `require_module`'s check is `if enabled is None or module in
+enabled: return` — an unusable session (`enabled is None`, whether from no
+cookie at all or, post-`a518957e`, an invalid one) makes the module gate
+**pass through without checking the module flag**. That sounds like a
+weakening, but it doesn't change the outcome for storefront specifically, for
+a reason particular to this feature's routes: `module_gate` runs before an
+endpoint's own auth dependency in FastAPI's resolution order, but the
+endpoint's own dependency still runs immediately after and still uses the
+**mandatory** `get_current_user` (or `require_permission`, which calls it),
+which `a518957e` explicitly does not change — it still rejects a missing or
+invalid credential with 401. Storefront has no route that would proceed past
+that second check anonymously: all 48 routes require at least
+`Depends(get_current_user)` (grep-confirmed against the current file). So a caller with no session or an invalid one
+is rejected by the endpoint's own auth dependency regardless of what the
+module gate decided — the module-gate pass-through and the endpoint's own
+rejection land on the same outcome, just via a different one of the two
+checks. For a genuinely authenticated caller whose org has the module
+switched off, `enabled` resolves to the org's real flag set (unaffected by
+`a518957e`, which only touches the invalid/absent-session path) and the 403
+still fires normally. No finding — but "doesn't reach it" was wrong; the
+correct statement is "reaches it and is a no-op for this route composition."
+
+Round 2 also caught that round 1's authorization-inventory line — "every
+route is permission-gated" — is itself wrong and contradicts this
+document's own pass-1 "Verified good" section: `GET /permissions`
+(`storefront.py:1512-1521`) is a deliberate `Depends(get_current_user)`
+self-probe, not `require_permission(...)`, exactly as pass 1 already
+recorded. Restated correctly below and in `PROGRESS.md`.
+
+`core/permissions.py`'s diff since `d8c5e39e` does touch lines near
+`STOREFRONT_VIEW`/`STOREFRONT_ORDER`/`STOREFRONT_MANAGE` — checked
+precisely: every hit is adjacent-context noise from the unrelated
+`equipment_check.*` → `inventory.check_*` rename (`cf033864`, also reviewed
+in `PERM-02-permissions-roles.md`'s pass 3); none of the three storefront
+`Permission(...)` definitions themselves changed. The rename **did** reach
+this feature's own test suite, though: `test_corporate_storefront_grants.py`
+(+28/-1) and `test_storefront_grant_backfill.py` (+15/-1) both needed a
+`LEGACY_PERMISSION_ALIASES`-derived translation so their frozen pre-rename
+migration snapshots keep comparing against the old `equipment_check.*`
+spelling instead of silently matching nothing once the live registry moved
+to `inventory.check_*` — a downstream test-fixture adaptation of the
+already-reviewed rename, not a new behavior or a new finding; the backfill
+migrations' own logic is untouched by either diff.
+
+**Correction (Codex review on this PR, round 4, precision fixed in round
+5): `dependencies.py`'s other change reaches storefront's permission
+decisions too, and wasn't reviewed for what it actually does here.**
+`cf033864` didn't only touch `core/permissions.py` — it also added a call
+to `expand_legacy_permissions` inside `_collect_user_permissions` (`app/api/
+dependencies.py`), the function that assembles a user's full
+granted-permission set. Both `require_permission` (47 of storefront's 48
+routes, via `PermissionChecker.__call__`) and `user_has_permission` (the
+`GET /permissions` self-probe, confirmed by reading its body) resolve
+through it. **Round 4 overstated when**: `PermissionChecker.__call__` takes
+`current_user: User = Depends(get_current_user)` as its own parameter, so
+FastAPI resolves authentication first and a missing/invalid credential
+never reaches the function body at all; the router-level `module_gate`
+dependency likewise runs before any endpoint dependency, so a request an
+authenticated caller's disabled module rejects never gets there either.
+Correct statement: `_collect_user_permissions` runs for every storefront
+request that reaches an actual permission decision — after authentication
+and the module gate both pass, not unconditionally on every request.
+
+`core/permissions.py:permission_matches` — the function every one of those
+permission decisions ultimately calls — **also** calls
+`expand_legacy_permissions` directly, on its own `granted` parameter,
+independent of `_collect_user_permissions`'s call (missed in round 4's
+correction, caught in round 5; both were already noted as the same
+double-call in `PERM-02-permissions-roles.md`'s pass 3, "redundant but
+harmless since expansion is idempotent" — round 4 named only the first of
+the two call sites). Same conclusion applies to both, for the same reason:
+`expand_legacy_permissions` only adds an entry when the input set contains
+one of `LEGACY_PERMISSION_ALIASES`' keys, and every key in that map is
+`equipment_check.*`-shaped — confirmed by re-reading the map (already
+quoted above) — a namespace with no `storefront.*` entry on either side of
+it. Whatever a given storefront caller's granted set contains from
+elsewhere (a customized position still holding a legacy
+`equipment_check.view` string, say), expanding it — at either call site —
+can only ever add `inventory.check_*` names to that set; it cannot add,
+remove, or alter `storefront.view`/`storefront.order`/`storefront.manage`,
+so `permission_matches("storefront.*", granted)` returns the identical
+answer before and after this change for every caller who reaches it.
+Provably a no-op for every storefront authorization decision, at both call
+sites, whenever one is reached.
+
+**Order export remains unbounded — carried forward again, still not
+fixed, and pass 2's own citation for it was wrong.** Pass 2 recorded this at
+`storefront_service.py:2916-2953,2980-3015`; re-checking those ranges
+against current (byte-identical-to-pass-2) code shows they are
+`_order_rollup`/`get_window_rollups`/`get_dashboard` — dashboard summary
+code, not the export. The actual unbounded accumulation is
+`export_orders_csv` (`storefront_service.py:3035-3072`): a `while True` loop
+(`page += 1`) that extends one in-memory `orders` list until
+`list_orders(...)` returns fewer than a full page, with no cap on the
+number of pages or total rows before the CSV is built. Same defect pass 2
+described, just at the range that actually contains it — a citation error
+carried unnoticed through one prior pass. Still needs a product decision (a
+row cap or a mandatory date window), not a drive-by fix.
+
+**Correction (Codex review on this PR, round 5): three more imports from
+changed files, each verified at the level of the actual imported symbol
+rather than the file.** `storefront.py`/`paypal_webhook.py` import `get_db`
+from `app/core/database.py` and `safe_error_detail` from `app/core/
+utils.py`; `storefront_service.py` imports `NotificationChannel` from
+`app/models/notification.py`. All three files changed since `d8c5e39e` —
+but a changed file is not the same claim as a changed symbol, the exact
+distinction the `core/permissions.py`/`STOREFRONT_*` context-noise check
+above already had to draw once. Checked precisely this time, per symbol:
+
+- `database.py`'s diff is confined to `DatabaseManager.disconnect()` (an
+  app-shutdown method, unrelated to any request path) gaining exception
+  handling so `self.engine`/`self.session_factory` reset even when
+  `dispose()` itself fails. `get_db()` (line 252, what this feature actually
+  imports and calls per-request) does not appear in the diff at all.
+- `core/utils.py`'s diff is a pure addition: a new function,
+  `sanitize_connector_error`, for integration-connector failures — grep
+  confirms neither `storefront.py`, `paypal_webhook.py`, nor
+  `storefront_service.py` calls it. `safe_error_detail` (what this feature
+  actually imports) does not appear in the diff at all.
+- `models/notification.py`'s +99/-1 diff is new tables, columns, and
+  relationships for an unrelated messaging feature
+  (`DepartmentMessageDelivery` and friends). `class NotificationChannel`
+  (what `storefront_service.py` actually imports — the enum's own
+  definition) does not appear in the diff at all; it's referenced only
+  inside a new column declaration on an unrelated table.
+
+All three: the file changed, the imported symbol didn't. No finding.
+
+**Correction (Codex review on this PR, round 6): "the imported symbol
+didn't change" isn't the whole story for `NotificationLog` — the table
+itself changed, and storefront writes to it through a different symbol than
+the one checked.** `StorefrontService.add_order_message`
+(`storefront_service.py:2260`) calls `self.in_app_notifications
+.log_notification(...)`, which does `NotificationLog(organization_id=...,
+**log_data)` — an insert into the exact table the messaging-feature diff
+added `department_message_id` (a nullable FK) and a new
+`UniqueConstraint("department_message_id", "recipient_id", "channel")` to.
+Checking only that `NotificationChannel` (the enum) was untouched missed
+that the table it's a column _type_ for gained a new column and constraint.
+
+Checked whether that constraint can reject or otherwise disrupt a
+storefront-originated insert: `add_order_message`'s `log_data` dict
+(reproduced above) has no `department_message_id` key, so the new column
+takes its default — `NULL`, per its `nullable=True` declaration with no
+explicit default. Under InnoDB (MySQL 8.0, this app's database per
+CLAUDE.md), a `UNIQUE` index treats `NULL` as distinct from every other
+`NULL`, including in a composite key — two rows with `department_message_id
+IS NULL` never collide on that account, regardless of what
+`recipient_id`/`channel` they share. So an order-status notification to the
+same member on the same channel (routine — a member can get several
+`storefront` in-app notices for one order) still inserts every time, exactly
+as before this column existed; the constraint only ever activates between
+rows that share a real, non-`NULL` `department_message_id`, which
+`add_order_message` never sets. No finding — the new constraint has no
+storefront-reachable failure mode.
+
+**No new findings** beyond the corrections above (a wrong "doesn't reach it"
+authorization claim, restated with the actual mechanism; a lost `GET
+/permissions` exception; a wrong export line citation; two scope artifacts a
+filename filter missed; two shared-dependency changes reviewed and confirmed
+safe; two `dependencies.py`/`core/permissions.py` legacy-expansion call
+sites proven a no-op, with the "every request" timing corrected; three more
+imports verified unchanged at the symbol level; a schema change to a table
+storefront writes through, confirmed to have no storefront-reachable
+failure mode) — all in this write-up across six Codex rounds, none in
+application code.
+
+**Completion gate:** no backend or frontend source file was modified by
+this pass — the `git diff` above is definitive, not merely a `flake8`/
+`validate_migrations.py` spot-check standing in for one. Both re-run
+directly anyway, alongside this pass's own PR's CI run for the frontend
+gates and full test suite.
 
 ---
 

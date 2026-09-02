@@ -32,7 +32,7 @@ import {
   HeartPulse,
 } from 'lucide-react';
 import type { OrganizationType } from '../store';
-import { applyAgencyVocabulary, type ModuleDefinition } from '../config';
+import { SEEDED_POSITION_GRANTS, applyAgencyVocabulary, type ModuleDefinition } from '../config';
 
 /**
  * Generate permissions for a specific role type.
@@ -100,6 +100,40 @@ const generateRolePermissions = (
  * agency has, and renames the two that are fire-specific. Everything else is
  * administrative or universal and is offered to everyone.
  */
+/**
+ * The checkboxes a seeded position starts with, taken from what the backend
+ * actually seeds it with rather than from its role type.
+ *
+ * The role-type heuristics above answer "what does a member/officer/leader
+ * broadly get", which is not the same question as "what did
+ * `DEFAULT_POSITIONS` put in this row". They disagreed on every seeded
+ * position: the member template ticked View for every non-System module, so
+ * the first Continue wrote `facilities.view` and `notifications.view` back
+ * onto a `member` row the registry (and two migrations) had just had them
+ * removed from, and the board template ticked Manage on eighteen modules the
+ * board is not seeded with. The editor saves what its boxes say, so a wrong
+ * default is a real grant on every fresh install.
+ *
+ * A position with no seeded row keeps its heuristic defaults — there is
+ * nothing to disagree with, and saving it creates the position.
+ */
+const applySeededGrants = <T extends { id: string; permissions: Record<string, { view: boolean; manage: boolean }> }>(
+  positions: T[],
+  modules: ModuleDefinition[]
+): T[] =>
+  positions.map((position) => {
+    const seeded = SEEDED_POSITION_GRANTS[position.id];
+    if (!seeded) return position;
+    const view = new Set(seeded.view);
+    const manage = new Set(seeded.manage);
+    return {
+      ...position,
+      permissions: Object.fromEntries(
+        modules.map((module) => [module.id, { view: view.has(module.id), manage: manage.has(module.id) }])
+      ),
+    };
+  });
+
 export const buildPositionTemplates = (
   modules: ModuleDefinition[],
   organizationType: OrganizationType = 'fire_department'
@@ -108,7 +142,10 @@ export const buildPositionTemplates = (
   return Object.fromEntries(
     Object.entries(templates).map(([key, category]) => [
       key,
-      { ...category, positions: applyAgencyVocabulary(category.positions, organizationType) },
+      {
+        ...category,
+        positions: applySeededGrants(applyAgencyVocabulary(category.positions, organizationType), modules),
+      },
     ])
   ) as typeof templates;
 };

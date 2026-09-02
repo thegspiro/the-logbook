@@ -37,6 +37,7 @@ from app.schemas.public_portal import (
     PublicPortalDataWhitelistUpdate,
     PublicPortalUsageStats,
 )
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter(prefix="/public-portal", tags=["public-portal-admin"])
 
@@ -390,7 +391,15 @@ async def get_access_logs(
     if ip_address:
         query = query.where(PublicPortalAccessLog.ip_address == ip_address)
     if endpoint:
-        query = query.where(PublicPortalAccessLog.endpoint.contains(endpoint))
+        # `.contains()` builds a LIKE with the term dropped in raw: an admin
+        # filtering the access log for "%" matched every row and turned the
+        # paginated read into a full scan. Escaped and given an ESCAPE clause
+        # like every other search in the app (CLAUDE.md pitfall #25).
+        query = query.where(
+            PublicPortalAccessLog.endpoint.like(
+                like_pattern(endpoint), escape=LIKE_ESCAPE_CHAR
+            )
+        )
     if status_code:
         query = query.where(PublicPortalAccessLog.status_code == status_code)
     if flagged_suspicious is not None:

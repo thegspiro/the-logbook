@@ -6,7 +6,7 @@ Handles creation, targeting, delivery, and read tracking.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -312,14 +312,19 @@ class MessagingService:
 
             audience_changed = bool(audience_fields.intersection(updates))
             published_by_update = was_pending and message.scheduled_at is None
+            newly_targeted: Set[str] = set()
             if published_by_update:
                 await self.materialize_recipients(message)
             elif audience_changed and message.scheduled_at is None:
-                await self.reconcile_recipients(message)
+                newly_targeted = await self.reconcile_recipients(message)
 
-            # The endpoint uses this transient flag to enqueue the same channel
-            # fan-out as a scheduler publication without persisting extra state.
+            # The endpoint uses these transient flags to enqueue the same
+            # channel fan-out as a scheduler publication without persisting
+            # extra state. `_newly_targeted` is the narrower case: the message
+            # was already published, and only the members just added to its
+            # audience still need telling.
             message._published_by_update = published_by_update
+            message._newly_targeted = newly_targeted
 
             await self.db.commit()
             await self.db.refresh(message)
@@ -377,6 +382,9 @@ class MessagingService:
             .where(
                 DepartmentMessageRecipient.organization_id == organization_id,
                 DepartmentMessageRecipient.user_id == user_id,
+                # A row kept only as a receipt after the author narrowed the
+                # audience is evidence, not access.
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active.is_(True),
                 DepartmentMessage.deleted_at.is_(None),
@@ -544,6 +552,7 @@ class MessagingService:
             .where(
                 DepartmentMessageRecipient.organization_id == organization_id,
                 DepartmentMessageRecipient.user_id == user_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active.is_(True),
                 DepartmentMessage.deleted_at.is_(None),
@@ -590,8 +599,17 @@ class MessagingService:
             )
         return len(users)
 
-    async def reconcile_recipients(self, message: DepartmentMessage) -> int:
-        """Rebuild a live audience while retaining resolution for members kept."""
+    async def reconcile_recipients(self, message: DepartmentMessage) -> Set[str]:
+        """Rebuild a live audience while retaining resolution for members kept.
+
+        Returns the ids added by this pass. Widening a published message's
+        audience used to add the rows and stop there: no email, no bell, no
+        SMS. The newly-targeted members then showed in the acknowledgment
+        report as owing an acknowledgment, and counted against
+        ``total_targeted``, for a notice that had never reached them by the
+        channel of record — visible only if they happened to open the in-app
+        inbox. The caller uses this to deliver to exactly those members.
+        """
         users = await self._targeted_users(message, str(message.organization_id))
         targeted = {str(user.id) for user in users}
         result = await self.db.execute(
@@ -602,7 +620,9 @@ class MessagingService:
             )
         )
         existing = {str(row.user_id): row for row in result.scalars().all()}
-        for user_id in targeted - existing.keys():
+        added = targeted - existing.keys()
+        now = datetime.now(timezone.utc)
+        for user_id in added:
             self.db.add(
                 DepartmentMessageRecipient(
                     id=generate_uuid(),
@@ -612,8 +632,29 @@ class MessagingService:
                 )
             )
         for user_id in existing.keys() - targeted:
-            await self.db.delete(existing[user_id])
-        return len(targeted)
+            row = existing[user_id]
+            # A receipt is evidence. read_at/acknowledged_at live on this row
+            # and nowhere else, so deleting it destroys the only record that a
+            # member read — and possibly formally acknowledged — this message.
+            # That record is exactly what a department needs to produce later,
+            # and it is lost without anyone acting on the message at all:
+            # _targeted_users filters on User.is_active, so a member simply
+            # going on leave drops out of the audience and takes their
+            # acknowledgment with them. Prune only rows that carry nothing.
+            if row.read_at is None and row.acknowledged_at is None:
+                await self.db.delete(row)
+            else:
+                # Keeping the row kept their access with it: every visibility
+                # query authorizes on the row's existence alone. An author who
+                # narrows a published audience means to take the message away,
+                # so the retained row becomes evidence and stops being a grant.
+                row.revoked_at = now
+        for user_id in targeted & existing.keys():
+            # Back in the audience — restore the access the revocation took,
+            # without re-notifying: they were already told the first time.
+            if existing[user_id].revoked_at is not None:
+                existing[user_id].revoked_at = None
+        return added
 
     @staticmethod
     def _user_targeting_context(user) -> Tuple[List[str], List[str], str]:
@@ -710,7 +751,8 @@ class MessagingService:
         """Return a currently live message only when targeted to the caller.
 
         Read/acknowledge records are compliance evidence, so inactive, expired,
-        scheduled, deleted, cross-org, and untargeted messages all fail closed.
+        scheduled, deleted, cross-org, revoked, and untargeted messages all
+        fail closed.
         """
         now = datetime.now(timezone.utc)
         message_result = await self.db.execute(
@@ -722,6 +764,7 @@ class MessagingService:
             .where(
                 DepartmentMessageRecipient.organization_id == organization_id,
                 DepartmentMessageRecipient.user_id == user_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessage.id == message_id,
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active.is_(True),
@@ -936,10 +979,16 @@ class MessagingService:
         if not message:
             return {"error": "Message not found"}
 
+        # All three describe the *live* audience, so a revoked row is out of
+        # every one of them. A member removed from the audience cannot
+        # acknowledge — the read/acknowledge gate refuses them — so counting
+        # them in the denominator reports an obligation nobody can discharge,
+        # and the ratio stops describing who the message is actually for.
         read_count = await self.db.execute(
             select(func.count(DepartmentMessageRecipient.id)).where(
                 DepartmentMessageRecipient.message_id == message_id,
                 DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessageRecipient.read_at.isnot(None),
             )
         )
@@ -947,6 +996,7 @@ class MessagingService:
             select(func.count(DepartmentMessageRecipient.id)).where(
                 DepartmentMessageRecipient.message_id == message_id,
                 DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessageRecipient.acknowledged_at.isnot(None),
             )
         )
@@ -954,6 +1004,7 @@ class MessagingService:
             select(func.count(DepartmentMessageRecipient.id)).where(
                 DepartmentMessageRecipient.message_id == message_id,
                 DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
             )
         )
 
@@ -993,15 +1044,25 @@ class MessagingService:
         recipients = []
         total_read = 0
         total_acknowledged = 0
+        total_targeted = 0
         for u, record in targeted_rows:
+            # Kept in the list and out of the totals. The row is the only
+            # record that this member read — and possibly acknowledged — the
+            # notice, which is exactly what a department has to produce later;
+            # but they are no longer in the audience and can no longer act, so
+            # counting them would report an obligation nobody can discharge.
+            removed = record.revoked_at is not None
             is_read = record.read_at is not None
             is_acknowledged = bool(record and record.acknowledged_at is not None)
-            if is_read:
-                total_read += 1
-            if is_acknowledged:
-                total_acknowledged += 1
+            if not removed:
+                total_targeted += 1
+                if is_read:
+                    total_read += 1
+                if is_acknowledged:
+                    total_acknowledged += 1
             recipients.append(
                 {
+                    "removed_from_audience": removed,
                     "user_id": str(u.id),
                     "name": f"{u.first_name or ''} {u.last_name or ''}".strip()
                     or (u.username or "Unknown"),
@@ -1023,13 +1084,23 @@ class MessagingService:
                 }
             )
 
-        # Surface the members who still owe an acknowledgment/read first.
-        recipients.sort(key=lambda r: (r["is_acknowledged"], r["is_read"], r["name"]))
+        # Surface the members who still owe an acknowledgment/read first, and
+        # the ones no longer in the audience last: an unacknowledged revoked
+        # row is not an outstanding obligation, and sorting it to the top
+        # reads as one.
+        recipients.sort(
+            key=lambda r: (
+                r["removed_from_audience"],
+                r["is_acknowledged"],
+                r["is_read"],
+                r["name"],
+            )
+        )
 
         return {
             "message_id": message_id,
             "requires_acknowledgment": message.requires_acknowledgment,
-            "total_targeted": len(targeted_rows),
+            "total_targeted": total_targeted,
             "total_read": total_read,
             "total_acknowledged": total_acknowledged,
             "recipients": recipients,

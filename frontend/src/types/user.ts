@@ -159,8 +159,11 @@ export interface UserProfileUpdate {
   mobile?: string | undefined;
   personal_email?: string | undefined;
   membership_number?: string | undefined;
-  date_of_birth?: string | undefined;
-  hire_date?: string | undefined;
+  // `| null` on the two dates: this is an update payload, and the backend
+  // rejects `''` for an `Optional[date]`. Clearing a date has to send an
+  // explicit null, which `exclude_unset` then writes through as a clear.
+  date_of_birth?: string | null | undefined;
+  hire_date?: string | null | undefined;
   rank?: string | undefined;
   station?: string | undefined;
   platoon?: string | undefined;

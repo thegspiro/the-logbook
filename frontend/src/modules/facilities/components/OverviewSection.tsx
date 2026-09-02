@@ -13,6 +13,8 @@ import type { Facility, FacilityType, FacilityStatus } from '../types';
 import { inputCls, labelCls } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
+import { blankToNull, numberOrNull } from '@/utils/formValues';
+import { getErrorMessage } from '@/utils/errorHandling';
 
 interface Props {
   facility: Facility;
@@ -30,7 +32,45 @@ const NUMERIC_FIELDS = new Set([
   'sleeping_quarters',
 ]);
 
-function facilityToEditData(facility: Facility): Record<string, unknown> {
+/**
+ * The lookup options this facility can be saved with.
+ *
+ * The store loads active types and statuses only, so that deactivating one on
+ * the settings screen actually stops it being chosen. But an existing facility
+ * still references whatever it was filed under, and dropping that option from
+ * the editor left the select showing its blank placeholder against a NOT NULL
+ * column: an unrelated edit either could not be saved ("Facility type is
+ * required") or quietly re-filed the station under something else.
+ *
+ * So the retained value is added back for this facility only, marked, and the
+ * choice stays out of every other facility's list.
+ */
+interface LookupOption {
+  id: string;
+  name: string;
+}
+
+function withRetainedOption<T extends LookupOption>(
+  active: T[],
+  current: T | undefined,
+  currentId: string | undefined
+): LookupOption[] {
+  if (!currentId || active.some((option) => option.id === currentId)) return active;
+  return [...active, { id: currentId, name: current ? `${current.name} (inactive)` : 'Current value (inactive)' }];
+}
+
+/**
+ * Columns the facility row declares NOT NULL. Both selects offer a blank
+ * "Select type..." option, so the form can present a value the column cannot
+ * hold; caught here rather than sent as a null the backend has to refuse.
+ */
+const REQUIRED_FIELDS: Record<string, string> = {
+  name: 'Facility name is required',
+  facility_type_id: 'Facility type is required',
+  status_id: 'Facility status is required',
+};
+
+function facilityToEditData(facility: Facility): Record<string, string | number> {
   return {
     name: facility.name || '',
     facility_number: facility.facilityNumber || '',
@@ -45,12 +85,16 @@ function facilityToEditData(facility: Facility): Record<string, unknown> {
     phone: facility.phone || '',
     fax: facility.fax || '',
     email: facility.email || '',
-    year_built: facility.yearBuilt || '',
-    square_footage: facility.squareFootage || '',
-    num_floors: facility.numFloors || '',
-    num_bays: facility.numBays || '',
-    max_occupancy: facility.maxOccupancy || '',
-    sleeping_quarters: facility.sleepingQuarters || '',
+    // `??`, not `||`, for every NUMERIC_FIELDS member: a stored 0 is a real
+    // answer — a station with no bays, no bunks, no second floor — and `||`
+    // turned it into '', which handleSave then sends as an explicit null.
+    // Opening the editor and pressing Save wiped every zero on the record.
+    year_built: facility.yearBuilt ?? '',
+    square_footage: facility.squareFootage ?? '',
+    num_floors: facility.numFloors ?? '',
+    num_bays: facility.numBays ?? '',
+    max_occupancy: facility.maxOccupancy ?? '',
+    sleeping_quarters: facility.sleepingQuarters ?? '',
     notes: facility.notes || '',
     description: facility.description || '',
   };
@@ -61,7 +105,7 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
   const { updateFacility } = useFacilitiesStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [editData, setEditData] = useState<Record<string, unknown>>({});
+  const [editData, setEditData] = useState<Record<string, string | number>>({});
 
   const startEditing = () => {
     setEditData(facilityToEditData(facility));
@@ -69,31 +113,38 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
   };
 
   const handleSave = async () => {
-    if (!(editData.name as string)?.trim()) {
-      toast.error('Facility name is required');
-      return;
+    for (const [field, message] of Object.entries(REQUIRED_FIELDS)) {
+      if (!String(editData[field] ?? '').trim()) {
+        toast.error(message);
+        return;
+      }
     }
     setIsSaving(true);
     try {
+      // An update payload, so a cleared box is an explicit `null` and not
+      // `undefined`: JSON.stringify drops an undefined value entirely, the key
+      // never leaves the browser, and the backend's `exclude_unset` dump reads
+      // the absence as "leave this alone". Clearing a facility's phone number
+      // or its notes used to be a no-op behind a success toast.
       const payload: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(editData)) {
-        if (value !== '' && value !== undefined) {
-          if (NUMERIC_FIELDS.has(key)) {
-            const num = Number(value);
-            payload[key] = Number.isNaN(num) ? undefined : num;
-          } else {
-            payload[key] = value;
-          }
-        } else if (value === '') {
-          payload[key] = undefined;
+        if (key in REQUIRED_FIELDS) {
+          payload[key] = typeof value === 'string' ? value.trim() : value;
+        } else if (NUMERIC_FIELDS.has(key)) {
+          payload[key] = numberOrNull(value);
+        } else {
+          payload[key] = blankToNull(String(value));
         }
       }
 
       await updateFacility(facility.id, payload);
       toast.success('Facility updated');
       setIsEditing(false);
-    } catch {
-      toast.error('Failed to update facility');
+    } catch (error) {
+      // The generic message hid the reason: with real nulls now going out, a
+      // rejection names the field, and swallowing that leaves the user
+      // retrying the same save.
+      toast.error(getErrorMessage(error, 'Failed to update facility'));
     } finally {
       setIsSaving(false);
     }
@@ -141,7 +192,12 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
         {!isEditing ? (
           <OverviewViewMode facility={facility} tz={tz} />
         ) : (
-          <OverviewEditMode ed={ed} setEd={setEd} facilityTypes={facilityTypes} facilityStatuses={facilityStatuses} />
+          <OverviewEditMode
+            ed={ed}
+            setEd={setEd}
+            facilityTypes={withRetainedOption(facilityTypes, facility.facilityType, facility.facilityTypeId)}
+            facilityStatuses={withRetainedOption(facilityStatuses, facility.statusRecord, facility.statusId)}
+          />
         )}
       </div>
     </div>
@@ -231,8 +287,10 @@ function OverviewViewMode({ facility, tz }: { facility: Facility; tz: string }) 
 interface EditModeProps {
   ed: (field: string) => string;
   setEd: (field: string, value: string) => void;
-  facilityTypes: FacilityType[];
-  facilityStatuses: FacilityStatus[];
+  // Already resolved by the parent — the active lookups plus, when this
+  // facility references a deactivated one, that value kept selectable.
+  facilityTypes: LookupOption[];
+  facilityStatuses: LookupOption[];
 }
 
 function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditModeProps) {

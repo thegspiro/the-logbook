@@ -7,6 +7,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A member can now see who's going, RSVP without being asked, and know where they stand on a waitlist (2026-09-01)
+
+**Added**
+
+- **The going list is visible to members.** An event's attendee list was
+  reachable only with `events.manage`, so an ordinary member saw aggregate
+  counts and nothing else. It is now shareable — names and going status only,
+  never contact details, RSVP notes, dietary restrictions, accessibility needs,
+  guest counts or check-in times, which stay in the organizer view. Who may see
+  it is an organization default with a per-event override in either direction.
+  **The default ships as managers-only**, so nothing changes for an existing
+  department until it opts in.
+- **A member can respond to an event that does not require a response.**
+  `requires_rsvp` now means "a response is expected" — it still drives the
+  Required badge, the deadline and the non-respondent reminder audience — and
+  no longer means "responses are permitted". Previously the API refused
+  outright, which left members with nothing to do on the majority of events.
+- **Waitlist standing.** The detail page says "You're #2 of 5 on the waitlist"
+  rather than only that a waitlist exists, ordered by the same column the
+  server actually promotes on.
+- **Inline RSVP from the dashboard**, matching the sign-up open shifts already
+  offered there.
+
+**Fixed**
+
+- **Guests occupy seats.** `allow_guests` had been on the model since the
+  beginning and was read nowhere, so guests were accepted on events that forbade
+  them; and capacity counted going _rows_, leaving guests out entirely, so a
+  capped event could be oversubscribed by however many guests attendees brought.
+  Capacity is now a sum of seats. **A capped event will fill sooner than it used
+  to** — that is the correction, not a regression — and existing events already
+  over the seat count are left alone rather than retroactively waitlisted; they
+  simply admit nobody new.
+- **The waitlist queue moves.** Releasing several seats now promotes several
+  members rather than one, and a party larger than the whole event is refused at
+  RSVP time instead of sitting at the head of the queue blocking everyone behind
+  it.
+- **"Apply to all future events" works on an optional series**, and now goes
+  through the same guarded write path as a single RSVP, so capacity, guests and
+  deadlines are enforced on every occurrence rather than none.
+- The RSVP modal opens with the member's existing response rather than blank —
+  which had quietly discarded their notes, and, once guests consumed capacity,
+  silently released the seats those guests were holding.
+
+### The dashboard's seven-day list is now thirty days, and its control says where it goes (2026-09-01)
+
+**Changed**
+
+- The dashboard card that merges a member's own shifts, open slots and events
+  covers **thirty days** rather than seven, and is titled **Next 30 Days**. It
+  was already a rolling window anchored to today, so it simply reaches further;
+  the six-row cap and the "N more through <date>" footer are unchanged.
+- **Its control is now "All Shifts", not "Full Schedule", and it opens the
+  month view.** The card lists drills and events alongside shifts, but
+  `/scheduling` holds shifts only — every tab there is shift-scoped and the
+  calendar endpoints return shifts — so a member who saw Thursday's drill on
+  the card and followed a promise of the _full_ schedule arrived somewhere it
+  could not be. Opening on the month view also fixes a phone mismatch: that
+  grid draws a month at every width, while the week view fetched only seven
+  days to fill it.
+- **Drills stop being crowded off the list.** The card's events and own-shifts
+  requests were capped at five records each, and the cap applied _before_ the
+  window filter rather than after — so five socials spread across the next six
+  months were enough to hide every drill in the coming month, on a card whose
+  own subtitle promises drills. Both requests now ask for the window the card
+  renders.
+- The footer's "N more open shifts" line **names the horizon it counts**. The
+  open-shift request deliberately reaches past the visible window so that line
+  has something to report, but it stops at sixty days; the wording no longer
+  implies it covers everything beyond the window.
+
+**Fixed**
+
+- The **"Take a Shift"** quick action counted open shifts up to sixty days out,
+  well past the window the card advertises — a number members read as "what is
+  open now", attached to a button that opens a schedule not showing those
+  shifts. Its count, and the short-staffed tally beside it, are now scoped to
+  the visible window; only the footer's "more later" line reads the longer
+  reach it was added for.
+
+### The member roster showed every member the membership coordinator's screen (2026-09-01)
+
+**Changed**
+
+- `/members` carries no permission gate — it is the department directory, open
+  to everyone — but it was rendering the coordinator's working screen to
+  everyone too: a username under each name, a hire date column, a per-row
+  Actions column, bulk-selection checkboxes with Print Badges and Export
+  Selected, a CSV export of the whole roster, and the title "Membership
+  Management — Manage department members and records". A firefighter looking up
+  who is on B platoon was reading a personnel management table. Those elements
+  are now shown only to holders of `members.manage`, the same grant that
+  already gated Add Member, Import CSV and Delete on this page; for a
+  coordinator nothing has changed. Everyone still gets the status counters, the
+  contact column their department has chosen to publish, search, filtering and
+  pagination, and the page is titled "Member Directory".
+- Search no longer matches a username for members who cannot see one. It is not
+  displayed anywhere on their page, so a row returned for "ladams" had no
+  visible reason to be there. Name, membership number and email — the three the
+  search box has always advertised — are unchanged, for everyone.
+- **Clicking a member's row opens their profile.** The only way in used to be
+  the pencil in the Actions column, which is now gone for most of the
+  department, so the row and the phone card carry it instead — for coordinators
+  as well, who keep the pencil. The member's name is a real link rather than
+  the row being a tab stop: a screen reader gets one target per row instead of
+  twenty-five, and the name can be middle-clicked or opened in a new tab.
+  Clicks that land on a checkbox or an action button are still theirs, so
+  selecting a member no longer risks navigating away from the list.
+
+**Note**
+
+This is a change to what the page _shows_, not to what the server _sends_. The
+member list endpoint still returns usernames and hire dates to anyone with
+`members.view`, so this declutters the screen — it is not a confidentiality
+boundary.
+
 ### The schedule named a crew seat by its stored token, so the EMT seat read as "EMS" (2026-09-01)
 
 **Fixed**

@@ -16,13 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 03 (Public surface & webhooks), pass 3** —
-[#2137](https://github.com/thegspiro/the-logbook/pull/2137), branch
-`claude/security-review-pub-pass3`. Diff since pass 2's merge
-(`36ce7595..HEAD`, correct merge-commit ancestry) touches only
-`display.py`, via a fix already made and reviewed under feature 32's own
-rotation pass; no new findings. See the log entry below and
-`PUB-03-public-surface-webhooks.md`'s Pass 3 section.
+None. [#2138](https://github.com/thegspiro/the-logbook/pull/2138) (Feature
+04, Storefront & payments, pass 3) merged after six Codex review rounds —
+see the Log below for detail. Rotation row 04 → ✅. Next: 05 Finance &
+approvals.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) ✅ merged — PR #2138
+
+All six Codex rounds (a wrong export-line citation; the router-level
+`module_gate` reach corrected from "doesn't reach it" to "reaches it, is a
+no-op"; a dropped `GET /permissions` exception restored; two missed
+dependency-graph files; two more shared-dependency changes reviewed as safe;
+`_collect_user_permissions`'s and `permission_matches`'s own
+`expand_legacy_permissions` calls proven no-ops; three more imports verified
+unchanged at the symbol level; a `NotificationLog` schema change confirmed
+harmless) fixed, replied to, and resolved; CI and both Codex Code/Security
+Review passes green on the final head, no merge conflict. No application-code
+security finding — every correction was to this review's own write-up.
+`GET /orders/export`'s unbounded-export item remains carried forward,
+unfixed, pending a product decision. Rotation row 04 → ✅. Next: 05 Finance &
+approvals.
+
+---
+
+### 2026-09-01 — Feature 03 (Public surface & webhooks, pass 3) ✅ merged — PR #2137
+
+Codex round 1's scope-command gap (missed `app/core/public_portal_security.py`,
+outside the searched directory) fixed and resolved; CI green on the final
+head, no merge conflict. No code-level security finding — the one commit in
+scope was already fixed and guard-tested under feature 32's own pass.
+Rotation row 03 → ✅. Next: 04 Storefront & payments.
 
 ---
 
@@ -64,6 +89,228 @@ own PR's CI run as the authority for the full gate.
 Full write-up: `docs/security-review/PUB-03-public-surface-webhooks.md`
 (Pass 3 section). Rotation row 03 → ⏳ (awaiting PR merge). Next: 04
 Storefront & payments, once this PR merges.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 6: a schema change to a table storefront writes through, confirmed harmless
+
+Codex reviewed round 5's own fix and found one more real gap: round 5's
+"file changed, imported symbol didn't" check of `models/notification.py`
+covered the `NotificationChannel` enum but missed that `NotificationLog` —
+the table `StorefrontService.add_order_message` writes to via
+`NotificationsService.log_notification` — gained a new nullable
+`department_message_id` FK and a `UniqueConstraint("department_message_id",
+"recipient_id", "channel")` in the same diff.
+
+Checked whether that constraint can reject a storefront-originated insert:
+`add_order_message`'s `log_data` never sets `department_message_id`, so it
+takes its default (`NULL`). Under InnoDB (MySQL 8.0), a `UNIQUE` index
+treats `NULL` as distinct from every other `NULL`, including inside a
+composite key — two rows with `department_message_id IS NULL` never
+collide on that account, whatever `recipient_id`/`channel` they share. So a
+member getting several `storefront` in-app notices for one order still
+inserts every time, exactly as before this column existed. The constraint
+only activates between rows sharing a real, non-`NULL`
+`department_message_id`, which storefront's own call never sets. No
+storefront-reachable failure mode.
+
+Fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 5: a timing overstatement corrected, `permission_matches`'s own alias-expansion call named, three more imports verified at the symbol level
+
+Codex reviewed round 4's own fix and found three more real gaps, none a new
+application-code finding:
+
+- **"Runs on literally every storefront request" overstated when.**
+  `PermissionChecker.__call__` (backing `require_permission`) takes
+  `current_user: User = Depends(get_current_user)` as its own dependency, so
+  FastAPI resolves authentication before the function body — which calls
+  `_collect_user_permissions` — ever runs; the router-level `module_gate`
+  dependency resolves before any endpoint dependency too. Corrected: it runs
+  for every request that reaches an actual permission decision, after
+  authentication and the module gate both pass — not unconditionally on
+  every request.
+- **`core/permissions.py:permission_matches` also calls
+  `expand_legacy_permissions` directly**, independent of
+  `_collect_user_permissions`'s call — round 4 named only the aggregation
+  call site. Both were already noted together as "redundant but harmless"
+  in `PERM-02-permissions-roles.md`'s pass 3; round 4 just didn't carry the
+  second one into this document. Same no-op conclusion applies to both, for
+  the same reason (the alias map is `equipment_check.*`-only).
+- **Three more imports from changed files, now checked at the symbol level
+  rather than the file level:** `get_db` (`app/core/database.py` — the
+  file's diff is confined to an unrelated `disconnect()` method; `get_db`
+  itself doesn't appear in it), `safe_error_detail` (`app/core/utils.py` —
+  the diff is a pure addition, a new `sanitize_connector_error` function
+  this feature doesn't call; `safe_error_detail` itself doesn't appear in
+  the diff), and `NotificationChannel` (`app/models/notification.py` — a
+  +99/-1 diff for an unrelated messaging feature; the enum's own class
+  definition doesn't appear in the diff, only a reference to it inside a
+  new column on a different table). All three: file changed, imported
+  symbol didn't.
+
+All three fixed in `docs/security-review/SF-04-storefront-payments.md`'s
+Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 4: `dependencies.py`'s permission-aggregation change reaches every storefront request too, proven a no-op
+
+Codex reviewed round 3's own fix and found one more real gap:
+`cf033864` (the `equipment_check.*` → `inventory.check_*` rename, already
+reviewed in `PERM-02-permissions-roles.md`'s pass 3) didn't only touch
+`core/permissions.py` — it also added an `expand_legacy_permissions` call
+inside `_collect_user_permissions` in `app/api/dependencies.py`, and that
+function backs both `require_permission` (47 of storefront's 48 routes) and
+`user_has_permission` (the `GET /permissions` self-probe). So it runs on
+every storefront request, not zero of them, contrary to what earlier rounds
+implied by only reviewing the registry side of the same commit.
+
+Verified what it actually does to a storefront decision rather than
+stopping at "it's called": every key in `LEGACY_PERMISSION_ALIASES` is
+`equipment_check.*`-shaped, a namespace with no `storefront.*` entry on
+either side. Expanding a caller's granted set can only ever add
+`inventory.check_*` names to it — it cannot touch
+`storefront.view`/`storefront.order`/`storefront.manage` — so
+`permission_matches` sees an identical answer for every storefront
+permission check before and after this change, for every caller. Exercised
+on every request, provably a no-op.
+
+Fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 3: two more shared dependencies changed, both reviewed and confirmed safe
+
+Codex reviewed round 2's own fix commit and found two more shared
+dependencies this feature actually calls that had changed since `d8c5e39e`:
+
+- **`app/core/security_middleware.py`** (imported by `paypal_webhook.py` for
+  `public_rate_limit`) — a `RateLimiter` fix (already reviewed once,
+  independently, per its own `Codex, PR #2106` comments): a bug where
+  `lockout_seconds=0` (`public_rate_limit`'s own fallback value) made an
+  "expired lockout" check unconditionally wipe the caller's request
+  history, so every `max_requests+1`th over-limit hit silently reset the
+  sliding window and defeated the rate limit; now gated on
+  `lockout_seconds > 0`. Strictly tightens enforcement. A second hunk
+  self-heals a missing Redis TTL on `daily_cap_exceeded`'s counter so a
+  transient `EXPIRE` failure can't leave a scope blocked past its intended
+  day. Neither weakens anything this feature's webhook relies on.
+- **`frontend/src/utils/createApiClient.ts`** (storefront's own
+  `services/api.ts` builds its axios instance through it) — decodes a JSON
+  error body that arrives as a `Blob` (axios applies the request's
+  `responseType` to error responses too, which matters here because
+  storefront's order-export flow is exactly that shape), so a real backend
+  error message reaches the user instead of a generic fallback. Parsed JSON
+  only feeds existing error-message plumbing, no new sink.
+
+Both reviewed and confirmed safe — defensive corrections to shared
+infrastructure, not new surface. Fixed in
+`docs/security-review/SF-04-storefront-payments.md`'s Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 2: the router-level module gate does reach storefront, the routing inventory dropped a known exception, and two dependency-graph files were missed by a filename filter
+
+Codex reviewed round 1's own fix commit and found three more real gaps —
+round 1's "doesn't reach it" claim about `a518957e` was itself wrong, not
+just under-scoped:
+
+- **`storefront.router` is mounted in `app/api/v1/api.py` with
+  `dependencies=module_gate("storefront", "The Department Store")`, and
+  `module_gate` → `require_module` → `Depends(get_request_enabled_modules)`
+  — so `a518957e` runs on every storefront request, contrary to round 1's
+  claim that it "doesn't reach this feature's routes at all."** Re-verified
+  the actual consequence rather than repeating the error: `require_module`'s
+  check passes through (no 403) when `get_request_enabled_modules` returns
+  `None` — including, post-`a518957e`, for an invalid/expired session, not
+  just an absent one. That sounds like a weakening, but every one of
+  storefront's 48 routes independently requires at least
+  `Depends(get_current_user)` (grep-confirmed), and `a518957e` explicitly
+  left that mandatory path rejecting invalid credentials with 401 unchanged
+  — so a caller the module gate lets through anonymously is rejected one
+  dependency later by the endpoint's own auth check regardless. For a
+  genuinely authenticated caller whose org has the module off, `enabled`
+  resolves to the org's real flag set (a518957e doesn't touch that path) and
+  the 403 still fires. No finding — but the correct statement is "reaches
+  every route and is a no-op for this route composition," not "doesn't
+  reach it."
+- **The routing-inventory correction itself dropped a real, already-documented
+  exception.** Restating "storefront's routes are permission-gated" without
+  qualification contradicts this document's own pass-1 record: `GET
+/permissions` (`storefront.py:1512-1521`) is a deliberate
+  `Depends(get_current_user)` self-probe, not `require_permission(...)`.
+  Restated with the exception preserved.
+- **Two files in this feature's real dependency graph aren't named
+  storefront/embroidery/personalization/thread, so round 1's filename filter
+  missed them:** `app/utils/embroidery.py` (imported by both
+  `storefront_service.py` and `schemas/storefront.py` — it isn't a
+  migration, so the migration-filename filter never had a chance to catch
+  it) and `20260825_1520_c6a3f8b41e29_settle_variant_size_order.py` (named
+  for what it does, not for "storefront"). Both diffed explicitly against
+  `d8c5e39e`: zero changes, same conclusion as everything else in scope.
+
+All three fixed in `docs/security-review/SF-04-storefront-payments.md`'s
+Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 1: a feature-local diff can't clear shared authorization code, plus a wrong line citation
+
+Codex reviewed this PR's first commit and found two real gaps, neither a
+new application-code finding:
+
+- **The zero-diff conclusion only covered the ten feature-owned files, not
+  shared code storefront's routes depend on.** Checked explicitly:
+  `storefront.py` gates every route with `require_permission(...)`, never
+  `module_gate`/`require_module`, so `a518957e`'s module-gate change
+  (already reviewed in PERM-02 pass 3) doesn't reach it. `core/permissions.py`'s
+  diff touches lines adjacent to the three `STOREFRONT_*` permissions, but
+  precisely checked — it's context noise from the unrelated
+  `equipment_check.*` → `inventory.check_*` rename (`cf033864`, also
+  already reviewed in PERM-02 pass 3); none of the three definitions
+  themselves changed. That rename did reach this feature's own test suite:
+  `test_corporate_storefront_grants.py` and `test_storefront_grant_backfill.py`
+  both needed a `LEGACY_PERMISSION_ALIASES` translation so their frozen
+  pre-rename migration snapshots keep matching the old spelling — a
+  downstream adaptation of an already-reviewed rename, not new behavior.
+- **Pass 2's own citation for the carried-forward unbounded-export finding
+  was wrong.** `storefront_service.py:2916-2953,2980-3015` is dashboard
+  rollup code (`_order_rollup`/`get_window_rollups`/`get_dashboard`); the
+  actual `while True` unbounded-accumulation loop is `export_orders_csv` at
+  `storefront_service.py:3035-3072`. Same defect, correct range now.
+
+Both fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section and in the entry below.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — no new findings
+
+`git diff` (not `git log`) between pass 2's closing merge (`d8c5e39e`) and
+current `HEAD`, across the full domain pass 2 established after its own
+under-scoping correction (10 backend files, the whole
+`frontend/src/modules/storefront/` tree, and any storefront-named
+migration) — chosen over `git log` because pass 2 documented this repo's
+history for this path as squashed/rewritten, which is exactly what caused
+pass 2's own first draft to under-scope and need a correction; `git diff`
+between two known tree states doesn't have that failure mode. Result: zero
+changes across the entire domain. SF-5/SF-6's fixes and every pass-1/2
+"Verified good" item stand unmodified. `GET /orders/export`'s unbounded
+export (no row cap or date window) is carried forward again, unfixed — a
+product decision, not a drive-by fix, and explicitly re-flagged so it
+doesn't silently drop out of the record the way it briefly did before pass
+2 caught it. No backend/frontend source touched by this pass; `flake8` and
+`validate_migrations.py --strict` re-run directly, with this pass's own
+PR's CI run as the authority for the full gate.
+
+Full write-up: `docs/security-review/SF-04-storefront-payments.md` (Pass 3
+section). Rotation row 04 → ⏳ (awaiting PR merge). Next: 05 Finance &
+approvals, once this PR merges.
 
 ---
 
@@ -5655,8 +5902,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⏳     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |

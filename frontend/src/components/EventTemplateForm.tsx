@@ -67,6 +67,11 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
   const [maxAttendees, setMaxAttendees] = useState(initialData?.max_attendees?.toString() ?? '');
   const [isMandatory, setIsMandatory] = useState(initialData?.is_mandatory ?? false);
   const [allowGuests, setAllowGuests] = useState(initialData?.allow_guests ?? false);
+  // null is the "inherit the org default" state and is a real choice, so it is
+  // held as null rather than coerced to a string.
+  const [attendeeVisibility, setAttendeeVisibility] = useState<'members' | 'managers' | null>(
+    initialData?.attendee_visibility ?? null
+  );
 
   // Reminders
   const [sendReminders, setSendReminders] = useState(initialData?.send_reminders ?? false);
@@ -121,6 +126,10 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
       requires_rsvp: requiresRsvp,
       is_mandatory: isMandatory,
       allow_guests: allowGuests,
+      // Always sent, including as null: a template that had an override and
+      // goes back to inheriting must persist that, and an omitted key means
+      // "leave alone" on the update path.
+      attendee_visibility: attendeeVisibility,
       send_reminders: sendReminders,
       reminder_target: sendReminders ? reminderTarget : 'none',
       require_checkout: requireCheckout,
@@ -347,6 +356,22 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
               <label htmlFor="template-allow-guests" className="text-theme-text-primary text-sm">
                 Allow guests
               </label>
+            </div>
+
+            <div>
+              <label htmlFor="template-attendee-visibility" className={labelClass}>
+                Who can see who&apos;s going
+              </label>
+              <select
+                id="template-attendee-visibility"
+                value={attendeeVisibility ?? ''}
+                onChange={(e) => setAttendeeVisibility((e.target.value || null) as 'members' | 'managers' | null)}
+                className={selectClass}
+              >
+                <option value="">Use organization default</option>
+                <option value="members">Everyone in the department</option>
+                <option value="managers">Only event managers</option>
+              </select>
             </div>
           </div>
         )}

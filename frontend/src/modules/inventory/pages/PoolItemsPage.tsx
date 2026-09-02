@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem, InventoryCategory, ItemIssuance, AllowanceCheck, LowStockAlert } from '../types';
+import { onHandQuantity } from '../utils/onHand';
 import type { MemberInventorySummary } from '../../../services/eventServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -95,8 +96,8 @@ const PoolCard: React.FC<PoolCardProps> = ({
   // it and increments quantity_issued, and a return reverses both. The total is
   // therefore the sum of the two — subtracting instead counted every issued
   // unit twice and showed a fully-issued item at a negative on-hand.
-  const onHand = item.quantity;
-  const total = item.quantity + item.quantity_issued;
+  const onHand = onHandQuantity(item);
+  const total = onHand + item.quantity_issued;
 
   const handleToggle = () => {
     if (!expanded) void onLoadIssuances();
@@ -293,7 +294,7 @@ const PoolItemsPage: React.FC = () => {
     if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (categoryFilter && item.category_id !== categoryFilter) return false;
     if (lowStockOnly) {
-      const onHand = item.quantity;
+      const onHand = onHandQuantity(item);
       const cat = categories.find((c) => c.id === item.category_id);
       const threshold = cat?.low_stock_threshold ?? 0;
       if (onHand > threshold) return false;
@@ -301,7 +302,7 @@ const PoolItemsPage: React.FC = () => {
     return true;
   });
 
-  const totalOnHand = items.reduce((s, i) => s + i.quantity, 0);
+  const totalOnHand = items.reduce((s, i) => s + onHandQuantity(i), 0);
   const totalIssued = items.reduce((s, i) => s + i.quantity_issued, 0);
   const lowStockCount = lowStockAlerts.length;
 
@@ -438,7 +439,7 @@ const PoolItemsPage: React.FC = () => {
 
   /* Render */
   const catLookup = categoryMap();
-  const issueItemOnHand = issueItem ? issueItem.quantity : 0;
+  const issueItemOnHand = issueItem ? onHandQuantity(issueItem) : 0;
 
   // The backend *rejects* an over-allowance issue with a 400 unless
   // override_allowance is set — it does not merely flag it. Mirror its test
@@ -801,10 +802,10 @@ const PoolItemsPage: React.FC = () => {
             <select className="form-input w-full" value={bulkItemId} onChange={(e) => setBulkItemId(e.target.value)}>
               <option value="">Select an item...</option>
               {items
-                .filter((i) => i.quantity > 0)
+                .filter((i) => onHandQuantity(i) > 0)
                 .map((i) => (
                   <option key={i.id} value={i.id}>
-                    {i.name} ({i.quantity} available)
+                    {i.name} ({onHandQuantity(i)} available)
                   </option>
                 ))}
             </select>
