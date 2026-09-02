@@ -48,7 +48,7 @@ import type {
   MedicalScreeningStageConfig,
   StageConfig,
 } from '../types';
-import { DEFAULT_EMAIL_SECTION_ORDER, defaultStageConfig } from '../types';
+import { DEFAULT_EMAIL_SECTION_ORDER, DEFAULT_ELECTION_PACKAGE_FIELDS, defaultStageConfig } from '../types';
 import { formsService } from '@/services/formsServices';
 import type { FormDef } from '@/services/formTypes';
 import { pipelineService } from '../services/api';
@@ -202,6 +202,13 @@ const STAGE_PRESETS: StagePreset[] = [
       victory_condition: 'majority' as const,
       eligible_voter_roles: ['member'],
       anonymous_voting: true,
+      // Presets only ever populate a brand-new stage (hidden while editing,
+      // see the `!editingStage` guard around this list) — so unlike the
+      // type's bare defaultStageConfig, it's safe to start this with the
+      // same field selection ElectionVoteConfig displays as checked, rather
+      // than leaving package_fields absent (which the backend reads as
+      // "capture everything").
+      package_fields: { ...DEFAULT_ELECTION_PACKAGE_FIELDS },
     }),
   },
   {

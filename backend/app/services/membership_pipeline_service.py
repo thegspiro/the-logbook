@@ -4625,20 +4625,30 @@ class MembershipPipelineService:
         # capture-everything behavior for every pipeline that hasn't
         # configured this — this only takes effect where a coordinator has
         # actually saved field choices.
+        #
+        # Resolved from the pipeline's own election_vote step, never from the
+        # client-supplied step_id: step_id is optional and, even when given,
+        # is only checked for being *some* step of the (also client-
+        # overridable) effective_pipeline — not for being an election_vote
+        # step at all. Trusting it directly let a caller silently defeat a
+        # coordinator's configured PII minimization just by omitting step_id
+        # or naming a different step, with no error and no sign anything was
+        # skipped (MP-08 pass 4 Codex). A pipeline has at most one election
+        # stage in practice, so looking it up directly removes the client's
+        # ability to steer which step's config governs this snapshot.
         package_fields: Optional[Dict[str, Any]] = None
-        if step_id:
-            step_obj = next(
-                (
-                    s
-                    for s in (effective_pipeline.steps if effective_pipeline else [])
-                    if str(s.id) == str(step_id)
-                ),
-                None,
-            )
-            if step_obj and isinstance(step_obj.config, dict):
-                candidate = step_obj.config.get("package_fields")
-                if isinstance(candidate, dict):
-                    package_fields = candidate
+        election_step = next(
+            (
+                s
+                for s in (effective_pipeline.steps if effective_pipeline else [])
+                if s.step_type == PipelineStepType.ELECTION_VOTE
+                and isinstance(s.config, dict)
+                and isinstance(s.config.get("package_fields"), dict)
+            ),
+            None,
+        )
+        if election_step:
+            package_fields = election_step.config["package_fields"]
 
         def _field_enabled(key: str, default: bool) -> bool:
             if package_fields is None:
@@ -4770,7 +4780,17 @@ class MembershipPipelineService:
         updated_by: Optional[str] = None,
     ) -> Optional[ProspectElectionPackage]:
         """Update an election package for a prospect"""
-        pkg = await self.get_election_package(prospect_id, organization_id)
+        # Locked for the same reason as assign_package_to_election (CLAUDE.md
+        # Pitfall #27): the state-machine check just below reads pkg.status
+        # to decide whether the write is allowed, so the read and the
+        # decision must be the same locking statement. An unlocked read here
+        # would let this method's status reset (e.g. "added_to_ballot" ->
+        # "ready") race a concurrent assign, validating against a stale
+        # snapshot of pkg.status and reopening the exact compounding
+        # scenario that state-machine check exists to prevent.
+        pkg = await self.get_election_package(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not pkg:
             return None
 
