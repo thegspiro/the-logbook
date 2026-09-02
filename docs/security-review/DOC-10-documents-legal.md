@@ -1,6 +1,222 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), (this PR) (pass 3)
+
+---
+
+## Pass 3 (2026-09-02)
+
+**Two unrelated, non-security-review PRs landed in this feature just before
+this rotation reached it**, both merged into `main` on 2026-09-02:
+
+- **#2160 ("Normalize document system folder access")** — makes
+  `can_access_folder` walk the requested folder's full ancestor chain
+  (logical AND, fail-closed on a missing/cross-org/cyclic ancestor),
+  normalizes the `members`/`facilities`/`apparatus` system-root ACLs to
+  match, and adds `get_rank_default_permissions` into the permission set
+  `_folder_admits_user` checks (a chief whose facilities grant comes from
+  rank, not a position, was previously admitted by the endpoint's own
+  permission check and then turned away by the folder gate). This is
+  **DOC-5**, previously flagged as an open design decision.
+- **#2171 ("Scope document summaries to caller folder access")** — a
+  separate PR, merged the same day, that gives `get_summary` the caller and
+  applies `accessible_folder_ids`/a shared `_document_access_predicate` to
+  every aggregate (document count, size, this-month count, folder count).
+  This is **DOC-4**, also previously flagged as an open decision.
+
+Both are read in full (not taken on faith) as this pass's prior-art review,
+per the rotation's standing discipline. Findings below.
+
+### DOC-4 / DOC-5 — re-verified fixed; docs corrected — ✅
+
+**DOC-5's fix is sound.** `can_access_folder` (`documents_service.py`) walks
+`current` up through `parent_id`, tracking `seen` ids to fail closed on a
+cycle, checking `str(current.organization_id) != expected_org` at every step
+(cross-org ancestry fails closed, not just the leaf), and requiring
+`_folder_admits_user` to pass at _every_ node — a leadership bypass at a
+child cannot override a `required_permissions` gate on an ancestor, since
+each node's own `required_permissions` is still checked before the bypass
+runs for that node. `get_folders`, `accessible_folder_ids`, and
+`get_apparatus_sub_folders`/`get_facility_sub_folders` all now delegate to
+it rather than re-deriving a shallower rule — closing the exact drift the
+prior module-audit's "Notes" section flagged ("`get_folders` duplicates
+`can_access_folder` logic inline… a drift risk"), which is corrected below.
+The accompanying migration
+(`20260902_0001_a8e4c1f7b930_normalize_system_folder_acls.py`) backfills the
+three system roots' `visibility`/`required_permissions` and guards on
+`document_folders` existing before touching it (Pitfall #26) — read in full,
+sound.
+
+**DOC-4's fix is sound**, independently. `get_summary` now takes
+`current_user`, computes `accessible_folder_ids`, and applies the same
+`_document_access_predicate` (`Document.folder_id.in_(accessible_ids) OR
+Document.folder_id.is_(None)`) to the document-count/size/this-month
+aggregate **and** the folder-count subquery — both halves of the original
+finding, not just one. Verified against current code (not the diff) and
+against `tests/test_documents_access.py::TestDocumentsSummaryAccess::
+test_summary_matches_each_caller_access_scope`, which asserts exact expected
+counts across five caller tiers (plain member, folder owner, a role-matched
+reader, a `facilities.view_sensitive` holder, and leadership) against a
+fixture with one document in each of an open/role-restricted/owner/
+sensitive/leadership/leadership-nested-child folder plus one org-level and
+one archived document — the strongest form of "verified", since a scoping
+bug in either direction (over- or under-counting) fails a specific tier's
+assertion rather than a smoke test that only checks the shape.
+
+**Correcting stale documentation, which is the actual finding of this
+pass's prior-art review:** `docs/KNOWN_LIMITATIONS.md`,
+`docs/module-audit/documents.md`, and `docs/app-review/documents.md` had
+already been updated (by #2160's own commit) to mark DOC-5 fixed, but still
+described DOC-4 as "still flagged" / open — because #2160 and #2171 are two
+different PRs and neither one's author had reason to know about the other's
+fix. Left uncorrected, the next reviewer (or an operator reading
+`KNOWN_LIMITATIONS.md`, which this repo treats as "what a compliance
+reviewer reads and what the next audit uses to aim") would see an open
+finding that current code has already closed. All three docs corrected in
+this pass (see Doc updates below) — no code change for this half, only the
+record catching up to it.
+
+### DOC-27 — LOW — Folder create/update/delete and a document metadata edit had no audit trail — ✅ FIXED
+
+`document_uploaded`, `document_downloaded` (DOC-26), and `document_deleted`
+all call `log_audit_event`. Folder `create_folder`/`update_folder`/
+`delete_folder` and `update_document` (`documents.py`) did not — and
+`update_revision`/`delete_revision` (`legal_documents.py`) didn't either,
+while their siblings `create_revision`/`publish_revision`/
+`revert_to_default` all do. A `documents.manage` holder could delete a
+folder — cascading to every descendant folder and document, and their
+backing files, per the existing `delete_folder` subtree walk — with nothing
+recording who did it or when. Not a cross-tenant or access-control gap
+(every one of these is already correctly permission- and org-scoped); this
+is an accountability/forensics gap of the same shape DOC-26 already fixed
+once for downloads, on the sibling operations DOC-26's own pass didn't
+reach.
+
+Fixed by adding `log_audit_event` calls matching the established pattern
+exactly (same `event_category`/actor-resolution shape as the existing
+calls in each file):
+
+- `folder_created` / `folder_updated` (severity `info`) and `folder_deleted`
+  (severity `warning`, matching `document_deleted`'s weight — a folder
+  delete is at least as destructive) in `documents.py`.
+- `document_updated` (severity `info`) in `documents.py`, for symmetry with
+  `document_uploaded`/`downloaded`/`deleted`.
+- `legal.revision_updated` / `legal.revision_discarded` (severity `info`) in
+  `legal_documents.py`, matching the `legal.revision_proposed` naming
+  already used by the sibling create path.
+
+None of these change behavior, response shape, or status codes — purely
+additive logging after the existing service call succeeds, in the same
+place and style as every neighboring `log_audit_event` call in both files.
+
+Covered by `tests/test_documents_access.py::TestFolderAndDocumentAuditLogging`
+(4 cases: folder create/update/delete, document update — each calls the
+endpoint function directly against a real `db_session` and asserts the
+matching `AuditLog` row exists with the expected `event_data`) and
+`tests/test_legal_documents.py::TestRevisionAuditLogging` (2 cases: revision
+update/discard). All 6 confirmed failing on the intended assertion
+(`entry is not None`) against the pre-fix endpoint code via `git stash`,
+passing after.
+
+### Re-verified still open, not re-flagged
+
+- **DOC-8** (`legal_service.py::list_revisions` unbounded — no
+  `LIMIT`/`OFFSET`) — unchanged, still open. Same class as this rotation's
+  other unbounded-list findings (FIN-9/ELEC-12/USR-5/MP-10/MS-6/DOC-9); a
+  response-envelope/frontend-contract change, left for an owner decision.
+- **DOC-9** (`documents_service.py::get_folders` unbounded and N+1 — one
+  `func.count` query per folder, no `LIMIT`/`OFFSET`) — unchanged on
+  `main`, still open. Worth naming precisely: an **unmerged** branch
+  (`codex/add-pagination-and-improve-folder-querying`, visible in this
+  session's `git fetch` output as a remote branch, not yet a PR reviewed by
+  this rotation) adds SQL-level pagination to this exact method, but it is
+  not on `main` as of this pass — current code is exactly what pass 2
+  described, re-confirmed by reading `get_folders` in full this pass rather
+  than assumed unchanged. Left open rather than credited, since crediting an
+  unmerged branch would misstate what a deployment actually runs today.
+
+### Verified good ✅ (additional, this pass)
+
+- **The ancestor walk in `can_access_folder` cannot be defeated by a stale
+  `folders_by_id` snapshot.** `accessible_folder_ids` builds one
+  org-scoped snapshot per call and passes it through; a missing id in that
+  snapshot (rather than falling back to an unscoped per-node query) is
+  treated as corrupt ancestry and fails closed — read and confirmed, not
+  merely asserted by the PR's own commit message.
+- **`_get_user_permissions`'s inclusion of `get_rank_default_permissions`
+  matches the canonical resolver.** Compared line-for-line against
+  `_collect_user_permissions` in `api/dependencies.py` — the one gap
+  (`_collect_user_permissions` additionally calls `expand_legacy_permissions`
+  for retired permission-string aliases; `_get_user_permissions` does not)
+  is inert today: `permission_matches` — what `_folder_admits_user`'s
+  `permission_matches_any` actually calls — expands legacy aliases
+  internally on every check regardless of whether the caller's set was
+  pre-expanded, so `required_permissions` gating is unaffected.
+  `_is_leadership`'s raw `user_perms & LEADERSHIP_PERMISSIONS` set
+  intersection does _not_ go through that expansion, but
+  `LEGACY_PERMISSION_ALIASES` today maps only `equipment_check.*` names, not
+  `documents.manage`/`members.manage`/`*` — so there is no live alias this
+  bypasses. Noted as a maintenance footgun rather than a finding: if a
+  future rename ever retires one of the three `LEADERSHIP_PERMISSIONS`
+  strings, `_is_leadership` would silently stop recognizing the alias where
+  every other permission check in the codebase would not.
+- **`print_document_service.py`'s printer resolution is org-scoped and
+  fails closed, not merely by convention.** `_resolve_receipt_printer` calls
+  `LabelPrinterService.get_printer(printer_id, organization_id)`, which
+  raises `ValueError("Printer not found")` — not `None` — on a missing or
+  cross-org id, so the caller's `printer.name` access two lines later (used
+  to build the "is a label printer" error message) can never see a `None`
+  printer and crash. Traced end to end rather than assumed from the
+  existing DOC-14 write-up.
+- **No CSV/spreadsheet export exists in this feature** (grepped
+  `documents.py`, `station_documents.py`, `legal_documents.py`, and their
+  services for `csv`/`SafeCsvWriter` — none). CLAUDE.md Pitfall #15 does not
+  apply here; recorded as checked, not skipped.
+- **`Document.tags.ilike`/`.name.ilike`/`.description.ilike` all still pass
+  `escape=LIKE_ESCAPE_CHAR`** (SEC-2's fix, re-confirmed present rather than
+  assumed still intact).
+- **No `window.confirm`/`alert`/`prompt`, no `dangerouslySetInnerHTML`, no
+  banned `.toLocale*Date/Time/String()` calls** anywhere in
+  `DocumentsPage.tsx`, `LegalPage.tsx`, `LegalDocumentsPage.tsx`, or the
+  other frontend files this feature touches (grepped directly, not inferred
+  from ESLint passing). `LegalDocumentsPage.tsx` uses `useConfirm()`
+  correctly for publish/discard/revert, matching CLAUDE.md Pitfall #16, and
+  `formatDateTime()`/`useTimezone()` for every timestamp, matching the
+  UTC-storage/local-display rule.
+
+## Doc updates
+
+- `docs/KNOWN_LIMITATIONS.md` — the "Documents: summary ignores folder ACL"
+  row updated from "Partially resolved" to "✅ Resolved", crediting DOC-4 to
+  PR #2171 alongside DOC-5.
+- `docs/module-audit/documents.md` — DOC-4 marked ✅ FIXED (was flagged);
+  the "Notes" section's two items (`uploader_name`/`folder_name` never
+  populated; `get_folders` duplicating `can_access_folder` inline) both
+  removed as stale — the first was fixed by DOC2-1 (app-review pass 2,
+  already noted as resolved in `app-review/documents.md` but never
+  back-corrected here), the second by #2160's `get_folders` rewrite
+  (verified above).
+- `docs/app-review/documents.md` — DOC-4 references in the "Future
+  development" lists across passes 1/2/3/4 annotated as resolved, matching
+  the treatment DOC-5 already received there.
+
+## Completion gate
+
+| Check                                                                                                                                                               | Result                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                       | pass, 0 violations                                                                                                                        |
+| `black --check app/ tests/ alembic/`                                                                                                                                | pass, 1396 files unchanged                                                                                                                |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                           | pass                                                                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                   | pass — 410 revisions, single head (`a8e4c1f7b930`), unchanged this pass                                                                   |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_facility_folder_access.py` | 178 passed                                                                                                                                |
+| `pytest tests/` (full backend suite)                                                                                                                                | 9906 passed, 21 skipped (pre-existing: Docker/registry unavailable, `pywebpush` not installed, API-contract server-mode opt-in), 0 failed |
+| `tsc --noEmit` / `eslint .` (frontend)                                                                                                                              | not run — no frontend file was changed this pass (verified by `git status`; frontend was read for review only, per Verified good above)   |
+
+Guard tests added this pass: `tests/test_documents_access.py::
+TestFolderAndDocumentAuditLogging` (4 cases) and
+`tests/test_legal_documents.py::TestRevisionAuditLogging` (2 cases) — see
+DOC-27. Confirmed to fail on the intended assertion pre-fix via `git stash`
+of the two endpoint files (tests kept), pass after restoring them.
 
 ---
 

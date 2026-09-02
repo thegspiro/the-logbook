@@ -30,11 +30,16 @@ tenant isolation).
 - **LIKE search escapes `\`, `%`, `_`; no raw SQL; flake8 clean; no TODOs.**
 
 **Correction (security review, 2026-08-25):** `docs/security-review/DOC-10-documents-legal.md`
-re-verified DOC-1/2/3/6 (still fixed) and DOC-4 (still open) and DOC-5 (resolved 2026-09-02 after being confirmed to extend identically to the facility-folder hierarchy
+re-verified DOC-1/2/3/6 (still fixed) and DOC-4 (still open at the time) and DOC-5 (resolved 2026-09-02 after being confirmed to extend identically to the facility-folder hierarchy
 added since this audit), and reviewed two files this audit never covered —
 `station_documents.py`/`print_document_service.py` and
 `legal_documents.py`/`legal_service.py` — for the first time. No new
 findings in either.
+
+**Correction (security review DOC-10 pass 3, 2026-09-02):** DOC-4 is now
+also fixed (a separate PR, #2171, merged the same day as DOC-5's #2160 —
+re-verified against current code, not the diff, and covered by a dedicated
+per-caller-tier test). See DOC-4 below.
 
 ## Findings
 
@@ -68,15 +73,19 @@ was skipped and the document was created with that unvalidated `folder_id`.
 **Fix:** reject a provided-but-unresolvable `folder_id` with 404 before the
 access check.
 
-### DOC-4 — LOW — `get_documents_summary` ignores the folder ACL
+### DOC-4 — LOW — `get_documents_summary` ignores the folder ACL — ✅ FIXED (2026-09-02)
 
-`get_summary` aggregates `total_documents`/`total_folders`/`total_size_bytes`/
-`documents_this_month` across the **entire org**, including leadership-only,
-owner-only (member personal), and role-restricted folders — so a plain
-`documents.view` user sees aggregate volume/existence of restricted content
-(counts only, no names/content).
-**Status:** flagged — scoping the summary to `accessible_folder_ids` is a
-behavior change to a stats endpoint; left for a deliberate decision.
+`get_summary` used to aggregate `total_documents`/`total_folders`/
+`total_size_bytes`/`documents_this_month` across the **entire org**,
+including leadership-only, owner-only (member personal), and
+role-restricted folders — so a plain `documents.view` user saw aggregate
+volume/existence of restricted content (counts only, no names/content).
+**Fix (PR #2171):** `get_summary` now takes the caller and scopes every
+aggregate — the document count/size/this-month sum and the folder count —
+to `accessible_folder_ids`. Covered by
+`tests/test_documents_access.py::TestDocumentsSummaryAccess::
+test_summary_matches_each_caller_access_scope` (5 caller tiers, exact
+expected counts each).
 
 ### DOC-5 — LOW (design) — Hierarchical folder ACL — ✅ FIXED (2026-09-02)
 
@@ -98,7 +107,20 @@ retain intended access, while apparatus remains leadership-only.
 
 ## Notes
 
-- `uploader_name` / `folder_name` in `DocumentResponse` are never populated
-  (no enrichment join) — always null; dead fields.
-- `get_folders` duplicates `can_access_folder` logic inline rather than calling
-  it — consistent today, a drift risk.
+Both items formerly listed here are resolved, and the corrections were
+scattered elsewhere rather than made in this file — recorded here so a
+reader of this file specifically doesn't rediscover them as open:
+
+- `uploader_name` / `folder_name` on `DocumentResponse` were never
+  populated (no enrichment join) — always null; dead fields. **Fixed**
+  (DOC2-1, app-review pass 2, 2026-08-06): a new `attach_document_names`
+  helper batch-resolves both, org-scoped, wired into every document
+  response path. Noted as resolved in `docs/app-review/documents.md` at the
+  time, but this file was never back-corrected until now (security review
+  DOC-10 pass 3, 2026-09-02).
+- `get_folders` duplicated `can_access_folder`'s logic inline rather than
+  calling it — a drift risk, since the two copies could (and eventually
+  did) diverge. **Fixed** (PR #2160, 2026-09-02, alongside DOC-5): the
+  inline visibility-only check is gone; `get_folders` now delegates to
+  `can_access_folder` for every folder, so it inherits the same
+  ancestor-walk/`required_permissions` rule the by-id path enforces.

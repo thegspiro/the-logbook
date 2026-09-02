@@ -139,6 +139,20 @@ async def create_folder(
         result = await service.create_folder(
             current_user.organization_id, folder_data, current_user.id
         )
+    await log_audit_event(
+        db=db,
+        event_type="folder_created",
+        event_category="documents",
+        severity="info",
+        event_data={
+            "folder_id": str(result.id),
+            "name": result.name,
+            "parent_id": str(result.parent_id) if result.parent_id else None,
+            "visibility": str(result.visibility),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return result
 
 
@@ -164,6 +178,15 @@ async def update_folder(
             folder_id, current_user.organization_id, update_data
         )
     result = ensure_found(updated, "Folder")
+    await log_audit_event(
+        db=db,
+        event_type="folder_updated",
+        event_category="documents",
+        severity="info",
+        event_data={"folder_id": str(folder_id), "fields": list(update_data.keys())},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return result
 
 
@@ -178,6 +201,18 @@ async def delete_folder(
     success = await service.delete_folder(folder_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=404, detail="Folder not found")
+    # A folder delete cascades to every descendant folder and document (and
+    # their backing files) — the same destructive weight as document_deleted,
+    # which already carries this severity.
+    await log_audit_event(
+        db=db,
+        event_type="folder_deleted",
+        event_category="documents",
+        severity="warning",
+        event_data={"folder_id": str(folder_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ============================================
@@ -537,6 +572,18 @@ async def update_document(
         )
     result = ensure_found(updated, "Document")
     await service.attach_document_names(current_user.organization_id, [result])
+    await log_audit_event(
+        db=db,
+        event_type="document_updated",
+        event_category="documents",
+        severity="info",
+        event_data={
+            "document_id": str(document_id),
+            "fields": list(update_data.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return result
 
 

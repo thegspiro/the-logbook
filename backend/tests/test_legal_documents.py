@@ -5,14 +5,21 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
-from app.api.v1.endpoints.legal_documents import _assert_may_modify
+from app.api.v1.endpoints.legal_documents import (
+    _assert_may_modify,
+    delete_revision,
+    update_revision,
+)
+from app.models.audit import AuditLog
 from app.models.legal import (
     LegalDocumentRevision,
     LegalDocumentType,
     LegalRevisionStatus,
 )
-from app.models.user import Organization
+from app.models.user import Organization, User
+from app.schemas.legal import LegalRevisionUpdate
 from app.services.legal_service import (
     EFFECTIVE_DATE_KEY,
     SETTINGS_KEY,
@@ -501,3 +508,88 @@ class TestLegalDocumentWorkflow:
         )
         assert updated.body == "Revised."
         assert updated.change_note == "Per counsel review."
+
+
+@pytest.mark.integration
+class TestRevisionAuditLogging:
+    """DOC-27: editing or discarding a draft revision had no audit trail --
+    unlike propose/publish/revert, which all already log. A draft is not
+    public, but the governance record around who proposed and who edited or
+    discarded a proposal is the whole reason this workflow keeps a revision
+    table instead of editing settings in place.
+    """
+
+    async def _org(self, db, slug="fcvfd-audit") -> Organization:
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db.add(org)
+        await db.flush()
+        return org
+
+    async def _author(self, db, org_id) -> User:
+        # A real row, not a SimpleNamespace stand-in: create_draft inserts
+        # `created_by` as an FK to `users.id`, which a synthetic id would
+        # violate. Its own `positions`/`rank` are unset (no grants), which is
+        # fine here -- `_assert_may_modify` admits the draft's own author
+        # regardless of permissions; only a *different* caller needs one of
+        # the propose/publish/settings.manage tiers.
+        user = User(
+            organization_id=org_id, username="author", email="author@example.com"
+        )
+        db.add(user)
+        await db.flush()
+        # _assert_may_modify -> _can_publish reads user.positions. A bare
+        # attribute access on an unloaded relationship needs a lazy load,
+        # which needs a greenlet context this plain `await` test setup
+        # doesn't provide (MissingGreenlet) -- force it through an explicit
+        # async refresh instead of leaving it to trigger implicitly.
+        await db.refresh(user, attribute_names=["positions"])
+        return user
+
+    async def _draft(self, db, org, created_by) -> LegalDocumentRevision:
+        service = LegalDocumentService(db)
+        return await service.create_draft(
+            organization_id=str(org.id),
+            created_by=str(created_by),
+            document_type=LegalDocumentType.PRIVACY_POLICY,
+            body="Proposed wording.",
+            change_note="Matches Article IV of the bylaws.",
+        )
+
+    async def _last_event(self, db, event_type):
+        result = await db.execute(
+            select(AuditLog)
+            .where(AuditLog.event_type == event_type)
+            .order_by(AuditLog.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def test_update_revision_is_audited(self, db_session):
+        org = await self._org(db_session)
+        author = await self._author(db_session, org.id)
+        revision = await self._draft(db_session, org, author.id)
+
+        await update_revision(
+            str(revision.id),
+            LegalRevisionUpdate(body="Revised wording."),
+            db=db_session,
+            current_user=author,
+        )
+
+        entry = await self._last_event(db_session, "legal.revision_updated")
+        assert entry is not None
+        assert entry.event_data["revision_id"] == str(revision.id)
+        assert entry.event_data["document_type"] == "privacy_policy"
+
+    async def test_delete_revision_is_audited(self, db_session):
+        org = await self._org(db_session)
+        author = await self._author(db_session, org.id)
+        revision = await self._draft(db_session, org, author.id)
+        revision_id = str(revision.id)
+
+        await delete_revision(revision_id, db=db_session, current_user=author)
+
+        entry = await self._last_event(db_session, "legal.revision_discarded")
+        assert entry is not None
+        assert entry.event_data["revision_id"] == revision_id
+        assert entry.event_data["document_type"] == "privacy_policy"
