@@ -556,6 +556,15 @@ async def lookup_ballot_by_token(
                 )
             )
 
+    # Nothing in schema validation stops a plain `election.positions` entry
+    # from equaling a ballot item's position/title/id (ELEC-29), so a
+    # candidate's position can legitimately fall in both namespaces at
+    # once. Snapshot the plain list before it is filtered by
+    # eligible_positions below, so a colliding candidate can be checked
+    # against *both* restrictions instead of only whichever namespace
+    # classified it first.
+    all_plain_positions: set = set(response.positions or [])
+
     allowed_item_positions: Optional[set] = None
     if voting_token.eligible_item_ids is not None and response.ballot_items is not None:
         allowed = set(voting_token.eligible_item_ids)
@@ -602,6 +611,10 @@ async def lookup_ballot_by_token(
     # position rarely appears in election.positions, so applying this
     # filter to it too would strip out legitimate ballot-item candidates
     # in an election that configures both positions and ballot items.
+    # EXCEPT when that item-scoped candidate's position *also* collides
+    # with a plain `election.positions` entry (ELEC-29): then it is a
+    # plain-positional candidate too, and must not be exempted from this
+    # filter just because a same-named ballot item also happens to exist.
     if voting_token.eligible_positions is not None:
         allowed_positions = set(voting_token.eligible_positions)
         if response.positions is not None:
@@ -611,7 +624,11 @@ async def lookup_ballot_by_token(
         candidates = [
             c
             for c in candidates
-            if c.position in all_item_positions or c.position in allowed_positions
+            if (
+                c.position in all_item_positions
+                and c.position not in all_plain_positions
+            )
+            or c.position in allowed_positions
         ]
 
     return BallotLookupResponse(

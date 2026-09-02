@@ -810,7 +810,7 @@ pre-fix via `git stash`. The third (frontend) finding was investigated in
 full, confirmed real, and flagged per the standard above rather than forcing
 a rushed UI change into a security-review PR.
 
-**Completion gate (pass 3, after all four Codex rounds):**
+**Completion gate (pass 3, after round 4):**
 
 | Check                                                                                                                   | Result                                                                      |
 | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -833,6 +833,142 @@ ELEC-23, plus 3 new tests for ELEC-25), and `tests/test_election_codex_round4.py
 stub was also given an explicit `eligible_item_ids=None` default — ELEC-21's
 fix reads that attribute unconditionally (as the real `VotingToken` model
 always has it), which a stub predating the field did not.
+
+### ELEC-29 — P1 — A colliding position name let a scope-restricted vote bypass its eligibility check — ✅ FIXED
+
+**What:** `cast_vote_with_token` (`backend/app/services/election_service.py`,
+~line 7360) classifies a candidate as "item-scoped" the moment its position
+resolves to _any_ ballot item, via a `next(...)` first-match lookup over
+`election.ballot_items` using `ballot_item_candidate_positions()` (the
+ELEC-22 helper: an item's own `"position"` field, or its title/id fallback
+for a legacy item persisted without one). When `matching_item` was found,
+the code checked only `voting_token.eligible_item_ids` and **never**
+consulted `voting_token.eligible_positions` at all — even when the same
+position value was _also_ a plain `election.positions` entry governed by
+`position_eligibility`. The public `/ballot/lookup` endpoint
+(`lookup_ballot_by_token` in `backend/app/api/v1/endpoints/elections.py`)
+had the same shape: a candidate whose position appeared in the union of all
+ballot items' claimed positions (`all_item_positions`) was exempted from the
+`eligible_positions` filter unconditionally, with no check for whether that
+same position also appeared in the plain `election.positions` list.
+
+Verified this collision is reachable, not just theoretical:
+
+1. **No schema validator forbids it.** `ElectionBase`/`ElectionUpdate` in
+   `app/schemas/election.py` validate `positions` for internal uniqueness
+   (`validate_positions`) and `ballot_items` for unique ids
+   (`validate_unique_ballot_item_ids`) — nothing cross-checks a plain
+   position string against any ballot item's `position`/`title`/`id`. An
+   election can be created or updated with a plain position `"Secretary"`
+   and a separate, legacy-shaped ballot item (no explicit `"position"`
+   field) titled `"Secretary"` in the same request.
+2. **Token issuance produces the exact mismatched-scope token Codex
+   described.** `send_ballot_emails` computes `eligible_item_ids` (from each
+   item's own `eligible_voter_types`) and `eligible_positions` (from
+   `position_eligibility`) **independently** — nothing ties them together.
+   A recipient who fails the plain position's voter-type rule but qualifies
+   for the unrestricted, same-named legacy item gets a token with
+   `eligible_item_ids` containing that item and `eligible_positions = []`
+   (empty, not `None` — the recipient was evaluated and found ineligible).
+3. **The candidate is a single row that legitimately serves both
+   namespaces.** `Candidate.position` is one string column; a candidate
+   stored as `position="Secretary"` is claimed by both the plain position
+   and the colliding item's title fallback at once — there is nothing
+   inconsistent about the data, only about which check the classification
+   logic chose to run.
+
+With all three confirmed, the token above could call
+`POST /elections/ballot/vote` for the "Secretary" candidate and succeed,
+despite `eligible_positions` explicitly excluding "Secretary" — an
+authorization bypass on a restricted position via an unrelated, unrestricted
+ballot item that merely shares its name.
+
+**Why "require both" (not "reject the collision at write time"):** the task
+that opened this finding named two candidate fixes. Rejecting the collision
+at schema/write time was ruled out: `ElectionUpdate` fields are independently
+optional and merged against whatever the row already holds, so validating
+"no collision" would require the schema layer to know the row's _existing_
+`positions` or `ballot_items` (whichever the request doesn't touch) — that
+validation belongs in the service layer against the merged effective state,
+not in a Pydantic model with no DB access, and retrofitting it risks
+rejecting elections that already exist in this exact shape with no way to
+migrate them cleanly. Requiring both scopes to authorize a colliding
+candidate closes the bypass without touching write-time validation or any
+existing election's stored configuration — it only ever makes an ambiguous
+candidate _more_ restricted than before, never less, so no previously-valid
+vote by a fully-eligible voter can regress.
+
+**Fix:** at both call sites, the collision is now detected directly —
+`effective_position in election.positions` (service) /
+`c.position in all_plain_positions` (endpoint, snapshotted before
+`eligible_positions` filtering mutates `response.positions`) — instead of
+inferring scope from whichever branch a `next()`/set-union lookup happened
+to resolve first:
+
+- `cast_vote_with_token`: the existing item-eligibility check
+  (`eligible_item_ids`) still runs whenever `matching_item` is found. The
+  position-eligibility check now also runs whenever the candidate is _not_
+  item-scoped **or** its position collides with a plain `election.positions`
+  entry — so a colliding candidate must clear both checks, and a
+  non-colliding item-scoped candidate is unaffected (unchanged behavior,
+  preserving the documented reason `eligible_positions` is skipped for a
+  genuine item-only candidate: its position rarely appears in
+  `election.positions`, so applying that filter there would reject
+  legitimate item votes outright).
+- `lookup_ballot_by_token`: the final `eligible_positions` filter no longer
+  exempts a candidate just because its position is in `all_item_positions`
+  — it exempts it only when that position is _not also_ a plain
+  `election.positions` entry. The earlier `eligible_item_ids` filter is
+  unchanged, so a colliding candidate must still pass both filters in
+  sequence, mirroring the service-layer fix.
+- `submit_ballot_with_token` was checked and needs no change: it resolves
+  votes by an explicit client-supplied `ballot_item_id` looked up in
+  `item_map`, never by classifying a bare position string, so the
+  "which scope does this position belong to" ambiguity does not arise there
+  — `allowed_item_ids` is checked directly against the id the client
+  supplied. `check_voter_eligibility`/`cast_vote` (the authenticated,
+  non-token flow) were also checked and already apply both the
+  `position_eligibility` check (lines ~1002-1019) and the ballot-item
+  `eligible_voter_types`/attendance check (lines ~1022-1054) unconditionally
+  when a `position` is passed — no either/or branching, so no bypass exists
+  there.
+
+New regression tests: `tests/test_election_codex_round5.py` (new file, 3
+tests) — one election fixture with a plain `"Secretary"` position
+(`position_eligibility` restricted to `administrative`) and an unrestricted
+legacy ballot item also titled `"Secretary"`, and a single candidate whose
+`position="Secretary"` is claimed by both. Confirmed failing pre-fix via
+`git stash` on the two service/endpoint files: a token eligible for the item
+but not the position could both see the candidate via `/ballot/lookup` and
+cast a vote for it via `cast_vote_with_token`; a third sanity test confirms
+a token eligible under _both_ scopes is unaffected — the fix does not
+over-reject.
+
+**Round 5: 1 fixed (ELEC-29).** The one finding posted against commit
+`53c81b92a` (before round 4's `67511fa77`) — round 4 did not touch this
+code, so it was still open against current code. Confirmed real by tracing
+`cast_vote_with_token`, `lookup_ballot_by_token`, `submit_ballot_with_token`,
+`check_voter_eligibility`/`cast_vote`, the schema validators, and
+`send_ballot_emails`'s token-issuance logic, and fixed uniformly at both
+vulnerable call sites with a "require both scopes when they collide"
+approach rather than a write-time rejection (see the "Why" note above for
+the tradeoff).
+
+**Completion gate (pass 3, after round 5):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 482 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round5.py -q`              | ✅ 3 passed, 0 failed (2 confirmed failing pre-fix via `git stash`)       |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9802 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round5.py` (new file, 3 tests
+for ELEC-29).
 
 ---
 

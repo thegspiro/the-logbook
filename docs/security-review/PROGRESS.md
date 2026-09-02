@@ -17,10 +17,61 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (Feature 06,
-Elections & ballots, pass 3) — 12 fixed, 3 flagged across four Codex review
+Elections & ballots, pass 3) — 13 fixed, 3 flagged across five Codex review
 rounds, 1 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 5) — 1 fixed — PR #2162
+
+Codex posted 1 more finding against commit `53c81b92a` (the state before
+round 4's `67511fa77` fix landed — round 4 did not touch this code, so it
+was still open). Re-verified against current code independently, same
+standard as all prior rounds:
+
+- **ELEC-29 (P1, fixed):** `cast_vote_with_token` classified a candidate as
+  item-scoped the moment its position resolved to _any_ ballot item (a
+  `next(...)` first-match lookup via `ballot_item_candidate_positions()`,
+  ELEC-22's helper) and, when it matched, checked only
+  `eligible_item_ids` — never `eligible_positions` — even when that same
+  position value was _also_ a plain `election.positions` entry governed by
+  `position_eligibility`. Nothing in `ElectionBase`/`ElectionUpdate`
+  (`app/schemas/election.py`) forbids a plain position colliding with a
+  ballot item's position/title/id, and `send_ballot_emails` computes
+  `eligible_item_ids` and `eligible_positions` independently — so a
+  recipient ineligible for a restricted plain position but eligible for an
+  unrestricted, same-named legacy ballot item got a token that could vote
+  for the restricted position's candidate anyway. The public
+  `/ballot/lookup` endpoint (`lookup_ballot_by_token`) had the identical
+  shape, exempting a colliding candidate from the `eligible_positions`
+  filter unconditionally. Confirmed reachable end-to-end (schema permits
+  the collision, token issuance produces the exact mismatched-scope token
+  Codex described, `Candidate.position` is a single column so the same row
+  serves both namespaces at once). Fixed at both call sites by detecting
+  the collision directly (does this position value also appear in the
+  plain `election.positions` list?) and requiring a colliding candidate to
+  clear _both_ applicable eligibility checks, rather than trusting
+  whichever scope an iteration order resolved first. `submit_ballot_with_token`
+  needed no change (it resolves votes by an explicit client-supplied
+  `ballot_item_id`, never by position classification) and the authenticated
+  `cast_vote`/`check_voter_eligibility` path was already checking both
+  namespaces unconditionally. A write-time schema rejection of the
+  collision was considered and rejected: `ElectionUpdate` fields merge
+  independently against the row's existing state, so that validation
+  belongs in the service layer against the merged effective state, not a
+  DB-unaware Pydantic model, and would risk rejecting elections already in
+  this shape.
+
+Fix guarded by 3 new regression tests in `tests/test_election_codex_round5.py`
+(new file), 2 confirmed failing pre-fix via `git stash`. Completion gate
+re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 482
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9802
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. Review thread replied to and resolved.
+See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-29) for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 4) — 2 fixed, 1 flagged — PR #2162
 

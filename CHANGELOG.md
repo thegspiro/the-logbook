@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A colliding position name let an emailed ballot bypass its own eligibility restriction (2026-09-02)
+
+**Fixed**
+
+- **A restricted election position could be voted on by a token that was
+  never granted that permission,** if an unrelated, unrestricted ballot
+  contest happened to share its exact name. Voting eligibility sent by
+  email is checked per-candidate against one of two independent rule sets
+  depending on how that candidate is classified; a naming collision between
+  the two caused the classification to pick only one rule set and skip the
+  other entirely, so a voter authorized for the unrestricted contest could
+  cast a vote for the restricted one under the same name. Fixed by
+  detecting the collision and requiring both rule sets to authorize the
+  vote whenever a candidate's name matches both.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-29).
+
 ### A mixed election could skip an eligible voter entirely, and a legacy title-keyed vote could be double-counted (2026-09-02)
 
 **Fixed**

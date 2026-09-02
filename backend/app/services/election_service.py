@@ -7371,6 +7371,19 @@ Best regards,
             else None
         )
 
+        # Nothing in schema validation stops a plain `election.positions`
+        # entry from equaling a ballot item's position/title/id (ELEC-29) —
+        # so `effective_position` can legitimately belong to *both*
+        # namespaces at once. Detecting that directly (rather than trusting
+        # which one `matching_item` above happened to resolve first) is what
+        # lets a colliding candidate be held to both applicable checks below
+        # instead of silently skipping whichever one lost the race.
+        is_plain_position = bool(
+            effective_position is not None
+            and election.positions
+            and effective_position in election.positions
+        )
+
         if matching_item is not None:
             # Enforce the token's per-item eligibility snapshot for
             # ballot-item elections (R-1). Without this a token scoped to
@@ -7385,17 +7398,22 @@ Best regards,
                     if effective_position
                     else "You are not eligible to vote in this election"
                 )
-        else:
-            # Not scoped to any ballot item — a plain positional candidate
-            # (or this election has no ballot items at all). Enforce the
+
+        if matching_item is None or is_plain_position:
+            # Either not scoped to any ballot item at all (a plain
+            # positional candidate, or this election has no ballot items),
+            # or scoped to both a ballot item AND a colliding plain position
+            # (ELEC-29) — in which case the item check above is necessary
+            # but not sufficient, and this candidate must also clear the
             # send-time position-eligibility snapshot (R-D4). NULL snapshot
             # = legacy token, or an election/position with no eligibility
             # rules configured — unrestricted (documented fail-open,
             # time-bounded by token expiry). This is deliberately *not*
-            # checked for an item-scoped candidate above: `eligible_positions`
-            # is drawn from `election.positions` only, so applying it to a
-            # ballot-item candidate as well (whose position rarely appears
-            # in that list) would reject legitimate item votes outright.
+            # checked for an item-scoped candidate with no collision:
+            # `eligible_positions` is drawn from `election.positions` only,
+            # so applying it to a ballot-item candidate whose position never
+            # appears in that list would reject legitimate item votes
+            # outright.
             if (
                 voting_token.eligible_positions is not None
                 and effective_position not in voting_token.eligible_positions
