@@ -1626,7 +1626,7 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
     // the template holding the preset twice.
     await waitFor(() => expect(updateEquipmentCheckTemplate).toHaveBeenCalled());
     expect(addCompartment).not.toHaveBeenCalled();
-  });
+  }, 15_000);
 
   it('marks the template unsaved so the preset is not lost on navigation', async () => {
     // The JSON and CSV import branches marked it; the vehicle preset did not.
@@ -1865,7 +1865,7 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
     // its own test and can fire during this one. Draining it here, before
     // wiring up this test's own mock behaviour, keeps that unrelated retry
     // from being mistaken for the one this test controls.
-    await new Promise((resolve) => setTimeout(resolve, 1700));
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
     updateCheckItem.mockClear();
 
     let releaseFirstFlush: (() => void) | null = null;
@@ -1918,5 +1918,10 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
         .map(([, patch]) => patch);
       expect(patches[patches.length - 1]).toEqual({ is_required: true });
     });
-  });
+    // Spends AUTOSAVE_DEBOUNCE_MS draining before it starts, then waits out
+    // two more real debounce windows. That does not fit vitest's 5s default,
+    // and it was only ever passing because it landed just under it — 4.7s on
+    // an idle machine. Under `--coverage`, which is how CI runs this suite,
+    // it tips over and the job fails on a timeout rather than an assertion.
+  }, 20_000);
 });
