@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None currently open.
+[#2188](https://github.com/thegspiro/the-logbook/pull/2188) — Feature 11
+(Inventory, pass 4). Rotation row 11 → 🔄 (in progress).
 
 ---
 
