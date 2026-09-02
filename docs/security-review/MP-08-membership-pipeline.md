@@ -1,6 +1,93 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4 and pass 4 round 2)
+
+---
+
+## Pass 4, round 2 (2026-09-02) — 1 fixed (Codex review of PR #2177's own fix commit)
+
+Codex reviewed pass 4's fix commit (`6c9bb09e`, still on open PR #2177 — no
+branch change needed, unlike the pass-3-to-4 handoff) and posted 1 new
+finding against the very code MP-20 just changed.
+
+#### MP-23 — P1 — election-package field policy still assumed a pipeline has at most one `election_vote` step — ✅ FIXED
+
+**What:** MP-20's fix resolves `package_fields` by finding the pipeline's
+"own" `election_vote`-typed step via `next(...)` over
+`effective_pipeline.steps` (ordered by `sort_order`). That is correct only if
+a pipeline has at most one such step — and nothing enforces that. `add_step`
+has no uniqueness check on `step_type` (confirmed by reading it directly:
+`membership_pipeline_service.py:470-518`, no such constraint), so a pipeline
+with two or more `election_vote` stages is a reachable configuration. In that
+case `next(...)` always returns the _first_ one found, ordered by
+`sort_order` — not necessarily the stage the applicant, and this specific
+package, actually reached. An earlier stage configured more permissively (or
+left unconfigured, meaning capture-everything) than the later stage the
+applicant is really on then silently governs the snapshot, over-capturing PII
+the applicant's real stage was configured to exclude.
+
+Codex additionally observed that the frontend's `advanceApplicant` flow
+(`prospectiveMembersStore.ts`) already knows the exact stage the applicant
+just entered when it triggers package creation. Confirmed by reading it: it
+finds `newStage` by matching `advanced.current_stage_id` against the
+pipeline's stage list, checks `newStage.stage_type === ELECTION_VOTE`, and
+passes `stage_id: newStage.id` through `createElectionPackage` to the
+backend's `step_id` parameter — but pass 4 deliberately stopped trusting
+`step_id` for this decision (the MP-20 fix, for good reason: a client
+supplying an arbitrary in-pipeline `step_id` could otherwise defeat the
+policy). A step_id-based fix that simply re-trusts a type-checked `step_id`
+would work for this one caller but re-opens exactly the class of bug pass 4
+closed for every other caller of `create_election_package`.
+
+**Where:** `create_election_package`, `membership_pipeline_service.py`.
+**Fix:** resolve the governing step from `prospect.current_step` first, not
+from the client-supplied `step_id`. `current_step_id` is set only by
+`create_prospect`/`advance_prospect`/`regress_prospect` and is in
+`_PROSPECT_PROTECTED_FIELDS` (excluded from the generic update path), so it
+names the stage the applicant has actually, currently reached with nothing
+for any caller — trusted or not — to steer. `get_prospect` (called at the top
+of `create_election_package`) already eager-loads
+`selectinload(ProspectiveMember.current_step)`, so this is available with no
+extra query. When `prospect.current_step` is itself an `election_vote` step
+belonging to the governing (possibly caller-overridden) pipeline, its
+`package_fields` governs. Only when it is _not_ — e.g. a package requested
+after the applicant already advanced past the vote stage, or a caller
+overriding `pipeline_id` to one the prospect isn't actually on — does the
+code fall back to MP-20's original `next(...)` lookup, which remains exactly
+correct for the single-`election_vote`-stage case (the overwhelmingly common
+one) and is the same best-effort guess as before for the residual ambiguous
+case.
+
+**Residual limitation, not fixed:** a pipeline with **multiple**
+`election_vote` stages where the prospect's `current_step` matches none of
+them (the fallback path) is still genuinely ambiguous — there is no single
+correct "the" election stage to resolve, by construction, once the pipeline
+itself has more than one and the applicant isn't presently on any of them.
+This is a product-design question (should a pipeline even be allowed
+multiple `election_vote` stages? if so, does "the applicant's stage" have a
+different definition for a package requested after they've moved on?) rather
+than a bug fixable in this pass. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+Covered by `backend/tests/test_membership_pipeline_pass4_round2_codex.py`:
+a two-`election_vote`-stage pipeline where the prospect's current step is the
+later, stricter one (must exclude phone/address/DOB, not the earlier
+permissive stage's fields); the mirror case where the current step is the
+earlier, permissive one (must include those fields — proving this is "prefer
+the actual stage," not "always prefer the stricter one"); and a
+single-`election_vote`-stage regression guard. The multi-stage assertion was
+independently confirmed to fail against the pre-fix code (`git stash` on
+`membership_pipeline_service.py`) before the fix was applied.
+
+### Completion gate (pass 4, round 2)
+
+| Check                                                              | Result                                                                                                                                                       |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                                      | pass, 0 violations                                                                                                                                           |
+| `black --check app/ tests/ alembic/`                               | pass, 0 files would be reformatted                                                                                                                           |
+| `isort --check-only app/ tests/ alembic/`                          | pass, 0 violations                                                                                                                                           |
+| `python3 scripts/validate_migrations.py --strict`                  | pass — 409 revisions, single head (no schema change)                                                                                                         |
+| new guard tests (`test_membership_pipeline_pass4_round2_codex.py`) | 3 passed; the multi-stage assertion independently confirmed to fail against the pre-fix code (`git stash`)                                                   |
+| full backend suite (`pytest tests/ -q`)                            | 9869 passed / 21 skipped (pre-existing/environmental) / 0 failed (baseline was 9866 passed before this PR's last commit; +3 for the new round-2 guard tests) |
 
 ---
 

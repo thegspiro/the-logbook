@@ -4626,28 +4626,63 @@ class MembershipPipelineService:
         # configured this — this only takes effect where a coordinator has
         # actually saved field choices.
         #
-        # Resolved from the pipeline's own election_vote step, never from the
-        # client-supplied step_id: step_id is optional and, even when given,
-        # is only checked for being *some* step of the (also client-
-        # overridable) effective_pipeline — not for being an election_vote
-        # step at all. Trusting it directly let a caller silently defeat a
-        # coordinator's configured PII minimization just by omitting step_id
-        # or naming a different step, with no error and no sign anything was
-        # skipped (MP-08 pass 4 Codex). A pipeline has at most one election
-        # stage in practice, so looking it up directly removes the client's
-        # ability to steer which step's config governs this snapshot.
+        # Resolved from a step, never trusted as *given* by the client:
+        # step_id is optional and, even when supplied, is only checked above
+        # for being *some* step of the (also client-overridable)
+        # effective_pipeline — not for being an election_vote step at all.
+        # Trusting it directly let a caller silently defeat a coordinator's
+        # configured PII minimization just by omitting step_id or naming a
+        # different step, with no error and no sign anything was skipped
+        # (MP-08 pass 4 Codex).
+        #
+        # Preferred source: prospect.current_step. `current_step_id` is
+        # server-only — set by create_prospect/advance_prospect/regress_prospect,
+        # protected from the generic update path (_PROSPECT_PROTECTED_FIELDS)
+        # — so it names the stage the applicant has actually, currently
+        # reached with nothing here for a client to steer. That distinction
+        # matters once a pipeline has *more than one* election_vote step
+        # (add_step has no uniqueness constraint on step_type, so this is a
+        # reachable configuration): the first-found step below can be an
+        # earlier, more permissive stage than the one this package is
+        # actually for, silently over-capturing PII the applicant's real
+        # stage was configured to exclude (MP-08 round 2 Codex).
+        election_step = None
+        current_step = prospect.current_step
+        effective_steps = effective_pipeline.steps if effective_pipeline else []
+        if (
+            current_step is not None
+            and current_step.step_type == PipelineStepType.ELECTION_VOTE
+            and any(str(s.id) == str(current_step.id) for s in effective_steps)
+        ):
+            election_step = current_step
+
+        # Fallback for when the prospect's current step isn't an
+        # election_vote step in the governing pipeline — e.g. a package
+        # requested after the applicant already advanced past the vote
+        # stage, or a caller-supplied pipeline_id override with no matching
+        # current step. Preserves the pass-4 behavior (and is exact whenever
+        # a pipeline has only one election_vote step, the overwhelmingly
+        # common case); a pipeline with several such steps and no current
+        # match here remains ambiguous — see docs/security-review/MP-08-
+        # membership-pipeline.md.
+        if election_step is None:
+            election_step = next(
+                (
+                    s
+                    for s in effective_steps
+                    if s.step_type == PipelineStepType.ELECTION_VOTE
+                    and isinstance(s.config, dict)
+                    and isinstance(s.config.get("package_fields"), dict)
+                ),
+                None,
+            )
+
         package_fields: Optional[Dict[str, Any]] = None
-        election_step = next(
-            (
-                s
-                for s in (effective_pipeline.steps if effective_pipeline else [])
-                if s.step_type == PipelineStepType.ELECTION_VOTE
-                and isinstance(s.config, dict)
-                and isinstance(s.config.get("package_fields"), dict)
-            ),
-            None,
-        )
-        if election_step:
+        if (
+            election_step
+            and isinstance(election_step.config, dict)
+            and isinstance(election_step.config.get("package_fields"), dict)
+        ):
             package_fields = election_step.config["package_fields"]
 
         def _field_enabled(key: str, default: bool) -> bool:

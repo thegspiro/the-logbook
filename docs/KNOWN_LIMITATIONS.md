@@ -1991,6 +1991,42 @@ left behind if the restore itself fails) than a rare compound failure — an
 justifies as a same-day fix. (Security review MP-08 pass 4, PR #2177,
 `docs/security-review/MP-08-membership-pipeline.md`.)
 
+## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once the Applicant Has Moved Past All of Them (2026-09-02)
+
+`create_election_package` (`membership_pipeline_service.py`) resolves its
+PII-minimization `package_fields` policy from `prospect.current_step` when
+that step is itself an `election_vote` step in the governing pipeline — this
+is server-only state (`current_step_id` is set exclusively by
+`create_prospect`/`advance_prospect`/`regress_prospect`, and is excluded from
+the generic update path), so it correctly identifies the applicant's actual
+stage even when a pipeline has more than one `election_vote` step (`add_step`
+has no uniqueness constraint on `step_type`, so this is a reachable
+configuration; fixed in security review MP-08 pass 4 round 2, MP-23).
+
+Not fixed, because there is no single correct answer: when the prospect's
+current step is **not** an `election_vote` step at all — e.g. a package is
+requested (or re-requested) after the applicant has already advanced past
+every vote stage in the pipeline, or a caller overrides `pipeline_id` to one
+the prospect was never actually on — the code falls back to the first
+`election_vote` step found in the pipeline's `sort_order`. With more than one
+such stage configured and no current match, that fallback is a best-effort
+guess, not a resolution of "the" stage the package is for; an earlier stage's
+`package_fields` (more permissive, or unconfigured — meaning
+capture-everything) can still govern a package that conceptually belongs to
+a later, stricter stage the applicant already passed through.
+
+This needs a product decision, not a drive-by fix: should a pipeline be
+allowed multiple `election_vote` stages at all, and if so, what does "the
+applicant's stage" mean once none of them is the applicant's _current_ one —
+the highest-`sort_order` stage they ever reached (would need step-progress
+history, not just `current_step_id`)? The stage named on the package request
+itself (would need `create_election_package` to require an explicit,
+type-checked `step_id` rather than treating it as optional)? Until that is
+decided, a pipeline with multiple `election_vote` stages remains an
+edge case with no fully-correct backend resolution in this fallback path.
+(Security review MP-08 pass 4 round 2, PR #2177,
+`docs/security-review/MP-08-membership-pipeline.md`.)
+
 ## Medical Screening — Requirement and Record Lists Are Unbounded (2026-08-06, mirrored 2026-08-25)
 
 `list_requirements`/`list_records` (`medical_screening_service.py`) run

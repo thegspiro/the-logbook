@@ -17,13 +17,57 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (Feature 08,
-Membership pipeline, pass 4) — #2176 (pass 3's Codex-fix commit) merged
-mid-investigation of a 4th round of Codex findings against that same commit.
-Per CLAUDE.md Pitfall #24 (never reuse a merged PR's branch — see #2173's
-identical precedent against #2162 in the elections feature), pass 4 landed
-as a fresh branch off `main` and this new PR rather than a push to the now-
-closed `claude/security-review-membership-pipeline` branch. 3 fixed, 1
-flagged. See the Log below for detail.
+Membership pipeline, pass 4 + pass 4 round 2) — #2176 (pass 3's Codex-fix
+commit) merged mid-investigation of a 4th round of Codex findings against
+that same commit. Per CLAUDE.md Pitfall #24 (never reuse a merged PR's
+branch — see #2173's identical precedent against #2162 in the elections
+feature), pass 4 landed as a fresh branch off `main` and this new PR rather
+than a push to the now-closed `claude/security-review-membership-pipeline`
+branch. Pass 4: 3 fixed, 1 flagged. Pass 4 round 2 (Codex reviewing pass 4's
+own fix commit): 1 more fixed. See the Log below for detail.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 2) — 1 fixed (Codex review of PR #2177's own fix commit)
+
+Codex reviewed pass 4's fix commit (`6c9bb09e`) and posted 1 new finding
+against the `create_election_package` field-policy fix that same commit had
+just landed (MP-20). Independently re-verified against the current code —
+confirmed real.
+
+**Fixed (1):** MP-23 — MP-20's fix resolved `package_fields` policy via
+`next(...)` over the pipeline's steps, which always returns the _first_
+`election_vote`-typed step by `sort_order`. `add_step` has no uniqueness
+check on `step_type` (confirmed by reading it), so a pipeline with multiple
+`election_vote` stages is reachable, and an earlier, more permissive stage
+could silently govern a package that belongs to a later, stricter stage the
+applicant actually reached. Fixed by preferring `prospect.current_step` —
+set only by `create_prospect`/`advance_prospect`/`regress_prospect`, and
+excluded from the generic prospect-update path, so it is never
+client-controlled — when it is itself an `election_vote` step in the
+governing pipeline; falls back to MP-20's original lookup only when the
+prospect's current step isn't an `election_vote` step at all (matches pass
+4 exactly for the common single-stage case).
+
+**Residual limitation (not a new flag — an explicit boundary on the MP-23
+fix, mirrored to `KNOWN_LIMITATIONS.md`):** a pipeline with multiple
+`election_vote` stages where the prospect's current step matches none of
+them (e.g. requested after the applicant already advanced past every vote
+stage) remains genuinely ambiguous — there is no single correct "the" stage
+to resolve without a product decision on what that should mean.
+
+New guard tests: `backend/tests/test_membership_pipeline_pass4_round2_codex.py`
+(3 tests — the multi-stage regression, its mirror-direction guard, and a
+single-stage regression guard). The multi-stage assertion independently
+confirmed to fail against the pre-fix code (`git stash` on
+`membership_pipeline_service.py`) before the fix was applied. Completion
+gate clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change); full backend suite `pytest tests/ -q` — 9869 passed / 21 skipped
+(pre-existing/environmental) / 0 failed (baseline was 9866 passed before this
+PR's last commit; +3 for the new round-2 guard tests). Full detail in
+`MP-08-membership-pipeline.md` → Pass 4, round 2. Rotation row 08 → ⏳
+(awaiting PR merge). Next: 09 medical screening (PHI), once this PR merges.
 
 ---
 
