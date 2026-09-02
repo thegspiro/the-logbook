@@ -870,6 +870,4 @@ reader it captures keystrokes **page-wide** rather than into a focused box,
 because a kiosk loses focus to the first stray tap on the screen and a station
 that has silently stopped reading is worse than one that was never armed.
 
-> **[SCREENSHOT NEEDED — the check-in station on a tablet-width viewport, armed,
->
-> > with one successful tap in the recent list.]**
+![The station left running on a tablet: armed, waiting for the next card, with the previous tap recorded beneath it](./images/10-21-check-in-station-tablet.png)

@@ -203,6 +203,315 @@ bootstrap**, before demo seeding runs, or on a throwaway instance.
 This is the same class of constraint as the label-printer status line recorded
 below: a shot that is trivial to fake and worth nothing faked.
 
+## Repaired 2026-09-01 — 27 of the 35 stale shots, and what actually broke them
+
+The full re-capture left 35 shots unable to reach their screen, all keeping
+pre-palette images. 27 are fixed and verified together; the rest are not
+selector problems and are listed at the bottom.
+
+"Stale selectors" undersold it. The causes, by frequency:
+
+| Cause | Shots |
+| --- | --- |
+| wrapper moved to the shared `card` utility | 9 |
+| dialog clip: structural form -> `role="dialog"` | 6 |
+| dialog *container* now any of three shapes | 3 |
+| the email page lost its Preview tab and renamed a button | 2 |
+| panel is the `modal-overlay` utility | 2 |
+| a heading, a placeholder option, and a print sheet all renamed | 3 |
+| strict mode: fifteen matches where one was assumed | 1 |
+| an applicant no longer last in a pipeline that gained a stage | 1 |
+
+### There are three dialog shapes now, and guessing does not work
+
+`modal-overlay` (the shared utility, carrying its own fixed positioning),
+`role="dialog"` (the shared Modal), and older hand-rolled `fixed inset-0`.
+Which one a given dialog uses has to be **probed**: 03-98 and 04-39 are
+`role="dialog"`, while 01-29's Change Member Status dialog next door is still
+a hand-rolled panel inside `modal-overlay` with no role at all.
+
+So containers got a union of all three — safe, because every lookup beneath
+takes `.first()` — and clips were changed one at a time against what each page
+renders. A union as a *clip* would match two elements on any page carrying one
+of each and fail strict mode, which is why the tempting sweep is the wrong
+move.
+
+### Two things that were not shot problems at all
+
+**Guide 08 documented a button that does not exist.** It told readers to switch
+to a **Preview** tab and click **Send Test Email to Me**. The tab is gone —
+the preview renders beside the editor now — and the control reads **Send Test
+to Me**. Corrected in three places.
+
+**`15-02` is not broken.** Its own comment says it needs
+`--bulk-prospects`, which the ordinary seed deliberately does not create, and
+failing without that flag is the intended behaviour rather than a defect. It is
+excluded from the 35 rather than "fixed".
+
+### Selectors that were facts about the feature, not about the markup
+
+`expandFirstReportCard` anchored on `div.rounded-xl > button`. It now matches
+the only visible button on that screen whose label carries a duration, because
+a report row *has* a duration and its wrapper class is nobody's contract — it
+has changed once already. Likewise `01-35` no longer clicks "Riley Bishop": it
+finds whoever sits in the pipeline's last stage. Bishop was last when the shot
+was written and the pipeline has since gained an **Onboarding** stage, so the
+drawer offers Advance where the caption promises Convert. That one would have
+pictured the wrong action rather than failing, had the Convert wait not timed
+out first.
+
+### The eight left, none of them selector work
+
+`04-42`, `14-24`, `19-27` need an open election with a contested position; the
+seeded elections have closed with time. `06-21` and `06-23` need an
+Intermediate EVOC level that no longer exists. `01-08` needs audit events
+matching its filter. `02-96`'s picker and `15-02` are covered above. These are
+fixtures to rebuild, not selectors to repoint.
+
+Image audit clean across 521 images; 281 markdown files, 0 broken links; 514
+captured, 0 markers outstanding.
+
+## Captured 2026-08-25 (twenty-third) — the last nine markers, and two more defects
+
+**514 of 514. No markers outstanding.** The nine that arrived with this
+release's own guide additions: the schedule board at both widths, the standing
+shift dialog, the ID cards panel, the check-in station (shared with guide 10),
+metrics settings, the seal panel, and My Admin Hours.
+
+### Two product defects, both found by failing to photograph a feature
+
+**The tamper-seal shortcut had never worked.** `/last-seals` returns a bare
+dict keyed by compartment id, so it carries none of the camelCase aliasing the
+schema-backed responses get: it answered `seal_number`, the check form types it
+`LastSealRecord { sealNumber }`, and the service casts without mapping. Every
+lookup was `undefined`, so the tag never prefilled and `canClear` stayed false
+at any number a crew typed. The panel told them "No seal recorded at the last
+count" over a bag whose seal *had* been recorded, and the one-tap clear — the
+reason to read a seal at all — was unreachable. Nothing looked broken; the bag
+was simply counted by hand every time. Fixed at the boundary; the service keeps
+snake_case, which its own 15 tests assert.
+
+**Requirement progress crashed for anyone who had logged hours.** `func.sum`
+returns a `Decimal` on MySQL and the requirement's stored JSON a float, so the
+percentage raised `TypeError`. With *no* hours the `or 0` fallback keeps
+everything float and it answers normally — so the endpoint worked for every
+member it had nothing to report about and 500ed for every member it did. The
+first fixture hid this by pointing at a category whose only entry was pending,
+returning a tidy 0.0 of 8.
+
+### The seal shot is the one to look at twice
+
+Both bags in one frame: the Drug Bag prefilled `M3-40817` with **Seal intact —
+clear 1 check**, the Trauma Bag carrying `M3-41190` with **Record seal** and
+"Different from the last count (M3-40822)". Only the *previous* count is
+seeded; the mismatching tag is typed during capture, because that is where a
+mismatch comes from — a number on a bag, not a value anything stores.
+
+Framed at 1440x2200 with `fullPage: false`. A stitched full-page capture paints
+this form's sticky footer at the scroll offset in force, dropping "Overall
+Notes" and "Submit Report" across the middle of the checklist; and at 1500 or
+1900 the second panel fell behind that footer, which always owns the bottom of
+the viewport.
+
+### What the board shot cannot show, and why that is a state
+
+All five chip colours are in one frame — `1 open` amber, `3 open` red,
+`Full 3/3` green, `You + 1/4` blue, `0 on` grey — plus the legend, whose
+"Crew size not set" entry only renders when an unsized shift exists.
+
+The marker also asks for the claim button, and **no account can produce one**:
+not the demo member, not the administrator. Every open seat that month needs a
+qualification nobody holds, so each crew renders "these seats need a
+qualification you do not hold yet" where the button would be. An earlier
+attempt selected a day on the strength of a claim button that merely *existed*
+in the DOM, and landed on a panel saying exactly that under a caption promising
+the opposite. The guide now names the state beside the image.
+
+Worth someone's attention separately: `ea47d4ab` tightened
+`get_eligible_positions` to close an offer bypass, and the seeded department
+now has 56 open seats in September that nobody at all may claim.
+
+### Four selectors, four wrong guesses
+
+Every one caught by reading source rather than by a timeout: the station's
+target is a native `<select>`; `MonthGrid` renders days as `role="gridcell"`;
+there is no "Claim" label, it is "Take a seat on this shift" or "Join this
+shift" on an unsized one — which is the grey fixture, so a "Claim" matcher
+would have skipped the day that matters.
+
+And one caught only by probing the live page: the board renders its month
+**twice**, `PhoneMonth` under `md:hidden` and `MonthGrid` under `md:grid`, with
+the phone copy first in the DOM. 62 gridcells, 31 visible. `first().waitFor()`
+waits for visibility, so it waited on an element that never becomes visible —
+the same trap `clickByName` documents a few hundred lines above it. The
+standing-shift helper had the identical bug and passed by accident, its
+`.catch()` swallowing a click failure per hidden cell until it reached a real
+one.
+
+### Fixture bugs, all mine, all invisible without executing
+
+Seals sent to `/complete` after a create that had already completed the check;
+an ID-card guard keyed on `tag_uid`, which `/nfc-tags` never returns (it gives
+`uidPreview`, four characters, under `items` not `cards`); a reopen guard
+reading `attendance_finalized_at` off a list that carries no such field; a
+profile selector reading snake_case off `/compliance/config`, which is
+camelCase — while `/users`, in the same method, is snake_case.
+
+That is four instances of one mistake: assuming a response's shape instead of
+printing it.
+
+## Re-captured 2026-08-25 — 470 images refreshed, and 35 shots that no longer reach their screen
+
+The pass planned in the entry below. Verified before committing, which is where
+most of what follows came from.
+
+**470 images rewritten, 328 of them at identical dimensions** — same layout,
+new palette, which is exactly what a colour migration should look like. 31 grew
+and 11 shrank; each of the 11 was opened.
+
+### Byte size is the wrong detector; dimensions are the right one
+
+The obvious check — "did the file get much smaller?" — is useless here. The
+median re-captured image is **0.35** of its committed size, because `pngquant`
+now applies where it did not for many of the originals. On bytes alone, 182 of
+302 looked like data loss. On dimensions, 8 did. Anyone repeating this should
+compare heights, not bytes.
+
+### Two images were worse, and are restored rather than committed
+
+`01-31-applicant-documents` went from a populated list to "No documents yet",
+and `19-08-store-admin-activity` from a full activity feed to "No order updates
+were recorded in the last 7 days". Both are seed gaps rather than code changes,
+so the committed bytes stand and the gap is recorded here — the rule the
+pipeline already carries. The cost is real and worth naming: those two keep the
+**old** button colour until their fixtures are fixed, so the palette is not
+uniformly migrated.
+
+`19-08`'s cause is worth writing down because it will recur. The storefront
+seeder advances order statuses only when they do not already match, so on a
+re-seed the orders keep their original timestamps and slide out of the
+seven-day activity window. The guard that makes the step idempotent is what
+makes the fixture expire.
+
+### One shot was photographing the demo scaffolding
+
+`04-02-event-detail` came back reading "Attendance (0)" with every statistic
+zero. It selected its subject with `isUpcoming` — the soonest upcoming event —
+which is now permanently the early check-in fixture: 90 minutes out,
+`requires_rsvp` false, RSVP cleared on every seed *by design*. A fixture added
+for one marker had quietly taken over a shot two guides away. Re-pointed at
+`isRsvpOpen`, the property its caption is about, and re-captured: 3333px with
+its attendance back. `isUpcoming` now has no callers, and its own docstring had
+already warned that the nearest upcoming event is the wrong subject for an RSVP
+shot — it burned the RSVP modal shot the same way.
+
+### 35 shots never reached their screen, and that is UI drift, not flake
+
+Re-run individually, they fail identically every time, so these are stale
+selectors rather than timing. They cluster on precisely the screens the review
+found rewritten last week — the email template editor, the shift-reports tabs,
+the training admin pages, the equipment-check builder.
+
+Nothing was overwritten: a shot that fails in `prepare` never reaches
+`page.screenshot`, so all 35 keep their committed bytes. **That is the problem,
+not the mitigation** — those 35 keep the pre-2026-08-23 button colour while the
+470 around them do not, which is the mixed palette this pass set out to remove.
+They need their prepare steps repaired against the current DOM, one screen at a
+time.
+
+`02-30-shift-reports` shows why the drift is real and not cosmetic: the tab it
+lands on is now a six-tab strip (About me / Written by me / Review Queue /
+Flagged / Drafts / New) that did not exist when the neighbouring shots were
+written. The image itself is good — four pending reports, named, with hours,
+calls and competency badges — it is simply half the height it used to be.
+
+### Also found, not fixed here
+
+Election Settings renders **two switches with no visible label**.
+`SettingsToggle` puts its `label` prop on `aria-label` only — its own prop
+comment says "Required whenever no visible label is tied to the switch" — and
+`ElectionsSettingsPage` passes the label while rendering no adjacent text. A
+screen-reader user hears "Anonymous voting by default"; a sighted user sees a
+bare toggle. `EmailSettingsSection` shows the house pattern: visible title and
+description beside the switch, no `label` prop.
+
+Four `audit_baseline.txt` entries no longer flag and are removed, as the audit
+asks. No new findings across 512 images; 281 markdown files, 0 broken links.
+
+## Reviewed 2026-08-25 — the primary button changed colour, and 80% of the library predates it
+
+Not a marker pass. A review of what merged in the week to 2026-08-25 turned up
+one change that invalidates most of the library at once, and the honest
+response was to re-shoot rather than to patch a list of screens.
+
+**`btn-primary` moved to `red-800` app-wide on 2026-08-23**, in `32627ceb`.
+`styles/index.css` says why, and says it was deliberately done everywhere at
+once: "a primary button that is one red on the store and another everywhere
+else reads as two different actions". **408 of the 510 committed images predate
+that commit**, so four in five pictured a red the application no longer draws.
+`ConfirmDialog.tsx` carried the same `red-600` -> `red-800` change separately,
+which put every confirmation dialog in the same position.
+
+Measured, not assumed. `18-01-member-storefront` re-captured against the same
+seed:
+
+| | dominant red | height |
+| --- | --- | --- |
+| committed 2026-08-16 | `(231, 0, 11)` | 1866px |
+| re-captured | `(159, 7, 18)` | 1770px |
+
+Colour and layout both. That shot was restored to its committed bytes at the
+time and re-taken properly as part of this pass.
+
+Underneath the palette, eight screens were also substantially rewritten in the
+same week and gain new content rather than only a new button colour: the email
+template editor (10 shots), the equipment-check builder and form with the new
+seal panel (5), the inventory admin hub (6), the settings shell and its label
+printers section (5), `SubmitTrainingPage`, `StorefrontPage` / `MyOrdersPage`,
+`ElectionsSettingsPage` and the label print page.
+
+Two shared-chrome changes worth separating from the noise: `Modal.tsx` gained
+the `modal-content` / `modal-footer` class hooks, and `modal-footer` makes
+dialog buttons full-width and 44px **on phones** — so mobile dialog shots
+change shape and desktop ones move by a few pixels of padding.
+`PageTransition.tsx` only touched document titles and changes nothing visible.
+
+### The seeder aborted first, and the guard was the reason
+
+The first seed of this pass failed the scheduling step outright:
+
+    Unable to create assignment. Member is no longer eligible for this shift
+
+`_validate_assignment` reports two sentences from one gate — "eligible for this
+shift" when a member may hold no seat at all, and "eligible for the X position"
+when they may hold some seat but not that one. `POSITION_NOT_ELIGIBLE` matched
+only the second. The first branch arrived on 2026-08-24 in `ea47d4ab`, closing
+an eligibility bypass on unscoped shift offers, and the matcher predated it.
+
+`is_expected_seat_refusal`'s own docstring already calls this class of refusal
+ordinary — it leaves a shift a seat short, which is what the Open Shifts tab
+exists to show — and warns that treating one as fatal "aborted the whole
+scheduling step", taking the close-out fixture, the batch report trainee, the
+shift reminder inbox and every downstream guide-03 capture with it. That is the
+fourth time this failure has arrived by a different door. The matcher now takes
+both sentences, and is asserted against both plus three refusals it must not
+swallow.
+
+Capturing on the failed seed would have produced exactly the outcome the
+discipline warns about: fresh images that are worse than the committed ones
+because data is missing rather than because code changed.
+
+### Status
+
+The re-capture itself is running as this is written; its results are recorded
+in the entry above this one once the pass has been verified. Verification is
+not optional on a change this size and is not a glance at a few images: the
+capture report carries a per-shot empty-state, ErrorBoundary, page-error and
+horizontal-overflow verdict, every one of the 511 committed images was
+snapshotted beforehand for a byte-and-dimension diff, and anything that shrank
+by more than 45% gets opened and checked against the API — that is the
+signature of a shot that lost its *data*, which no palette change can explain.
+
 ## Captured 2026-08-25 (twenty-second) — label printers, and a marker that asked for two incompatible things
 
 `19-33-label-printers`. 505 of 514.

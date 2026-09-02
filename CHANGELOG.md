@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Medical screening: audit trail gap closed, two dead compliance settings labelled honestly, one gap flagged (2026-09-02)
+
+**Fixed**
+
+- **Creating a screening requirement or record logged an audit event that
+  never named the row it was about.** `requirement_created`/`record_created`
+  audit entries omitted `requirement_id`/`record_id` — every sibling event
+  (`_updated`, `_deleted`) included it. An auditor investigating a specific
+  PHI record's creation could only correlate by user + timestamp + type,
+  which is ambiguous when the same subject gets two screenings of the same
+  type close together.
+- **The "Grace Period (days past expiration)" and "Applies to Roles" fields
+  on a screening requirement have never affected compliance.** Both are
+  stored and shown with no caveat; `get_compliance_status` applies a hard
+  expiration cutoff with no grace leeway, and evaluates every active
+  requirement against every subject regardless of the configured role list.
+  Both fields now say so on the form, rather than silently doing nothing —
+  the same remedy already used for the sibling
+  `compliance_configs.grace_period_days` gap. Wiring either is left for a
+  future change: `grace_period_days` defaults to 30 on every requirement
+  already on file, so wiring it would relax non-compliance flagging
+  installation-wide, not just for departments that opted in.
+
+**Flagged — not fixed**
+
+- **A screening record can be self-created and self-cleared.** Nothing stops
+  a `medical_screening.manage` holder from logging their own screening as
+  `passed`, with no reviewer distinct from the subject. See
+  `docs/KNOWN_LIMITATIONS.md` (MS-7).
+
+Full write-up: `docs/security-review/MS-09-medical-screening.md` (feature
+09, pass 3, MS-7/MS-8/MS-9).
+
 ### The member roster silently dropped platoon (and other) assignments from every response (2026-09-02)
 
 **Fixed**
@@ -421,6 +454,39 @@ Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
   shifts. Its count, and the short-staffed tally beside it, are now scoped to
   the visible window; only the footer's "more later" line reads the longer
   reach it was added for.
+
+### A hire date, an expiry or any other calendar date read one day early west of UTC (2026-09-01)
+
+**Fixed**
+
+- **A MySQL `DATE` column displayed a day early for every department west of
+  UTC.** A hire date of 2020-12-06 printed "12/5/2020" in New York, "12/6/2020"
+  in Berlin, and shifted again for anyone whose browser was set somewhere else.
+  The column has no time and no timezone — it is a square on a calendar, the
+  same square for everyone — but it was being parsed as UTC midnight and then
+  rendered in the viewer's zone, which rolls it backwards for any negative
+  offset. Every date-only field in the app was affected: hire dates,
+  certification expiries, due dates, leave dates.
+- **The same shift named the wrong weekday**, which on anything schedule-shaped
+  is worse than a wrong number: a date-only value formatted with a weekday came
+  back as "Monday, Sep 14" for a date that is a Tuesday the 15th.
+- **"Days remaining" counts were one short.** `daysBetween` resolved its target
+  through the same shifted conversion, so a certification expiring on the 15th
+  reported thirteen days out on the 1st rather than fourteen — the direction
+  that makes a renewal look less urgent than it is.
+
+A bare `"YYYY-MM-DD"` is now recognised as a calendar date and pinned to UTC at
+both ends, parse and format, so the day written in the value is the day on the
+screen for every viewer. A value carrying a time is an instant and still
+converts to the viewer's timezone exactly as before — that distinction is what
+the fix turns on, and it is asserted in both directions so neither half can be
+restored by breaking the other. A `Date` object is still treated as an instant,
+because nothing can recover a date-only origin once one has been constructed.
+
+`formatCalendarDate` and the other calendar-space helpers are unchanged and
+remain the clearest way to say "this is a calendar date" where the author knows
+it. What changed is that a call site which _doesn't_ know it is no longer
+silently wrong.
 
 ### The member roster showed every member the membership coordinator's screen (2026-09-01)
 
@@ -2584,6 +2650,48 @@ count must fall through to no badge rather than warning about every rank.
   file outside the caller's own organization's upload directory; the
   download endpoint now confines every resolved path to that directory.
 - Downloading a document is now recorded in the audit log.
+
+### Admin-hours requirement progress crashed for anyone who had logged hours (2026-08-25)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` raised
+  `TypeError: unsupported operand type(s) for /: 'decimal.Decimal' and 'float'`
+  whenever a member had approved hours against a required category. `func.sum`
+  returns a `Decimal` on MySQL and the requirement's stored JSON gives a float,
+  so the percentage calculation could not run. With **no** logged hours the
+  `or 0` fallback substitutes an int, every value stays float, and the endpoint
+  answered normally — so it worked for every member it had nothing to report
+  about and failed for every member it did.
+
+  The call site also hand-rolled the minutes-to-hours conversion that
+  `hours_from_minutes` performs at the five other sites in the same service. It
+  now uses the helper for the reported figure and grades on the raw figure,
+  which `app/utils/hours` requires in as many words: rounding before grading
+  turns a shortfall under an eighth of an hour into zero and marks a member
+  compliant while they are short.
+
+### The tamper-seal shortcut never fired (2026-08-25)
+
+**Fixed**
+
+- **A sealed bag could never clear its own contents count.**
+  `GET /equipment-checks/templates/{id}/last-seals` returns a bare dict keyed
+  by compartment id, so it carries none of the camelCase alias generation the
+  schema-backed responses get. It answered `seal_number` and `checked_at`,
+  while the check form types the payload as `LastSealRecord { sealNumber,
+checkedAt }` and casts the response without mapping it.
+
+  Every lookup was therefore `undefined`. `SealPanel` prefills its input from
+  the last count and decides `canClear` by comparing against it, so the tag
+  never prefilled, the panel told the crew _"No seal recorded at the last
+  count"_ on a bag whose seal **had** been recorded, and the one-tap
+  clear-the-contents shortcut — the reason a tamper seal is worth reading —
+  could not be reached at any number they typed. The seal was still filed, so
+  nothing looked broken; the bag was simply counted by hand every time.
+
+  Converted at the endpoint. The service keeps snake_case, which is what its
+  own tests assert.
 
 ### Admin hours: reading another member's requirement progress returned a 500 (2026-08-25)
 

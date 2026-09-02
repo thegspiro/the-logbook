@@ -98,7 +98,7 @@ async def create_requirement(
         event_type="medical_screening.requirement_created",
         event_category="medical_screening",
         severity="info",
-        event_data={"requirement_name": data.name},
+        event_data={"requirement_id": requirement.id, "requirement_name": data.name},
         user_id=str(current_user.id),
         username=current_user.username,
     )
@@ -257,6 +257,7 @@ async def create_record(
         event_category="medical_screening",
         severity="info",
         event_data={
+            "record_id": record.id,
             "record_user_id": data.user_id,
             "screening_type": data.screening_type,
         },
