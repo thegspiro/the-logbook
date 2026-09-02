@@ -17,14 +17,66 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (Feature 08,
-Membership pipeline, pass 4 + pass 4 round 2) — #2176 (pass 3's Codex-fix
-commit) merged mid-investigation of a 4th round of Codex findings against
-that same commit. Per CLAUDE.md Pitfall #24 (never reuse a merged PR's
-branch — see #2173's identical precedent against #2162 in the elections
-feature), pass 4 landed as a fresh branch off `main` and this new PR rather
-than a push to the now-closed `claude/security-review-membership-pipeline`
-branch. Pass 4: 3 fixed, 1 flagged. Pass 4 round 2 (Codex reviewing pass 4's
-own fix commit): 1 more fixed. See the Log below for detail.
+Membership pipeline, pass 4 + pass 4 round 2 + pass 4 round 3) — #2176 (pass
+3's Codex-fix commit) merged mid-investigation of a 4th round of Codex
+findings against that same commit. Per CLAUDE.md Pitfall #24 (never reuse a
+merged PR's branch — see #2173's identical precedent against #2162 in the
+elections feature), pass 4 landed as a fresh branch off `main` and this new
+PR rather than a push to the now-closed
+`claude/security-review-membership-pipeline` branch. Pass 4: 3 fixed, 1
+flagged. Pass 4 round 2 (Codex reviewing pass 4's own fix commit): 1 more
+fixed. Pass 4 round 3 (Codex reviewing round 2's fix commit): 1 more fixed,
+1 refuted (claimed deadlock does not reproduce against the actual code). See
+the Log below for detail.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 3) — 1 fixed, 1 refuted (Codex review of PR #2177's `da29d880`)
+
+Codex reviewed round 2's fix commit (`da29d880`, MP-23's
+`prospect.current_step` preference) and posted 2 new findings against
+`membership_pipeline_service.py`.
+
+**MP-24 (P1, fixed)** — `create_election_package` resolved its PII-policy
+from `prospect.current_step` (MP-23) but never checked the caller-supplied
+`step_id` against it. `advanceApplicant`'s two-request pattern (commit the
+advance, then a separate request to create the package naming the
+just-entered stage) leaves a window where `current_step` can move again
+before the second request lands, so the package could end up stored under
+one `step_id` while a different stage's `package_fields` actually governed
+the snapshot. Fixed: reject (`ValueError` → 400) when a supplied `step_id`
+disagrees with the `current_step` the policy was just resolved from — this
+only fires on the genuine race (never when `step_id` is omitted, and never
+for the pre-existing "named step isn't the election step" case pass 4
+already covers). Guard tests in
+`test_membership_pipeline_pass4_round3_codex.py` (3 tests); the race
+assertion independently confirmed to fail against the pre-fix code via
+`git stash`.
+
+**MP-25 (P2, refuted, no fix)** — claimed a lock-order deadlock between
+`update_election_package`'s locking read (which joins the `election`
+relationship, `lazy="joined"`, into its `SELECT ... FOR UPDATE`) and
+`ElectionService.close_election` (claimed to lock the election first, then
+write linked packages via `_sync_package_statuses`). Independently traced
+`close_election` line by line: it **commits** after locking the election
+(releasing that lock) well before `_sync_package_statuses` ever touches a
+package row, and that method's own package read isn't even a locking read —
+only its final `UPDATE` takes a row lock, in a transaction that by then holds
+no election lock at all. A lock-order deadlock needs both transactions
+holding one resource while waiting on the other simultaneously; the commit
+boundary here structurally prevents that. Documented in full — including why
+the underlying "joined eager load also locks the joined row" mechanic is
+still real and worth knowing, and why narrowing it isn't a safe same-day
+change (the eager load is load-bearing for response serialization:
+`election_title`/`election_status`/`election_end_date` read `self.election`
+synchronously) — in `MP-08-membership-pipeline.md` → Pass 4, round 3.
+
+Full completion gate clean: flake8/black/isort on `app/ tests/ alembic/`,
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change), full backend suite `pytest tests/ -q` — 9872 passed / 21 skipped /
+0 failed (baseline was 9869 before this commit; +3 for the new guard tests).
+Full detail in `MP-08-membership-pipeline.md` → Pass 4, round 3. Rotation
+row 08 → ⏳ (awaiting PR merge/close of the currently-open review threads).
 
 ---
 

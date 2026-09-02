@@ -1,6 +1,157 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4 and pass 4 round 2)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4), 2026-09-02 (pass 4 round 2), 2026-09-02 (pass 4 round 3) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4, pass 4 round 2, and pass 4 round 3)
+
+---
+
+## Pass 4, round 3 (2026-09-02) — 1 fixed, 1 flagged/refuted (Codex review of PR #2177's `da29d880`)
+
+Codex reviewed round 2's fix commit (`da29d880`, MP-23's `prospect.current_step`
+preference) and posted 2 new findings, both against
+`membership_pipeline_service.py`.
+
+#### MP-24 — P1 — a supplied `step_id` could still disagree with the `current_step` that governed the snapshot — ✅ FIXED
+
+**What:** `advanceApplicant` (frontend) commits the applicant's stage
+advancement in one request, then makes a **separate** request to create the
+election package, naming the stage it just entered via `step_id`. Between
+those two requests, `prospect.current_step` can change again — a regression,
+or another advance landing in the gap. MP-23 (round 2) made
+`create_election_package` prefer `prospect.current_step` for the PII policy,
+but never checked it against the request's `step_id` — so on this genuine
+race, the method would resolve `package_fields` from whatever `current_step`
+now is, while still persisting the request's original (now-stale) `step_id`
+on the package. The package ends up labeled for one stage while a different
+stage's policy actually governed what got captured — the same class of
+mismatch MP-23 fixed for the _first-found_ lookup, reopened one layer up by
+the request/response race between the two frontend calls.
+
+Independently confirmed by reading `create_election_package`'s full body at
+`da29d880`: `step_id` is validated only for belonging to the pipeline (MP-5,
+`membership_pipeline_service.py` lines 4613-4616) and is stored verbatim on
+`pkg.step_id` (line 4772) — completely independent of which step's
+`package_fields` governed the snapshot above it. No existing check compares
+the two. Also confirmed `advanceApplicant`
+(`prospectiveMembersStore.ts:433-483`) is the only frontend caller of
+`create_election_package`, and it always intends `step_id` to equal the
+stage the applicant just entered — there is no legitimate frontend path that
+names a deliberately different stage, which is what makes rejecting a
+mismatch safe rather than a false-positive risk.
+
+**Where:** `create_election_package`, `membership_pipeline_service.py:4649`
+(right after `election_step` is resolved from `current_step`, before the
+first-found fallback).
+
+**Fix:** when the policy was resolved from `current_step` (i.e.
+`election_step is current_step`) and the caller supplied a `step_id` that
+disagrees with it, raise `ValueError` (→ 400 via the endpoint's existing
+`except ValueError` handler) instead of silently mixing the two. This never
+fires when `step_id` is omitted, and never fires for the pass-4 "named step
+isn't the pipeline's election step" scenario
+(`test_wrong_step_id_still_honors_the_pipelines_election_stage`), because
+there the policy comes from the fallback lookup, not from `current_step` —
+verified by re-running that suite alongside the new tests. The caller
+(`advanceApplicant`) already treats package-creation failure as non-fatal to
+the advance (a toast warning, per its own comment about 409s), so a 400 here
+degrades the same way; a genuine race is correctly surfaced rather than
+silently mis-attributed.
+
+**Considered and declined:** removing `step_id` as a caller-supplied field
+entirely, deriving it server-side from `current_step`. Only one caller
+exists today and it always intends the two to match, so this would likely be
+safe — but it is a request-schema change on an endpoint with its own test
+coverage of the "named step is deliberately not the election step" case
+(pass 4), and changes the field's meaning for any future caller. Left as a
+reject-on-mismatch rather than a schema change, consistent with this
+rotation's preference for the smaller, reversible fix on an already
+many-times-reviewed surface.
+
+Covered by `backend/tests/test_membership_pipeline_pass4_round3_codex.py` (3
+tests): the race itself (current_step moved on after step_id was captured →
+`ValueError`); the ordinary matching case (step_id equals current_step →
+unaffected); and step_id omitted (never triggers the check). The race
+assertion was independently confirmed to fail against the pre-fix code
+(`git stash` on `membership_pipeline_service.py`) before the fix was applied.
+
+#### MP-25 — P2 — claimed lock-order deadlock between `update_election_package` and `ElectionService.close_election` — 🚩 REFUTED (no fix)
+
+**What (claim):** `ProspectElectionPackage.election` is
+`lazy="joined"` (confirmed: `models/membership_pipeline.py:544`), so
+`get_election_package(..., lock_for_update=True)`'s `SELECT ... FOR UPDATE`
+(added by MP-21) generates a join that locks both the package row and its
+linked election row, package-then-election. The claim was that
+`ElectionService.close_election` takes the opposite order — election first,
+packages later via `_sync_package_statuses` — creating a classic lock-order
+deadlock: `update_election_package` holding the package lock waiting on the
+election lock, while a concurrent `close_election` holds the election lock
+waiting on the package lock.
+
+**Independently verified, and refuted:** the `lazy="joined"` mechanic is
+real — confirmed the relationship declaration, and confirmed (via the
+response schema, `schemas/membership_pipeline.py:747-749`,
+`election_title`/`election_status`/`election_end_date`) that the eager join
+is load-bearing, not incidental: those response fields are `@property`s that
+read `self.election` synchronously during Pydantic serialization, so
+dropping the eager load on this query without also handling that read would
+trade a theoretical deadlock for a real, reproducible `MissingGreenlet` crash
+on every successful update.
+
+But the deadlock premise itself does not hold against the actual code.
+Traced `ElectionService.close_election` (`election_service.py:4781-4947`)
+statement by statement: it takes the election lock at line 4787-4792, then
+**commits at line 4827** — before it ever touches `ProspectElectionPackage`.
+`_sync_package_statuses` (line 4949, called from `close_election` at line
+4928, after several more reads and its own commit boundary) runs in a
+transaction that no longer holds the election lock (released at the line
+4827 commit) and does not itself lock the package rows it selects (its query
+at lines 4969-4973 has no `.with_for_update()` — only the later `UPDATE`
+implicit from `pkg.status = new_status` takes a row lock, at commit time,
+line 5033). Confirmed grepping `election_service.py` for
+`ProspectElectionPackage`: the only two references are both inside
+`_sync_package_statuses`, after the election-lock-releasing commit.
+
+A lock-order deadlock requires two transactions to each hold one resource
+while waiting on the other, at the same time. Here, `close_election` never
+holds the election lock and a package lock simultaneously — the intervening
+commit at line 4827 splits it into two separate transactions, one holding
+only the election lock, the other (in `_sync_package_statuses`) taking only
+a package lock, with no overlap. The two-transaction split makes the
+opposite-order interaction Codex described structurally impossible with the
+current code: at worst, `_sync_package_statuses`'s package `UPDATE` blocks
+briefly behind a concurrent `update_election_package`'s lock (ordinary lock
+contention, not a cycle) and proceeds once that transaction commits.
+
+**Disposition:** flagged, not fixed — there is nothing to fix; the claimed
+scenario does not reproduce against the actual code. Recorded here (rather
+than silently dismissed) because: (1) the underlying "the joined eager load
+also locks the election row when present" mechanic is real and worth a
+future reviewer knowing about before adding a _new_ election-then-package
+code path within a single uncommitted transaction elsewhere — that is the
+shape that would actually risk this deadlock; (2) any fix to narrow the lock
+scope (e.g. a column-limited raw locking statement instead of the ORM
+join) would need to independently guarantee `election` is still loaded
+before serialization, which is exactly the kind of behavior-changing,
+easy-to-get-subtly-wrong change this rotation's own precedent (MP-22) says
+to flag rather than force through same-day on an already many-times-reviewed
+surface, especially when the finding it would guard against isn't actually
+reachable today.
+
+No test added — there is no reproducible failure to guard against. If a
+future change to `close_election` merges its election-lock phase and its
+package-write phase into a single transaction (removing the line-4827
+commit boundary), the deadlock risk this finding described would become
+real; that is the condition a reviewer of such a change should check for.
+
+### Completion gate (pass 4, round 3)
+
+| Check                                                              | Result                                                                                                                                             |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                      | pass, 0 violations                                                                                                                                 |
+| `black --check app/ tests/ alembic/`                               | pass, 0 files would be reformatted                                                                                                                 |
+| `isort --check-only app/ tests/ alembic/`                          | pass, 0 violations                                                                                                                                 |
+| `python3 scripts/validate_migrations.py --strict`                  | pass — 409 revisions, single head (no schema change)                                                                                               |
+| new guard tests (`test_membership_pipeline_pass4_round3_codex.py`) | 3 passed; the race assertion independently confirmed to fail against the pre-fix code (`git stash`)                                                |
+| full backend suite (`pytest tests/ -q`)                            | 9872 passed / 21 skipped (pre-existing/environmental) / 0 failed (baseline was 9869 passed before this commit; +3 for the new round-3 guard tests) |
 
 ---
 

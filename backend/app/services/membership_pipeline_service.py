@@ -4656,6 +4656,31 @@ class MembershipPipelineService:
         ):
             election_step = current_step
 
+        # MP-08 pass 4 round 2 (Codex, second finding): advanceApplicant
+        # (frontend) commits the stage advance, then makes a *separate*
+        # request to create the package, naming the stage it just entered as
+        # step_id — between those two requests, current_step can change again
+        # (a regression, or another advance landing in the gap). If that
+        # happens, the policy above would already be resolved from the new
+        # current_step while the package below still stored the *request's*
+        # stale step_id verbatim — labeling the package for one stage while a
+        # different stage's package_fields actually governed the snapshot.
+        # Reject rather than silently mixing the two: this only fires when a
+        # step_id was supplied AND current_step is itself the election_vote
+        # step whose policy just governed (never for the "named step isn't
+        # the pipeline's election step" case the pass-4 tests cover, and
+        # never when step_id is omitted). The caller re-fetches and retries,
+        # which is correct — the applicant genuinely moved.
+        if (
+            election_step is current_step
+            and step_id is not None
+            and str(step_id) != str(current_step.id)
+        ):
+            raise ValueError(
+                "The applicant's pipeline stage changed since this request "
+                "was made. Refresh the applicant and try again."
+            )
+
         # Fallback for when the prospect's current step isn't an
         # election_vote step in the governing pipeline — e.g. a package
         # requested after the applicant already advanced past the vote
