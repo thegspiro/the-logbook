@@ -160,7 +160,11 @@ class DocumentsService:
         # folder stayed hidden from a direct fetch and listed in the browser.
         # One owner for the rule is what keeps those answers the same.
         if current_user is not None:
-            folders = [f for f in folders if self.can_access_folder(f, current_user)]
+            folders = [
+                folder
+                for folder in folders
+                if await self.can_access_folder(folder, organization_id, current_user)
+            ]
 
         # Add document counts
         for folder in folders:
@@ -184,8 +188,9 @@ class DocumentsService:
         )
         return result.scalar_one_or_none()
 
-    def can_access_folder(self, folder: DocumentFolder, user: User) -> bool:
-        """Check if a user can access a specific folder.
+    @staticmethod
+    def _folder_admits_user(folder: DocumentFolder, user: User) -> bool:
+        """Apply one folder's restrictions, without considering its parent.
 
         ``required_permissions`` is checked *before* the leadership bypass and
         is the one rule leadership does not override. Every other restriction
@@ -227,6 +232,53 @@ class DocumentsService:
 
         return True
 
+    async def can_access_folder(
+        self,
+        folder: DocumentFolder,
+        organization_id: UUID,
+        user: User,
+        folders_by_id: Optional[Dict[str, DocumentFolder]] = None,
+    ) -> bool:
+        """Authorize a folder by evaluating it and every ancestor.
+
+        Restrictions compose with logical AND: every folder from the requested
+        folder through the root must admit the caller.  Missing ancestors,
+        ancestors belonging to another organization, and ancestry cycles all
+        fail closed.  The per-folder leadership bypass still cannot override
+        ``required_permissions``.
+
+        ``folders_by_id`` may contain an already org-scoped folder snapshot for
+        callers authorizing many folders.  A missing id in such a snapshot is
+        treated as corrupt ancestry rather than triggering an unscoped lookup.
+        """
+        expected_org = str(organization_id)
+        current: Optional[DocumentFolder] = folder
+        seen: Set[str] = set()
+
+        while current is not None:
+            current_id = str(current.id)
+            if current_id in seen:
+                return False
+            seen.add(current_id)
+
+            if str(current.organization_id) != expected_org:
+                return False
+            if not self._folder_admits_user(current, user):
+                return False
+
+            parent_id = current.parent_id
+            if parent_id is None:
+                return True
+
+            if folders_by_id is not None:
+                current = folders_by_id.get(str(parent_id))
+            else:
+                current = await self.get_folder_by_id(parent_id, organization_id)
+            if current is None:
+                return False
+
+        return False
+
     async def can_access_document(
         self, document: Document, organization_id: UUID, user: User
     ) -> bool:
@@ -245,16 +297,17 @@ class DocumentsService:
             # Fail closed: a document that references a folder we can't resolve
             # must not become readable by falling through the ACL.
             return False
-        return self.can_access_folder(folder, user)
+        return await self.can_access_folder(folder, organization_id, user)
 
     async def accessible_folder_ids(
         self, organization_id: UUID, user: User
-    ) -> Optional[Set[str]]:
-        """Ids of folders the user may access, or None when they may access all
-        (leadership). Used to keep a document listing consistent with the folder
-        access rules even when no folder filter is supplied — otherwise listing
-        documents without a folder returned every org document, including those
-        in restricted/owner-only folders.
+    ) -> Set[str]:
+        """Return exactly the folder ids whose complete hierarchy is accessible.
+
+        An explicit set is returned even for leadership because corrupt or
+        cross-organization ancestry must never be converted into an unrestricted
+        document query. This keeps unfiltered listings consistent with direct
+        folder and document authorization.
         """
         result = await self.db.execute(
             select(DocumentFolder).where(
@@ -262,18 +315,14 @@ class DocumentsService:
             )
         )
         folders = result.scalars().all()
-        # The leadership fast path returns None ("no folder restriction"), which
-        # is only sound while every restriction here is one leadership
-        # outranks. A required_permissions folder is not: skipping the filter
-        # for a documents administrator is precisely the read that field
-        # exists to refuse. Keep the fast path for orgs that have no such
-        # folder, so the common case still costs no filtering.
-        user_perms = _get_user_permissions(user)
-        if _is_leadership(user_perms) and not any(
-            f.required_permissions for f in folders
-        ):
-            return None
-        return {f.id for f in folders if self.can_access_folder(f, user)}
+        folders_by_id = {str(folder.id): folder for folder in folders}
+        accessible = set()
+        for folder in folders:
+            if await self.can_access_folder(
+                folder, organization_id, user, folders_by_id
+            ):
+                accessible.add(folder.id)
+        return accessible
 
     async def _creates_cycle(
         self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID
@@ -613,7 +662,7 @@ class DocumentsService:
         so only the member and leadership can see it.
 
         Folder hierarchy:
-          Member Files/              (system, visibility=leadership)
+          Member Files/              (system, visibility=organization)
             └── Last, First/         (owner=user, visibility=owner)
         """
         # Find the 'members' system folder
@@ -639,7 +688,7 @@ class DocumentsService:
                 color=members_def["color"],
                 sort_order=members_def["sort_order"],
                 is_system=True,
-                visibility=FolderVisibility.LEADERSHIP,
+                visibility=FolderVisibility.ORGANIZATION,
             )
             self.db.add(members_root)
             await self.db.flush()
@@ -686,7 +735,7 @@ class DocumentsService:
 
         Folder hierarchy:
           Apparatus Files/                      (system, visibility=leadership)
-            └── Engine 1 (unit_number)/         (visibility=organization, allowed_roles restricted)
+            └── Engine 1 (unit_number)/         (visibility=organization)
                 ├── Photos/
                 ├── Registration & Insurance/
                 ├── Maintenance Records/
@@ -775,7 +824,7 @@ class DocumentsService:
         return vehicle_folder
 
     async def get_apparatus_sub_folders(
-        self, organization_id: UUID, apparatus_id: str
+        self, organization_id: UUID, apparatus_id: str, current_user: User
     ) -> List[DocumentFolder]:
         """
         Get the sub-folders for a specific apparatus.
@@ -810,6 +859,11 @@ class DocumentsService:
             .order_by(DocumentFolder.sort_order, DocumentFolder.name)
         )
         sub_folders = list(result.scalars().all())
+        sub_folders = [
+            folder
+            for folder in sub_folders
+            if await self.can_access_folder(folder, organization_id, current_user)
+        ]
 
         for folder in sub_folders:
             count_result = await self.db.execute(
@@ -833,7 +887,8 @@ class DocumentsService:
         under the 'Facility Files' system folder.
 
         Folder hierarchy:
-          Facility Files/                           (system, visibility=leadership)
+          Facility Files/                           (organization visibility,
+                                                     facility permission gate)
             └── Station 1 - Main St (display_name)/ (visibility=organization)
                 ├── Photos/
                 ├── Blueprints & Permits/
@@ -896,7 +951,7 @@ class DocumentsService:
                 color=facilities_def["color"],
                 sort_order=facilities_def["sort_order"],
                 is_system=True,
-                visibility=FolderVisibility.LEADERSHIP,
+                visibility=FolderVisibility.ORGANIZATION,
                 required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
             )
             self.db.add(facilities_root)
@@ -965,7 +1020,7 @@ class DocumentsService:
         return facility_folder
 
     async def get_facility_sub_folders(
-        self, organization_id: UUID, facility_id: str
+        self, organization_id: UUID, facility_id: str, current_user: User
     ) -> List[DocumentFolder]:
         """
         Get the sub-folders for a specific facility.
@@ -1006,6 +1061,11 @@ class DocumentsService:
             .order_by(DocumentFolder.sort_order, DocumentFolder.name)
         )
         sub_folders = list(result.scalars().all())
+        sub_folders = [
+            folder
+            for folder in sub_folders
+            if await self.can_access_folder(folder, organization_id, current_user)
+        ]
 
         for folder in sub_folders:
             count_result = await self.db.execute(
