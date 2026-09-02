@@ -16,13 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2173](https://github.com/thegspiro/the-logbook/pull/2173) (Feature 06,
-Elections & ballots, pass 3, round 7 only — round 7's predecessor, #2162,
-merged mid-task before round 7's fix was ready; see the PR-split note
-below) — 23 fixed, 5 flagged across ten Codex review rounds, 1
-re-verified open (ELEC-12). See the Log below for detail.
+None.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) ✅ merged — PR #2173
+
+PR #2173 (round 7's continuation branch, after its predecessor #2162 merged
+mid-task) merged to `main` as merge commit `860abcc2`. Final tally across
+both PRs of this pass: 23 fixed, 5 flagged across ten Codex review rounds, 1
+re-verified open (ELEC-12). Rotation row 06 → ✅. Next: 07 users &
+organizations.
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 10) — 1 fixed, 1 flagged (ELEC-39, ELEC-40) — PR #2173
 
@@ -55,7 +59,7 @@ round in this pass.
   constraint. That reasoning assumed every existing vote's hash was
   computed under the current, id-based convention (ELEC-34, round 7) — it
   does not hold for a vote `cast_vote_with_token` wrote for a legacy item
-  *before* ELEC-34 landed, since that route's stored `Vote.position` has
+  _before_ ELEC-34 landed, since that route's stored `Vote.position` has
   always been the item's title (ELEC-34 only changed the hash input, never
   the column), and a pre-ELEC-34 row's hash was itself computed against
   that title, not the item's id. On a title/id collision between two
@@ -6632,8 +6636,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | 🔄     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |

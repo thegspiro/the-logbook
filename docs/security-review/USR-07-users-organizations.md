@@ -1,6 +1,232 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1)
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1), [#1949](https://github.com/thegspiro/the-logbook/pull/1949) (pass 2)
+
+---
+
+## Pass 3 (2026-09-02)
+
+**Scope:** full domain since pass 2's merge commit `6823bece` (PR #1949):
+`endpoints/users.py`, `endpoints/organizations.py`, `endpoints/member_status.py`,
+`endpoints/member_leaves.py`, `services/user_service.py`,
+`services/organization_service.py`, `services/member_leave_service.py`,
+`models/user.py`, `schemas/user.py`, `schemas/organization.py`, every
+migration touching these tables since, and the in-app frontend surface (no
+dedicated module directory, same as pass 1/2) — `git diff --stat` against
+`frontend/src/` since `6823bece`, reviewed file by file for every match on
+user/organization/member terms.
+
+**Read in full (diff-driven):** the `users.py`/`models/user.py` diff since
+pass 2 (the "stated one of two membership columns, refuse to guess the other"
+guard added to `update_user_profile`, and `_reconcile_membership`'s "keep the
+existing class/status when the split can't answer" fix); the
+`schemas/organization.py` diff (the `testing` module flag); every changed
+frontend file (`AddMember.tsx`, `ImportMembers.tsx`, `MemberAdminEditPage.tsx`,
+`MemberIdCardPage.tsx`, `Members.tsx`, `userServices.ts`, `types/user.ts`,
+`purgeLocalMemberData.ts`).
+
+**Re-enumerated, not re-derived:** all 62 routes across the four files (24 +
+19 + 12 + 7 — up one from pass 1's 61, the new
+`update_user_profile` guard added no route) — every route's auth dependency
+and permission string checked against the route inventory below. Every
+by-id (`{user_id}`, `{leave_id}`) fetch in all four files traced for an
+`organization_id` filter (CLAUDE.md Pitfall #14 / CHECKLIST XC-3), and every
+client-supplied FK on a create path (`member_leaves.py`'s `create_leave_of_
+absence` → `MemberLeaveService.create_leave`) traced for an in-org check
+(XC-1). `organizations.py`'s 19 routes carry no by-id path parameter at all —
+every one resolves exclusively off `current_user.organization_id`, so XC-3
+does not apply to that file by construction; confirmed by reading all 19
+handlers, not inferred from the file's shape.
+
+**Re-verified against current code, not re-derived:** every pass-1/pass-2
+"Verified good" claim below the by-id trace (privilege-ceiling wiring, PII
+redaction, settings-secret redaction, the class/rank invariant's now-four
+locked writers, USR-1…4 fixes). USR-5 (unbounded lists) and ORU-7c
+(mass-escalatable `member` role) re-checked against current line numbers and
+`KNOWN_LIMITATIONS.md` — both still open, unchanged, already mirrored; not
+re-flagged.
+
+**Not re-read line-by-line:** `member_status.py` lines 1–281 (imports/schemas/
+helpers above the first route) and `organization_service.py`'s non-module-
+settings methods — no diff signal since pass 2 pointed at either.
+
+## Findings (pass 3)
+
+### USR-7 — LOW — `GET /users` silently dropped `platoon` (and declared-but-unset `member_class`/`member_status`/`compliance_exempt`) from every roster response — ✅ FIXED
+
+**What:** `UserListResponse` (`schemas/user.py:271-298`) declares `platoon`,
+`member_class`, `member_status` and `compliance_exempt`, but
+`UserService.get_users_for_organization` (`services/user_service.py:54-69`)
+never set any of the four in the `user_dict` it builds per row — each one
+came back as the schema's bare default (`None`/`False`) regardless of the
+real column value, for every caller of `GET /users`.
+
+**Where:** `services/user_service.py:54-69`.
+
+**Failure scenario:** `PlatoonRosterPanel.tsx` (scheduling module) loads its
+"current assignment" column straight from `GET /users`'s `platoon` field to
+seed the officer's edit grid. Every member showed as unassigned regardless of
+their actual platoon, and the panel's own "only send rows that changed" diff
+compares against that same wrong baseline — an officer who didn't touch a row
+believing it already showed the true value would leave it unset while
+believing it was confirmed correct.
+
+**Impact:** functional defect, not a permission or tenancy bug — reproducible
+on any organization using platoon-based scheduling.
+
+**Fix:** `platoon` added to the dict `UserListResponse` is built from,
+matching what the schema already declares and the model already stores.
+`member_class`/`member_status`/`compliance_exempt` deliberately left unset —
+see USR-8, which found the same gap for those three but for a reason worth
+weighing before it's fixed rather than incidentally: `compliance_exempt` in
+particular is a more sensitive field to widen to every `members.view` holder
+(every default position) than `platoon` is, and USR-8 is the same "should
+this whole endpoint's field set be tiered by permission" decision. Guarded by
+`tests/test_user_list_platoon.py` (2 tests), confirmed to fail against the
+pre-fix code via `git stash`.
+
+### USR-8 — MED — `GET /users` sends the full admin-facing member record to every `members.view` holder; a 2026-09-01/02 frontend change frames a reduced "Member Directory" experience for that tier without any matching backend change — 🚩 FLAGGED
+
+**What:** `members.view` is, per the route's own docstring
+(`users.py:103-106`), "the baseline grant every default position carries" —
+every member of the department holds it. `UserService.get_users_for_
+organization` returns the same `UserListResponse` regardless of which of the
+three OR-gated permissions (`users.view`, `members.view`, `members.manage`)
+the caller holds, and that response unconditionally includes `username`,
+`hire_date`, `membership_number`, `rank`, and `station` for every member in
+the organization.
+
+Since pass 2, `Members.tsx` was changed (comment at line ~36-41) to render a
+visibly different experience by permission tier: a caller without
+`members.manage` sees "Member Directory" / "Find and contact department
+members" instead of "Membership Management", loses the username line, the
+Hire Date column, the CSV export, bulk-select, and the edit/delete actions —
+framed in the code comment as "administrative furniture ... a member without
+the grant gets a directory; a coordinator gets the management table
+unchanged." That framing describes an access-control boundary. No such
+boundary exists server-side: the fields the directory-tier UI hides are still
+in the JSON `GET /users` response reaching that caller's browser — visible in
+the network tab, or to any script the member runs against their own
+authenticated session — regardless of the UI's rendering choice.
+
+**Where:** `services/user_service.py:24-91` (unconditional field set);
+`schemas/user.py:271-298` (`UserListResponse`); `api/v1/endpoints/users.py:
+99-155` (`list_users`, OR-gated on `members.view`); frontend framing at
+`frontend/src/pages/Members.tsx:36-41`.
+
+**Failure scenario:** a plain member (no `members.manage`, no `users.view`)
+opens the roster, sees the reduced "Member Directory" the new UI presents,
+and reasonably infers that a colleague's username, hire date, and membership
+number are coordinator-only information. They are not: the same member can
+open browser devtools' Network tab (or call `GET /api/v1/users` directly with
+their own session cookie — no additional privilege needed) and read every
+one of those fields, plus `rank`/`station`, for the entire roster. The
+severity is capped by two things: this is disclosure _within_ the caller's
+own organization (no cross-tenant leak — `get_users_for_organization` filters
+on `current_user.organization_id` throughout), and none of the exposed
+fields are on the leadership-only list `GET /{user_id}/with-roles` already
+enforces (DOB, emergency contacts) — but the mismatch between the new UI's
+implied tiering and the actual wire payload is real and user-visible to
+anyone who looks.
+
+**Impact:** MED — org-internal PII over-exposure relative to the access
+model the newest UI change now implies, not a cross-tenant or unauthenticated
+leak. Also interacts with USR-7: `member_class`/`member_status`/
+`compliance_exempt` are declared on the same response and were found
+similarly unpopulated (fixed for a different reason there); populating them
+now, before this is resolved, would extend the same over-exposure to a
+plausibly more sensitive field (`compliance_exempt` reads as a compliance/
+medical-tracking exemption) with no product decision behind it — left unset
+for that reason.
+
+**Fix:** not applied. `GET /users` is consumed by at least 25 frontend files
+(scheduling rosters, messaging composer, election nominations, meeting
+attendance, waiver management, shift reports, and more) via the shared
+`userService.getUsers()` call, several of which need fields (`rank`,
+`station`, `platoon`) that a naive "trim to `members.manage`" would also
+strip from those legitimate, non-directory consumers — this is a response-
+shape/product decision (which fields belong at the `members.view` tier vs.
+`members.manage`, and whether `GET /users` should serve two shapes by
+permission or a second, narrower directory endpoint should be split out),
+the same category of call left flagged for FIN-7/ELEC-12/USR-5/MP-10/MS-6.
+Mirrored into `KNOWN_LIMITATIONS.md`.
+
+## Verified good ✅ (re-confirmed pass 3)
+
+- **Every by-id fetch across all four files org-scopes.** Traced individually
+  in `users.py` (`get_user_roles`, `assign_user_roles`, `add_role_to_user`,
+  `remove_role_from_user`, `get_user_with_roles`, `update_contact_info`,
+  `update_user_profile`, `delete_user`, `admin_reset_password`,
+  `admin_reset_mfa`, `upload_photo`, `delete_photo`,
+  `get_member_audit_history`, `anonymize_member` (via
+  `MemberAnonymizationService.get_user_for_anonymization`, org_id passed
+  explicitly), `get_user_consents`), `member_status.py`
+  (`change_member_status`, `get_property_return_preview`, `archive_member`,
+  `reactivate_member` (via service), `change_membership_type`,
+  `set_compliance_exemption`), and `member_leaves.py` (`get_member_leaves`,
+  `update_leave_of_absence`/`delete_leave_of_absence` via
+  `MemberLeaveService.get_leave`, both of which filter
+  `organization_id == organization_id` at `member_leave_service.py:182-188`).
+  No exception found.
+- **The one client-supplied FK on a create path is validated in-org (XC-1).**
+  `create_leave_of_absence`'s `user_id` is checked against the caller's org
+  inside `MemberLeaveService.create_leave` (`member_leave_service.py:108-118`,
+  `SELECT User.id WHERE id = :user_id AND organization_id = :organization_id`,
+  raises `ValueError` → 400 if absent) before the leave (and its linked
+  training waiver) is written — confirmed present and unchanged since pass 2.
+- **The class/rank invariant now has a fourth guard, and it holds.**
+  `update_user_profile`'s new "stated one of `member_class`/`member_status`,
+  refuse to guess the other" check (`users.py:1571-1592`) and
+  `_reconcile_membership`'s matching "keep the existing class/status when
+  `split_membership_type` can't answer, don't overwrite with `None`"
+  (`models/user.py:588-594`) were read in full, cross-checked against the
+  documented failure mode (`('senior', None, None)` silently becoming
+  `('active', 'operational', 'regular')` on a status-only PATCH), and found
+  correctly guarded by existing tests in `test_membership_class_status.py`.
+- **`organizations.py` has no by-id path parameter across all 19 routes** —
+  confirmed by reading every handler, not inferred from route shapes alone;
+  every response is derived exclusively from `current_user.organization_id`,
+  so cross-tenant IDOR (XC-3) does not apply to this file's surface.
+- **Secrets stay redacted; infrastructure identifiers stay gated on
+  `settings.manage`.** `GET /settings` calls `.redacted()` then
+  `.without_infrastructure()` for non-`settings.manage` callers
+  (`organizations.py:70-79`); `PATCH /settings/email`, `/settings/file-storage`,
+  `/settings/auth` each return `.redacted()`, never the raw payload
+  (`organizations.py:241,283,326`) — unchanged since pass 1's ORU-2/3/5/8b,
+  re-read directly rather than taken on the prior pass's word.
+- **`JSON` settings mutation still deep-copies.** `update_module_settings`
+  and its siblings in `organization_service.py` (`:397`, `:494`, `:548`) all
+  `copy.deepcopy(org.settings or {})` before mutating, never a shallow
+  `dict()` — Pitfall #12 holds; the new `testing` module flag flows through
+  the same path and needs no migration (module toggles live in the JSON
+  `settings` column, not a dedicated column).
+- **No new `.ilike()`/`.like()` or raw `csv.writer` in any of the four files**
+  (grepped fresh this pass — 0 hits either way).
+- **USR-5 (unbounded lists) unchanged, still open, still mirrored.** Verified
+  current line numbers still match: `get_archived_members`
+  (`member_status.py:738-747`), `list_users_with_roles`
+  (`users.py` — `.scalars().all()` at the loader), `leave_widget_summary`
+  (`member_leaves.py:58-70`), `MemberLeaveService.list_leaves`
+  (`member_leave_service.py:167-176`, sliced in-memory by callers).
+- **ORU-7c (org-wide `member` role mass-escalation) unchanged, still a
+  documented product decision, not a defect** — `KNOWN_LIMITATIONS.md`
+  entry re-read, still accurate.
+
+## Completion gate (pass 3)
+
+| Check                                                                                                                                                                                        | Result                                                                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                | ✅ 0 violations                                                                                                                                           |
+| `black --check app/ tests/ alembic/`                                                                                                                                                         | ✅ clean (1387 files unchanged)                                                                                                                           |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                                                                                                  | ✅ clean                                                                                                                                                  |
+| `validate_migrations.py --strict`                                                                                                                                                            | ✅ 409 revisions, single head — unchanged (no migration needed)                                                                                           |
+| `pytest tests/ -k "users or user_list or organization or member_status or member_leave or member_class or platoon or rank_grant or role_edit or audit_history or ceiling or administrative"` | ✅ 323 passed, 1 skipped (pre-existing `py_vapid`), 0 failed                                                                                              |
+| `pytest tests/` (full backend suite)                                                                                                                                                         | ✅ 9833 passed, 21 skipped (pre-existing/environmental: Docker daemon/registry unavailable, `py_vapid` optional dep, opt-in API-contract suite), 0 failed |
+| `tsc --noEmit`                                                                                                                                                                               | ✅ 0 errors                                                                                                                                               |
+| `eslint .`                                                                                                                                                                                   | ✅ 0 errors/warnings (no frontend file modified this pass)                                                                                                |
+
+Every new/modified guard test confirmed to fail against the pre-fix code via
+`git stash` before being counted as covering its finding.
 
 ---
 

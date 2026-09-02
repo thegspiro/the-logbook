@@ -1890,6 +1890,33 @@ the full list (the Members admin page, the leave dashboard widget), which is
 a frontend-affecting decision, not a drop-in. (Security review USR-5,
 `docs/security-review/USR-07-users-organizations.md`.)
 
+## Users: `GET /users` Sends the Full Admin Roster Record to Every `members.view` Holder (2026-09-02)
+
+`members.view` — held by every default position, per the route's own
+docstring — is enough to receive the same `UserListResponse` shape
+`members.manage` gets: `username`, `hire_date`, `membership_number`, `rank`,
+and `station` for every member in the org
+(`app/services/user_service.py:24-91`, `app/schemas/user.py:271-298`). A
+2026-09-01/02 frontend change (`frontend/src/pages/Members.tsx`) now presents
+a visibly reduced "Member Directory" for callers without `members.manage` —
+no username, no Hire Date column, no export/bulk actions — framed as "a
+member without the grant gets a directory; a coordinator gets the management
+table." That framing implies an access-control boundary that does not exist
+server-side: every field the directory view hides is still in the JSON `GET
+/users` response reaching that caller's own browser, readable via devtools'
+Network tab or a direct authenticated call to the endpoint. Not a
+cross-tenant leak (org-scoped throughout) and not on the leadership-only PII
+list (DOB, emergency contacts) enforced elsewhere in this module — but a real
+mismatch between the UI's implied tiering and the actual wire payload.
+
+Not fixed: `GET /users` is consumed by 25+ frontend files beyond the roster
+page (scheduling, messaging, elections, meetings, waivers, shift reports),
+several of which need `rank`/`station`/`platoon` at the `members.view` tier
+for legitimate, non-directory purposes. Trimming the response naively would
+break those callers; the fix needs a decision on whether `GET /users` should
+serve two shapes by permission or a narrower directory endpoint should be
+split out. (Security review USR-8, `docs/security-review/USR-07-users-organizations.md`.)
+
 ## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
 
 `GET /prospective-members/election-packages` (`list_election_packages`) runs
