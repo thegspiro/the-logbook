@@ -16,13 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING) (Feature 08,
+[#2176](https://github.com/thegspiro/the-logbook/pull/2176) (Feature 08,
 Membership pipeline, pass 3) — full re-verification, zero code diff since
 pass 2, no new findings. See the Log below for detail.
 
 ---
 
-### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) — 0 fixed, 0 flagged (re-verification) — PR #PENDING
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) — 0 fixed, 0 flagged (re-verification) — PR #2176
 
 Diffed the full domain against pass 2's merge (`58535700`, PR #1950):
 `endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
