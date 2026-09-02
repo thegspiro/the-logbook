@@ -504,6 +504,7 @@ const Dashboard: React.FC = () => {
         checkedOut: data.active_checkouts.length,
         overdue: data.active_checkouts.filter((item) => item.is_overdue).length,
       });
+      setEquipmentError(false);
     } catch {
       setEquipmentError(true);
     } finally {
@@ -550,6 +551,7 @@ const Dashboard: React.FC = () => {
         (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
       );
       setUpcomingEvents(sorted);
+      setUpcomingEventsError(false);
     } catch {
       setUpcomingEventsError(true);
     } finally {
@@ -590,8 +592,11 @@ const Dashboard: React.FC = () => {
     if (!isRetry) setLoadingMessages(true);
     const wantInbox = only !== 'unread';
     const wantUnread = only !== 'inbox';
-    if (wantInbox) setInboxError(false);
-    if (wantUnread) setUnreadCountError(false);
+    // Not cleared eagerly on a retry: both flags are assigned from the settled
+    // results below, so waiting costs nothing and keeps the banner up while the
+    // request is still in flight.
+    if (!isRetry && wantInbox) setInboxError(false);
+    if (!isRetry && wantUnread) setUnreadCountError(false);
     // These endpoints are independent: a badge-count failure must not throw
     // away messages the member can still read (and vice versa).
     const [inboxResult, unreadResult] = await Promise.allSettled([
@@ -778,8 +783,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadMySeats = async () => {
-    setSeatsError(false);
+  const loadMySeats = async (isRetry = false) => {
+    if (!isRetry) setSeatsError(false);
     if (!isModuleOn('scheduling')) {
       setMySeats([]);
       return;
@@ -792,6 +797,7 @@ const Dashboard: React.FC = () => {
       // report, and "no seats" is not a readiness finding about them — the
       // verdict simply says nothing on the subject.
       setMySeats(data.is_excluded ? [] : data.positions);
+      setSeatsError(false);
     } catch {
       setSeatsError(true);
       // Seat eligibility is non-critical; the verdict falls back to
@@ -799,14 +805,15 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadMyScreenings = async () => {
-    setScreeningsError(false);
+  const loadMyScreenings = async (isRetry = false) => {
+    if (!isRetry) setScreeningsError(false);
     if (!isModuleOn('medical_screening')) {
       setMyScreenings(null);
       return;
     }
     try {
       setMyScreenings(await medicalScreeningService.getMyCompliance());
+      setScreeningsError(false);
     } catch {
       setScreeningsError(true);
       // Clear rather than keep the last good answer. A pull-to-refresh that
@@ -817,10 +824,15 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadHours = async () => {
-    setLoadingHours(true);
-    setHoursError(false);
-    setCertificationsError(false);
+  const loadHours = async (isRetry = false) => {
+    if (!isRetry) setLoadingHours(true);
+    // The header chip reads hoursError directly and does not consult
+    // loadingHours, so clearing the flag up front on a retry puts the stale
+    // partial sum back on screen as an exact "N hrs in Month" -- and leaves it
+    // there for as long as the retry takes. `sourceFailed` sets the flag from
+    // the settled result either way, so the retry path simply waits.
+    if (!isRetry) setHoursError(false);
+    if (!isRetry) setCertificationsError(false);
     try {
       // Month-to-date in the organization's timezone, not UTC — near midnight
       // a UTC-derived date lands in the wrong month for half the country.
@@ -840,6 +852,7 @@ const Dashboard: React.FC = () => {
       // must leave this false -- flipping it would pin an error banner and a
       // Retry that re-runs the same gate and changes nothing.
       let sourceFailed = false;
+      let certificationsFailed = false;
       const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
         canLoadScheduling
           ? schedulingService.getSummary().catch((err) => {
@@ -852,7 +865,7 @@ const Dashboard: React.FC = () => {
           ? trainingModuleConfigService.getMyTraining().catch((err) => {
               console.error('Failed to load training summary:', err);
               sourceFailed = true;
-              setCertificationsError(true);
+              certificationsFailed = true;
               return null;
             })
           : Promise.resolve(null),
@@ -865,6 +878,10 @@ const Dashboard: React.FC = () => {
           : Promise.resolve(null),
       ]);
       setHoursError(sourceFailed);
+      // Assigned from the settled result rather than only ever set to true:
+      // a flag that a failure raises and only the eager pre-await reset clears
+      // can never come down on a successful retry, which skips that reset.
+      setCertificationsError(certificationsFailed);
       // All three are month-to-date, because the card says "My Hours, August"
       // and the total adds them together. Training and administrative hours
       // were previously lifetime figures — so the headline total summed two
@@ -878,13 +895,13 @@ const Dashboard: React.FC = () => {
     } catch {
       // Hours are non-critical
     } finally {
-      setLoadingHours(false);
+      if (!isRetry) setLoadingHours(false);
     }
   };
 
   const loadTrainingProgress = async (isRetry = false) => {
     if (!isRetry) setLoadingTraining(true);
-    setTrainingError(false);
+    if (!isRetry) setTrainingError(false);
     if (!isModuleOn('training')) {
       setEnrollments([]);
       setLoadingTraining(false);
@@ -1473,9 +1490,9 @@ const Dashboard: React.FC = () => {
                       // replaces good data with an unavailable state -- turning
                       // one recoverable failure into several.
                       const retries: Promise<void>[] = [];
-                      if (certificationsError) retries.push(loadHours());
-                      if (seatsError) retries.push(loadMySeats());
-                      if (screeningsError) retries.push(loadMyScreenings());
+                      if (certificationsError) retries.push(loadHours(true));
+                      if (seatsError) retries.push(loadMySeats(true));
+                      if (screeningsError) retries.push(loadMyScreenings(true));
                       void Promise.all(retries);
                     }}
                   />
@@ -1960,7 +1977,7 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Hours could not be fully verified."
                       source="hours"
-                      onRetry={() => void loadHours()}
+                      onRetry={() => void loadHours(true)}
                     />
                   </div>
                 )}

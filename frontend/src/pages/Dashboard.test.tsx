@@ -637,6 +637,135 @@ describe('Dashboard', () => {
     });
   });
 
+  describe('a successful retry clears the failure it was shown for', () => {
+    // The counterpart to "retry preserves what is already known", and the half
+    // that was missing when the preserve rule was first added: moving the
+    // error clear off the eager pre-await path is only correct if the success
+    // path picks it up. Skipping both leaves the banner on screen forever
+    // after the data has actually arrived, which is worse than the bug it
+    // replaced. Every retryable section is listed so a new one cannot be added
+    // with only one half.
+    const cases: {
+      name: string;
+      arm: () => void;
+      region: string;
+      retry: string;
+      banner: string;
+      recovered: () => Promise<HTMLElement>;
+    }[] = [
+      {
+        name: 'schedule (events)',
+        arm: () => {
+          mockGetEvents.mockRejectedValueOnce(new Error('offline')).mockResolvedValue([
+            {
+              id: 'ev1',
+              title: 'Live Fire Drill',
+              event_type: 'training',
+              start_datetime: `${inWindow(3)}T14:00:00Z`,
+              end_datetime: `${inWindow(3)}T17:00:00Z`,
+              requires_rsvp: false,
+              is_mandatory: false,
+              is_cancelled: false,
+            },
+          ]);
+        },
+        region: 'Next 30 Days',
+        retry: 'Retry schedule',
+        banner: 'Some schedule information could not be verified.',
+        recovered: () => screen.findByText('Live Fire Drill'),
+      },
+      {
+        name: 'issued gear',
+        arm: () => {
+          mockGetUserInventory.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({
+            permanent_assignments: [{ id: 'a1' }],
+            active_checkouts: [],
+            issued_items: [],
+          });
+        },
+        region: 'Next 30 Days',
+        retry: 'Retry issued gear',
+        banner: 'Issued gear could not be verified.',
+        recovered: () => screen.findByText('1'),
+      },
+    ];
+
+    cases.forEach(({ name, arm, retry, banner, recovered }) => {
+      it(`clears the ${name} banner once the retry succeeds`, async () => {
+        arm();
+        const user = userEvent.setup();
+        renderWithRouter(<Dashboard />);
+
+        expect(await screen.findByText(banner)).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: retry }));
+
+        await recovered();
+        await waitFor(() => {
+          expect(screen.queryByText(banner)).not.toBeInTheDocument();
+        });
+      });
+    });
+
+    it('clears the hours banner and the stale header total once the retry succeeds', async () => {
+      mockGetMyTraining
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ hours_summary: { total_hours: 4, hours_this_month: 4 }, certifications: [] });
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      expect(await within(card).findByText('Total unavailable')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      // 3 + 2 + 4, now that every attempted source has answered.
+      expect(await within(card).findByText('9')).toBeInTheDocument();
+      expect(within(card).queryByText('Total unavailable')).not.toBeInTheDocument();
+      expect(screen.queryByText('Hours could not be fully verified.')).not.toBeInTheDocument();
+    });
+
+    it('clears the readiness banner once the certification retry succeeds', async () => {
+      // certificationsError is raised inside loadHours' training catch. A flag
+      // that only a failure ever sets, and only the eager pre-await reset ever
+      // clears, can never come down on a retry -- which skips that reset.
+      mockGetMyTraining
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ hours_summary: { total_hours: 1, hours_this_month: 1 }, certifications: [] });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Readiness could not be fully verified.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Retry readiness' }));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Readiness could not be fully verified.')).not.toBeInTheDocument();
+      });
+    });
+
+    it('keeps the stale hours total off the header while the retry is in flight', async () => {
+      // The header reads hoursError directly and never consults loadingHours,
+      // so clearing the flag up front would put the partial sum back as an
+      // exact figure for as long as the retry takes.
+      mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await within(card).findByText('Total unavailable');
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      expect(within(card).getByText('Total unavailable')).toBeInTheDocument();
+      expect(screen.queryByText(/5 hrs in/)).not.toBeInTheDocument();
+    });
+  });
+
   it('names each Retry control by the source it retries', async () => {
     // Several of these render together when the dashboard is half-broken, and
     // a screen reader reads only the button's own name.
