@@ -118,6 +118,79 @@ def _dedup_position_key(
     return effective_position
 
 
+def _effective_voting_method(
+    election: "Election", item: Optional[Dict]
+) -> Optional[str]:
+    """The voting method that actually governs one vote's dedup discriminator.
+
+    A ballot item may override the election-level voting method
+    (``BallotItemInput.voting_method`` — see ``submit_ballot_with_token``,
+    which already resolves this override to decide which submission forms
+    it accepts). Both vote-submission routes must resolve the SAME override
+    when picking the dedup-hash discriminator (``_dedup_discriminator``), or
+    an item overriding e.g. a ``simple_majority`` election to ``approval``
+    hashes differently depending on which route cast the vote — one route
+    keys off the item, the other off the raw election column — and the
+    UNIQUE constraint on ``vote_dedup_hash`` stops being able to catch two
+    routes racing on the same logical vote (Codex round 9, ELEC-37).
+    Mirrors why ``_dedup_position_key`` exists for the position component.
+
+    ``item=None`` (a plain positional candidate, or a caller that does not
+    resolve a matching ballot item) falls back to the election's own
+    method — unchanged behavior for those callers.
+    """
+    if item is not None:
+        override = item.get("voting_method")
+        if override:
+            return override
+    return election.voting_method
+
+
+def _dedup_scoped_item_aliases(item: Dict, all_items: List[Dict]) -> Set[str]:
+    """The alias subset of ``ballot_item_candidate_positions(item)`` that is
+    safe to use when scanning *stored votes* for a prior vote on this item
+    (ELEC-38).
+
+    The schema enforces only unique item **ids** — nothing stops one item's
+    title from equaling a different item's id (or explicit position
+    override), so ``ballot_item_candidate_positions``' title/id fallback for
+    a legacy item can, on that collision, also match a genuinely different
+    item's votes. That broad match is what candidate lookups need (a real
+    legacy candidate can only be found by title, and narrowing there would
+    empty a legitimate item's candidate list — see
+    ``ballot_item_candidate_positions``'s own docstring), but it is a false
+    positive for duplicate-vote detection, which only has to decide whether
+    THIS submission would be a re-vote. Under-matching there is safe: new
+    votes for a legacy item are always hashed against the item's own id via
+    ``_dedup_position_key``/the bulk route's canonical ``position`` value,
+    never its title, so the database's ``vote_dedup_hash`` UNIQUE
+    constraint still catches a genuine duplicate on this item even when an
+    alias was dropped here to avoid colliding with a sibling item.
+
+    An item's own id is never dropped — ids are unique per election
+    (``unique_item_ids``), so it can never collide with anything. A
+    fallback alias (the title, for a legacy item) is dropped only when some
+    OTHER item in the same election already claims that exact string as its
+    own id or explicit position override — that other item is the
+    unambiguous owner of votes stored under it.
+    """
+    aliases = ballot_item_candidate_positions(item)
+    if item.get("position"):
+        # Explicit position — this item's one alias, never ambiguous.
+        return aliases
+    item_id = item.get("id")
+    other_canonical_keys = {
+        (other.get("position") or other.get("id"))
+        for other in all_items
+        if other.get("id") != item_id
+    }
+    return {
+        alias
+        for alias in aliases
+        if alias == item_id or alias not in other_canonical_keys
+    }
+
+
 def _token_eligibility_error(
     voting_token: "VotingToken",
     election: "Election",
@@ -1664,15 +1737,27 @@ class ElectionService:
 
     @staticmethod
     def _dedup_discriminator(
-        election: Election, candidate_id, vote_rank: Optional[int]
+        election: Election,
+        candidate_id,
+        vote_rank: Optional[int],
+        item: Optional[Dict] = None,
     ) -> str:
-        """Pick the dedup-hash discriminator for this election's voting method."""
-        if election.voting_method == "ranked_choice":
+        """Pick the dedup-hash discriminator for this vote's *effective*
+        voting method (ELEC-37) — the matched ballot item's override if it
+        has one, else the election's. ``item`` defaults to ``None`` (the
+        election-only resolution) for callers that don't yet resolve a
+        matching ballot item (``cast_vote``, ``cast_proxy_vote``); pass the
+        matched item wherever one is available so an item-level override is
+        honored consistently — see ``_effective_voting_method``.
+
+        ``max_votes_per_position`` has no item-level override in the
+        schema, so it is always read from the election regardless of
+        ``item``.
+        """
+        method = _effective_voting_method(election, item)
+        if method == "ranked_choice":
             return f"rank:{vote_rank}"
-        if (
-            election.voting_method == "approval"
-            or (election.max_votes_per_position or 1) > 1
-        ):
+        if method == "approval" or (election.max_votes_per_position or 1) > 1:
             return f"cand:{candidate_id}"
         return ""
 
@@ -7642,8 +7727,14 @@ Best regards,
         # same voter cast one vote through each (Codex round 7, ELEC-34).
         # Compare against every alias this item's candidates can be keyed
         # under, not just the one this call resolved.
+        # Scoped, not the raw alias set: a legacy item's title can equal a
+        # different item's id/explicit position (ELEC-38), and this route's
+        # own duplicate/limit checks below key off `position_votes` alone —
+        # unlike the bulk route, there is no separate candidate-ownership
+        # use of this alias set to preserve, so it is safe to narrow here
+        # too (see _dedup_scoped_item_aliases).
         position_aliases = (
-            ballot_item_candidate_positions(matching_item)
+            _dedup_scoped_item_aliases(matching_item, election.ballot_items or [])
             if matching_item is not None
             else ({effective_position} if effective_position else set())
         )
@@ -7721,7 +7812,7 @@ Best regards,
                 dedup_voter,
                 _dedup_position_key(matching_item, effective_position),
                 discriminator=self._dedup_discriminator(
-                    election, candidate_id, vote_rank
+                    election, candidate_id, vote_rank, item=matching_item
                 ),
             ),
         )
@@ -8041,9 +8132,22 @@ Best regards,
             # via candidate.position) — depending on which route cast them.
             # Matching only `position` missed a prior vote cast through the
             # other route, letting the same voter cast one vote through each
-            # (Codex round 7, ELEC-34). `item_candidate_positions` is
-            # already the full alias set computed above; use it here too
-            # instead of the single literal.
+            # (Codex round 7, ELEC-34).
+            #
+            # For THIS check specifically (not candidate ownership above),
+            # use the collision-scoped alias set rather than the full one:
+            # the schema enforces only unique item ids, so a legacy item's
+            # title fallback can equal a DIFFERENT item's id, and matching
+            # on the raw alias would treat that other item's already-stored
+            # vote as a duplicate of this one (Codex round 9, ELEC-38).
+            # Dropping a colliding fallback alias here is safe — new votes
+            # for a legacy item are always dedup-hashed against its own
+            # canonical id, never its title, so the UNIQUE constraint on
+            # vote_dedup_hash still catches a genuine repeat on this exact
+            # item even when this pre-check no longer does.
+            dedup_check_positions = _dedup_scoped_item_aliases(
+                ballot_item, ballot_items
+            )
             existing_check = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election.id)
@@ -8051,13 +8155,13 @@ Best regards,
                 .where(Vote.is_test == voting_token.is_test)
                 .where(
                     or_(
-                        Vote.position.in_(item_candidate_positions),
+                        Vote.position.in_(dedup_check_positions),
                         and_(
                             Vote.position.is_(None),
                             Vote.candidate_id.in_(
                                 select(Candidate.id)
                                 .where(Candidate.election_id == election.id)
-                                .where(Candidate.position.in_(item_candidate_positions))
+                                .where(Candidate.position.in_(dedup_check_positions))
                             ),
                         ),
                     )

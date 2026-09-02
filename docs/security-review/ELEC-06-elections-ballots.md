@@ -1459,6 +1459,191 @@ New guard tests: `tests/test_election_codex_round8.py` (new file, 3
 tests, `TestMultiCollisionRequiresEligibilityForEveryColludingPosition` —
 both bypass directions plus a sanity check against over-rejection).
 
+### ELEC-37 — P1 — `cast_vote_with_token`'s dedup-hash discriminator ignored a ballot item's voting-method override — ✅ FIXED
+
+**What:** `election_service.py:1666-1690` (pre-fix) — `_dedup_discriminator()`
+picked the dedup-hash discriminator suffix (`""`, `f"rank:{n}"`, or
+`f"cand:{id}"`) purely from `election.voting_method` /
+`election.max_votes_per_position`. `submit_ballot_with_token`
+(`election_service.py:8109-8110` at the reported commit) already resolves a
+ballot item's own override first —
+`effective_method = ballot_item.get("voting_method") or election.voting_method`
+— because `BallotItemInput.voting_method` lets one item legitimately run
+under a different method than the election's own column.
+`cast_vote_with_token` (`election_service.py:7722-7726` at the reported
+commit) called `_dedup_discriminator(election, candidate_id, vote_rank)`
+with no item, so for an item overriding e.g. a `simple_majority` election
+to `approval`, the bulk route computed `f"cand:{candidate_id}"` and the
+single-vote route computed `""` for the identical logical vote.
+
+**Impact:** `vote_dedup_hash = SHA256(election_id:voter:position:discriminator)`
+is the database-level UNIQUE-constraint backstop the code's own comments
+cite as catching a double-vote race that bypasses the pre-insert SELECT
+(`"SECURITY: Database-level unique constraint on vote_dedup_hash prevents
+double-voting even if race condition bypasses application checks"`). Two
+tokens for the same voter racing on the same overridden item through the
+two different routes hashed to two different values, so the UNIQUE
+constraint had nothing to collide against and both inserts could commit —
+the exact race the backstop exists to catch.
+
+**Verified reachable:** confirmed by reading both routes' actual
+discriminator computation (not the paraphrase) — `submit_ballot_with_token`
+resolves the item override inline before dispatching to its
+`rankings`/`candidate_ids`/single-choice branches, while
+`_dedup_discriminator` had no `item` parameter to resolve one at all.
+`BallotItemInput.voting_method` (`schemas/election.py`) is a genuine,
+validated per-item override (`VALID_VOTING_METHODS`), not a legacy-only
+field.
+
+**Fix:** added `_effective_voting_method(election, item)` (mirroring
+`_dedup_position_key`'s precedent for the position component) and gave
+`_dedup_discriminator` an optional `item` parameter that resolves through
+it; `cast_vote_with_token` now passes its already-resolved `matching_item`.
+`max_votes_per_position` has no item-level override in the schema, so it is
+still read from the election unconditionally. `item=None` (the default)
+preserves prior behavior for `cast_vote` and `cast_proxy_vote`, neither of
+which resolves a matching ballot item today — those two authenticated (non-
+token) routes don't support per-item voting-method overrides in their
+duplicate-check business logic either, which is a separate, pre-existing
+gap outside what this finding reported; noted here rather than expanded
+into scope this round.
+
+**TOCTOU angle (raised alongside this finding, not a fresh instance):**
+Codex also flagged that `get_ballot_by_token` reads the election before
+`_lock_token_ballot_for_submission`'s `with_for_update()` lock, so the
+duplicate-check SELECT could run against a stale REPEATABLE READ snapshot.
+Traced this against `_lock_token_ballot_for_submission`'s own docstring
+(already applies the `with_for_update()` + `populate_existing=True` fix
+this exact staleness class needs, per the `quorum_service.py` precedent it
+cites) and against the duplicate-check SELECT itself
+(`election_service.py`, both routes): the SELECT is a plain (non-locking)
+read and can indeed still answer from a snapshot older than a just-released
+competing lock — but unlike the capacity-check class this repo's own
+`CLAUDE.md` documents (pitfall #27, where a stale count IS the entire
+enforcement), this pre-check is not the enforcement boundary. InnoDB checks
+a UNIQUE index against the latest committed state at INSERT time
+regardless of the inserting transaction's REPEATABLE READ snapshot — that
+is what makes `vote_dedup_hash`'s constraint a valid backstop at all. A
+stale pre-check can at worst let a doomed second INSERT reach the database
+before failing with `IntegrityError` (already handled — see both routes'
+`except IntegrityError` blocks), trading a friendlier "already voted"
+message for a generic one; it does not admit a second row. Not a fresh
+instance of the ELEC-17/24 staleness class and not fixed this round —
+flagged here so the reasoning is on record rather than re-litigated next
+pass.
+
+New regression tests in `tests/test_election_codex_round9.py`
+(`TestDedupDiscriminatorHonorsItemVotingMethodOverride`, 4 tests) —
+confirmed the module fails to import pre-fix (`_dedup_scoped_item_aliases`,
+added for ELEC-38 below, doesn't exist yet) via `git stash`; the two
+discriminator-matching tests independently reproduce the pre-fix mismatch
+by construction (`_dedup_discriminator` without an `item` argument returns
+`""` for this election/item pair, not `"cand:<id>"`).
+
+### ELEC-38 — P2 — The ELEC-34 duplicate-check alias broadening could match a different ballot item's vote when one item's title equals another's id — ✅ FIXED
+
+**What:** `ballot_item_candidate_positions()` matches a legacy item (no
+explicit `position` field) by its `title` **or** `id` — necessary so a real
+legacy candidate keyed under either convention is still found (see the
+function's own docstring; narrowing it outright would silently empty a
+legitimate item's candidate list, exactly the regression ELEC-34 avoided
+reintroducing). ELEC-34 (round 7) widened both routes' duplicate-vote
+pre-check to scan for this full alias set so a prior vote stored under
+either alias registers as "already voted on this item." But
+`BallotItemInput`'s schema (`schemas/election.py`) enforces only
+**unique ids** across an election's ballot items (`unique_item_ids`) —
+nothing stops a _different_ item's `title` (or explicit `position`
+override) from equaling this item's `id`, or vice versa. On that
+collision, the broadened alias set for one item also matches a
+completely different item's already-stored vote.
+
+**Impact:** item `{"id": "budget", "title": "Budget Approval"}` voted on
+first — stored `Vote.position = "budget"` (its own canonical id, per the
+bulk route's write convention). A second, distinct item `{"id":
+"officer", "title": "budget"}` in the SAME election (its title happens to
+equal the first item's id) is then processed: `ballot_item_candidate_positions()`
+for `officer` returns `{"officer", "budget"}`, and the duplicate-check
+SELECT (`Vote.position.in_(...)`, autoflushed against the just-created
+first vote within the same bulk submission) matches the first item's
+vote purely on the string `"budget"` — rejecting a legitimate, entirely
+separate vote on `officer` as though the voter had already voted on it.
+Reproduced exactly as described through both `submit_ballot_with_token`
+(single call covering both items) and `cast_vote_with_token` (two
+sequential calls, second one incorrectly blocked).
+
+**Verified reachable:** read the actual duplicate-check query/logic in
+both routes and confirmed it matches on alias-string overlap alone, with
+no join back to a stored item identity. Checked whether `Vote` (or
+`Candidate`) carries enough information to fully disambiguate two items
+that collide this way: **it does not** — `Vote` has no `ballot_item_id`
+column, only `position` (a string) and `candidate_id`; `Candidate.position`
+carries the exact same ambiguity a candidate's own row can't resolve,
+since which item a candidate was originally created "for" is not
+persisted anywhere once its position string is stored. Full disambiguation
+of "which item does this stored candidate/vote row belong to" when two
+items collide on an alias would need a schema change (e.g., an explicit
+`ballot_item_id` column on `Candidate` and/or `Vote`) — flagged as a
+**known limitation**, not fixed this round (see `docs/KNOWN_LIMITATIONS.md`).
+
+That said, the specific bug reported — the duplicate-vote _pre-check_
+producing a false-positive rejection — **is** fixable in application logic
+alone, because it only needs to decide "would this read as a re-vote,"
+where under-matching is safe: a genuine repeat vote on a legacy item is
+always dedup-hashed against that item's own canonical id (`_dedup_position_key`
+/ the bulk route's canonical `position` value), never its title, so
+`vote_dedup_hash`'s UNIQUE constraint still catches an actual duplicate on
+that exact item even after a colliding alias is dropped from this
+pre-check. Over-matching (this bug) has no such backstop — it fails a
+legitimate vote outright — so the fix only had to narrow, never widen.
+
+**Fix:** added `_dedup_scoped_item_aliases(item, all_items)`: returns
+`ballot_item_candidate_positions(item)` with a fallback (title) alias
+dropped whenever some OTHER item in the same election already claims that
+exact string as its own id or explicit `position` override — the item's
+own id is never dropped (ids are unique per election, so it can never
+collide). Used **only** at the two duplicate-check call sites
+(`submit_ballot_with_token`'s `existing_check` query, and
+`cast_vote_with_token`'s `position_aliases`) — the broader, unscoped
+`ballot_item_candidate_positions()` alias set is deliberately left
+untouched everywhere it decides candidate ownership/eligibility (e.g.
+`item_candidate_positions` in `submit_ballot_with_token`, still used for
+validating `choice`/`candidate_ids`/`rankings` belong to the right item),
+since narrowing candidate-ownership matching is exactly the regression the
+function's own docstring warns against.
+
+New regression tests in `tests/test_election_codex_round9.py`
+(`TestDuplicateCheckDoesNotCollideAcrossDistinctItems`, 3 tests, and
+`TestDedupScopedItemAliasesHelper`, 4 unit tests) — confirmed the module
+fails to import pre-fix via `git stash` (the helper doesn't exist yet); the
+end-to-end tests independently reproduce the exact reported rejection
+(`"You have already voted on: budget"` / `"already voted"`) against
+pre-fix logic by construction. A sanity test confirms a genuine repeat
+vote on the same item is still rejected after the narrowing.
+
+**Completion gate (pass 3, after round 9, ELEC-37/38):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 508 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round9.py -q`              | ✅ 11 passed, 0 failed                                                    |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9828 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round9.py` (new file, 11
+tests — 4 for ELEC-37, 3 end-to-end + 4 unit for ELEC-38).
+
+**Known limitation flagged this round:** two ballot items whose alias sets
+collide (one item's title equals another's id or explicit position) cannot
+be fully disambiguated for candidate/vote _ownership_ purposes without a
+schema change — see `docs/KNOWN_LIMITATIONS.md`. The duplicate-vote
+false-positive this collision caused is fixed (ELEC-38); a candidate
+mis-attribution in this same colliding scenario is not, and was not part
+of what was reported this round.
+
 ---
 
 ## Pass 2 (2026-08-27)

@@ -19,10 +19,74 @@ feature. The rotation cannot outrun its own review queue.
 [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (Feature 06,
 Elections & ballots, pass 3, round 7 only — round 7's predecessor, #2162,
 merged mid-task before round 7's fix was ready; see the PR-split note
-below) — 20 fixed, 3 flagged across eight Codex review rounds, 1
+below) — 22 fixed, 4 flagged across nine Codex review rounds, 1
 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 9) — 2 more fixed (ELEC-37, ELEC-38) — PR #2173
+
+Codex posted 2 findings against commit `8a989764c` (round 8's own fix
+commit), both about gaps in the ELEC-34 vote-deduplication mechanism.
+
+- **ELEC-37 (P1, fixed):** `cast_vote_with_token`'s dedup-hash
+  discriminator (`_dedup_discriminator`) resolved the vote's method purely
+  from `election.voting_method`, ignoring a ballot item's own
+  `voting_method` override — which `submit_ballot_with_token` already
+  resolves inline for the same purpose. An item overriding e.g. a
+  `simple_majority` election to `approval` produced `f"cand:{id}"` from the
+  bulk route and `""` from the single-vote route for the identical vote, so
+  the `vote_dedup_hash` UNIQUE constraint (the documented backstop for a
+  race that bypasses the pre-insert duplicate check) could no longer catch
+  two tokens racing on the same item through the two different routes.
+  Fixed by adding `_effective_voting_method(election, item)` (mirroring the
+  existing `_dedup_position_key` precedent for the position component) and
+  threading the matched ballot item through `_dedup_discriminator` in
+  `cast_vote_with_token`. A related TOCTOU note (the duplicate-check SELECT
+  reads before the token/election row lock refreshes the snapshot) was
+  traced and found already covered: InnoDB checks a UNIQUE index against
+  the latest committed row at INSERT time regardless of the inserting
+  transaction's snapshot, so the actual backstop is unaffected by the
+  pre-check's staleness — not a fresh instance of the ELEC-17/24 class, and
+  not changed this round; reasoning recorded in the full write-up.
+- **ELEC-38 (P2, fixed):** `ballot_item_candidate_positions()`'s title/id
+  fallback (needed so a legacy candidate stored under either alias is still
+  found) let the ELEC-34 duplicate-vote pre-check in both routes match a
+  _different_ ballot item's already-stored vote whenever one item's title
+  happened to equal another item's id — the schema enforces only unique
+  item ids, not title-vs-id uniqueness across items. Reproduced exactly as
+  reported: voting on item `{id: "budget", ...}` then item `{id: "officer",
+title: "budget", ...}` in the same bulk submission got the second vote
+  rejected as a duplicate of the first. Checked whether `Vote`/`Candidate`
+  already carry enough information to fully disambiguate two colliding
+  items — they do not (no `ballot_item_id` column on either; `Candidate.position`
+  carries the identical ambiguity) — so full candidate/vote _ownership_
+  disambiguation on a collision is flagged as a known limitation requiring
+  a schema change (`docs/KNOWN_LIMITATIONS.md`), not forced as an
+  application-only fix. The narrower, reported bug (false-positive
+  duplicate rejection) _is_ fixable without a schema change, because
+  under-matching in a duplicate pre-check is safe (a genuine repeat vote is
+  always dedup-hashed against the item's own canonical id, never its
+  title, so the UNIQUE constraint still catches it) while over-matching
+  (this bug) is not. Fixed by adding `_dedup_scoped_item_aliases(item,
+all_items)`, used only at the two duplicate-check call sites — the
+  broader alias set is left untouched everywhere it decides candidate
+  ownership/eligibility, to avoid the exact regression the original
+  function's docstring warns against.
+
+New regression tests in `tests/test_election_codex_round9.py` (new file,
+11 tests: 4 for ELEC-37, 3 end-to-end + 4 unit for ELEC-38), confirmed to
+fail pre-fix via `git stash` (the module fails to import — the helper
+functions it exercises don't exist pre-fix). Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged, no migration this round); scoped
+suite (`-k "election or ballot or vote or quorum"`) 508 passed/1 skipped
+(pre-existing)/0 failed; full backend suite 9828 passed/21 skipped
+(pre-existing/environmental)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. Both review threads replied to and resolved on
+#2173. See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-37/38)
+for the full write-up. Rotation row 06 remains ⏳ (awaiting PR #2173
+merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 8) — 1 more fixed (ELEC-36) — PR #2173
 

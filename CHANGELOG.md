@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A double vote on an unusually-configured contest could slip past the database's own safety net, and a legitimate vote could be wrongly rejected as a duplicate of an unrelated contest (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing several selections on one contest
+  while the rest of the ballot allows only one), **the database's own
+  safety-net check for a near-simultaneous double vote no longer
+  recognized two vote attempts on that contest as the same vote** when
+  they arrived through the single-vote link and the full-ballot link at
+  (or near) the same moment — even though every other duplicate-vote
+  protection in the system treats them as identical. Fixed so both routes
+  compute the same internal fingerprint for that contest, restoring the
+  safety net.
+- **A legitimate vote on one contest could be wrongly rejected as a
+  duplicate of a completely different contest,** when one contest's
+  displayed title happened to be identical to another contest's internal
+  identifier. Fixed so the duplicate check no longer confuses two distinct
+  contests that merely share a name this way.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-37, ELEC-38).
+
 ### A colliding position name could bypass eligibility on the full-ballot submission route, and a legacy contest's votes could be double-counted across routes (2026-09-02)
 
 **Fixed**
