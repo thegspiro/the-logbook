@@ -16,12 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-(this PR) (Feature 09, Medical screening, pass 3) — 2 fixed, 1 flagged. See
-the Log below for detail.
+[#2180](https://github.com/thegspiro/the-logbook/pull/2180) (Feature 09,
+Medical screening, pass 3) — 2 fixed, 1 flagged. See the Log below for
+detail.
 
 ---
 
-### 2026-09-02 — Feature 09 (Medical screening, pass 3) — 2 fixed, 1 flagged
+### 2026-09-02 — Feature 09 (Medical screening, pass 3) — 2 fixed, 1 flagged — PR #2180
 
 Byte-identical diff since pass 2's merge (`a14bf441`, PR #1952) across all
 four declared backend files and the whole `modules/medical-screening/`
