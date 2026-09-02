@@ -8,6 +8,7 @@ visibility, and the allowed-roles restriction, plus the permission/role
 collection helpers. Pure logic; no DB.
 """
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,7 +21,7 @@ from app.api.v1.endpoints.documents import (
     download_document,
 )
 from app.models.document import Document, DocumentFolder, FolderVisibility
-from app.models.user import Organization
+from app.models.user import Organization, User
 from app.services.documents_service import (
     DocumentsService,
     _get_user_permissions,
@@ -338,6 +339,145 @@ class TestAccessibleFolderIds:
         # Open org folder + own owner folder only; not leadership, others', or
         # the officer-restricted folder.
         assert ids == {"f-org", "f-mine"}
+
+    async def test_accessible_child_is_hidden_beneath_inaccessible_ancestor(self):
+        svc = _svc()
+        folders = [
+            _folder(FolderVisibility.LEADERSHIP, fid="parent"),
+            _folder(
+                FolderVisibility.ORGANIZATION,
+                fid="child",
+                parent_id="parent",
+            ),
+        ]
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = folders
+        svc.db.execute = AsyncMock(return_value=result)
+
+        member = _user(roles=[([], "member")])
+        assert await svc.accessible_folder_ids("org-1", member) == set()
+
+
+@pytest.mark.integration
+class TestDocumentsSummaryAccess:
+    """Summary cards must describe the same rows the caller can browse."""
+
+    async def test_summary_matches_each_caller_access_scope(self, db_session):
+        org = Organization(name="Summary VFD", slug="documents-summary-access")
+        db_session.add(org)
+        await db_session.flush()
+
+        owner = User(
+            organization_id=org.id,
+            username="summary-owner",
+            email="summary-owner@example.com",
+        )
+        db_session.add(owner)
+        await db_session.flush()
+        owner_id = owner.id
+        folders = {
+            "open": DocumentFolder(organization_id=org.id, name="Open"),
+            "role": DocumentFolder(
+                organization_id=org.id,
+                name="Officers",
+                allowed_roles=["officer"],
+            ),
+            "owner": DocumentFolder(
+                organization_id=org.id,
+                name="Personal",
+                visibility=FolderVisibility.OWNER,
+                owner_user_id=owner_id,
+            ),
+            "sensitive": DocumentFolder(
+                organization_id=org.id,
+                name="Sensitive",
+                required_permissions=["facilities.view_sensitive"],
+            ),
+            "leadership": DocumentFolder(
+                organization_id=org.id,
+                name="Leadership",
+                visibility=FolderVisibility.LEADERSHIP,
+            ),
+        }
+        db_session.add_all(folders.values())
+        await db_session.flush()
+        folders["nested"] = DocumentFolder(
+            organization_id=org.id,
+            name="Nested open child",
+            parent_id=folders["leadership"].id,
+        )
+        db_session.add(folders["nested"])
+        await db_session.flush()
+
+        current = datetime.now(timezone.utc)
+        old = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        documents = [
+            Document(
+                organization_id=org.id,
+                folder_id=folders[key].id,
+                name=key,
+                file_size=size,
+                created_at=old if key == "owner" else current,
+            )
+            for key, size in [
+                ("open", 10),
+                ("role", 20),
+                ("owner", 30),
+                ("sensitive", 40),
+                ("leadership", 50),
+                ("nested", 60),
+            ]
+        ]
+        documents.extend(
+            [
+                Document(
+                    organization_id=org.id,
+                    name="Organization level",
+                    file_size=5,
+                    created_at=current,
+                ),
+                Document(
+                    organization_id=org.id,
+                    folder_id=folders["open"].id,
+                    name="Archived",
+                    file_size=100,
+                    status="archived",
+                    created_at=current,
+                ),
+            ]
+        )
+        db_session.add_all(documents)
+        await db_session.flush()
+
+        callers = [
+            (_user(roles=[([], "member")]), (2, 1, 15, 2)),
+            (_user(uid=owner_id, roles=[([], "member")]), (3, 2, 45, 2)),
+            (_user(roles=[([], "officer")]), (3, 2, 35, 3)),
+            (
+                _user(roles=[(["facilities.view_sensitive"], "facility-reader")]),
+                (3, 2, 55, 3),
+            ),
+            (
+                _user(roles=[(["documents.manage"], "leadership")]),
+                (6, 5, 175, 5),
+            ),
+        ]
+
+        service = DocumentsService(db_session)
+        for caller, expected in callers:
+            accessible_ids = await service.accessible_folder_ids(org.id, caller)
+            browsable, browsable_total = await service.get_documents(
+                org.id, accessible_folder_ids=accessible_ids, limit=100
+            )
+            summary = await service.get_summary(org.id, caller)
+
+            assert len(browsable) == browsable_total == expected[0]
+            assert summary == {
+                "total_documents": expected[0],
+                "total_folders": expected[1],
+                "total_size_bytes": expected[2],
+                "documents_this_month": expected[3],
+            }
 
 
 class TestAttachDocumentNames:
