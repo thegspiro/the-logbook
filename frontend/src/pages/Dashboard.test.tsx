@@ -1123,6 +1123,143 @@ describe('Dashboard', () => {
 
       await waitFor(() => expect(retry).not.toBeDisabled());
     });
+
+    it('stays pressable while only one of the sources it covers is running', async () => {
+      // A control covering more than one source was disabled the moment any
+      // one of them was in flight, so a slow retry of one blocked recovery of
+      // the other. Pressing it is safe: the busy half is joined, the idle half
+      // is the only one that starts.
+      let releaseShifts: ((value: { shifts: ShiftRecord[]; total: number }) => void) | undefined;
+      mockGetMyShifts
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockImplementationOnce(
+          () => new Promise<{ shifts: ShiftRecord[]; total: number }>((resolve) => (releaseShifts = resolve))
+        );
+      mockGetOpenShifts.mockRejectedValue(new Error('offline'));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Some schedule information could not be verified.');
+      const retry = screen.getByRole('button', { name: 'Retry schedule' });
+      await user.click(retry);
+
+      // myShifts is hanging; openShifts settled and failed again, so it is
+      // idle and still broken. The control must remain usable for it.
+      await waitFor(() => expect(retry).not.toBeDisabled());
+
+      const openCallsBefore = mockGetOpenShifts.mock.calls.length;
+      const myCallsBefore = mockGetMyShifts.mock.calls.length;
+      await user.click(retry);
+
+      await waitFor(() => {
+        expect(mockGetOpenShifts.mock.calls.length).toBeGreaterThan(openCallsBefore);
+      });
+      // The hanging half is joined, not reissued.
+      expect(mockGetMyShifts.mock.calls.length).toBe(myCallsBefore);
+      expect(releaseShifts).toBeDefined();
+    });
+
+    it('queues the post-RSVP events read behind an older one', async () => {
+      // handleEventRSVP writes the server-confirmed status into one row. An
+      // events read that started before the mutation still replaces the whole
+      // array when it lands, taking that status with it -- so the row offers
+      // RSVP buttons again until something else refreshes. The post-mutation
+      // read is queued behind it, like the signup path's.
+      const rsvpEvent = {
+        id: 'evt-1',
+        title: 'Ladder Ops Drill',
+        event_type: 'training',
+        start_datetime: `${inWindow(3)}T14:00:00Z`,
+        end_datetime: `${inWindow(3)}T17:00:00Z`,
+        requires_rsvp: true,
+        is_mandatory: false,
+        is_cancelled: false,
+      };
+      mockGetEvents.mockResolvedValue([rsvpEvent]);
+      mockCreateOrUpdateRSVP.mockResolvedValue({ status: 'going' });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+      await screen.findByRole('button', { name: /^going$/i });
+
+      // Leave an older events read in flight.
+      let releaseOlder: ((value: unknown[]) => void) | undefined;
+      mockGetEvents.mockImplementationOnce(() => new Promise<unknown[]>((resolve) => (releaseOlder = resolve)));
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(releaseOlder).toBeDefined(), { timeout: 5000 });
+      const callsBefore = mockGetEvents.mock.calls.length;
+
+      await user.click(screen.getByRole('button', { name: /^going$/i }));
+      await waitFor(() => expect(mockCreateOrUpdateRSVP).toHaveBeenCalled());
+
+      // Queued, not racing.
+      expect(mockGetEvents.mock.calls.length).toBe(callsBefore);
+
+      await act(async () => {
+        releaseOlder?.([rsvpEvent]);
+        await Promise.resolve();
+      });
+
+      // Once the older read settles, the post-RSVP read runs and lands last.
+      await waitFor(() => {
+        expect(mockGetEvents.mock.calls.length).toBeGreaterThan(callsBefore);
+      });
+    });
+
+    it('joins a pull-to-refresh to a first load still in flight', async () => {
+      // Unregistered, the first load let a gesture start a second request for
+      // the same source; if the older one settled last it restored its result
+      // over the newer one.
+      let releaseInitial: ((value: ShiftRecord[]) => void) | undefined;
+      mockGetOpenShifts
+        .mockImplementationOnce(() => new Promise<ShiftRecord[]>((resolve) => (releaseInitial = resolve)))
+        .mockResolvedValue([]);
+
+      renderWithRouter(<Dashboard />);
+      await waitFor(() => expect(releaseInitial).toBeDefined(), { timeout: 5000 });
+      const callsBefore = mockGetOpenShifts.mock.calls.length;
+
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      expect(mockGetOpenShifts.mock.calls.length).toBe(callsBefore);
+    });
+
+    it('retries a message half that failed after an earlier press', async () => {
+      // The Updates retry must read the error state current at the press. An
+      // outer key over both halves coalesced on the first press's snapshot, so
+      // a second press returned that promise and the half which had failed
+      // since was never retried.
+      mockGetInbox.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Updates could not be fully verified.');
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+
+      // The unread count breaks while that inbox retry is still hanging.
+      mockGetUnreadCount.mockRejectedValue(new Error('offline'));
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(mockGetUnreadCount).toHaveBeenCalledTimes(2));
+      const unreadCallsBefore = mockGetUnreadCount.mock.calls.length;
+
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+
+      await waitFor(() => {
+        expect(mockGetUnreadCount.mock.calls.length).toBeGreaterThan(unreadCallsBefore);
+      });
+    });
   });
 
   it('names each Retry control by the source it retries', async () => {
