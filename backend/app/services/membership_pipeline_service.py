@@ -4681,15 +4681,47 @@ class MembershipPipelineService:
                 "was made. Refresh the applicant and try again."
             )
 
-        # Fallback for when the prospect's current step isn't an
-        # election_vote step in the governing pipeline — e.g. a package
-        # requested after the applicant already advanced past the vote
-        # stage, or a caller-supplied pipeline_id override with no matching
-        # current step. Preserves the pass-4 behavior (and is exact whenever
-        # a pipeline has only one election_vote step, the overwhelmingly
+        # MP-08 pass 4 round 4 (Codex): before guessing by sort_order, prefer
+        # a caller-supplied step_id if it names an election_vote step of
+        # this exact pipeline — a check not performed above. MP-5 already
+        # confirmed step_id belongs to the pipeline; it never checked
+        # step_type, so the guess below used to discard that validated
+        # information even when it was the one signal actually naming the
+        # stage this package is for. This matters for the same race MP-24
+        # guards on the current_step-governed side: advanceApplicant (the
+        # only frontend caller) sends step_id as the election_vote stage the
+        # applicant just entered, and if a second advance moves current_step
+        # past every election_vote stage before this request lands, the old
+        # fallback discarded that step_id and guessed whichever
+        # election_vote step sorts first — which can be an earlier, more
+        # permissive stage than the one the applicant, and this request,
+        # actually just passed through. A step_id naming a real, in-pipeline
+        # step of the *wrong* type (the pass-4 "wrong step_id" case) is left
+        # alone here and still falls through to the guess below — this only
+        # trusts step_id once it is confirmed to be an election_vote step,
+        # never merely because MP-5 accepted it as *some* step of the
+        # pipeline.
+        if election_step is None and step_id is not None:
+            named_step = next(
+                (s for s in effective_steps if str(s.id) == str(step_id)),
+                None,
+            )
+            if (
+                named_step is not None
+                and named_step.step_type == PipelineStepType.ELECTION_VOTE
+            ):
+                election_step = named_step
+
+        # Fallback for when neither the prospect's current step nor a
+        # type-checked step_id identifies an election_vote step in the
+        # governing pipeline — e.g. a package requested with step_id omitted
+        # after the applicant already advanced past every vote stage, or a
+        # caller-supplied pipeline_id override with no matching current step
+        # or step_id. Preserves the pass-4 behavior (and is exact whenever a
+        # pipeline has only one election_vote step, the overwhelmingly
         # common case); a pipeline with several such steps and no current
-        # match here remains ambiguous — see docs/security-review/MP-08-
-        # membership-pipeline.md.
+        # step or step_id match here remains ambiguous — see
+        # docs/security-review/MP-08-membership-pipeline.md.
         if election_step is None:
             election_step = next(
                 (

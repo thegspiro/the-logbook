@@ -17,17 +17,72 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (Feature 08,
-Membership pipeline, pass 4 + pass 4 round 2 + pass 4 round 3) — #2176 (pass
-3's Codex-fix commit) merged mid-investigation of a 4th round of Codex
-findings against that same commit. Per CLAUDE.md Pitfall #24 (never reuse a
-merged PR's branch — see #2173's identical precedent against #2162 in the
-elections feature), pass 4 landed as a fresh branch off `main` and this new
-PR rather than a push to the now-closed
+Membership pipeline, pass 4 + pass 4 round 2 + pass 4 round 3 + pass 4 round 4) — #2176 (pass 3's Codex-fix commit) merged mid-investigation of a 4th
+round of Codex findings against that same commit. Per CLAUDE.md Pitfall #24
+(never reuse a merged PR's branch — see #2173's identical precedent against
+#2162 in the elections feature), pass 4 landed as a fresh branch off `main`
+and this new PR rather than a push to the now-closed
 `claude/security-review-membership-pipeline` branch. Pass 4: 3 fixed, 1
 flagged. Pass 4 round 2 (Codex reviewing pass 4's own fix commit): 1 more
 fixed. Pass 4 round 3 (Codex reviewing round 2's fix commit): 1 more fixed,
-1 refuted (claimed deadlock does not reproduce against the actual code). See
-the Log below for detail.
+1 refuted (claimed deadlock does not reproduce against the actual code).
+Pass 4 round 4 (Codex reviewing round 3's fix commit): 1 more fixed
+(narrowed, not closed, the residual limitation MP-23 documented). See the
+Log below for detail.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 4) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
+
+Codex reviewed round 3's fix commit (`0d9a981a`, MP-24/MP-25) and posted 1
+new finding against `create_election_package`'s fallback branch — the same
+branch MP-23 (round 2) had already flagged as a documented residual
+limitation, not fixed it.
+
+**MP-26 (P2, fixed)** — the fallback branch (reached when `current_step`
+doesn't itself govern the PII policy — e.g. the applicant already advanced
+past every `election_vote` stage) discarded a caller-supplied `step_id`
+entirely and always guessed the pipeline's first-configured `election_vote`
+step by `sort_order`, even when `step_id` was already validated by MP-5
+(pass 3) to belong to the exact governing pipeline. `advanceApplicant` (the
+only frontend caller) always sends `step_id` as the stage the applicant
+just entered, so on the same race MP-24 guards on the `current_step`-side,
+the fallback could pick an earlier, more permissive stage than the one the
+request actually named and the applicant actually just passed through.
+Independently verified the fallback was exactly the unconditional
+sort-order guess Codex described, and that MP-5's own check only confirms
+pipeline membership, never `step_type` — so `step_id` needed one more check
+(is it actually an `election_vote` step?) before it could safely be trusted
+here, which is what MP-20 originally objected to trusting it for
+unconditionally. Fixed: within the fallback, a supplied `step_id` is now
+re-checked for `step_type == ELECTION_VOTE` and preferred over the
+sort-order guess when it passes; a `step_id` naming a real but wrong-type
+step still falls through unchanged (the pass-4 "wrong step_id" case is
+unaffected). MP-24's mismatch check needed no change — it only fires when
+`current_step` itself governed, never true once this fallback is reached.
+
+**Residual limitation, narrowed, not closed:** a pipeline with multiple
+`election_vote` stages where _neither_ `current_step` _nor_ a
+type-checked `step_id` identifies one (step_id omitted, or wrong type) is
+still genuinely ambiguous — `docs/KNOWN_LIMITATIONS.md` updated to reflect
+the narrower scope rather than removed, since the case isn't fully closed.
+
+Guard tests in `test_membership_pipeline_pass4_round4_codex.py` (5 tests):
+the core regression, its mirror (proving "prefer the named stage" not
+"prefer the stricter one"), a wrong-type step_id (unaffected), an omitted
+step_id (unaffected), and a single-election-vote-stage regression guard.
+The core regression assertion independently confirmed to fail against the
+pre-fix code via `git stash`; the other 4 confirmed to already pass
+unchanged against that same pre-fix code, so the fix is additive.
+
+Full completion gate clean: flake8/black/isort on `app/ tests/ alembic/`
+(1 new test file needed `black` reformatting, applied), `validate_
+migrations.py --strict` (409 revisions, single head, no schema change),
+full backend suite `pytest tests/ -q` — 9877 passed / 21 skipped
+(pre-existing/environmental) / 0 failed (baseline was 9872 before this
+commit; +5 for the new round-4 guard tests). Full detail in
+`MP-08-membership-pipeline.md` → Pass 4, round 4. Rotation row 08 → ⏳
+(awaiting PR merge/close of the currently-open review threads).
 
 ---
 
