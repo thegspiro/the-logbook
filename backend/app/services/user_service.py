@@ -66,18 +66,13 @@ class UserService:
                 "hire_date": user.hire_date,
                 "rank": user.rank,
                 "station": user.station,
-                # Declared on UserListResponse but never set here, so every
-                # caller of the roster endpoint silently got null regardless
-                # of the real column value. PlatoonRosterPanel reads platoon
-                # straight off this list to seed its "current assignment"
-                # column, which therefore always rendered blank. member_class/
-                # member_status/compliance_exempt are also declared on the
-                # schema and share the same gap, but nothing currently reads
-                # them off this endpoint and compliance_exempt in particular
-                # is a more sensitive field to widen org-wide without a
-                # decision on which roster fields belong at the members.view
-                # tier (see USR-07 pass 3) — left unset here deliberately.
                 "platoon": user.platoon,
+                # member_class/member_status/compliance_exempt are also
+                # declared on UserListResponse but deliberately left unset:
+                # compliance_exempt is a plausibly sensitive field, and
+                # populating it here would widen it to every members.view
+                # holder before a decision on which roster fields belong at
+                # that permission tier (see docs/KNOWN_LIMITATIONS.md, USR-8).
             }
 
             # Conditionally include contact information based on settings
