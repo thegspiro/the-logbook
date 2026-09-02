@@ -1665,14 +1665,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   }, []);
 
   const scheduleAutoSaveItem = useCallback(
-    (itemId: string, patch: Record<string, unknown>, options?: { immediate?: boolean }) => {
+    (itemId: string, patch: Record<string, unknown>, options?: { immediate?: boolean; rearmStalePatch?: boolean }) => {
       if (!isEditing || !itemId) return;
 
       const pending = autoSavePendingRef.current.get(itemId);
       if (pending) clearTimeout(pending.timer);
       // Merge rather than replace, so two edits to different fields of the same
-      // row inside the debounce window both survive.
-      const merged = { ...(pending?.patch ?? {}), ...patch };
+      // row inside the debounce window both survive. `rearmStalePatch` is set
+      // when a failed flush is putting its already-sent (and now possibly
+      // stale) patch back on the debounce: the member may have edited the
+      // same fields again while that flush was in flight, and that newer
+      // edit is what is sitting in `pending` right now. Flipping the spread
+      // order lets it win the conflict instead of being overwritten by the
+      // value the retry is resending.
+      const merged = options?.rearmStalePatch
+        ? { ...patch, ...(pending?.patch ?? {}) }
+        : { ...(pending?.patch ?? {}), ...patch };
 
       if (autoSaveFadeRef.current) {
         clearTimeout(autoSaveFadeRef.current);
@@ -1781,7 +1789,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           pendingPatches.map(([itemId, { patch }]) => equipmentCheckService.updateCheckItem(itemId, patch))
         );
       } catch (err: unknown) {
-        for (const [itemId, { patch }] of pendingPatches) scheduleAutoSaveItem(itemId, patch);
+        for (const [itemId, { patch }] of pendingPatches)
+          scheduleAutoSaveItem(itemId, patch, { rearmStalePatch: true });
         toast.error(getErrorMessage(err, 'Could not save your latest edits'));
         return false;
       }

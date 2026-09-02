@@ -1780,4 +1780,72 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(updateEquipmentCheckTemplate).not.toHaveBeenCalled();
   });
+
+  it('keeps a newer edit when the in-flight flush that raced it fails', async () => {
+    // Save is pressed while the form is still editable (setSaving runs only
+    // after the flush resolves), so a second edit to the same field can land
+    // while the first flush's request is still on the wire. If that request
+    // then fails, the retry must not resend the value it already sent and
+    // clobber the edit made in between.
+    //
+    // A handful of tests above this one deliberately fail their flush and
+    // let it re-arm on the normal (real, un-mocked) 1.5s debounce without
+    // ever pressing Save again to consume it — that retry timer outlives
+    // its own test and can fire during this one. Draining it here, before
+    // wiring up this test's own mock behaviour, keeps that unrelated retry
+    // from being mistaken for the one this test controls.
+    await new Promise((resolve) => setTimeout(resolve, 1700));
+    updateCheckItem.mockClear();
+
+    let releaseFirstFlush: (() => void) | null = null;
+    // The very first call this mock receives from here is guaranteed to be
+    // this test's own flush: it is driven by a microtask chain
+    // (fireEvent -> handleSave -> flushPendingAutoSaves), which the JS event
+    // loop always finishes draining before it moves on to any macrotask —
+    // including a leftover real `setTimeout`-based debounce from another
+    // test, however close to due it already is.
+    updateCheckItem.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          releaseFirstFlush = () => reject(new Error('Network Error'));
+        })
+    );
+    updateCheckItem.mockResolvedValue({});
+
+    mockViewport('laptop');
+    renderBuilder();
+    // Selected once and left selected — the toolbar's "Set Required/Optional"
+    // button reads current state off it each render, so toggling it twice
+    // needs the checkbox clicked only the first time.
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    const toggleRequired = () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+    };
+
+    // Radio starts required; this queues { is_required: false }.
+    toggleRequired();
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    // The flush's request is in flight (deferred above) but the form is not
+    // yet marked saving, so the same field can be edited again.
+    await waitFor(() => expect(releaseFirstFlush).not.toBeNull());
+    toggleRequired(); // now queues the newer { is_required: true }
+
+    releaseFirstFlush?.();
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+
+    // Pressing Save again flushes whatever is now pending for 'radio'. Once
+    // that flush succeeds, Save's own per-item persistence step follows and
+    // sends the item's full field set — filtered out here by shape, since
+    // this assertion is only about the small autosave patch itself.
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    await waitFor(() => {
+      const calls = updateCheckItem.mock.calls as [string, Record<string, unknown>][];
+      const patches = calls
+        .filter(([id, patch]) => id === 'radio' && Object.keys(patch).length === 1 && 'is_required' in patch)
+        .map(([, patch]) => patch);
+      expect(patches[patches.length - 1]).toEqual({ is_required: true });
+    });
+  });
 });

@@ -3885,6 +3885,7 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
 
     from app.models.notification import DepartmentMessage, DepartmentMessageDelivery
     from app.services.message_delivery_service import MessageDeliveryService
+    from app.services.messaging_service import MessagingService
 
     cutoff = datetime.now(dt_timezone.utc) - timedelta(
         minutes=_STRANDED_CLAIM_AFTER_MINUTES
@@ -3982,9 +3983,42 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
             ).scalar_one_or_none()
             if message is None:
                 continue
-            # deliver() never raises and re-resolves the audience itself, so a
-            # member who has since left the targeting is not re-notified.
-            await delivery.deliver(message, only_user_ids=user_ids)
+
+            # deliver() re-resolves the audience itself and would silently
+            # drop a claim whose recipient has since left the targeting —
+            # which leaves that row `pending` forever. Unlike the "message
+            # deactivated" case above, deliver() has no way to report which
+            # of the ids it was handed it actually excluded, so the audience
+            # is resolved here too and the stale ones are retired the same
+            # way, before the bounded scan can be refilled with them again.
+            current_audience = {
+                str(u.id)
+                for u in await MessagingService(db)._targeted_users(
+                    message, str(message.organization_id)
+                )
+                if str(u.id) != str(message.posted_by)
+            }
+            stale_ids = user_ids - current_audience
+            if stale_ids:
+                await db.execute(
+                    update(DepartmentMessageDelivery)
+                    .where(
+                        DepartmentMessageDelivery.message_id == message_id,
+                        DepartmentMessageDelivery.recipient_id.in_(stale_ids),
+                        DepartmentMessageDelivery.status == "pending",
+                    )
+                    .values(
+                        status="failed",
+                        error="Recipient is no longer targeted; delivery abandoned",
+                    )
+                )
+                await db.commit()
+                retired.extend(stale_ids)
+
+            deliverable_ids = user_ids - stale_ids
+            if not deliverable_ids:
+                continue
+            await delivery.deliver(message, only_user_ids=deliverable_ids)
             recovered += 1
         except Exception as e:  # pragma: no cover - defensive
             logger.warning(

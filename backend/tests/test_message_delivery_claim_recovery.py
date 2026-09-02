@@ -245,6 +245,84 @@ class TestTheSweepFindsThem:
         # that can never be delivered.
         assert calls == [str(live_message.id)]
 
+    async def test_a_claim_for_a_recipient_dropped_from_the_audience_is_retired(
+        self, db_session, monkeypatch
+    ):
+        """The audience narrowed after the claim was made — the stranded
+        member no longer belongs to it. Re-selecting the same pending row on
+        every sweep (and never touching it) is what starves newer recoverable
+        claims once the bounded scan fills with permanently-stuck ones."""
+        from app.services import scheduled_tasks
+
+        org = await _org(db_session)
+        author = await _user(db_session, org)
+        dropped_member = await _user(db_session, org)
+        still_targeted = await _user(db_session, org)
+        message = await _message(db_session, org, author)
+        # Narrowed to specific members, and the stranded claim's recipient is
+        # not one of them.
+        message.target_type = "members"
+        message.target_member_ids = [still_targeted.id]
+        await db_session.flush()
+        stale_claim = await _claim_row(db_session, message, dropped_member)
+
+        calls = []
+
+        async def _capture(self, msg, only_user_ids=None):
+            calls.append((str(msg.id), set(only_user_ids or ())))
+
+        monkeypatch.setattr(MessageDeliveryService, "deliver", _capture)
+
+        result = await scheduled_tasks.run_recover_stranded_message_deliveries(
+            db_session
+        )
+
+        assert result["messages"] == 0
+        assert result["retired"] == 1
+        assert calls == []
+        await db_session.refresh(stale_claim)
+        assert stale_claim.status == "failed"
+        assert "no longer targeted" in (stale_claim.error or "")
+
+    async def test_a_mixed_batch_retires_only_the_dropped_recipient(
+        self, db_session, monkeypatch
+    ):
+        """One message, two stranded claims: the audience narrowed out one
+        recipient but not the other. Only the dropped one is retired; the
+        still-targeted one is still recovered."""
+        from app.services import scheduled_tasks
+
+        org = await _org(db_session)
+        author = await _user(db_session, org)
+        dropped_member = await _user(db_session, org)
+        still_targeted = await _user(db_session, org)
+        message = await _message(db_session, org, author)
+        message.target_type = "members"
+        message.target_member_ids = [still_targeted.id]
+        await db_session.flush()
+        stale_claim = await _claim_row(db_session, message, dropped_member)
+        live_claim = await _claim_row(db_session, message, still_targeted)
+
+        calls = []
+
+        async def _capture(self, msg, only_user_ids=None):
+            calls.append((str(msg.id), set(only_user_ids or ())))
+
+        monkeypatch.setattr(MessageDeliveryService, "deliver", _capture)
+
+        result = await scheduled_tasks.run_recover_stranded_message_deliveries(
+            db_session
+        )
+
+        assert result["messages"] == 1
+        assert result["retired"] == 1
+        assert calls == [(str(message.id), {str(still_targeted.id)})]
+        await db_session.refresh(stale_claim)
+        await db_session.refresh(live_claim)
+        assert stale_claim.status == "failed"
+        assert "no longer targeted" in (stale_claim.error or "")
+        assert live_claim.status == "pending"
+
     async def test_a_fresh_claim_is_not_swept(self, db_session, monkeypatch):
         from app.services import scheduled_tasks
 
