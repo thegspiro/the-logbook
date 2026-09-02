@@ -16,13 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 05 (Finance & approvals, pass 3) — branch
-`claude/security-review-fin-pass3` pushed; PR pending. See the Log below for
-detail.
+[#2159](https://github.com/thegspiro/the-logbook/pull/2159) (Feature 05,
+Finance & approvals, pass 3) — 4 fixes (FIN-23–26), 0 flagged. See the Log
+below for detail.
 
 ---
 
-### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) — 4 fixes, 0 flagged
+### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) — 4 fixes, 0 flagged — PR #2159
 
 Pass 2's own closing PR (#1946) merged onto a rewritten history — its head
 commit is not an ancestor of `origin/main`, the same effect AUTH-01/SF-04/
