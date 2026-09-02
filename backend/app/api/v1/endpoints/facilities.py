@@ -3750,6 +3750,7 @@ async def get_facility_folders(
     sub_folders = await docs_service.get_facility_sub_folders(
         organization_id=current_user.organization_id,
         facility_id=facility_id,
+        current_user=current_user,
     )
 
     # Every generic folder/document/summary read in the Documents module
