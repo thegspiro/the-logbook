@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Upload,
   Download,
+  ChevronRight,
 } from 'lucide-react';
 import {
   documentsService,
@@ -46,15 +47,18 @@ const DocumentsPage: React.FC = () => {
   const [summary, setSummary] = useState<DocumentsSummary | null>(null);
 
   // Loading / error state
-  const [loading, setLoading] = useState(true);
+  const [foldersLoading, setFoldersLoading] = useState(true);
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [foldersError, setFoldersError] = useState<string | null>(null);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
 
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [folderPath, setFolderPath] = useState<DocFolder[]>([]);
+  const [showAllDocuments, setShowAllDocuments] = useState(false);
 
   // Modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -74,15 +78,23 @@ const DocumentsPage: React.FC = () => {
   // Data fetching
   // -------------------------------------------------------
 
-  const fetchFolders = useCallback(async () => {
+  const currentFolder = folderPath[folderPath.length - 1];
+
+  const fetchFolders = useCallback(async (parentId?: string) => {
+    setFoldersLoading(true);
+    setFoldersError(null);
     try {
-      const response = await documentsService.getFolders();
+      const response = await documentsService.getFolders(parentId);
       // Envelope responses put the array a level down, where the service's
       // asArray guard does not reach — and `folders` is mapped and measured
       // without checking, so an envelope missing the key crashes the page.
       setFolders(asArray(response.folders));
+      return true;
     } catch {
-      setError('Unable to load folders. Please check your connection and try again.');
+      setFoldersError('Unable to load folders. Please check your connection and try again.');
+      return false;
+    } finally {
+      setFoldersLoading(false);
     }
   }, []);
 
@@ -97,34 +109,55 @@ const DocumentsPage: React.FC = () => {
 
   const fetchDocuments = useCallback(async (folderId: string) => {
     setDocumentsLoading(true);
+    setDocumentsError(null);
     try {
       const response = await documentsService.getDocuments(folderId === ALL_DOCUMENTS ? {} : { folder_id: folderId });
       setDocuments(asArray(response.documents));
     } catch {
-      setError('Unable to load documents. Please check your connection and try again.');
+      setDocuments([]);
+      setDocumentsError('Unable to load documents. Please check your connection and try again.');
+      return false;
     } finally {
       setDocumentsLoading(false);
     }
+    return true;
   }, []);
 
   // Initial load
   useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      await Promise.all([fetchFolders(), fetchSummary()]);
-      setLoading(false);
-    };
-    void init();
-  }, [fetchFolders, fetchSummary]);
+    void fetchSummary();
+  }, [fetchSummary]);
 
-  // Fetch documents when folder is selected
+  // Each path segment was returned by the API at its parent level, so the UI
+  // never invents or exposes ancestors that the caller has not been allowed to see.
   useEffect(() => {
-    if (selectedFolder) {
-      void fetchDocuments(selectedFolder);
-    } else {
+    if (showAllDocuments) {
+      void fetchDocuments(ALL_DOCUMENTS);
+      return;
+    }
+
+    const loadLevel = async () => {
+      const folderId = currentFolder?.id;
+      const results = await Promise.all([
+        fetchFolders(folderId),
+        folderId ? fetchDocuments(folderId) : Promise.resolve(true),
+      ]);
+      if (!folderId) {
+        setDocuments([]);
+      } else if (results.some((succeeded) => !succeeded)) {
+        // A folder can disappear or become inaccessible between levels. Fall
+        // back one verified path segment at a time rather than retaining it.
+        setError(
+          `The folder “${currentFolder.name}” is no longer accessible. Returned to the nearest accessible location.`
+        );
+        setFolderPath((path) => path.slice(0, -1));
+      }
+    };
+    if (!currentFolder) {
       setDocuments([]);
     }
-  }, [selectedFolder, fetchDocuments]);
+    void loadLevel();
+  }, [currentFolder, showAllDocuments, fetchDocuments, fetchFolders]);
 
   // -------------------------------------------------------
   // Handlers
@@ -138,17 +171,18 @@ const DocumentsPage: React.FC = () => {
       await documentsService.createFolder({
         name: folderForm.name.trim(),
         ...(folderForm.description.trim() ? { description: folderForm.description.trim() } : {}),
+        ...(currentFolder ? { parent_id: currentFolder.id } : {}),
       });
       setShowCreateFolder(false);
       setFolderForm({ name: '', description: '' });
-      await fetchFolders();
+      await fetchFolders(currentFolder?.id);
       await fetchSummary();
     } catch {
       setError('Unable to create folder. Please check your connection and try again.');
     } finally {
       setActionLoading(false);
     }
-  }, [folderForm, fetchFolders, fetchSummary]);
+  }, [folderForm, currentFolder, fetchFolders, fetchSummary]);
 
   const handleUploadDocument = useCallback(async () => {
     if (!uploadForm.file) return;
@@ -171,20 +205,20 @@ const DocumentsPage: React.FC = () => {
       setUploadForm({
         name: '',
         description: '',
-        folder: selectedFolder && selectedFolder !== ALL_DOCUMENTS ? selectedFolder : '',
+        folder: currentFolder?.id ?? '',
         file: null,
       });
-      await fetchFolders();
+      await fetchFolders(currentFolder?.id);
       await fetchSummary();
-      if (selectedFolder) {
-        await fetchDocuments(selectedFolder);
+      if (showAllDocuments || currentFolder) {
+        await fetchDocuments(showAllDocuments ? ALL_DOCUMENTS : (currentFolder?.id ?? ALL_DOCUMENTS));
       }
     } catch {
       setError('Unable to upload document. Please check your connection and try again.');
     } finally {
       setActionLoading(false);
     }
-  }, [uploadForm, selectedFolder, fetchFolders, fetchSummary, fetchDocuments]);
+  }, [uploadForm, currentFolder, showAllDocuments, fetchFolders, fetchSummary, fetchDocuments]);
 
   const handleDeleteDocument = useCallback(
     async (documentId: string) => {
@@ -193,10 +227,10 @@ const DocumentsPage: React.FC = () => {
       try {
         await documentsService.deleteDocument(documentId);
         setDeleteConfirm(null);
-        await fetchFolders();
+        await fetchFolders(currentFolder?.id);
         await fetchSummary();
-        if (selectedFolder) {
-          await fetchDocuments(selectedFolder);
+        if (showAllDocuments || currentFolder) {
+          await fetchDocuments(showAllDocuments ? ALL_DOCUMENTS : (currentFolder?.id ?? ALL_DOCUMENTS));
         }
       } catch {
         setError('Unable to delete document. Please check your connection and try again.');
@@ -204,7 +238,7 @@ const DocumentsPage: React.FC = () => {
         setActionLoading(false);
       }
     },
-    [selectedFolder, fetchFolders, fetchSummary, fetchDocuments]
+    [currentFolder, showAllDocuments, fetchFolders, fetchSummary, fetchDocuments]
   );
 
   const handleDownloadDocument = useCallback(async (doc: DocumentRecord) => {
@@ -224,27 +258,29 @@ const DocumentsPage: React.FC = () => {
     }
   }, []);
 
-  const handleFolderSelect = useCallback((folderId: string) => {
-    setSelectedFolder(folderId);
+  const handleFolderSelect = useCallback((folder: DocFolder) => {
+    setFolderPath((path) => [...path, folder]);
+    setShowAllDocuments(false);
     setError(null);
   }, []);
 
   const handleClearFolder = useCallback(() => {
-    setSelectedFolder(null);
+    setFolderPath([]);
+    setShowAllDocuments(false);
     setDocuments([]);
     setError(null);
   }, []);
 
   const handleOpenUploadModal = useCallback(() => {
-    const currentFolder = selectedFolder && selectedFolder !== ALL_DOCUMENTS ? selectedFolder : '';
+    const currentFolderId = currentFolder?.id ?? '';
     setUploadForm({
       name: '',
       description: '',
-      folder: currentFolder || (folders.length > 0 && folders[0] ? folders[0].id : ''),
+      folder: currentFolderId || (folders.length > 0 && folders[0] ? folders[0].id : ''),
       file: null,
     });
     setShowUploadModal(true);
-  }, [selectedFolder, folders]);
+  }, [currentFolder, folders]);
 
   // -------------------------------------------------------
   // Derived state
@@ -269,7 +305,7 @@ const DocumentsPage: React.FC = () => {
   // Render
   // -------------------------------------------------------
 
-  if (loading) {
+  if (foldersLoading && folderPath.length === 0 && !showAllDocuments) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center space-y-4" role="status" aria-live="polite">
@@ -376,9 +412,9 @@ const DocumentsPage: React.FC = () => {
                 id="doc-search"
                 type="text"
                 placeholder={
-                  selectedFolder === ALL_DOCUMENTS
+                  showAllDocuments
                     ? 'Search all documents...'
-                    : selectedFolder
+                    : currentFolder
                       ? 'Search documents in this folder...'
                       : 'Select a folder to browse documents...'
                 }
@@ -388,7 +424,7 @@ const DocumentsPage: React.FC = () => {
               />
             </div>
             <div className="flex items-center space-x-2">
-              {selectedFolder && (
+              {(currentFolder || showAllDocuments) && (
                 <button
                   onClick={handleClearFolder}
                   className="flex items-center space-x-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
@@ -419,32 +455,82 @@ const DocumentsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Folder Browser */}
-        {!selectedFolder && (
-          <div className="mb-8">
-            <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Folders</h2>
-            <div className="mb-4">
+        <nav className="mb-6" aria-label="Folder breadcrumbs">
+          <ol className="text-theme-text-secondary flex flex-wrap items-center gap-1 text-sm">
+            <li>
               <button
-                onClick={() => handleFolderSelect(ALL_DOCUMENTS)}
-                className="stat-card group hover:bg-theme-surface-hover w-full text-left transition-all hover:border-amber-500/30 md:max-w-xs"
+                onClick={handleClearFolder}
+                aria-label="Go to root folders"
+                className="hover:text-theme-text-primary rounded-sm px-2 py-1"
               >
-                <div className="flex items-start space-x-3">
-                  <FileText className="h-8 w-8 text-amber-700 transition-transform group-hover:scale-110 dark:text-amber-400" />
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-theme-text-primary truncate font-semibold">All Documents</h3>
-                    <p className="text-theme-text-muted mt-1 text-sm">
-                      Every document you can see, including ones with no folder
-                    </p>
-                  </div>
-                </div>
+                Root
               </button>
-            </div>
-            {folders.length > 0 ? (
+            </li>
+            {showAllDocuments && (
+              <li className="flex items-center gap-1" aria-current="page">
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                <span className="text-theme-text-primary px-2 py-1">All Documents</span>
+              </li>
+            )}
+            {folderPath.map((folder, index) => (
+              <li
+                key={folder.id}
+                className="flex items-center gap-1"
+                aria-current={index === folderPath.length - 1 ? 'page' : undefined}
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                <button
+                  onClick={() => setFolderPath((path) => path.slice(0, index + 1))}
+                  aria-label={`Go to folder ${folder.name}`}
+                  className="hover:text-theme-text-primary rounded-sm px-2 py-1"
+                >
+                  {folder.name}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
+
+        {/* Folder Browser */}
+        {!showAllDocuments && (
+          <div className="mb-8">
+            <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">
+              {currentFolder ? `Folders in ${currentFolder.name}` : 'Folders'}
+            </h2>
+            {!currentFolder && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowAllDocuments(true)}
+                  className="stat-card group hover:bg-theme-surface-hover w-full text-left transition-all hover:border-amber-500/30 md:max-w-xs"
+                >
+                  <div className="flex items-start space-x-3">
+                    <FileText className="h-8 w-8 text-amber-700 transition-transform group-hover:scale-110 dark:text-amber-400" />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-theme-text-primary truncate font-semibold">All Documents</h3>
+                      <p className="text-theme-text-muted mt-1 text-sm">
+                        Every document you can see, including ones with no folder
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            )}
+            {foldersLoading ? (
+              <div className="card p-8 text-center" role="status" aria-live="polite">
+                <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-amber-700 dark:text-amber-400" />
+                <p className="text-theme-text-secondary text-sm">Loading folders...</p>
+              </div>
+            ) : foldersError ? (
+              <div className="card border-red-500/30 p-8 text-center" role="alert">
+                <AlertCircle className="mx-auto mb-3 h-10 w-10 text-red-700 dark:text-red-400" />
+                <p className="text-red-700 dark:text-red-300">{foldersError}</p>
+              </div>
+            ) : folders.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {folders.map((folder) => (
                   <button
                     key={folder.id}
-                    onClick={() => handleFolderSelect(folder.id)}
+                    onClick={() => handleFolderSelect(folder)}
                     className="stat-card group hover:bg-theme-surface-hover text-left transition-all hover:border-amber-500/30"
                   >
                     <div className="flex items-start space-x-3">
@@ -465,19 +551,27 @@ const DocumentsPage: React.FC = () => {
             ) : (
               <div className="card p-8 text-center">
                 <FolderOpen className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-                <p className="text-theme-text-secondary">No folders yet. Create a folder to get started.</p>
+                <p className="text-theme-text-secondary">No folders in this location.</p>
               </div>
             )}
           </div>
         )}
 
         {/* Documents in Folder */}
-        {selectedFolder && (
+        {(currentFolder || showAllDocuments) && (
           <>
+            <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">
+              {showAllDocuments ? 'Documents' : `Documents in ${currentFolder?.name ?? ''}`}
+            </h2>
             {documentsLoading ? (
               <div className="card p-12 text-center" role="status" aria-live="polite">
                 <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-amber-700 dark:text-amber-400" />
                 <p className="text-theme-text-secondary text-sm">Loading documents...</p>
+              </div>
+            ) : documentsError ? (
+              <div className="card border-red-500/30 p-12 text-center" role="alert">
+                <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-700 dark:text-red-400" />
+                <p className="text-red-700 dark:text-red-300">{documentsError}</p>
               </div>
             ) : filteredDocuments.length > 0 ? (
               viewMode === 'grid' ? (
@@ -652,7 +746,7 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Empty State - No folder selected and no folders exist */}
-        {!selectedFolder && folders.length === 0 && (
+        {!showAllDocuments && !currentFolder && !foldersLoading && !foldersError && folders.length === 0 && (
           <div className="card p-12 text-center">
             <FolderOpen className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
             <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Documents Yet</h3>
@@ -819,6 +913,11 @@ const DocumentsPage: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
+                    <p className="text-theme-text-secondary text-sm">
+                      Parent:{' '}
+                      <span className="text-theme-text-primary font-medium">{currentFolder?.name ?? 'Root'}</span>
+                      {showAllDocuments && ' (folders created from All Documents are placed at the root)'}
+                    </p>
                     <div>
                       <label htmlFor="folder-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                         Folder Name <span aria-hidden="true">*</span>
