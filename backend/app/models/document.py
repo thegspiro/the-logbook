@@ -115,6 +115,9 @@ SYSTEM_FOLDERS = [
         "sort_order": 7,
         "icon": "users",
         "color": "text-emerald-400",
+        # Personal descendants enforce OWNER access. Keeping the navigation
+        # root organization-visible lets each owner satisfy every ancestor.
+        "visibility": FolderVisibility.ORGANIZATION,
     },
     {
         "slug": "apparatus",
@@ -123,6 +126,7 @@ SYSTEM_FOLDERS = [
         "sort_order": 8,
         "icon": "truck",
         "color": "text-orange-400",
+        "visibility": FolderVisibility.LEADERSHIP,
     },
     {
         "slug": "facilities",
@@ -131,6 +135,14 @@ SYSTEM_FOLDERS = [
         "sort_order": 9,
         "icon": "building",
         "color": "text-indigo-400",
+        # Facility permissions, rather than document leadership, are the
+        # sensitive-record contract for this entire tree.
+        "visibility": FolderVisibility.ORGANIZATION,
+        "required_permissions": [
+            "facilities.view_sensitive",
+            "facilities.edit",
+            "facilities.manage",
+        ],
     },
     {
         "slug": "events",
