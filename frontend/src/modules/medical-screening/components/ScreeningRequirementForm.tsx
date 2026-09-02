@@ -161,6 +161,14 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
             )}
           </div>
 
+          {/* Applies to Roles: stored and shown next to the requirement's name,
+              but get_compliance_status (medical_screening_service.py) pulls every
+              active requirement for every subject regardless of role — nothing
+              reads this list to scope who a requirement applies to. Labelled
+              rather than silently wired, since wiring it changes who counts as
+              non-compliant on every installation that has set it. Delete this
+              notice in the change that makes compliance evaluation read it; see
+              tests/test_medical_screening_requirement_fields_are_unwired.py. */}
           <div>
             <label htmlFor="req-roles" className={labelClass}>
               Applies to Roles (comma-separated)
@@ -174,8 +182,21 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               className={inputClass}
             />
             <p className="text-theme-text-muted mt-1 text-xs">Leave blank to apply to all members.</p>
+            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+              Not enforced yet — every active member and prospect is evaluated against this requirement regardless of
+              role, so listing roles here does not narrow who it applies to.
+            </p>
           </div>
 
+          {/* Grace Period: same gap as compliance_configs.grace_period_days
+              (ComplianceRequirementsConfigPage.tsx) — stored, shown, and never
+              read. get_compliance_status marks non-compliant the instant
+              expiration_date passes, with no leeway for this value. Labelled
+              rather than silently wired, since this column defaults to 30 for
+              every requirement, so wiring it would relax the non-compliance cutoff
+              on every existing installation, not just ones that opted in. Delete
+              this notice in the change that makes compliance evaluation read it;
+              see tests/test_medical_screening_requirement_fields_are_unwired.py. */}
           <div>
             <label htmlFor="req-grace" className={labelClass}>
               Grace Period (days past expiration)
@@ -188,6 +209,10 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               onChange={(e) => setGracePeriodDays(e.target.value)}
               className={inputClass + ' w-32'}
             />
+            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+              Not enforced yet — a screening is marked non-compliant the day after its expiration date; this value is
+              saved but does not extend that deadline.
+            </p>
           </div>
 
           <label className="text-theme-text-secondary flex items-center gap-2 text-sm">

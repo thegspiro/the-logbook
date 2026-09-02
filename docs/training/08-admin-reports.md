@@ -1573,10 +1573,10 @@ This is useful when a template has been heavily customized and you want to start
 
 You can now send a test email to verify your template changes before they go live:
 
-1. Open the template and switch to the **Preview** tab — the button sits under
-   the rendered preview, not in the toolbar, and stays greyed out until a
-   preview has been generated
-2. Click **Send Test Email to Me**
+1. Open the template. The rendered preview sits beside the editor — there is
+   no longer a **Preview** tab to switch to, and the control is under that
+   preview rather than in the toolbar
+2. Click **Send Test to Me**
 3. The system sends what you are looking at — the current editor content,
    unsaved changes included — to **your own** address. There is no field for a
    different recipient
@@ -1585,7 +1585,7 @@ You can now send a test email to verify your template changes before they go liv
 Sending needs a working mail transport. On a department that has not configured
 one, the button reports the failure rather than a delivery.
 
-![Send Test Email to Me, under the rendered preview it sends](./images/08-58-template-send-test.png)
+![Send Test to Me, under the rendered preview it sends](./images/08-58-template-send-test.png)
 
 ### Template Search
 
@@ -1768,16 +1768,16 @@ because they apply to every template rather than to this one.
 Several of these are things a **recipient** was seeing, so they are worth knowing
 about even if you never open the template editor.
 
-| What was wrong                                                                                                                                        | Now                                                                        |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| **Only the first paragraph of an email was styled.** Gmail strips the stylesheet, so this was the spacing most recipients actually saw                | Every paragraph is styled                                                  |
-| The inventory notice's removed-items list and the ballot eligibility summary's recipient list **arrived as visible angle brackets**                   | Rendered as the lists they are                                             |
-| Departments that had never opened the Email Templates screen received footers reading a literal **`{{organization_phone}}`**                          | Filled in — that path is the normal one until the screen is first opened   |
-| A member of the public who asked the department to attend their event got bare **"Reason:"** lines                                                    | Optional blocks appear only when there is something in them                |
-| The duplicate-application notice **printed its contact line twice**                                                                                   | Once                                                                       |
-| Three header colours and the small footer contact line **failed WCAG AA contrast** against their text                                                 | Corrected                                                                  |
-| **"Send Test Email to Me" reported success for an email nobody received** — it posted a blank recipient, SMTP rejected it, and the screen said 200 OK | Sends, or tells you why it did not                                         |
-| A backslash in a public contact's name **corrupted the event-request notice**                                                                         | Handled — and these sends now appear in Message History for the first time |
+| What was wrong                                                                                                                                  | Now                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **Only the first paragraph of an email was styled.** Gmail strips the stylesheet, so this was the spacing most recipients actually saw          | Every paragraph is styled                                                  |
+| The inventory notice's removed-items list and the ballot eligibility summary's recipient list **arrived as visible angle brackets**             | Rendered as the lists they are                                             |
+| Departments that had never opened the Email Templates screen received footers reading a literal **`{{organization_phone}}`**                    | Filled in — that path is the normal one until the screen is first opened   |
+| A member of the public who asked the department to attend their event got bare **"Reason:"** lines                                              | Optional blocks appear only when there is something in them                |
+| The duplicate-application notice **printed its contact line twice**                                                                             | Once                                                                       |
+| Three header colours and the small footer contact line **failed WCAG AA contrast** against their text                                           | Corrected                                                                  |
+| **"Send Test to Me" reported success for an email nobody received** — it posted a blank recipient, SMTP rejected it, and the screen said 200 OK | Sends, or tells you why it did not                                         |
+| A backslash in a public contact's name **corrupted the event-request notice**                                                                   | Handled — and these sends now appear in Message History for the first time |
 
 Three notices your department sends most often — **shift assignment**, **shift
 decline** and **shift reminder** — were listed on the Email Templates screen but
