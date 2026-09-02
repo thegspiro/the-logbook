@@ -101,4 +101,66 @@ describe('useProfileVisibility', () => {
       mobile: false,
     });
   });
+
+  it('serialises saves so a second flip cannot be undone by the first response', async () => {
+    let resolveFirst: (v: ProfileVisibility) => void = () => {};
+    setMyProfileVisibility
+      .mockImplementationOnce(
+        () =>
+          new Promise<ProfileVisibility>((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
+      .mockImplementationOnce((v: ProfileVisibility) => Promise.resolve(v));
+    const { result } = renderHook(() => useProfileVisibility({ enabled: true, initial: DEFAULT_PROFILE_VISIBILITY }));
+
+    let first: Promise<void> = Promise.resolve();
+    let second: Promise<void> = Promise.resolve();
+    await act(async () => {
+      first = result.current.setField('address', true);
+      second = result.current.setField('mobile', false);
+      // Let the queue hand the first save to the network; the second stays behind it.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // Only the first request has gone out; the second waits its turn.
+    expect(setMyProfileVisibility).toHaveBeenCalledTimes(1);
+    expect(result.current.visibility).toEqual({ ...DEFAULT_PROFILE_VISIBILITY, address: true, mobile: false });
+
+    await act(async () => {
+      // The server echoes the first snapshot, which does not know about mobile.
+      resolveFirst({ ...DEFAULT_PROFILE_VISIBILITY, address: true });
+      await first;
+      await second;
+    });
+
+    expect(setMyProfileVisibility).toHaveBeenCalledTimes(2);
+    expect(setMyProfileVisibility).toHaveBeenLastCalledWith({
+      ...DEFAULT_PROFILE_VISIBILITY,
+      address: true,
+      mobile: false,
+    });
+    expect(result.current.visibility.mobile).toBe(false);
+    expect(result.current.visibility.address).toBe(true);
+  });
+
+  it('refuses to write while the stored choice is unknown, and reloads on request', async () => {
+    getMyProfileVisibility.mockRejectedValueOnce(new Error('offline'));
+    const { result } = renderHook(() => useProfileVisibility({ enabled: true, initial: null }));
+
+    await waitFor(() => expect(result.current.loadError).toBe(true));
+    expect(result.current.ready).toBe(false);
+
+    await act(async () => {
+      await result.current.setField('address', true);
+    });
+    // A whole-object save built on the defaults would overwrite a hidden field.
+    expect(setMyProfileVisibility).not.toHaveBeenCalled();
+    expect(result.current.visibility.address).toBe(false);
+
+    act(() => result.current.reload());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.loadError).toBe(false);
+    expect(result.current.visibility.address).toBe(true);
+  });
 });

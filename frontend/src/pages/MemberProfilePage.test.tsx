@@ -50,6 +50,16 @@ const getUserInventory = vi.fn();
 const getEnabledModules = vi.fn();
 const getUserWithRoles = vi.fn();
 const setMyProfileVisibility = vi.fn();
+const checkContactInfoEnabled = vi.fn();
+let nfcIdCardsConnected = false;
+
+vi.mock('../hooks/useConnectedIntegrations', () => ({
+  useConnectedIntegrations: () => ({
+    connected: new Set(nfcIdCardsConnected ? ['nfc-id-cards'] : []),
+    loading: false,
+    isConnected: (type: string) => type === 'nfc-id-cards' && nfcIdCardsConnected,
+  }),
+}));
 
 vi.mock('../hooks/useRanks', () => ({
   useRanks: () => ({
@@ -65,6 +75,7 @@ vi.mock('../services/api', () => ({
   userService: {
     getUserWithRoles: (...args: unknown[]) => getUserWithRoles(...args) as unknown,
     getUserConsents: () => Promise.resolve([]),
+    checkContactInfoEnabled: (...args: unknown[]) => checkContactInfoEnabled(...args) as unknown,
     getMyProfileVisibility: () =>
       Promise.resolve({ email: true, personal_email: false, phone: true, mobile: true, address: false }),
     setMyProfileVisibility: (...args: unknown[]) => setMyProfileVisibility(...args) as unknown,
@@ -109,6 +120,8 @@ describe('MemberProfilePage assigned inventory', () => {
     grantedPermissions = [];
     getUserWithRoles.mockReset();
     getUserWithRoles.mockResolvedValue(targetUser);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
     getEnabledModules.mockResolvedValue({ enabled_modules: ['inventory'] });
     getUserInventory.mockResolvedValue({
       permanent_assignments: [
@@ -193,6 +206,9 @@ describe('MemberProfilePage membership and privacy', () => {
     grantedPermissions = [];
     getUserWithRoles.mockReset();
     getUserWithRoles.mockResolvedValue(redactedColleague);
+    checkContactInfoEnabled.mockReset();
+    checkContactInfoEnabled.mockResolvedValue({ enabled: true, show_email: true, show_phone: true, show_mobile: true });
+    nfcIdCardsConnected = false;
     getEnabledModules.mockResolvedValue({ enabled_modules: [] });
     getUserInventory.mockResolvedValue({ permanent_assignments: [] });
     setMyProfileVisibility.mockReset();
@@ -286,5 +302,48 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.getByText('Visible to members')).toBeInTheDocument();
     expect(screen.getByText('Only you and leadership')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('does not claim "no address on file" when only the personal email was shared', async () => {
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, personal_email: 'jane@example.org' });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('jane@example.org')).toBeInTheDocument();
+    expect(screen.queryByText('Address')).not.toBeInTheDocument();
+    expect(screen.queryByText('No address on file.')).not.toBeInTheDocument();
+  });
+
+  it('tells a members-manager when the department, not the member, has a field off', async () => {
+    grantedPermissions = ['members.manage'];
+    checkContactInfoEnabled.mockResolvedValue({
+      enabled: true,
+      show_email: false,
+      show_phone: true,
+      show_mobile: true,
+    });
+    getUserWithRoles.mockResolvedValue({
+      ...redactedColleague,
+      email: 'jdoe@example.com',
+      phone: '555-0100',
+      profile_visibility: { ...shareNothing, email: true, phone: true },
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText('Off for everyone (department setting)')).toBeInTheDocument();
+    // Phone is allowed by both, so it still reads as visible.
+    expect(screen.getByText('Visible to members')).toBeInTheDocument();
+  });
+
+  it('does not reserve a left column for an ID-card panel the integration hides', async () => {
+    grantedPermissions = ['members.manage_id_cards'];
+    nfcIdCardsConnected = false;
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'jdoe' });
+    expect(screen.getByTestId('profile-grid-two')).toBeInTheDocument();
+
+    nfcIdCardsConnected = true;
+    renderWithRouter(<MemberProfilePage />);
+    expect(await screen.findByTestId('profile-grid-three')).toBeInTheDocument();
   });
 });

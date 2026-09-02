@@ -9,16 +9,20 @@
  *
  * The wording is deliberately the consequence, not the mechanism: "Visible to
  * members" means every member of the department, and "Only you and
- * leadership" names exactly who else can see it.
+ * leadership" names exactly who else can see it. When the department's own
+ * contact-visibility setting has switched a work field off for everyone, the
+ * marker says so rather than promising a visibility the roster does not give;
+ * the member's switch still records their own choice for when it is back on.
  */
 
 import React from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Building2 } from 'lucide-react';
 import { SettingsToggle } from '../settings/SettingsToggle';
 import type { ProfileVisibilityField } from '../../types/user';
 
 export const VISIBLE_LABEL = 'Visible to members';
 export const HIDDEN_LABEL = 'Only you and leadership';
+export const ORG_HIDDEN_LABEL = 'Off for everyone (department setting)';
 
 interface VisibilityControlProps {
   field: ProfileVisibilityField;
@@ -26,6 +30,8 @@ interface VisibilityControlProps {
   label: string;
   visible: boolean;
   mode: 'toggle' | 'badge';
+  /** The organisation's contact-visibility setting hides this field for everyone. */
+  orgHidden?: boolean | undefined;
   onChange?: ((next: boolean) => void) | undefined;
   disabled?: boolean | undefined;
 }
@@ -35,18 +41,20 @@ export const VisibilityControl: React.FC<VisibilityControlProps> = ({
   label,
   visible,
   mode,
+  orgHidden = false,
   onChange,
   disabled,
 }) => {
-  const Icon = visible ? Eye : EyeOff;
-  const text = visible ? VISIBLE_LABEL : HIDDEN_LABEL;
+  const effectiveVisible = visible && !orgHidden;
+  const Icon = orgHidden ? Building2 : effectiveVisible ? Eye : EyeOff;
+  const text = orgHidden ? ORG_HIDDEN_LABEL : effectiveVisible ? VISIBLE_LABEL : HIDDEN_LABEL;
 
   if (mode === 'badge') {
     return (
       <span
         className="badge bg-theme-surface-secondary text-theme-text-secondary gap-1"
         data-visibility-field={field}
-        data-visibility-state={visible ? 'visible' : 'hidden'}
+        data-visibility-state={effectiveVisible ? 'visible' : 'hidden'}
       >
         <Icon className="h-3.5 w-3.5" aria-hidden="true" />
         {text}

@@ -33,11 +33,19 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import { useProfileVisibility } from '../hooks/useProfileVisibility';
+import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
+import { NFC_ID_CARDS_INTEGRATION } from '../modules/membership/constants/idCards';
 import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
-import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
+import type {
+  ContactInfoSettings,
+  ContactInfoUpdate,
+  NotificationPreferences,
+  EmergencyContact,
+  UserProfileUpdate,
+} from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
 import { AVAILABLE_MODULES } from '../types/modules';
 import { MAX_AVATAR_SIZE } from '../constants/config';
@@ -302,6 +310,37 @@ export const MemberProfilePage: React.FC = () => {
   // is made; owned by the hook so a contact-info save replacing `user` cannot
   // reset a switch mid-flight.
   const privacy = useProfileVisibility({ enabled: isSelf, initial: user?.profile_visibility });
+
+  // The department's own contact-visibility ceiling. A marker that says
+  // "Visible to members" while the department has switched work email off
+  // for everyone would promise a visibility the roster does not give, so the
+  // markers combine the two. Only the member and members-managers see
+  // markers, so only they need the setting.
+  const [orgContactVisibility, setOrgContactVisibility] = useState<ContactInfoSettings | null>(null);
+  const needsOrgVisibility = isSelf || canManageMembers;
+  useEffect(() => {
+    if (!needsOrgVisibility) return;
+    let cancelled = false;
+    userService
+      .checkContactInfoEnabled()
+      .then((settings) => {
+        if (!cancelled) setOrgContactVisibility(settings);
+      })
+      .catch(() => {
+        // Unknown rather than assumed: the markers then show the member's
+        // own choice alone, which is what they control.
+        if (!cancelled) setOrgContactVisibility(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsOrgVisibility]);
+
+  // MemberIdCardsPanel renders nothing until the NFC ID Cards integration is
+  // known to be connected, so the layout must not reserve a column for it
+  // on that basis alone.
+  const { isConnected: isIntegrationConnected, loading: integrationsLoading } = useConnectedIntegrations();
+  const idCardsEnabled = !integrationsLoading && isIntegrationConnected(NFC_ID_CARDS_INTEGRATION);
 
   const handleOpenStatusModal = () => {
     if (!user) return;
@@ -578,17 +617,21 @@ export const MemberProfilePage: React.FC = () => {
   // the member has not shared it, and the backend blanked it. Rendering the
   // card with "No address on file." would state something false about them,
   // so the card is skipped. Self and leadership see the real empty state.
-  const hasAddressData = Boolean(user?.address_street || user?.address_city || user?.personal_email);
+  // Address fields only: personal email is displayed in the contact card, and
+  // a member who shares it while hiding their address must not trigger the
+  // very false statement this guard exists to prevent.
+  const hasAddressData = Boolean(user?.address_street || user?.address_city);
   const showAddressCard = canEdit || hasAddressData;
 
   // The left column is per-viewer: training, admin hours, ID cards and gear
   // are all hidden from a plain colleague, and a `lg:col-span-2` ghost would
   // still reserve two-thirds of the page for nothing.
   const showAdminHours = Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0) || adminHoursLoading;
+  const showIdCards = Boolean(canManageIdCards && userId && idCardsEnabled);
   const hasLeftColumn =
     (trainingEnabled && canViewTargetTraining) ||
     showAdminHours ||
-    Boolean(canManageIdCards && userId) ||
+    showIdCards ||
     (inventoryModuleEnabled && canViewTargetInventory);
   const hasQuickStats =
     (trainingEnabled && canViewTargetTraining) ||
@@ -807,7 +850,7 @@ export const MemberProfilePage: React.FC = () => {
               {/* ID cards (NFC). Officers only — a member cannot register,
                 relabel or revoke a card, not even their own, and the panel
                 hides itself when the organization has cards turned off. */}
-              {canManageIdCards && userId && (
+              {showIdCards && userId && (
                 <MemberIdCardsPanel
                   userId={userId}
                   memberName={user ? `${user.first_name} ${user.last_name}`.trim() : undefined}
@@ -912,9 +955,13 @@ export const MemberProfilePage: React.FC = () => {
               smsConsentGranted={smsConsentGranted}
               visibilityMode={visibilityMode}
               visibility={visibility}
+              visibilityReady={visibilityMode !== 'toggle' || privacy.ready}
+              visibilityLoadError={visibilityMode === 'toggle' && privacy.loadError}
               visibilitySaving={privacy.savingField}
               visibilitySaveState={privacy.saveState}
+              orgVisibility={orgContactVisibility}
               onVisibilityChange={(field, next) => void privacy.setField(field, next)}
+              onVisibilityRetry={privacy.reload}
             />
 
             {/* Address & Personal Email */}
@@ -963,7 +1010,9 @@ export const MemberProfilePage: React.FC = () => {
                           label="Mailing address"
                           visible={visibility.address}
                           mode={visibilityMode}
-                          disabled={privacy.savingField === 'address'}
+                          disabled={
+                            visibilityMode === 'toggle' && (!privacy.ready || privacy.savingField === 'address')
+                          }
                           onChange={(next) => void privacy.setField('address', next)}
                         />
                       )}

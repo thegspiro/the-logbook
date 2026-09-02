@@ -20,6 +20,7 @@ vi.mock('../services/api', () => ({
     setMyConsent: vi.fn().mockResolvedValue(undefined),
     getMyProfileVisibility: vi.fn(),
     setMyProfileVisibility: vi.fn(),
+    checkContactInfoEnabled: vi.fn(),
   },
 }));
 
@@ -121,6 +122,13 @@ describe('UserSettingsPage', () => {
     });
     vi.mocked(userService.setMyProfileVisibility).mockReset();
     vi.mocked(userService.setMyProfileVisibility).mockImplementation((v) => Promise.resolve(v));
+    vi.mocked(userService.checkContactInfoEnabled).mockReset();
+    vi.mocked(userService.checkContactInfoEnabled).mockResolvedValue({
+      enabled: true,
+      show_email: true,
+      show_phone: true,
+      show_mobile: true,
+    });
   });
 
   describe('Privacy Tab', () => {
@@ -164,6 +172,35 @@ describe('UserSettingsPage', () => {
       expect(await screen.findByText('Privacy Choices')).toBeInTheDocument();
       expect(await screen.findByText('Text message notifications')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Download my data' })).toBeInTheDocument();
+    });
+
+    it('keeps the switches off when the profile behind them could not load', async () => {
+      // A member must never enable a field they cannot see: with the profile
+      // unknown every row would read "Nothing on file" over a real value.
+      vi.mocked(userService.getUserWithRoles).mockRejectedValue(new Error('offline'));
+      window.history.pushState({}, '', '/account?tab=privacy');
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue(defaultProfile as never);
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }));
+
+      await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(5));
+    });
+
+    it('marks a work field the department has switched off for everyone', async () => {
+      vi.mocked(userService.checkContactInfoEnabled).mockResolvedValue({
+        enabled: true,
+        show_email: false,
+        show_phone: true,
+        show_mobile: true,
+      });
+      window.history.pushState({}, '', '/account?tab=privacy');
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByText('Off for everyone (department setting)')).toBeInTheDocument();
     });
 
     it('leaves the Security tab to two-factor authentication', async () => {

@@ -147,11 +147,19 @@ async def list_users(
             f"Failed to load organization settings, returning users without contact info: {e}"
         )
 
-    # Get users with conditional contact info
+    # Get users with conditional contact info. Members-managers are exempt
+    # from the subject's own choice, as they are on the profile endpoint: they
+    # maintain these records, and the choice governs what the *roster* shows
+    # the general membership. The organisation ceiling still applies here as
+    # it always has for this list.
+    is_manager = _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    )
     users = await user_service.get_users_for_organization(
         organization_id=current_user.organization_id,
         include_contact_info=include_contact_info,
         contact_settings=contact_settings,
+        honor_member_choice=not is_manager,
     )
 
     return users
@@ -583,6 +591,25 @@ def _clear_directory_only_profile_metadata(payload: UserProfileResponse) -> None
     payload.notification_preferences = None
     for role in payload.roles:
         role.permissions = []
+
+
+def _withhold_profile_visibility(
+    payload: UserProfileResponse, current_user: User, is_self: bool
+) -> None:
+    """Blank the subject's visibility choice for anyone but them and leadership.
+
+    What a member chose to hide is itself private: the contact nulls say
+    nothing about whether a field is empty or withheld, and the choice object
+    would say exactly that. Applied on every route that serialises
+    ``UserProfileResponse`` — the profile read and both profile writes — so a
+    ``users.edit`` holder editing a colleague's phone does not learn what that
+    colleague hides from the roster.
+    """
+    if is_self:
+        return
+    if _has_permission("members.manage", _collect_user_permissions(current_user)):
+        return
+    payload.profile_visibility = None
 
 
 def _clear_hidden_contact_fields(
@@ -1309,10 +1336,7 @@ async def get_user_with_roles(
         _clear_leadership_only_fields(payload)
         if not _has_permission("users.view", user_permissions):
             _clear_directory_only_profile_metadata(payload)
-        # What a colleague chose to hide is itself private: the nulls above
-        # already say nothing about whether a field is empty or withheld, and
-        # the choice object would say exactly that.
-        payload.profile_visibility = None
+    _withhold_profile_visibility(payload, current_user, is_self)
 
     return payload
 
@@ -1441,7 +1465,11 @@ async def update_contact_info(
         username=current_user.username,
     )
 
-    return user
+    payload = UserProfileResponse.model_validate(user)
+    _withhold_profile_visibility(
+        payload, current_user, is_self=str(current_user.id) == str(user_id)
+    )
+    return payload
 
 
 @router.patch("/{user_id}/profile", response_model=UserProfileResponse)
@@ -1736,7 +1764,9 @@ async def update_user_profile(
         username=current_user.username,
     )
 
-    return user
+    payload = UserProfileResponse.model_validate(user)
+    _withhold_profile_visibility(payload, current_user, is_self)
+    return payload
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

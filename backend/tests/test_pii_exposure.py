@@ -23,6 +23,7 @@ from app.api.v1.endpoints.users import (
     _clear_directory_only_profile_metadata,
     _clear_hidden_contact_fields,
     _redact_contact_fields,
+    _withhold_profile_visibility,
     get_user_with_roles,
 )
 from app.models.user import Position, User, UserStatus
@@ -509,6 +510,60 @@ class TestListUsersHonorsMemberPreference:
         assert rows[0].email is None
         assert rows[0].phone is None
         assert rows[0].mobile is None
+
+    async def test_members_manager_is_exempt_from_the_member_choice(self):
+        # The management table and its CSV export must keep what leadership
+        # keeps on the profile; the org ceiling still applies to them here.
+        member = _member({**SHARE_EVERYTHING, "phone": False, "mobile": False})
+        rows = await self._service_for(member).get_users_for_organization(
+            organization_id=uuid.UUID(member.organization_id),
+            include_contact_info=True,
+            contact_settings={
+                "contact_info_visibility": {**ALL_VISIBLE, "show_mobile": False}
+            },
+            honor_member_choice=False,
+        )
+
+        assert rows[0].phone == "555-0100"
+        assert rows[0].mobile is None
+
+
+class TestWithholdProfileVisibility:
+    """Every route serialising UserProfileResponse withholds the choice object
+    from anyone but the subject and members-managers — including the two
+    PATCH routes a users.edit holder may use on a colleague."""
+
+    @staticmethod
+    def _payload() -> UserProfileResponse:
+        return UserProfileResponse.model_validate(_member(SHARE_EVERYTHING))
+
+    def test_subject_keeps_it(self):
+        payload = self._payload()
+        _withhold_profile_visibility(payload, _caller_with([]), is_self=True)
+
+        assert payload.profile_visibility is not None
+
+    def test_members_manager_keeps_it(self):
+        payload = self._payload()
+        _withhold_profile_visibility(
+            payload, _caller_with(["members.manage"]), is_self=False
+        )
+
+        assert payload.profile_visibility is not None
+
+    def test_users_edit_holder_does_not(self):
+        payload = self._payload()
+        _withhold_profile_visibility(
+            payload, _caller_with(["users.edit", "users.view"]), is_self=False
+        )
+
+        assert payload.profile_visibility is None
+
+
+def _caller_with(permissions: list[str]) -> MagicMock:
+    return _caller(
+        user_id=str(uuid.uuid4()), org_id=str(uuid.uuid4()), permissions=permissions
+    )
 
 
 class TestDirectoryProfileMetadataRedaction:

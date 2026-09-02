@@ -26,6 +26,7 @@ class UserService:
         organization_id: UUID,
         include_contact_info: bool = False,
         contact_settings: Optional[Dict[str, Any]] = None,
+        honor_member_choice: bool = True,
     ) -> List[UserListResponse]:
         """
         Get all users for an organization
@@ -77,20 +78,26 @@ class UserService:
 
             # Conditionally include contact information: the organisation's
             # setting is the ceiling, and within it the member's own choice
-            # decides. Same rule as the profile endpoint's
-            # `_clear_hidden_contact_fields`, so the directory and the
-            # profile cannot disagree about a field.
+            # decides — unless the caller is a members-manager
+            # (`honor_member_choice=False`), who is exempt from the choice on
+            # the profile endpoint and must be here too, or the management
+            # table and its CSV export would lose fields leadership keeps.
+            # Same rule as `_clear_hidden_contact_fields`, so the directory
+            # and the profile cannot disagree about a field.
             if include_contact_info and contact_settings:
                 visibility = contact_settings.get("contact_info_visibility", {})
                 member = resolve_profile_visibility(user)
+                allow_email = member.email or not honor_member_choice
+                allow_phone = member.phone or not honor_member_choice
+                allow_mobile = member.mobile or not honor_member_choice
 
-                if visibility.get("show_email", False) and member.email:
+                if visibility.get("show_email", False) and allow_email:
                     user_dict["email"] = user.email
 
-                if visibility.get("show_phone", False) and member.phone:
+                if visibility.get("show_phone", False) and allow_phone:
                     user_dict["phone"] = user.phone
 
-                if visibility.get("show_mobile", False) and member.mobile:
+                if visibility.get("show_mobile", False) and allow_mobile:
                     user_dict["mobile"] = user.mobile
             else:
                 # Don't include contact info if not enabled

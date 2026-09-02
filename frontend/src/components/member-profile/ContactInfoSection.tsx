@@ -1,5 +1,6 @@
 import React from 'react';
 import type {
+  ContactInfoSettings,
   ContactInfoUpdate,
   NotificationPreferences,
   ProfileVisibility,
@@ -7,6 +8,7 @@ import type {
 } from '../../types/user';
 import { VisibilityControl } from './VisibilityControl';
 import { SaveStatusPill, type SaveState } from '../settings/SaveStatusPill';
+import { orgHidesField } from '../../utils/profileVisibility';
 
 interface ContactInfoSectionProps {
   user: {
@@ -38,10 +40,23 @@ interface ContactInfoSectionProps {
    */
   visibilityMode?: 'toggle' | 'badge' | 'none' | undefined;
   visibility?: ProfileVisibility | null | undefined;
+  /**
+   * False until the stored choice is on hand. Switches stay disabled until
+   * then: a save built on the defaults would overwrite a hidden field.
+   */
+  visibilityReady?: boolean | undefined;
+  /** The stored choice could not be read; shown with a retry in toggle mode. */
+  visibilityLoadError?: boolean | undefined;
   /** The field whose save is in flight, so only its switch is disabled. */
   visibilitySaving?: ProfileVisibilityField | null | undefined;
   visibilitySaveState?: SaveState | undefined;
+  /**
+   * The department's contact-visibility ceiling over the three work fields.
+   * `null` when unknown; the markers then show the member's choice alone.
+   */
+  orgVisibility?: ContactInfoSettings | null | undefined;
   onVisibilityChange?: ((field: ProfileVisibilityField, next: boolean) => void) | undefined;
+  onVisibilityRetry?: (() => void) | undefined;
 }
 
 interface ContactRow {
@@ -65,9 +80,13 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
   smsConsentGranted,
   visibilityMode = 'none',
   visibility,
+  visibilityReady = true,
+  visibilityLoadError = false,
   visibilitySaving,
   visibilitySaveState,
+  orgVisibility,
   onVisibilityChange,
+  onVisibilityRetry,
 }) => {
   const rows: ContactRow[] = [
     { field: 'email', label: 'Email', value: user.email },
@@ -110,12 +129,23 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
                   label={row.label}
                   visible={visibility[row.field]}
                   mode={visibilityMode === 'badge' ? 'badge' : 'toggle'}
-                  disabled={visibilitySaving === row.field}
+                  orgHidden={orgHidesField(row.field, orgVisibility)}
+                  disabled={!visibilityReady || visibilitySaving === row.field}
                   onChange={(next) => onVisibilityChange?.(row.field, next)}
                 />
               )}
             </div>
           ))}
+          {visibilityMode === 'toggle' && visibilityLoadError && (
+            <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+              Couldn&apos;t load what you currently share, so the switches are off until it loads.{' '}
+              {onVisibilityRetry && (
+                <button type="button" onClick={onVisibilityRetry} className="font-medium underline underline-offset-2">
+                  Try again
+                </button>
+              )}
+            </p>
+          )}
           {visibilityMode === 'toggle' && (
             <p className="text-theme-text-muted pt-1 text-xs">
               Leadership can always see everything. The department can also turn email, phone and mobile off for
