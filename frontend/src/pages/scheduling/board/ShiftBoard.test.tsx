@@ -23,14 +23,22 @@ vi.mock('../../../modules/scheduling', async () => {
   };
 });
 
-vi.mock('../../../stores/authStore', () => ({
-  useAuthStore: (selector?: (state: unknown) => unknown) => {
-    const state = {
-      user: { id: 'me-1', full_name: 'Sam Poe', timezone: 'America/New_York' },
-    };
-    return selector ? selector(state) : state;
-  },
-}));
+vi.mock('../../../stores/authStore', () => {
+  const state = () => ({
+    user: { id: 'me-1', full_name: 'Sam Poe', timezone: 'America/New_York' },
+  });
+  // Callable and carrying getState, as the real store is: consumers that read
+  // it outside React (the org-scoped scheduling settings cache) use the latter.
+  return {
+    useAuthStore: Object.assign(
+      (selector?: (s: unknown) => unknown) => {
+        const s = state();
+        return selector ? selector(s) : s;
+      },
+      { getState: state }
+    ),
+  };
+});
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';

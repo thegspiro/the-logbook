@@ -13,14 +13,10 @@
  * board, which reads as a different seat rather than as the same one spelled
  * two ways. So the mapping lives here, once, and every screen that shows a
  * seat name goes through it — there is no second copy to drift.
- *
- * Deliberately pure, and deliberately not a lookup against the department's
- * scheduling settings: this runs inside every seat row on the board, and a
- * label is not worth a dependency on a service, an org id and a cache that a
- * roster can render without.
  */
 
 import { POSITION_LABELS } from '../../../constants/enums';
+import { ensureShiftSettingsLoaded, getCachedShiftSettings } from '../services/shiftSettingsApi';
 
 /**
  * Spellings that mean a built-in seat but are not its token. Mirrors
@@ -34,14 +30,24 @@ const POSITION_ALIASES: Record<string, string> = {
 /**
  * The display name for one seat token.
  *
- * A department's own custom seats are not in the map — their labels live in
- * the department's scheduling settings, and the screens that offer those
- * seats read them from there. Here an unknown token is returned readable
- * rather than blank, so a custom seat still names itself on a roster.
+ * A seat the department defined itself carries an admin-chosen label, and the
+ * position-configuration screen is the only place that knows it — so it is
+ * resolved from the same `customPositions` the template form's dropdown is
+ * built from, rather than from a second list here. An unknown token is
+ * returned readable rather than blank: settings may not have landed yet, and
+ * a nameless seat on a roster is worse than a slug.
  */
 export const positionLabel = (position: string | null | undefined): string => {
   const token = (position ?? '').trim();
   if (!token) return '';
+
+  // Sync read of a cache a background load fills, as getPositionOptions does
+  // for the same list. The kick is single-flight per organization, so a board
+  // full of seats makes one request at most and none once it has landed.
+  void ensureShiftSettingsLoaded();
+  const custom = getCachedShiftSettings().customPositions.find((p) => p.value === token);
+  if (custom) return custom.label;
+
   const folded = token.toLowerCase();
   const canonical = POSITION_ALIASES[folded] ?? folded;
   return POSITION_LABELS[canonical] ?? token.replace(/_/g, ' ');

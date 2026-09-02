@@ -35,6 +35,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expiry gap and a gap for chains that were denied before the fix shipped);
   this pass independently re-verified the fix is complete and correct.
 
+### Quick Add: starting a log entry on a phone is now two taps from anywhere (2026-09-01)
+
+**Added**
+
+- **The centre of the phone bottom bar is an Add button.** It opens a short
+  list of the things a member actually logs — training hours, a rig check, an
+  action item, a shift report, clocking in, checking into a shift, scanning a
+  member ID, and for officers requesting equipment, creating an event or adding
+  a member. Before this, every one of them was reached the same way: tap More,
+  wait for the drawer, find the module, find the page, find its button. Four
+  taps and two page loads before the first field.
+- **Each row goes to the screen that already owns that entry.** Quick Add adds
+  no forms of its own, so there is no second path for the same data to drift
+  down and nothing that can fall behind a form's own validation rules.
+- **Rows appear only where the page behind them would actually open.** A row
+  gated more widely than its route is a link to Access Denied placed there by
+  the app itself. `navGateIntegrity.test.ts` now resolves every row against the
+  real route definition — the route must exist, the row's permissions must be a
+  subset of what the route accepts, and a route's module gate must be repeated
+  on the row.
+
+**Changed**
+
+- **The phone bar keeps five items; the configurable slots go from three to
+  two.** Six items on a 390px phone is 65px each and puts the action at an edge
+  rather than under the thumb. A bar layout saved before this shipped keeps its
+  first two destinations and is left intact on disk — the third is still one tap
+  away under More.
+
+**Documentation**
+
+- **[MOBILE_QUICK_ENTRY_REVIEW.md](docs/MOBILE_QUICK_ENTRY_REVIEW.md)** records
+  the review this came out of. Eleven findings remain open, each with its
+  evidence: the command palette is still keyboard-only and so unreachable on a
+  phone; no image input opens the camera directly; the offline queue carries two
+  kinds of write while replay protection exists on one create schema out of
+  many; a fuel log asks for eleven fields where the API needs four; and a phone
+  home screen still needs about a dozen requests to answer "what is waiting for
+  me". Nothing found blocks work.
+
 ### A member can now see who's going, RSVP without being asked, and know where they stand on a waitlist (2026-09-01)
 
 **Added**
@@ -166,18 +206,22 @@ boundary.
   screen you were standing on, and "EMS" reads as a different seat rather than
   as the same one spelled another way. Every screen that shows a seat name now
   resolves it through one helper (`positionLabel`), so there is no second copy
-  of the mapping left to drift. Custom seats a department defines itself are
-  not in that mapping — their labels live in the department's scheduling
-  settings, read by the screens that offer them — and are unchanged.
+  of the mapping left to drift. A seat a department defined itself resolves
+  through the same `customPositions` the template form's dropdown is built
+  from, so its admin-chosen label now reaches the board and the roster too
+  rather than showing there as its slug.
 - **The same token reached print and email.** A printed shift roster's
   right-hand column and the shift-reminder emails' crew list were built from
   the token as well ("EMS", "Ems"), and a shift assignment notification told a
   member they had been assigned to the "ems position". These now go through
   `position_label` in `app/utils/positions.py`, the backend half of the same
   mapping, asserted against the frontend's copy from source so the two cannot
-  disagree. On a 32-character receipt a label wider than the seat column falls
-  back to its first word, because the renderer's mid-word cut
-  ("DRIVER/OPERA") reads as a printer fault.
+  disagree. On a 32-character receipt a label wider than the seat column drops
+  the alternative after a slash — "Driver/Operator" is two names for one seat,
+  and the renderer's mid-word cut ("DRIVER/OPERA") reads as a printer fault —
+  and is otherwise truncated rather than reduced to its first word, which
+  would print a department's "Assistant Chief" and "Assistant Driver"
+  identically.
 - **`POSITION_LABELS` held three keys for one seat** — `EMS`, `ems` and `EMT`,
   all mapping to "EMT" — which is also why the shift assign dropdown, built by
   iterating that map, offered "EMT" three times, two of them tokens no member
