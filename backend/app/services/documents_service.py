@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
@@ -273,7 +273,39 @@ class DocumentsService:
             f.required_permissions for f in folders
         ):
             return None
-        return {f.id for f in folders if self.can_access_folder(f, user)}
+        individually_accessible = {
+            f.id for f in folders if self.can_access_folder(f, user)
+        }
+        folders_by_id = {f.id: f for f in folders}
+
+        # A child cannot relax an ancestor's restriction. Computing the final
+        # set here keeps every consumer (listings, summaries, and future scoped
+        # queries) ancestor-aware through one access scope rather than forcing
+        # each query to rediscover the hierarchy rule.
+        accessible: Set[str] = set()
+        pending = set(individually_accessible)
+        while pending:
+            admitted = {
+                folder_id
+                for folder_id in pending
+                if folders_by_id[folder_id].parent_id is None
+                or folders_by_id[folder_id].parent_id in accessible
+            }
+            if not admitted:
+                break
+            accessible.update(admitted)
+            pending.difference_update(admitted)
+        return accessible
+
+    @staticmethod
+    def _document_access_predicate(accessible_folder_ids: Optional[Set[str]]):
+        """SQL predicate shared by browse and aggregate document queries."""
+        if accessible_folder_ids is None:
+            return None
+        return or_(
+            Document.folder_id.in_(accessible_folder_ids),
+            Document.folder_id.is_(None),
+        )
 
     async def _creates_cycle(
         self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID
@@ -461,11 +493,9 @@ class DocumentsService:
         if folder_id:
             query = query.where(Document.folder_id == str(folder_id))
 
-        if accessible_folder_ids is not None:
-            query = query.where(
-                Document.folder_id.in_(accessible_folder_ids)
-                | Document.folder_id.is_(None)
-            )
+        access_predicate = self._document_access_predicate(accessible_folder_ids)
+        if access_predicate is not None:
+            query = query.where(access_predicate)
 
         if status:
             query = query.where(Document.status == status)
@@ -1094,49 +1124,47 @@ class DocumentsService:
     # Summary & Reporting
     # ============================================
 
-    async def get_summary(self, organization_id: UUID) -> Dict[str, Any]:
-        """Get documents summary statistics"""
-        # Total documents
-        total_result = await self.db.execute(
-            select(func.count(Document.id))
-            .where(Document.organization_id == str(organization_id))
-            .where(Document.status == DocumentStatus.ACTIVE)
-        )
-        total_documents = total_result.scalar() or 0
-
-        # Total folders
-        folder_result = await self.db.execute(
-            select(func.count(DocumentFolder.id)).where(
-                DocumentFolder.organization_id == str(organization_id)
-            )
-        )
-        total_folders = folder_result.scalar() or 0
-
-        # Total size
-        size_result = await self.db.execute(
-            select(func.coalesce(func.sum(Document.file_size), 0))
-            .where(Document.organization_id == str(organization_id))
-            .where(Document.status == DocumentStatus.ACTIVE)
-        )
-        total_size = size_result.scalar() or 0
-
-        # Documents this month
+    async def get_summary(
+        self, organization_id: UUID, current_user: User
+    ) -> Dict[str, Any]:
+        """Get statistics for the folders and active documents a caller can browse."""
+        accessible_ids = await self.accessible_folder_ids(organization_id, current_user)
+        access_predicate = self._document_access_predicate(accessible_ids)
         first_of_month = date.today().replace(day=1)
-        month_result = await self.db.execute(
-            select(func.count(Document.id))
-            .where(Document.organization_id == str(organization_id))
-            .where(
-                Document.created_at
-                >= datetime.combine(
-                    first_of_month, datetime.min.time(), tzinfo=timezone.utc
-                )
-            )
+        month_start = datetime.combine(
+            first_of_month, datetime.min.time(), tzinfo=timezone.utc
         )
-        documents_this_month = month_result.scalar() or 0
+
+        document_aggregates = select(
+            func.count(Document.id),
+            func.coalesce(func.sum(Document.file_size), 0),
+            func.coalesce(
+                func.sum(case((Document.created_at >= month_start, 1), else_=0)), 0
+            ),
+        ).where(
+            Document.organization_id == str(organization_id),
+            Document.status == DocumentStatus.ACTIVE,
+        )
+        if access_predicate is not None:
+            document_aggregates = document_aggregates.where(access_predicate)
+        aggregate_result = await self.db.execute(document_aggregates)
+        total_documents, total_size, documents_this_month = aggregate_result.one()
+
+        accessible_folders = select(DocumentFolder.id).where(
+            DocumentFolder.organization_id == str(organization_id)
+        )
+        if accessible_ids is not None:
+            accessible_folders = accessible_folders.where(
+                DocumentFolder.id.in_(accessible_ids)
+            )
+        folder_result = await self.db.execute(
+            select(func.count()).select_from(accessible_folders.subquery())
+        )
+        total_folders = folder_result.scalar_one()
 
         return {
-            "total_documents": total_documents,
+            "total_documents": total_documents or 0,
             "total_folders": total_folders,
-            "total_size_bytes": total_size,
-            "documents_this_month": documents_this_month,
+            "total_size_bytes": total_size or 0,
+            "documents_this_month": documents_this_month or 0,
         }

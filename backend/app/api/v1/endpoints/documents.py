@@ -571,4 +571,4 @@ async def get_documents_summary(
 ):
     """Get documents module summary statistics"""
     service = DocumentsService(db)
-    return await service.get_summary(current_user.organization_id)
+    return await service.get_summary(current_user.organization_id, current_user)
