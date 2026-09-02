@@ -34,7 +34,7 @@ vi.mock('../services/apiClient', () => ({
 }));
 
 // ---- Import store AFTER mocks are in place ----
-import { useAuthStore } from './authStore';
+import { markSignInPending, useAuthStore } from './authStore';
 
 // ---- Helpers ----
 
@@ -628,6 +628,25 @@ describe('authStore', () => {
       await signIn();
 
       expect(mockPurgeLocalMemberData).toHaveBeenCalled();
+    });
+
+    it('purges on an OAuth sign-in to a device whose owner was never recorded', async () => {
+      // The OAuth callback is a *sign-in* that arrives through loadUser, and
+      // the provider redirect reloaded the app — so the store's own
+      // sign-in flag is gone and the claim would otherwise read this as a
+      // refresh. On a device with no recorded owner, which is every device the
+      // first time this ships, that hands the previous member's drafts and
+      // queued submissions to whoever signs in with Google next.
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        markSignInPending();
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
+      expect(localStorage.getItem('device_member_id')).toBe('u1');
     });
 
     it('leaves a live session’s own work alone across a page reload', async () => {

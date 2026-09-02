@@ -245,6 +245,52 @@ class TestTheSweepFindsThem:
         # that can never be delivered.
         assert calls == [str(live_message.id)]
 
+    async def test_a_claim_for_somebody_no_longer_targeted_is_retired(
+        self, db_session, monkeypatch
+    ):
+        """`deliver()` drops members no longer in the audience, which is right,
+        and leaves their claim `pending`, which is not: the sweep would
+        re-select the same rows on every pass, report the message recovered
+        without changing anything, and eventually fill the bounded window with
+        claims that can never resolve.
+
+        Narrowing an audience after publication is ordinary — an officer fixes
+        the targeting on a notice that went to the wrong crew — so this is not
+        a corner case.
+        """
+        from app.services import scheduled_tasks
+
+        org = await _org(db_session)
+        author = await _user(db_session, org)
+        kept = await _user(db_session, org)
+        dropped = await _user(db_session, org)
+
+        message = await _message(db_session, org, author)
+        # The audience as it stands now: `dropped` was claimed before an
+        # officer narrowed it and is no longer in it.
+        message.target_type = "members"
+        message.target_member_ids = [kept.id]
+        dropped_claim = await _claim_row(db_session, message, dropped)
+        await _claim_row(db_session, message, kept)
+
+        calls = []
+
+        async def _capture(self, msg, only_user_ids=None):
+            calls.append(set(only_user_ids or ()))
+
+        monkeypatch.setattr(MessageDeliveryService, "deliver", _capture)
+
+        result = await scheduled_tasks.run_recover_stranded_message_deliveries(
+            db_session
+        )
+
+        await db_session.refresh(dropped_claim)
+        assert dropped_claim.status == "failed"
+        assert "no longer in the message audience" in (dropped_claim.error or "")
+        assert result["retired"] == 1
+        # And the member who is still targeted is the only one re-delivered to.
+        assert calls == [{str(kept.id)}]
+
     async def test_a_fresh_claim_is_not_swept(self, db_session, monkeypatch):
         from app.services import scheduled_tasks
 
