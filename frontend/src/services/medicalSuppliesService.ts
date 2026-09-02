@@ -104,9 +104,10 @@ export const medicalSuppliesService = {
     return response.data;
   },
 
-  async getItems(filters?: MedicalItemFilters): Promise<InventoryItemsListResponse> {
+  async getItems(filters?: MedicalItemFilters, signal?: AbortSignal): Promise<InventoryItemsListResponse> {
     const response = await api.get<InventoryItemsListResponse>('/medical-supplies/items', {
       params: filters,
+      ...(signal ? { signal } : {}),
     });
     return response.data;
   },

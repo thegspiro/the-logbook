@@ -9,7 +9,7 @@
  * know what is about to lapse before they want an inventory count.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -90,42 +90,92 @@ const MedicalSuppliesPage: React.FC = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [expiring, setExpiring] = useState<ExpiringLot[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [isItemsLoading, setIsItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
+  const overviewRequestId = useRef(0);
+  const itemsRequestId = useRef(0);
+  const itemsAbortController = useRef<AbortController | null>(null);
+
+  const loadOverview = useCallback(async () => {
+    const requestId = ++overviewRequestId.current;
+    setIsOverviewLoading(true);
+    setOverviewError(null);
     try {
-      const [summaryData, itemsData, categoryData, expiringData] = await Promise.all([
+      const [summaryData, categoryData, expiringData] = await Promise.all([
         medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS),
-        medicalSuppliesService.getItems({
-          search: search || undefined,
-          category_id: categoryFilter || undefined,
-          limit: 200,
-        }),
         medicalSuppliesService.getCategories(),
         medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS),
       ]);
+      if (requestId !== overviewRequestId.current) return;
       setSummary(summaryData);
-      setItems(itemsData.items);
       setCategories(categoryData);
       setExpiring(expiringData);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load medical supplies'));
+      if (requestId !== overviewRequestId.current) return;
+      const message = getErrorMessage(err, 'Failed to load medical supplies overview');
+      setOverviewError(message);
+      toast.error(message);
     } finally {
-      setIsLoading(false);
+      if (requestId === overviewRequestId.current) setIsOverviewLoading(false);
     }
-  }, [search, categoryFilter]);
+  }, []);
+
+  const loadItems = useCallback(async () => {
+    const requestId = ++itemsRequestId.current;
+    itemsAbortController.current?.abort();
+    const controller = new AbortController();
+    itemsAbortController.current = controller;
+    setIsItemsLoading(true);
+    setItemsError(null);
+    try {
+      const itemsData = await medicalSuppliesService.getItems(
+        {
+          search: debouncedSearch || undefined,
+          category_id: categoryFilter || undefined,
+          limit: 200,
+        },
+        controller.signal
+      );
+      if (requestId !== itemsRequestId.current) return;
+      setItems(itemsData.items);
+    } catch (err: unknown) {
+      if (controller.signal.aborted || requestId !== itemsRequestId.current) return;
+      const message = getErrorMessage(err, 'Failed to load medical supplies');
+      setItemsError(message);
+      toast.error(message);
+    } finally {
+      if (requestId === itemsRequestId.current) setIsItemsLoading(false);
+    }
+  }, [debouncedSearch, categoryFilter]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadOverview();
+  }, [loadOverview]);
 
-  useRegisterPullToRefresh(load);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    void loadItems();
+    return () => itemsAbortController.current?.abort();
+  }, [loadItems]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([loadOverview(), loadItems()]);
+  }, [loadOverview, loadItems]);
+
+  useRegisterPullToRefresh(refresh);
 
   /** Lot stock is the real count for dated items; quantity is what's left over. */
 
@@ -148,7 +198,7 @@ const MedicalSuppliesPage: React.FC = () => {
     setShowItemModal(false);
     setEditingItem(null);
     setShowDeliveryModal(false);
-    void load();
+    void refresh();
   };
 
   return (
@@ -186,7 +236,7 @@ const MedicalSuppliesPage: React.FC = () => {
           <div className="hscroll flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => void refresh()}
               className="btn-icon"
               aria-label="Refresh medical supplies"
             >
@@ -275,7 +325,18 @@ const MedicalSuppliesPage: React.FC = () => {
         </button>
       </div>
 
-      {isLoading ? (
+      {tab === 'expiring' && overviewError && (
+        <p role="alert" className="mb-4 text-sm text-red-700 dark:text-red-400">
+          {overviewError}
+        </p>
+      )}
+      {tab === 'stock' && itemsError && (
+        <p role="alert" className="mb-4 text-sm text-red-700 dark:text-red-400">
+          {itemsError}
+        </p>
+      )}
+
+      {tab === 'expiring' && isOverviewLoading ? (
         <SkeletonCard />
       ) : tab === 'expiring' ? (
         <section aria-label="Expiring stock">
@@ -332,7 +393,7 @@ const MedicalSuppliesPage: React.FC = () => {
           )}
         </section>
       ) : (
-        <section aria-label="All supplies">
+        <section aria-label="All supplies" aria-busy={isItemsLoading}>
           <div className="mb-4 flex flex-wrap gap-2">
             <div className="relative min-w-[200px] flex-1">
               <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />

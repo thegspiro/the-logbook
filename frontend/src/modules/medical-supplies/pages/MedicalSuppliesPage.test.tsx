@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -60,6 +60,21 @@ const expiringLot = (overrides: Record<string, unknown> = {}) => ({
   updated_at: '2026-08-01T00:00:00Z',
   ...overrides,
 });
+
+const itemResponse = (name: string) => ({
+  items: [{ id: `item-${name}`, name, quantity: 5 }],
+  total: 1,
+  skip: 0,
+  limit: 200,
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
 
 describe('MedicalSuppliesPage', () => {
   beforeEach(() => {
@@ -147,12 +162,73 @@ describe('MedicalSuppliesPage', () => {
     // The exact filter object, so a future item_type sneaking into the payload
     // fails here rather than quietly letting the client choose its own domain.
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenCalledWith({
-        search: undefined,
-        category_id: undefined,
-        limit: 200,
-      })
+      expect(mockGetItems).toHaveBeenCalledWith(
+        {
+          search: undefined,
+          category_id: undefined,
+          limit: 200,
+        },
+        expect.any(AbortSignal)
+      )
     );
+  });
+
+  it('settles rapid search edits into one item request without reloading overview data', async () => {
+    vi.useFakeTimers();
+    try {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await act(async () => Promise.resolve());
+      mockGetItems.mockClear();
+      mockGetSummary.mockClear();
+      mockGetCategories.mockClear();
+      mockGetExpiringLots.mockClear();
+
+      fireEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+      const input = screen.getByRole('searchbox', { name: /Search medical supplies/i });
+      fireEvent.change(input, { target: { value: 'g' } });
+      fireEvent.change(input, { target: { value: 'ga' } });
+      fireEvent.change(input, { target: { value: 'gauze' } });
+
+      await act(async () => vi.advanceTimersByTimeAsync(299));
+      expect(mockGetItems).not.toHaveBeenCalled();
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+
+      expect(mockGetItems).toHaveBeenCalledTimes(1);
+      expect(mockGetItems).toHaveBeenCalledWith(
+        { search: 'gauze', category_id: undefined, limit: 200 },
+        expect.any(AbortSignal)
+      );
+      expect(mockGetSummary).not.toHaveBeenCalled();
+      expect(mockGetCategories).not.toHaveBeenCalled();
+      expect(mockGetExpiringLots).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let an older item response replace newer search results', async () => {
+    vi.useFakeTimers();
+    const older = deferred<ReturnType<typeof itemResponse>>();
+    const newer = deferred<ReturnType<typeof itemResponse>>();
+    mockGetItems.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+
+    try {
+      renderWithRouter(<MedicalSuppliesPage />);
+      fireEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+      fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+        target: { value: 'new' },
+      });
+      await act(async () => vi.advanceTimersByTimeAsync(300));
+
+      await act(async () => newer.resolve(itemResponse('New result')));
+      expect(screen.getByText('New result')).toBeInTheDocument();
+
+      await act(async () => older.resolve(itemResponse('Older result')));
+      expect(screen.getByText('New result')).toBeInTheDocument();
+      expect(screen.queryByText('Older result')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('names the category from the list it loaded, not the stripped response field', async () => {
