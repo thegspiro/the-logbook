@@ -193,26 +193,46 @@ def _token_eligibility_error(
         # ballot-item candidate whose position never appears in that list
         # would reject legitimate item votes outright.
         #
-        # The value checked against `eligible_positions` (and named in the
-        # message) is the colliding plain-position label itself when one
-        # exists — not necessarily `effective_position`, which for a
-        # colliding legacy item in the bulk route is the item id — falling
-        # back to `effective_position` only for a genuinely plain (no
-        # matching_item) candidate.
-        check_label = (
-            next(iter(colliding_positions))
-            if colliding_positions
-            else effective_position
-        )
-        if (
-            voting_token.eligible_positions is not None
-            and check_label not in voting_token.eligible_positions
-        ):
-            return (
-                f"You are not eligible to vote for {check_label}"
-                if check_label
-                else "You are not eligible to vote in this election"
-            )
+        # The value(s) checked against `eligible_positions` are the
+        # colliding plain-position labels themselves when any exist — not
+        # `effective_position`, which for a colliding legacy item in the
+        # bulk route is the item id — falling back to `effective_position`
+        # only for a genuinely plain (no matching_item) candidate.
+        #
+        # A legacy item's title *and* id can each separately collide with
+        # a *different* configured plain position at once (schema allows
+        # an id like "treasurer" alongside an unrelated title "Secretary",
+        # both also present in `election.positions`). Which alias is "the"
+        # position this vote is really for is inherently ambiguous — that
+        # ambiguity is exactly why both are matched at all (see
+        # `ballot_item_candidate_positions`) — so picking a single member
+        # via `next(iter(colliding_positions))` checked an arbitrary one
+        # (Python set iteration order depends on hash seeding) and let a
+        # token eligible for only one of the two colliding positions vote
+        # anyway, bypassing the other's restriction entirely (Codex round
+        # 8). Failing closed — requiring eligibility for every colliding
+        # label, not just one — closes that without guessing which alias
+        # is "real".
+        if voting_token.eligible_positions is not None:
+            if colliding_positions:
+                denied = sorted(
+                    label
+                    for label in colliding_positions
+                    if label not in voting_token.eligible_positions
+                )
+            else:
+                denied = (
+                    [effective_position]
+                    if effective_position not in voting_token.eligible_positions
+                    else []
+                )
+            if denied:
+                check_label = denied[0]
+                return (
+                    f"You are not eligible to vote for {check_label}"
+                    if check_label
+                    else "You are not eligible to vote in this election"
+                )
 
     return None
 

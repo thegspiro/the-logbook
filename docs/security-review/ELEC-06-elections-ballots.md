@@ -1316,6 +1316,74 @@ one-line mock fixup — its hand-built `organization` `SimpleNamespace`
 lacked a `.settings` attribute, which `_member_voting_gates()` now always
 reads once `election.positions` is set.
 
+### ELEC-36 — P1 — The ELEC-33 collision check picked an arbitrary colliding position when a legacy item collided with two different plain positions at once — ✅ FIXED
+
+**What:** Round 7's ELEC-33 fix added `_token_eligibility_error()`, which
+detects when a ballot item's position/title/id collides with a restricted
+plain `election.positions` entry and, when it does, checks
+`voting_token.eligible_positions` against the colliding label. For a
+legacy item (no explicit `position` field), `ballot_item_candidate_positions()`
+returns up to two aliases — the item's `title` and its `id` — either of
+which can independently collide with a configured plain position. The fix
+computed `colliding_positions = item_aliases & set(election.positions)`
+correctly, but then selected which one to check with
+`next(iter(colliding_positions))` — an arbitrary member whenever the set
+has more than one element, since Python set iteration order depends on
+hash seeding, not on which alias this particular vote is actually for.
+
+**Impact:** an item `{"id": "Treasurer", "title": "Secretary"}` (no
+`position` field) where both "Treasurer" and "Secretary" are also
+independently configured, independently restricted plain positions in
+`election.positions`. A token eligible for "Treasurer" but explicitly
+NOT eligible for "Secretary" could, depending only on hash-seed luck, have
+its candidate checked against "Treasurer" (passes) instead of "Secretary"
+(the alias the check actually needed to enforce) — bypassing Secretary's
+positional eligibility restriction and casting a counted vote the token
+was never granted.
+
+**Verified reachable:** `BallotItemInput.id` (`app/schemas/election.py`)
+accepts any string matching `^[A-Za-z0-9_-]+$` up to 100 characters — a
+value like `Treasurer` is valid — and `title` has no validator preventing
+it from equaling a different `election.positions` entry, nor is there any
+cross-field check preventing an item's `id` and `title` from each equaling
+a _different_ member of `election.positions` at once. Nothing in
+`ElectionBase`/`ElectionUpdate` restricts `positions` from containing both
+values simultaneously either (this is the same absence of exclusivity
+ELEC-29 and ELEC-33 already documented — deliberate, since a ballot item
+and a plain position are allowed to legitimately share eligibility rules
+by name). Reproduced with a regression test
+(`TestMultiCollisionRequiresEligibilityForEveryColludingPosition` in
+`tests/test_election_codex_round8.py`) that fails pre-fix: a token
+eligible for "Treasurer" (one colliding alias) but not "Secretary" (the
+other) submits the colliding candidate through the bulk route
+(`submit_ballot_with_token`) with no error, and a `Vote` row is persisted.
+
+**Fix:** `_token_eligibility_error()` now requires the token to be
+eligible for **every** colliding position, not one arbitrarily chosen
+member of the set — failing closed on the ambiguity (which alias is "the"
+position this vote is for is inherently unresolvable from a legacy item
+alone; that ambiguity is exactly why both aliases are matched at all)
+rather than guessing. For the pre-existing single-collision case
+(`len(colliding_positions) == 1`) this is byte-identical to the prior
+behavior — only the 2+-alias case changes. Confirmed via grep that
+`_token_eligibility_error()` has exactly two call sites
+(`cast_vote_with_token` and `submit_ballot_with_token`), both already
+routed through the shared helper per ELEC-33's own centralization goal, so
+this one change closes the gap in both routes at once with no third call
+site to drift.
+
+New regression tests in `tests/test_election_codex_round8.py`
+(`TestMultiCollisionRequiresEligibilityForEveryColludingPosition`, 3
+tests) — confirmed one fails pre-fix via `git stash` (the token eligible
+for "Treasurer" but not "Secretary" was wrongly accepted, `result is not
+None`); the mirror-image test (eligible for "Secretary" but not
+"Treasurer") and a sanity test (eligible for both, must still succeed)
+guard against the fix over-rejecting. Both directions are asserted in the
+same test module/process specifically so that whichever alias hash-seed
+luck would have favored, at least one direction demonstrably failed
+pre-fix — the bug's own non-determinism can't hide behind a single
+lucky test run.
+
 **Round 7: 3 fixed (ELEC-33, ELEC-34, ELEC-35).** The first two findings
 were posted by Codex against commit `44fcbfe8e` (round 5's own fix commit)
 about gaps in that fix (and, for ELEC-34, round 2's ELEC-27 fix)
@@ -1362,6 +1430,34 @@ time #2173 was opened) and merged forward onto current `main`.
 New guard tests: `tests/test_election_codex_round7.py` (7 tests total: 2
 for ELEC-33, 3 for ELEC-34 — one of which is a pure unit test of
 `_dedup_position_key` with no DB fixture — and 2 for ELEC-35).
+
+**Round 8: 1 fixed (ELEC-36).** Posted by Codex against commit
+`097f1c37e` (round 7's own ELEC-33 fix commit) about a bug in that fix's
+collision-detection logic — verified real by reading the actual
+`_token_eligibility_error()` implementation and confirming the multi-alias
+collision scenario is reachable through the schema, not by taking the
+paraphrase as final. This is the third round of scrutiny on this specific
+invariant (ELEC-29 opened it, ELEC-33 partially fixed it while
+introducing this gap, ELEC-36 closes it) — fixed by making the check
+exhaustive over every colliding alias rather than adding a fourth
+special case.
+
+**Completion gate (pass 3, after round 8, ELEC-36):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 497 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round8.py -q`              | ✅ 3 passed, 0 failed                                                     |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9817 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round8.py` (new file, 3
+tests, `TestMultiCollisionRequiresEligibilityForEveryColludingPosition` —
+both bypass directions plus a sanity check against over-rejection).
 
 ---
 

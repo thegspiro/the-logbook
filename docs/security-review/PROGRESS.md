@@ -19,10 +19,56 @@ feature. The rotation cannot outrun its own review queue.
 [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (Feature 06,
 Elections & ballots, pass 3, round 7 only — round 7's predecessor, #2162,
 merged mid-task before round 7's fix was ready; see the PR-split note
-below) — 19 fixed, 3 flagged across seven Codex review rounds, 1
+below) — 20 fixed, 3 flagged across eight Codex review rounds, 1
 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 8) — 1 more fixed (ELEC-36) — PR #2173
+
+Codex posted 1 finding against commit `097f1c37e` (round 7's own
+`_token_eligibility_error` fix, ELEC-33) about a bug in that fix's own
+collision-detection logic.
+
+- **ELEC-36 (P1, fixed):** when a candidate's ballot item collides with a
+  restricted plain position under _multiple_ aliases at once — a legacy
+  item (no explicit `position` field) whose `id` equals one configured
+  plain position's name and whose `title` equals a _different_ configured
+  plain position's name, both present in `election.positions` — the
+  helper computed `colliding_positions` as the set of every colliding
+  alias and then checked eligibility against `next(iter(colliding_positions))`,
+  an arbitrary member (Python set iteration order depends on hash
+  seeding), not necessarily the specific alias this vote actually needs to
+  clear. A token eligible for only one of the two colliding positions
+  could, depending on which label the arbitrary pick happened to favor,
+  have its candidate checked against the position it _is_ eligible for
+  instead of the one it is not — bypassing that position's eligibility
+  restriction entirely. Confirmed reachable: `BallotItemInput.id` accepts
+  `^[A-Za-z0-9_-]+$` (so an id like `Treasurer` is valid), `title` has no
+  overlap restriction against `id` or against `election.positions`, and
+  nothing in schema or service validation prevents both aliases from also
+  appearing in `election.positions` at once.
+
+Fixed by requiring eligibility for _every_ colliding position rather than
+one arbitrarily chosen member of the set — failing closed on which alias
+is "real" instead of guessing, in the one shared `_token_eligibility_error()`
+helper (confirmed via grep to be the only place this logic lives — exactly
+two call sites, `cast_vote_with_token` and `submit_ballot_with_token`, both
+already routed through it per ELEC-33's own goal — so the fix closes both
+routes at once). New regression tests in
+`tests/test_election_codex_round8.py`
+(`TestMultiCollisionRequiresEligibilityForEveryColludingPosition`, 3
+tests), confirmed one fails pre-fix via `git stash` (a token eligible for
+"Treasurer" but not the item's other colliding alias "Secretary" was
+wrongly accepted). Completion gate re-run clean: flake8/black/isort on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` (409 revisions,
+unchanged, no migration this round); scoped suite (`-k "election or
+ballot or vote or quorum"`) 497 passed/1 skipped (pre-existing)/0 failed;
+full backend suite 9817 passed/21 skipped (pre-existing/environmental)/0
+failed. No frontend file touched, so `tsc`/`eslint` not run. Review thread
+replied to and resolved on #2173. See `ELEC-06-elections-ballots.md`'s
+Pass 3 section (ELEC-36) for the full write-up. Rotation row 06 remains ⏳
+(awaiting PR #2173 merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 7 continued) — 1 more fixed (ELEC-35) — PR #2173
 

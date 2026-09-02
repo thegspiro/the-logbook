@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the election configured an (empty) rule for that position. Fixed so
   the tier-wide ban applies to every election with plain positions,
   regardless of whether position-specific rules are configured.
+- **The fix for the naming-collision bypass above had a gap of its own:**
+  when a legacy contest happened to share a name with two different
+  restricted positions at once (via its internal id and its displayed
+  title respectively), the check picked one of the two names to verify —
+  effectively at random — instead of requiring the vote to clear both. A
+  token granted access to only one of the two names could, depending on
+  that random pick, still bypass the other. Fixed to require clearing
+  every colliding name, not just one.
 
 Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
 (ELEC-33, ELEC-34, ELEC-35).
