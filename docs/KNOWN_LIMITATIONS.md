@@ -1937,6 +1937,33 @@ package per prospect is a behavior change that could break an intended
 a response-envelope/frontend-contract change, not a drop-in. (Security review
 MP-10, `docs/security-review/MP-08-membership-pipeline.md`.)
 
+## Membership Pipeline — `/widget-summary` Loads Every Prospect Row to Count Them (2026-09-02)
+
+`GET /prospective-members/widget-summary` (`pipeline_widget_summary`,
+`membership_pipeline.py:118-168`) loads every full `ProspectiveMember` row in
+the organization — every column, unbounded — into Python just to compute
+`by_status` counts, three aging buckets, and (for a caller holding
+`prospective_members.manage`) a `details` list of every applicant's id/name/
+status. Same class as MP-10 above and the medical-screening/finance entries
+elsewhere on this page: access control is sound (org-scoped,
+permission-gated, and the manager-only `details` field is already withheld
+from view-only callers), so this is a scaling concern, not a leak — but a
+department with years of applicant history materializes its entire prospect
+table, full PII columns included, on every render of this dashboard widget.
+
+Not fixed: the aggregate counts (`by_status`/`aging`/`total`) could be
+computed with `GROUP BY`/`CASE` SQL instead of a full row scan without
+changing the response shape, but the `details` list itself has no natural
+cap in the current contract — capping it silently truncates what a manager
+sees, and paginating it is a response-envelope change for the frontend
+widget, the same class of decision MP-10 already declined to make
+unilaterally. (Security review MP-08 pass 3, PR #2176,
+`docs/security-review/MP-08-membership-pipeline.md`.) The sibling read in
+this same finding — `GET /pipelines`'s `selectinload(...prospects)` used
+only to `len()` the collection — **was** fixed in the same pass: it now
+counts prospects per pipeline with one aggregate query instead of
+eager-loading every row, with no response-shape change.
+
 ## Medical Screening — Requirement and Record Lists Are Unbounded (2026-08-06, mirrored 2026-08-25)
 
 `list_requirements`/`list_records` (`medical_screening_service.py`) run

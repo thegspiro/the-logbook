@@ -16,9 +16,64 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2175](https://github.com/thegspiro/the-logbook/pull/2175) (Feature 07,
-Users & organizations, pass 3) — 1 fixed (USR-7), 1 flagged (USR-8). See the
-Log below for detail.
+[#2176](https://github.com/thegspiro/the-logbook/pull/2176) (Feature 08,
+Membership pipeline, pass 3) — the pass 3 draft's "no new findings"
+conclusion did not hold: Codex's review of it found 6 real issues (plus a
+7th restated in a comment, mirroring the already-flagged MP-10). 5 fixed, 2
+flagged. See the Log below for detail.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) — 5 fixed, 2 flagged (Codex review on PR #2176)
+
+The pass 3 draft (full re-verification, zero code diff since pass 2's
+byte-identical merge) concluded "no new findings." Codex's review of that
+draft found 6 real issues it had missed, plus a 7th (unbounded prospect
+reads on `/widget-summary` and `/pipelines`) restated in a review comment
+mirroring MP-10's already-flagged class. Independently re-traced every one
+against the current code (not the bot's say-so) — all 7 confirmed real.
+
+**Fixed (5):** MP-13 unvalidated cross-tenant `form_id` in step config
+(`add_step`/`update_step`/`create_pipeline`'s inline steps all now validate
+in-org before persisting, mirroring the existing `email_template_id`
+pattern); MP-14 N+1 query in `list_event_links` (batch-fetched instead of
+per-row); MP-15 election-package PII over-collection ignoring the stage's
+configured `package_fields` (CLAUDE.md Pitfall #19 — a config switch with no
+reader; wired one that preserves the prior full-capture behavior for every
+pipeline that never configured it); MP-16 election-package assignment race
+with no row lock (CLAUDE.md Pitfall #27 — locked the package and election
+rows, made the status check a locking read); MP-17 no state machine on
+election-package `status` (mirrors MP-9's fix for
+`ProspectStatus.TRANSFERRED` — system-derived states can no longer be set or
+cleared through the generic update); MP-18 document deletion could orphan
+the file on a failed `os.remove` (reordered so the file removal happens
+before the metadata commit, and a failed removal now raises instead of
+being swallowed).
+
+**Flagged (1 full + half of a 2nd, both mirrored to `KNOWN_LIMITATIONS.md`):**
+MP-19's `/widget-summary` half (unbounded prospect-row materialization for
+aggregate counts and an uncapped `details` list — same class as MP-10, a
+response-contract change to fix properly); MP-10 itself remains open,
+unchanged. MP-19's `/pipelines` half **was** fixed (aggregate count query
+instead of eager-loading every prospect row, no contract change).
+
+New guard tests: `backend/tests/test_membership_pipeline_pass3_codex.py`
+(26 tests), each independently confirmed to fail against the pre-fix code
+via `git stash` on the two changed source files. Completion gate clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, single head, no schema change); scoped
+election/membership/prospect/pipeline suite (49 files) 808 passed/0 failed;
+full backend suite 9859 passed/21 skipped (pre-existing/environmental)/0
+failed (9833 baseline + 26 new guard tests). No frontend file changed, so
+`tsc`/`eslint` were not re-run this pass. Full detail in `MP-08-membership-pipeline.md` → Pass 3. Rotation row 08 → ⏳ (awaiting PR merge). Next: 09 medical screening
+(PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 07 (Users & organizations, pass 3) ✅ merged — PR #2175
+
+Merged to `main` as commit `9860bde5`. Rotation row 07 → ✅. Next: 08
+Membership pipeline.
 
 ---
 
@@ -6676,8 +6731,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⏳     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
