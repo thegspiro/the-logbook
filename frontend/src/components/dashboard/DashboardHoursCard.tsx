@@ -15,6 +15,16 @@ interface DashboardHoursCardProps {
   monthLabel: string;
   segments: HoursSegment[];
   loading: boolean;
+  /**
+   * True when a source that was actually attempted failed to load.
+   *
+   * A null segment is not enough to decide this: a department with Training
+   * disabled has a null training figure and a total that is genuinely correct
+   * without it. Only a failed source leaves the sum short of the month's real
+   * hours, and stating that short sum as "total" is a precise wrong number,
+   * which reads more trustworthy than a missing one.
+   */
+  totalUnverified?: boolean;
 }
 
 /**
@@ -24,7 +34,12 @@ interface DashboardHoursCardProps {
  * numbers and their sum. A single stacked bar answers "where did my time go"
  * without asking the reader to divide the tiles in their head.
  */
-const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, segments, loading }) => {
+const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({
+  monthLabel,
+  segments,
+  loading,
+  totalUnverified = false,
+}) => {
   // Rounded once, here, so the bar spans, the legend figures and the total are
   // all the same numbers the reader is being asked to add up.
   const rounded = segments.map((segment) => ({
@@ -41,8 +56,14 @@ const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, seg
           <div className="bg-theme-surface-hover h-7 w-10 animate-pulse rounded-sm" />
         ) : (
           <span className="flex items-baseline gap-1.5">
-            <span className="text-theme-text-primary text-2xl font-bold tabular-nums">{formatHours(total)}</span>
-            <span className="text-theme-text-muted text-xs">total</span>
+            {totalUnverified ? (
+              <span className="text-theme-text-primary text-sm font-bold">Total unavailable</span>
+            ) : (
+              <>
+                <span className="text-theme-text-primary text-2xl font-bold tabular-nums">{formatHours(total)}</span>
+                <span className="text-theme-text-muted text-xs">total</span>
+              </>
+            )}
           </span>
         )}
       </div>

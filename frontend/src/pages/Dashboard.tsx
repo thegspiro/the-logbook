@@ -175,10 +175,20 @@ interface FeedEntry {
 
 interface SectionErrorProps {
   message: string;
+  /**
+   * What this control retries, e.g. "schedule". Becomes "Retry schedule" as
+   * the button's accessible name.
+   *
+   * When several sources fail at once the dashboard shows several of these,
+   * and a screen reader walking the button list hears "Retry" every time --
+   * the adjacent message is not part of the button's name, so there is
+   * nothing to tell them apart by.
+   */
+  source: string;
   onRetry: () => void;
 }
 
-const SectionError: React.FC<SectionErrorProps> = ({ message, onRetry }) => (
+const SectionError: React.FC<SectionErrorProps> = ({ message, source, onRetry }) => (
   <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
     <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
     <span className="min-w-0 flex-1">{message}</span>
@@ -188,6 +198,7 @@ const SectionError: React.FC<SectionErrorProps> = ({ message, onRetry }) => (
     <button
       type="button"
       onClick={onRetry}
+      aria-label={`Retry ${source}`}
       className="btn-secondary mobile-touch-target shrink-0 px-3 py-1 text-xs font-semibold"
     >
       Retry
@@ -303,7 +314,13 @@ const Dashboard: React.FC = () => {
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
-  const [messagesError, setMessagesError] = useState(false);
+  // Two independent requests sit behind the Updates card, so they get two
+  // flags: retrying the pair when only the badge count failed re-runs a
+  // healthy inbox request that can now stall or fail, turning one recoverable
+  // failure into two.
+  const [inboxError, setInboxError] = useState(false);
+  const [unreadCountError, setUnreadCountError] = useState(false);
+  const messagesError = inboxError || unreadCountError;
   const [deptMsgUnread, setDeptMsgUnread] = useState(0);
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
 
@@ -464,8 +481,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadMyEquipment = async () => {
-    setLoadingMyEquipment(true);
+  const loadMyEquipment = async (isRetry = false) => {
+    if (!isRetry) setLoadingMyEquipment(true);
     setEquipmentError(false);
     if (!isModuleOn('inventory')) {
       setLoadingMyEquipment(false);
@@ -506,8 +523,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadUpcomingEvents = async () => {
-    setLoadingUpcomingEvents(true);
+  const loadUpcomingEvents = async (isRetry = false) => {
+    if (!isRetry) setLoadingUpcomingEvents(true);
     setUpcomingEventsError(false);
     try {
       // Bounded to the window the list renders, and to a limit that can hold
@@ -563,19 +580,38 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadDeptMessages = async () => {
-    setLoadingMessages(true);
-    setMessagesError(false);
+  // `only` retries a single subrequest. A retry also skips the loading flag,
+  // for the reason given on loadMyShifts.
+  const loadDeptMessages = async (only?: 'inbox' | 'unread') => {
+    const isRetry = only !== undefined;
+    if (!isRetry) setLoadingMessages(true);
+    const wantInbox = only !== 'unread';
+    const wantUnread = only !== 'inbox';
+    if (wantInbox) setInboxError(false);
+    if (wantUnread) setUnreadCountError(false);
     // These endpoints are independent: a badge-count failure must not throw
     // away messages the member can still read (and vice versa).
     const [inboxResult, unreadResult] = await Promise.allSettled([
-      messagesService.getInbox({ include_read: false, limit: 10 }),
-      messagesService.getUnreadCount(),
+      wantInbox ? messagesService.getInbox({ include_read: false, limit: 10 }) : Promise.resolve(null),
+      wantUnread ? messagesService.getUnreadCount() : Promise.resolve(null),
     ]);
-    if (inboxResult.status === 'fulfilled') setDeptMessages(inboxResult.value);
-    if (unreadResult.status === 'fulfilled') setDeptMsgUnread(unreadResult.value.unread_count);
-    setMessagesError(inboxResult.status === 'rejected' || unreadResult.status === 'rejected');
-    setLoadingMessages(false);
+    if (wantInbox) {
+      if (inboxResult.status === 'fulfilled' && inboxResult.value) setDeptMessages(inboxResult.value);
+      setInboxError(inboxResult.status === 'rejected');
+    }
+    if (wantUnread) {
+      if (unreadResult.status === 'fulfilled' && unreadResult.value) setDeptMsgUnread(unreadResult.value.unread_count);
+      setUnreadCountError(unreadResult.status === 'rejected');
+    }
+    if (!isRetry) setLoadingMessages(false);
+  };
+
+  // The retry the Updates card offers: whichever half actually failed.
+  const retryDeptMessages = () => {
+    if (inboxError && unreadCountError) return loadDeptMessages();
+    if (inboxError) return loadDeptMessages('inbox');
+    if (unreadCountError) return loadDeptMessages('unread');
+    return Promise.resolve();
   };
 
   const markMessageRead = async (msgId: string) => {
@@ -620,8 +656,13 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadMyShifts = async () => {
-    setLoadingMyShifts(true);
+  // `isRetry` suppresses the loading flag, and every loader whose section
+  // renders a skeleton takes it. On first load the skeleton is right: there is
+  // nothing to show. On a retry the section is already populated and carrying
+  // an error banner, so raising the flag swaps that for a skeleton and a
+  // hanging request then hides the preserved rows indefinitely.
+  const loadMyShifts = async (isRetry = false) => {
+    if (!isRetry) setLoadingMyShifts(true);
     setMyShiftsError(false);
     if (!isModuleOn('scheduling')) {
       setMyShifts([]);
@@ -645,8 +686,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadOpenShifts = async () => {
-    setLoadingOpenShifts(true);
+  const loadOpenShifts = async (isRetry = false) => {
+    if (!isRetry) setLoadingOpenShifts(true);
     setOpenShiftsError(false);
     if (!isModuleOn('scheduling')) {
       setOpenShifts([]);
@@ -832,8 +873,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadTrainingProgress = async () => {
-    setLoadingTraining(true);
+  const loadTrainingProgress = async (isRetry = false) => {
+    if (!isRetry) setLoadingTraining(true);
     setTrainingError(false);
     if (!isModuleOn('training')) {
       setEnrollments([]);
@@ -844,12 +885,16 @@ const Dashboard: React.FC = () => {
       const data = await trainingProgramService.getMyEnrollments('active');
       setEnrollments(data);
 
-      const top3 = data.slice(0, 3);
-      const results = await Promise.allSettled(top3.map((e) => trainingProgramService.getEnrollmentProgress(e.id)));
+      // Only the rows the card renders. Asking about a fourth enrollment
+      // nobody can see spends a request on it and, worse, lets its failure
+      // raise "Training progress could not be verified" over two rows that
+      // loaded fine — with a Retry that keeps querying the invisible one.
+      const shown = data.slice(0, PROGRAMS_SHOWN);
+      const results = await Promise.allSettled(shown.map((e) => trainingProgramService.getEnrollmentProgress(e.id)));
       const details = new Map<string, MemberProgramProgress>();
       results.forEach((result, i) => {
         if (result.status === 'fulfilled') {
-          const item = top3[i];
+          const item = shown[i];
           if (item) details.set(item.id, result.value);
         }
       });
@@ -1361,8 +1406,14 @@ const Dashboard: React.FC = () => {
             <span className="border-theme-surface-border bg-theme-surface text-theme-text-secondary inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-4 text-[13px]">
               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
-                <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(totalHours)}</span> hrs in{' '}
-                {monthLabel}
+                {hoursError ? (
+                  <span className="text-theme-text-primary font-bold">Hours unavailable for {monthLabel}</span>
+                ) : (
+                  <>
+                    <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(totalHours)}</span>{' '}
+                    hrs in {monthLabel}
+                  </>
+                )}
               </span>
             </span>
           </div>
@@ -1398,8 +1449,18 @@ const Dashboard: React.FC = () => {
                 <div className="card">
                   <SectionError
                     message="Readiness could not be fully verified."
+                    source="readiness"
                     onRetry={() => {
-                      void Promise.all([loadHours(), loadMySeats(), loadMyScreenings()]);
+                      // Only the failed sources. Reloading the healthy ones
+                      // disturbs the Hours card for a readiness failure, and a
+                      // transient rejection from a request that had succeeded
+                      // replaces good data with an unavailable state -- turning
+                      // one recoverable failure into several.
+                      const retries: Promise<void>[] = [];
+                      if (certificationsError) retries.push(loadHours());
+                      if (seatsError) retries.push(loadMySeats());
+                      if (screeningsError) retries.push(loadMyScreenings());
+                      void Promise.all(retries);
                     }}
                   />
                 </div>
@@ -1437,8 +1498,14 @@ const Dashboard: React.FC = () => {
                       Take a Shift
                     </span>
                     <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
-                      {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
+                      {openShiftsError ? (
+                        'Open shifts unavailable'
+                      ) : (
+                        <>
+                          <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
+                          {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
+                        </>
+                      )}
                     </span>
                   </span>
                 </button>
@@ -1496,11 +1563,12 @@ const Dashboard: React.FC = () => {
                     {(myShiftsError || openShiftsError || upcomingEventsError) && (
                       <SectionError
                         message="Some schedule information could not be verified."
+                        source="schedule"
                         onRetry={() => {
                           const retries: Promise<void>[] = [];
-                          if (myShiftsError) retries.push(loadMyShifts());
-                          if (openShiftsError) retries.push(loadOpenShifts());
-                          if (upcomingEventsError) retries.push(loadUpcomingEvents());
+                          if (myShiftsError) retries.push(loadMyShifts(true));
+                          if (openShiftsError) retries.push(loadOpenShifts(true));
+                          if (upcomingEventsError) retries.push(loadUpcomingEvents(true));
                           void Promise.all(retries);
                         }}
                       />
@@ -1631,9 +1699,10 @@ const Dashboard: React.FC = () => {
                   messagesError || notificationsError ? (
                     <SectionError
                       message="Updates could not be fully verified."
+                      source="updates"
                       onRetry={() => {
                         void Promise.all([
-                          ...(messagesError ? [loadDeptMessages()] : []),
+                          ...(messagesError ? [retryDeptMessages()] : []),
                           ...(notificationsError ? [loadNotifications()] : []),
                         ]);
                       }}
@@ -1646,9 +1715,10 @@ const Dashboard: React.FC = () => {
                     {(messagesError || notificationsError) && (
                       <SectionError
                         message="Some updates could not be verified."
+                        source="notifications"
                         onRetry={() => {
                           void Promise.all([
-                            ...(messagesError ? [loadDeptMessages()] : []),
+                            ...(messagesError ? [retryDeptMessages()] : []),
                             ...(notificationsError ? [loadNotifications()] : []),
                           ]);
                         }}
@@ -1777,7 +1847,8 @@ const Dashboard: React.FC = () => {
                   {trainingError && (
                     <SectionError
                       message="Training progress could not be verified."
-                      onRetry={() => void loadTrainingProgress()}
+                      source="training"
+                      onRetry={() => void loadTrainingProgress(true)}
                     />
                   )}
 
@@ -1859,10 +1930,19 @@ const Dashboard: React.FC = () => {
               )}
 
               <div className="flex flex-col gap-2">
-                <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
+                <DashboardHoursCard
+                  monthLabel={monthLabel}
+                  segments={hoursSegments}
+                  loading={loadingHours}
+                  totalUnverified={hoursError}
+                />
                 {hoursError && !loadingHours && (
                   <div className="card">
-                    <SectionError message="Hours could not be fully verified." onRetry={() => void loadHours()} />
+                    <SectionError
+                      message="Hours could not be fully verified."
+                      source="hours"
+                      onRetry={() => void loadHours()}
+                    />
                   </div>
                 )}
               </div>
@@ -1883,7 +1963,11 @@ const Dashboard: React.FC = () => {
                     </button>
                   </div>
                   {equipmentError && (
-                    <SectionError message="Issued gear could not be verified." onRetry={() => void loadMyEquipment()} />
+                    <SectionError
+                      message="Issued gear could not be verified."
+                      source="issued gear"
+                      onRetry={() => void loadMyEquipment(true)}
+                    />
                   )}
                   {!equipmentError && (
                     <dl className="flex flex-col gap-1.5 text-[13px]">
