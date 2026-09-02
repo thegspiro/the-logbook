@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7)
 
 ---
 
@@ -1276,6 +1276,15 @@ convention (`_dedup_position_key`, ELEC-34) — both changes reduce, rather
 than add to, the number of independent places this "which position values
 belong to this contest" logic is implemented, so a fifth call site is less
 likely to drift the way this fourth one did.
+
+**PR split note:** #2162 merged (rounds 1-6 through commit `c4e0e7eb2`)
+while this round's fix was still in progress on its branch — a genuine
+race with this rotation's own "one PR at a time" process, not a process
+violation. The two round-7 review threads were replied to and resolved on
+#2162 as normal (GitHub accepts both on a merged PR), but the code fix
+itself landed in a new PR, [#2173](https://github.com/thegspiro/the-logbook/pull/2173),
+branched from #2162's final commit (already an ancestor of `main` by the
+time #2173 was opened) and merged forward onto current `main`.
 
 **Completion gate (pass 3, after round 7):**
 

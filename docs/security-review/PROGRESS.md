@@ -16,13 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2162](https://github.com/thegspiro/the-logbook/pull/2162) (Feature 06,
-Elections & ballots, pass 3) — 18 fixed, 3 flagged across seven Codex review
-rounds, 1 re-verified open (ELEC-12). See the Log below for detail.
+[#2173](https://github.com/thegspiro/the-logbook/pull/2173) (Feature 06,
+Elections & ballots, pass 3, round 7 only — round 7's predecessor, #2162,
+merged mid-task before round 7's fix was ready; see the PR-split note
+below) — 18 fixed, 3 flagged across seven Codex review rounds, 1
+re-verified open (ELEC-12). See the Log below for detail.
 
 ---
 
-### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 7) — 2 fixed — PR #2162
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 7) — 2 fixed — PR #2173 (follow-up to merged #2162)
+
+**PR split note:** #2162 merged (rounds 1-6, through commit `c4e0e7eb2`)
+while this round's fix was still in progress on its own branch — a race
+with this rotation's own "one PR at a time" process, not a violation of
+it: the merge happened out-of-band while round 7 review comments were
+being fetched and addressed. The two round-7 review threads were replied
+to and resolved on #2162 as normal (GitHub accepts both actions on a
+merged PR), but with the branch deleted post-merge the code fix itself
+was pushed as a new branch and opened as [#2173](https://github.com/thegspiro/the-logbook/pull/2173) —
+branched from #2162's final commit (`c4e0e7eb2`, already an ancestor of
+`main` by then) and merged forward onto current `main`, not rebased.
 
 Codex posted 2 more findings against commit `44fcbfe8e` (round 5's own fix
 commit) — both about gaps in that fix (and, for the second, round 2's
