@@ -8,6 +8,7 @@ const mockGetFolders = vi.fn();
 const mockGetDocuments = vi.fn();
 const mockGetSummary = vi.fn();
 const mockDownloadDocument = vi.fn();
+const mockCreateFolder = vi.fn();
 
 vi.mock('../services/api', () => ({
   documentsService: {
@@ -17,7 +18,7 @@ vi.mock('../services/api', () => ({
     downloadDocument: (...args: unknown[]) => mockDownloadDocument(...args) as unknown,
     uploadDocument: vi.fn(),
     deleteDocument: vi.fn(),
-    createFolder: vi.fn(),
+    createFolder: (...args: unknown[]) => mockCreateFolder(...args) as unknown,
   },
 }));
 
@@ -57,6 +58,8 @@ function makeDocument(overrides: Partial<DocumentRecord> = {}): DocumentRecord {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetFolders.mockResolvedValue({ folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 });
+  mockGetDocuments.mockResolvedValue({ documents: [], total: 0, skip: 0, limit: 20 });
+  mockCreateFolder.mockResolvedValue({ id: 'created' });
   mockGetSummary.mockResolvedValue({
     total_documents: 1,
     total_folders: 1,
@@ -136,5 +139,104 @@ describe('DocumentsPage', () => {
     await waitFor(() => {
       expect(mockDownloadDocument).toHaveBeenCalledWith('d1');
     });
+  });
+
+  it('loads and enters child folders alongside the current folder documents', async () => {
+    const user = userEvent.setup();
+    mockGetFolders.mockImplementation((parentId?: string) =>
+      Promise.resolve(
+        parentId === 'f1'
+          ? { folders: [{ id: 'f2', name: 'Training', document_count: 0 }], total: 1 }
+          : parentId === 'f2'
+            ? { folders: [], total: 0 }
+            : { folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 }
+      )
+    );
+
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+
+    expect(await screen.findByRole('button', { name: /training/i })).toBeInTheDocument();
+    expect(mockGetFolders).toHaveBeenCalledWith('f1');
+    expect(mockGetDocuments).toHaveBeenCalledWith({ folder_id: 'f1' });
+
+    await user.click(screen.getByRole('button', { name: /training/i }));
+    await waitFor(() => expect(mockGetFolders).toHaveBeenCalledWith('f2'));
+    expect(mockGetDocuments).toHaveBeenCalledWith({ folder_id: 'f2' });
+  });
+
+  it('traverses ancestors with accessible breadcrumb labels', async () => {
+    const user = userEvent.setup();
+    mockGetFolders.mockImplementation((parentId?: string) =>
+      Promise.resolve(
+        parentId === 'f1'
+          ? { folders: [{ id: 'f2', name: 'Training', document_count: 0 }], total: 1 }
+          : { folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 }
+      )
+    );
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await user.click(await screen.findByRole('button', { name: /training/i }));
+
+    await user.click(screen.getByRole('button', { name: 'Go to folder SOPs' }));
+    await waitFor(() => expect(mockGetFolders).toHaveBeenLastCalledWith('f1'));
+    expect(screen.queryByRole('button', { name: 'Go to folder Training' })).not.toBeInTheDocument();
+  });
+
+  it('creates a folder under the current folder and shows the intended parent', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await user.click(screen.getByRole('button', { name: /new folder/i }));
+
+    expect(screen.getByText('SOPs', { selector: 'span' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/folder name/i), 'Operations');
+    await user.click(screen.getByRole('button', { name: /^create folder$/i }));
+
+    await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith({ name: 'Operations', parent_id: 'f1' }));
+  });
+
+  it('creates root folders from the all-documents pseudo-view', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /all documents/i }));
+    await user.click(screen.getByRole('button', { name: /new folder/i }));
+
+    expect(screen.getByText(/folders created from all documents are placed at the root/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/folder name/i), 'Root Folder');
+    await user.click(screen.getByRole('button', { name: /^create folder$/i }));
+    await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith({ name: 'Root Folder' }));
+  });
+
+  it('shows independent empty states for child folders and documents', async () => {
+    const user = userEvent.setup();
+    mockGetFolders.mockImplementation((parentId?: string) =>
+      Promise.resolve(
+        parentId ? { folders: [], total: 0 } : { folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 }
+      )
+    );
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+
+    expect(await screen.findByText('No folders in this location.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No Documents in This Folder' })).toBeInTheDocument();
+  });
+
+  it('returns to the nearest accessible ancestor when a child level fails', async () => {
+    const user = userEvent.setup();
+    mockGetFolders.mockImplementation((parentId?: string) => {
+      if (parentId === 'f2') return Promise.reject(new Error('Forbidden'));
+      if (parentId === 'f1') {
+        return Promise.resolve({ folders: [{ id: 'f2', name: 'Training', document_count: 0 }], total: 1 });
+      }
+      return Promise.resolve({ folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 });
+    });
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /sops/i }));
+    await user.click(await screen.findByRole('button', { name: /training/i }));
+
+    expect(await screen.findByText(/folder “Training” is no longer accessible/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Go to folder Training' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Go to folder SOPs' })).toBeInTheDocument();
   });
 });
