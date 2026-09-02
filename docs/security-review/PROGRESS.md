@@ -17,14 +17,14 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2188](https://github.com/thegspiro/the-logbook/pull/2188) — Feature 11
-(Inventory, pass 4). Rotation row 11 → 🔄 (in progress).
+(Inventory, pass 3). Rotation row 11 → 🔄 (in progress).
 
 ---
 
 ### 2026-09-02 — Feature 10 (Documents & legal, pass 3) ✅ merged — PR #2187
 
 Confirmed merged into `main` via a fresh `origin/main` fetch (merge commit
-`67873d77`). Rotation row 10 → ✅. Next: 11 Inventory (pass 4), now marked
+`67873d77`). Rotation row 10 → ✅. Next: 11 Inventory (pass 3), now marked
 🔄.
 
 ### 2026-09-02 — Feature 10 (Documents & legal, pass 3) — 1 fixed, 0 flagged (new); 2 stale-doc corrections
