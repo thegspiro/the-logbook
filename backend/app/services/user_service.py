@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.user import User
-from app.schemas.user import UserListResponse
+from app.schemas.user import UserListResponse, resolve_profile_visibility
 
 
 class UserService:
@@ -75,17 +75,22 @@ class UserService:
                 # that permission tier (see docs/KNOWN_LIMITATIONS.md, USR-8).
             }
 
-            # Conditionally include contact information based on settings
+            # Conditionally include contact information: the organisation's
+            # setting is the ceiling, and within it the member's own choice
+            # decides. Same rule as the profile endpoint's
+            # `_clear_hidden_contact_fields`, so the directory and the
+            # profile cannot disagree about a field.
             if include_contact_info and contact_settings:
                 visibility = contact_settings.get("contact_info_visibility", {})
+                member = resolve_profile_visibility(user)
 
-                if visibility.get("show_email", False):
+                if visibility.get("show_email", False) and member.email:
                     user_dict["email"] = user.email
 
-                if visibility.get("show_phone", False):
+                if visibility.get("show_phone", False) and member.phone:
                     user_dict["phone"] = user.phone
 
-                if visibility.get("show_mobile", False):
+                if visibility.get("show_mobile", False) and member.mobile:
                     user_dict["mobile"] = user.mobile
             else:
                 # Don't include contact info if not enabled

@@ -31,8 +31,11 @@ import { CreditCard, Pencil } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { useRanks } from '../hooks/useRanks';
+import { useProfileVisibility } from '../hooks/useProfileVisibility';
 import { formatCalendarDate, formatDate } from '../utils/dateFormatting';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
+import { isAdministrativeMember, membershipTypeLabel } from '../utils/membership';
 import type { UserWithRoles } from '../types/role';
 import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
 import type { TrainingRecord, ComplianceSummary } from '../types/training';
@@ -43,6 +46,7 @@ import TrainingSection from '../components/member-profile/TrainingSection';
 import AdminHoursSection from '../components/member-profile/AdminHoursSection';
 import ContactInfoSection from '../components/member-profile/ContactInfoSection';
 import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
+import { VisibilityControl } from '../components/member-profile/VisibilityControl';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
 import { MemberIdCardsPanel } from '../modules/membership/components/MemberIdCardsPanel';
 
@@ -288,6 +292,16 @@ export const MemberProfilePage: React.FC = () => {
   }, [userId, inventoryModuleEnabled, canViewTargetInventory, fetchInventoryItems]);
 
   const canManageMembers = checkPermission('members.manage');
+
+  // Rank codes are stored on the member; the display name lives on the org's
+  // operational ranks, readable by any signed-in member.
+  const { formatRank } = useRanks();
+
+  // The member's own choice of what colleagues see. Seeded from the profile
+  // payload (present for self and for members-managers) so no second request
+  // is made; owned by the hook so a contact-info save replacing `user` cannot
+  // reset a switch mid-flight.
+  const privacy = useProfileVisibility({ enabled: isSelf, initial: user?.profile_visibility });
 
   const handleOpenStatusModal = () => {
     if (!user) return;
@@ -549,6 +563,47 @@ export const MemberProfilePage: React.FC = () => {
   // different and wrong statement about the member.
   const canViewRestrictedPii = canEdit;
 
+  // Which "who can see this" marker a viewer gets. The member flips switches;
+  // a members-manager sees a read-only badge (they see every field anyway,
+  // and the badge answers "why can't Smith see my phone?"); nobody else sees
+  // the marker at all — the backend nulls the choice object for them.
+  const visibilityMode: 'toggle' | 'badge' | 'none' = isSelf
+    ? 'toggle'
+    : canManageMembers && user?.profile_visibility
+      ? 'badge'
+      : 'none';
+  const visibility = visibilityMode === 'toggle' ? privacy.visibility : (user?.profile_visibility ?? null);
+
+  // A null address on a colleague's profile is a redaction, not an absence:
+  // the member has not shared it, and the backend blanked it. Rendering the
+  // card with "No address on file." would state something false about them,
+  // so the card is skipped. Self and leadership see the real empty state.
+  const hasAddressData = Boolean(user?.address_street || user?.address_city || user?.personal_email);
+  const showAddressCard = canEdit || hasAddressData;
+
+  // The left column is per-viewer: training, admin hours, ID cards and gear
+  // are all hidden from a plain colleague, and a `lg:col-span-2` ghost would
+  // still reserve two-thirds of the page for nothing.
+  const showAdminHours = Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0) || adminHoursLoading;
+  const hasLeftColumn =
+    (trainingEnabled && canViewTargetTraining) ||
+    showAdminHours ||
+    Boolean(canManageIdCards && userId) ||
+    (inventoryModuleEnabled && canViewTargetInventory);
+  const hasQuickStats =
+    (trainingEnabled && canViewTargetTraining) ||
+    (inventoryModuleEnabled && canViewTargetInventory) ||
+    Boolean(adminHoursSummary && adminHoursSummary.totalEntries > 0);
+
+  const rankLabel = user
+    ? isAdministrativeMember(undefined, user.membership_type)
+      ? 'Administrative'
+      : formatRank(user.rank)
+    : '';
+  const memberTypeLabel = user ? membershipTypeLabel(user.membership_type) : '';
+  // "Administrative · Administrative" would be the class stated twice.
+  const headerSubtitle = [rankLabel, memberTypeLabel === rankLabel ? '' : memberTypeLabel].filter(Boolean).join(' · ');
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -597,7 +652,7 @@ export const MemberProfilePage: React.FC = () => {
             &larr; Back to Members
           </button>
 
-          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="card p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-center gap-4">
                 {/* Profile Photo with Upload */}
@@ -656,10 +711,13 @@ export const MemberProfilePage: React.FC = () => {
                   <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">
                     {user.full_name || user.username}
                   </h1>
-                  <p className="text-theme-text-muted mt-1">@{user.username}</p>
-                  {user.membership_number && (
-                    <p className="text-theme-text-secondary mt-1 text-sm">#{user.membership_number}</p>
+                  {headerSubtitle && (
+                    <p className="text-theme-text-secondary mt-1 text-[15px] font-medium">{headerSubtitle}</p>
                   )}
+                  <p className="text-theme-text-muted mt-1 text-sm">
+                    @{user.username}
+                    {user.membership_number && <> · #{user.membership_number}</>}
+                  </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(user.roles || []).map((role) => (
                       <span
@@ -695,142 +753,149 @@ export const MemberProfilePage: React.FC = () => {
                     }`}
                     title="Change member status"
                   >
-                    {user.status}
+                    {user.status.replace(/_/g, ' ')}
                     <Pencil className="h-3 w-3" />
                   </button>
                 ) : (
-                  <span
-                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                      user.status === UserStatus.ACTIVE
-                        ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                        : 'bg-theme-surface-secondary text-theme-text-secondary'
-                    }`}
-                  >
-                    {user.status}
-                  </span>
+                  // The account lifecycle status is leadership's concern; a
+                  // colleague only needs to know when it is NOT the ordinary
+                  // case — on leave, retired, suspended.
+                  user.status !== UserStatus.ACTIVE && (
+                    <span className="bg-theme-surface-secondary text-theme-text-secondary rounded-full px-3 py-1 text-sm font-semibold capitalize">
+                      {user.status.replace(/_/g, ' ')}
+                    </span>
+                  )
                 )}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Main Content Grid. With nothing to show on the left, the right
+            column's cards spread across two columns instead. */}
+        <div
+          className={`grid grid-cols-1 gap-6 ${hasLeftColumn ? 'lg:grid-cols-3' : 'md:grid-cols-2'}`}
+          data-testid={hasLeftColumn ? 'profile-grid-three' : 'profile-grid-two'}
+        >
           {/* Left Column */}
-          <div className="space-y-6 lg:col-span-2">
-            {/* Training & Certifications — hidden when the viewer has no
+          {hasLeftColumn && (
+            <div className="space-y-6 lg:col-span-2">
+              {/* Training & Certifications — hidden when the viewer has no
                 target-scoped access; an empty card would wrongly imply the
                 member has no training. */}
-            {trainingEnabled && canViewTargetTraining && (
-              <TrainingSection
-                userId={userId ?? ''}
-                trainings={trainings}
-                trainingsLoading={trainingsLoading}
-                complianceSummary={complianceSummary}
-                tz={tz}
-              />
-            )}
+              {trainingEnabled && canViewTargetTraining && (
+                <TrainingSection
+                  userId={userId ?? ''}
+                  trainings={trainings}
+                  trainingsLoading={trainingsLoading}
+                  complianceSummary={complianceSummary}
+                  tz={tz}
+                />
+              )}
 
-            {/* Admin Hours Summary */}
-            {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
-              <AdminHoursSection adminHoursSummary={adminHoursSummary} adminHoursCompliance={adminHoursCompliance} />
-            )}
-            {adminHoursLoading && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-                <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Administrative Hours</h2>
-                <div className="text-theme-text-muted py-4 text-center">Loading admin hours...</div>
-              </div>
-            )}
+              {/* Admin Hours Summary */}
+              {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
+                <AdminHoursSection adminHoursSummary={adminHoursSummary} adminHoursCompliance={adminHoursCompliance} />
+              )}
+              {adminHoursLoading && (
+                <div className="card p-6">
+                  <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Administrative Hours</h2>
+                  <div className="text-theme-text-muted py-4 text-center">Loading admin hours...</div>
+                </div>
+              )}
 
-            {/* ID cards (NFC). Officers only — a member cannot register,
+              {/* ID cards (NFC). Officers only — a member cannot register,
                 relabel or revoke a card, not even their own, and the panel
                 hides itself when the organization has cards turned off. */}
-            {canManageIdCards && userId && (
-              <MemberIdCardsPanel
-                userId={userId}
-                memberName={user ? `${user.first_name} ${user.last_name}`.trim() : undefined}
-              />
-            )}
+              {canManageIdCards && userId && (
+                <MemberIdCardsPanel
+                  userId={userId}
+                  memberName={user ? `${user.first_name} ${user.last_name}`.trim() : undefined}
+                />
+              )}
 
-            {/* Assigned Inventory - the member's own kit, or a quartermaster's
+              {/* Assigned Inventory - the member's own kit, or a quartermaster's
                 view of it. Hidden from everyone else rather than rendered
                 empty, which would read as "nothing issued". */}
-            {inventoryModuleEnabled && canViewTargetInventory && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-                <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Assigned Inventory</h2>
-                {inventoryLoading ? (
-                  <div className="text-theme-text-muted py-4 text-center">Loading inventory...</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="divide-theme-surface-border min-w-full divide-y">
-                      <thead>
-                        <tr>
-                          <th
-                            scope="col"
-                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
-                          >
-                            Item
-                          </th>
-                          <th
-                            scope="col"
-                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
-                          >
-                            Item #
-                          </th>
-                          <th
-                            scope="col"
-                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
-                          >
-                            Category
-                          </th>
-                          <th
-                            scope="col"
-                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
-                          >
-                            Condition
-                          </th>
-                          <th
-                            scope="col"
-                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
-                          >
-                            Assigned
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-theme-surface-border divide-y">
-                        {inventoryItems.map((item) => (
-                          <tr key={item.id} className="hover:bg-theme-surface-hover">
-                            <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">{item.name}</td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.item_number}</td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.category}</td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                                  item.condition === 'Excellent'
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                                    : item.condition === 'Good'
-                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
-                                }`}
-                              >
-                                {item.condition}
-                              </span>
-                            </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm">
-                              {formatDate(item.assigned_date, tz)}
-                            </td>
+              {inventoryModuleEnabled && canViewTargetInventory && (
+                <div className="card p-6">
+                  <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Assigned Inventory</h2>
+                  {inventoryLoading ? (
+                    <div className="text-theme-text-muted py-4 text-center">Loading inventory...</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="divide-theme-surface-border min-w-full divide-y">
+                        <thead>
+                          <tr>
+                            <th
+                              scope="col"
+                              className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                            >
+                              Item
+                            </th>
+                            <th
+                              scope="col"
+                              className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                            >
+                              Item #
+                            </th>
+                            <th
+                              scope="col"
+                              className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                            >
+                              Category
+                            </th>
+                            <th
+                              scope="col"
+                              className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                            >
+                              Condition
+                            </th>
+                            <th
+                              scope="col"
+                              className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                            >
+                              Assigned
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                        </thead>
+                        <tbody className="divide-theme-surface-border divide-y">
+                          {inventoryItems.map((item) => (
+                            <tr key={item.id} className="hover:bg-theme-surface-hover">
+                              <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">{item.name}</td>
+                              <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.item_number}</td>
+                              <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.category}</td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                                    item.condition === 'Excellent'
+                                      ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                                      : item.condition === 'Good'
+                                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
+                                  }`}
+                                >
+                                  {item.condition}
+                                </span>
+                              </td>
+                              <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                                {formatDate(item.assigned_date, tz)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Right Column - Contact & Additional Info */}
-          <div className="space-y-6">
+          {/* Right Column - Contact & Additional Info. Without a left column
+              these cards are the page, so they flow into the two-column grid
+              rather than stacking in one narrow strip. */}
+          <div className={hasLeftColumn ? 'space-y-6' : 'contents'}>
             {/* Contact Information */}
             <ContactInfoSection
               user={user}
@@ -845,167 +910,193 @@ export const MemberProfilePage: React.FC = () => {
               onFormChange={handleFormChange}
               onNotificationToggle={handleNotificationToggle}
               smsConsentGranted={smsConsentGranted}
+              visibilityMode={visibilityMode}
+              visibility={visibility}
+              visibilitySaving={privacy.savingField}
+              visibilitySaveState={privacy.saveState}
+              onVisibilityChange={(field, next) => void privacy.setField(field, next)}
             />
 
             {/* Address & Personal Email */}
-            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-theme-text-primary text-lg font-semibold">Address</h2>
-                {canEdit && !editingAddress && (
-                  <button
-                    onClick={handleEditAddress}
-                    className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    Edit
-                  </button>
+            {showAddressCard && (
+              <div className="card p-6">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h2 className="text-theme-text-primary text-lg font-semibold">Address</h2>
+                  {canEdit && !editingAddress && (
+                    <button
+                      onClick={handleEditAddress}
+                      className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+                {!editingAddress ? (
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-theme-text-muted text-xs font-medium uppercase">Mailing Address</p>
+                        {user.address_street || user.address_city ? (
+                          <p className="text-theme-text-primary mt-1 text-sm">
+                            {user.address_street && (
+                              <>
+                                {user.address_street}
+                                <br />
+                              </>
+                            )}
+                            {user.address_city}
+                            {user.address_state ? `, ${user.address_state}` : ''} {user.address_zip}
+                            {user.address_country && user.address_country !== 'USA' && (
+                              <>
+                                <br />
+                                {user.address_country}
+                              </>
+                            )}
+                          </p>
+                        ) : (
+                          <p className="text-theme-text-muted mt-1 text-sm">No address on file.</p>
+                        )}
+                      </div>
+                      {visibilityMode !== 'none' && visibility && (
+                        <VisibilityControl
+                          field="address"
+                          label="Mailing address"
+                          visible={visibility.address}
+                          mode={visibilityMode}
+                          disabled={privacy.savingField === 'address'}
+                          onChange={(next) => void privacy.setField('address', next)}
+                        />
+                      )}
+                    </div>
+                    {isSelf && (
+                      <p className="text-theme-text-muted text-xs">
+                        Leadership can always see your address.{' '}
+                        <Link
+                          to="/account?tab=privacy"
+                          className="font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          Manage what other members see
+                        </Link>
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
+                        Personal Email
+                      </label>
+                      <input
+                        type="email"
+                        value={addressForm.personal_email}
+                        onChange={(e) =>
+                          setAddressForm((p) => ({
+                            ...p,
+                            personal_email: e.target.value,
+                          }))
+                        }
+                        className="form-input px-3 text-sm"
+                        placeholder="Home email for post-separation contact"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Street</label>
+                      <input
+                        type="text"
+                        value={addressForm.address_street}
+                        onChange={(e) =>
+                          setAddressForm((p) => ({
+                            ...p,
+                            address_street: e.target.value,
+                          }))
+                        }
+                        className="form-input px-3 text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">City</label>
+                        <input
+                          type="text"
+                          value={addressForm.address_city}
+                          onChange={(e) =>
+                            setAddressForm((p) => ({
+                              ...p,
+                              address_city: e.target.value,
+                            }))
+                          }
+                          className="form-input px-3 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">State</label>
+                        <input
+                          type="text"
+                          value={addressForm.address_state}
+                          onChange={(e) =>
+                            setAddressForm((p) => ({
+                              ...p,
+                              address_state: e.target.value,
+                            }))
+                          }
+                          className="form-input px-3 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">ZIP</label>
+                        <input
+                          type="text"
+                          value={addressForm.address_zip}
+                          onChange={(e) =>
+                            setAddressForm((p) => ({
+                              ...p,
+                              address_zip: e.target.value,
+                            }))
+                          }
+                          className="form-input px-3 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
+                          Country
+                        </label>
+                        <input
+                          type="text"
+                          value={addressForm.address_country}
+                          onChange={(e) =>
+                            setAddressForm((p) => ({
+                              ...p,
+                              address_country: e.target.value,
+                            }))
+                          }
+                          className="form-input px-3 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => {
+                          void handleSaveAddress();
+                        }}
+                        disabled={savingAddress}
+                        className="btn-info flex-1 rounded-md text-sm font-medium"
+                      >
+                        {savingAddress ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingAddress(false)}
+                        disabled={savingAddress}
+                        className="btn-secondary text-theme-text-secondary flex-1 text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-              {!editingAddress ? (
-                <div className="space-y-3">
-                  {user.personal_email && (
-                    <div>
-                      <p className="text-theme-text-muted text-xs font-medium uppercase">Personal Email</p>
-                      <p className="text-theme-text-primary mt-1 text-sm">{user.personal_email}</p>
-                    </div>
-                  )}
-                  {user.address_street || user.address_city ? (
-                    <div>
-                      <p className="text-theme-text-muted text-xs font-medium uppercase">Mailing Address</p>
-                      <p className="text-theme-text-primary mt-1 text-sm">
-                        {user.address_street && (
-                          <>
-                            {user.address_street}
-                            <br />
-                          </>
-                        )}
-                        {user.address_city}
-                        {user.address_state ? `, ${user.address_state}` : ''} {user.address_zip}
-                        {user.address_country && user.address_country !== 'USA' && (
-                          <>
-                            <br />
-                            {user.address_country}
-                          </>
-                        )}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-theme-text-muted text-sm">No address on file.</p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
-                      Personal Email
-                    </label>
-                    <input
-                      type="email"
-                      value={addressForm.personal_email}
-                      onChange={(e) =>
-                        setAddressForm((p) => ({
-                          ...p,
-                          personal_email: e.target.value,
-                        }))
-                      }
-                      className="form-input px-3 text-sm"
-                      placeholder="Home email for post-separation contact"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Street</label>
-                    <input
-                      type="text"
-                      value={addressForm.address_street}
-                      onChange={(e) =>
-                        setAddressForm((p) => ({
-                          ...p,
-                          address_street: e.target.value,
-                        }))
-                      }
-                      className="form-input px-3 text-sm"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">City</label>
-                      <input
-                        type="text"
-                        value={addressForm.address_city}
-                        onChange={(e) =>
-                          setAddressForm((p) => ({
-                            ...p,
-                            address_city: e.target.value,
-                          }))
-                        }
-                        className="form-input px-3 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">State</label>
-                      <input
-                        type="text"
-                        value={addressForm.address_state}
-                        onChange={(e) =>
-                          setAddressForm((p) => ({
-                            ...p,
-                            address_state: e.target.value,
-                          }))
-                        }
-                        className="form-input px-3 text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">ZIP</label>
-                      <input
-                        type="text"
-                        value={addressForm.address_zip}
-                        onChange={(e) =>
-                          setAddressForm((p) => ({
-                            ...p,
-                            address_zip: e.target.value,
-                          }))
-                        }
-                        className="form-input px-3 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Country</label>
-                      <input
-                        type="text"
-                        value={addressForm.address_country}
-                        onChange={(e) =>
-                          setAddressForm((p) => ({
-                            ...p,
-                            address_country: e.target.value,
-                          }))
-                        }
-                        className="form-input px-3 text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={() => {
-                        void handleSaveAddress();
-                      }}
-                      disabled={savingAddress}
-                      className="btn-info flex-1 rounded-md text-sm font-medium"
-                    >
-                      {savingAddress ? 'Saving...' : 'Save'}
-                    </button>
-                    <button
-                      onClick={() => setEditingAddress(false)}
-                      disabled={savingAddress}
-                      className="btn-secondary text-theme-text-secondary flex-1 text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Emergency Contacts — leadership and the member only */}
             {canViewRestrictedPii && (
@@ -1025,81 +1116,120 @@ export const MemberProfilePage: React.FC = () => {
               />
             )}
 
-            {/* Employment Info */}
-            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-              <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Employment</h2>
+            {/* Membership — how the department describes a member: rank and
+                type, where they ride, and since when. The account lifecycle
+                status (active / leave / retired / dropped) is a different
+                axis, managed by leadership, and stays with them. */}
+            <div className="card p-6">
+              <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Membership</h2>
               <div className="space-y-3">
-                <div>
-                  <p className="text-theme-text-muted text-xs font-medium uppercase">Status</p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <p className="text-theme-text-primary text-sm capitalize">{user.status.replace(/_/g, ' ')}</p>
-                    {canManageMembers && (
+                {rankLabel && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Rank</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{rankLabel}</p>
+                  </div>
+                )}
+                {memberTypeLabel && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member type</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{memberTypeLabel}</p>
+                  </div>
+                )}
+                {user.station && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Station</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{user.station}</p>
+                  </div>
+                )}
+                {user.platoon && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Platoon</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{user.platoon}</p>
+                  </div>
+                )}
+                {user.hire_date && (
+                  <div>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Member since</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.hire_date, tz)}</p>
+                  </div>
+                )}
+                {!rankLabel && !memberTypeLabel && !user.station && !user.platoon && !user.hire_date && (
+                  <p className="text-theme-text-muted text-sm">No membership details on file.</p>
+                )}
+                {canManageMembers && (
+                  <div className="border-theme-surface-border border-t pt-3">
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Status</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <p className="text-theme-text-primary text-sm capitalize">{user.status.replace(/_/g, ' ')}</p>
                       <button
                         type="button"
                         onClick={handleOpenStatusModal}
                         className="text-theme-text-muted transition hover:text-blue-500"
                         title="Change status"
+                        aria-label="Change status"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
+                    </div>
+                    {user.status === UserStatus.ACTIVE && (
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Shown to you because you manage members. Other members do not see an active status.
+                      </p>
                     )}
-                  </div>
-                </div>
-                {user.hire_date && (
-                  <div>
-                    <p className="text-theme-text-muted text-xs font-medium uppercase">Hire Date</p>
-                    <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.hire_date, tz)}</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Quick Stats */}
-            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-              <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Quick Stats</h2>
-              <div className="space-y-3">
-                {trainingEnabled && canViewTargetTraining && (
-                  <>
+            {/* Quick Stats — only when the viewer can see at least one of the
+                numbers; an empty card reads as "nothing to report". */}
+            {hasQuickStats && (
+              <div className="card p-6">
+                <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Quick Stats</h2>
+                <div className="space-y-3">
+                  {trainingEnabled && canViewTargetTraining && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-theme-text-secondary text-sm">Active Training</span>
+                        <span className="text-theme-text-primary text-sm font-semibold">
+                          {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-theme-text-secondary text-sm">Expiring Soon</span>
+                        <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
+                          {trainings.filter((t) => isExpiringSoon(t)).length}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-theme-text-secondary text-sm">Total Hours</span>
+                        <span className="text-theme-text-primary text-sm font-semibold">
+                          {formatHours(sumHoursToQuarter(trainings.map((t) => t.hours_completed)))} hrs
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {inventoryModuleEnabled && canViewTargetInventory && (
                     <div className="flex items-center justify-between">
-                      <span className="text-theme-text-secondary text-sm">Active Training</span>
+                      <span className="text-theme-text-secondary text-sm">Assigned Equipment</span>
+                      <span className="text-theme-text-primary text-sm font-semibold">{inventoryItems.length}</span>
+                    </div>
+                  )}
+                  {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary text-sm">Admin Hours</span>
                       <span className="text-theme-text-primary text-sm font-semibold">
-                        {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
+                        {formatHours(adminHoursSummary.totalHours)} hrs
                       </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-theme-text-secondary text-sm">Expiring Soon</span>
-                      <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
-                        {trainings.filter((t) => isExpiringSoon(t)).length}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-theme-text-secondary text-sm">Total Hours</span>
-                      <span className="text-theme-text-primary text-sm font-semibold">
-                        {formatHours(sumHoursToQuarter(trainings.map((t) => t.hours_completed)))} hrs
-                      </span>
-                    </div>
-                  </>
-                )}
-                {inventoryModuleEnabled && canViewTargetInventory && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-theme-text-secondary text-sm">Assigned Equipment</span>
-                    <span className="text-theme-text-primary text-sm font-semibold">{inventoryItems.length}</span>
-                  </div>
-                )}
-                {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-theme-text-secondary text-sm">Admin Hours</span>
-                    <span className="text-theme-text-primary text-sm font-semibold">
-                      {formatHours(adminHoursSummary.totalHours)} hrs
-                    </span>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Active Leaves of Absence */}
             {activeLeaves.length > 0 && (
-              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="card p-6">
                 <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Leave of Absence</h2>
                 <div className="space-y-3">
                   {activeLeaves.map((leave) => (

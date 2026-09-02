@@ -289,6 +289,21 @@ export const MembershipType = {
 } as const;
 export type MembershipType = (typeof MembershipType)[keyof typeof MembershipType];
 
+/**
+ * Display labels for the built-in membership types. `membership_type` also
+ * holds org-configured tier ids (`senior`, …), so callers fall back to the
+ * humanized raw value: `MEMBERSHIP_TYPE_LABELS[t] ?? t.replace(/_/g, ' ')`.
+ */
+export const MEMBERSHIP_TYPE_LABELS: Record<string, string> = {
+  prospective: 'Prospective',
+  probationary: 'Probationary',
+  active: 'Active',
+  life: 'Life',
+  retired: 'Retired',
+  honorary: 'Honorary',
+  administrative: 'Administrative',
+};
+
 // ============================================
 // Member Class and Status
 // ============================================

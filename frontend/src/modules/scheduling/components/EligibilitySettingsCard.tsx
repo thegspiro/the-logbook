@@ -9,20 +9,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Shield, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { MembershipType } from '../../../constants/enums';
+import { MEMBERSHIP_TYPE_LABELS, MembershipType } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { schedulingService } from '../services/api';
 import { positionLabel } from '../utils/positionLabels';
-
-const MEMBERSHIP_TYPE_LABELS: Record<string, string> = {
-  prospective: 'Prospective',
-  probationary: 'Probationary',
-  active: 'Active',
-  life: 'Life',
-  retired: 'Retired',
-  honorary: 'Honorary',
-  administrative: 'Administrative',
-};
 
 const ALL_MEMBERSHIP_TYPES = Object.values(MembershipType);
 

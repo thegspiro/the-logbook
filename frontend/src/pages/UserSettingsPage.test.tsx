@@ -18,6 +18,8 @@ vi.mock('../services/api', () => ({
     updateNotificationPreferences: vi.fn().mockResolvedValue(undefined),
     getMyConsents: vi.fn(),
     setMyConsent: vi.fn().mockResolvedValue(undefined),
+    getMyProfileVisibility: vi.fn(),
+    setMyProfileVisibility: vi.fn(),
   },
 }));
 
@@ -109,6 +111,69 @@ describe('UserSettingsPage', () => {
     vi.mocked(userService.getMyConsents).mockResolvedValue([
       { consent_type: 'sms_notifications', granted: true, updated_at: null },
     ]);
+    vi.mocked(userService.getMyProfileVisibility).mockReset();
+    vi.mocked(userService.getMyProfileVisibility).mockResolvedValue({
+      email: true,
+      personal_email: false,
+      phone: true,
+      mobile: true,
+      address: false,
+    });
+    vi.mocked(userService.setMyProfileVisibility).mockReset();
+    vi.mocked(userService.setMyProfileVisibility).mockImplementation((v) => Promise.resolve(v));
+  });
+
+  describe('Privacy Tab', () => {
+    it('lists a switch for each of the five fields with the current value beside it', async () => {
+      window.history.pushState({}, '', '/account?tab=privacy');
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByText('Profile visibility')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getAllByRole('switch')).toHaveLength(5));
+      expect(screen.getByRole('switch', { name: 'Work email visibility' })).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByRole('switch', { name: 'Mailing address visibility' })).toHaveAttribute(
+        'aria-checked',
+        'false'
+      );
+      // The value under the switch comes from the loaded profile.
+      expect(await screen.findByText('jdoe@example.com')).toBeInTheDocument();
+    });
+
+    it('saves the whole object when one switch is flipped', async () => {
+      window.history.pushState({}, '', '/account?tab=privacy');
+      renderWithRouter(<UserSettingsPage />);
+
+      await userEvent.setup().click(await screen.findByRole('switch', { name: 'Mailing address visibility' }));
+
+      await waitFor(() =>
+        expect(userService.setMyProfileVisibility).toHaveBeenCalledWith({
+          email: true,
+          personal_email: false,
+          phone: true,
+          mobile: true,
+          address: true,
+        })
+      );
+      expect(await screen.findByText('All changes saved')).toBeInTheDocument();
+    });
+
+    it('now holds the consents and the data export, which left the Security tab', async () => {
+      window.history.pushState({}, '', '/account?tab=privacy');
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByText('Privacy Choices')).toBeInTheDocument();
+      expect(await screen.findByText('Text message notifications')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Download my data' })).toBeInTheDocument();
+    });
+
+    it('leaves the Security tab to two-factor authentication', async () => {
+      window.history.pushState({}, '', '/account?tab=security');
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByText('Two-Factor Authentication')).toBeInTheDocument();
+      expect(screen.queryByText('Privacy Choices')).not.toBeInTheDocument();
+      expect(screen.queryByText('Download my data')).not.toBeInTheDocument();
+    });
   });
 
   it('should render the page title', () => {
