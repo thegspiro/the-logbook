@@ -185,26 +185,45 @@ interface SectionErrorProps {
    * nothing to tell them apart by.
    */
   source: string;
-  onRetry: () => void;
+  /** Returns the retry's promise so the control can coalesce while it runs. */
+  onRetry: () => Promise<unknown>;
 }
 
-const SectionError: React.FC<SectionErrorProps> = ({ message, source, onRetry }) => (
-  <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
-    <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-    <span className="min-w-0 flex-1">{message}</span>
-    {/* mobile-touch-target, not a hand-set height: at min-h-9 this rendered
-        57x36 and broke /dashboard's zero-budget tap-target check, which is
-        the one place a section error is guaranteed to appear. */}
-    <button
-      type="button"
-      onClick={onRetry}
-      aria-label={`Retry ${source}`}
-      className="btn-secondary mobile-touch-target shrink-0 px-3 py-1 text-xs font-semibold"
-    >
-      Retry
-    </button>
-  </div>
-);
+const SectionError: React.FC<SectionErrorProps> = ({ message, source, onRetry }) => {
+  // Owned here rather than at each call site, because the guard is only worth
+  // anything if every control has it. Without one the button stays live during
+  // a slow retry: a second click starts a second request for the same source,
+  // and if the second succeeds before the first finally rejects, the older
+  // failure lands last and puts the warning back over recovered data. The
+  // hours and readiness controls can race that way between two buttons,
+  // without anyone double-clicking either.
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetry = () => {
+    if (retrying) return;
+    setRetrying(true);
+    void onRetry().finally(() => setRetrying(false));
+  };
+
+  return (
+    <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+      <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1">{message}</span>
+      {/* mobile-touch-target, not a hand-set height: at min-h-9 this rendered
+          57x36 and broke /dashboard's zero-budget tap-target check, which is
+          the one place a section error is guaranteed to appear. */}
+      <button
+        type="button"
+        onClick={handleRetry}
+        disabled={retrying}
+        aria-label={`Retry ${source}`}
+        className="btn-secondary mobile-touch-target shrink-0 px-3 py-1 text-xs font-semibold disabled:opacity-60"
+      >
+        {retrying ? 'Retrying' : 'Retry'}
+      </button>
+    </div>
+  );
+};
 
 const TIMELINE_ACCENT: Record<TimelineKind, string> = {
   'my-shift': 'bg-theme-accent-blue',
@@ -851,47 +870,60 @@ const Dashboard: React.FC = () => {
       // training.view is not looking at a broken card, so a gated-off source
       // must leave this false -- flipping it would pin an error banner and a
       // Retry that re-runs the same gate and changes nothing.
-      let sourceFailed = false;
-      let certificationsFailed = false;
+      let schedulingFailed = false;
+      let trainingFailed = false;
+      let adminHoursFailed = false;
       const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
         canLoadScheduling
           ? schedulingService.getSummary().catch((err) => {
               console.error('Failed to load scheduling summary:', err);
-              sourceFailed = true;
+              schedulingFailed = true;
               return null;
             })
           : Promise.resolve(null),
         canLoadTraining
           ? trainingModuleConfigService.getMyTraining().catch((err) => {
               console.error('Failed to load training summary:', err);
-              sourceFailed = true;
-              certificationsFailed = true;
+              trainingFailed = true;
               return null;
             })
           : Promise.resolve(null),
         canLoadAdminHours
           ? adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
               console.error('Failed to load admin hours summary:', err);
-              sourceFailed = true;
+              adminHoursFailed = true;
               return null;
             })
           : Promise.resolve(null),
       ]);
-      setHoursError(sourceFailed);
       // Assigned from the settled result rather than only ever set to true:
       // a flag that a failure raises and only the eager pre-await reset clears
       // can never come down on a successful retry, which skips that reset.
-      setCertificationsError(certificationsFailed);
+      setHoursError(schedulingFailed || trainingFailed || adminHoursFailed);
+      setCertificationsError(trainingFailed);
       // All three are month-to-date, because the card says "My Hours, August"
       // and the total adds them together. Training and administrative hours
       // were previously lifetime figures — so the headline total summed two
       // lifetime numbers with one monthly one and meant nothing.
-      setHours({
-        training: trainingSummary?.hours_summary?.hours_this_month ?? null,
-        standby: schedulingSummary?.hours_worked_this_month ?? null,
-        administrative: adminHoursSummary?.totalHours ?? null,
-      });
-      setMyCerts(trainingSummary?.certifications ?? []);
+      // Per source, and only where this call actually has an answer. The three
+      // requests are independent, so rewriting all three from one call means a
+      // retry that recovers scheduling while training transiently fails wipes
+      // training's known figure -- recovery from one outage manufacturing a
+      // second. A source that was not attempted, or that rejected, leaves the
+      // last value it had.
+      setHours((previous) => ({
+        training:
+          trainingFailed || !canLoadTraining
+            ? previous.training
+            : (trainingSummary?.hours_summary?.hours_this_month ?? null),
+        standby:
+          schedulingFailed || !canLoadScheduling
+            ? previous.standby
+            : (schedulingSummary?.hours_worked_this_month ?? null),
+        administrative:
+          adminHoursFailed || !canLoadAdminHours ? previous.administrative : (adminHoursSummary?.totalHours ?? null),
+      }));
+      if (canLoadTraining && !trainingFailed) setMyCerts(trainingSummary?.certifications ?? []);
     } catch {
       // Hours are non-critical
     } finally {
@@ -1493,7 +1525,7 @@ const Dashboard: React.FC = () => {
                       if (certificationsError) retries.push(loadHours(true));
                       if (seatsError) retries.push(loadMySeats(true));
                       if (screeningsError) retries.push(loadMyScreenings(true));
-                      void Promise.all(retries);
+                      return Promise.all(retries);
                     }}
                   />
                 </div>
@@ -1602,7 +1634,7 @@ const Dashboard: React.FC = () => {
                           if (myShiftsError) retries.push(loadMyShifts(true));
                           if (openShiftsError) retries.push(loadOpenShifts(true));
                           if (upcomingEventsError) retries.push(loadUpcomingEvents(true));
-                          void Promise.all(retries);
+                          return Promise.all(retries);
                         }}
                       />
                     )}
@@ -1734,7 +1766,7 @@ const Dashboard: React.FC = () => {
                       message="Updates could not be fully verified."
                       source="updates"
                       onRetry={() => {
-                        void Promise.all([
+                        return Promise.all([
                           ...(messagesError ? [retryDeptMessages()] : []),
                           ...(notificationsError ? [loadNotifications(true)] : []),
                         ]);
@@ -1753,7 +1785,7 @@ const Dashboard: React.FC = () => {
                         // reader the button refreshes a healthy feed.
                         source={messagesError ? 'updates' : 'notifications'}
                         onRetry={() => {
-                          void Promise.all([
+                          return Promise.all([
                             ...(messagesError ? [retryDeptMessages()] : []),
                             ...(notificationsError ? [loadNotifications(true)] : []),
                           ]);
@@ -1884,7 +1916,7 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Training progress could not be verified."
                       source="training"
-                      onRetry={() => void loadTrainingProgress(true)}
+                      onRetry={() => loadTrainingProgress(true)}
                     />
                   )}
 
@@ -1932,7 +1964,16 @@ const Dashboard: React.FC = () => {
                               />
                             </div>
                             <p className="text-theme-text-secondary text-[13px] leading-relaxed">
-                              {nextStep ? (
+                              {/* Three states, not two. No `progress` entry means the
+                                  detail request rejected and never loaded -- saying
+                                  "All requirements in progress" there is an
+                                  affirmative claim about this program that nothing
+                                  supports, and the section warning above does not
+                                  make it true. That sentence is reserved for a
+                                  payload that actually arrived and had no next step. */}
+                              {!progress ? (
+                                'Progress unavailable.'
+                              ) : nextStep ? (
                                 <>
                                   Next requirement: {nextStep.requirement?.name || 'Requirement'}
                                   {target ? ` (${target})` : ''}.
@@ -1977,7 +2018,7 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Hours could not be fully verified."
                       source="hours"
-                      onRetry={() => void loadHours(true)}
+                      onRetry={() => loadHours(true)}
                     />
                   </div>
                 )}
@@ -2002,7 +2043,7 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Issued gear could not be verified."
                       source="issued gear"
-                      onRetry={() => void loadMyEquipment(true)}
+                      onRetry={() => loadMyEquipment(true)}
                     />
                   )}
                   {!equipmentError && (

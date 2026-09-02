@@ -766,6 +766,83 @@ describe('Dashboard', () => {
     });
   });
 
+  describe('a retry cannot make things worse', () => {
+    it('keeps an hours figure that loaded when a later retry loses its source', async () => {
+      // The three summaries are independent requests. Rewriting all three from
+      // one call means a retry that recovers scheduling while training
+      // transiently fails wipes training's known figure -- recovery from one
+      // outage manufacturing a second.
+      mockGetSchedulingSummary.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({
+        hours_worked_this_month: 3,
+      });
+      mockGetMyTraining
+        .mockResolvedValueOnce({ hours_summary: { total_hours: 4, hours_this_month: 4 }, certifications: [] })
+        .mockRejectedValue(new Error('offline'));
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      expect(await within(card).findByText('4')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      // Scheduling recovered; training's 4 must survive its retry rejection.
+      expect(await within(card).findByText('3')).toBeInTheDocument();
+      expect(within(card).getByText('4')).toBeInTheDocument();
+    });
+
+    it('does not claim a program is on track when its progress never loaded', async () => {
+      // No progressDetails entry means the request rejected. "All requirements
+      // in progress" is an affirmative claim about that program, and the
+      // section warning above it does not make the claim true.
+      mockGetTrainingEnrollments.mockResolvedValue([
+        { id: 'e1', program: { name: 'Program 1' }, progress_percentage: 40, status: 'active' },
+      ]);
+      mockGetEnrollmentProgress.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Progress unavailable.')).toBeInTheDocument();
+      expect(screen.queryByText('All requirements in progress.')).not.toBeInTheDocument();
+    });
+
+    it('coalesces a second Retry click while the first is still running', async () => {
+      // Without the guard the second request can settle first, leaving the
+      // older failure to land last and put the warning back over recovered
+      // data.
+      mockGetOpenShifts.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Some schedule information could not be verified.');
+      const retry = screen.getByRole('button', { name: 'Retry schedule' });
+      await user.click(retry);
+
+      expect(retry).toBeDisabled();
+      const callsAfterFirst = mockGetOpenShifts.mock.calls.length;
+      await user.click(retry);
+      expect(mockGetOpenShifts.mock.calls.length).toBe(callsAfterFirst);
+    });
+
+    it('re-enables the Retry control once its request settles', async () => {
+      // The guard must not be a one-way door: a retry that fails has to be
+      // retryable again.
+      mockGetOpenShifts.mockRejectedValue(new Error('offline'));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Some schedule information could not be verified.');
+      const retry = screen.getByRole('button', { name: 'Retry schedule' });
+      await user.click(retry);
+
+      await waitFor(() => expect(retry).not.toBeDisabled());
+    });
+  });
+
   it('names each Retry control by the source it retries', async () => {
     // Several of these render together when the dashboard is half-broken, and
     // a screen reader reads only the button's own name.
