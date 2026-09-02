@@ -16,10 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2188](https://github.com/thegspiro/the-logbook/pull/2188) — Feature 11
-(Inventory, pass 3). Rotation row 11 → ⏳ (awaiting PR merge).
+Follow-up to #2188 (Feature 11, Inventory, pass 3, merged) — fixes INV-20,
+a lock-ordering deadlock risk that #2188's own INV-18/INV-19 fix
+introduced. Codex caught it on the merged PR before this pass's agent
+finished; the corrected fix could not be pushed to #2188's branch (already
+merged, dead per CLAUDE.md Pitfall #24), so it lands as a fresh PR. Feature
+11 itself is otherwise done (#2188 merged); this is a correctness
+follow-up, not a new review pass. Rotation row 11 → ⏳ (awaiting this
+follow-up's merge).
 
 ---
+
+### 2026-09-02 — Feature 11 doc fix — INV-20, a lock-ordering deadlock the INV-18/19 fix itself introduced
+
+PR #2188 (feature 11, Inventory, pass 3) fixed INV-18/INV-19 by adding
+`.with_for_update()` to `return_to_pool`'s `ItemIssuance` lookup and
+`checkin_item`'s `CheckOutRecord` lookup — but locked the holding record
+before the item, the opposite order from three sibling methods
+(`review_return_request`, `transfer_item_holding`, `unassign_item`) that
+lock the item first. Codex caught this on the merged PR as it was closing;
+independently verified real (a genuine circular-wait shape, not a false
+positive) and fixed by restructuring both methods to lock the item first,
+matching the other three. Landed in a follow-up PR since #2188's branch
+was already dead by the time the finding surfaced.
 
 ### 2026-09-02 — Feature 11 (Inventory, pass 3) — 2 fixed (1 HIGH), 4 re-verified open
 

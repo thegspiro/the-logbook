@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: a concurrent return or check-in could double-credit stock or silently overwrite condition notes, and the first fix for it had a lock-ordering bug of its own (2026-09-02)
+
+**Fixed**
+
+- **A concurrent return of the same pooled item could double-credit stock.**
+  `return_to_pool` read the issuance row, checked whether it was already
+  returned, and only afterward locked the item — so two near-simultaneous
+  returns of the same issuance (a double-tap, or two officers processing the
+  same physical return) could both pass the check and each credit stock,
+  inflating recorded on-hand quantity above what is actually on the shelf.
+  Fixed by locking the issuance row before the check.
+- **A concurrent check-in of the same item could silently overwrite the
+  first check-in's condition/damage notes** with whatever a racing second
+  request submitted, instead of being rejected as already checked in. Same
+  fix, applied to `checkin_item`'s checkout-record lookup.
+- **That fix itself locked the item and the issuance/checkout record in the
+  opposite order from three sibling methods** (`review_return_request`,
+  `transfer_item_holding`, `unassign_item`), which risked a genuine InnoDB
+  deadlock if a return raced a review, or a check-in raced a custody
+  transfer, on the same item. Corrected to lock the item first everywhere,
+  matching the rest of the module.
+
 ### Documents & legal: folder/document/legal-revision edits gained an audit trail; two long-flagged findings confirmed already fixed by unrelated PRs (2026-09-02)
 
 **Fixed**
@@ -73,6 +95,7 @@ Full write-up: `docs/security-review/DOC-10-documents-legal.md` (feature
 
 Full write-up: `docs/security-review/MS-09-medical-screening.md` (feature
 09, pass 3, MS-7/MS-8/MS-9).
+
 ### Document folder listings are paginated, and stopped costing a query per folder (2026-09-02)
 
 **Changed**

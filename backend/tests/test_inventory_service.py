@@ -1125,10 +1125,19 @@ class TestCheckinItem:
         """checkin_item should reject if item was already checked in."""
         checkout_record = MagicMock()
         checkout_record.is_returned = True
+        checkout_record.item_id = str(uuid4())
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = checkout_record
-        mock_db.execute = AsyncMock(return_value=mock_result)
+        # checkin_item locks the item before locking/re-reading the checkout
+        # row itself (matching review_return_request/transfer_item_holding/
+        # unassign_item's order -- see test_inventory_return_locking.py), so
+        # the first db.execute is an unlocked peek at item_id only, and the
+        # second is the locked re-read that returns the full record.
+        peek_result = MagicMock()
+        peek_result.scalar_one_or_none.return_value = checkout_record.item_id
+        locked_result = MagicMock()
+        locked_result.scalar_one_or_none.return_value = checkout_record
+        mock_db.execute = AsyncMock(side_effect=[peek_result, locked_result])
+        service._get_item_locked = AsyncMock(return_value=_make_item())
 
         success, err = await service.checkin_item(
             checkout_id=uuid4(),
@@ -1150,12 +1159,18 @@ class TestCheckinItem:
 
         item = _make_item(status=ItemStatus.CHECKED_OUT)
 
-        # First execute returns checkout record, subsequent calls for item lock
+        # checkin_item locks the item before locking/re-reading the checkout
+        # row itself (matching review_return_request/transfer_item_holding/
+        # unassign_item's order -- see test_inventory_return_locking.py), so
+        # the first db.execute is an unlocked peek at item_id only, and the
+        # second is the locked re-read that returns the full record.
+        peek_result = MagicMock()
+        peek_result.scalar_one_or_none.return_value = checkout_record.item_id
         co_result = MagicMock()
         co_result.scalar_one_or_none.return_value = checkout_record
 
         service._get_item_locked = AsyncMock(return_value=item)
-        mock_db.execute = AsyncMock(return_value=co_result)
+        mock_db.execute = AsyncMock(side_effect=[peek_result, co_result])
 
         with patch.object(
             service, "_queue_inventory_notification", new_callable=AsyncMock
