@@ -1734,6 +1734,47 @@ an owner decision elsewhere (FIN-7's export cap, the various CS-config
 thresholds). (Security review ELEC-12,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
+## Elections — Vote Receipt Verification Takes Its Credential as a GET Query Parameter (2026-09-02)
+
+`GET /elections/{id}/verify-receipt?receipt=...` (`verify_vote_receipt`)
+binds `receipt` as a bare scalar parameter on a `GET` route, so it travels
+in the URL query string rather than a request body — unlike the other three
+public token routes (`/ballot/lookup`, `/ballot/vote`, `/ballot/vote/bulk`),
+which all carry their credential in a POST body specifically so it never
+lands in server/proxy access logs or browser network history (R-D3). A
+receipt hash cannot cast, change, or reveal the content of a vote — it only
+confirms a matching vote was recorded, plus its timestamp and position — but
+it is still a value tied to one specific voter's one specific ballot, and a
+query-string value is more exposed than a body value to logging
+infrastructure the application doesn't control.
+
+Not fixed: converting this endpoint to `POST` with the receipt in the body
+would be a public API **shape** change, not a mechanical one. This exact
+`GET .../verify-receipt?receipt=` contract is documented as a stable,
+external-facing endpoint in `wiki/API-Reference.md`, `ARCHITECTURE.md`,
+`BALLOT_FORENSICS_GUIDE.md`, and the training materials — any of which may
+already have a caller depending on the GET shape — so changing it needs an
+owner decision about that external contract, not a guess made during a
+security-review pass. (Security review ELEC-14,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Elections — Manual Ballot Batch Listing Has No Bound (2026-09-02)
+
+`list_manual_ballot_batches` (`GET .../manual-ballots`) returns every
+paper-tally batch recorded for an election with `scalars().all()`, eagerly
+loads every batch's attestations, and aggregates every associated vote —
+with no pagination or per-election cap. Access control is sound
+(`elections.manage`-gated, org- and election-scoped, the same trust boundary
+as `SavedBallotTemplate` below), so this is a scaling concern rather than a
+leak: an election that accumulates many paper-tally sessions over a long
+voting window pays a growing, uncapped cost on every load of this listing.
+
+Not fixed for the same reason as the saved-ballot-templates item below:
+pagination changes the response envelope (a frontend-affecting contract
+change for the manual-ballots admin screen), and a per-election batch cap
+needs an actual number picked by a human. (Security review ELEC-16,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 
 `list_users_with_roles` (`users.py:601`) and `get_archived_members`

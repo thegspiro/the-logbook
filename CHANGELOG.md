@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A member moved to a custom membership tier kept voting rights a restricted ballot meant to exclude, and four token-ballot races/gaps (2026-09-02)
+
+**Fixed**
+
+- **A member moved onto a department's own custom membership tier (e.g.
+  "Senior") kept counting as an operational/regular voter for ballots
+  restricted to that category,** even though a custom tier is documented to
+  match none of the built-in voter categories. Caused by an unrelated,
+  correct fix for shift scheduling that started preserving a member's prior
+  class/status across a tier switch — election eligibility read the same two
+  columns and inherited the carryover. Fixed by re-checking the member's
+  live membership tier before trusting those columns for ballot eligibility.
+- **Officer attestation of a paper-ballot batch could race a concurrent
+  election close:** the attestation only locked the batch, not the election,
+  so a batch attested moments before close could be confirmed after the
+  election had already generated its certified results excluding it. Fixed
+  with a locking read on the election status.
+- **A vote submitted through an emailed ballot link could read stale
+  election/token state past its own row lock:** the lock was acquired
+  correctly, but the already-cached (pre-lock) Python objects were returned
+  instead of the freshly locked row's values, the same class of bug
+  previously fixed once in this release for meeting quorum. Fixed by
+  refreshing the locked objects from the row lock.
+- **Voiding a paper-ballot batch was not safe against two officers voiding
+  the same batch at once** — both could load the same votes before either
+  committed, and the second commit silently overwrote the first officer's
+  recorded reason and timestamp. Fixed by locking the batch first and
+  refusing a second void of an already-voided one.
+- **A single-candidate selection on one ballot item could be bound to a
+  different ballot item in the same election** via a crafted vote-bulk
+  submission, letting an ineligible candidate appear in the wrong contest.
+  Fixed by requiring the candidate to belong to the named item, matching the
+  check already applied to ranked and multi-select ballot items.
+- **The single-vote ballot-link endpoint didn't check which ballot items a
+  voter's token was actually restricted to,** only a position restriction
+  that's never set for item-based elections — so a token limited to one
+  ballot item could still vote on a different, possibly restricted item.
+  Fixed by enforcing the same per-item restriction the bulk vote-submission
+  endpoint already enforced, and by no longer showing a restricted item's
+  candidates to a token that can't vote for them.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-13, ELEC-15, ELEC-17, ELEC-19b, ELEC-20).
+
 ### Four more finance foreign keys are now scoped to the caller's organization (2026-09-02)
 
 **Fixed**

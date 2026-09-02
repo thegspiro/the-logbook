@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3)
 
 ---
 
@@ -76,11 +76,15 @@ depth applied here, not re-reading everything:**
 - **The 4 public token routes re-read against their compensating controls,
   full route bodies not just descriptions** (`lookup_ballot_by_token`,
   `cast_vote_with_token`, `submit_ballot_with_token`, `verify_vote_receipt`,
-  `elections.py:508-723`, `3775-3809`) — token in body/fragment never a URL
-  query param, rate-limited via `_ballot_read_rate_limit`/
-  `_ballot_vote_rate_limit`, `eligible_item_ids`/`eligible_positions`
-  snapshot filtering intact, receipt lookup returns no PII beyond
-  `voted_at`/`position`. Matches pass 1's description exactly; no drift.
+  `elections.py:508-723`, `3775-3809`) — rate-limited via
+  `_ballot_read_rate_limit`/`_ballot_vote_rate_limit`,
+  `eligible_item_ids`/`eligible_positions` snapshot filtering present,
+  receipt lookup returns no PII beyond `voted_at`/`position`. **Corrected on
+  Codex review (ELEC-14 below): the claim that the token "never [travels as]
+  a URL query param" does not hold for all four** — `verify_vote_receipt`
+  declares `receipt: str` as a bare GET query parameter, so that one
+  credential does land in the URL. See ELEC-14 for the accurate per-route
+  breakdown and disposition.
 - **ELEC-12 re-verified still accurate and still open** — see below.
 - **No `.like()`/`.ilike()` anywhere in the module** (still zero, re-grepped).
   No `csv.writer`/`SafeCsvWriter` call in the module — elections has no CSV
@@ -88,11 +92,272 @@ depth applied here, not re-reading everything:**
 - **10 `.with_for_update()` sites, re-enumerated**
   (`election_service.py:1110,1352,2992,3048,3286,3527,4413,4667,7118,7128`) —
   consistent with the locking pass 1/2 already documented (open/close
-  election, quorum calc, token consumption, manual-ballot attestation); no
-  new capacity/race surface introduced since nothing changed.
+  election, quorum calc, token consumption, manual-ballot attestation).
+  **Corrected on Codex review: "no new capacity/race surface" did not hold.**
+  Re-enumerating the count wasn't the same as tracing whether each lock's
+  _read_ was also a locking read (Pitfall #27's second half) or whether a
+  lock on one row actually serialized against every other transaction that
+  matters to it — three of these ten sites had exactly that gap (ELEC-15,
+  ELEC-17, ELEC-18 below), latent in code this pass's own diff showed as
+  byte-identical to pass 2, i.e. present since at least pass 2 and missed by
+  it too.
 
-**0 fixes, 0 new findings.** ELEC-12 is the only standing item and remains
-open (unchanged code, unchanged disposition):
+**Codex review on this PR raised 8 findings against this pass's initial
+"0 fixes, 0 new findings" write-up. Each was independently re-traced against
+current code (not taken on either the original pass's or Codex's word) per
+`AGENTS.md`'s "inspect the current implementation" standard — 6 confirmed
+real and fixed, 2 confirmed real and flagged (a product/API-contract
+decision in each case, not a mechanical fix).** ELEC-12 remains open
+unchanged; see below. New findings below are numbered ELEC-13 onward,
+continuing this module's series.
+
+### ELEC-13 — P2 — Custom membership tier inherited a stale operational/regular class for restricted ballots — ✅ FIXED
+
+**What:** `6b5a82fa` (landed between pass 2 and this PR, in the same commit
+range this pass's diff otherwise found byte-identical to pass 2 — the diff
+check compared against `a518957e5`, pass 2's own landing commit, and never
+re-diffed against anything later, so this change was missed rather than
+ruled out) changed `models/user.py::_reconcile_membership` to _preserve_
+`member_class`/`member_status` from before a member is moved onto an
+org-configured custom membership tier (e.g. `"senior"`), instead of nulling
+them the way it did when pass 2 documented `split_membership_type`'s
+"a custom tier matches no built-in category" guarantee. That change was
+correct for its own purpose (`ShiftEligibilityService` needs to keep
+recognizing that a senior-tier member still rides — see the commit message)
+— but `ElectionService._user_has_role_type` (`election_service.py:250`)
+reads the exact same two columns for ballot-eligibility categories
+(`operational`, `regular`, `administrative`, …), with no awareness that the
+value it's trusting may be a carryover from before a tier switch rather than
+the member's current standing.
+
+**Where:** `election_service.py:281-296` (pre-fix).
+
+**Failure scenario:** a regular operational firefighter is moved onto a
+department's custom `"senior"` membership tier (a real, department-
+configured tier, not a hypothetical one — the shipped defaults include it).
+`_reconcile_membership` preserves `member_class="operational"`,
+`member_status="regular"` on the row. A ballot item restricted to
+`eligible_voter_types: ["operational"]` (e.g. an operations-only vote on
+apparatus purchase) then still counted this member as eligible, even though
+`split_membership_type`'s own docstring — quoted and relied on by pass 2 —
+states a custom tier is supposed to match no built-in category, precisely to
+avoid widening a restricted ballot's electorate.
+
+**Fix:** `_user_has_role_type` now checks the member's _live_
+`membership_type` first. When it resolves (via `split_membership_type`) to
+`(None, None)` — the signature of an unrecognized, org-configured tier — the
+cached `member_class`/`member_status` are discarded for eligibility purposes
+regardless of what shift eligibility keeps them for, restoring the documented
+"a custom tier matches nothing" invariant. A recognized legacy
+`membership_type` (`"active"`, `"life"`, …) is unaffected; so is a caller
+passing a bare class/status stub with no `membership_type` at all (existing
+unit tests). Guarded by
+`TestCustomTierDoesNotInheritStaleEligibility` (`test_election_codex_round2.py`),
+confirmed to fail pre-fix via `git stash`.
+
+### ELEC-14 — P2 — `verify_vote_receipt`'s credential is a GET query parameter, not body/fragment — 🚩 FLAGGED (doc corrected)
+
+**What:** `verify_vote_receipt` (`elections.py:3775` pre-fix numbering,
+`GET /{election_id}/verify-receipt`) declares `receipt: str` as a bare
+scalar path/query parameter on a `@router.get` route, so FastAPI binds it
+from `?receipt=...`. This pass's first draft asserted all 4 public token
+routes carry their credential "in body/fragment, never a URL query param" —
+true for `/ballot/lookup`, `/ballot/vote`, and `/ballot/vote/bulk` (all
+`POST` with the token in the request body), false for this one. Pass 1's own
+route table (`## Route inventory`, above) already had this right — "receipt
+hash is the credential" with no body/fragment claim — so the error was
+introduced by this pass's own summary sentence, not inherited.
+
+**Impact:** the receipt hash is not a voting credential — it cannot cast,
+change, or reveal the content of any vote, only confirm that _a_ vote
+matching it was recorded, plus its timestamp and position
+(`VoteReceiptResponse`) — but it will appear in query strings, which
+commonly land in nginx/reverse-proxy access logs and browser devtools
+network history, unlike a POST body.
+
+**Fix:** not applied. Converting this to a `POST` with the receipt in the
+body (mirroring `/ballot/lookup`'s R-D3 pattern) is a public API **shape**
+change, not a mechanical one: this exact `GET .../verify-receipt?receipt=`
+contract is documented as a stable, external-facing endpoint across
+`wiki/API-Reference.md`, `ARCHITECTURE.md`, `BALLOT_FORENSICS_GUIDE.md`, and
+the training materials, any of which may already have a caller depending on
+the GET shape. Changing it is a decision for whoever owns that external
+contract, not something to guess at on a security-review pass — the same
+standard ELEC-12 was held to. The documentation's overreaching claim is
+corrected above; the transport tradeoff itself is mirrored to
+`docs/KNOWN_LIMITATIONS.md`.
+
+### ELEC-15 — P1 — Attestation could race a concurrent close — ✅ FIXED
+
+**What:** `attest_manual_ballot_batch` took a `.with_for_update()` lock on
+the `ManualBallotBatch` row, then read `Election.status` with a **plain**
+(non-locking) `select`. `close_election` locks and commits the `Election`
+row independently, and the two locks don't block each other — they're on
+different rows. Under REPEATABLE READ, the plain election read is not
+guaranteed to reflect a commit that happened after this transaction's
+snapshot was established, so an attestation that started just before a
+concurrent close could still observe `status == OPEN`, pass the
+"attestations can only be added while voting is open" check, and commit a
+batch to `"confirmed"` after the election had already closed and generated
+its certified results (which had, at that moment, correctly excluded the
+still-pending batch and logged it as such) — leaving the closed election's
+audit trail saying "excluded" while a later results view would show the
+batch's votes counted.
+
+**Where:** `election_service.py:3562-3567` (pre-fix: plain `select`, no
+`.with_for_update()`).
+
+**Fix:** the election read in `attest_manual_ballot_batch` now takes
+`.with_for_update()` too. `close_election` never locks the batch, so there
+is no lock-ordering deadlock risk in adding this. Guarded by
+`TestAttestationLocksElection` (`test_election_codex_round2.py`), confirmed
+to fail pre-fix via `git stash`.
+
+### ELEC-16 — P2 — `list_manual_ballot_batches` is unbounded — 🚩 FLAGGED
+
+**What:** `list_manual_ballot_batches` (`election_service.py:3617`) runs
+`scalars().all()` over every `ManualBallotBatch` for the election with no
+pagination, eager-loads every attestation (`selectinload`), and aggregates
+every associated vote via a separate unbounded query — the same
+no-`all()`-over-an-org-scale-table shape as ELEC-12. `record_manual_ballots`
+places no cap on how many batches an election can accumulate, and its
+audited `allow_over_count` option does not gate batch creation, only the
+aggregate voter-count check within one batch.
+
+**Impact:** access control is sound (`elections.manage`-gated, org- and
+election-scoped, same trust boundary as `SavedBallotTemplate`), so — as with
+ELEC-12 — this is a scaling concern rather than a leak: a long-lived
+election with many recorded paper-tally sessions pays a growing,
+un-capped cost on every load of this listing.
+
+**Fix:** not applied, for the identical reason ELEC-12 was flagged rather
+than fixed: pagination changes this endpoint's response envelope (a
+frontend-affecting contract change), and a creation cap needs a number
+picked by a human, not inferred by a review pass. Mirrored to
+`docs/KNOWN_LIMITATIONS.md` alongside ELEC-12.
+
+### ELEC-17 — P1 — Token-submission lock didn't refresh already-cached election/token state — ✅ FIXED
+
+**What:** `get_ballot_by_token` loads the `Election` and `VotingToken` ORM
+objects into the session's identity map (and commits, updating the token's
+access counter). `_lock_token_ballot_for_submission` then re-`SELECT`s the
+_same_ primary keys `.with_for_update()` to serialize the actual vote write.
+With `expire_on_commit=False` (`core/database.py`), SQLAlchemy's default
+behavior on a re-`SELECT` for a row already in the identity map is to return
+the **cached Python object without copying the new row's columns onto it** —
+the row lock is genuinely acquired at the SQL level, but
+`locked_token.used` / `locked_election.status` still read whatever was
+in memory before the lock was taken. A concurrent submission or close that
+committed while this request was waiting for the lock would then be
+invisible to it: the exact same class of bug this module's own pass 2 found
+and fixed in `quorum_service.py::calculate_quorum` (`populate_existing=True`
+on the locking re-select), present here in the token path and undetected by
+either pass 1 or pass 2's review of it.
+
+**Where:** `election_service.py:7143-7155` (pre-fix: `.with_for_update()`
+with no `.execution_options(populate_existing=True)`).
+
+**Fix:** both re-selects (election and token) now add
+`.execution_options(populate_existing=True)`, matching the established
+lock-and-repopulate pattern (`quorum_service.py`,
+`membership_pipeline_service.py`, `inventory_service.py`). Guarded by
+`TestTokenLockRepopulatesExisting` (`test_election_codex_round2.py`),
+confirmed to fail pre-fix via `git stash`.
+
+### ELEC-18 — P2 — Voiding a manual-ballot batch was not row-locked — ✅ FIXED
+
+**What:** `void_manual_ballot_batch` ran plain (non-locking) selects of both
+`ManualBallotBatch` and `Vote`, and had no check for a batch already voided.
+Two officers voiding the same still-pending batch concurrently could both
+load the same not-yet-voided rows before either committed, both succeed and
+both audit-log a success, with the later ORM flush silently overwriting the
+first officer's `deleted_by`/`deletion_reason`/`deleted_at` — corrupting the
+exact forensic attribution this operation exists to preserve. This pass's
+initial write-up called the "manual-ballot-batch surface" row-locked as a
+group without re-checking this specific method's queries against that claim.
+
+**Where:** `election_service.py:3746-3775` (pre-fix: no `.with_for_update()`
+on either query, no already-voided guard).
+
+**Fix:** locks the batch row first (`.with_for_update()`) — the parent every
+void of this batch contends on — and returns early with "This batch has
+already been voided" if a concurrent void already committed. The vote select
+is also `.with_for_update()`. Two concurrent voids now serialize on the
+batch lock; the loser sees the committed `"voided"` status and never
+re-processes the votes. Guarded by `TestVoidManualBallotBatchLocking`
+(`test_election_codex_round2.py`), confirmed to fail pre-fix via `git stash`.
+
+### ELEC-20 — P1 — A candidate-selection ballot item's single-choice vote wasn't bound to its own item — ✅ FIXED
+
+**What:** in `submit_ballot_with_token`, the `rankings` and `candidate_ids`
+payload forms both verify `candidate.position == position` (the _current_
+ballot item's effective position) before accepting a selection. The plain
+UUID `choice` form — used for a simple single-candidate selection — checked
+only `choice in candidate_map`, i.e. that the candidate exists _somewhere_ in
+the election, not that it belongs to the ballot item named in this vote
+entry.
+
+**Where:** `election_service.py:7770-7777` (pre-fix).
+
+**Failure scenario:** an election with two candidate-selection ballot items,
+A and B. A crafted `POST /ballot/vote/bulk` submission sends
+`{"ballot_item_id": "item_b", "choice": "<item A's candidate id>"}`.
+Pre-fix, this passed the existence check, and `_create_token_vote` stored
+the vote with `candidate_id` = item A's candidate and `position` = item B's
+effective position — binding a candidate onto a contest they were never
+nominated for.
+
+**Fix:** the `choice`-as-candidate-UUID branch now checks
+`candidate.position == position`, matching the other two branches exactly.
+Guarded by `TestSubmitBallotChoiceBoundToItem` (`test_election_codex_round2.py`,
+plus a same-item positive-path test), confirmed to fail pre-fix via
+`git stash`.
+
+### ELEC-21 — P1 — Single-vote token route (`/ballot/vote`) skipped per-item eligibility — ✅ FIXED
+
+**What:** `cast_vote_with_token` (the single-vote route) checked only
+`voting_token.eligible_positions`. That field is populated **only** for
+positional (non-ballot-item) elections —
+`generate_and_send_election_report`'s own snapshot logic (`election_service.py:5983-5989`)
+sets it `if not election.ballot_items and election.positions and
+election.position_eligibility`, so for a ballot-item election it is always
+`None`. `eligible_item_ids` — the field that actually restricts a
+ballot-item voter — was never checked by this route at all, even though the
+bulk route (`submit_ballot_with_token`) already enforced it. This is the
+reintroduction (via a route that didn't exist, or wasn't checked, when R-1
+was originally fixed) of the exact class of bug R-1 closed: a token scoped
+to a subset of items could vote on an item outside that scope.
+
+**Where:** `election_service.py:7256-7270` (pre-fix — `eligible_positions`
+check only, no `eligible_item_ids` check anywhere in the function).
+
+**Failure scenario:** an election has two ballot items, one open to
+everyone and one restricted (e.g. to `["operational"]`). A voter eligible
+only for the open item receives a token with
+`eligible_item_ids=["item_a"]`. `POST /ballot/lookup` (unaffected by this
+finding) already filtered `ballot_items` to the eligible set, but did **not**
+filter the returned `candidates` list by item — so it still handed back the
+restricted item's candidate id. That id, POSTed to `/ballot/vote`
+(`cast_vote_with_token`) with the same token, was accepted and recorded: the
+`eligible_positions` check is a no-op (`None`) for this election shape, and
+nothing else checked the item restriction.
+
+**Fix:** two changes, closing both the disclosure and the write:
+
+1. `cast_vote_with_token` now also checks `voting_token.eligible_item_ids`
+   for ballot-item elections: it recovers the matching ballot item from
+   `candidate`'s effective position (the item's own `position` field, or its
+   `id` when unset — the same derivation `submit_ballot_with_token` already
+   uses) and rejects the vote if that item's id isn't in the token's
+   snapshot.
+2. `lookup_ballot_by_token` now also filters the `candidates` it returns to
+   the positions of the (already `eligible_item_ids`-filtered) `ballot_items`
+   it returns, so a restricted item's candidates are never disclosed to a
+   token that can't vote for them in the first place.
+
+Guarded by `TestSingleVoteTokenEnforcesItemEligibility` (3 cases: blocked,
+allowed on the eligible item, unaffected when unrestricted) in
+`test_election_codex_round2.py`, confirmed to fail pre-fix via `git stash`.
 
 ### ELEC-12 — LOW/MED — `SavedBallotTemplate` list/create still unbounded — 🚩 OPEN (re-verified, pass 3)
 
@@ -107,19 +372,35 @@ are product decisions, not mechanical fixes. Already mirrored in
 List Bound or Creation Cap", 2026-08-25) — confirmed that entry is still
 accurate against current code.
 
-**Completion gate (pass 3):**
+**6 fixed (ELEC-13, ELEC-15, ELEC-17, ELEC-20, ELEC-21, plus the doc
+correction folded into ELEC-14's write-up), 2 flagged (ELEC-14, ELEC-16),
+plus ELEC-12 re-verified open.** The "0 fixes, 0 new findings" conclusion
+this section originally recorded was wrong — not because the diff-based
+scoping was wrong (it wasn't: the five core files really were byte-identical
+to pass 2's landing commit), but because "unchanged since pass 2" was taken
+to mean "still correct," and pass 2 itself had not caught these six. A
+diff-based scope proves nothing changed; it does not prove what didn't
+change was right.
 
-| Check                                                        | Result                                                                    |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations (no Python file changed)                                  |
-| `black --check app/ tests/ alembic/`                         | ✅ 1377 files unchanged                                                   |
-| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
-| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`)                            |
-| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 452 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
-| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this pass                              |
+**Completion gate (pass 3, after the Codex round):**
 
-No guard test added — no behavior changed, so there is no new class of
-regression to guard against.
+| Check                                                        | Result                                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                         | ✅ 1379 files unchanged                                                     |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                    |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration in this round |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 464 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed   |
+| `pytest tests/test_election_codex_round2.py -q`              | ✅ 12 passed (7 confirmed to fail pre-fix via `git stash`)                  |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9784 passed, 21 skipped (pre-existing/environmental), 0 failed           |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                               |
+
+New guard tests: `tests/test_election_codex_round2.py` (12 tests across the
+6 fixed findings). `tests/test_election_codex_fixes.py`'s
+`TestTokenVoteNullPositionDedup._token()` stub was also given an explicit
+`eligible_item_ids=None` default — ELEC-21's fix reads that attribute
+unconditionally (as the real `VotingToken` model always has it), which a
+stub predating the field did not.
 
 ---
 

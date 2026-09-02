@@ -536,11 +536,22 @@ async def lookup_ballot_by_token(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     response = BallotElectionResponse.model_validate(election)
+    allowed_item_positions: Optional[set] = None
     if voting_token.eligible_item_ids is not None and response.ballot_items is not None:
         allowed = set(voting_token.eligible_item_ids)
         response.ballot_items = [
             item for item in response.ballot_items if item.id in allowed
         ]
+        # Candidates are stored under their ballot item's effective position
+        # (the item's own "position" field, or its id when unset — see
+        # ElectionService.submit_ballot_with_token). Hiding candidates for
+        # items outside this token's eligible set here, not just the items
+        # themselves, keeps this endpoint from handing out the candidate ids
+        # of a restricted item that cast_vote_with_token would then have to
+        # refuse (R-1).
+        allowed_item_positions = {
+            item.position or item.id for item in response.ballot_items
+        }
 
     result = await db.execute(
         select(Candidate)
@@ -549,6 +560,8 @@ async def lookup_ballot_by_token(
         .order_by(Candidate.position, Candidate.display_order)
     )
     candidates = list(result.scalars().all())
+    if allowed_item_positions is not None:
+        candidates = [c for c in candidates if c.position in allowed_item_positions]
 
     # Position-restricted token: hide positions/candidates the voter may
     # not vote for (mirrors the enforcement in cast_vote_with_token).

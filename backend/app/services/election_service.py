@@ -280,12 +280,27 @@ class ElectionService:
 
         member_class = getattr(user, "member_class", None)
         member_status = getattr(user, "member_status", None)
-        if not member_class or not member_status:
+        membership_type = getattr(user, "membership_type", None)
+        live_class, live_status = split_membership_type(membership_type)
+
+        # A live membership_type that is an org-configured custom tier
+        # ("senior") splits to (None, None) — that is the important case,
+        # not the fallback one. `_reconcile_membership` (models/user.py)
+        # deliberately *preserves* member_class/member_status from before a
+        # switch onto such a tier, because shift eligibility needs to keep
+        # recognizing a member who still rides. That carryover must not
+        # leak into election eligibility: a member moved onto a custom tier
+        # is meant to match no built-in voter category (see
+        # split_membership_type's docstring — "would widen the electorate
+        # of any ballot restricted to either"), so the stale class/status
+        # cached on the row is discarded here regardless of what shift
+        # eligibility keeps it for.
+        if membership_type and live_class is None and live_status is None:
+            member_class, member_status = None, None
+        elif not member_class or not member_status:
             # A row written before the split, or a caller passing a stub. The
             # legacy field still carries both facts, just fused.
-            member_class, member_status = split_membership_type(
-                getattr(user, "membership_type", None)
-            )
+            member_class, member_status = live_class, live_status
         # Deliberately not defaulted. Both stay None when the member's
         # membership_type is an org-configured tier id ("senior") rather than
         # one of the seven known values, and None matches no class and no
@@ -3534,10 +3549,21 @@ class ElectionService:
         if batch.status == "confirmed":
             return None, "This batch is already fully attested"
 
+        # Also FOR UPDATE: close_election takes its own lock on this same
+        # row independently of the batch lock above, so a plain read here
+        # can still observe a stale OPEN status while a concurrent close is
+        # in flight — the two locks don't block each other since they're on
+        # different rows, and REPEATABLE READ's snapshot for the plain read
+        # would not reflect a commit that happened after this transaction
+        # began. A locking read forces this transaction to wait for any
+        # in-flight close to finish and then see its committed CLOSED
+        # status, so a batch attested "just in time" is consistently
+        # rejected rather than sometimes slipping past the close.
         election_result = await self.db.execute(
             select(Election)
             .where(Election.id == str(election_id))
             .where(Election.organization_id == str(organization_id))
+            .with_for_update()
         )
         election = election_result.scalar_one_or_none()
         if not election:
@@ -3717,6 +3743,28 @@ class ElectionService:
         the single-vote endpoint — rows are retained with deleted_at/by and
         the reason, and appear in the forensics report.
         """
+        # Lock the batch first — it's the row every void of this batch
+        # contends on. Without this, two concurrent voids can both load the
+        # same not-yet-voided votes before either commits, both report
+        # success, and the later ORM flush overwrites the first officer's
+        # deleted_by/reason/timestamp, corrupting the forensic attribution
+        # this operation exists to preserve. Locking also lets the
+        # already-voided check below see a concurrent void's committed
+        # result instead of a stale pre-lock snapshot (CLAUDE.md #27:
+        # lock the parent row *and* read its state through the lock).
+        # Absent for batches recorded before the attestation feature
+        # existed — those have no row to lock or flag, so this stays a
+        # best-effort guard for them, not a correctness gap introduced here.
+        batch_result = await self.db.execute(
+            select(ManualBallotBatch)
+            .where(ManualBallotBatch.id == batch_id)
+            .where(ManualBallotBatch.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        batch = batch_result.scalar_one_or_none()
+        if batch is not None and batch.status == "voided":
+            return 0, "This batch has already been voided"
+
         result = await self.db.execute(
             select(Vote)
             .join(Election, Vote.election_id == Election.id)
@@ -3725,6 +3773,7 @@ class ElectionService:
             .where(Vote.manual_batch_id == batch_id)
             .where(Vote.is_manual.is_(True))
             .where(Vote.deleted_at.is_(None))
+            .with_for_update()
         )
         votes = list(result.scalars().all())
         if not votes:
@@ -3736,14 +3785,6 @@ class ElectionService:
             vote.deleted_by = str(deleted_by)
             vote.deletion_reason = reason
 
-        # Mirror the void on the batch row (absent for batches recorded
-        # before the attestation feature existed).
-        batch_result = await self.db.execute(
-            select(ManualBallotBatch)
-            .where(ManualBallotBatch.id == batch_id)
-            .where(ManualBallotBatch.organization_id == str(organization_id))
-        )
-        batch = batch_result.scalar_one_or_none()
         if batch is not None:
             batch.status = "voided"
         await self.db.commit()
@@ -7113,9 +7154,22 @@ Best regards,
         rest of the voting lifecycle, then re-check mutable state. Besides closing
         the token replay race, the election lock serializes updates to
         ``last_chain_hash`` so concurrent ballots cannot fork the vote audit chain.
+
+        Both re-selects need ``populate_existing=True``, not just
+        ``with_for_update()``. ``get_ballot_by_token`` already loaded this same
+        ``election``/``voting_token`` pair into the session's identity map (and
+        ``expire_on_commit=False`` means its commit does not expire them), so a
+        re-SELECT for a primary key already in the identity map returns the
+        cached Python object without copying the new row's columns onto it —
+        the lock is acquired at the SQL level, but ``locked_token.used`` /
+        ``locked_election.status`` would still read the pre-lock value. Same
+        requirement as ``quorum_service.py``'s ``calculate_quorum`` fix.
         """
         election_result = await self.db.execute(
-            select(Election).where(Election.id == election.id).with_for_update()
+            select(Election)
+            .where(Election.id == election.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         locked_election = election_result.scalar_one_or_none()
         if not locked_election:
@@ -7126,6 +7180,7 @@ Best regards,
             .where(VotingToken.id == voting_token.id)
             .where(VotingToken.election_id == locked_election.id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         locked_token = token_result.scalar_one_or_none()
         if not locked_token:
@@ -7213,6 +7268,36 @@ Best regards,
                 if effective_position
                 else "You are not eligible to vote in this election"
             )
+
+        # Enforce the token's per-item eligibility snapshot for ballot-item
+        # elections (R-1). `eligible_positions` above is always None for
+        # these — it's only ever populated for positional elections
+        # (`generate_and_send_election_report`) — so without this check a
+        # token scoped to one ballot item could vote on any other item's
+        # candidate via this single-vote route, even though
+        # `submit_ballot_with_token` (the bulk route) already enforces
+        # `eligible_item_ids`. Candidates are stored with their ballot
+        # item's effective position (the item's own "position" field, or
+        # its id when unset — see submit_ballot_with_token), so the item is
+        # recovered the same way here.
+        if voting_token.eligible_item_ids is not None and election.ballot_items:
+            allowed_item_ids = set(voting_token.eligible_item_ids)
+            matching_item = next(
+                (
+                    item
+                    for item in election.ballot_items
+                    if (item.get("position") or item.get("id")) == effective_position
+                ),
+                None,
+            )
+            if matching_item is not None and matching_item.get("id") not in (
+                allowed_item_ids
+            ):
+                return None, (
+                    f"You are not eligible to vote for {effective_position}"
+                    if effective_position
+                    else "You are not eligible to vote in this election"
+                )
 
         # Method-aware duplicate and limit checks — the token-path mirror of
         # cast_vote's rules (R-D5): approval records one vote per approved
@@ -7713,8 +7798,14 @@ Best regards,
                 candidate_id = deny_candidate.id
 
             else:
-                # Choice is a candidate UUID
-                if choice not in candidate_map:
+                # Choice is a candidate UUID. Must belong to *this* ballot
+                # item's position — same check the rankings/candidate_ids
+                # branches above already make — or a crafted submission
+                # could select a candidate from ballot item A while naming
+                # item B, binding an otherwise-uneligible candidate onto B's
+                # position (_create_token_vote below stores it there).
+                choice_candidate = candidate_map.get(choice)
+                if choice_candidate is None or choice_candidate.position != position:
                     return (
                         None,
                         f"Invalid candidate selection for: {ballot_item.get('title', ballot_item_id)}",
