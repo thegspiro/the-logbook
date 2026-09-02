@@ -43,6 +43,9 @@ const {
   mockGetInventorySummary,
   mockGetEligiblePositions,
   mockGetMyCompliance,
+  mockGetSchedulingSummary,
+  mockGetAdminHoursSummary,
+  mockGetEnabledModules,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -61,15 +64,16 @@ const {
   mockGetInventorySummary: vi.fn(),
   mockGetEligiblePositions: vi.fn(),
   mockGetMyCompliance: vi.fn(),
+  mockGetSchedulingSummary: vi.fn(),
+  mockGetAdminHoursSummary: vi.fn(),
+  mockGetEnabledModules: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getMyShifts: mockGetMyShifts,
     getOpenShifts: mockGetOpenShifts,
-    getSummary: vi
-      .fn()
-      .mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
+    getSummary: mockGetSchedulingSummary,
     signupForShift: mockSignupForShift,
     getEligiblePositions: mockGetEligiblePositions,
   },
@@ -98,7 +102,7 @@ vi.mock('../services/api', () => ({
     getSetupChecklist: mockGetSetupChecklist,
     // Reached via DashboardOrientation -> useEnabledModules, which decides
     // which learning lessons count toward the orientation prompt.
-    getEnabledModules: vi.fn().mockResolvedValue({ enabled_modules: [] }),
+    getEnabledModules: mockGetEnabledModules,
   },
   inventoryService: {
     getUserInventory: mockGetUserInventory,
@@ -123,7 +127,7 @@ vi.mock('../services/api', () => ({
 
 vi.mock('../modules/admin-hours/services/api', () => ({
   adminHoursEntryService: {
-    getSummary: vi.fn().mockResolvedValue({ totalHours: 0 }),
+    getSummary: mockGetAdminHoursSummary,
   },
 }));
 
@@ -213,7 +217,15 @@ describe('Dashboard', () => {
       is_fully_compliant: true,
       days_until_next_expiration: null,
     });
-    mockCheckPermission.mockReturnValue(false);
+    mockCheckPermission.mockImplementation((permission: string) =>
+      ['scheduling.view', 'training.view', 'admin_hours.view'].includes(permission)
+    );
+    mockGetEnabledModules.mockResolvedValue({
+      configured: true,
+      enabled_modules: ['inventory', 'medical_screening', 'notifications', 'scheduling', 'training'],
+    });
+    mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 0 });
+    mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 0 });
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
     mockGetUserInventory.mockResolvedValue({ permanent_assignments: [], active_checkouts: [], issued_items: [] });
@@ -223,6 +235,55 @@ describe('Dashboard', () => {
       active_checkouts: 0,
       overdue_checkouts: 0,
       maintenance_due_count: 0,
+    });
+  });
+
+  describe('hours summary gates', () => {
+    it('does not call summary endpoints owned by disabled modules', async () => {
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: [] });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(mockGetAdminHoursSummary).toHaveBeenCalledTimes(1);
+      });
+      expect(mockGetSchedulingSummary).not.toHaveBeenCalled();
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(within(card).getAllByText('Unavailable')).toHaveLength(2);
+      expect(within(card).getAllByText('0')).toHaveLength(2);
+    });
+
+    it('loads authorized sources independently when another source fails', async () => {
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyTraining.mockRejectedValue(new Error('training unavailable'));
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(within(card).getByText('5')).toBeInTheDocument();
+      });
+      expect(within(card).getByText('3')).toBeInTheDocument();
+      expect(within(card).getByText('2')).toBeInTheDocument();
+      expect(within(card).getByText('Unavailable')).toBeInTheDocument();
+    });
+
+    it('does not call enabled sources without their view permissions', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'scheduling.view');
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 4 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(within(card).getAllByText('4')).toHaveLength(2);
+      });
+      expect(mockGetSchedulingSummary).toHaveBeenCalledTimes(1);
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(mockGetAdminHoursSummary).not.toHaveBeenCalled();
+      expect(mockCheckPermission).toHaveBeenCalledWith('admin_hours.view');
     });
   });
 
