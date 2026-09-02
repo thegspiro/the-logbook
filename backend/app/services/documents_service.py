@@ -125,7 +125,9 @@ class DocumentsService:
         organization_id: UUID,
         parent_id: Optional[UUID] = None,
         current_user: Optional[User] = None,
-    ) -> List[DocumentFolder]:
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[DocumentFolder], int]:
         """
         Get folders the user is allowed to see.
 
@@ -138,40 +140,67 @@ class DocumentsService:
         Users with documents.manage, members.manage, or wildcard '*'
         bypass all restrictions (leadership override).
         """
-        query = select(DocumentFolder).where(
-            DocumentFolder.organization_id == str(organization_id)
+        access_query = self._folder_access_projection(organization_id, current_user)
+        access_query = access_query.where(
+            DocumentFolder.parent_id == parent_id
+            if parent_id
+            else DocumentFolder.parent_id.is_(None)
+        ).order_by(DocumentFolder.sort_order, DocumentFolder.name, DocumentFolder.id)
+        access_rows = (await self.db.execute(access_query)).all()
+        accessible_ids = [
+            row.id
+            for row in access_rows
+            if current_user is None or self.can_access_folder(row, current_user)
+        ]
+        total = len(accessible_ids)
+        page_ids = accessible_ids[skip : skip + limit]
+        if not page_ids:
+            return [], total
+
+        counts = (
+            select(Document.folder_id, func.count(Document.id).label("document_count"))
+            .where(Document.status == DocumentStatus.ACTIVE)
+            .group_by(Document.folder_id)
+            .subquery()
         )
+        query = (
+            select(DocumentFolder, func.coalesce(counts.c.document_count, 0))
+            .outerjoin(counts, counts.c.folder_id == DocumentFolder.id)
+            .where(DocumentFolder.id.in_(page_ids))
+            .order_by(DocumentFolder.sort_order, DocumentFolder.name, DocumentFolder.id)
+        )
+        rows = (await self.db.execute(query)).all()
+        folders = []
+        for folder, document_count in rows:
+            folder.document_count = document_count
+            folders.append(folder)
+        return folders, total
 
-        if parent_id:
-            query = query.where(DocumentFolder.parent_id == parent_id)
-        else:
-            query = query.where(DocumentFolder.parent_id.is_(None))
+    def _folder_access_projection(self, organization_id: UUID, user: Optional[User]):
+        """Build the smallest folder query needed to evaluate folder ACLs.
 
-        query = query.order_by(DocumentFolder.sort_order, DocumentFolder.name)
-        result = await self.db.execute(query)
-        folders = result.scalars().all()
-
-        # Apply access filtering if a user is provided.
-        #
-        # Delegated to can_access_folder rather than repeated here. This block
-        # used to re-implement the same rules inline, and the two copies did
-        # not stay equal: the by-id path learned required_permissions while the
-        # listing kept its own visibility-only walk, so a permission-gated
-        # folder stayed hidden from a direct fetch and listed in the browser.
-        # One owner for the rule is what keeps those answers the same.
-        if current_user is not None:
-            folders = [f for f in folders if self.can_access_folder(f, current_user)]
-
-        # Add document counts
-        for folder in folders:
-            count_result = await self.db.execute(
-                select(func.count(Document.id))
-                .where(Document.folder_id == folder.id)
-                .where(Document.status == DocumentStatus.ACTIVE)
+        Visibility and ownership are filtered in SQL. JSON permission and role
+        lists retain wildcard semantics that are not portable across supported
+        databases, so those few columns are evaluated in Python. This scales
+        with the number of candidate folder ACL rows, not complete ORM states.
+        """
+        query = select(
+            DocumentFolder.id,
+            DocumentFolder.visibility,
+            DocumentFolder.owner_user_id,
+            DocumentFolder.allowed_roles,
+            DocumentFolder.required_permissions,
+        ).where(DocumentFolder.organization_id == str(organization_id))
+        if user is not None and not _is_leadership(_get_user_permissions(user)):
+            query = query.where(
+                (DocumentFolder.visibility == FolderVisibility.ORGANIZATION)
+                | (DocumentFolder.visibility.is_(None))
+                | (
+                    (DocumentFolder.visibility == FolderVisibility.OWNER)
+                    & (DocumentFolder.owner_user_id == str(user.id))
+                )
             )
-            folder.document_count = count_result.scalar() or 0
-
-        return folders
+        return query
 
     async def get_folder_by_id(
         self, folder_id: UUID, organization_id: UUID
@@ -257,11 +286,9 @@ class DocumentsService:
         in restricted/owner-only folders.
         """
         result = await self.db.execute(
-            select(DocumentFolder).where(
-                DocumentFolder.organization_id == str(organization_id)
-            )
+            self._folder_access_projection(organization_id, user)
         )
-        folders = result.scalars().all()
+        folders = result.all()
         # The leadership fast path returns None ("no folder restriction"), which
         # is only sound while every restriction here is one leadership
         # outranks. A required_permissions folder is not: skipping the filter

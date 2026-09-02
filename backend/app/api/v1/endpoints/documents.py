@@ -100,14 +100,19 @@ ALLOWED_DOCUMENT_MIME_TYPES = {
 @router.get("/folders", response_model=FoldersListResponse)
 async def list_folders(
     parent_id: str | None = None,
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.view")),
 ):
     """List document folders the current user can access"""
     service = DocumentsService(db)
     parent_uuid = _parse_uuid_or_400(parent_id, "parent_id") if parent_id else None
-    folders = await service.get_folders(
-        current_user.organization_id, parent_uuid, current_user=current_user
+    folders, total = await service.get_folders(
+        current_user.organization_id,
+        parent_uuid,
+        current_user=current_user,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
     return {
@@ -118,7 +123,9 @@ async def list_folders(
             }
             for f in folders
         ],
-        "total": len(folders),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
     }
 
 

@@ -185,7 +185,7 @@ class TestAccessibleFolderIds:
         no permission-gated folder, which costs the one folder read below."""
         svc = _svc()
         result = MagicMock()
-        result.scalars.return_value.all.return_value = [
+        result.all.return_value = [
             _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
             _folder(FolderVisibility.LEADERSHIP, fid="f-lead"),
         ]
@@ -200,7 +200,7 @@ class TestAccessibleFolderIds:
         leak the field was added to close."""
         svc = _svc()
         result = MagicMock()
-        result.scalars.return_value.all.return_value = [
+        result.all.return_value = [
             _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
             _folder(
                 FolderVisibility.ORGANIZATION,
@@ -233,7 +233,7 @@ class TestAccessibleFolderIds:
             ),
         ]
         result = MagicMock()
-        result.scalars.return_value.all.return_value = folders
+        result.all.return_value = folders
         svc.db.execute = AsyncMock(return_value=result)
 
         member = _user(uid="u1", roles=[([], "ff")])
@@ -241,6 +241,53 @@ class TestAccessibleFolderIds:
         # Open org folder + own owner folder only; not leadership, others', or
         # the officer-restricted folder.
         assert ids == {"f-org", "f-mine"}
+
+
+class TestFolderListing:
+    """Folder pagination is applied after ACL filtering and stays constant-query."""
+
+    async def test_total_stable_pages_counts_and_access_filtering(self):
+        svc = _svc()
+        member = _user(uid="u1", roles=[([], "ff")])
+        accessible = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f1"),
+            _folder(FolderVisibility.LEADERSHIP, fid="hidden"),
+            _folder(FolderVisibility.ORGANIZATION, fid="f2"),
+            _folder(FolderVisibility.ORGANIZATION, fid="f3"),
+        ]
+        first_result = MagicMock()
+        first_result.all.return_value = accessible
+        folder = SimpleNamespace(id="f2")
+        page_result = MagicMock()
+        page_result.all.return_value = [(folder, 0)]
+        svc.db.execute = AsyncMock(side_effect=[first_result, page_result])
+
+        folders, total = await svc.get_folders(
+            "org-1", current_user=member, skip=1, limit=1
+        )
+
+        assert total == 3
+        assert [item.id for item in folders] == ["f2"]
+        assert folders[0].document_count == 0
+        access_statement = svc.db.execute.await_args_list[0].args[0]
+        assert "document_folders.id" in str(access_statement).split("ORDER BY", 1)[1]
+        # ACL projection plus one grouped-count page query: never one query per
+        # folder, regardless of the number of candidates or returned folders.
+        assert svc.db.execute.await_count == 2
+
+    async def test_page_past_total_uses_only_access_query(self):
+        svc = _svc()
+        result = MagicMock()
+        result.all.return_value = [_folder(FolderVisibility.ORGANIZATION, fid="f1")]
+        svc.db.execute = AsyncMock(return_value=result)
+
+        folders, total = await svc.get_folders(
+            "org-1", current_user=_user(), skip=1, limit=10
+        )
+
+        assert folders == []
+        assert total == 1
+        assert svc.db.execute.await_count == 1
 
 
 class TestAttachDocumentNames:

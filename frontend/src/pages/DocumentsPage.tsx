@@ -34,6 +34,7 @@ type ViewMode = 'grid' | 'list';
 // choice on the upload form) -- otherwise those documents are uploadable but
 // never visible or reachable anywhere in this page (Codex finding on #1827).
 const ALL_DOCUMENTS = '__all__';
+const FOLDER_PAGE_SIZE = 12;
 
 const DocumentsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -42,6 +43,8 @@ const DocumentsPage: React.FC = () => {
 
   // Data state
   const [folders, setFolders] = useState<DocFolder[]>([]);
+  const [folderTotal, setFolderTotal] = useState(0);
+  const [folderSkip, setFolderSkip] = useState(0);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [summary, setSummary] = useState<DocumentsSummary | null>(null);
 
@@ -74,13 +77,15 @@ const DocumentsPage: React.FC = () => {
   // Data fetching
   // -------------------------------------------------------
 
-  const fetchFolders = useCallback(async () => {
+  const fetchFolders = useCallback(async (skip = 0) => {
     try {
-      const response = await documentsService.getFolders();
+      const response = await documentsService.getFolders({ skip, limit: FOLDER_PAGE_SIZE });
       // Envelope responses put the array a level down, where the service's
       // asArray guard does not reach — and `folders` is mapped and measured
       // without checking, so an envelope missing the key crashes the page.
       setFolders(asArray(response.folders));
+      setFolderTotal(response.total);
+      setFolderSkip(response.skip);
     } catch {
       setError('Unable to load folders. Please check your connection and try again.');
     }
@@ -440,28 +445,53 @@ const DocumentsPage: React.FC = () => {
               </button>
             </div>
             {folders.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {folders.map((folder) => (
-                  <button
-                    key={folder.id}
-                    onClick={() => handleFolderSelect(folder.id)}
-                    className="stat-card group hover:bg-theme-surface-hover text-left transition-all hover:border-amber-500/30"
-                  >
-                    <div className="flex items-start space-x-3">
-                      <FolderOpen
-                        className={`h-8 w-8 ${folder.color || 'text-amber-700 dark:text-amber-400'} transition-transform group-hover:scale-110`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-theme-text-primary truncate font-semibold">{folder.name}</h3>
-                        <p className="text-theme-text-muted mt-1 text-sm">{folder.description || 'No description'}</p>
-                        <p className="text-theme-text-muted mt-2 text-xs">
-                          {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
-                        </p>
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {folders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      onClick={() => handleFolderSelect(folder.id)}
+                      className="stat-card group hover:bg-theme-surface-hover text-left transition-all hover:border-amber-500/30"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <FolderOpen
+                          className={`h-8 w-8 ${folder.color || 'text-amber-700 dark:text-amber-400'} transition-transform group-hover:scale-110`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-theme-text-primary truncate font-semibold">{folder.name}</h3>
+                          <p className="text-theme-text-muted mt-1 text-sm">{folder.description || 'No description'}</p>
+                          <p className="text-theme-text-muted mt-2 text-xs">
+                            {folder.document_count} {folder.document_count === 1 ? 'document' : 'documents'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
+                    </button>
+                  ))}
+                </div>
+                {folderTotal > FOLDER_PAGE_SIZE && (
+                  <nav className="mt-6 flex items-center justify-between" aria-label="Folder pagination">
+                    <button
+                      type="button"
+                      disabled={folderSkip === 0}
+                      onClick={() => void fetchFolders(Math.max(0, folderSkip - FOLDER_PAGE_SIZE))}
+                      className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-theme-text-muted text-sm">
+                      {folderSkip + 1}–{Math.min(folderSkip + folders.length, folderTotal)} of {folderTotal}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={folderSkip + folders.length >= folderTotal}
+                      onClick={() => void fetchFolders(folderSkip + FOLDER_PAGE_SIZE)}
+                      className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </nav>
+                )}
+              </>
             ) : (
               <div className="card p-8 text-center">
                 <FolderOpen className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />

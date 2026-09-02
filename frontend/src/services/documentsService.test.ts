@@ -26,22 +26,24 @@ describe('documentsService', () => {
   // --- getFolders ---
   describe('getFolders', () => {
     it('should GET /documents/folders without parentId', async () => {
-      const data = { folders: [{ id: 'f1', name: 'Folder 1' }], total: 1 };
+      const data = { folders: [{ id: 'f1', name: 'Folder 1' }], total: 1, skip: 0, limit: 100 };
       mockGet.mockResolvedValueOnce({ data });
 
       const result = await documentsService.getFolders();
 
-      expect(mockGet).toHaveBeenCalledWith('/documents/folders', { params: {} });
+      expect(mockGet).toHaveBeenCalledWith('/documents/folders', { params: undefined });
       expect(result).toEqual(data);
     });
 
-    it('should pass parent_id param when provided', async () => {
-      const data = { folders: [], total: 0 };
+    it('should pass parent and pagination params when provided', async () => {
+      const data = { folders: [], total: 0, skip: 20, limit: 20 };
       mockGet.mockResolvedValueOnce({ data });
 
-      await documentsService.getFolders('parent-1');
+      await documentsService.getFolders({ parent_id: 'parent-1', skip: 20, limit: 20 });
 
-      expect(mockGet).toHaveBeenCalledWith('/documents/folders', { params: { parent_id: 'parent-1' } });
+      expect(mockGet).toHaveBeenCalledWith('/documents/folders', {
+        params: { parent_id: 'parent-1', skip: 20, limit: 20 },
+      });
     });
   });
 

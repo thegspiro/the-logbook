@@ -66,6 +66,23 @@ beforeEach(() => {
 });
 
 describe('DocumentsPage', () => {
+  it('uses folder pagination metadata to request the next page', async () => {
+    const user = userEvent.setup();
+    mockGetFolders.mockResolvedValue({
+      folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }],
+      total: 13,
+      skip: 0,
+      limit: 12,
+    });
+
+    renderWithRouter(<DocumentsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Next' }));
+    await waitFor(() => {
+      expect(mockGetFolders).toHaveBeenLastCalledWith({ skip: 12, limit: 12 });
+    });
+  });
+
   it('lists a folderless document under "All Documents" (DOC-22)', async () => {
     const user = userEvent.setup();
     // A folderless upload has folder_id undefined and is only ever returned
