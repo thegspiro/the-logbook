@@ -2507,26 +2507,34 @@ class FormsService:
         The email column is disclosed only as *contact_policy* allows — the
         organisation's ceiling and the member's own profile-visibility choice.
         Without a policy the email is withheld: a caller that has not decided
-        who may see it must not show it by default. The search itself still
-        matches on email, so a member can be found by it without it being
-        displayed.
+        who may see it must not show it by default.
+
+        Matching on email is allowed only when the policy discloses email
+        unconditionally (a members-manager under a ceiling that allows it).
+        Otherwise a hit on a hidden address would confirm it to the caller
+        even with the column blanked, and the lookup would be an oracle for
+        exactly what the member chose to keep from colleagues.
         """
         search_term = like_pattern(query)
+        matchers = [
+            User.first_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+            User.last_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+            User.membership_number.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+            func.concat(User.first_name, " ", User.last_name).ilike(
+                search_term, escape=LIKE_ESCAPE_CHAR
+            ),
+        ]
+        if (
+            contact_policy is not None
+            and contact_policy.show_email
+            and not contact_policy.honor_member_choice
+        ):
+            matchers.append(User.email.ilike(search_term, escape=LIKE_ESCAPE_CHAR))
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
-            .where(
-                or_(
-                    User.first_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
-                    User.last_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
-                    User.email.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
-                    User.membership_number.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
-                    func.concat(User.first_name, " ", User.last_name).ilike(
-                        search_term, escape=LIKE_ESCAPE_CHAR
-                    ),
-                )
-            )
+            .where(or_(*matchers))
             .order_by(User.last_name, User.first_name)
             .limit(limit)
         )

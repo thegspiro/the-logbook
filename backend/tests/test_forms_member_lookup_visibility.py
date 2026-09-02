@@ -177,6 +177,45 @@ class TestSearchMembers:
 
         assert rows[0]["email"] is None
 
+    @staticmethod
+    def _where_clause(service: FormsService) -> str:
+        statement = service.db.execute.await_args.args[0]
+        return str(statement.whereclause)
+
+    async def test_members_cannot_match_on_email(self):
+        # A hit on a hidden address would confirm it even with the column
+        # blanked, so the predicate is left out for anyone the member choice
+        # applies to.
+        service = self._service(_member({"email": False}))
+        await service.search_members(uuid.UUID(ORG), "jsmith@", contact_policy=ALL_ON)
+
+        assert "users.email" not in self._where_clause(service)
+        assert "users.last_name" in self._where_clause(service)
+
+    async def test_no_policy_cannot_match_on_email_either(self):
+        service = self._service(_member(None))
+        await service.search_members(uuid.UUID(ORG), "jsmith@")
+
+        assert "users.email" not in self._where_clause(service)
+
+    async def test_manager_under_an_allowing_ceiling_can_match_on_email(self):
+        service = self._service(_member({"email": False}))
+        await service.search_members(uuid.UUID(ORG), "jsmith@", contact_policy=MANAGER)
+
+        assert "users.email" in self._where_clause(service)
+
+    async def test_manager_under_a_closed_ceiling_cannot(self):
+        closed = ContactPolicy(
+            show_email=False,
+            show_phone=True,
+            show_mobile=True,
+            honor_member_choice=False,
+        )
+        service = self._service(_member(None))
+        await service.search_members(uuid.UUID(ORG), "jsmith@", contact_policy=closed)
+
+        assert "users.email" not in self._where_clause(service)
+
 
 class TestEndpoint:
     async def test_passes_the_callers_policy_to_the_search(self):

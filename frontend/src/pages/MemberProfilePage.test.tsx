@@ -253,6 +253,15 @@ describe('MemberProfilePage membership and privacy', () => {
     expect(screen.getByText('Address')).toBeInTheDocument();
   });
 
+  it('shows a shared address that has only a ZIP code', async () => {
+    getUserWithRoles.mockResolvedValue({ ...redactedColleague, address_zip: '22046' });
+    renderWithRouter(<MemberProfilePage />);
+
+    expect(await screen.findByText(/22046/)).toBeInTheDocument();
+    expect(screen.getByText('Address')).toBeInTheDocument();
+    expect(screen.queryByText('No address on file.')).not.toBeInTheDocument();
+  });
+
   it('still badges a member who is not active', async () => {
     getUserWithRoles.mockResolvedValue({ ...redactedColleague, status: UserStatus.LEAVE });
     renderWithRouter(<MemberProfilePage />);

@@ -79,6 +79,13 @@ export function useProfileVisibility({ enabled, initial }: UseProfileVisibilityO
   useEffect(() => {
     if (!enabled) return;
     if (initial) {
+      // Seed once. The profile page hands a fresh `initial` every time a
+      // contact or address save replaces its `user`, and a PATCH that started
+      // before a visibility PUT can return the OLDER snapshot after it —
+      // re-seeding from that would roll the switches back and the next
+      // whole-object save would persist the stale choice. This hook's own
+      // saves are the only writer, so the first seed cannot go stale.
+      if (readyRef.current) return;
       setVisibility(initial);
       setLoading(false);
       setLoadError(false);

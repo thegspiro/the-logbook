@@ -309,7 +309,10 @@ export const MemberProfilePage: React.FC = () => {
   // payload (present for self and for members-managers) so no second request
   // is made; owned by the hook so a contact-info save replacing `user` cannot
   // reset a switch mid-flight.
-  const privacy = useProfileVisibility({ enabled: isSelf, initial: user?.profile_visibility });
+  // Enabled only once the profile is loaded: the payload carries the choice,
+  // and starting a separate fetch before it arrives would seed the hook from
+  // that fetch and then ignore the payload under the seed-once rule.
+  const privacy = useProfileVisibility({ enabled: isSelf && user !== null, initial: user?.profile_visibility });
 
   // The department's own contact-visibility ceiling. A marker that says
   // "Visible to members" while the department has switched work email off
@@ -620,7 +623,15 @@ export const MemberProfilePage: React.FC = () => {
   // Address fields only: personal email is displayed in the contact card, and
   // a member who shares it while hiding their address must not trigger the
   // very false statement this guard exists to prevent.
-  const hasAddressData = Boolean(user?.address_street || user?.address_city);
+  // Every component counts: the form accepts a state, a ZIP or a non-default
+  // country on their own, and an opted-in partial address must still show.
+  const hasAddressData = Boolean(
+    user?.address_street ||
+    user?.address_city ||
+    user?.address_state ||
+    user?.address_zip ||
+    (user?.address_country && user.address_country !== 'USA')
+  );
   const showAddressCard = canEdit || hasAddressData;
 
   // The left column is per-viewer: training, admin hours, ID cards and gear
@@ -983,7 +994,7 @@ export const MemberProfilePage: React.FC = () => {
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <p className="text-theme-text-muted text-xs font-medium uppercase">Mailing Address</p>
-                        {user.address_street || user.address_city ? (
+                        {hasAddressData ? (
                           <p className="text-theme-text-primary mt-1 text-sm">
                             {user.address_street && (
                               <>

@@ -163,4 +163,23 @@ describe('useProfileVisibility', () => {
     expect(result.current.loadError).toBe(false);
     expect(result.current.visibility.address).toBe(true);
   });
+
+  it('seeds from initial once and ignores later, possibly stale, snapshots', async () => {
+    const stored = { ...DEFAULT_PROFILE_VISIBILITY, email: false };
+    const { result, rerender } = renderHook(
+      ({ initial }: { initial: ProfileVisibility }) => useProfileVisibility({ enabled: true, initial }),
+      { initialProps: { initial: stored } }
+    );
+    expect(result.current.visibility.email).toBe(false);
+
+    await act(async () => {
+      await result.current.setField('address', true);
+    });
+
+    // A contact PATCH that started before the PUT returns the older snapshot.
+    rerender({ initial: { ...stored, address: false } });
+
+    expect(result.current.visibility.address).toBe(true);
+    expect(result.current.visibility.email).toBe(false);
+  });
 });
