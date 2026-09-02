@@ -2560,10 +2560,19 @@ class InventoryService:
     ) -> Tuple[bool, Optional[str]]:
         """Return issued units back to the pool."""
         try:
+            # Lock the issuance row itself: without this, two concurrent
+            # returns of the same issuance (a double-tap submit, or two
+            # officers processing the same physical return) can both pass
+            # the is_returned/quantity check before either commits, so the
+            # second call double-credits item.quantity from a stale
+            # in-memory read instead of seeing the first return's result
+            # (Pitfall #27 — the same shape review_return_request's INV-10
+            # fix closed on its own request row).
             result = await self.db.execute(
                 select(ItemIssuance)
                 .where(ItemIssuance.id == str(issuance_id))
                 .where(ItemIssuance.organization_id == str(organization_id))
+                .with_for_update()
             )
             issuance = result.scalar_one_or_none()
 
@@ -2779,10 +2788,19 @@ class InventoryService:
     ) -> Tuple[bool, Optional[str]]:
         """Check in an item"""
         try:
+            # Lock the checkout row itself: without this, two concurrent
+            # check-ins of the same checkout (a double-tap submit, or two
+            # officers processing the same physical return) can both pass
+            # the is_returned check before either commits, so the second
+            # call silently re-records a check-in — with its own condition
+            # and damage_notes — over the first's already-committed result
+            # instead of being rejected (Pitfall #27, same shape as
+            # return_to_pool's INV-10-style fix).
             result = await self.db.execute(
                 select(CheckOutRecord)
                 .where(CheckOutRecord.id == str(checkout_id))
                 .where(CheckOutRecord.organization_id == str(organization_id))
+                .with_for_update()
             )
             checkout = result.scalar_one_or_none()
 
