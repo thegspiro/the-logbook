@@ -148,7 +148,7 @@ async def create_folder(
             "folder_id": str(result.id),
             "name": result.name,
             "parent_id": str(result.parent_id) if result.parent_id else None,
-            "visibility": str(result.visibility),
+            "visibility": result.visibility.value,
         },
         user_id=str(current_user.id),
         username=current_user.username,

@@ -939,6 +939,7 @@ class TestDownloadDocument:
         assert exc.value.status_code == 403
 
 
+@pytest.mark.integration
 class TestFolderAndDocumentAuditLogging:
     """DOC-27: folder create/update/delete and a document metadata edit had
     no audit trail at all -- unlike document_uploaded/downloaded/deleted,
@@ -983,6 +984,10 @@ class TestFolderAndDocumentAuditLogging:
         entry = await self._last_event(db_session, "folder_created")
         assert entry is not None
         assert entry.event_data["name"] == "New Folder"
+        # Regression guard: str(FolderVisibility.ORGANIZATION) renders
+        # "FolderVisibility.ORGANIZATION" (Enum.__str__), not the schema
+        # value "organization" -- the audit event must use .value.
+        assert entry.event_data["visibility"] == "organization"
 
     async def test_update_folder_is_audited(self, db_session):
         org = Organization(name="Audit VFD", slug="audit-folder-update")
