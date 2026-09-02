@@ -104,7 +104,10 @@ from app.schemas.election import (
     VoterOverrideListResponse,
     VoterOverrideRecord,
 )
-from app.services.election_service import ElectionService
+from app.services.election_service import (
+    ElectionService,
+    ballot_item_candidate_positions,
+)
 from app.utils.org_scoping import assert_in_org
 
 router = APIRouter()
@@ -536,6 +539,23 @@ async def lookup_ballot_by_token(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     response = BallotElectionResponse.model_validate(election)
+
+    # The full set of candidate.position values claimed by *any* ballot
+    # item on this election — computed before any item filtering below, and
+    # used to tell an item-scoped candidate apart from a plain positional
+    # one (election.positions) further down. An election can configure
+    # both at once (a candidate can be nominated for a plain position with
+    # no ballot item at all), so a candidate's position not being in this
+    # set is what identifies it as positional, not just "unrestricted".
+    all_item_positions: set = set()
+    if response.ballot_items:
+        for item in response.ballot_items:
+            all_item_positions.update(
+                ballot_item_candidate_positions(
+                    {"position": item.position, "title": item.title, "id": item.id}
+                )
+            )
+
     allowed_item_positions: Optional[set] = None
     if voting_token.eligible_item_ids is not None and response.ballot_items is not None:
         allowed = set(voting_token.eligible_item_ids)
@@ -543,15 +563,19 @@ async def lookup_ballot_by_token(
             item for item in response.ballot_items if item.id in allowed
         ]
         # Candidates are stored under their ballot item's effective position
-        # (the item's own "position" field, or its id when unset — see
-        # ElectionService.submit_ballot_with_token). Hiding candidates for
-        # items outside this token's eligible set here, not just the items
-        # themselves, keeps this endpoint from handing out the candidate ids
-        # of a restricted item that cast_vote_with_token would then have to
-        # refuse (R-1).
-        allowed_item_positions = {
-            item.position or item.id for item in response.ballot_items
-        }
+        # (the item's own "position" field, or its title/id for legacy
+        # items persisted without one — see ballot_item_candidate_positions).
+        # Hiding candidates for items outside this token's eligible set
+        # here, not just the items themselves, keeps this endpoint from
+        # handing out the candidate ids of a restricted item that
+        # cast_vote_with_token would then have to refuse (R-1).
+        allowed_item_positions = set()
+        for item in response.ballot_items:
+            allowed_item_positions.update(
+                ballot_item_candidate_positions(
+                    {"position": item.position, "title": item.title, "id": item.id}
+                )
+            )
 
     result = await db.execute(
         select(Candidate)
@@ -561,17 +585,34 @@ async def lookup_ballot_by_token(
     )
     candidates = list(result.scalars().all())
     if allowed_item_positions is not None:
-        candidates = [c for c in candidates if c.position in allowed_item_positions]
+        # Keep candidates belonging to an allowed item, and leave any
+        # candidate that isn't item-scoped at all alone — it's a plain
+        # positional candidate, filtered by eligible_positions below, not
+        # by this token's item restriction.
+        candidates = [
+            c
+            for c in candidates
+            if c.position in allowed_item_positions
+            or c.position not in all_item_positions
+        ]
 
     # Position-restricted token: hide positions/candidates the voter may
-    # not vote for (mirrors the enforcement in cast_vote_with_token).
+    # not vote for (mirrors the enforcement in cast_vote_with_token). Only
+    # applies to positional candidates — an item-scoped candidate's
+    # position rarely appears in election.positions, so applying this
+    # filter to it too would strip out legitimate ballot-item candidates
+    # in an election that configures both positions and ballot items.
     if voting_token.eligible_positions is not None:
         allowed_positions = set(voting_token.eligible_positions)
         if response.positions is not None:
             response.positions = [
                 p for p in response.positions if p in allowed_positions
             ]
-        candidates = [c for c in candidates if c.position in allowed_positions]
+        candidates = [
+            c
+            for c in candidates
+            if c.position in all_item_positions or c.position in allowed_positions
+        ]
 
     return BallotLookupResponse(
         election=response,

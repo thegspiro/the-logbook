@@ -143,9 +143,13 @@ class TestAttestationLocksElection:
             required_attestations=2,
         )
         election = SimpleNamespace(id="election-1", status=ElectionStatus.OPEN)
+        # Election is locked FIRST, batch second — see ELEC-23: matching
+        # election deletion's parent-then-child order avoids a deadlock
+        # against a concurrent delete, which locks batch-then-election if
+        # the order here is reversed.
         service.db.execute.side_effect = [
-            _scalar_result(batch),
             _scalar_result(election),
+            _scalar_result(batch),
             _count_result(0),
             _count_result(1),
         ]
@@ -159,10 +163,46 @@ class TestAttestationLocksElection:
         )
 
         assert error is None
-        election_query = service.db.execute.await_args_list[1].args[0]
+        election_query = service.db.execute.await_args_list[0].args[0]
         assert election_query._for_update_arg is not None
-        # Sanity: it is actually the Election query, not the batch one again.
+        # Sanity: it is actually the Election query, not the batch one.
         assert "elections" in str(election_query).lower()
+
+    async def test_election_locked_before_batch(self):
+        """ELEC-23: the election lock must be acquired before the batch
+        lock, matching election deletion's parent-to-child order. Locking
+        batch-then-election (the reverse) can deadlock against a concurrent
+        delete, which locks election-then-batch via ON DELETE CASCADE."""
+        service = _make_service()
+        batch = SimpleNamespace(
+            id="batch-1",
+            status="pending",
+            recorded_by="recorder-1",
+            required_attestations=2,
+        )
+        election = SimpleNamespace(id="election-1", status=ElectionStatus.OPEN)
+        service.db.execute.side_effect = [
+            _scalar_result(election),
+            _scalar_result(batch),
+            _count_result(0),
+            _count_result(1),
+        ]
+        service._audit = AsyncMock()
+
+        result, error = await service.attest_manual_ballot_batch(
+            election_id=UUID(int=0),
+            organization_id=UUID(int=0),
+            batch_id="batch-1",
+            attested_by="attester-1",
+        )
+
+        assert error is None
+        first_query = service.db.execute.await_args_list[0].args[0]
+        second_query = service.db.execute.await_args_list[1].args[0]
+        assert "elections" in str(first_query).lower()
+        assert "manual_ballot_batches" in str(second_query).lower()
+        assert first_query._for_update_arg is not None
+        assert second_query._for_update_arg is not None
 
 
 # ===================================================================

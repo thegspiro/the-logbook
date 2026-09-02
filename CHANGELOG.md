@@ -51,6 +51,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
 (ELEC-13, ELEC-15, ELEC-17, ELEC-19b, ELEC-20).
 
+### A legacy ballot item lost its candidates, and a positional candidate outside any ballot item could bypass eligibility entirely (2026-09-02)
+
+**Fixed**
+
+- **A candidate-selection ballot item created before ballot items carried
+  their own "position" field lost every one of its candidates on the ballot
+  link,** and rejected them if submitted anyway: the eligibility checks
+  added for the previous fix above only recognized a candidate as belonging
+  to an item by the item's id, dropping the by-title matching the voting
+  page and eligibility checks elsewhere in the app already relied on for
+  these older items. Fixed by matching a candidate to its item by title
+  when the item has no explicit position, consistently everywhere that
+  match is made.
+- **A candidate running for a plain position that isn't tied to any ballot
+  item had no eligibility check at all, on an election that also had
+  ballot items** — an org could restrict a position (e.g. "Secretary") to
+  a particular membership category, and a member outside that category
+  could still vote for it, because the restriction was never captured on
+  their ballot link in the first place whenever the election also used
+  ballot items. Fixed by capturing that restriction regardless of whether
+  the election also has ballot items, and by checking each candidate
+  against the one restriction that actually applies to it.
+- **Attesting a paper-ballot batch and deleting its election could deadlock
+  against each other** under heavy concurrent use, because the two
+  operations locked the batch and the election in opposite orders. Fixed
+  by locking them in the same order everywhere.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-22, ELEC-23, ELEC-24).
+
 ### Four more finance foreign keys are now scoped to the caller's organization (2026-09-02)
 
 **Fixed**

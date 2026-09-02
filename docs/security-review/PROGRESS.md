@@ -17,10 +17,64 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (Feature 06,
-Elections & ballots, pass 3) — 6 fixed, 2 flagged (Codex review round 1),
-1 re-verified open (ELEC-12). See the Log below for detail.
+Elections & ballots, pass 3) — 9 fixed, 2 flagged across two Codex review
+rounds, 1 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 2) — 3 fixed — PR #2162
+
+Codex reviewed round 1's fix commit (`d07af4143`) itself and posted 3 more
+findings — 2 P1s and a P2 — specifically on those fixes, not on the
+original pass. Re-verified each against current code independently, same
+standard as round 1: **all 3 confirmed real and fixed.**
+
+- **ELEC-22 (P1, fixed):** round 1's new per-item eligibility checks
+  (ELEC-20/21) matched a candidate to its ballot item by the item's
+  `position` field or its `id` — but a legacy ballot item persisted without
+  an explicit `position` field ties its candidates by _title_ instead, a
+  convention the voting UI (`BallotVotingPage.tsx`) and
+  `check_voter_eligibility` already relied on before this review touched
+  the file. The id-only allow-list emptied every such item's candidate list
+  on `/ballot/lookup` and rejected the same candidates on both token-vote
+  routes. Fixed with a shared `ballot_item_candidate_positions()` helper
+  (position, else title-or-id) used consistently across all three call
+  sites, so the lookup filter and both submission checks agree.
+- **ELEC-23 (P1, fixed):** a candidate nominated for a plain
+  `election.positions` entry (not tied to any ballot item — the schema
+  allows both on the same election) had its eligibility checked nowhere at
+  all whenever the election also had ballot items: `send_ballot_emails`
+  unconditionally skipped snapshotting `eligible_positions` in that case,
+  and `cast_vote_with_token`'s item check is a no-op for a candidate that
+  doesn't resolve to an item. Worse in kind than ELEC-21 — that was a
+  check that fired but read the wrong field; this was no check firing at
+  all. Fixed by snapshotting `eligible_positions` whenever
+  `election.positions` has configured rules regardless of ballot items,
+  and restructuring `cast_vote_with_token` (and `lookup_ballot_by_token`)
+  so each candidate is judged by exactly one snapshot — item-scoped
+  candidates by `eligible_item_ids`, everything else by
+  `eligible_positions` — so populating the latter for mixed elections
+  can't collaterally reject legitimate item votes.
+- **ELEC-24 (P2, fixed):** ELEC-15's election-row lock in
+  `attest_manual_ballot_batch` was acquired _after_ the batch lock —
+  child-then-parent — while election deletion's `ON DELETE CASCADE` locks
+  parent-then-child. A concurrent attest and delete could deadlock under
+  InnoDB, and neither path retries. Fixed by acquiring the election lock
+  first, matching the parent-to-child order; ELEC-15's serialization
+  property (both locks still held before either check) is unchanged.
+
+All 3 fixes guarded by regression tests in `tests/test_election_codex_round3.py`
+(new file, 7 tests) plus 2 new/updated tests in the existing
+`TestAttestationLocksElection` class in `test_election_codex_round2.py`,
+each confirmed to fail pre-fix via `git stash`. Completion gate re-run
+clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 472
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9792
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. All 3 review threads replied to and
+resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 1) — 6 fixed, 2 flagged — PR #2162
 

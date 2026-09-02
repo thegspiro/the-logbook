@@ -372,31 +372,210 @@ are product decisions, not mechanical fixes. Already mirrored in
 List Bound or Creation Cap", 2026-08-25) — confirmed that entry is still
 accurate against current code.
 
-**6 fixed (ELEC-13, ELEC-15, ELEC-17, ELEC-20, ELEC-21, plus the doc
-correction folded into ELEC-14's write-up), 2 flagged (ELEC-14, ELEC-16),
-plus ELEC-12 re-verified open.** The "0 fixes, 0 new findings" conclusion
-this section originally recorded was wrong — not because the diff-based
-scoping was wrong (it wasn't: the five core files really were byte-identical
-to pass 2's landing commit), but because "unchanged since pass 2" was taken
-to mean "still correct," and pass 2 itself had not caught these six. A
-diff-based scope proves nothing changed; it does not prove what didn't
-change was right.
+**Round 1: 6 fixed (ELEC-13, ELEC-15, ELEC-17, ELEC-20, ELEC-21, plus the
+doc correction folded into ELEC-14's write-up), 2 flagged (ELEC-14,
+ELEC-16), plus ELEC-12 re-verified open.** The "0 fixes, 0 new findings"
+conclusion this section originally recorded was wrong — not because the
+diff-based scoping was wrong (it wasn't: the five core files really were
+byte-identical to pass 2's landing commit), but because "unchanged since
+pass 2" was taken to mean "still correct," and pass 2 itself had not caught
+these six. A diff-based scope proves nothing changed; it does not prove
+what didn't change was right.
 
-**Completion gate (pass 3, after the Codex round):**
+Codex then reviewed the round-1 commit itself and posted 3 more findings —
+2 P1s and a P2 — specifically on those fixes. Round 2 below.
 
-| Check                                                        | Result                                                                      |
-| ------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                             |
-| `black --check app/ tests/ alembic/`                         | ✅ 1379 files unchanged                                                     |
-| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                    |
-| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration in this round |
-| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 464 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed   |
-| `pytest tests/test_election_codex_round2.py -q`              | ✅ 12 passed (7 confirmed to fail pre-fix via `git stash`)                  |
-| `pytest tests/ -q` (full backend suite)                      | ✅ 9784 passed, 21 skipped (pre-existing/environmental), 0 failed           |
-| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                               |
+### ELEC-22 — P1 — Round 1's item-eligibility allow-list dropped the legacy title fallback — ✅ FIXED
 
-New guard tests: `tests/test_election_codex_round2.py` (12 tests across the
-6 fixed findings). `tests/test_election_codex_fixes.py`'s
+**What:** a ballot item persisted without its own `"position"` field (the
+shape every item had before ballot items carried one) is matched to its
+candidates by _title_, not id — a convention the voting UI
+(`BallotVotingPage.tsx::getCandidatesForItem`) and
+`ElectionService.check_voter_eligibility` (`election_service.py:999-1004`,
+`item.get("position") == position or item.get("title") == position`)
+already relied on before this review touched the file. Round 1's new
+per-item eligibility checks (ELEC-21's `cast_vote_with_token` fix, and the
+matching `lookup_ballot_by_token` filter) derived an item's "effective
+position" as `item.get("position") or item.get("id")` — id, never title.
+ELEC-20's `submit_ballot_with_token` fix inherited the same id-only
+assumption for the plain-UUID `choice` branch (the `rankings`/
+`candidate_ids` branches had already compared against that id-only value
+since before this review, so this wasn't new there — but the round-1
+`choice` fix newly applied it to a form that previously had no candidate
+binding check at all).
+
+**Where:** `elections.py:552-554` (`lookup_ballot_by_token`'s
+`allowed_item_positions`), `election_service.py:7285-7295` pre-fix
+numbering (`cast_vote_with_token`'s `matching_item` lookup), and the three
+candidate-binding checks in `submit_ballot_with_token`
+(`election_service.py:7743, 7766, 7860` pre-fix numbering).
+
+**Failure scenario:** any existing candidate-selection ballot item created
+before it carried an explicit `position` field, with its candidate(s)
+stored under the item's title (the only shape possible before that field
+existed, and still producible today — `create_candidate`'s position/
+election.positions cross-check is skipped whenever the election has no
+plain `positions` list, i.e. exactly the pure-ballot-item case). On deploy,
+`/ballot/lookup` returns that item with zero candidates, and a submission
+naming the candidate by its (retained, unchanged) id is rejected by all
+three token routes — an existing, previously-working ballot renders empty
+and becomes unsubmittable with no data changed on either side.
+
+**Fix:** `ballot_item_candidate_positions(item)` (new module-level helper,
+`election_service.py`) is the one place that decides which
+`candidate.position` values belong to an item: the item's own `position`
+when set, else its `title` _and_ `id` (mirroring the frontend's own
+fallback). `lookup_ballot_by_token`, `cast_vote_with_token`'s item-matching,
+and all three `submit_ballot_with_token` candidate-binding checks
+(`choice`, `rankings`, `candidate_ids`) now call it instead of re-deriving
+the set inline. The value newly stored on a vote (`Vote.position` for new
+votes) is unchanged — this only widens what is _accepted_ as belonging to
+an item, not what gets written going forward. `lookup_ballot_by_token` also
+needed a second fix alongside this: naively applying the (now correct)
+item-position set as a blanket filter over every returned candidate would
+incorrectly strip out a _positional_ candidate (see ELEC-23) that isn't
+tied to any item at all — the endpoint now only excludes a candidate that
+belongs to a specific, _disallowed_ item, leaving a non-item candidate for
+the `eligible_positions` filter below it to judge instead.
+
+Guarded by `TestLegacyTitleKeyedCandidatePositions`
+(`test_election_codex_round3.py`; unit test on the helper plus lookup/
+cast-vote/submit-ballot integration cases), confirmed to fail pre-fix via
+`git stash` (the helper doesn't exist pre-fix, so the whole module fails to
+import).
+
+### ELEC-23 — P1 — A positional candidate outside any ballot item bypassed eligibility entirely in a mixed election — ✅ FIXED
+
+**What:** the election schema (`ElectionBase`) allows `positions` and
+`ballot_items` to be configured on the same election with no
+mutual-exclusion validator, and `create_nomination` will nominate a
+candidate for any value in `election.positions` regardless of whether the
+election also has ballot items. `send_ballot_emails`'s token-issuance logic
+computed the `eligible_positions` snapshot only `if not election.ballot_items
+and election.positions and election.position_eligibility` — so for _any_
+election with ballot items, `eligible_positions` was unconditionally `None`
+on every issued token, even when the election also had a `positions` list
+with real `position_eligibility` rules. `cast_vote_with_token`'s per-item
+check (ELEC-21) only ever fires when a candidate's position resolves to a
+ballot item (`matching_item is not None`); when it doesn't — exactly the
+case for a plain positional candidate — the block was skipped entirely.
+With `eligible_positions` always `None` too, **no eligibility check of any
+kind ran** for such a candidate: worse in kind than ELEC-21, which at least
+had a check that was merely a no-op for the wrong reason, not a fallthrough
+with nothing behind it.
+
+**Where:** `election_service.py:6018-6029` pre-fix numbering
+(`send_ballot_emails`'s `eligible_positions` snapshot, gated on
+`not election.ballot_items`), and `election_service.py:7283-7295` pre-fix
+numbering (`cast_vote_with_token`'s item check, silently skipped when
+`matching_item is None`).
+
+**Failure scenario:** an election configures one ballot item open to
+everyone (`eligible_voter_types: ["all"]`) alongside a plain position
+`"Secretary"` restricted to `["operational"]` via `position_eligibility`. An
+administrative (non-operational) member is legitimately eligible for the
+ballot item, so `send_ballot_emails` issues them a token —
+pre-fix, that token always has `eligible_positions=None` because the
+election has ballot items, regardless of the Secretary restriction.
+`/ballot/lookup` for this token returns the Secretary candidate (positional
+candidates were never filtered by the item-position logic, and the
+`eligible_positions` filter is a no-op when `None`). Submitting that
+candidate's id via `/ballot/vote` reaches `cast_vote_with_token`: the
+`eligible_positions` check is skipped (`None`), and the item-eligibility
+block's `matching_item` resolves to `None` (Secretary isn't a ballot item),
+so its restriction is skipped too. The vote is recorded — an administrative
+member votes for a restricted officer position with no check ever
+executing.
+
+**Fix:** two changes, addressing issuance and the check:
+
+1. `send_ballot_emails` now computes `eligible_positions` whenever
+   `election.positions and election.position_eligibility`, regardless of
+   whether the election also has ballot items. The "skip this recipient
+   entirely" branch for zero eligible positions is narrowed to
+   `not eligible_positions and not eligible_items` — a mixed election must
+   not stop sending a ballot to someone who _is_ eligible for an item just
+   because they qualify for no plain position.
+2. `cast_vote_with_token`'s eligibility logic is restructured so a
+   candidate is judged by exactly one snapshot: if it resolves to a ballot
+   item (via `ballot_item_candidate_positions`, ELEC-22), only
+   `eligible_item_ids` governs it; otherwise (a genuinely positional
+   candidate, or an election with no ballot items at all) only
+   `eligible_positions` governs it. This also fixes a collateral bug the
+   naive version of the issuance change alone would have introduced:
+   `eligible_positions` is drawn only from `election.positions`, so
+   applying it to an item-scoped candidate too (whose position is rarely a
+   member of that list) would have wrongly rejected legitimate item votes
+   in any mixed election. `lookup_ballot_by_token` got the equivalent
+   restructuring (see ELEC-22's write-up) for the same reason.
+
+An already-issued token from before this fix still carries
+`eligible_positions=None` and remains in the fail-open state described
+above — this cannot be fixed retroactively for a token already emailed —
+which matches this module's existing documented posture for a `None`
+snapshot ("legacy token or election without position rules — unrestricted,
+time-bounded by token expiry"); tokens issued after this deploy are
+correctly restricted.
+
+Guarded by `TestMixedElectionPositionalCandidateFailsClosed`
+(`test_election_codex_round3.py`; asserts the issuance snapshot via a real
+`send_ballot_emails` call, that the ineligible positional vote is rejected,
+and that the same token's eligible item vote still succeeds), confirmed to
+fail pre-fix via `git stash`.
+
+### ELEC-24 — P2 — Attestation and election deletion locked the batch/election pair in opposite orders — ✅ FIXED
+
+**What:** ELEC-15's fix (round 1) added a `.with_for_update()` lock on the
+`Election` row to `attest_manual_ballot_batch`, acquired _after_ the
+existing batch lock — i.e. child-then-parent. Deleting an election
+(`DELETE /{election_id}`) locks the `elections` row via the `DELETE`
+statement itself, and MySQL's `ON DELETE CASCADE` on
+`manual_ballot_batches.election_id` then locks each batch row as it cascades
+— parent-then-child. A concurrent attest and delete on the same election can
+each hold one row and block on the other (attest holds batch, waits on
+election; delete holds election, waits on batch via the cascade) — a
+classic InnoDB deadlock. Neither endpoint retries on a deadlock error, so
+one of the two requests fails outright with a database error instead of a
+clean "already deleted" / "still open" response.
+
+**Where:** `election_service.py:3558-3591` pre-fix numbering
+(`attest_manual_ballot_batch`: batch lock, then election lock).
+
+**Fix:** the election lock is now acquired _before_ the batch lock in
+`attest_manual_ballot_batch`, matching the parent-to-child order election
+deletion already uses. Both locks are still acquired, and both are still
+held before either status check runs, so ELEC-15's serialization property
+(an attestation cannot observe a stale `OPEN` status past a concurrent
+close) is unchanged — only the acquisition order moved. `close_election`
+never locks the batch, so reordering carries no new deadlock risk on that
+path.
+
+Guarded by `TestAttestationLocksElection.test_election_locked_before_batch`
+(new, `test_election_codex_round2.py`) plus an update to
+`test_election_read_is_locking` in the same class (both now assert the
+election query is `db.execute`'s _first_ call, not its second), confirmed
+to fail pre-fix via `git stash`.
+
+**Round 2: 3 fixed (ELEC-22, ELEC-23, ELEC-24).** All three were confirmed
+real against current code before fixing — the same "verify, don't defer to
+either party" standard round 1 applied to the initial 8 findings.
+
+**Completion gate (pass 3, after both Codex rounds):**
+
+| Check                                                                               | Result                                                                      |
+| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                       | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                                                | ✅ clean                                                                    |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                         | ✅ clean                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                   | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration in this round |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"`                        | ✅ 472 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed   |
+| `pytest tests/test_election_codex_round2.py tests/test_election_codex_round3.py -q` | ✅ 20 passed, 0 failed                                                      |
+| `pytest tests/ -q` (full backend suite)                                             | ✅ 9792 passed, 21 skipped (pre-existing/environmental), 0 failed           |
+| `tsc --noEmit` / `eslint .`                                                         | not run — no frontend file changed this round                               |
+
+New guard tests: `tests/test_election_codex_round2.py` (2 new/updated tests
+for ELEC-24's lock-order fix) and `tests/test_election_codex_round3.py`
+(new file, 7 tests across ELEC-22 and ELEC-23). `tests/test_election_codex_fixes.py`'s
 `TestTokenVoteNullPositionDedup._token()` stub was also given an explicit
 `eligible_item_ids=None` default — ELEC-21's fix reads that attribute
 unconditionally (as the real `VotingToken` model always has it), which a
