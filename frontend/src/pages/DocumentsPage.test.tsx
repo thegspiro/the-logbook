@@ -56,6 +56,10 @@ function makeDocument(overrides: Partial<DocumentRecord> = {}): DocumentRecord {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetFolders.mockReset();
+  mockGetDocuments.mockReset();
+  mockGetSummary.mockReset();
+  mockDownloadDocument.mockReset();
   mockGetFolders.mockResolvedValue({ folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 });
   mockGetSummary.mockResolvedValue({
     total_documents: 1,
@@ -66,6 +70,30 @@ beforeEach(() => {
 });
 
 describe('DocumentsPage', () => {
+  it('keeps folder browsing available and retries a failed summary', async () => {
+    const user = userEvent.setup();
+    mockGetSummary.mockRejectedValueOnce(new Error('summary unavailable')).mockResolvedValueOnce({
+      total_documents: 7,
+      total_folders: 3,
+      total_size_bytes: 2048,
+      documents_this_month: 2,
+    });
+
+    renderWithRouter(<DocumentsPage />);
+
+    expect(await screen.findByText('Document statistics could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sops/i })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => {
+      expect(mockGetSummary).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText('7')).toBeInTheDocument();
+    expect(screen.getByText('2.0 KB')).toBeInTheDocument();
+    expect(screen.queryByText('Document statistics could not be loaded.')).not.toBeInTheDocument();
+  });
+
   it('lists a folderless document under "All Documents" (DOC-22)', async () => {
     const user = userEvent.setup();
     // A folderless upload has folder_id undefined and is only ever returned
