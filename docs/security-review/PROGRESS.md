@@ -16,9 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#PLACEHOLDER](https://github.com/thegspiro/the-logbook/pull/PLACEHOLDER) —
-Feature 10 (Documents & legal, pass 3). Rotation row 10 → ⏳ (awaiting PR
-merge).
+[#2187](https://github.com/thegspiro/the-logbook/pull/2187) — Feature 10
+(Documents & legal, pass 3). Rotation row 10 → ⏳ (awaiting PR merge).
 
 ---
 
