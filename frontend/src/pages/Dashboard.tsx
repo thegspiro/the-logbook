@@ -182,7 +182,14 @@ const SectionError: React.FC<SectionErrorProps> = ({ message, onRetry }) => (
   <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
     <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
     <span className="min-w-0 flex-1">{message}</span>
-    <button type="button" onClick={onRetry} className="btn-secondary min-h-9 shrink-0 px-3 py-1 text-xs font-semibold">
+    {/* mobile-touch-target, not a hand-set height: at min-h-9 this rendered
+        57x36 and broke /dashboard's zero-budget tap-target check, which is
+        the one place a section error is guaranteed to appear. */}
+    <button
+      type="button"
+      onClick={onRetry}
+      className="btn-secondary mobile-touch-target shrink-0 px-3 py-1 text-xs font-semibold"
+    >
       Retry
     </button>
   </div>
