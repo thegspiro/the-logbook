@@ -11,7 +11,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
-import toast from 'react-hot-toast';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -64,6 +63,39 @@ interface StatTileProps {
   tone: string;
 }
 
+type Section = 'summary' | 'items' | 'categories' | 'expiring';
+
+const SECTION_LABELS: Record<Section, string> = {
+  summary: 'overview',
+  items: 'supply table',
+  categories: 'category list',
+  expiring: 'expiring stock',
+};
+
+interface SectionErrorProps {
+  section: Section;
+  message: string;
+  isStale: boolean;
+  onRetry: () => void;
+}
+
+const SectionError: React.FC<SectionErrorProps> = ({ section, message, isStale, onRetry }) => (
+  <div className="alert-error mb-4 flex flex-wrap items-center justify-between gap-3" role="alert">
+    <div>
+      <p className="font-medium">Could not load the {SECTION_LABELS[section]}.</p>
+      <p className="text-sm">{message}</p>
+      {isStale && <p className="mt-1 text-xs font-semibold uppercase">Showing previously loaded data</p>}
+    </div>
+    <button
+      type="button"
+      onClick={onRetry}
+      className="mobile-touch-target rounded-md border border-current px-3 py-2 text-sm font-medium"
+    >
+      Retry
+    </button>
+  </div>
+);
+
 const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone }) => (
   <div className="card flex items-center gap-3 p-4">
     <div className={`rounded-md p-2 ${tone}`}>{icon}</div>
@@ -90,36 +122,66 @@ const MedicalSuppliesPage: React.FC = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [expiring, setExpiring] = useState<ExpiringLot[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState<Record<Section, boolean>>({
+    summary: true,
+    items: true,
+    categories: true,
+    expiring: true,
+  });
+  const [errors, setErrors] = useState<Partial<Record<Section, string>>>({});
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [summaryData, itemsData, categoryData, expiringData] = await Promise.all([
-        medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS),
-        medicalSuppliesService.getItems({
-          search: search || undefined,
-          category_id: categoryFilter || undefined,
-          limit: 200,
-        }),
-        medicalSuppliesService.getCategories(),
-        medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS),
-      ]);
-      setSummary(summaryData);
-      setItems(itemsData.items);
-      setCategories(categoryData);
-      setExpiring(expiringData);
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load medical supplies'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [search, categoryFilter]);
+  const loadSections = useCallback(
+    async (sections: Section[]) => {
+      setLoading((current) => ({ ...current, ...Object.fromEntries(sections.map((section) => [section, true])) }));
+
+      const requests: Record<Section, () => Promise<unknown>> = {
+        summary: () => medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS),
+        items: () =>
+          medicalSuppliesService.getItems({
+            search: search || undefined,
+            category_id: categoryFilter || undefined,
+            limit: 200,
+          }),
+        categories: () => medicalSuppliesService.getCategories(),
+        expiring: () => medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS),
+      };
+      const results = await Promise.allSettled(sections.map((section) => requests[section]()));
+
+      results.forEach((result, index) => {
+        const section = sections[index];
+        if (!section) return;
+        if (result.status === 'rejected') {
+          setErrors((current) => ({
+            ...current,
+            [section]: getErrorMessage(result.reason, `Failed to load the ${SECTION_LABELS[section]}`),
+          }));
+          return;
+        }
+
+        setErrors((current) => {
+          const next = { ...current };
+          delete next[section];
+          return next;
+        });
+        if (section === 'summary') setSummary(result.value as MedicalSupplySummary);
+        if (section === 'items') setItems((result.value as { items: InventoryItem[] }).items);
+        if (section === 'categories') setCategories(result.value as InventoryCategory[]);
+        if (section === 'expiring') setExpiring(result.value as ExpiringLot[]);
+      });
+      setLoading((current) => ({
+        ...current,
+        ...Object.fromEntries(sections.map((section) => [section, false])),
+      }));
+    },
+    [search, categoryFilter]
+  );
+
+  const load = useCallback(() => loadSections(['summary', 'items', 'categories', 'expiring']), [loadSections]);
 
   useEffect(() => {
     void load();
@@ -219,33 +281,49 @@ const MedicalSuppliesPage: React.FC = () => {
         </div>
       </div>
 
-      {summary && (
-        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatTile
-            icon={<Stethoscope className="h-4 w-4 text-sky-700 dark:text-sky-400" />}
-            label="Supply items"
-            value={summary.total_items}
-            tone="bg-sky-500/10"
-          />
-          <StatTile
-            icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
-            label={`Expiring within ${summary.expiring_within_days}d`}
-            value={summary.expiring_soon}
-            tone="bg-amber-500/10"
-          />
-          <StatTile
-            icon={<AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400" />}
-            label="Already expired"
-            value={summary.expired}
-            tone="bg-red-500/10"
-          />
-          <StatTile
-            icon={<TrendingDown className="h-4 w-4 text-orange-700 dark:text-orange-400" />}
-            label="Below reorder point"
-            value={summary.low_stock}
-            tone="bg-orange-500/10"
-          />
+      {loading.summary && !summary ? (
+        <div className="mb-6">
+          <SkeletonCard />
         </div>
+      ) : (
+        <>
+          {errors.summary && (
+            <SectionError
+              section="summary"
+              message={errors.summary}
+              isStale={summary !== null}
+              onRetry={() => void loadSections(['summary'])}
+            />
+          )}
+          {summary && (
+            <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatTile
+                icon={<Stethoscope className="h-4 w-4 text-sky-700 dark:text-sky-400" />}
+                label="Supply items"
+                value={summary.total_items}
+                tone="bg-sky-500/10"
+              />
+              <StatTile
+                icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
+                label={`Expiring within ${summary.expiring_within_days}d`}
+                value={summary.expiring_soon}
+                tone="bg-amber-500/10"
+              />
+              <StatTile
+                icon={<AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400" />}
+                label="Already expired"
+                value={summary.expired}
+                tone="bg-red-500/10"
+              />
+              <StatTile
+                icon={<TrendingDown className="h-4 w-4 text-orange-700 dark:text-orange-400" />}
+                label="Below reorder point"
+                value={summary.low_stock}
+                tone="bg-orange-500/10"
+              />
+            </div>
+          )}
+        </>
       )}
 
       <div className="tab-scroll mb-4">
@@ -275,7 +353,32 @@ const MedicalSuppliesPage: React.FC = () => {
         </button>
       </div>
 
-      {isLoading ? (
+      {tab === 'expiring' && errors.expiring && (
+        <SectionError
+          section="expiring"
+          message={errors.expiring}
+          isStale={expiring.length > 0}
+          onRetry={() => void loadSections(['expiring'])}
+        />
+      )}
+      {tab === 'stock' && errors.categories && (
+        <SectionError
+          section="categories"
+          message={errors.categories}
+          isStale={categories.length > 0}
+          onRetry={() => void loadSections(['categories'])}
+        />
+      )}
+      {tab === 'stock' && errors.items && (
+        <SectionError
+          section="items"
+          message={errors.items}
+          isStale={items.length > 0}
+          onRetry={() => void loadSections(['items'])}
+        />
+      )}
+
+      {(tab === 'expiring' ? loading.expiring && expiring.length === 0 : loading.items && items.length === 0) ? (
         <SkeletonCard />
       ) : tab === 'expiring' ? (
         <section aria-label="Expiring stock">

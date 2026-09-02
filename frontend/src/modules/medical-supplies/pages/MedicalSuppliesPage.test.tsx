@@ -258,4 +258,85 @@ describe('MedicalSuppliesPage', () => {
 
     expect(await screen.findByText(/Expiring within 30d/i)).toBeInTheDocument();
   });
+
+  it('keeps expiring stock usable when the overview fails', async () => {
+    mockGetSummary.mockRejectedValue(new Error('Overview unavailable'));
+
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load the overview');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('keeps the overview and expiring stock usable when the supply table fails', async () => {
+    mockGetItems.mockRejectedValue(new Error('Supplies unavailable'));
+
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByText('Supply items')).toBeInTheDocument();
+    expect(screen.getByText('4x4 Gauze')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load the supply table');
+  });
+
+  it('keeps the supply table usable when the category list fails', async () => {
+    mockGetCategories.mockRejectedValue(new Error('Categories unavailable'));
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-2', name: 'Trauma Shears', quantity: 6 }],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+    expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load the category list');
+    expect(screen.getByRole('combobox', { name: 'Filter by category' })).toBeEnabled();
+  });
+
+  it('keeps the overview and supply table usable when expiring stock fails', async () => {
+    mockGetExpiringLots.mockRejectedValue(new Error('Lots unavailable'));
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-2', name: 'Trauma Shears', quantity: 6 }],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+
+    expect(await screen.findByText('Supply items')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load the expiring stock');
+    await userEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+    expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
+  });
+
+  it('marks retained data as stale and explicit refresh retries every section', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-2', name: 'Trauma Shears', category_id: 'cat-1', quantity: 6 }],
+      total: 1,
+      skip: 0,
+      limit: 200,
+    });
+    mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Airway' }]);
+    renderWithRouter(<MedicalSuppliesPage />);
+    expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
+
+    mockGetSummary.mockRejectedValueOnce(new Error('Overview unavailable'));
+    mockGetItems.mockRejectedValueOnce(new Error('Supplies unavailable'));
+    mockGetCategories.mockRejectedValueOnce(new Error('Categories unavailable'));
+    mockGetExpiringLots.mockRejectedValueOnce(new Error('Lots unavailable'));
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh medical supplies' }));
+
+    expect(await screen.findAllByText('Showing previously loaded data')).toHaveLength(2);
+    await userEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+    expect(await screen.findAllByText('Showing previously loaded data')).toHaveLength(3);
+    expect(mockGetSummary).toHaveBeenCalledTimes(2);
+    expect(mockGetItems).toHaveBeenCalledTimes(2);
+    expect(mockGetCategories).toHaveBeenCalledTimes(2);
+    expect(mockGetExpiringLots).toHaveBeenCalledTimes(2);
+  });
 });
