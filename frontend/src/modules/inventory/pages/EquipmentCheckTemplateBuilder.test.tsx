@@ -174,6 +174,10 @@ async function confirm(label: string | RegExp) {
  * viewport set by one `describe` survives into the next one unless it is set
  * again. Tests that depend on a width should say which one they mean.
  */
+// The autosave debounce in EquipmentCheckTemplateBuilder. Mirrored here so a
+// test that has to outwait it says why, rather than carrying a bare number.
+const AUTOSAVE_DEBOUNCE_MS = 1500;
+
 const VIEWPORT_WIDTHS = { phone: 390, tablet: 900, laptop: 1440 } as const;
 
 const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
@@ -382,6 +386,21 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     // edit, backwards for a retry of an older one. The member's latest change
     // silently reverted on the automatic retry.
     mockViewport('laptop');
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Radio selection checkbox' });
+
+    // Drain before arming, not tolerate afterwards. A debounce timer left
+    // running by an earlier test in this file fires up to AUTOSAVE_DEBOUNCE_MS
+    // into this one, and if it lands *after* the one-shot below is installed
+    // it consumes the deferred rejection: the flush then succeeds on the
+    // resolved fallback, the retry path never runs, `rejectFlush` rejects
+    // some other test's request whose error is swallowed, and the level edit
+    // arrives by its own ordinary debounce. Every assertion below would still
+    // pass, against a run that never exercised the failure this test is named
+    // for. Waiting the window out first is what makes that unreachable.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+
     updateCheckItem.mockReset();
     let rejectFlush!: (reason: unknown) => void;
     updateCheckItem.mockImplementationOnce(
@@ -391,8 +410,6 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
         })
     );
     updateCheckItem.mockResolvedValue({});
-    const user = userEvent.setup();
-    renderBuilder();
 
     // Filtered rather than counted or indexed: a debounce timer left running
     // by an earlier test in this file can land its own patch among these, so
@@ -412,7 +429,6 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
 
     // Laptop width: the row carries its own type buttons and a selection
     // checkbox; `Edit Radio` is the phone editor's label (pitfall #28a).
-    await screen.findByRole('button', { name: 'Radio selection checkbox' });
     fireEvent.click(screen.getAllByRole('button', { name: 'Count' })[0] as HTMLElement);
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(typeWrites()).toContainEqual(expect.objectContaining({ check_type: 'count' })));
