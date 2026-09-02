@@ -16,11 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2180](https://github.com/thegspiro/the-logbook/pull/2180) (Feature 09,
-Medical screening, pass 3) — 2 fixed, 1 flagged. See the Log below for
-detail.
+[#2182](https://github.com/thegspiro/the-logbook/pull/2182) (docs-only
+follow-up to #2180) — restores 384 lines of Pass 1/Pass 2 history in
+`MS-09-medical-screening.md` that #2180's merge accidentally dropped. See
+the Log below for detail. Feature 09 itself is done (#2180 merged); this
+is bookkeeping, not a new review pass.
 
 ---
+
+### 2026-09-02 — Feature 09 doc fix — `MS-09-medical-screening.md` lost its Pass 1/Pass 2 history on merge — PR #2182
+
+#2180's findings doc was authored with the `Write` tool and replaced the
+whole file with only the new Pass 3 section, instead of appending it above
+the pre-existing Pass 1/Pass 2 sections the way every other multi-pass
+finding doc in this rotation does it. This silently dropped 384 lines of
+prior-pass review history from `main` once #2180 merged. Caught during the
+post-commit re-read this rotation runs specifically to catch unintended
+content loss (previously this class of mistake was prettier reformatting;
+this time it was tool choice, same symptom). Since #2180 had already
+merged, the fix could not be pushed to that branch (CLAUDE.md Pitfall #24)
+— #2182 restores the dropped sections byte-identical to their pre-#2180
+form (verified via `diff`), reattached below Pass 3 with no change to the
+merged content.
 
 ### 2026-09-02 — Feature 09 (Medical screening, pass 3) — 2 fixed, 1 flagged — PR #2180
 
@@ -7013,7 +7030,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⏳     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
