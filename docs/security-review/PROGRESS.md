@@ -17,7 +17,55 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2188](https://github.com/thegspiro/the-logbook/pull/2188) — Feature 11
-(Inventory, pass 3). Rotation row 11 → 🔄 (in progress).
+(Inventory, pass 3). Rotation row 11 → ⏳ (awaiting PR merge).
+
+---
+
+### 2026-09-02 — Feature 11 (Inventory, pass 3) — 2 fixed (1 HIGH), 4 re-verified open
+
+Re-verified all four still-open flagged findings from pass 1/2 (INV-8,
+INV-9, INV-16, INV-17) against current code — all four unchanged, not
+re-fixed. Read the full backend diff since pass 2's merge (1,119 lines
+across `inventory.py`/`inventory_service.py`/`labels.py`/`label_service.py`)
+in full: a new dual-ledger stock model (`InventoryItem.quantity` vs.
+`InventoryLot` rows, mutually exclusive per item) that is Pitfall
+#27-correct throughout its own new code, a new `create-if-absent` catalog
+route (correctly gated and FK-validated), and a member-profile-visibility
+fix on the impact planner (an improvement, not a regression). Per this
+pass's specific brief, swept every `.with_for_update()` call site (23) and
+every `select()` of a holding/request record (30 sites) across the **whole
+file**, not just the diff, for Pitfall #27's two-part shape.
+
+**INV-18 (HIGH, fixed)** — `return_to_pool` read `ItemIssuance` with a
+plain `SELECT`, checked `is_returned`, and only afterward locked the
+`InventoryItem` row — the reverse of Pitfall #27's required order. Two
+concurrent returns of the same issuance could both pass the check before
+either committed; the second call proceeded on a stale in-memory copy and
+double-credited `item.quantity` (or a stock lot) for units physically
+returned only once. Pre-existing since before pass 2, not a new
+regression — found by widening the sweep past the diff. **INV-19 (MED,
+fixed)** — identical shape on `checkin_item`/`CheckOutRecord`: a second,
+redundant check-in was not rejected and could overwrite the first's
+recorded condition/damage_notes. Both fixed with `.with_for_update()` on
+the initial lookup, mirroring INV-10's own fix pattern exactly. Two new
+source-inspection guard tests
+(`tests/test_inventory_return_locking.py`), both confirmed failing
+pre-fix via `git stash` and passing after.
+
+Frontend scope this pass was explicitly narrowed: the diff against pass 2
+touches 91 files (~31,500 lines) under `modules/inventory/`, but that is
+almost entirely feature 14's equipment-check checklist/scan module living
+in that directory, not inventory feature work — reviewing it here would
+duplicate feature 14's own rotation slot. The files actually reviewed
+(`InventoryScanModal.tsx`, `InventoryAdminHub.tsx`, `MyEquipmentPage.tsx`,
+`EquipmentRequestsPage.tsx`, `onHand.ts`) were all already correct; no
+frontend edit was made, so `tsc`/`eslint` were not run this pass (stated
+explicitly rather than claiming a gate that didn't run). Full backend
+completion gate green: flake8/black/isort/migrations clean, 786/786
+inventory+label-scoped and 9977/9977 full backend suite pass (21
+pre-existing skips). See `INV-11-inventory.md` → "Pass 3" for the complete
+write-up. PR #2188 opened and subscribed. Next: 12 facilities, once this
+PR merges.
 
 ---
 
@@ -7097,7 +7145,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | 🔄     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⏳     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
