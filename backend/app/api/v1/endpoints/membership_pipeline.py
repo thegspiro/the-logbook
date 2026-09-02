@@ -203,9 +203,7 @@ async def list_pipelines(
                 is_active=p.is_active if hasattr(p, "is_active") else True,
                 auto_transfer_on_approval=p.auto_transfer_on_approval,
                 step_count=len(p.steps) if p.steps else 0,
-                prospect_count=(
-                    len(p.prospects) if hasattr(p, "prospects") and p.prospects else 0
-                ),
+                prospect_count=getattr(p, "prospect_count", 0),
                 created_at=p.created_at,
             )
         )
@@ -1875,12 +1873,18 @@ async def delete_prospect_document(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    deleted = await service.delete_prospect_document(
-        document_id=str(document_id),
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        deleted_by=current_user.id,
-    )
+    try:
+        deleted = await service.delete_prospect_document(
+            document_id=str(document_id),
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            deleted_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
@@ -1982,12 +1986,17 @@ async def update_election_package(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    pkg = await service.update_election_package(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        updates=data.model_dump(exclude_unset=True),
-        updated_by=current_user.id,
-    )
+    try:
+        pkg = await service.update_election_package(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            updates=data.model_dump(exclude_unset=True),
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not pkg:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election package not found"

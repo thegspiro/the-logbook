@@ -17,34 +17,56 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (Feature 08,
-Membership pipeline, pass 3) — full re-verification, zero code diff since
-pass 2, no new findings. See the Log below for detail.
+Membership pipeline, pass 3) — the pass 3 draft's "no new findings"
+conclusion did not hold: Codex's review of it found 6 real issues (plus a
+7th restated in a comment, mirroring the already-flagged MP-10). 5 fixed, 2
+flagged. See the Log below for detail.
 
 ---
 
-### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) — 0 fixed, 0 flagged (re-verification) — PR #2176
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) — 5 fixed, 2 flagged (Codex review on PR #2176)
 
-Diffed the full domain against pass 2's merge (`58535700`, PR #1950):
-`endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
-`models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
-`api/prospect_privacy.py`, and the frontend `prospective-members` module are
-all byte-identical to pass 2 — confirmed by `git diff --stat`, not assumed.
-Independently re-read the current code against all seven `CHECKLIST.md`
-dimensions rather than trusting the prior write-up, and re-verified every
-prior fix (MP-8/MP-9/MP-11/MP-12, the two pass-2 Codex findings) is still
-intact at its cited line, plus a set of checks not previously written up
-explicitly (client-FK validation on every write path, `SET NULL`
-nullability, LIKE escaping, JSON deep-copy, upload/download hardening,
-bulk-action caps, module axios auth, `UNCACHEABLE_PREFIXES`). MP-10
-(unbounded election-package list/create) remains correctly OPEN/FLAGGED,
-unchanged, already in `KNOWN_LIMITATIONS.md`. No new findings. Completion
-gate clean: flake8/black/isort (9.0.1, CI-pinned) on `app/ tests/ alembic/`;
-`validate_migrations.py --strict` (409 revisions, single head); scoped
-suite (20 files) 322 passed/0 failed; full backend suite 9833 passed/21
-skipped (pre-existing/environmental)/0 failed; `tsc --noEmit` 0 errors;
-`eslint .` clean. Full detail in `MP-08-membership-pipeline.md` → Pass 3.
-Rotation row 08 → ⏳ (awaiting PR merge). Next: 09 medical screening (PHI),
-once this PR merges.
+The pass 3 draft (full re-verification, zero code diff since pass 2's
+byte-identical merge) concluded "no new findings." Codex's review of that
+draft found 6 real issues it had missed, plus a 7th (unbounded prospect
+reads on `/widget-summary` and `/pipelines`) restated in a review comment
+mirroring MP-10's already-flagged class. Independently re-traced every one
+against the current code (not the bot's say-so) — all 7 confirmed real.
+
+**Fixed (5):** MP-13 unvalidated cross-tenant `form_id` in step config
+(`add_step`/`update_step`/`create_pipeline`'s inline steps all now validate
+in-org before persisting, mirroring the existing `email_template_id`
+pattern); MP-14 N+1 query in `list_event_links` (batch-fetched instead of
+per-row); MP-15 election-package PII over-collection ignoring the stage's
+configured `package_fields` (CLAUDE.md Pitfall #19 — a config switch with no
+reader; wired one that preserves the prior full-capture behavior for every
+pipeline that never configured it); MP-16 election-package assignment race
+with no row lock (CLAUDE.md Pitfall #27 — locked the package and election
+rows, made the status check a locking read); MP-17 no state machine on
+election-package `status` (mirrors MP-9's fix for
+`ProspectStatus.TRANSFERRED` — system-derived states can no longer be set or
+cleared through the generic update); MP-18 document deletion could orphan
+the file on a failed `os.remove` (reordered so the file removal happens
+before the metadata commit, and a failed removal now raises instead of
+being swallowed).
+
+**Flagged (1 full + half of a 2nd, both mirrored to `KNOWN_LIMITATIONS.md`):**
+MP-19's `/widget-summary` half (unbounded prospect-row materialization for
+aggregate counts and an uncapped `details` list — same class as MP-10, a
+response-contract change to fix properly); MP-10 itself remains open,
+unchanged. MP-19's `/pipelines` half **was** fixed (aggregate count query
+instead of eager-loading every prospect row, no contract change).
+
+New guard tests: `backend/tests/test_membership_pipeline_pass3_codex.py`
+(26 tests), each independently confirmed to fail against the pre-fix code
+via `git stash` on the two changed source files. Completion gate clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, single head, no schema change); scoped
+election/membership/prospect/pipeline suite (49 files) 808 passed/0 failed;
+full backend suite 9859 passed/21 skipped (pre-existing/environmental)/0
+failed (9833 baseline + 26 new guard tests). No frontend file changed, so
+`tsc`/`eslint` were not re-run this pass. Full detail in `MP-08-membership-pipeline.md` → Pass 3. Rotation row 08 → ⏳ (awaiting PR merge). Next: 09 medical screening
+(PHI), once this PR merges.
 
 ---
 
