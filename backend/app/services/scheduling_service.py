@@ -65,7 +65,7 @@ from app.utils.apparatus_ref import (
 from app.utils.hours import hours_from_minutes
 from app.utils.membership import is_administrative
 from app.utils.org_timezone import resolve_scheduling_timezone
-from app.utils.positions import normalize_stored_positions
+from app.utils.positions import normalize_stored_positions, position_label
 
 
 def _position_label(position) -> str:
@@ -78,9 +78,23 @@ def _position_label(position) -> str:
     "ShiftPosition.FIREFIGHTER position". Reading `.value` off whatever arrives
     is indifferent to which class it came from, and also covers the ORM
     attribute, whose `str()` is the same repr.
+
+    The value is then the seat *token*, which is not always what the department
+    calls the seat: the EMT seat is stored as "ems", so a body built from the
+    token told a member they were assigned to the "ems position" for a seat
+    every screen calls EMT.
     """
     value = getattr(position, "value", position)
-    return str(value) if value else "unspecified"
+    if not value:
+        return "unspecified"
+    return position_label(value)
+
+
+# The widest span a member-facing shift listing will scan. Matches
+# MAX_OPEN_SHIFTS_DAYS on /shifts/open, which bounds the same kind of read for
+# the same reason: eligibility is not expressible in SQL, so the rows have to
+# be fetched before they can be filtered.
+MEMBER_SHIFT_WINDOW_DAYS = 366
 
 
 class SchedulingService:
@@ -355,7 +369,12 @@ class SchedulingService:
         if isinstance(positions, dict):
             flat = positions.get("flat_positions")
             if isinstance(flat, list) and flat:
-                return [{"position": p, "required": True} for p in flat]
+                # The templates form writes seat objects here, not bare
+                # strings; binding an entry straight in as the seat *name*
+                # produced {"position": {"position": "officer", ...}} — a seat
+                # nobody can be assigned to, which then failed ShiftResponse.
+                # The list branch above already settles both shapes.
+                return SchedulingService.normalize_positions(flat)
             resources = positions.get("resources")
             if isinstance(resources, list):
                 result: List[Dict[str, Any]] = []
@@ -892,6 +911,29 @@ class SchedulingService:
 
         return shifts, total
 
+    @staticmethod
+    def _bound_shift_window(
+        start_date: Optional[date],
+        end_date: Optional[date],
+    ) -> Tuple[date, date]:
+        """Close an open-ended range to a bounded window.
+
+        Anchored on whichever end the caller gave, so "everything from today"
+        looks forward and "everything up to the audit date" looks back — the
+        two ways an open end is actually used.
+        """
+        span = timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
+        if start_date is None and end_date is None:
+            start_date = date.today()
+            end_date = start_date + span
+        elif start_date is None:
+            start_date = end_date - span
+        elif end_date is None:
+            end_date = start_date + span
+        elif end_date - start_date > span:
+            end_date = start_date + span
+        return start_date, end_date
+
     async def get_member_visible_shifts(
         self,
         user: User,
@@ -901,12 +943,25 @@ class SchedulingService:
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[Shift], int]:
-        """Filter by signup eligibility before counting and paginating."""
-        query = select(Shift).where(Shift.organization_id == str(organization_id))
-        if start_date:
-            query = query.where(Shift.shift_date >= start_date)
-        if end_date:
-            query = query.where(Shift.shift_date <= end_date)
+        """Filter by signup eligibility before counting and paginating.
+
+        Eligibility depends on the member's rank, held positions, training and
+        qualifications, none of which the shift row carries, so it cannot be a
+        WHERE clause — every candidate has to be fetched and filtered in
+        Python. That makes the date window the only bound available, and an
+        unbounded one is a full read of the organization's shift table for a
+        single page. Open ends are therefore closed to
+        ``MEMBER_SHIFT_WINDOW_DAYS``, the same span ``/shifts/open`` enforces,
+        and an explicit range wider than that is clamped rather than rejected:
+        the officer path on this same endpoint accepts any range, and a member
+        should not get a 400 where an officer gets a page.
+        """
+        start_date, end_date = self._bound_shift_window(start_date, end_date)
+        query = select(Shift).where(
+            Shift.organization_id == str(organization_id),
+            Shift.shift_date >= start_date,
+            Shift.shift_date <= end_date,
+        )
         query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
         candidates = list((await self.db.execute(query)).scalars().all())
         if not candidates:
@@ -2836,8 +2891,12 @@ class SchedulingService:
                     # a recurring pattern fills the calendar, so stripping the
                     # required flag here would re-seed the legacy shape after
                     # the migration and quietly promote every optional seat.
-                    positions=self.normalize_positions(
-                        getattr(template, "positions", None)
+                    # The display normalizer flattens an event template's
+                    # metadata into seats, which is what a generated shift
+                    # wants; the stored-form pass then settles the seat names
+                    # so this write path matches every other one.
+                    positions=normalize_stored_positions(
+                        self.normalize_positions(getattr(template, "positions", None))
                     )
                     or None,
                     min_staffing=getattr(template, "min_staffing", None),

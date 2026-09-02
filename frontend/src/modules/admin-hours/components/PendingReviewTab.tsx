@@ -15,6 +15,8 @@ import { formatDate, formatForDateTimeInput, localToUTC } from '../../../utils/d
 import { useTimezone } from '../../../hooks/useTimezone';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import toast from 'react-hot-toast';
+import { addHours, syncEndToStart } from '../utils/entryTimes';
+import QuickDurationButtons from './QuickDurationButtons';
 
 const PendingReviewTab: React.FC = () => {
   const tz = useTimezone();
@@ -97,6 +99,18 @@ const PendingReviewTab: React.FC = () => {
       description: entry.description ?? '',
       category_id: entry.categoryId,
     });
+  };
+
+  const handleEditStartChange = (value: string) => {
+    setEditData({
+      ...editData,
+      clock_in_at: value,
+      clock_out_at: syncEndToStart(editData.clock_in_at ?? '', value, editData.clock_out_at ?? '', tz),
+    });
+  };
+
+  const handleEditDuration = (hours: number) => {
+    setEditData({ ...editData, clock_out_at: addHours(editData.clock_in_at ?? '', hours, tz) });
   };
 
   const handleSaveEdit = async () => {
@@ -220,22 +234,37 @@ const PendingReviewTab: React.FC = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Start Time</label>
+                        <label
+                          htmlFor={`edit-clock-in-${entry.id}`}
+                          className="text-theme-text-muted mb-1 block text-xs font-medium"
+                        >
+                          Start Time
+                        </label>
                         <DateTimeQuarterHour
+                          id={`edit-clock-in-${entry.id}`}
                           value={editData.clock_in_at ?? ''}
-                          onChange={(val) => setEditData({ ...editData, clock_in_at: val })}
+                          onChange={handleEditStartChange}
                           className="form-input-sm"
+                          timezone={tz}
                         />
                       </div>
                       <div>
-                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">End Time</label>
+                        <label
+                          htmlFor={`edit-clock-out-${entry.id}`}
+                          className="text-theme-text-muted mb-1 block text-xs font-medium"
+                        >
+                          End Time
+                        </label>
                         <DateTimeQuarterHour
+                          id={`edit-clock-out-${entry.id}`}
                           value={editData.clock_out_at ?? ''}
                           onChange={(val) => setEditData({ ...editData, clock_out_at: val })}
                           className="form-input-sm"
+                          timezone={tz}
                         />
                       </div>
                     </div>
+                    <QuickDurationButtons onSelect={handleEditDuration} disabled={!editData.clock_in_at} size="sm" />
                     {editDurationMinutes !== null && (
                       <p className="text-theme-text-secondary text-xs">
                         Duration:{' '}

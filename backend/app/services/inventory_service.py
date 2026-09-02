@@ -104,6 +104,57 @@ _FORCED_CONDITION: dict[ItemStatus, ItemCondition] = {
 # Statuses that require assigned_to_user_id to be set
 _REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
 
+# Pool stock that must not be handed out, whatever `active` says. The item edit
+# form derives a quarantine status from an unsafe condition (poor, damaged,
+# out-of-service, retired), and `active` stays true on a newly quarantined item,
+# so the scan/distribution and direct issuance paths would still dispense gear
+# the form had just recorded as unserviceable. Every pool issuance path in this
+# service — distribute_items, bulk_issue_from_pool, bulk_issue_from_plan, the
+# request-fulfilment paths — funnels through issue_from_pool, so this is the
+# one gate.
+_UNISSUABLE_STATUSES = {
+    ItemStatus.IN_MAINTENANCE,
+    ItemStatus.RETIRED,
+    ItemStatus.LOST,
+    ItemStatus.STOLEN,
+}
+_UNISSUABLE_CONDITIONS = {
+    ItemCondition.POOR,
+    ItemCondition.DAMAGED,
+    ItemCondition.OUT_OF_SERVICE,
+    ItemCondition.RETIRED,
+}
+
+
+def _append_note(existing: Optional[str], addition: Optional[str]) -> Optional[str]:
+    """Join a note onto whatever the row already carries.
+
+    Both return paths record a write-off on the issuance before they settle
+    its return notes, and both then *assigned* those notes — erasing the only
+    record that the returned units did not rejoin stock, in exactly the case
+    it exists for (a full return of unserviceable gear). A full return also
+    landed on top of any earlier partial return's note.
+    """
+    parts = [part.strip() for part in (existing, addition) if part and part.strip()]
+    return "\n".join(parts) or None
+
+
+def _enum_member(value):
+    """An ItemCondition however the caller spelled it, or None.
+
+    `return_condition` reaches return_to_pool as the enum from the endpoint and
+    as its raw string from a few service callers, and a set membership test on
+    the wrong one silently answers False — which here would mean shipping a
+    damaged unit back out.
+    """
+    if value is None or isinstance(value, ItemCondition):
+        return value
+    try:
+        return ItemCondition(str(value).strip().lower())
+    except ValueError:
+        return None
+
+
 # Inventory barcode scheme — a single rule used everywhere: a human-readable
 # sequential number per organization, ``<prefix><zero-padded number>`` with a
 # 6-digit minimum (e.g. INV-000001, INV-000002, ...). The prefix (default
@@ -351,6 +402,22 @@ def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
     return " | ".join(parts)
 
 
+def is_pool_without_stock(item_data: Dict[str, Any]) -> bool:
+    """Whether this row is pool-tracked and carries no usable count.
+
+    The rule the *list-oriented* create paths keep and the single-item create
+    deliberately does not. Pasting or importing a stock list is an act of
+    entering counts, so a pool line reading zero is a mis-parsed spreadsheet
+    column; creating one catalog row by hand — from a checklist position, say —
+    knows the item exists and nothing about what is on the shelf.
+
+    One definition, because ``create_items_bulk`` and the CSV import are two
+    callers of the same rule and drifting them apart is how the CSV path
+    silently lost it once already.
+    """
+    return item_data.get("tracking_type") == "pool" and item_data.get("quantity", 1) < 1
+
+
 class InventoryService:
     """Service for inventory management"""
 
@@ -578,7 +645,13 @@ class InventoryService:
         """Determine item status after return based on condition.
 
         Items returned in poor/damaged/out-of-service condition are
-        auto-quarantined to IN_MAINTENANCE; all others go to AVAILABLE.
+        auto-quarantined to IN_MAINTENANCE; a retired one goes to RETIRED;
+        all others go to AVAILABLE.
+
+        This is the single mapping from condition to a safe status, and every
+        write path that sets one from the other uses it. Omitting RETIRED here
+        produced AVAILABLE + retired — a pair _VALID_STATE_COMBOS rejects, so
+        the row became uneditable by the very validator meant to prevent it.
         """
         if return_condition and return_condition in (
             ItemCondition.POOR,
@@ -586,6 +659,8 @@ class InventoryService:
             ItemCondition.OUT_OF_SERVICE,
         ):
             return ItemStatus.IN_MAINTENANCE
+        if return_condition == ItemCondition.RETIRED:
+            return ItemStatus.RETIRED
         return ItemStatus.AVAILABLE
 
     @staticmethod
@@ -610,10 +685,24 @@ class InventoryService:
 
     @staticmethod
     def _validate_item_state(
-        status_val: ItemStatus, condition_val: ItemCondition, assigned_to_user_id=None
+        status_val: ItemStatus,
+        condition_val: ItemCondition,
+        assigned_to_user_id=None,
+        *,
+        check_combination: bool = True,
     ) -> Optional[str]:
-        """Return an error string if the status/condition combination is invalid."""
-        allowed = _VALID_STATE_COMBOS.get(status_val)
+        """Return an error string if the status/condition combination is invalid.
+
+        ``check_combination=False`` skips only the status/condition pair rule,
+        for an update that does not touch either field. The pair rule was
+        introduced after rows carrying the forbidden combinations already
+        existed, so applying it to the *resulting* state of every partial
+        update made those rows permanently unsaveable — a quartermaster
+        changing an item's storage location got "Invalid state" naming two
+        fields the edit was not touching. The assigned-user rule always
+        applies: it is about the resulting state, not about a transition.
+        """
+        allowed = _VALID_STATE_COMBOS.get(status_val) if check_combination else None
         if allowed is not None and condition_val not in allowed:
             return (
                 f"Invalid state: status '{status_val.value}' requires condition "
@@ -622,6 +711,29 @@ class InventoryService:
         if status_val in _REQUIRES_ASSIGNED_USER and not assigned_to_user_id:
             return f"Status '{status_val.value}' requires an assigned user"
         return None
+
+    @classmethod
+    def _enforce_state_invariant(cls, item) -> None:
+        """Quarantine an item whose stored status/condition pair is illegal.
+
+        Write paths that set a condition without touching status can otherwise
+        manufacture exactly the pair the validator forbids — AVAILABLE plus
+        poor/damaged/out-of-service. That is not merely inconsistent: assign
+        and checkout gate on status alone, so the item stays distributable
+        while recorded as unsafe, and the item edit form can no longer save it.
+
+        The item's own assignee has to be handed to the validator. Leaving it
+        at the default None makes every ASSIGNED item read as invalid — the
+        status requires an assignee — so completing maintenance on gear that
+        is out with a member rewrote it to AVAILABLE while the assignment row
+        stayed put, listing issued gear as ready to hand to somebody else.
+        """
+        if cls._validate_item_state(
+            item.status,
+            item.condition,
+            getattr(item, "assigned_to_user_id", None),
+        ):
+            item.status = cls._status_from_condition(item.condition)
 
     async def _validate_category_requirements(
         self, item_data: Dict[str, Any], organization_id
@@ -1424,10 +1536,16 @@ class InventoryService:
             # INV-4 (XC-1): location/storage/variant-group/assignee must be in-org.
             await self._assert_item_fks_in_org(item_data, organization_id)
 
-            # Validate pool items have quantity >= 1
+            # Pool stock can legitimately sit at zero. A catalog row created
+            # from a checklist position is a definition — "this truck carries
+            # 4x4 gauze" — and says nothing about what is in the stock room
+            # yet; update_item has always allowed the same value (only a
+            # negative is refused). Only ``create_items_bulk`` still requires a
+            # count, and deliberately: that path is somebody pasting a stock
+            # list, where the number is the point.
             tracking = item_data.get("tracking_type", "individual")
-            if tracking == "pool" and item_data.get("quantity", 1) < 1:
-                return None, "Pool items must have a quantity of at least 1"
+            if tracking == "pool" and item_data.get("quantity", 1) < 0:
+                return None, "Pool item quantity cannot be negative"
 
             # Validate serial number uniqueness within the organization
             sn_err = await self._check_serial_number_unique(
@@ -1778,8 +1896,17 @@ class InventoryService:
             assigned_user = update_data.get(
                 "assigned_to_user_id", item.assigned_to_user_id
             )
+            # Enforce the pair rule only when this update actually changes the
+            # pair. A row stored with a combination that predates the rule must
+            # stay editable for every unrelated field; the migration that
+            # normalizes those rows is the place that fixes them, not a 400 on
+            # a location change.
+            pair_changed = (new_status, new_condition) != (item.status, item.condition)
             state_err = self._validate_item_state(
-                new_status, new_condition, assigned_user
+                new_status,
+                new_condition,
+                assigned_user,
+                check_combination=pair_changed,
             )
             if state_err:
                 return None, state_err
@@ -1994,7 +2121,12 @@ class InventoryService:
             if return_condition:
                 item.condition = return_condition
 
-            item.status = self._status_from_condition(return_condition)
+            # From the condition the item actually ends up with, not the one
+            # supplied. Unassign is reachable from the UI with no body at all,
+            # so `return_condition` is routinely None while the stored
+            # condition is damaged — which wrote AVAILABLE + damaged and put a
+            # damaged coat straight back in the assignable pool.
+            item.status = self._status_from_condition(item.condition)
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -2058,6 +2190,231 @@ class InventoryService:
     # Pool Item Issuance Management
     # ============================================
 
+    async def _consume_from_lots(
+        self, item_id: str, organization_id: str, quantity: int
+    ) -> Tuple[Optional[str], Dict[str, int]]:
+        """Draw *quantity* ready units from an item's stock lots, or explain why not.
+
+        Returns ``(error, {lot_id: units taken})``. The breakdown is what the
+        return path needs: a lot-stocked item's ``quantity`` column is read by
+        nothing, so units credited there on return are lost, and FEFO means one
+        issuance can span several lots.
+
+        Lots are the authoritative ledger for a lot-stocked item:
+        ``receive_reorder`` records incoming stock as a lot and the
+        equipment-check swap consumes from one, while
+        ``InventoryItem.quantity`` is maintained by neither. Issuing against
+        `quantity` as well meant the same physical units could be dispensed
+        twice — once to a member from the pool, once onto an apparatus — with
+        neither consumer reducing the other's tally.
+
+        First-expired-first-out, which is what a consumable actually wants:
+        gauze that expires next month should leave before gauze that expires
+        next year. Expired lots are skipped entirely — the swap refuses them,
+        so they are not stock anyone can use.
+
+        Each lot row is locked before its read-check-decrement, matching the
+        equipment-check swap, so two concurrent issuances cannot both pass the
+        stock guard on the same units (pitfall #27).
+        """
+        today = date.today()
+        result = await self.db.execute(
+            select(InventoryLot)
+            .where(
+                InventoryLot.inventory_item_id == item_id,
+                InventoryLot.organization_id == organization_id,
+                InventoryLot.quantity > 0,
+                or_(
+                    InventoryLot.expiration_date.is_(None),
+                    InventoryLot.expiration_date >= today,
+                ),
+            )
+            # NULLs last: a lot with no expiry is the least urgent to use.
+            .order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date,
+                InventoryLot.received_date,
+            )
+            .with_for_update()
+        )
+        lots = list(result.scalars().all())
+        available = sum(lot.quantity or 0 for lot in lots)
+        if available < quantity:
+            return (
+                f"Insufficient stock: {available} available, {quantity} requested",
+                {},
+            )
+
+        remaining = quantity
+        taken: Dict[str, int] = {}
+        for lot in lots:
+            if remaining <= 0:
+                break
+            take = min(lot.quantity or 0, remaining)
+            if take <= 0:
+                continue
+            lot.quantity -= take
+            taken[str(lot.id)] = take
+            remaining -= take
+        return None, taken
+
+    async def _item_is_lot_stocked(self, item_id: str, organization_id: str) -> bool:
+        """Whether this item's stock lives in lots rather than in `quantity`.
+
+        Any lot at all, not just an in-date one: the question is which ledger
+        the readers consult, and `_in_date_lot_totals` treats an item with an
+        expired lot as lot-stocked too. Answering it from in-date lots alone
+        would send a return into a column nothing reads whenever the shelf
+        happened to be empty.
+        """
+        result = await self.db.execute(
+            select(InventoryLot.id)
+            .where(
+                InventoryLot.inventory_item_id == item_id,
+                InventoryLot.organization_id == organization_id,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    def _restore_without_allocations(
+        self, item_id: str, organization_id: str, quantity: int, returned_by: str
+    ) -> None:
+        """Return units whose source lot was never recorded.
+
+        An issuance that went out before ``lot_allocations`` existed has it
+        NULL, and the migration deliberately leaves those rows alone — it
+        cannot know which lots they drew from. But the item is on the lot
+        ledger, so the units must not go back into ``quantity``, which nothing
+        reads for such an item. They land undated, exactly as an opening
+        balance does.
+
+        Not a carry-forward site despite creating a lot: this branch runs only
+        when the item is *already* lot-stocked, so its ``quantity`` holds a
+        stale residue rather than shelf stock, and turning that into a lot
+        would invent units. See tests/test_lot_ledger_carry_forward.py.
+        """
+        self.db.add(
+            InventoryLot(
+                organization_id=organization_id,
+                inventory_item_id=item_id,
+                created_by=returned_by,
+                quantity=quantity,
+                notes="Returned stock; original lot not recorded.",
+            )
+        )
+
+    async def _return_units_to_stock(
+        self,
+        issuance,
+        item,
+        organization_id: str,
+        quantity: int,
+        return_condition,
+        returned_by: str,
+    ) -> None:
+        """Put returned units back where this item's readers will look for them.
+
+        Shared by both return paths — the direct one and the quartermaster's
+        review of a member's return request — because they are the same
+        decision made on two screens, and they had already drifted: the review
+        path credited ``item.quantity`` unconditionally, which for a
+        lot-stocked item is a column no reader consults, so approving a return
+        recorded it as received, reduced ``quantity_issued``, and left the
+        units missing from on-hand stock.
+
+        Unserviceable units do not rejoin ready stock. A lot carries no
+        condition of its own, so crediting a damaged return back to the lot it
+        came from puts it at the front of the FEFO queue with a lot number and
+        an expiry — issuable again, and swappable onto an apparatus during a
+        check. The issuance row keeps the return and its condition, which is
+        the record; the units are written off the issuable balance rather than
+        being quietly re-offered.
+
+        ``lot_allocations`` is left alone in that case: it says how many units
+        are still owed back to which lots, and a written-off unit is never
+        coming back. A later return of the serviceable remainder repays only
+        itself, because each pass repays at most what it returns.
+        """
+        if _enum_member(return_condition) in _UNISSUABLE_CONDITIONS:
+            write_off = f"{quantity} unit(s) written off on return: not serviceable"
+            issuance.return_notes = (
+                (issuance.return_notes or "") + "\n" + write_off
+            ).strip()
+        elif issuance.lot_allocations:
+            # Back to the ledger it came out of. Crediting `quantity` for an
+            # item whose stock lives in lots puts the units in a column no
+            # reader consults — issuance, low-stock and the checklist swap all
+            # go to the lots — so returned gear simply disappeared from
+            # available stock, permanently.
+            await self._restore_to_lots(issuance, organization_id, quantity)
+        elif await self._item_is_lot_stocked(str(item.id), organization_id):
+            self._restore_without_allocations(
+                str(item.id), organization_id, quantity, returned_by
+            )
+        else:
+            item.quantity = (item.quantity or 0) + quantity
+
+    async def _restore_to_lots(
+        self, issuance, organization_id: str, quantity: int
+    ) -> None:
+        """Put returned units back into the lots the issuance drew them from.
+
+        ``lot_allocations`` is decremented as it is repaid, so a sequence of
+        partial returns cannot credit the same lot twice. A lot that has since
+        been deleted takes its share into a fresh undated lot rather than into
+        ``quantity``, which for a lot-stocked item is a column nothing reads.
+        """
+        # Pitfall #12: a plain JSON column does not track in-place mutation,
+        # and a shallow copy would share nothing here (values are ints) but
+        # would still be reassigned as an equal dict if nothing changed.
+        remaining = dict(issuance.lot_allocations or {})
+        owed = quantity
+        repaid: Dict[str, int] = {}
+        for lot_id, lent in list(remaining.items()):
+            if owed <= 0:
+                break
+            give = min(int(lent), owed)
+            if give <= 0:
+                continue
+            repaid[lot_id] = give
+            owed -= give
+
+        if repaid:
+            result = await self.db.execute(
+                select(InventoryLot)
+                .where(
+                    InventoryLot.id.in_(list(repaid)),
+                    InventoryLot.organization_id == organization_id,
+                )
+                .with_for_update()
+            )
+            by_id = {str(lot.id): lot for lot in result.scalars().all()}
+            for lot_id, give in repaid.items():
+                lot = by_id.get(lot_id)
+                if lot is None:
+                    # The lot row is gone. The units are not.
+                    owed += give
+                    continue
+                lot.quantity = (lot.quantity or 0) + give
+                left = int(remaining.get(lot_id, 0)) - give
+                if left > 0:
+                    remaining[lot_id] = left
+                else:
+                    remaining.pop(lot_id, None)
+
+        if owed > 0:
+            self.db.add(
+                InventoryLot(
+                    organization_id=organization_id,
+                    inventory_item_id=str(issuance.item_id),
+                    quantity=owed,
+                    notes="Returned stock whose original lot no longer exists.",
+                )
+            )
+
+        issuance.lot_allocations = remaining or None
+
     async def issue_from_pool(
         self,
         item_id: UUID,
@@ -2101,7 +2458,31 @@ class InventoryService:
             if not item.active:
                 return None, "Item is retired or inactive"
 
-            if item.quantity < quantity:
+            if item.status in _UNISSUABLE_STATUSES:
+                return (
+                    None,
+                    f"Item is {item.status.value.replace('_', ' ')} and cannot "
+                    f"be issued",
+                )
+            if item.condition in _UNISSUABLE_CONDITIONS:
+                return (
+                    None,
+                    f"Item condition is {item.condition.value.replace('_', ' ')} "
+                    f"and cannot be issued",
+                )
+
+            # Lots are authoritative for an item that has any, because that is
+            # the ledger receiving writes and the equipment-check swap
+            # consumes. Membership in the totals map is what marks an item as
+            # lot-stocked, so an item whose lots have all expired reads as zero
+            # ready units rather than falling back to a `quantity` column no
+            # lot bookkeeping maintains. Same rule as
+            # get_low_stock_items_for_alerts.
+            lot_totals = await self._in_date_lot_totals(
+                str(organization_id), [str(item.id)]
+            )
+            lot_stocked = str(item.id) in lot_totals
+            if not lot_stocked and item.quantity < quantity:
                 return (
                     None,
                     f"Insufficient stock: {item.quantity} available, {quantity} requested",
@@ -2114,8 +2495,16 @@ class InventoryService:
                 if allowance_error:
                     return None, allowance_error
 
-            # Decrement pool quantity, increment issued count
-            item.quantity -= quantity
+            # Decrement whichever ledger holds this item's stock, never both.
+            allocations: Dict[str, int] = {}
+            if lot_stocked:
+                lot_err, allocations = await self._consume_from_lots(
+                    str(item.id), str(organization_id), quantity
+                )
+                if lot_err:
+                    return None, lot_err
+            else:
+                item.quantity -= quantity
             item.quantity_issued = (item.quantity_issued or 0) + quantity
 
             # Snapshot the replacement cost at issuance time for cost recovery
@@ -2135,6 +2524,10 @@ class InventoryService:
                 issue_reason=reason,
                 is_returned=False,
                 unit_cost_at_issuance=unit_cost,
+                # NULL rather than {} for a column-ledger issue, so the return
+                # path can tell "came from lots" from "came from quantity"
+                # without also having to special-case an empty dict.
+                lot_allocations=allocations or None,
             )
             self.db.add(issuance)
 
@@ -2197,7 +2590,15 @@ class InventoryService:
             if not item:
                 return False, "Associated pool item not found"
 
-            item.quantity += qty
+            await self._return_units_to_stock(
+                issuance,
+                item,
+                str(organization_id),
+                qty,
+                return_condition,
+                str(returned_by),
+            )
+            # Down either way: the member is not holding them any more.
             item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
 
             # Handle partial return: reduce issuance quantity_issued and leave open
@@ -2218,7 +2619,9 @@ class InventoryService:
                 issuance.returned_at = datetime.now(timezone.utc)
                 issuance.returned_by = returned_by
                 issuance.return_condition = return_condition
-                issuance.return_notes = return_notes
+                issuance.return_notes = _append_note(
+                    issuance.return_notes, return_notes
+                )
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -2408,7 +2811,7 @@ class InventoryService:
                 return False, "Associated item not found"
             item.condition = return_condition
 
-            item.status = self._status_from_condition(return_condition)
+            item.status = self._status_from_condition(item.condition)
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -2653,6 +3056,10 @@ class InventoryService:
                     if maintenance_data.get("passed") is False:
                         item.status = ItemStatus.IN_MAINTENANCE
                         item.condition = ItemCondition.OUT_OF_SERVICE
+                    # `passed` is absent on a plain repair log, so the branch
+                    # above does not fire and an unsafe condition_after would
+                    # otherwise be written against an AVAILABLE item.
+                    self._enforce_state_invariant(item)
             elif maintenance_data.get("maintenance_type") == "repair":
                 item = await self._get_item_locked(item_id, organization_id)
                 if item:
@@ -2728,6 +3135,7 @@ class InventoryService:
                             item.next_inspection_due = (
                                 safe_data.get("next_due_date") or record.next_due_date
                             )
+                    self._enforce_state_invariant(item)
 
             await self.db.commit()
             await self.db.refresh(record)
@@ -5379,12 +5787,20 @@ class InventoryService:
                     raise ValueError(
                         f"Cannot receive {qty}; only {issuance.quantity_issued} remain issued"
                     )
-                item.quantity = (item.quantity or 0) + qty
+                await self._return_units_to_stock(
+                    issuance,
+                    item,
+                    str(organization_id),
+                    qty,
+                    condition,
+                    str(reviewer_id),
+                )
                 item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
                 if qty == issuance.quantity_issued:
                     issuance.is_returned = True
                     issuance.returned_at, issuance.returned_by = now, str(reviewer_id)
-                    issuance.return_condition, issuance.return_notes = condition, note
+                    issuance.return_condition = condition
+                    issuance.return_notes = _append_note(issuance.return_notes, note)
                 else:
                     issuance.quantity_issued -= qty
                     issuance.return_notes = (
@@ -5393,13 +5809,24 @@ class InventoryService:
                     ).strip()
 
             req.status = ReturnRequestStatus.INSPECTED
-            item.condition = condition
             unsafe = condition in {
                 ItemCondition.POOR,
                 ItemCondition.DAMAGED,
                 ItemCondition.OUT_OF_SERVICE,
             }
-            item.status = ItemStatus.IN_MAINTENANCE if unsafe else ItemStatus.AVAILABLE
+            # A pool row is a catalog entry for many physical units, not one of
+            # them, so one member's damaged glove says nothing about the other
+            # ninety-nine. Copying the observed condition onto the row used to
+            # be merely wrong on the screen; with issuance now refusing an
+            # unsafe status or condition, it would take the whole pool out of
+            # service. The returned units are already out of the issuable
+            # balance — they are written off rather than restored — and the
+            # issuance row carries the condition that was observed.
+            if item.tracking_type != TrackingType.POOL:
+                item.condition = condition
+                item.status = (
+                    ItemStatus.IN_MAINTENANCE if unsafe else ItemStatus.AVAILABLE
+                )
 
             chosen = follow_up
             if chosen == "auto":
@@ -5716,6 +6143,80 @@ class InventoryService:
         )
         return list(result.scalars().all())
 
+    async def _carry_forward_column_stock(
+        self, organization_id: str, item_ids: List[str], created_by: Optional[str]
+    ) -> None:
+        """Move an item's ``quantity`` into a lot before its first lot exists.
+
+        Stock lives in one ledger or the other, never both: once an item has
+        any lot, ``_in_date_lot_totals`` reports it as lot-stocked and every
+        reader stops consulting ``InventoryItem.quantity``. So the moment a
+        supply officer records the first delivery against an item that was
+        being counted in the column, whatever was on the shelf becomes
+        invisible — the item reads as zero ready units, low-stock alerts fire
+        against a full cupboard, and issuing refuses stock that is there.
+
+        The carried units become an undated lot, which is what they are: an
+        opening balance with no lot number and no expiry, because the column
+        never recorded either. It is created only for items that have no lot
+        yet, so it happens once per item and never doubles a count.
+        """
+        if not item_ids:
+            return
+
+        # Pitfall #27, and this is the read-then-write it warns about: two
+        # deliveries recorded against the same item in the same moment both
+        # saw no lot, both read the same positive `quantity`, and both copied
+        # it into an opening-balance lot — doubling the stock on hand and
+        # letting the department issue units that are not there.
+        #
+        # Lock the item rows: they are the thing both requests already share,
+        # and the lots that would conflict do not exist yet, so there is
+        # nothing there to lock. The `quantity > 0` filter then does the rest
+        # of the work, because a locking read sees the latest committed
+        # version — the loser of the race re-reads the zero the winner wrote
+        # and carries nothing forward.
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.id.in_(item_ids),
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.quantity > 0,
+            )
+            .with_for_update()
+        )
+        items = list(result.scalars().all())
+        if not items:
+            return
+
+        # Locking too, for the same reason the count in a capacity check has
+        # to be: under REPEATABLE READ a plain SELECT answers from the
+        # snapshot this transaction took at its *first* read, which predates
+        # the lock acquired above, so it would not see the lot the winner just
+        # committed.
+        lotted = await self.db.execute(
+            select(InventoryLot.inventory_item_id)
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryLot.inventory_item_id.in_([str(i.id) for i in items]),
+            )
+            .with_for_update()
+        )
+        already = {str(row) for row in lotted.scalars().all()}
+        for item in items:
+            if str(item.id) in already:
+                continue
+            self.db.add(
+                InventoryLot(
+                    organization_id=organization_id,
+                    inventory_item_id=str(item.id),
+                    created_by=created_by,
+                    quantity=item.quantity,
+                    notes="Opening balance carried from the item's stock count.",
+                )
+            )
+            item.quantity = 0
+
     async def add_lot(
         self,
         item_id: str,
@@ -5727,6 +6228,10 @@ class InventoryService:
         item = await self._get_item(item_id, organization_id)
         if not item:
             return None
+
+        await self._carry_forward_column_stock(
+            organization_id, [str(item.id)], created_by
+        )
 
         lot = InventoryLot(
             organization_id=organization_id,
@@ -5777,6 +6282,10 @@ class InventoryService:
                 f"{len(missing)} item(s) in this delivery are not in your "
                 f"inventory and were not received"
             )
+
+        await self._carry_forward_column_stock(
+            organization_id, sorted(known), created_by
+        )
 
         lots: List[InventoryLot] = []
         for entry in entries:
@@ -5855,7 +6364,7 @@ class InventoryService:
             # client on every row of the paste, not just the first.
             await self._assert_item_fks_in_org(data, organization_id)
 
-            if data.get("tracking_type") == "pool" and data.get("quantity", 1) < 1:
+            if is_pool_without_stock(data):
                 raise ValueError(
                     f"{name}: pool items must have a quantity of 1 or more"
                 )
@@ -5873,6 +6382,89 @@ class InventoryService:
         for item in items:
             await self.db.refresh(item)
         return items, skipped
+
+    async def _item_id_by_name(self, organization_id: str, name: str) -> Optional[str]:
+        """The id of the org's item carrying this name, if any.
+
+        Deliberately spans the **whole** catalog, medical stock included. The
+        gear list (`GET /inventory/items`) excludes medical types by design, so
+        a caller that only searched there cannot answer this — and a caller that
+        assumes it can is how one item becomes two rows with its checklist links
+        and replacement lots split between them.
+
+        Matched on `normalize_name` rather than raw equality, for the same
+        reason `create_items_bulk` does: "Gauze Pads, 4x4" and "gauze pads 4x4"
+        are the same box.
+        """
+        key = normalize_name(name)
+        if not key:
+            return None
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.name).where(
+                InventoryItem.organization_id == organization_id,
+                # Active rows only. A retired item is hidden from every catalog
+                # search (they all pass active_only), so handing one back would
+                # report a link to a row the crew cannot find, in retired
+                # condition — and where a name has both a retired and an active
+                # row, an unordered query could return the wrong one of the two.
+                InventoryItem.active.is_(True),
+            )
+        )
+        return next(
+            (iid for iid, n in result.all() if n and normalize_name(n) == key),
+            None,
+        )
+
+    async def create_item_if_absent(
+        self, organization_id: str, item_data: Dict[str, Any], created_by: str
+    ) -> Tuple[Optional[InventoryItem], bool, Optional[str]]:
+        """Create a catalog row, or hand back the one already carrying the name.
+
+        Returns ``(item, created, error)``.
+
+        One operation rather than a check the caller makes and then acts on.
+        A create-and-link screen that asks from the browser leaves seconds
+        between the question and the write, and a second editor filing the same
+        name inside that window gets a duplicate — one item as two rows, with
+        its checklist links and replacement lots split between them and nothing
+        in the UI afterwards saying so.
+
+        Returning the existing row rather than an error is the point: the caller
+        wanted a link, and an item it could not see (medical stock is absent
+        from the gear list it searched) is still the right thing to link to.
+
+        Applies to pool rows only — see the comment on the check below.
+
+        This narrows the window to a single transaction; it does not close it.
+        ``inventory_items`` carries no unique constraint on (organization,
+        name) — `create_items_bulk` has the same property — so two creates
+        landing in the same instant can still both find nothing. Closing that
+        needs the constraint and a backfill for the duplicate names already on
+        file, which is a schema change rather than a caller fix.
+        """
+        name = (item_data.get("name") or "").strip()
+        if not name:
+            return None, False, "Every item needs a name"
+
+        # Only a pool row is one-per-name. A pool row is a *definition* — "the
+        # department stocks 4x4 gauze" — and a second one splits the same
+        # supply's lots and checklist links across two records. An individual
+        # row is a *physical asset*, told apart by serial number or asset tag,
+        # and a department owning two thermal imagers has two rows that share a
+        # product name. Deduping those would alias two apparatus positions onto
+        # one device, and quietly report the second truck as carrying the first
+        # truck's imager.
+        if item_data.get("tracking_type") == "pool":
+            existing_id = await self._item_id_by_name(organization_id, name)
+            if existing_id:
+                return (
+                    await self.get_item_by_id(existing_id, organization_id),
+                    False,
+                    None,
+                )
+
+        item, error = await self.create_item(organization_id, item_data, created_by)
+        return item, item is not None, error
 
     async def update_lot(
         self,
@@ -6301,6 +6893,15 @@ class InventoryService:
         item = await self._get_item_locked(UUID(str(row.item_id)), organization_id)
         if not item:
             return None, "Linked inventory item not found"
+        # Before the lot below exists, not after: creating it is what flips
+        # this item to the lot ledger, and from that moment every reader stops
+        # consulting item.quantity. A cupboard counted in the column — ten
+        # pairs of gloves recorded by hand — would otherwise vanish the instant
+        # a five-unit delivery was received against it, leaving five issuable
+        # where there are fifteen, and low-stock alerts firing on a full shelf.
+        await self._carry_forward_column_stock(
+            str(organization_id), [str(row.item_id)], current_user_id
+        )
         lot = InventoryLot(
             organization_id=str(organization_id),
             inventory_item_id=row.item_id,
@@ -6325,7 +6926,10 @@ class InventoryService:
             received_by=current_user_id,
         )
         self.db.add(receipt)
-        item.quantity = (item.quantity or 0) + data["quantity"]
+        # Deliberately NOT crediting item.quantity as well. The lot above is
+        # the record for these units; issuance and the equipment-check swap
+        # both draw from lots for a lot-stocked item, so a second credit here
+        # let the same delivery be dispensed twice.
         row.quantity_received += data["quantity"]
         row.actual_unit_cost = data["unit_cost"]
         row.status = (

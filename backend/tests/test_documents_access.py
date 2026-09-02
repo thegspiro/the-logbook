@@ -29,12 +29,14 @@ from app.services.documents_service import (
 )
 
 
-def _user(uid="u1", roles=None):
+def _user(uid="u1", roles=None, rank=None):
     # roles: list of (permissions_list, slug)
+    # `rank` is part of a real User and carries its own default permissions,
+    # so the stand-in declares it rather than leaving the attribute absent.
     role_objs = [
         SimpleNamespace(permissions=perms, slug=slug) for perms, slug in (roles or [])
     ]
-    return SimpleNamespace(id=uid, roles=role_objs)
+    return SimpleNamespace(id=uid, roles=role_objs, rank=rank)
 
 
 def _folder(

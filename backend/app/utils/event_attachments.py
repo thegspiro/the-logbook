@@ -40,14 +40,23 @@ def org_attachment_root(organization_id: Any) -> str:
     return os.path.realpath(os.path.join(ATTACHMENT_UPLOAD_DIR, str(organization_id)))
 
 
-def is_path_in_org(file_path: Optional[str], organization_id: Any) -> bool:
+def is_path_in_org(file_path: Any, organization_id: Any) -> bool:
     """Return True iff *file_path* resolves inside the org's own upload subtree.
 
-    Fails **closed**: an empty path, a missing organization, or anything that
-    resolves outside the subtree (``..`` traversal included, since the
-    comparison is on the realpath) all return False.
+    Fails **closed**: an empty path, a missing organization, a value that is
+    not a string, or anything that resolves outside the subtree (``..``
+    traversal included, since the comparison is on the realpath) all return
+    False.
+
+    The type check is load-bearing, not defensive noise. ``attachments`` is
+    typed ``List[Dict[str, Any]]`` — it has to be, because the upload handler
+    writes ``file_size`` as an int and ``description`` as None — so a create
+    request may legitimately reach here carrying ``{"file_path": 1}``. Without
+    this, ``os.path.realpath`` raises ``TypeError``, which the event endpoints
+    do not catch (they translate ``ValueError`` to a 400), and a malformed
+    request became a 500 instead of a validation error.
     """
-    if not file_path or not organization_id:
+    if not isinstance(file_path, str) or not file_path or not organization_id:
         return False
     root = org_attachment_root(organization_id)
     resolved = os.path.realpath(file_path)

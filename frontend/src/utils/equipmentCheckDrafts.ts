@@ -36,6 +36,19 @@ function sameChecklist(draft: EquipmentCheckDraft<unknown>, identity: EquipmentC
   return draft.shiftId === identity.shiftId && draft.templateId === identity.templateId;
 }
 
+/**
+ * Whose work this is — the half of the key that carries a privacy consequence.
+ *
+ * A station tablet is shared. A draft written by another member, or under
+ * another organization, must never be surfaced to the person now holding the
+ * device, so those are purged on sight. A draft written by *this* member under
+ * an older template revision is the opposite case: it is their own in-progress
+ * check, and destroying it is the data loss this module exists to prevent.
+ */
+function sameOwner(draft: EquipmentCheckDraft<unknown>, identity: EquipmentCheckDraftIdentity): boolean {
+  return draft.organizationId === identity.organizationId && draft.userId === identity.userId;
+}
+
 export async function saveEquipmentCheckDraft<T>(
   identity: EquipmentCheckDraftIdentity,
   contents: T,
@@ -75,41 +88,89 @@ export async function loadEquipmentCheckDraft<T>(
     request.onerror = () => reject(request.error ?? new Error('Failed to load equipment-check drafts'));
     request.onsuccess = () => {
       const drafts = request.result as EquipmentCheckDraft<T>[];
+      const wanted = draftId(identity);
       let match: EquipmentCheckDraft<T> | null = null;
+      // Same member, same checklist, older template revision. Returned so the
+      // caller can reconcile it item by item; it is NOT deleted here, because
+      // the caller may not get as far as writing the reconciled draft back.
+      let supersededRevision: EquipmentCheckDraft<T> | null = null;
       for (const draft of drafts) {
-        if (draft.expiresAt <= now || (sameChecklist(draft, identity) && draft.id !== draftId(identity))) {
+        if (draft.expiresAt <= now) {
           store.delete(draft.id);
-        } else if (draft.id === draftId(identity)) {
+          continue;
+        }
+        if (!sameChecklist(draft, identity)) continue;
+        if (!sameOwner(draft, identity)) {
+          store.delete(draft.id);
+          continue;
+        }
+        if (draft.id === wanted) {
           match = draft;
+        } else if (!supersededRevision || draft.updatedAt > supersededRevision.updatedAt) {
+          supersededRevision = draft;
         }
       }
-      resolve(match);
+      // A draft written under the current revision always wins; the older one
+      // is only a fallback for the first load after an officer edits the
+      // template mid-check.
+      resolve(match ?? supersededRevision);
     };
   });
 }
 
+/**
+ * Discard this member's work on this checklist — every revision of it.
+ *
+ * Keyed on the exact draft id, this deleted only the revision the caller had
+ * open. A draft written before an officer edited the template survived the
+ * submission, and `loadEquipmentCheckDraft` hands back exactly that as its
+ * superseded-revision fallback when no current-revision draft exists: reopening
+ * the checklist after submitting restored answers from the check just filed,
+ * and went on doing so for the seven days until it expired.
+ */
 export async function deleteEquipmentCheckDraft(identity: EquipmentCheckDraftIdentity): Promise<void> {
   const db = await openOfflineDb();
   await new Promise<void>((resolve, reject) => {
-    const request = db
-      .transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite')
-      .objectStore(STORE_EQUIPMENT_CHECK_DRAFTS)
-      .delete(draftId(identity));
-    request.onsuccess = () => resolve();
+    const tx = db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite');
+    const store = tx.objectStore(STORE_EQUIPMENT_CHECK_DRAFTS);
+    const request = store.getAll();
     request.onerror = () => reject(request.error ?? new Error('Failed to delete equipment-check draft'));
+    request.onsuccess = () => {
+      for (const draft of request.result as EquipmentCheckDraft<unknown>[]) {
+        // Another member's draft on this station tablet is not ours to delete
+        // here — loadEquipmentCheckDraft purges those on sight, and only for
+        // the member actually holding the device.
+        if (sameChecklist(draft, identity) && sameOwner(draft, identity)) store.delete(draft.id);
+      }
+    };
+    // Settled on the transaction, not on the deletes being queued. Resolving
+    // from `onsuccess` reports success while the writes are still in flight,
+    // so an abort left the draft in place and the caller went on to submit —
+    // and the next time the member opened that checklist it offered them
+    // answers from the check they had already filed.
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to delete equipment-check draft'));
+    tx.onabort = () => reject(tx.error ?? new Error('Equipment-check draft deletion was aborted'));
   });
 }
 
 export async function clearAllEquipmentCheckDrafts(): Promise<number> {
   const db = await openOfflineDb();
   return new Promise((resolve, reject) => {
-    const store = db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite').objectStore(STORE_EQUIPMENT_CHECK_DRAFTS);
+    const tx = db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite');
+    const store = tx.objectStore(STORE_EQUIPMENT_CHECK_DRAFTS);
     const count = store.count();
     count.onerror = () => reject(count.error ?? new Error('Failed to count equipment-check drafts'));
     count.onsuccess = () => {
       const clear = store.clear();
-      clear.onsuccess = () => resolve(count.result);
       clear.onerror = () => reject(clear.error ?? new Error('Failed to clear equipment-check drafts'));
     };
+    // Same rule as the delete above, and it matters more here: this runs when
+    // a device changes hands, and a count returned before the clear committed
+    // would report the previous member's drafts as purged while they are
+    // still on the tablet.
+    tx.oncomplete = () => resolve(count.result);
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to clear equipment-check drafts'));
+    tx.onabort = () => reject(tx.error ?? new Error('Equipment-check draft purge was aborted'));
   });
 }

@@ -1077,7 +1077,7 @@ which positions are open to everyone regardless of rank.
 
 **How it affects shift signup:**
 
-- Every open slot in the Dashboard's **Next 7 Days** list offers a **Sign Up**
+- Every open slot in the Dashboard's **Next 30 Days** list offers a **Sign Up**
   button. Eligibility is checked when you press it, not before — the row gives
   no advance warning
 - Pressing **Sign Up** expands the row into a position dropdown holding **only
@@ -2112,10 +2112,12 @@ The self-signup button visibility on the Open Shifts tab had a fallback permissi
 
 ### Dashboard Shift Display
 
-The dashboard's shift panels were merged into a single **Next 7 Days**
+The dashboard's shift panels were merged into a single **Next 30 Days**
 timeline: your own shifts (marked **Yours**), open slots you can sign up for,
-and upcoming events in one seven-day list, with a line noting how much more
-lies beyond the window. The old "My Upcoming Shifts" filtering rules carry
+and upcoming events in one thirty-day list, with a line noting how much more
+lies beyond the window. The **All Shifts** control in its header opens the
+scheduling calendar on the month view — shifts only, since drills and events
+live in their own modules. The old "My Upcoming Shifts" filtering rules carry
 over — declined and cancelled assignments do not appear:
 
 - Declined assignments (shifts you said "no" to)
@@ -2130,7 +2132,7 @@ Shifts**, where each card carries its badge and the bulk Confirm All /
 Decline All bar sits above them. What the dashboard promises is narrower —
 that everything marked Yours is a shift you are still on.
 
-![The dashboard's Next 7 Days timeline, listing the member's own shifts alongside open slots and events](./images/03-60-dashboard-my-shifts.png)
+![The dashboard's Next 30 Days timeline, listing the member's own shifts alongside open slots and events](./images/03-60-dashboard-my-shifts.png)
 
 ### Desktop Camera Scanning
 

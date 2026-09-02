@@ -552,16 +552,15 @@ Tab-based interface with the following views:
 
 ### Scheduling Admin Pages (2026-03-19)
 
-| URL                                  | Page                          | Permission                                                                  |
-| ------------------------------------ | ----------------------------- | --------------------------------------------------------------------------- |
-| `/scheduling/templates`              | Shift Templates Management    | `scheduling.manage`                                                         |
-| `/scheduling/patterns`               | Shift Pattern Management      | `scheduling.manage`                                                         |
-| `/scheduling/reports`                | Scheduling Reports            | `scheduling.manage`                                                         |
-| `/scheduling/settings`               | Scheduling Settings           | `scheduling.manage`                                                         |
-| `/scheduling/platoons`               | Platoon Management            | `scheduling.manage`                                                         |
-| `/scheduling/qualifications`         | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage`          |
-| `/scheduling/checkin`                | Shift Check-In                | Authenticated                                                               |
-| `/inventory/admin/checklists/supply` | Expiring Supply Items         | `inventory.check_view` **OR** `inventory.manage` **OR** `scheduling.manage` |
+| URL                          | Page                          | Permission                                                         |
+| ---------------------------- | ----------------------------- | ------------------------------------------------------------------ |
+| `/scheduling/templates`      | Shift Templates Management    | `scheduling.manage`                                                |
+| `/scheduling/patterns`       | Shift Pattern Management      | `scheduling.manage`                                                |
+| `/scheduling/reports`        | Scheduling Reports            | `scheduling.manage`                                                |
+| `/scheduling/settings`       | Scheduling Settings           | `scheduling.manage`                                                |
+| `/scheduling/platoons`       | Platoon Management            | `scheduling.manage`                                                |
+| `/scheduling/qualifications` | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage` |
+| `/scheduling/checkin`        | Shift Check-In                | Authenticated                                                      |
 
 > Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
 

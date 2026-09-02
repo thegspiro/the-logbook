@@ -58,11 +58,18 @@ _REVERSE = {new: old for old, new in _RENAMES.items()}
 def _rewrite(mapping: dict, wildcard: str | None, wildcard_to: tuple) -> None:
     """Rewrite every ``positions.permissions`` row through *mapping*."""
     bind = op.get_bind()
-    # positions is a model-only table, materialized by startup create_all,
-    # which runs AFTER migrations on a fresh install (CLAUDE.md pitfall #26).
-    # Reflecting it unguarded raises NoSuchTableError and kills the whole
-    # upgrade. A fresh install seeds the new names from DEFAULT_POSITIONS
-    # anyway, so skipping is correct and not merely safe.
+    # Defensive only. ``positions`` IS created by the migration chain — the
+    # initial schema builds ``roles``, and 20260805_0008 renames it, which
+    # makes that rename a required ancestor of this revision. An earlier
+    # version of this comment claimed the opposite ("model-only table,
+    # materialized by startup create_all"), which is the exact false positive
+    # CLAUDE.md pitfall #26 records being reverted on 2026-08-31 after an
+    # empirical `alembic upgrade head` against an empty database showed the
+    # table already present. Verified again here the same way.
+    #
+    # The guard is kept because it costs one reflection and cannot be wrong,
+    # but it is not load-bearing, and it is not the pattern to copy for a
+    # genuinely create_all-only table — for those the guard is required.
     if "positions" not in sa.inspect(bind).get_table_names():
         return
 

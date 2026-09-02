@@ -17,8 +17,10 @@ import pytest
 from app.schemas.scheduling import ShiftPosition
 from app.utils.positions import (
     CANONICAL_POSITIONS,
+    POSITION_LABELS,
     canonical_position,
     normalize_stored_positions,
+    position_label,
 )
 
 
@@ -568,3 +570,248 @@ class TestSeatVocabularyMatchesTheWire:
         assert (
             seats <= CANONICAL_POSITIONS
         ), f"non-canonical default seats: {seats - CANONICAL_POSITIONS}"
+
+
+class TestParsedRequestModels:
+    """A route hands over parsed models, not dicts.
+
+    ``BasicApparatusCreate.positions`` is ``List[PositionSlot | str]``, so
+    ``POST /scheduling/apparatus`` reaches ``normalize_stored_positions`` with
+    ``PositionSlot`` instances. Matching neither the str nor the dict branch
+    dropped every structured seat and stored ``[]`` — with a 201 and no error —
+    while the PATCH sibling, which dumps the payload first, kept them.
+    """
+
+    def test_position_slot_models_survive_the_write(self):
+        from app.schemas.scheduling import BasicApparatusCreate
+
+        parsed = BasicApparatusCreate(
+            unit_number="E1",
+            name="Engine 1",
+            positions=[
+                {
+                    "position": "officer",
+                    "required": True,
+                    "allow_administrative_members": True,
+                },
+                {"position": "driver", "required": False},
+            ],
+        )
+
+        assert normalize_stored_positions(parsed.positions) == [
+            {
+                "position": "officer",
+                "required": True,
+                "allow_administrative_members": True,
+            },
+            {
+                "position": "driver",
+                "required": False,
+                "allow_administrative_members": False,
+            },
+        ]
+
+    def test_a_mixed_list_keeps_both_arms(self):
+        from app.schemas.scheduling import BasicApparatusCreate
+
+        parsed = BasicApparatusCreate(
+            unit_number="E1",
+            name="Engine 1",
+            positions=["EMT", {"position": "driver"}],
+        )
+
+        assert [
+            s["position"] for s in normalize_stored_positions(parsed.positions)
+        ] == [
+            "ems",
+            "driver",
+        ]
+
+    def test_create_and_patch_settle_identically(self):
+        from app.schemas.scheduling import BasicApparatusCreate, BasicApparatusUpdate
+
+        seats = [{"position": "officer", "required": False}]
+        created = BasicApparatusCreate(unit_number="E1", name="E1", positions=seats)
+        patched = BasicApparatusUpdate(positions=seats)
+
+        assert normalize_stored_positions(
+            created.positions
+        ) == normalize_stored_positions(
+            patched.model_dump(exclude_unset=True)["positions"]
+        )
+
+
+class TestEventMetadataFlattening:
+    """The templates form writes seat objects into ``flat_positions``.
+
+    The display normalizer bound each entry in as the seat *name*, so a shift
+    generated from an event template stored a seat inside a seat: unassignable,
+    and rejected by ``ShiftResponse`` — one such row 500s the whole calendar.
+    """
+
+    @staticmethod
+    def _meta(flat):
+        return {"event_type": "parade", "resources": [], "flat_positions": flat}
+
+    def test_object_entries_flatten_to_seats(self):
+        from app.services.scheduling_service import SchedulingService
+
+        slots = SchedulingService.normalize_positions(
+            self._meta(
+                [
+                    {
+                        "position": "officer",
+                        "required": True,
+                        "allow_administrative_members": True,
+                    },
+                    {"position": "driver", "required": False},
+                ]
+            )
+        )
+
+        assert slots == [
+            {
+                "position": "officer",
+                "required": True,
+                "allow_administrative_members": True,
+            },
+            {
+                "position": "driver",
+                "required": False,
+                "allow_administrative_members": False,
+            },
+        ]
+
+    def test_legacy_name_entries_still_flatten(self):
+        from app.services.scheduling_service import SchedulingService
+
+        assert SchedulingService.normalize_positions(self._meta(["officer"])) == [
+            {"position": "officer", "required": True}
+        ]
+
+    def test_flattened_seats_pass_response_validation(self):
+        from app.schemas.scheduling import PositionSlot
+        from app.services.scheduling_service import SchedulingService
+
+        slots = SchedulingService.normalize_positions(
+            self._meta([{"position": "officer", "required": True}])
+        )
+
+        # A nested seat satisfies neither arm of ShiftResponse's
+        # ``List[PositionSlot | str]``, which is the 500.
+        assert [PositionSlot(**slot).position for slot in slots] == ["officer"]
+
+
+class TestNestedSeatRepair:
+    """The migration that unwraps rows already written with a nested seat."""
+
+    @staticmethod
+    def _unwrap():
+        import importlib.util
+
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "20260831_0900_f7a1c3b5d9e2_unwrap_nested_seat_names.py"
+        )
+        spec = importlib.util.spec_from_file_location("_unwrap_seats", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module._unwrap
+
+    def test_unwraps_a_seat_inside_a_seat(self):
+        corrupt = [
+            {
+                "position": {
+                    "position": "officer",
+                    "required": False,
+                    "allow_administrative_members": True,
+                },
+                "required": True,
+            }
+        ]
+
+        # The wrapper's ``required`` was a hardcoded True; the admin chose the
+        # inner one, so that is the flag the repair must keep.
+        assert self._unwrap()(corrupt) == [
+            {
+                "position": "officer",
+                "required": False,
+                "allow_administrative_members": True,
+            }
+        ]
+
+    def test_leaves_healthy_rows_byte_identical(self):
+        healthy = [
+            {
+                "position": "driver",
+                "required": True,
+                "allow_administrative_members": False,
+            }
+        ]
+        assert self._unwrap()(healthy) == healthy
+
+    def test_drops_an_unnameable_seat(self):
+        assert self._unwrap()([{"position": {"required": True}}]) == []
+
+    def test_passes_event_metadata_through(self):
+        meta = {"event_type": "parade", "flat_positions": ["officer"]}
+        assert self._unwrap()(meta) == meta
+
+
+class TestSeatDisplayNames:
+    """The seat's stored token and its name on screen are two things.
+
+    A department builds a template with two EMT seats and the board listed
+    them as "EMS", because the token ("ems") was printed where the label
+    belonged. Everything that shows a member a seat name goes through
+    `position_label`, so the template screen and the board cannot disagree
+    about what one seat is called.
+    """
+
+    def test_the_ems_seat_is_called_emt(self):
+        assert position_label("ems") == "EMT"
+
+    def test_aliases_resolve_to_the_same_name(self):
+        # Rows written before the backend settled on one spelling.
+        assert position_label("EMT") == "EMT"
+        assert position_label("EMS") == "EMT"
+        assert position_label(" emt ") == "EMT"
+
+    def test_enum_members_resolve(self):
+        assert position_label(ShiftPosition.EMS) == "EMT"
+        assert position_label(ShiftPosition.DRIVER) == "Driver/Operator"
+
+    def test_a_departments_own_seat_is_returned_readable(self):
+        # Custom seats are not in the map; a slug is still better than blank,
+        # which would leave the seat nameless on a printed roster.
+        assert position_label("medic_student") == "Medic Student"
+
+    def test_no_position_names_nothing(self):
+        assert position_label(None) == ""
+        assert position_label("") == ""
+
+    def test_every_canonical_seat_has_a_label(self):
+        # A seat added to the vocabulary with no label renders as its slug.
+        assert set(POSITION_LABELS) == set(CANONICAL_POSITIONS)
+
+    def test_frontend_labels_agree(self):
+        # Two copies of one mapping, in two languages: a shift roster printed
+        # by the backend and the same roster on screen have to name the seat
+        # identically, so the frontend map is asserted from source.
+        source = (
+            Path(__file__).resolve().parents[2]
+            / "frontend"
+            / "src"
+            / "constants"
+            / "enums.ts"
+        ).read_text()
+        block = re.search(
+            r"export const POSITION_LABELS: Record<string, string> = \{(.*?)\n\};",
+            source,
+            re.S,
+        )
+        assert block, "POSITION_LABELS not found in enums.ts"
+        frontend = dict(re.findall(r"(\w+): '([^']+)'", block.group(1)))
+        assert frontend == POSITION_LABELS

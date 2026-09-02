@@ -15,13 +15,13 @@ import userEvent from '@testing-library/user-event';
 
 const mockGetItems = vi.fn();
 const mockGetItemLots = vi.fn();
-const mockCreateItem = vi.fn();
+const mockCreateItemIfAbsent = vi.fn();
 
 vi.mock('@/services/inventoryService', () => ({
   inventoryService: {
     getItems: (...a: unknown[]) => mockGetItems(...a) as unknown,
     getItemLots: (...a: unknown[]) => mockGetItemLots(...a) as unknown,
-    createItem: (...a: unknown[]) => mockCreateItem(...a) as unknown,
+    createItemIfAbsent: (...a: unknown[]) => mockCreateItemIfAbsent(...a) as unknown,
   },
 }));
 
@@ -57,8 +57,23 @@ describe('CatalogQuickAdd', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // mockReset, not clearAllMocks alone: clearing wipes call history and
+    // leaves implementations and any unconsumed *Once queue in place, so a
+    // persistent mockResolvedValue set by one test — or the queued
+    // mockReturnValueOnce a test never reached — is still installed for
+    // whichever test calls that mock next. It then passes on a value it never
+    // asked for, and only fails when run alone. (CLAUDE.md pitfall #28.)
+    mockGetItems.mockReset();
+    mockGetItemLots.mockReset();
+    mockCreateItemIfAbsent.mockReset();
+    onAdd.mockReset();
+
     mockGetItems.mockResolvedValue({ items: [catalogItem()], total: 1, skip: 0, limit: 6 });
     mockGetItemLots.mockResolvedValue([]);
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-new', name: 'Burn Sheet', tracking_type: 'pool' },
+      created: true,
+    });
     onAdd.mockResolvedValue(undefined);
   });
 
@@ -243,14 +258,17 @@ describe('CatalogQuickAdd', () => {
   it('offers to create the item in inventory when nothing matches', async () => {
     const user = userEvent.setup();
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
-    mockCreateItem.mockResolvedValue({ id: 'inv-new', name: 'Burn Sheet' });
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-new', name: 'Burn Sheet', tracking_type: 'pool' },
+      created: true,
+    });
     renderWith();
 
     await typeName(user, 'Burn Sheet');
     await user.click(await screen.findByText(/Create .Burn Sheet. in inventory/));
 
     await waitFor(() => {
-      expect(mockCreateItem).toHaveBeenCalledWith({
+      expect(mockCreateItemIfAbsent).toHaveBeenCalledWith({
         name: 'Burn Sheet',
         tracking_type: 'pool',
         quantity: 0,
@@ -261,6 +279,80 @@ describe('CatalogQuickAdd', () => {
       inventoryItemId: 'inv-new',
       checkType: 'count',
     });
+  });
+
+  it('links the row already on file rather than adding a second one', async () => {
+    // This bar searches six gear results and cannot see medical stock at all,
+    // so "no match" here never proved the name was free. The server decides.
+    const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-existing', name: 'Burn Sheet', tracking_type: 'pool' },
+      created: false,
+    });
+    renderWith();
+
+    await typeName(user, 'Burn Sheet');
+    await user.click(await screen.findByText(/Create .Burn Sheet. in inventory/));
+
+    await waitFor(() => {
+      expect(onAdd).toHaveBeenCalledWith({
+        name: 'Burn Sheet',
+        inventoryItemId: 'inv-existing',
+        checkType: 'count',
+      });
+    });
+  });
+
+  it('carries expiration over from a returned row that has dated lots', async () => {
+    // The row came back rather than being created, so it may already hold
+    // stock with expiry dates. Adding it as a bare count would leave that
+    // expiry neither shown nor checked.
+    const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-existing', name: 'Epinephrine', tracking_type: 'pool' },
+      created: false,
+    });
+    mockGetItemLots.mockResolvedValue([{ id: 'lot-1', expiration_date: '2028-01-31' }]);
+    renderWith();
+
+    await typeName(user, 'Epinephrine');
+    await user.click(await screen.findByText(/Create .Epinephrine. in inventory/));
+
+    await waitFor(() => {
+      expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ hasExpiration: true }));
+    });
+  });
+
+  it('leaves a returned individual asset as a function check', async () => {
+    // Matching addLinked: whether a position counts or is switched on should
+    // not depend on which page of results the item happened to be on.
+    const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-imager', name: 'Thermal Imager', tracking_type: 'individual' },
+      created: false,
+    });
+    renderWith();
+
+    await typeName(user, 'Thermal Imager');
+    await user.click(await screen.findByText(/Create .Thermal Imager. in inventory/));
+
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    expect(onAdd).toHaveBeenCalledWith(expect.not.objectContaining({ checkType: 'count' }));
+  });
+
+  it('does not offer creation when the catalog search failed', async () => {
+    const user = userEvent.setup();
+    mockGetItems.mockRejectedValue(new Error('Network Error'));
+    renderWith();
+
+    await typeName(user, 'Burn Sheet');
+
+    expect(await screen.findByText(/Couldn’t search the catalog/)).toBeInTheDocument();
+    expect(screen.queryByText(/Create .Burn Sheet. in inventory/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No catalog match/)).not.toBeInTheDocument();
   });
 
   it('hides the create option from someone who cannot write to the catalog', async () => {

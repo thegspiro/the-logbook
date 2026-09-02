@@ -195,6 +195,28 @@ interface TreeRowProps {
   isDesktop: boolean;
   onNavigate: (node: TreeNode) => void;
 }
+/**
+ * The flexible middle of a tree row: a button when it navigates, a plain
+ * container when it does not. Given the row's full 44px height so the target
+ * is the whole name, not the glyph beside it.
+ *
+ * Module scope, not inside the row: a component declared during render is a
+ * new type every render, so React would unmount and remount the name on each
+ * one.
+ */
+const NameCell: React.FC<{
+  children: React.ReactNode;
+  label: string;
+  onNavigate?: () => void;
+}> = ({ children, label, onNavigate }) =>
+  onNavigate ? (
+    <button type="button" onClick={onNavigate} className="min-h-11 min-w-0 flex-1 text-left" aria-label={label}>
+      {children}
+    </button>
+  ) : (
+    <div className="min-w-0 flex-1">{children}</div>
+  );
+
 const TreeRow: React.FC<TreeRowProps> = ({
   node,
   depth,
@@ -217,33 +239,50 @@ const TreeRow: React.FC<TreeRowProps> = ({
     <>
       <div
         data-storage-area-row={node.id}
+        data-testid="storage-area-row"
         className={`hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${
           isDesktop ? '' : 'border-theme-surface-border border-l-2'
         }`}
         style={{ paddingLeft: `${indent}px` }}
       >
-        <button
-          onClick={() => (isDesktop ? onToggle(node.id) : onNavigate(node))}
-          disabled={!has}
-          className="text-theme-text-muted flex h-6 w-6 shrink-0 items-center justify-center"
-          aria-label={has ? (isDesktop ? (open ? 'Collapse' : 'Expand') : `Open ${node.name}`) : undefined}
-        >
-          {has ? (
-            isDesktop && open ? (
-              <ChevronDown className="h-4 w-4" />
+        {/* Desktop expands in place, so the chevron is its own control. On a
+            phone it drills in, which the whole name now does — so the glyph
+            is decoration there rather than a second control with the same
+            name, which would leave two "Open <area>" buttons per row. */}
+        {isDesktop ? (
+          <button
+            onClick={() => onToggle(node.id)}
+            disabled={!has}
+            className="text-theme-text-muted flex h-6 w-6 shrink-0 items-center justify-center"
+            aria-label={has ? (open ? 'Collapse' : 'Expand') : undefined}
+          >
+            {has ? (
+              open ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )
             ) : (
-              <ChevronRight className="h-4 w-4" />
-            )
-          ) : (
-            <span className="h-4 w-4" />
-          )}
-        </button>
+              <span className="h-4 w-4" />
+            )}
+          </button>
+        ) : (
+          <span className="text-theme-text-muted flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden="true">
+            {has ? <ChevronRight className="h-4 w-4" /> : <span className="h-4 w-4" />}
+          </span>
+        )}
         <Box className="text-theme-text-muted hidden h-4 w-4 shrink-0 md:block" />
-        <div className="min-w-0 flex-1">
+        {/* On a phone the tree drills in rather than expanding in place, and
+            the 24px chevron was the only way to do it — a fingertip aimed at
+            the area's name, which is what looks tappable, did nothing, and a
+            near-miss to the right hit the item-count button instead. The name
+            is the control here; the chevron stays as the affordance. */}
+        <NameCell {...(!isDesktop && has ? { onNavigate: () => onNavigate(node) } : {})} label={`Open ${node.name}`}>
           <span
             className="text-theme-text-primary block truncate text-sm font-medium"
             title={pathLabel}
             aria-label={pathLabel}
+            data-testid="storage-area-row-path"
           >
             <span aria-hidden="true">
               {isDesktop ? (
@@ -262,7 +301,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
             </span>
             {node.label && <span className="text-theme-text-muted ml-1.5 font-normal">({node.label})</span>}
           </span>
-        </div>
+        </NameCell>
         <span className="hidden shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 sm:inline dark:text-blue-400">
           {getTypeLabel(node.storage_type)}
         </span>

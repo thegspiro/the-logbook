@@ -132,3 +132,38 @@ class TestLegacyPermissionAliases:
         assert permission_matches(
             "inventory.check_submit", _collect_user_permissions(user)
         )
+
+
+class TestInventoryWildcardCoversChecklists:
+    """``inventory.*`` grants the checklist permissions, deliberately.
+
+    This is a real widening, not a tautology worth asserting for its own sake.
+    Before the move these were ``equipment_check.*``, which ``inventory.*``
+    did not reach; renaming them into the inventory namespace put them under
+    that wildcard. A department that had built its own position granting
+    ``inventory.*`` — a quartermaster, typically — gained the ability to
+    author and submit equipment checklists on upgrade, without anyone
+    choosing that for them.
+
+    It is the intended behaviour (the grants live with the stock they
+    describe, exactly as ``view_medical``/``manage_medical`` do), so it is
+    pinned here rather than left implicit: moving any of these three back out
+    of the ``inventory`` namespace, or adding a fourth the wildcard should not
+    cover, has to fail a test and be argued for.
+    """
+
+    CHECK_PERMISSIONS = (
+        "inventory.check_view",
+        "inventory.check_manage",
+        "inventory.check_submit",
+    )
+
+    def test_inventory_wildcard_grants_every_checklist_permission(self):
+        for name in self.CHECK_PERMISSIONS:
+            assert permission_matches(name, {"inventory.*"}), name
+
+    def test_a_narrow_inventory_grant_does_not_imply_them(self):
+        """``inventory.view`` is not a wildcard, so it grants none of these —
+        the widening is the wildcard's doing, not the namespace's."""
+        for name in self.CHECK_PERMISSIONS:
+            assert not permission_matches(name, {"inventory.view"}), name

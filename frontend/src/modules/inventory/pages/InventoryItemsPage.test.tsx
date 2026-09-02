@@ -12,6 +12,7 @@ const mockGetStorageAreas = vi.fn();
 const mockGetLocations = vi.fn();
 const mockCheckPermission = vi.fn();
 const mockRetireItem = vi.fn();
+const mockUpdateItem = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -21,7 +22,7 @@ vi.mock('../../../services/api', () => ({
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
     getStorageAreas: (...a: unknown[]) => mockGetStorageAreas(...a) as unknown,
     retireItem: (...a: unknown[]) => mockRetireItem(...a) as unknown,
-    updateItem: vi.fn(),
+    updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
     exportItemsCsv: vi.fn(),
   },
   locationsService: {
@@ -51,9 +52,12 @@ vi.mock('../../../components/InventoryScanModal', () => ({ InventoryScanModal: (
 vi.mock('../../../components/ux/FloatingActionButton', () => ({ FloatingActionButton: () => null }));
 
 const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: vi.fn(),
+    success: (...a: unknown[]): void => {
+      mockToastSuccess(...a);
+    },
     error: (...a: unknown[]): void => {
       mockToastError(...a);
     },
@@ -92,6 +96,7 @@ describe('InventoryItemsPage', () => {
     mockGetStorageAreas.mockResolvedValue([]);
     mockGetLocations.mockResolvedValue([]);
     mockRetireItem.mockResolvedValue({});
+    mockUpdateItem.mockResolvedValue({});
     mockCheckPermission.mockReturnValue(true);
   });
 
@@ -237,5 +242,73 @@ describe('InventoryItemsPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retire' }));
     await waitFor(() => expect(mockRetireItem).toHaveBeenCalledWith('it-1'));
+  });
+});
+
+describe('InventoryItemsPage — a bulk change that only half applies', () => {
+  const two = [makeItem({ id: 'it-1', name: 'Drill' }), makeItem({ id: 'it-2', name: 'Saw' })];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetItems.mockResolvedValue({ items: two, total: 2 });
+    mockGetSummary.mockResolvedValue({
+      total_items: 2,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReturnValue(true);
+    mockUpdateItem.mockResolvedValue({});
+  });
+
+  const selectBoth = async (user: ReturnType<typeof userEvent.setup>) => {
+    await screen.findByText('Drill');
+    const selectAll = screen.getAllByRole('checkbox', { name: /^Select all/ })[0];
+    await user.click(selectAll as HTMLElement);
+  };
+
+  it('reports what failed and still refreshes the list', async () => {
+    // `Promise.all` rejects on the first failure, so the reload never ran and
+    // the items that *did* change stayed on screen with their old status —
+    // reachable now that setting status='available' is refused per item.
+    mockUpdateItem
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce({ response: { data: { detail: 'Condition forbids AVAILABLE' } } });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await selectBoth(user);
+
+    await user.click(screen.getByRole('button', { name: /Change Status/ }));
+    await user.selectOptions(await screen.findByRole('combobox', { name: /new status/i }), 'in_maintenance');
+    await user.click(screen.getByRole('button', { name: /Apply/ }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    expect(String(mockToastError.mock.calls[0]?.[0])).toContain('Condition forbids AVAILABLE');
+    // The reload happens on both halves; the initial load is call 1.
+    await waitFor(() => expect(mockGetItems.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('counts the half that worked instead of calling the whole thing a failure', async () => {
+    // A call count proves nothing here: `Promise.all` still *starts* every
+    // request, it only rejects early. What it cannot do is report both
+    // outcomes — the old code said just "Failed to update" while one item had
+    // in fact changed.
+    mockUpdateItem.mockRejectedValueOnce({ response: { data: { detail: 'nope' } } }).mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await selectBoth(user);
+
+    await user.click(screen.getByRole('button', { name: /Change Status/ }));
+    await user.selectOptions(await screen.findByRole('combobox', { name: /new status/i }), 'in_maintenance');
+    await user.click(screen.getByRole('button', { name: /Apply/ }));
+
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+    expect(String(mockToastSuccess.mock.calls[0]?.[0])).toContain('1 item(s)');
+    expect(String(mockToastError.mock.calls[0]?.[0])).toContain('1 item(s)');
   });
 });

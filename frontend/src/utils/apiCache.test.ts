@@ -627,6 +627,11 @@ describe('apiCache', () => {
       expect(isCacheable('/events/123')).toBe(true);
       // ...but PII sub-resources (id mid-path) are not.
       expect(isCacheable('/events/123/rsvps')).toBe(false);
+      // The member-facing half of the same roster. It serves going-only member
+      // names under a different noun, so '/rsvps' does not cover it, and a
+      // cached copy would stay readable for 90s after an organizer restricts
+      // the event's attendee visibility.
+      expect(isCacheable('/events/123/attendees')).toBe(false);
       expect(isCacheable('/events/123/eligible-members')).toBe(false);
       expect(isCacheable('/events/123/external-attendees')).toBe(false);
       expect(isCacheable('/events/123/check-in-monitoring')).toBe(false);

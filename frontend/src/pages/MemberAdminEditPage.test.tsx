@@ -156,3 +156,57 @@ describe('MemberAdminEditPage rank field', () => {
     expect(mockUpdateUserProfile).not.toHaveBeenCalled();
   });
 });
+
+describe('MemberAdminEditPage — clearing a date', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLocations.mockResolvedValue([]);
+    mockUpdateUserProfile.mockResolvedValue({});
+    mockChangeMembershipType.mockResolvedValue({});
+    mockGetUserWithRoles.mockResolvedValue(member({ date_of_birth: '1980-01-01', hire_date: '2015-06-01' }));
+  });
+
+  it('sends an explicit null, not the empty string the input yields', async () => {
+    // `Optional[date]` rejects '' with a 422, so the field could never be
+    // cleared — and the 422's array-shaped `detail` then took the page down.
+    const user = userEvent.setup();
+    await renderPage();
+
+    await user.clear(screen.getByDisplayValue('1980-01-01'));
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.date_of_birth).toBeNull();
+    expect(JSON.parse(JSON.stringify(payload))).toHaveProperty('date_of_birth', null);
+  });
+
+  it('clears the hire date the same way', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    await user.clear(screen.getByDisplayValue('2015-06-01'));
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalled());
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.hire_date).toBeNull();
+  });
+
+  it('renders a 422 as a sentence instead of crashing the page', async () => {
+    // FastAPI's validation handler answers with an array. Assigned straight to
+    // state typed `string | null` it reached the JSX as an array, and React
+    // threw "Objects are not valid as a React child" — the ErrorBoundary
+    // replaced the whole page rather than showing the message.
+    const user = userEvent.setup();
+    mockUpdateUserProfile.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'date_of_birth', message: 'Invalid date format.' }] } },
+    });
+    await renderPage();
+
+    await user.clear(screen.getByDisplayValue('1980-01-01'));
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/date_of_birth: Invalid date format\./)).toBeInTheDocument();
+  });
+});

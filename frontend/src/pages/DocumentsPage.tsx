@@ -483,7 +483,11 @@ const DocumentsPage: React.FC = () => {
               viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {filteredDocuments.map((doc) => (
-                    <div key={doc.id} className="stat-card group hover:bg-theme-surface-hover transition-all">
+                    <div
+                      key={doc.id}
+                      data-testid={`document-card-${doc.id}`}
+                      className="stat-card group hover:bg-theme-surface-hover transition-all"
+                    >
                       <div className="flex items-start space-x-3">
                         <File className="h-8 w-8 shrink-0 text-amber-700 dark:text-amber-400" />
                         <div className="min-w-0 flex-1">

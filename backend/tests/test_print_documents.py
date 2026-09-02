@@ -191,7 +191,34 @@ class TestShiftRoster:
             rows=[(_assignment("driver"), _user("Jon", "Okafor"))],
         )
         doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        # "Driver/Operator" does not fit the column, and a mid-word cut
+        # ("DRIVER/OPERA") reads as a printer fault.
         assert next(_rows_of(doc, "Crew")).right == "DRIVER"
+
+    async def test_two_long_seats_stay_distinguishable(self):
+        # Reducing an over-wide label to its first word printed a department's
+        # "Assistant Chief" and "Assistant Driver" identically, so the column
+        # could no longer say which seat a member held.
+        db = _db(
+            scalars=[_shift()],
+            rows=[
+                (_assignment("assistant_chief"), _user("Ada", "Rivera")),
+                (_assignment("assistant_driver"), _user("Jon", "Okafor")),
+            ],
+        )
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        seats = [row.right for row in _rows_of(doc, "Crew")]
+        assert len(set(seats)) == 2, seats
+
+    async def test_the_ems_seat_prints_as_emt(self):
+        # The seat is stored as "ems" and called EMT everywhere it is chosen;
+        # a roster carried round the station named it something else.
+        db = _db(
+            scalars=[_shift()],
+            rows=[(_assignment("ems"), _user("Ada", "Rivera"))],
+        )
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        assert next(_rows_of(doc, "Crew")).right == "EMT"
 
     async def test_minimum_staffing_appears_in_the_heading(self):
         db = _db(

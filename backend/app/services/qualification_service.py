@@ -15,7 +15,7 @@ apparatus editor's did (#1833).
 
 from calendar import monthrange
 from datetime import date
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -134,6 +134,51 @@ class QualificationService:
             )
         )
         return [code for (code,) in result.all()]
+
+    async def get_member_code_windows(
+        self,
+        user_id: str,
+        organization_id: str,
+    ) -> List[Tuple[str, Optional[date], Optional[date]]]:
+        """Every code the member holds, with the window it is in force for.
+
+        ``get_member_codes`` answers for one date, so a caller asking about a
+        range of dates pays one query per date. The bulk shift-eligibility
+        pass asks about every distinct shift date on the page — a year of
+        generated shifts is ~365 sequential round trips for one list request.
+        Returning the bounds instead lets that caller settle each date in
+        Python off a single statement; a NULL at either end means unbounded,
+        exactly as ``_current_on`` reads it.
+        """
+        result = await self.db.execute(
+            select(
+                MemberQualification.qualification_code,
+                MemberQualification.granted_on,
+                MemberQualification.expires_on,
+            ).where(
+                MemberQualification.user_id == user_id,
+                MemberQualification.organization_id == organization_id,
+            )
+        )
+        return [(code, granted, expires) for code, granted, expires in result.all()]
+
+    @staticmethod
+    def codes_in_force(
+        windows: List[Tuple[str, Optional[date], Optional[date]]],
+        as_of: date,
+    ) -> List[str]:
+        """The subset of ``get_member_code_windows`` in force on ``as_of``.
+
+        The Python mirror of ``_current_on``. Kept beside it so the two cannot
+        drift: a member with a Paramedic card starting next month must not
+        clear the medic seat today by either route.
+        """
+        return [
+            code
+            for code, granted, expires in windows
+            if (granted is None or granted <= as_of)
+            and (expires is None or expires >= as_of)
+        ]
 
     async def get_current_by_member(
         self,

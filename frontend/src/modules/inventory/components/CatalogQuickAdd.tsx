@@ -61,6 +61,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const [results, setResults] = useState<CatalogResult[]>([]);
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [creating, setCreating] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -99,6 +100,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       .getItems({ search: query, limit: 6, active_only: true })
       .then((res) => {
         if (request !== requestRef.current) return;
+        setSearchFailed(false);
         setResults(
           res.items.map((i) => {
             const sub = [i.category_name, i.unit_of_measure].filter(Boolean).join(' · ');
@@ -108,8 +110,12 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         setHighlightedIndex(-1);
       })
       .catch(() => {
+        // Not the same as an empty catalog. Saying "no catalog match" here
+        // invites the crew to add a plain checklist line for an item that is
+        // on file and linkable, which is the link this bar exists to make.
         if (request !== requestRef.current) return;
         setResults([]);
+        setSearchFailed(true);
         setHighlightedIndex(-1);
       })
       .finally(() => {
@@ -122,6 +128,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     onChange(q);
     setOpen(true);
     setResults([]);
+    setSearchFailed(false);
     setHighlightedIndex(-1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const request = ++requestRef.current;
@@ -198,16 +205,33 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     reset();
     setCreating(true);
     try {
-      const created = await inventoryService.createItem({
+      // create-if-absent, not create: this bar searches six gear results and
+      // cannot see medical stock at all, so "no match" here is not proof the
+      // name is free. The server decides, and hands back the existing row when
+      // there is one rather than filing a second beside it.
+      const { item, created } = await inventoryService.createItemIfAbsent({
         name,
         // Checklist stock is counted, not serialized — a bracket holds four
         // gauze, not gauze #7.
         tracking_type: 'pool',
         quantity: 0,
       });
-      await onAdd({ name: created.name, inventoryItemId: created.id, checkType: 'count' });
+      // A row handed back rather than created gets exactly what picking it out
+      // of the results would have given it. It may be an individual asset, and
+      // it may carry dated lots — an existing medication added as a bare count
+      // would have its expiry neither shown nor checked. A row created just now
+      // has no lots, so that lookup is skipped rather than asked and ignored.
+      const hasExpiration = created ? false : await hasDatedStock(item.id);
+      await onAdd({
+        name: item.name,
+        inventoryItemId: item.id,
+        ...(item.tracking_type === 'pool' ? { checkType: 'count' as const } : {}),
+        ...(hasExpiration ? { hasExpiration: true } : {}),
+      });
       inputRef.current?.focus();
-      toast.success(`Added “${created.name}” to inventory`);
+      toast.success(
+        created ? `Added “${item.name}” to inventory` : `“${item.name}” was already in the catalog — linked it`
+      );
     } catch (err: unknown) {
       submittingRef.current = false;
       toast.error(getErrorMessage(err, 'Failed to create the inventory item'));
@@ -218,7 +242,10 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
 
   const typed = value.trim();
   const hasExactMatch = results.some((r) => r.name.trim().toLowerCase() === typed.toLowerCase());
-  const showCreate = canCreateInventory && typed.length > 0 && !searching && !hasExactMatch;
+  // Suppressed on a failed search for the same reason as the picker: the
+  // create-if-absent behind it would not duplicate, but offering to add to a
+  // catalog we could not reach reads as a promise the next click may not keep.
+  const showCreate = canCreateInventory && typed.length > 0 && !searching && !searchFailed && !hasExactMatch;
 
   /**
    * Position the results list against the viewport rather than the input.
@@ -391,7 +418,14 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
             </button>
           )}
 
-          {results.length === 0 && !searching && !showCreate && (
+          {searchFailed && !searching && (
+            <p role="status" className="text-theme-text-muted px-3 py-2 text-xs">
+              Couldn&rsquo;t search the catalog. Press Enter to add “{typed}” as a plain checklist item, or try again to
+              link it.
+            </p>
+          )}
+
+          {results.length === 0 && !searching && !searchFailed && !showCreate && (
             <p className="text-theme-text-muted px-3 py-2 text-xs">
               No catalog match. Press Enter to add “{typed}” as a plain checklist item.
             </p>

@@ -380,6 +380,49 @@ class TestAssignment:
         assert refreshed.status == ItemStatus.AVAILABLE
 
     @pytest.mark.asyncio
+    async def test_unassign_quarantines_an_item_returned_damaged(
+        self, db_session, setup_org_and_user
+    ):
+        """Unassign is reachable from the UI with no body, so return_condition
+        is routinely None while the stored condition is unsafe. Deriving the
+        status from the supplied condition rather than the effective one put a
+        damaged coat straight back into the assignable pool — assign and
+        checkout gate on status alone — and simultaneously wrote the
+        AVAILABLE + damaged pair the item edit form can no longer save.
+        """
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Coat", "condition": "good", "status": "available"},
+            created_by=uuid.UUID(user_id),
+        )
+        await svc.assign_item_to_user(
+            item_id=uuid.UUID(item.id),
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            assigned_by=uuid.UUID(user_id),
+            reason="issue",
+        )
+        # Damage recorded while the coat is out — legal for an ASSIGNED item.
+        assigned = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
+        assigned.condition = ItemCondition.DAMAGED
+        await db_session.flush()
+
+        # The UI's Unassign button sends no body at all.
+        success, err = await svc.unassign_item(
+            item_id=uuid.UUID(item.id),
+            organization_id=uuid.UUID(org_id),
+            returned_by=uuid.UUID(user_id),
+        )
+        assert err is None
+
+        refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
+        assert refreshed.condition == ItemCondition.DAMAGED
+        assert refreshed.status == ItemStatus.IN_MAINTENANCE
+
+    @pytest.mark.asyncio
     async def test_cannot_assign_unavailable_item(self, db_session, setup_org_and_user):
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)

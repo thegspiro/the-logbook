@@ -61,11 +61,14 @@ def _serialize(entry, names: dict[str, str], viewer_id: str) -> TestingCheckResp
         params=entry.params or None,
         checked_at=entry.checked_at,
         user_id=entry.user_id,
-        user_name=names.get(entry.user_id),
+        # A mark whose author was hard-deleted has user_id NULL. It is nobody's
+        # mark rather than everybody's: without the None test a viewer_id that
+        # was itself somehow None would claim them all.
+        user_name=names.get(entry.user_id) if entry.user_id else None,
         tested_as=entry.tested_as or None,
         build_id=entry.build_id,
         expected_access=entry.expected_access,
-        is_mine=entry.user_id == viewer_id,
+        is_mine=entry.user_id is not None and entry.user_id == viewer_id,
     )
 
 

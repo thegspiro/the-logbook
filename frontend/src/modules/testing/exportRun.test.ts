@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildPermissionMatrixCsv, buildRunCsv, flattenRun, runFileName } from './exportRun';
 import type { RunExportContext } from './exportRun';
+import type { TestingRun } from './services/api';
 
 const context = (overrides: Partial<RunExportContext> = {}): RunExportContext => ({
   run: {
@@ -177,5 +178,20 @@ describe('the matrix keys columns by account', () => {
 describe('runFileName', () => {
   it('dates the file from the run, not from today', () => {
     expect(runFileName(context().run, 'run', 'csv')).toBe('logbook-testing-run-2026-08-27.csv');
+  });
+
+  it('dates an evening run by the reader\u2019s day, not by UTC\u2019s', () => {
+    // 21:00 in New York is already tomorrow in UTC, so slicing the ISO string
+    // named the file after a day the run did not happen on.
+    const run = { ...context().run, startedAt: '2026-08-28T01:00:00Z' } as TestingRun;
+
+    expect(runFileName(run, 'run', 'csv', 'America/New_York')).toBe('logbook-testing-run-2026-08-27.csv');
+    expect(runFileName(run, 'run', 'csv', 'UTC')).toBe('logbook-testing-run-2026-08-28.csv');
+  });
+
+  it('falls back to today when there is no run', () => {
+    expect(runFileName(null, 'permissions', 'csv', 'UTC')).toMatch(
+      /^logbook-testing-permissions-\d{4}-\d{2}-\d{2}\.csv$/
+    );
   });
 });

@@ -6,10 +6,14 @@
  * snapshots of `inventory_lots` rows. The router is gated on the Inventory
  * module.
  *
- * The endpoints keep their `/equipment-checks` prefix — the API path did not
- * move, only ownership of the feature — and `modules/scheduling/services/api`
- * re-exports this service, because Scheduling still owns *performing* a check
- * from a shift.
+ * The endpoints keep their `/equipment-checks` prefix: the API path did not
+ * move, only ownership of the feature.
+ *
+ * Scheduling imports this module directly where it still needs it — the shift
+ * detail panel and check-in page read a shift's checklists, and the template
+ * form offers them. There is deliberately no re-export from
+ * `modules/scheduling/services/api`: one import path means one place to look
+ * when asking who still depends on checks from the shift side.
  */
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray } from '../../../utils/asArray';
@@ -239,6 +243,27 @@ export const equipmentCheckService = {
   },
   async deleteCompartment(compartmentId: string): Promise<void> {
     await api.delete(`/equipment-checks/compartments/${compartmentId}`);
+  },
+  /**
+   * Swap a template's whole contents in one transaction.
+   *
+   * The builder's bulk-replacement paths clear the template and load a preset
+   * or an import in its place. The discard travels with the replacement
+   * because they are one decision: sent on its own it commits an empty
+   * template, leaving the new contents in the browser until the next Save —
+   * a closed tab in between costs the department the checklist it had.
+   *
+   * An empty list is a valid request: it clears the template.
+   */
+  async replaceCompartments(
+    templateId: string,
+    compartments: CheckTemplateCompartmentCreate[]
+  ): Promise<CheckTemplateCompartment[]> {
+    const response = await api.post<CheckTemplateCompartment[]>(
+      `/equipment-checks/templates/${templateId}/compartments/replace`,
+      { compartments }
+    );
+    return response.data;
   },
   async cloneCompartment(compartmentId: string, sortOrder: number): Promise<CheckTemplateCompartment> {
     const response = await api.post<CheckTemplateCompartment>(`/equipment-checks/compartments/${compartmentId}/clone`, {

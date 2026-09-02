@@ -523,6 +523,25 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.queryByText(/showing below the required quantity/)).not.toBeInTheDocument();
   });
 
+  it('sets a zero-minimum position to its expected count, not to zero', async () => {
+    // `_target_quantity` is `required_quantity or expected_quantity`, so a
+    // required minimum of 0 means "no minimum" and the expected count is the
+    // par. Resolving it with `??` made par 0 here, and "set all to par" then
+    // wrote a zero onto the truck — a crew tapping it to say the compartment
+    // is full recorded it as empty.
+    const user = userEvent.setup();
+    render({ requiredQuantity: 0, expectedQuantity: 4, quantityOnTruck: 1 });
+    await screen.findByDisplayValue('1');
+
+    await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
+    // Deterministic: with par resolved to 4 the row shows 1, so it is short and
+    // the confirmation always appears. It is that dialog naming a par of 4
+    // rather than 0 that the crew is agreeing to.
+    await user.click(await screen.findByRole('button', { name: /Yes, it is full/ }));
+
+    expect(await screen.findByDisplayValue('4')).toBeInTheDocument();
+  });
+
   it('keeps the photo control with the note it evidences', async () => {
     const user = userEvent.setup();
     render({ quantityOnTruck: 4 });
@@ -817,5 +836,114 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.getByText('1/1')).toBeInTheDocument();
     expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/update.*while rendering|cannot update/i);
     consoleError.mockRestore();
+  });
+});
+
+/**
+ * The accordion's Swap button, held to the endpoint's submitter limit.
+ *
+ * It is offered on any inventory-linked item rather than only an expiring one,
+ * which is what makes it reach the refused case most often: a position that is
+ * neither expired nor short is the common one, and until now a submitter's tap
+ * on it ended in a 403.
+ */
+describe('who the accordion offers a swap to', () => {
+  /** Below manage: holds check_submit and nothing above it. */
+  const asSubmitter = () => mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockGetLastCheckResults.mockReset();
+    mockGetLastCheckResults.mockResolvedValue({});
+    mockListPendingChecks.mockReset();
+    mockListPendingChecks.mockResolvedValue([]);
+    mockGetItemLots.mockReset();
+    mockGetItemLots.mockResolvedValue([]);
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const swapButton = async () => {
+    const buttons = await screen.findAllByRole('button', { name: /Swap/ });
+    return buttons[0] as HTMLElement;
+  };
+
+  it('refuses a submitter a position that is neither expired nor short', async () => {
+    // No disposition goes with this swap, so the server's ceiling is the
+    // shortfall — zero on a position holding its par — and the POST 403s.
+    asSubmitter();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={template({ inventoryItemId: 'inv-1', quantityOnTruck: 4 }) as never}
+      />
+    );
+    const swap = await swapButton();
+    expect(swap).toBeDisabled();
+    expect(swap).toHaveAttribute('title', expect.stringContaining('has not expired yet'));
+  });
+
+  it('lets a submitter top up a position that is genuinely short', async () => {
+    asSubmitter();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={template({ inventoryItemId: 'inv-1', quantityOnTruck: 1 }) as never}
+      />
+    );
+    expect(await swapButton()).toBeEnabled();
+  });
+
+  it('lets a submitter replace stock that has expired', async () => {
+    // That swap carries a disposition, and the server allows it up to the
+    // expired units aboard — so it is not a submitter's to lose.
+    asSubmitter();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={
+          template({
+            inventoryItemId: 'inv-1',
+            quantityOnTruck: 4,
+            hasExpiration: true,
+            expirationDate: '2020-01-01',
+          }) as never
+        }
+      />
+    );
+    expect(await swapButton()).toBeEnabled();
+  });
+
+  it('reads a zero required minimum as no minimum, not as a zero target', async () => {
+    // `_target_quantity` is `required_quantity or expected_quantity`, so a
+    // required minimum of 0 falls through to the expected count. Resolving it
+    // with `??` would make the target 0, report a position of one-against-four
+    // as having nothing to be short of, and refuse a top-up the server allows.
+    asSubmitter();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={
+          template({
+            inventoryItemId: 'inv-1',
+            requiredQuantity: 0,
+            expectedQuantity: 4,
+            quantityOnTruck: 1,
+          }) as never
+        }
+      />
+    );
+    expect(await swapButton()).toBeEnabled();
+  });
+
+  it('leaves an officer the swap on any linked item', async () => {
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={template({ inventoryItemId: 'inv-1', quantityOnTruck: 4 }) as never}
+      />
+    );
+    expect(await swapButton()).toBeEnabled();
   });
 });

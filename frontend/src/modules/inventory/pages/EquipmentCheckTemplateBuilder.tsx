@@ -94,11 +94,11 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItemCreate,
   CheckTemplateItem,
-  CheckType,
   TemplateType,
   LinkCoverage,
 } from '@/modules/inventory/types/equipmentCheck';
 import {
+  CheckType,
   TEMPLATE_TYPE_LABELS,
   CONTAINER_TYPE_PRESETS,
   CHECK_TYPE_STORES,
@@ -208,6 +208,18 @@ interface ItemFormState {
 
 let nextItemKey = 0;
 const newItemKey = () => `local-item-${Date.now()}-${nextItemKey++}`;
+
+/**
+ * How a catalog item created from this position should be tracked.
+ *
+ * Count and expiry positions are consumable stock replaced from a shelf —
+ * counted, lot-tracked, `pool`. Level and function positions are a particular
+ * vessel or device (an O2 cylinder, a thermal imager), and the custody, serial
+ * and transfer paths all require an `individual` row, so creating those as pool
+ * left them unable to use any of it until somebody reclassified them by hand.
+ */
+const trackingTypeForCheck = (checkType: CheckType): 'pool' | 'individual' =>
+  checkType === CheckType.COUNT || checkType === CheckType.EXPIRY ? 'pool' : 'individual';
 
 function emptyItem(): ItemFormState {
   return {
@@ -332,6 +344,20 @@ function compartmentFormFromResponse(compartment: CheckTemplateCompartment): Com
     isSealed: compartment.isSealed ?? false,
     parentCompartmentId: compartment.parentCompartmentId ?? '',
     items: compartment.items.map(itemFormFromResponse),
+  };
+}
+
+function compartmentCreateFromForm(comp: CompartmentFormState, sortOrder: number): CheckTemplateCompartmentCreate {
+  return {
+    name: comp.name,
+    description: comp.description.trim() || undefined,
+    sort_order: sortOrder,
+    image_url: comp.imageUrl.trim() || undefined,
+    is_header: comp.isHeader || undefined,
+    container_type: comp.containerType || undefined,
+    is_sealed: comp.isSealed,
+    parent_compartment_id: comp.parentCompartmentId || undefined,
+    items: comp.items.map((item, itemIdx) => itemCreateFromForm(item, itemIdx)),
   };
 }
 
@@ -646,6 +672,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const next = current.includes(pos) ? current.filter((p) => p !== pos) : [...current, pos];
       return { ...prev, assignedPositions: next };
     });
+    // Every other field edit marks the form dirty; this one did not, so a
+    // change to the position restriction alone left the unsaved-changes guard
+    // believing there was nothing to save.
+    markDirty();
   };
 
   // ---------------------------------------------------------------------------
@@ -1622,15 +1652,33 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Auto-save: debounced save of a single item when in edit mode
   // ---------------------------------------------------------------------------
 
+  // Report only once the whole batch has settled; a per-item "saved" would
+  // flicker through every row a bulk action touched. Shared with the Save
+  // button's flush below, which cancels those timers and so never reaches the
+  // `.finally` that used to be the only caller — leaving the indicator stuck
+  // on "Saving…" for the rest of the session.
+  const settleAutoSaveStatus = useCallback(() => {
+    if (autoSaveInFlightRef.current.size > 0 || autoSavePendingRef.current.size > 0) return;
+    const failed = autoSaveErrorRef.current;
+    setAutoSaveStatus(failed ? 'error' : 'saved');
+    autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
+  }, []);
+
   const scheduleAutoSaveItem = useCallback(
-    (itemId: string, patch: Record<string, unknown>) => {
+    (itemId: string, patch: Record<string, unknown>, options?: { immediate?: boolean; asFallback?: boolean }) => {
       if (!isEditing || !itemId) return;
 
       const pending = autoSavePendingRef.current.get(itemId);
       if (pending) clearTimeout(pending.timer);
       // Merge rather than replace, so two edits to different fields of the same
-      // row inside the debounce window both survive.
-      const merged = { ...(pending?.patch ?? {}), ...patch };
+      // row inside the debounce window both survive. The supplied patch wins a
+      // conflict because it is the newer edit — except when the caller says
+      // otherwise: rearming a flush that failed re-offers a patch captured
+      // *before* anything pending, and letting it win reverts the member's
+      // latest keystroke on the retry.
+      const merged = options?.asFallback
+        ? { ...patch, ...(pending?.patch ?? {}) }
+        : { ...(pending?.patch ?? {}), ...patch };
 
       if (autoSaveFadeRef.current) {
         clearTimeout(autoSaveFadeRef.current);
@@ -1640,30 +1688,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
       setAutoSaveStatus('saving');
 
-      const timer = setTimeout(() => {
-        autoSavePendingRef.current.delete(itemId);
-        const request: Promise<void> = ensureDraftBeforeStructureEdit()
-          .then(() => equipmentCheckService.updateCheckItem(itemId, merged))
-          .then(() => undefined)
-          .catch(() => {
-            autoSaveErrorRef.current = true;
-          })
-          .finally(() => {
-            autoSaveInFlightRef.current.delete(request);
-            // Report only once the whole batch has settled; a per-item "saved"
-            // would flicker through every row a bulk action touched.
-            if (autoSaveInFlightRef.current.size === 0 && autoSavePendingRef.current.size === 0) {
-              const failed = autoSaveErrorRef.current;
-              setAutoSaveStatus(failed ? 'error' : 'saved');
-              autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
-            }
-          });
-        autoSaveInFlightRef.current.add(request);
-      }, 1500);
+      const timer = setTimeout(
+        () => {
+          autoSavePendingRef.current.delete(itemId);
+          const request: Promise<void> = ensureDraftBeforeStructureEdit()
+            .then(() => equipmentCheckService.updateCheckItem(itemId, merged))
+            .then(() => undefined)
+            .catch(() => {
+              autoSaveErrorRef.current = true;
+            })
+            .finally(() => {
+              autoSaveInFlightRef.current.delete(request);
+              settleAutoSaveStatus();
+            });
+          autoSaveInFlightRef.current.add(request);
+        },
+        options?.immediate ? 0 : 1500
+      );
 
       autoSavePendingRef.current.set(itemId, { timer, patch: merged });
     },
-    [ensureDraftBeforeStructureEdit, isEditing]
+    [ensureDraftBeforeStructureEdit, isEditing, settleAutoSaveStatus]
   );
 
   // Enhanced updateItemField that triggers auto-save for persisted items
@@ -1701,7 +1746,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (patch.imageUrl !== undefined) apiPatch.image_url = blankToNull(patch.imageUrl);
 
       if (Object.keys(apiPatch).length > 0) {
-        scheduleAutoSaveItem(item.id, apiPatch);
+        // A catalog link is one deliberate click, not typing, so it has nothing
+        // to gain from the debounce and something to lose: creating the item
+        // and linking it are two writes, and a window between them is a window
+        // in which the page can close leaving a catalog row nothing points at.
+        scheduleAutoSaveItem(item.id, apiPatch, {
+          immediate: patch.inventoryItemId !== undefined,
+        });
       }
     }
   };
@@ -1710,10 +1761,49 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Save
   // ---------------------------------------------------------------------------
 
-  const handleSave = async (publish: boolean) => {
-    for (const { timer } of autoSavePendingRef.current.values()) clearTimeout(timer);
+  /**
+   * Send the debounced item edits Save is about to overtake.
+   *
+   * Flush, do not discard. Cancelling these timers threw away every edit made
+   * inside the 1.5s debounce window — and because handleSave's per-item
+   * payload omits blank fields, a field cleared just before pressing Save was
+   * then restored to its old server value behind a "Draft saved" toast.
+   *
+   * Guarded, because it runs before handleSave's own try/catch: a failure here
+   * escaped as an unhandled rejection with no toast, and the pending edits
+   * were gone. On failure the patches are re-armed on the normal debounce, so
+   * the retry is automatic and the indicator goes back to reporting on them.
+   *
+   * Returns false when the caller should stop.
+   */
+  const flushPendingAutoSaves = async (): Promise<boolean> => {
+    const pendingPatches = [...autoSavePendingRef.current.entries()];
+    for (const [, { timer }] of pendingPatches) clearTimeout(timer);
     autoSavePendingRef.current.clear();
+    if (pendingPatches.length > 0) {
+      try {
+        await ensureDraftBeforeStructureEdit();
+        await Promise.all(
+          pendingPatches.map(([itemId, { patch }]) => equipmentCheckService.updateCheckItem(itemId, patch))
+        );
+      } catch (err: unknown) {
+        // asFallback: these were captured before the member could edit again,
+        // and Save leaves the form live until it gets past this flush — so a
+        // field they have since changed keeps the newer value.
+        for (const [itemId, { patch }] of pendingPatches) {
+          scheduleAutoSaveItem(itemId, patch, { asFallback: true });
+        }
+        toast.error(getErrorMessage(err, 'Could not save your latest edits'));
+        return false;
+      }
+    }
     if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
+    settleAutoSaveStatus();
+    return true;
+  };
+
+  const handleSave = async (publish: boolean) => {
+    if (!(await flushPendingAutoSaves())) return;
     // Drafts deliberately bypass readiness checks; publication never does.
     // Keep the blocking rules aligned with the backend instead of putting them
     // in the overridable warning dialog below.
@@ -1753,45 +1843,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     try {
       const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
         .filter((c) => !c.id) // Only include unsaved compartments in create payload
-        .map((c, idx) => ({
-          name: c.name,
-          description: c.description.trim() || undefined,
-          sort_order: idx,
-          image_url: c.imageUrl.trim() || undefined,
-          is_header: c.isHeader || undefined,
-          container_type: c.containerType || undefined,
-          is_sealed: c.isSealed,
-          parent_compartment_id: c.parentCompartmentId || undefined,
-          items: c.items.map((item, itemIdx) => ({
-            name: item.name,
-            description: item.description.trim() || undefined,
-            sort_order: itemIdx,
-            check_type: item.checkType,
-            is_required: item.isRequired,
-            required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
-            expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-            critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
-            min_level: item.minLevel ? Number(item.minLevel) : undefined,
-            level_unit: item.levelUnit.trim() || undefined,
-            serial_number: item.serialNumber.trim() || undefined,
-            lot_number: item.lotNumber.trim() || undefined,
-            inventory_item_id: item.inventoryItemId || undefined,
-            image_url: item.imageUrl.trim() || undefined,
-            has_expiration: item.hasExpiration,
-            expiration_date: item.expirationDate.trim() || undefined,
-            expiration_warning_days: item.expirationWarningDays ? Number(item.expirationWarningDays) : undefined,
-          })),
-        }));
+        .map(compartmentCreateFromForm);
 
       if (isEditing && templateId) {
         await equipmentCheckService.updateEquipmentCheckTemplate(templateId, {
           name: form.name.trim(),
-          description: form.description.trim() || undefined,
+          // Explicit nulls, not omissions: this is an update, and the backend
+          // dumps it with exclude_unset. Omitting a cleared field left the old
+          // value in place behind a success toast — un-pinning a template from
+          // an apparatus, or removing its position restriction, did nothing.
+          description: blankToNull(form.description),
           check_timing: form.checkTiming,
           template_type: form.templateType,
-          assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
-          apparatus_type: form.apparatusType || undefined,
-          apparatus_id: form.apparatusId || undefined,
+          // An empty array is a meaningful value here: it means "no position
+          // restriction", which is exactly what the user just asked for.
+          assigned_positions: form.assignedPositions,
+          apparatus_type: form.apparatusType || null,
+          apparatus_id: form.apparatusId || null,
           is_active: false,
         });
 
@@ -1808,12 +1876,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             updatePromises.push(
               equipmentCheckService.updateCompartment(comp.id, {
                 name: comp.name,
-                description: comp.description.trim() || undefined,
-                image_url: comp.imageUrl.trim() || undefined,
+                description: blankToNull(comp.description),
+                image_url: blankToNull(comp.imageUrl),
                 is_header: comp.isHeader,
-                container_type: comp.containerType || undefined,
+                container_type: comp.containerType || null,
                 is_sealed: comp.isSealed,
-                parent_compartment_id: comp.parentCompartmentId || undefined,
+                // Compartments have no auto-save path, so this is the only
+                // writer: re-parenting one to the top level is expressible
+                // only as an explicit null.
+                parent_compartment_id: comp.parentCompartmentId || null,
               })
             );
 
@@ -1822,25 +1893,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 updatePromises.push(
                   equipmentCheckService.updateCheckItem(item.id, {
                     name: item.name,
-                    description: item.description.trim() || undefined,
+                    // Same coercions the auto-save path in this file already
+                    // uses (updateItemFieldWithAutoSave); handleSave was the
+                    // one writer still omitting cleared fields.
+                    description: blankToNull(item.description),
                     check_type: item.checkType,
                     is_required: item.isRequired,
-                    required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
-                    expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-                    critical_minimum_quantity: item.criticalMinimumQuantity
-                      ? Number(item.criticalMinimumQuantity)
-                      : undefined,
-                    min_level: item.minLevel ? Number(item.minLevel) : undefined,
-                    level_unit: item.levelUnit.trim() || undefined,
-                    serial_number: item.serialNumber.trim() || undefined,
-                    lot_number: item.lotNumber.trim() || undefined,
-                    inventory_item_id: item.inventoryItemId || undefined,
-                    image_url: item.imageUrl.trim() || undefined,
+                    required_quantity: numberOrNull(item.requiredQuantity),
+                    expected_quantity: numberOrNull(item.expectedQuantity),
+                    critical_minimum_quantity: numberOrNull(item.criticalMinimumQuantity),
+                    min_level: numberOrNull(item.minLevel),
+                    level_unit: blankToNull(item.levelUnit),
+                    serial_number: blankToNull(item.serialNumber),
+                    lot_number: blankToNull(item.lotNumber),
+                    inventory_item_id: item.inventoryItemId || null,
+                    image_url: blankToNull(item.imageUrl),
                     has_expiration: item.hasExpiration,
-                    expiration_date: item.expirationDate.trim() || undefined,
-                    expiration_warning_days: item.expirationWarningDays
-                      ? Number(item.expirationWarningDays)
-                      : undefined,
+                    expiration_date: blankToNull(item.expirationDate),
+                    expiration_warning_days: numberOrNull(item.expirationWarningDays),
                   })
                 );
               }
@@ -1865,37 +1935,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
           is_active: publish,
-          compartments: compartments.map((c, idx) => ({
-            name: c.name,
-            description: c.description.trim() || undefined,
-            sort_order: idx,
-            image_url: c.imageUrl.trim() || undefined,
-            is_header: c.isHeader || undefined,
-            container_type: c.containerType || undefined,
-            is_sealed: c.isSealed,
-            parent_compartment_id: c.parentCompartmentId || undefined,
-            items: c.items.map((item, itemIdx) => ({
-              name: item.name,
-              description: item.description.trim() || undefined,
-              sort_order: itemIdx,
-              check_type: item.checkType,
-              is_required: item.isRequired,
-              required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
-              expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-              critical_minimum_quantity: item.criticalMinimumQuantity
-                ? Number(item.criticalMinimumQuantity)
-                : undefined,
-              min_level: item.minLevel ? Number(item.minLevel) : undefined,
-              level_unit: item.levelUnit.trim() || undefined,
-              serial_number: item.serialNumber.trim() || undefined,
-              lot_number: item.lotNumber.trim() || undefined,
-              inventory_item_id: item.inventoryItemId || undefined,
-              image_url: item.imageUrl.trim() || undefined,
-              has_expiration: item.hasExpiration,
-              expiration_date: item.expirationDate.trim() || undefined,
-              expiration_warning_days: item.expirationWarningDays ? Number(item.expirationWarningDays) : undefined,
-            })),
-          })),
+          compartments: compartments.map(compartmentCreateFromForm),
         };
         const created = await equipmentCheckService.createEquipmentCheckTemplate(createPayload);
         setIsDirty(false);
@@ -1977,6 +2017,66 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
   }, [templateId]);
 
+  /**
+   * Discard every compartment on the template and put `next` in its place.
+   *
+   * The three bulk-replacement paths — vehicle preset, JSON import, CSV
+   * import — all promise "discards every compartment and item currently on
+   * this template", and all three used to deliver that promise to *local
+   * state only*. `handleSave` creates the new compartments (they have no id)
+   * and updates the ones still in `compartments`; nothing deletes the rows
+   * that are no longer mentioned. On a saved template the result was A, B, X
+   * and Y persisted together — a doubled checklist handed to the next crew,
+   * visible in the builder only after a reload.
+   *
+   * Deleted before the swap, and in ONE request, so a failure leaves the
+   * template exactly as it was rather than half-replaced. A loop of single
+   * deletes commits each one separately: a failure on the third left the
+   * first two gone from the server while the builder still showed all of
+   * them. `parent_compartment_id` is ON DELETE SET NULL, so a parent's
+   * children are orphaned rather than cascaded — every persisted id has to
+   * be named, and the order does not matter.
+   *
+   * Returns false when the caller should stop.
+   */
+  const replaceAllCompartments = async (next: CompartmentFormState[]): Promise<boolean> => {
+    const persisted = compartments.map((comp) => comp.id).filter((id): id is string => Boolean(id));
+    let staged = next;
+    // An id only exists on a compartment loaded from a saved template, so
+    // `persisted` is non-empty only when there is a templateId to name.
+    //
+    // The discard travels WITH the replacement, in one server transaction.
+    // Sent on its own it commits an empty template while the new contents
+    // exist only in this tab until the next Save — so a crash, a closed lid or
+    // a failed save in between leaves the department with a checklist that has
+    // no contents at all, and this screen showing contents nothing persisted.
+    // The saved rows come back with ids, so Save then updates them instead of
+    // creating a second copy.
+    if (persisted.length > 0 && templateId) {
+      try {
+        await ensureDraftBeforeStructureEdit();
+        const saved = await equipmentCheckService.replaceCompartments(templateId, next.map(compartmentCreateFromForm));
+        staged = saved.map(compartmentFormFromResponse);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to replace the template contents'));
+        return false;
+      }
+    }
+    setCompartments(staged);
+    // Marked here rather than at each call site: replacing the contents leaves
+    // a save outstanding on every path that does it, and the vehicle-preset
+    // branch was the one that forgot. On an unsaved template the replacement
+    // is local and would simply be lost; on a saved one the swap is persisted
+    // but the template has been demoted to a draft on the way, so it stays
+    // unpublished until this save runs. Either way, leaving without warning
+    // is wrong.
+    markDirty();
+    const expanded = new Set<string>();
+    staged.forEach((c) => expanded.add(c.id ?? c.clientKey));
+    setExpandedCompartments(expanded);
+    return true;
+  };
+
   const loadVehiclePreset = async (presetKey: string) => {
     const preset = VEHICLE_PRESETS[presetKey];
     if (!preset) return;
@@ -2013,12 +2113,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         return;
     }
 
-    setCompartments(newCompartments);
+    if (!(await replaceAllCompartments(newCompartments))) return;
     setShowPresetPicker(false);
-    // Expand all new compartments
-    const expanded = new Set<string>();
-    newCompartments.forEach((c) => expanded.add(c.id ?? c.clientKey));
-    setExpandedCompartments(expanded);
     toast.success(`Loaded ${preset.label} vehicle check preset`);
   };
 
@@ -2168,11 +2264,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           })),
         }));
 
-        setCompartments(imported);
-        const expanded = new Set<string>();
-        imported.forEach((c) => expanded.add(c.id ?? c.clientKey));
-        setExpandedCompartments(expanded);
-        markDirty();
+        if (!(await replaceAllCompartments(imported))) return;
         toast.success(`Imported ${imported.length} compartment(s)`);
       } catch {
         toast.error('Failed to parse template file');
@@ -2301,12 +2393,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       items,
     }));
 
-    setCompartments(imported);
-    const expanded = new Set<string>();
-    imported.forEach((c) => expanded.add(c.id ?? c.clientKey));
-    setExpandedCompartments(expanded);
+    if (!(await replaceAllCompartments(imported))) return;
     setCsvPreview(null);
-    setIsDirty(true);
     toast.success(`Imported ${imported.length} compartment(s) with ${csvPreview.length} item(s) from CSV`);
     // Imported rows are names on a page, not catalog links. Saying so here is
     // what stops a template looking finished while tracking nothing — the
@@ -2915,10 +3003,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </label>
             <InventoryItemPicker
               value={item.inventoryItemId || undefined}
+              canCreateInventory={canManageInventory}
+              createTrackingType={trackingTypeForCheck(item.checkType)}
               onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
             />
             <p className="text-theme-text-muted mt-1 text-[11px]">
-              Link to track replacement stock and enable lot swaps during checks.
+              Link to track replacement stock and enable lot swaps during checks. The count and minimum above stay on
+              this position — the same item can be stocked in other places, each counted on its own.
             </p>
           </div>
 
@@ -3987,10 +4078,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
 
             {selectedCount > 0 && (
+              // Controls sized for the finger on a phone and for density on a
+              // laptop. This bar renders at both widths (the fixed phone
+              // action bar below carries the same selection but not the
+              // required/optional toggle), and `min-h-8` on its own put every
+              // control here under the 44px floor the rest of the app keeps.
               <div className="my-2 flex flex-wrap items-center gap-2 rounded-md border border-blue-500/30 bg-blue-500/5 px-2.5 py-1.5">
                 <span className="text-xs font-medium text-blue-700 dark:text-blue-400">{selectedCount} selected</span>
                 <select
-                  className="form-input min-h-8 w-auto py-1 text-xs"
+                  className="form-input min-h-11 w-auto py-1 text-xs sm:min-h-8"
                   aria-label="Set type for selected items"
                   value=""
                   onChange={(e) => {
@@ -4013,7 +4109,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
                     bulkToggleRequired(idx, !allRequired);
                   }}
-                  className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 dark:border-blue-700 dark:text-blue-400"
+                  className="min-h-11 rounded-md border border-blue-300 px-3 text-xs font-medium text-blue-600 sm:min-h-0 sm:px-2 sm:py-1 dark:border-blue-700 dark:text-blue-400"
                 >
                   {(() => {
                     const selected = selectedItems[key];
@@ -4024,7 +4120,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void deleteSelectedItems(idx)}
-                  className="flex items-center gap-1 rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-600 dark:border-red-700 dark:text-red-400"
+                  className="flex min-h-11 items-center gap-1 rounded-md border border-red-300 px-3 text-xs font-medium text-red-600 sm:min-h-0 sm:px-2 sm:py-1 dark:border-red-700 dark:text-red-400"
                   aria-label="Delete selected items"
                 >
                   <Trash2 className="h-3 w-3" aria-hidden="true" /> Delete
@@ -4032,7 +4128,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => deselectAllItems(idx)}
-                  className="text-theme-text-muted hover:text-theme-text-primary rounded-md px-2 py-1 text-xs"
+                  className="text-theme-text-muted hover:text-theme-text-primary min-h-11 rounded-md px-3 text-xs sm:min-h-0 sm:px-2 sm:py-1"
                 >
                   Clear
                 </button>
@@ -5784,7 +5880,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       {renderItemEditorFields(compIdx, itemIdx, item, item.checkType === 'header')}
                     </section>
                   </div>
-                  <footer className="modal-footer-sticky grid shrink-0 grid-cols-3 items-center gap-2 px-4 py-3">
+                  <footer className="modal-footer-sticky grid shrink-0 grid-cols-3 items-center gap-2 px-4">
                     <button
                       type="button"
                       className="btn-secondary min-h-[44px]"

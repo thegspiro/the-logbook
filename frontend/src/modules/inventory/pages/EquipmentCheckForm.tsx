@@ -70,7 +70,14 @@ import type {
   LastSealRecord,
   DeployedLot,
 } from '../types/equipmentCheck';
-import { CHECK_TYPE_LABELS, ExpiredStockDisposition, soonestExpiration } from '../types/equipmentCheck';
+import {
+  CHECK_TYPE_LABELS,
+  countedOnTruck,
+  ExpiredStockDisposition,
+  soonestExpiration,
+  submitterMaySwap,
+  targetQuantity,
+} from '../types/equipmentCheck';
 import { flattenCompartmentTree } from '../utils/compartmentTree';
 import LotsAboardPanel from '../components/LotsAboardPanel';
 import SealPanel from '../components/SealPanel';
@@ -203,7 +210,7 @@ const ShortfallList: React.FC<{
       </p>
       <ul className="border-theme-surface-border divide-theme-surface-border divide-y rounded-md border">
         {shown.map((item) => {
-          const required = item.requiredQuantity ?? item.expectedQuantity;
+          const required = targetQuantity(item);
           const found = results[item.id]?.quantityFound;
           return (
             <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
@@ -349,6 +356,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     checkPermission('inventory.check_submit') ||
     checkPermission('inventory.check_manage') ||
     checkPermission('inventory.manage');
+  // The half of the endpoint's rule a submitter does not clear. `swap_item_lot`
+  // sets enforce_submitter_limits for anyone below manage: with a disposition
+  // it allows up to the expired units aboard, without one only up to the
+  // position's count shortfall. So a submitter can replace expired stock but
+  // cannot top up a position that is not counted.
+  const canManageStock = checkPermission('inventory.check_manage') || checkPermission('inventory.manage');
   const tz = useTimezone();
   // Calendar day in the org's timezone — the reference every expiry check in
   // this form compares against, so the badge, the auto-fail and the server all
@@ -973,8 +986,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       .then((data) => {
         if (cancelled) return;
         setLastCheckData(data);
-        // Only pre-populate if the user hasn't started filling in yet (no draft)
-        if (Object.keys(results).length > 0) return;
         const seed: Record<string, ItemResult> = {};
         for (const comp of compartments) {
           for (const item of comp.items) {
@@ -995,7 +1006,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           }
         }
         if (Object.keys(seed).length > 0) {
-          setResults(seed);
+          // The "don't overwrite what the crew already entered" decision has to
+          // be made against CURRENT state, not the `results` in this closure.
+          // This effect deliberately omits `results` from its deps, so that
+          // binding is the mount-render `{}` forever — and the IndexedDB draft
+          // restore lands in the window between this request going out and its
+          // response arriving. Reading the stale binding therefore replaced a
+          // just-restored truck check with the carried-count seed and, via the
+          // autosave effect, wrote the wiped state back over the draft.
+          setResults((current) => (Object.keys(current).length > 0 ? current : seed));
         }
       })
       .catch(() => {
@@ -1215,7 +1234,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const next = { ...prev };
       for (const item of items) {
         const existing = next[item.id];
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const shown = existing?.quantityFound;
         const patch: Partial<ItemResult> = { status: 'pass' };
         if (item.checkType === 'count' && required != null) {
@@ -1241,7 +1260,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     (compartment: CheckTemplateCompartment) =>
       checkableIn(compartment).filter((item) => {
         if (item.checkType !== 'count') return false;
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const shown = results[item.id]?.quantityFound;
         return required != null && shown != null && shown < required;
       }),
@@ -1276,7 +1295,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           const existing = next[item.id];
           const patch: Partial<ItemResult> = { status: 'pass' };
           if (item.checkType === 'count') {
-            const required = item.requiredQuantity ?? item.expectedQuantity;
+            const required = targetQuantity(item);
             if (required != null) patch.quantityFound = required;
           }
           next[item.id] = { status: 'not_checked', ...existing, ...patch };
@@ -1536,7 +1555,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           check_type: item.checkType,
           status: getEffectiveStatus(item, result, today),
           quantity_found: result?.quantityFound,
-          required_quantity: item.requiredQuantity ?? item.expectedQuantity,
+          required_quantity: targetQuantity(item) ?? undefined,
           critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
           level_reading: result?.levelReading,
           level_unit: item.levelUnit || undefined,
@@ -1869,7 +1888,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return passFailButtons;
 
       case 'count': {
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const expected = item.expectedQuantity ?? required;
         const criticalMin = item.criticalMinimumQuantity;
         const currentQty = result?.quantityFound ?? 0;
@@ -2116,6 +2135,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const result = results[item.id];
     const effectiveStatus = getEffectiveStatus(item, result, today);
     const showNotesField = expandedNotes.has(item.id);
+    // Below manage, a swap carrying no disposition is allowed only up to this
+    // position's shortfall, and an expired one goes through the disposition
+    // path instead. `submitterMaySwap` owns that rule for both experiences.
+    const swapRefused =
+      !canManageStock &&
+      !submitterMaySwap(getExpirationStatus(item, today) === 'expired', targetQuantity(item), countedOnTruck(item));
     const TypeIcon = CHECK_TYPE_ICONS[item.checkType] ?? CheckCircle;
     const isQuantity = item.checkType === 'count';
 
@@ -2218,15 +2243,26 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               ready stock on the shelf and no way to reach it. Disabled (not
               hidden) for a read-only member: the server refuses the swap, and
               the tooltip tells them who to hand the unit to instead of letting
-              the tap end in a 403. */}
+              the tap end in a 403.
+
+              Disabled for a submitter on the same rule the sweep applies —
+              being offered on any inventory-linked item is exactly what makes
+              this button reach the refused case most often, since a position
+              that is neither expired nor short is the common one. */}
           {item.inventoryItemId && (
             <button
               type="button"
-              disabled={!canSwapStock}
+              disabled={!canSwapStock || swapRefused}
               onClick={() => {
                 void openSwap(item);
               }}
-              title={canSwapStock ? undefined : 'Swaps from stock are recorded by a crew member on the check'}
+              title={
+                !canSwapStock
+                  ? 'Swaps from stock are recorded by a crew member on the check'
+                  : swapRefused
+                    ? 'Only an officer can draw stock for an item that has not expired yet'
+                    : undefined
+              }
               className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
                   ? 'text-theme-accent-blue hover:opacity-80'
@@ -2760,6 +2796,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       }
                 }
                 canSwap={canSwapStock}
+                canManageSwap={canManageStock}
                 // The organization's calendar day, so an expiry verdict does
                 // not move with the phone's timezone.
                 today={new Date(`${today}T00:00:00`)}

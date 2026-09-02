@@ -21,6 +21,8 @@ import type { UserWithRoles } from '../types/role';
 import type { UserProfileUpdate, EmergencyContact } from '../types/user';
 import { useRanks } from '../hooks/useRanks';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
+import { blankToNull } from '../utils/formValues';
+import { getErrorMessage } from '../utils/errorHandling';
 
 const MEMBERSHIP_TYPE_OPTIONS = [
   { value: 'prospective', label: 'Prospective' },
@@ -128,8 +130,7 @@ export const MemberAdminEditPage: React.FC = () => {
       setForm(formData);
       setInitialForm(formData);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail || 'Unable to load member data. Please try again.');
+      setError(getErrorMessage(err, 'Unable to load member data. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -228,7 +229,11 @@ export const MemberAdminEditPage: React.FC = () => {
         hasProfileChanges = true;
       }
       if (form.date_of_birth !== initialForm.date_of_birth) {
-        profileUpdate.date_of_birth = form.date_of_birth;
+        // `null`, not `''`: the browser's clear affordance on a date input
+        // yields an empty string, which `Optional[date]` rejects with a 422 —
+        // so the field could never be cleared, and the 422's array-shaped
+        // `detail` then took the page down (see the catch below).
+        profileUpdate.date_of_birth = blankToNull(form.date_of_birth);
         hasProfileChanges = true;
       }
       if (form.personal_email !== initialForm.personal_email) {
@@ -252,7 +257,7 @@ export const MemberAdminEditPage: React.FC = () => {
         hasProfileChanges = true;
       }
       if (form.hire_date !== initialForm.hire_date) {
-        profileUpdate.hire_date = form.hire_date;
+        profileUpdate.hire_date = blankToNull(form.hire_date);
         hasProfileChanges = true;
       }
       if (form.phone !== initialForm.phone) {
@@ -332,12 +337,16 @@ export const MemberAdminEditPage: React.FC = () => {
 
       setSuccessMessage('Member information saved successfully.');
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string }; status?: number } })?.response?.data?.detail;
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 403) {
         setError('You do not have permission to update this member. Contact an administrator.');
       } else {
-        setError(detail || 'Unable to save member information. Please try again.');
+        // Through `getErrorMessage`, which flattens a 422's array-shaped
+        // `detail` into a sentence. Assigning it straight to state typed
+        // `string | null` put an array in the JSX, and React threw "Objects
+        // are not valid as a React child" — the ErrorBoundary replaced the
+        // whole page with the error screen instead of showing the message.
+        setError(getErrorMessage(err, 'Unable to save member information. Please try again.'));
       }
     } finally {
       setSaving(false);

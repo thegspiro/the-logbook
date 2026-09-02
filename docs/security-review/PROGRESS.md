@@ -16,20 +16,1693 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 34 (Frontend shared, pass 3), round 2 —
-[#2118](https://github.com/thegspiro/the-logbook/pull/2118), subscribed.
-Round 1 ([#2112](https://github.com/thegspiro/the-logbook/pull/2112))
-merged before Codex's review of its commit landed, carrying only the
-"0 findings" content; Codex then caught 4 real defects in the auth/cache
-core that round 1's methodology (diff-based cache-risk sweep + first full
-read of `components/ux/*`) wasn't aimed at. Round 2 carries the fix as a
-fresh PR off current `main` (round 1's branch had already merged — never
-reuse a branch whose PR has merged, CLAUDE.md Pitfall #24): 2 fixed
-(FE3-34-1/3), 2 flagged (FE3-34-2/4, mirrored into `KNOWN_LIMITATIONS.md`).
-Codex's review of _that_ fix then caught a fifth defect — FE3-34-5, a
-direct consequence of FE3-34-1's own fix (see the round-3 entry below) —
-flagged, not fixed, same PR. Once merged, every row (00-34) is ✅ and the
-rotation wraps to 00 for the next full pass.
+None. [#2138](https://github.com/thegspiro/the-logbook/pull/2138) (Feature
+04, Storefront & payments, pass 3) merged after six Codex review rounds —
+see the Log below for detail. Rotation row 04 → ✅. Next: 05 Finance &
+approvals.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) ✅ merged — PR #2138
+
+All six Codex rounds (a wrong export-line citation; the router-level
+`module_gate` reach corrected from "doesn't reach it" to "reaches it, is a
+no-op"; a dropped `GET /permissions` exception restored; two missed
+dependency-graph files; two more shared-dependency changes reviewed as safe;
+`_collect_user_permissions`'s and `permission_matches`'s own
+`expand_legacy_permissions` calls proven no-ops; three more imports verified
+unchanged at the symbol level; a `NotificationLog` schema change confirmed
+harmless) fixed, replied to, and resolved; CI and both Codex Code/Security
+Review passes green on the final head, no merge conflict. No application-code
+security finding — every correction was to this review's own write-up.
+`GET /orders/export`'s unbounded-export item remains carried forward,
+unfixed, pending a product decision. Rotation row 04 → ✅. Next: 05 Finance &
+approvals.
+
+---
+
+### 2026-09-01 — Feature 03 (Public surface & webhooks, pass 3) ✅ merged — PR #2137
+
+Codex round 1's scope-command gap (missed `app/core/public_portal_security.py`,
+outside the searched directory) fixed and resolved; CI green on the final
+head, no merge conflict. No code-level security finding — the one commit in
+scope was already fixed and guard-tested under feature 32's own pass.
+Rotation row 03 → ✅. Next: 04 Storefront & payments.
+
+---
+
+### 2026-09-01 — Feature 03 (Public surface & webhooks, pass 3) — Codex round 1: scope command missed a declared file outside `app/api/public/`
+
+Codex reviewed this PR's first commit (`d64e525`) and found the pass 3 scope
+command, `git log 36ce7595..HEAD -- backend/app/api/public/`, only covers
+the `app/api/public/` directory — but this feature's declared 12-file scope
+includes `app/core/public_portal_security.py` (the public portal's API-key
+and rate-limit controls), which lives in `app/core/`, not `app/api/public/`.
+The write-up claimed that file byte-identical to pass 2 on the strength of
+a command that never looked at it. Re-run with the complete scope
+(`... -- backend/app/api/public/ backend/app/core/public_portal_security.py`):
+still exactly one commit, `b2b2c53c` — the conclusion doesn't change, but
+the earlier command didn't establish it. Fixed in
+`docs/security-review/PUB-03-public-surface-webhooks.md`'s Pass 3 section
+and in the entry below.
+
+---
+
+### 2026-09-01 — Feature 03 (Public surface & webhooks, pass 3) — no new findings
+
+`git log 36ce7595..HEAD -- backend/app/api/public/ backend/app/core/public_portal_security.py`
+(`36ce7595` is pass 2's own closing merge commit, used as the lower bound
+per the ancestry-based scoping method PERM-02 pass 3 established; the second
+path corrects a Codex-caught scope gap — see the entry above) found one
+commit, `b2b2c53c`, touching only `display.py` — a reorder of
+`guest_check_in`'s rejection
+gates ahead of its daily-cap check, already made and guard-tested under
+feature 32's (Locations & kiosk) own rotation pass (LOC-32-4), cited and
+re-verified here rather than re-derived. File count (12) and route count
+(20) both unchanged. The other 11 files are byte-identical to pass 2; PUB-1,
+PUB-2, and PUB-4's fixes re-verified present; PUB-3 remains an accepted,
+documented `create_all`-only table. No backend/frontend source touched by
+this pass itself; `flake8 app/ tests/ alembic/` and `validate_migrations.py
+--strict` re-run directly to confirm the baseline is clean, with this pass's
+own PR's CI run as the authority for the full gate.
+
+Full write-up: `docs/security-review/PUB-03-public-surface-webhooks.md`
+(Pass 3 section). Rotation row 03 → ⏳ (awaiting PR merge). Next: 04
+Storefront & payments, once this PR merges.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 6: a schema change to a table storefront writes through, confirmed harmless
+
+Codex reviewed round 5's own fix and found one more real gap: round 5's
+"file changed, imported symbol didn't" check of `models/notification.py`
+covered the `NotificationChannel` enum but missed that `NotificationLog` —
+the table `StorefrontService.add_order_message` writes to via
+`NotificationsService.log_notification` — gained a new nullable
+`department_message_id` FK and a `UniqueConstraint("department_message_id",
+"recipient_id", "channel")` in the same diff.
+
+Checked whether that constraint can reject a storefront-originated insert:
+`add_order_message`'s `log_data` never sets `department_message_id`, so it
+takes its default (`NULL`). Under InnoDB (MySQL 8.0), a `UNIQUE` index
+treats `NULL` as distinct from every other `NULL`, including inside a
+composite key — two rows with `department_message_id IS NULL` never
+collide on that account, whatever `recipient_id`/`channel` they share. So a
+member getting several `storefront` in-app notices for one order still
+inserts every time, exactly as before this column existed. The constraint
+only activates between rows sharing a real, non-`NULL`
+`department_message_id`, which storefront's own call never sets. No
+storefront-reachable failure mode.
+
+Fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 5: a timing overstatement corrected, `permission_matches`'s own alias-expansion call named, three more imports verified at the symbol level
+
+Codex reviewed round 4's own fix and found three more real gaps, none a new
+application-code finding:
+
+- **"Runs on literally every storefront request" overstated when.**
+  `PermissionChecker.__call__` (backing `require_permission`) takes
+  `current_user: User = Depends(get_current_user)` as its own dependency, so
+  FastAPI resolves authentication before the function body — which calls
+  `_collect_user_permissions` — ever runs; the router-level `module_gate`
+  dependency resolves before any endpoint dependency too. Corrected: it runs
+  for every request that reaches an actual permission decision, after
+  authentication and the module gate both pass — not unconditionally on
+  every request.
+- **`core/permissions.py:permission_matches` also calls
+  `expand_legacy_permissions` directly**, independent of
+  `_collect_user_permissions`'s call — round 4 named only the aggregation
+  call site. Both were already noted together as "redundant but harmless"
+  in `PERM-02-permissions-roles.md`'s pass 3; round 4 just didn't carry the
+  second one into this document. Same no-op conclusion applies to both, for
+  the same reason (the alias map is `equipment_check.*`-only).
+- **Three more imports from changed files, now checked at the symbol level
+  rather than the file level:** `get_db` (`app/core/database.py` — the
+  file's diff is confined to an unrelated `disconnect()` method; `get_db`
+  itself doesn't appear in it), `safe_error_detail` (`app/core/utils.py` —
+  the diff is a pure addition, a new `sanitize_connector_error` function
+  this feature doesn't call; `safe_error_detail` itself doesn't appear in
+  the diff), and `NotificationChannel` (`app/models/notification.py` — a
+  +99/-1 diff for an unrelated messaging feature; the enum's own class
+  definition doesn't appear in the diff, only a reference to it inside a
+  new column on a different table). All three: file changed, imported
+  symbol didn't.
+
+All three fixed in `docs/security-review/SF-04-storefront-payments.md`'s
+Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 4: `dependencies.py`'s permission-aggregation change reaches every storefront request too, proven a no-op
+
+Codex reviewed round 3's own fix and found one more real gap:
+`cf033864` (the `equipment_check.*` → `inventory.check_*` rename, already
+reviewed in `PERM-02-permissions-roles.md`'s pass 3) didn't only touch
+`core/permissions.py` — it also added an `expand_legacy_permissions` call
+inside `_collect_user_permissions` in `app/api/dependencies.py`, and that
+function backs both `require_permission` (47 of storefront's 48 routes) and
+`user_has_permission` (the `GET /permissions` self-probe). So it runs on
+every storefront request, not zero of them, contrary to what earlier rounds
+implied by only reviewing the registry side of the same commit.
+
+Verified what it actually does to a storefront decision rather than
+stopping at "it's called": every key in `LEGACY_PERMISSION_ALIASES` is
+`equipment_check.*`-shaped, a namespace with no `storefront.*` entry on
+either side. Expanding a caller's granted set can only ever add
+`inventory.check_*` names to it — it cannot touch
+`storefront.view`/`storefront.order`/`storefront.manage` — so
+`permission_matches` sees an identical answer for every storefront
+permission check before and after this change, for every caller. Exercised
+on every request, provably a no-op.
+
+Fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 3: two more shared dependencies changed, both reviewed and confirmed safe
+
+Codex reviewed round 2's own fix commit and found two more shared
+dependencies this feature actually calls that had changed since `d8c5e39e`:
+
+- **`app/core/security_middleware.py`** (imported by `paypal_webhook.py` for
+  `public_rate_limit`) — a `RateLimiter` fix (already reviewed once,
+  independently, per its own `Codex, PR #2106` comments): a bug where
+  `lockout_seconds=0` (`public_rate_limit`'s own fallback value) made an
+  "expired lockout" check unconditionally wipe the caller's request
+  history, so every `max_requests+1`th over-limit hit silently reset the
+  sliding window and defeated the rate limit; now gated on
+  `lockout_seconds > 0`. Strictly tightens enforcement. A second hunk
+  self-heals a missing Redis TTL on `daily_cap_exceeded`'s counter so a
+  transient `EXPIRE` failure can't leave a scope blocked past its intended
+  day. Neither weakens anything this feature's webhook relies on.
+- **`frontend/src/utils/createApiClient.ts`** (storefront's own
+  `services/api.ts` builds its axios instance through it) — decodes a JSON
+  error body that arrives as a `Blob` (axios applies the request's
+  `responseType` to error responses too, which matters here because
+  storefront's order-export flow is exactly that shape), so a real backend
+  error message reaches the user instead of a generic fallback. Parsed JSON
+  only feeds existing error-message plumbing, no new sink.
+
+Both reviewed and confirmed safe — defensive corrections to shared
+infrastructure, not new surface. Fixed in
+`docs/security-review/SF-04-storefront-payments.md`'s Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 2: the router-level module gate does reach storefront, the routing inventory dropped a known exception, and two dependency-graph files were missed by a filename filter
+
+Codex reviewed round 1's own fix commit and found three more real gaps —
+round 1's "doesn't reach it" claim about `a518957e` was itself wrong, not
+just under-scoped:
+
+- **`storefront.router` is mounted in `app/api/v1/api.py` with
+  `dependencies=module_gate("storefront", "The Department Store")`, and
+  `module_gate` → `require_module` → `Depends(get_request_enabled_modules)`
+  — so `a518957e` runs on every storefront request, contrary to round 1's
+  claim that it "doesn't reach this feature's routes at all."** Re-verified
+  the actual consequence rather than repeating the error: `require_module`'s
+  check passes through (no 403) when `get_request_enabled_modules` returns
+  `None` — including, post-`a518957e`, for an invalid/expired session, not
+  just an absent one. That sounds like a weakening, but every one of
+  storefront's 48 routes independently requires at least
+  `Depends(get_current_user)` (grep-confirmed), and `a518957e` explicitly
+  left that mandatory path rejecting invalid credentials with 401 unchanged
+  — so a caller the module gate lets through anonymously is rejected one
+  dependency later by the endpoint's own auth check regardless. For a
+  genuinely authenticated caller whose org has the module off, `enabled`
+  resolves to the org's real flag set (a518957e doesn't touch that path) and
+  the 403 still fires. No finding — but the correct statement is "reaches
+  every route and is a no-op for this route composition," not "doesn't
+  reach it."
+- **The routing-inventory correction itself dropped a real, already-documented
+  exception.** Restating "storefront's routes are permission-gated" without
+  qualification contradicts this document's own pass-1 record: `GET
+/permissions` (`storefront.py:1512-1521`) is a deliberate
+  `Depends(get_current_user)` self-probe, not `require_permission(...)`.
+  Restated with the exception preserved.
+- **Two files in this feature's real dependency graph aren't named
+  storefront/embroidery/personalization/thread, so round 1's filename filter
+  missed them:** `app/utils/embroidery.py` (imported by both
+  `storefront_service.py` and `schemas/storefront.py` — it isn't a
+  migration, so the migration-filename filter never had a chance to catch
+  it) and `20260825_1520_c6a3f8b41e29_settle_variant_size_order.py` (named
+  for what it does, not for "storefront"). Both diffed explicitly against
+  `d8c5e39e`: zero changes, same conclusion as everything else in scope.
+
+All three fixed in `docs/security-review/SF-04-storefront-payments.md`'s
+Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 1: a feature-local diff can't clear shared authorization code, plus a wrong line citation
+
+Codex reviewed this PR's first commit and found two real gaps, neither a
+new application-code finding:
+
+- **The zero-diff conclusion only covered the ten feature-owned files, not
+  shared code storefront's routes depend on.** Checked explicitly:
+  `storefront.py` gates every route with `require_permission(...)`, never
+  `module_gate`/`require_module`, so `a518957e`'s module-gate change
+  (already reviewed in PERM-02 pass 3) doesn't reach it. `core/permissions.py`'s
+  diff touches lines adjacent to the three `STOREFRONT_*` permissions, but
+  precisely checked — it's context noise from the unrelated
+  `equipment_check.*` → `inventory.check_*` rename (`cf033864`, also
+  already reviewed in PERM-02 pass 3); none of the three definitions
+  themselves changed. That rename did reach this feature's own test suite:
+  `test_corporate_storefront_grants.py` and `test_storefront_grant_backfill.py`
+  both needed a `LEGACY_PERMISSION_ALIASES` translation so their frozen
+  pre-rename migration snapshots keep matching the old spelling — a
+  downstream adaptation of an already-reviewed rename, not new behavior.
+- **Pass 2's own citation for the carried-forward unbounded-export finding
+  was wrong.** `storefront_service.py:2916-2953,2980-3015` is dashboard
+  rollup code (`_order_rollup`/`get_window_rollups`/`get_dashboard`); the
+  actual `while True` unbounded-accumulation loop is `export_orders_csv` at
+  `storefront_service.py:3035-3072`. Same defect, correct range now.
+
+Both fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section and in the entry below.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — no new findings
+
+`git diff` (not `git log`) between pass 2's closing merge (`d8c5e39e`) and
+current `HEAD`, across the full domain pass 2 established after its own
+under-scoping correction (10 backend files, the whole
+`frontend/src/modules/storefront/` tree, and any storefront-named
+migration) — chosen over `git log` because pass 2 documented this repo's
+history for this path as squashed/rewritten, which is exactly what caused
+pass 2's own first draft to under-scope and need a correction; `git diff`
+between two known tree states doesn't have that failure mode. Result: zero
+changes across the entire domain. SF-5/SF-6's fixes and every pass-1/2
+"Verified good" item stand unmodified. `GET /orders/export`'s unbounded
+export (no row cap or date window) is carried forward again, unfixed — a
+product decision, not a drive-by fix, and explicitly re-flagged so it
+doesn't silently drop out of the record the way it briefly did before pass
+2 caught it. No backend/frontend source touched by this pass; `flake8` and
+`validate_migrations.py --strict` re-run directly, with this pass's own
+PR's CI run as the authority for the full gate.
+
+Full write-up: `docs/security-review/SF-04-storefront-payments.md` (Pass 3
+section). Rotation row 04 → ⏳ (awaiting PR merge). Next: 05 Finance &
+approvals, once this PR merges.
+
+---
+
+### 2026-09-01 — Feature 02 (Permissions & roles, pass 3) ✅ merged — PR #2136
+
+All three Codex round-1 findings (missed commit from a date-based scoping
+bug, an overclaimed wildcard-authority statement, a wrong completion-gate
+baseline citation) fixed and resolved; CI green on the final head, no merge
+conflict. No code-level security finding. Rotation row 02 → ✅. Next: 03
+Public surface & webhooks.
+
+---
+
+### 2026-09-01 — Feature 02 (Permissions & roles, pass 3) — Codex round 1: date-cutoff methodology bug found a real omitted commit, plus two overclaims in the write-up
+
+Codex reviewed this PR's first commit (`4e53af51`) and found three real
+process defects, none of them a code-level security finding:
+
+- **A missed commit.** This pass's original scope used
+  `git log --since=2026-08-27` (a date) instead of the actual pass-2 merge
+  commit as the lower bound. `7ac83395` (merging `4e40f96b` +
+  `2959d2aa` — a `facilities.view` baseline-grant restriction touching
+  `core/permissions.py`) landed ~45 minutes after pass 2's closing merge
+  `e601a95d` and was present in the `--since` output as the trailing
+  boundary commit but never actually opened and reviewed. Confirmed with
+  `git merge-base --is-ancestor e601a95d 7ac83395` that it postdates pass 2
+  and is genuinely in scope. Reviewed now: a revocation (removes
+  `facilities.view` from baseline member/line-member defaults), which can
+  only narrow authority; its own Pitfall #23 gap (registry-only edit not
+  reaching already-materialized `positions` rows) was caught and fixed by
+  its own author 3.5 hours later in the same PR (`2959d2aa`, migration
+  `c7e2b9a41f83`). No residual issue found.
+- **An overclaimed "no permission gained or lost."** The `cf033864` rename's
+  write-up checked only seeded `OPERATIONAL_RANKS`/`DEFAULT_POSITIONS`
+  entries but stated the conclusion as if it covered every position. A
+  **custom** position holding the `inventory.*` module wildcard does gain
+  the three `inventory.check_*` grants post-rename (it could not match
+  `equipment_check.*` pre-rename — different module segment). Real, but not
+  a new finding: the original commit's own message already named this as a
+  deliberate, accepted consequence, since no seeded position uses that
+  wildcard. The write-up's blanket claim is narrowed to "no **seeded** rank
+  or position," with the custom-wildcard case now stated explicitly instead
+  of being swept into an absolute claim.
+- **A wrong completion-gate citation.** The write-up cited PR #2133 as
+  confirming a green baseline, but PR #2134 (7 frontend files) merged after
+  #2133 and is this branch's actual parent — #2133's checks say nothing
+  about it. Corrected to cite this PR's own CI run (which validates the
+  real current tree, #2134 included) instead of a prior PR.
+
+All three fixed in the findings doc (`PERM-02-permissions-roles.md`, Pass 3
+section) and in this entry. Guidance for future passes: use
+`git log <prior-pass-merge-sha>..HEAD`, never a date, when scoping a diff
+review.
+
+---
+
+### 2026-09-01 — Feature 02 (Permissions & roles, pass 3) — no new findings
+
+`git log --since=2026-08-27` (pass 2's merge date) against all six feature
+files found exactly three commits: `cf033864` (rename
+`equipment_check.*` → `inventory.check_*`, with an authority-preserving
+migration and an additive `LEGACY_PERMISSION_ALIASES` compatibility layer),
+`9f6e7a7a` (let the `member` position's display name be customized, slug and
+permission ceiling untouched), and `a518957e` (a Codex follow-up on PR #1948
+that changes how `get_request_enabled_modules` handles an invalid session
+cookie — doesn't weaken any endpoint's own auth dependency, confirmed by
+grep that the function is never itself used as one). All three reviewed
+against the full checklist; none introduced a finding. `officers.py`,
+`org_chart.py`, `operational_ranks.py`, and their services are
+byte-identical to pass 2 (zero commits since, confirmed via git log) — pass
+2's "Verified good" write-up for those stands without re-derivation.
+Re-verified PERM-1 through PERM-4's fixes and the ceiling machinery
+(`_enforce_permission_grant_ceiling`, `_enforce_role_edit_ceiling`,
+`_enforce_rank_grant_ceiling`) are all still present and wired exactly as
+described. No backend/frontend source touched this pass, so the code-level
+completion gates had nothing new to validate; `validate_migrations.py
+--strict` (399 revisions, single head) and `flake8 app/ tests/ alembic/` (0
+violations) re-run to confirm the baseline PR #2133 left is still clean.
+
+Full write-up: `docs/security-review/PERM-02-permissions-roles.md` (Pass 3
+section). Rotation row 02 → ⏳ (awaiting PR merge). Next: 03 Public surface &
+webhooks, once this PR merges.
+
+---
+
+### 2026-09-01 — Feature 01 (Auth & session lifecycle, pass 3) ✅ merged — PR #2133
+
+All 6 Codex review threads (AUTH-7 through AUTH-13, two P1s, four P2s) fixed
+and resolved; CI green (17/17) on the final head, no merge conflict. Rotation
+row 01 → ✅. Next: 02 Permissions & roles.
+
+---
+
+### 2026-09-01 — Feature 01 (Auth & session lifecycle, pass 3) — Codex round 1: a real P1 TOTP-replay gap the pass had wrongly marked "verified good", plus a P2 brute-force-wiring doc error
+
+Codex reviewed pass 3's commit `87212a8` and found its "Verified good"
+section's two claims both wrong — not overcautious, not a style nit, but a
+real authentication gap incorrectly cleared. Investigated both from the real
+code before acting, per this rotation's rule that a wrong fix in an auth
+path is worse than an honest finding.
+
+- **AUTH-7 (P1, FIXED):** `mfa_verify_setup`, `mfa_disable`, and
+  `mfa_regenerate_recovery_codes` (`/mfa/recovery-codes`) verified a live
+  TOTP code with bare `mfa_service.verify_totp` and never recorded the
+  matched time-step in `user.mfa_last_timestep` — only `mfa_login` did. The
+  original writeup reasoned each of the three management routes was
+  self-blocking against a _repeat call to itself_, but never checked replay
+  at a _different_ route. Because none of the three ever wrote
+  `mfa_last_timestep`, a code verified there stayed valid at `/mfa/login`
+  for the rest of its ~30–90s window. An attacker who already holds the
+  account's password gets a free `mfa_pending` token from `/login` (password
+  alone, MFA not required for that step) and, if they observe a code the
+  legitimate user is using _right now_ at one of those three routes
+  (shoulder-surfing, a compromised endpoint, a phishing relay), can replay
+  it at `/mfa/login` to open a fully independent session. Reproduced
+  empirically against the pre-fix code (see the fix commit's message).
+  **Fix:** every code-verifying route now goes through one shared
+  `_verify_and_consume_totp(user, code)` primitive in `auth.py` that records
+  the consumed step on every match, not just on `/mfa/login`. Also flagged,
+  not fixed (needs a product decision, not a guess in an auth path): the
+  same recovery-codes route is not idempotent under a retried request
+  (network retry/double-click) — recorded in `docs/KNOWN_LIMITATIONS.md`.
+- **AUTH-8 (P2, FIXED):** the writeup claimed
+  `security_monitor.detect_brute_force` wiring "matches SEC-00's documented
+  brute-force model exactly." `mfa_login` never called
+  `detect_brute_force` at all — a wrong TOTP code fed the per-account lockout
+  and the suspicious-IP throttle (both real, enforcing, and still correct)
+  but generated no history for this specific short-window per-IP/per-user
+  alert. Separately, `login`'s own `success=True` call to
+  `detect_brute_force` runs _before_ the MFA branch (on password-correct
+  alone), which the writeup conflated with the _different_
+  `clear_auth_failures` function's documented after-MFA-only invariant.
+  **Fix:** `mfa_login`'s failure and success branches now call
+  `detect_brute_force` with `success=False`/`True` respectively, mirroring
+  `login`'s exact pattern (best-effort, `try/except`, piggybacking the
+  branch's existing `db.commit()`). `login`'s own password-step ordering is
+  unchanged — a separate, lower-severity, out-of-scope-for-this-fix
+  inaccuracy, now described accurately in the doc rather than left
+  mischaracterized.
+
+Both replied to and resolved on PR #2133 (Codex review comments), with the
+mechanism and reasoning mirrored into
+`docs/security-review/AUTH-01-auth-session.md` (AUTH-7/AUTH-8, replacing the
+struck-through "Verified good" claims) and `docs/KNOWN_LIMITATIONS.md`
+(the recovery-codes idempotency flag).
+
+**Guard tests:** `TestTotpConsumedAcrossMfaRoutes` and
+`TestMfaLoginBruteForceWiring` in `backend/tests/test_auth_mfa_endpoints.py`
+(5 new tests) — the replay test drives the real `mfa_regenerate_recovery_codes`
+then `mfa_login` handlers and confirmed to fail against the pre-fix code
+(reverted `auth.py`, re-ran: `mfa_login` completed successfully with the
+replayed code).
+
+**Completion gate (Codex round 1, full re-run):** `flake8`/`black
+--check`/`isort --check-only` on `app/ tests/ alembic/` clean;
+`validate_migrations.py --strict` passed (399 revisions, single head);
+scoped backend tests (`-k "auth or mfa or oauth or consent or
+suspicious_ip"`) 221 passed (5 new), 1 skipped (pre-existing, missing
+optional `pywebpush`); `npm run typecheck` (native compiler wrapper) 0
+errors; `npm run lint` 0 errors/warnings (no frontend files changed).
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md` (AUTH-7,
+AUTH-8, and the struck-through correction note under Pass 3).
+
+---
+
+### 2026-09-01 — Feature 01 (Auth & session lifecycle, pass 3) — Codex round 2: a real P1 concurrency race inside round 1's own fix, plus three more P2s, plus a second P1 of the same shape found on this round's own adversarial re-read
+
+Codex reviewed round 1's fix commit (`2640733a`) itself and found four more
+issues, one of them another P1 — in the very code round 1 had just landed to
+close AUTH-7. Verified each against the real code before acting, per this
+rotation's rule that a wrong fix in an auth path is worse than an honest
+finding; all four turned out to be real, and all four were fixed.
+
+- **AUTH-9 (P1, FIXED):** `_verify_and_consume_totp` (AUTH-7's own new
+  primitive) read `user.mfa_last_timestep` off whatever ORM object the
+  caller already held and wrote the consumed step back onto it, with no row
+  lock and no compare-and-set — a plain read-then-later-write. Two
+  concurrent requests racing the SAME valid code (Codex's scenario: a
+  phishing relay races a captured code against an attacker's own
+  `/mfa/login` and the legitimate holder's request to any of the other three
+  routes) could both load the row before either committed, both pass the
+  replay check, and both commit — defeating AUTH-7's single-use guarantee in
+  the very commit that introduced it. **Fix:** the helper now re-fetches the
+  row with `.with_for_update().execution_options(populate_existing=True)`
+  before checking/consuming — the same locking-read pattern this codebase
+  already uses everywhere else for this shape of race (CLAUDE.md Pitfall
+  #27; `quorum_service.py`, `users.py`, `membership_pipeline_service.py`).
+  `populate_existing` is required alongside the lock, not optional:
+  `expire_on_commit=False` means the lock alone would be acquired correctly
+  but leave the second request evaluating the replay check against a stale
+  cached value. Reproduced and verified with two REAL, independently-
+  committing `AsyncSession`s racing the identical code against a real row in
+  the test database (a mocked `db` cannot exercise a genuine InnoDB row
+  lock) — both returned `True` pre-fix, only the first returns `True`
+  post-fix.
+- **AUTH-10 (P2, FIXED):** round 1's AUTH-8 fix wired `mfa_login`'s failure
+  path into `detect_brute_force(success=False)`, but deliberately left
+  `login`'s own pre-existing `success=True` call unchanged, calling it
+  out-of-scope. That call fires on password-correct alone, **before** the
+  `mfa_enabled` branch — so for an MFA-enabled account, an attacker who
+  already has the password can call `/login` again before every MFA guess
+  (ordinary client behavior, re-establishing the `mfa_pending` token) and
+  wipe the very tally AUTH-8 had just wired `mfa_login` to accumulate. The
+  two calls fought each other; AUTH-8's fix was real but its effect was
+  silently erased on every cycle. **Fix:** moved `login`'s `success=True`
+  call below the `mfa_enabled` branch, so it only fires when a correct
+  password IS full authentication — mirroring the invariant
+  `clear_auth_failures` immediately below it already enforced. Verified with
+  a test driving 5 real `login()` + wrong-MFA-code cycles against a fresh
+  detector instance, asserting the tally climbs `1, 2, 3, 4, 5` instead of
+  resetting to `1` every cycle; confirmed to reproduce the "stuck at 1"
+  failure against the pre-fix ordering.
+- **AUTH-11 (P2, FIXED):** `_add_alert` (`security_monitoring.py`) already
+  caught its own DB-write failures, but catching does not undo the effect on
+  the **session** — a real `flush()` failure leaves the `AsyncSession`
+  needing a rollback, and the caller's own later `db.commit()` (persisting
+  `failed_login_attempts`/lockout on the same session) then raises
+  `PendingRollbackError` instead of completing, turning an intended 401 into
+  an unhandled 500 and losing every side effect the caller had staged.
+  Checked PR #2132's extensive rework of this same file first — that work
+  fixed several in-memory tracker races but never touched this DB-write
+  path. **Fix:** wrapped the write in `db.begin_nested()` (a SAVEPOINT), the
+  exact pattern `AuditLogger.create_log_entry` (`core/audit.py`) already
+  uses for the identical problem. Verified with a REAL constraint violation
+  (`SecurityAlert.description=None`, a genuine `IntegrityError` at flush)
+  against the real test database, not a mocked exception — a mock never
+  touches the DBAPI transaction and cannot reproduce the state this bug
+  depends on; confirmed the caller's subsequent commit raises
+  `PendingRollbackError` verbatim pre-fix, and succeeds post-fix.
+- **AUTH-12 (P2, FIXED):** `mfa_disable` cleared the secret but left
+  `mfa_last_timestep` untouched; timesteps are unix-time-derived, not
+  secret-derived, so a user who disables MFA and immediately re-enrolls with
+  a new secret could hit `/mfa/verify-setup` with a legitimate first code
+  that lands in the same raw timestep as whatever was last recorded against
+  the OLD secret, and get rejected as a "replay" of a code that shares no
+  secret with it. A real, narrow availability bug, not a security gap.
+  **Fix:** both `mfa_disable` and `mfa_setup` (the only two places a user's
+  secret changes) now clear `mfa_last_timestep` alongside the secret.
+  Verified end-to-end: disable with an old-secret code, re-enroll with a new
+  secret, submit the new secret's code in the same wall-clock timestep —
+  rejected pre-fix, accepted post-fix.
+
+- **AUTH-13 (P1, FIXED, found by this round's own adversarial re-read, not
+  Codex):** the required final "look hard for anything else the same shape"
+  pass over the full PR diff (per this round's own instructions) found the
+  identical unlocked read-then-write race as AUTH-9, one field over:
+  `mfa_login`'s recovery-code branch read `user.mfa_backup_codes` off the
+  caller's already-loaded, unlocked object and wrote the filtered list back
+  with no lock — sitting directly below the `_verify_and_consume_totp` call
+  AUTH-9 had just fixed. A recovery code has no ~30–90s expiry to outrun
+  (unlike TOTP), so this was, if anything, a more attractive target. **Fix:**
+  extracted `_verify_and_consume_recovery_code`, structurally identical to
+  AUTH-9's fix. Verified with the same two-real-session race shape; also
+  verified against the pre-fix shape via a throwaway reproduction script
+  (deleted after use, not left in the tree) since the fixed helper's minimal
+  test stub doesn't carry the attributes the old inline code needed —
+  printed `result_a=True result_b=True`, confirming both concurrent requests
+  consumed the same code.
+
+Replied to and resolved all four Codex review comments on PR #2133, with the
+mechanism and reasoning mirrored into
+`docs/security-review/AUTH-01-auth-session.md` (AUTH-9 through AUTH-13).
+
+**Guard tests (7 new):** `TestVerifyAndConsumeTotpConcurrency` (real
+two-session DB race), `TestLoginBruteForceResetGating` (real detector
+instance, 5-cycle accumulation), `TestMfaLastTimestepClearedOnSecretChange`
+(3 tests), `TestVerifyAndConsumeRecoveryCodeConcurrency` (real two-session
+DB race, recovery codes) in `backend/tests/test_auth_mfa_endpoints.py`; and
+`TestAddAlertSavepointIsolation` (real constraint violation against the test
+database) in `backend/tests/test_security_monitoring.py`. Every one
+individually confirmed to fail against `2640733a` (or the equivalent
+pre-fix shape for AUTH-13) and pass after its fix — by temporarily
+reverting only that finding's change and re-running.
+
+**Completion gate (Codex round 2 + AUTH-13, full re-run):** `flake8`/`black
+--check`/`isort --check-only` on `app/ tests/ alembic/` clean;
+`validate_migrations.py --strict` passed (399 revisions, single head, no
+migrations touched); scoped backend tests (`-k "auth or mfa or oauth or
+consent or suspicious_ip"`) 227 passed, 1 skipped (pre-existing, missing
+optional `pywebpush`); `backend/tests/test_security_monitoring.py` (run
+directly — outside the keyword filter, but AUTH-11's fix and guard test live
+here) 28 passed (1 new); `npm run typecheck` (native compiler wrapper) 0
+errors; `npm run lint` 0 errors/warnings (no frontend files changed).
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md` (AUTH-9
+through AUTH-13).
+
+---
+
+### 2026-09-01 — Feature 01 (Auth & session lifecycle, pass 3) — 2 fixed, 0 open, re-verified 3 prior items
+
+Re-read all four in-scope backend files in full (`auth.py`, `auth_service.py`,
+`mfa_service.py`, `oauth_service.py`) against all seven `CHECKLIST.md`
+dimensions, plus `consent_service.py`/`PhotoUseConsentPage.tsx` (in scope
+since pass 2). `git diff` against pass 2's baseline (`9a58e352`) showed only
+`auth.py` (+11/-4, a permission-alias-expansion call unrelated to this
+feature's own security surface) and `consent_service.py` (the same `roster()`
+method pass 2 already reviewed and fixed, unchanged since) had moved;
+`mfa_service.py`/`oauth_service.py` are byte-identical to pass 2, and three
+touched frontend auth files (`authStore.ts`, `apiClient.ts`,
+`createApiClient.ts`) all carry already-landed, already-correct fixes from
+other work, confirmed rather than assumed.
+
+**Re-verified all three standing items, all still current:** AUTH-1 (OAuth
+org-active-check fix) and AUTH-3 (stale photo-consent-roster race fix) both
+still present in the code; AUTH-4 (unbounded roster query, informational,
+intentionally not fixed — one of 255+ identically-shaped call sites app-wide)
+still accurate.
+
+**Two new fixes, both doc/dead-code, zero behavior change:**
+
+- **AUTH-5 (NIT):** `validate_reset_token`'s docstring claimed the endpoint
+  returns "the associated email"; the code deliberately withholds it
+  (anti-enumeration) and the comment right above the `return` already says
+  so. Docstring corrected to match.
+- **AUTH-6 (INFORMATIONAL):** `_InMemoryFailureTracker.clear(ip)` in
+  `app/core/suspicious_ip.py` — the in-memory fallback for the suspicious-IP
+  throttle — cleared both the failure counter and an active block. It was
+  dead code (the real reset path, `clear_auth_failures()`, pops only the
+  failure counter directly and never calls it), but its behavior directly
+  contradicted the documented, load-bearing invariant "clearing never lifts
+  an active block" (CLAUDE.md's Attack Protection table) — a landmine for a
+  future edit that reaches for the conveniently-named method. Removed.
+
+**Also verified good, not previously written up:** traced (rather than
+re-derived) how `login`/`mfa_login` feed `security_monitor.detect_brute_force`
+and the suspicious-IP tracker (`record_auth_failure`/`clear_auth_failures`),
+confirming the wiring matches `SEC-00`'s documented brute-force model and the
+CLAUDE.md invariant that a correct password alone (pre-MFA) never clears the
+suspicious-IP counter. Also traced why `mfa_login`'s TOTP replay protection
+(`verify_totp_get_timestep`) is deliberately absent from
+`mfa_verify_setup`/`mfa_disable`/`mfa_recovery-codes` — all three already
+require an authenticated session and are either self-blocking against a
+replayed code (state flips on first use) or idempotent-equivalent if replayed,
+so the asymmetry with the login path is not a gap.
+
+**Completion gate:** flake8/black/isort clean on `app/ tests/ alembic/`
+(0 violations); `validate_migrations.py --strict` passed (399 revisions,
+single head); scoped backend tests (`-k "auth or mfa or oauth or consent or
+suspicious_ip"`) 216 passed, 1 skipped (pre-existing, missing optional
+`pywebpush` dependency); `npm run typecheck` (native compiler) 0 errors;
+`npx eslint .` 0 errors/warnings (no frontend files changed this pass).
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md` (Pass 3
+section).
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — PR #2132 merged, closing out
+
+[#2132](https://github.com/thegspiro/the-logbook/pull/2132) merged to `main`
+at commit `8efbbcc6`. It closed out nine Codex review rounds on top of
+round 1/2's original fixes — round 3 through round 9 all landed on this PR
+after round 1/2's own PR (#2128) merged out from under it (Pitfall #24). The
+headline result across the rounds: five straight rounds (3–7) probing the
+same `detect_session_hijack` tracker-eviction/trust-baseline logic, each
+uncovering a distinct real bug in the previous round's own fix (stale reads,
+attacker-IP laundering into the trust baseline, a time-based bypass of the
+IP-pinning fix), followed by round 8 finding an incomplete `EncryptedJSON`
+type match in the JSON-column AST sweep (a PHI column missed), and round 9
+catching a genuine async interleaving race in `detect_session_hijack` itself
+— two concurrent calls for the same `session_id` racing past `await`
+points on the write-back, with the fix moving tracker writes before the
+alert-dispatch awaits. Full round-by-round detail is preserved in the log
+entries below; this note is only the merge close-out. Feature 00's row in
+the Rotation table is confirmed ✅. Full round-by-round detail (rounds 1–9,
+including the duplicate close-out PR #2119 that was closed without merging)
+remains in the log entries immediately below.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 9: a real async interleaving race in detect_session_hijack, plus a one-line attribution fix
+
+**Two findings from Codex's review of round-8 commit `c417d659`.**
+
+**1. Doc-accuracy fix (quick).** A comment in `detect_session_hijack`
+(`security_monitoring.py:634`) still attributed the eviction-ordering
+regression to "the round-2 fix" alone. The corrected attribution —
+established by round 4's own correction, and stated in this file's
+"Attribution correction" note — is that the ordering bug was **introduced**
+in round 1's commit `3b6b65e4` and only **widened** (not introduced) by round
+2's `df7438e0`. Reworded the comment to match; no code changed.
+
+**2. Concurrency finding: verified real, reproduced, and fixed by reordering
+— not flagged.** Codex flagged that `detect_session_hijack` is `async def`
+and, on its alert-firing path, `await`s `log_audit_event()` and
+`self._add_alert()` — both real DB-I/O yield points — _before_ writing the
+call's decision back to `_session_trusted_ip`/`_session_ips`. Since
+`security_monitor` (`app/services/security_monitoring.py`, module scope) is a
+single instance shared by every request through the ASGI middleware
+(`security_middleware.py:1400-1418` for the hijack check,
+`:1425-1445` for the sibling exfiltration check), and this method runs on
+every authenticated request ("a genuine hot path", per this file's own
+`_enforce_key_caps` docstring), a second concurrent request for the SAME
+session_id can run its own read-decide-write cycle while the first is
+suspended mid-await — and when the first call resumes, it writes its own
+now-stale snapshot back, silently overwriting whatever the second call
+legitimately wrote in the meantime.
+
+**Verified before deciding anything, per this rotation's own rule that a
+wrong fix in a security path is worse than an honest finding:**
+
+- Confirmed `detect_session_hijack` is `async def` and that
+  `log_audit_event()` (→ `audit_logger.create_log_entry`: `async with
+db.begin_nested()`, `await db.execute(...)`) and `_add_alert()` (`await
+db.execute(...)`, `await db.flush()`) are genuine `await` points doing real
+  DB I/O — not synchronous calls in async clothing.
+- Confirmed `security_monitor = SecurityMonitoringService()`
+  (`security_monitoring.py`, bottom of file) is a true module-level
+  singleton, and that `security_middleware.py` imports and calls it directly
+  on every request — not a per-request instance.
+- Checked the other three tracker methods in the same file
+  (`_check_rate_limit`, `detect_brute_force`, `detect_data_exfiltration`) for
+  the same shape, per the task's instruction not to stop at the one method
+  Codex named: **all three already write their tracker state before doing
+  anything that awaits** — each one's alert-dispatch `await`s sit strictly
+  _after_ its tracker write, already documented in each method's own
+  round-5 comments. `detect_session_hijack` was the only one of the four
+  with an `await` sandwiched between its read and its write. That is exactly
+  why 8 prior rounds' "checked every method" passes never caught this: the
+  bug isn't the read-after-evict/write-after-evict shape those rounds hunted
+  for, it's a new shape specific to this one method's own alert-dispatch
+  position.
+- Reproduced with an actual `asyncio` test
+  (`TestSessionHijackConcurrentInterleaving`, new in
+  `test_security_monitoring.py`): two coroutines call
+  `detect_session_hijack` for the same `session_id`. Call A's IP change fires
+  the hijack alert and is stalled inside a monkeypatched `log_audit_event`
+  (an `asyncio.Event` under test control, standing in for the real DB-I/O
+  await). While A is stalled, call B — a legitimate IP change outside the
+  5-minute window — runs to completion and writes its own trusted-IP update.
+  A is then released and resumes. **Run against the pre-fix source (commit
+  `c417d659`): fails** — A's resumed write overwrites B's
+  `_session_trusted_ip` entry (ends up `10.0.0.1`/A's stale timestamp instead
+  of `10.0.0.3`/B's) and B's forensic-log entry vanishes from `_session_ips`
+  entirely, exactly as predicted. **Run against the fix below: passes.**
+- Real-world likelihood assessed honestly, not inflated or deflated: this
+  detection runs on _every_ authenticated response, and this app's frontend
+  is a SPA that routinely fires several concurrent API calls carrying the
+  same session cookie on one page load (parallel widget fetches,
+  prefetching) — so two concurrent calls for the same session_id are
+  ordinary traffic here, not an attack precondition. The race window only
+  opens on the alert-firing branch specifically (an IP change observed
+  within 5 minutes), which narrows it, but that branch fires for both a
+  genuine hijack attempt _and_ a legitimate client presenting multiple
+  egress IPs (mobile carrier-grade NAT, corporate proxies round-robining
+  outbound IPs) making concurrent requests — a known source of
+  false-positive hijack alerts this method's own leniency window already
+  exists to soften. Impact where it does fire: a security-relevant forensic
+  log (`_session_ips`) can silently lose an entry, and the trusted-IP
+  baseline's timestamp can regress — neither corrupts the _alert_ that
+  already fired on either individual call (each call's own alert-or-not
+  decision, and the audit-log row it wrote, are computed and persisted
+  independently of the race), so this is a data-integrity gap in the
+  monitoring layer's tracker state for _subsequent_ calls, not a bypass of
+  detection on the call where the interleaving happens. Real, worth fixing,
+  and not a reason to distrust an alert that already fired.
+
+**Fix — chosen over flagging, and why it qualifies as the small kind, not the
+architectural kind:** moved both tracker writes
+(`self._session_trusted_ip[key] = ...` and `self._session_ips[key] = ...`)
+to occur immediately after the (synchronous) decision logic, _before_ the
+`await log_audit_event(...)` / `await self._add_alert(...)` calls that only
+run when an alert fires. This is the exact pattern the other three methods
+in this file already use (compute → write → _then_ await for alert
+dispatch), so it is this method finally matching the other three, not a new
+pattern introduced under review pressure. Nothing the writes depend on
+(`new_trusted_ip`, `new_trusted_time`, `session_data`, `current_ip`, `now`)
+is produced or altered by the awaited calls, so reordering changes nothing
+about _what_ gets written, only _when_ — confirmed by running the full
+existing `TestSessionHijackTrustedBaseline` and
+`TestSessionHijackLeniencyWindow` suites (rounds 6 and 7's own regression
+tests) unchanged after the reorder: still pass, showing the reorder didn't
+reopen either of those prior bugs. No lock, no merge-not-overwrite semantics,
+no architecture change — the fix removes the only `await` between this
+method's read and its write, so there is nothing left for a concurrent call
+to interleave with. A per-session `asyncio.Lock` was considered and rejected
+as unneeded: once the write moves ahead of the await, this method's tracker
+section is synchronous start-to-finish again, same as the other three, which
+is what actually closes the race rather than just narrowing its window.
+
+**Verification:** `TestSessionHijackConcurrentInterleaving` (1 new test) —
+fails against `c417d659`, passes after the fix. Full
+`test_security_monitoring.py` **27/27**, up from 26.
+
+**Completion gate (round 9 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head
+`4e7e125cb00f`, no migration touched); `pytest tests/ -m "not integration and
+not slow and not docker" --cov=app --cov-fail-under=51` (CI's exact Backend
+Unit Tests invocation) — **8106 passed, 2 skipped, 58.66% coverage**; `cd
+frontend && npm run typecheck` (aliased 7.0.2 compiler) **0 errors**; `cd
+frontend && npm run lint` **0 errors, 0 warnings** (no frontend files touched
+this round). Files changed this round: `app/services/security_monitoring.py`
+(comment fix + the write-before-await reorder) and its test file (new
+`TestSessionHijackConcurrentInterleaving`); `CHANGELOG.md`;
+`docs/security-review/SEC-00-cross-cutting-baseline.md` and this file
+(round-9 write-up + this log entry). Same branch, same PR #2132.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 8: the JSON-column sweep's own type matching was incomplete, missing a PHI column
+
+**A different sweep than the session-hijack rounds above.** Codex reviewed
+commit `dc152491` (round 7's write-up-only follow-up) and found a gap in
+`backend/scripts/json_column_ast_sweep.py` itself — the AST walk behind
+sweep 9's "179 distinct attribute names" completeness claim. `_call_
+references_json` checked a `Column(...)` call's argument subtree for a
+`Name`/`Attribute` node literally spelled `JSON`. That correctly finds
+`Column(JSON, ...)` and any depth of `MutableDict.as_mutable(JSON)`-style
+wrapping (the round-4 write-up's whole point), but not a _different_ type
+name whose underlying storage is JSON under a different spelling.
+`app/models/medical_screening.py`'s `MedicalScreening.result_data =
+Column(EncryptedJSON, ...)` is exactly that: `EncryptedJSON` never spells
+`JSON` in the `Column(...)` call, so `--list` silently excluded it, and the
+one JSON-shaped column holding PHI in this schema had never actually been
+covered by sweep 9's bug-detection pass.
+
+**Investigated before extending the sweep.** `EncryptedJSON`
+(`app/core/encrypted_types.py`) is a `TypeDecorator` (`impl = Text`) that
+does `encrypt_data(json.dumps(value))` on write and
+`json.loads(decrypt_data(value))` on read — the mapped Python attribute is
+a genuine dict/list, same shape as a bare `Column(JSON)` attribute. It is
+**not** wrapped in `MutableDict.as_mutable(...)` anywhere, and a
+`TypeDecorator`'s bind/result processing doesn't change how the ORM's
+attribute-level dirty-tracking works — that's instrumented on the mapped
+attribute, not the column type. So `result_data`'s mutation semantics are
+exactly the bare-`JSON` case pitfall #12 opens with: no in-place-mutation
+tracking at all (not even `MutableDict`'s top-level auto-detection), fully
+exposed to the shallow-copy-then-reassign bug. Also checked the whole
+`app/models/*.py` tree via AST for every other non-builtin `Column(...)`
+first-argument identifier (180+ names) to confirm no _second_ custom
+JSON-wrapping type exists — every other custom name is a `(str, Enum)`
+column via `SQLEnum`, or `EncryptedText`, which wraps `Text` and stores a
+scalar string, not JSON, and is deliberately excluded from the fix.
+
+**Fix:** `json_column_ast_sweep.py` now matches against a documented
+`JSON_LIKE_TYPE_NAMES` frozenset (`{"JSON", "EncryptedJSON"}`, each entry
+commented with why) instead of the literal string `JSON`, so a future
+third JSON-wrapping type is one named addition, not a second special case.
+Corrected count, re-run against current code: **180 distinct attribute
+names, across 231 `Column(...)` declarations, across the same 43
+files** (up from 179/230 — the one new name is `result_data`,
+`medical_screening.py:183`). Diffed `--list` output before/after the fix:
+the only change is `result_data`'s addition.
+
+**Re-ran the shallow-copy-then-reassign bug-detection pass against
+`result_data` specifically**, whole `app/` tree: no `dict(...)`/
+`{**...}`/`.copy()`/`.setdefault(...)` idiom references it anywhere, and
+both direct `.result_data =` reassignment sites
+(`app/services/medical_screening_service.py`) are clean — `create_record`
+assigns it on a row about to be `db.add()`-ed (a new insert, from a
+freshly deserialized Pydantic payload, not derived from `self`'s own
+column) and `update_record` routes through `apply_updates(record, data.
+model_dump(exclude_unset=True))`, a plain `setattr` from the incoming
+payload dict, never `dict(record.result_data)`-then-mutate. The bulk
+`update(ScreeningRecord).values(result_data=None, ...)` calls in
+`member_anonymization_service.py` are SQL-level statements, not ORM
+mutation, outside this bug's shape. A same-named local variable in
+`training_enhancement_service.py` (an unrelated xAPI `"result"` object)
+was confirmed unconnected to this column. **Clean — 0 bugs found**; no
+other name was newly added by this round, so no further sites to check.
+
+**Completion gate (round 8 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (no migration touched);
+`pytest tests/ -m "not integration and not slow and not docker" --cov=app
+--cov-fail-under=51` (CI's exact Backend Unit Tests invocation); `cd
+frontend && npm run typecheck` (aliased 7.0.2 compiler); `cd frontend &&
+npm run lint`. No source/model changes this round (no `.result_data =`
+site needed a fix), so no new backend tests were added — the sweep script
+itself has no dedicated test suite (it's a reporting tool, exit code
+always 0, per its own docstring) and none of the newly-covered code paths
+changed behavior. Files changed this round:
+`backend/scripts/json_column_ast_sweep.py` (extended type-name matching),
+`backend/scripts/README.md` (corrected expected-output block, re-run and
+pasted rather than hand-edited), `docs/security-review/
+SEC-00-cross-cutting-baseline.md` and this file (round-8 write-up + this
+log entry, plus a forward-pointing correction note on the now-superseded
+round-4 count). No `CHANGELOG.md` entry: no functional/security bug was
+found (the newly-covered PHI field was verified clean), so this is a
+tooling/doc correction, not a fix. Same branch, same PR #2132.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 7: round 6's fix pinned the trusted IP but not its timestamp — a time-based bypass
+
+**Seven rounds of Codex review on this same file's session-hijack tracking
+now, across two PRs (#2128, #2132).** Round 6 (commit `56620c9e`) correctly
+stopped the alert path from advancing `_session_trusted_ip`'s stored _IP_ to
+the attacker's, but left that entry's stored _timestamp_ unrefreshed on the
+same path — `new_trusted_time = last_time` instead of `now`. That timestamp
+is exactly what the method's own 5-minute leniency check reads on the next
+call:
+
+```python
+if last_ip != current_ip:
+    time_diff = (now - last_time).total_seconds()
+    if time_diff < 300:                 # suspicious -> alert
+        ...
+    # time_diff >= 300 falls through to the DEFAULT path at the top of the
+    # method, which promotes current_ip as the new trusted baseline
+```
+
+Under continuous attacker traffic, `last_time` stays pinned to whenever the
+trusted IP was last confirmed-good, while real wall-clock time keeps
+advancing on every subsequent attacker call. `time_diff` therefore grows
+monotonically with elapsed real time regardless of how many attacker
+requests occur in between, and once it crosses 300s — which it eventually
+will, purely because time passed — the alert branch stops matching and
+control falls through to the default path, silently promoting the
+attacker's now-longstanding IP to trusted with no alert. This is the "IP
+changed but it's been a while, probably roaming" leniency (correct for a
+session that genuinely went idle) wrongly triggered by a session that has
+in fact been under continuous, uninterrupted attack the whole time. Distinct
+from round 6's bug: round 6 was the `ip` half of the stored pair being
+wrongly advanced; round 7 is the `timestamp` half being wrongly held still,
+and it fully bypasses round 6's fix given enough elapsed wall-clock time.
+
+**Fix:** refresh the trusted entry's timestamp to `now` on every call —
+alert or not — while still leaving the trusted `ip` unchanged on the alert
+path (round 6's fix, unmodified):
+
+```python
+new_trusted_ip = last_ip
+new_trusted_time = now   # was `last_time`; refreshed regardless of alert
+```
+
+This makes the stored timestamp mean "the last time this session was
+evaluated, by any IP," not "the last time the trusted IP was
+confirmed-good." The next call's `time_diff` then measures the gap since
+_this_ call, not since the session's last idle period ended — so a session
+under continuous attack never accumulates elapsed time toward the leniency
+window (every attacker call resets the clock the same call it fails to earn
+promotion on), while a genuinely idle session (no calls from anyone for 5+
+minutes) still earns the leniency exactly as before, since nothing
+refreshes the timestamp while there are no calls to refresh it with.
+
+**Three scenarios hand-traced end-to-end:** (1) attacker persists — trusted
+`A`, attacker `B` alerts at `t=0`, `B` continues once/minute through
+`t=10min`; against the pre-fix code `time_diff` is measured against the
+_original_ `t=0` and crosses 300s at exactly `t=5min` (300s = 5×60s),
+silently promoting `B` from that call onward; against the fix, `time_diff`
+is measured against the _previous call's_ refreshed timestamp, stays ~60s
+every time, and all ten calls alert; legitimate `A` returns at `t=11min`,
+matches the still-preserved trusted `A`, no alert. (2) Legitimate
+idle-then-return — trusted `A` at `t=0`, _no calls from anyone_ for 10
+minutes, then the same user returns from a new IP: `time_diff` against the
+unrefreshed `t=0` timestamp is 600s, leniency applies, no alert, new IP
+promoted — unaffected by the fix, since nothing refreshes a timestamp during
+a gap with no calls at all. (3) Round 6's original 4-step trace, re-confirmed
+under the fix: trusted `A` → `B` alerts (timestamp refreshes, `A` stays
+trusted) → `B` again within a short gap (alerts again, `A` still trusted) →
+legitimate `A` returns (matches, no alert) — same outcome as round 6 found,
+unaffected since every gap in that trace is already well under 300s.
+
+**Verification, round 7:** new `TestSessionHijackLeniencyWindow` class, 2
+tests. `test_continuous_attacker_traffic_never_earns_the_leniency_window`
+drives one legitimate call then ten attacker calls one simulated minute
+apart, asserting every one of the ten still alerts, the trusted baseline is
+still the legitimate IP afterward, and the legitimate IP's return at
+`t=+11min` does not alert. `test_genuinely_idle_session_still_gets_the_
+leniency_on_return` asserts the original idle-then-roam case (a 10-minute
+gap with no calls at all) still does not alert. Simulated time is driven by
+a small `_FrozenClock` helper plus a `datetime` subclass monkeypatched over
+`app.services.security_monitoring.datetime` — this project has no
+`freezegun` dependency, and the existing session-hijack tests instead seed
+tracker dicts directly with past timestamps, which doesn't fit this
+scenario's need to control several successive calls' `now` independently.
+Verified directly: `git stash`-ing this round's one-line fix (restoring
+`new_trusted_time = last_time`) and running the new leniency-window test
+against commit `56620c9e` — it **fails** at the `t=+5min` call specifically
+(`alert is None`), matching the hand-traced mechanism exactly; **passes**
+after the fix. Full `test_security_monitoring.py` **26/26**, up from 24.
+
+**Completion gate (round 7 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head, no
+migration touched); `pytest tests/ -m "not integration and not slow and not
+docker" --cov=app --cov-fail-under=51` (CI's exact Backend Unit Tests
+invocation); `cd frontend && npm run typecheck` (aliased 7.0.2 compiler);
+`cd frontend && npm run lint` (no frontend files touched this round). See
+this round's PR push for the exact pass/fail counts recorded at push time.
+Files changed this round: `app/services/security_monitoring.py` (one-line
+timestamp-refresh fix plus updated comments) and its test file
+(`TestSessionHijackLeniencyWindow`, 2 new tests); `docs/security-review/
+SEC-00-cross-cutting-baseline.md` and this file (round-7 write-up + this log
+entry, plus the round-5 doc correction above); `CHANGELOG.md`. Same branch,
+same PR #2132.
+
+**Seven review rounds on this file's session-hijack tracking now — the
+seventh straight round to find something in this exact method, each a
+genuinely different shape** (missing eviction, one-key-at-a-time eviction,
+read-after-evict, a fourth method with the same read-after-evict shape,
+write-after-evict, a semantic bug in what write-after-evict wrote, and now a
+time-based path around that same semantic fix). The caution stated in
+rounds 4, 5, and 6 — that a clean result on this exact code is worth
+substantially less evidentiary weight than the same result elsewhere, and
+is exactly the place to look hardest for one more angle — is carried
+forward again, not treated as satisfied by this round's fix.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 6: round 5's own fix laundered the attacker's IP into the trusted baseline
+
+**Six rounds of Codex review on this same file's session-hijack tracking
+now, across two PRs (#2128, #2132) — but this is the first of the six that
+is not another instance of the eviction-ordering bug class from rounds 3–5.**
+Round 5's fix made `detect_session_hijack`'s tracker write unconditional,
+including on the path where a hijack alert just fired, to guarantee the
+tracker always ends a call holding a live baseline (closing a real gap: a
+key evicted at the exact moment its alert fired otherwise lost its history
+outright). Codex found that the replacement write used `current_ip`
+unconditionally — so on the alert path specifically, it wrote the
+_attacker's_ IP back as the newest tracked entry:
+
+```python
+# 90e373cc (round 5) — detect_session_hijack, unconditional write
+self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]
+```
+
+Since the comparison logic only ever read `session_data[-1]` (the single
+most recent entry), the very next request from that same attacker IP then
+compared its own IP against itself, found no change, and returned `None` —
+an ongoing hijack detected exactly once, then silent for as long as the
+attacker kept reusing the one IP. Round 5's own regression test
+(`test_session_hijack_detects_a_second_and_third_ip_change_in_a_row`) never
+exercised this: it drives three _distinct_ attacker IPs in sequence, each
+different from the one before, so every comparison still finds a mismatch
+regardless of whether the prior IP got promoted.
+
+**Origin, verified against git history, not assumed: new in round 5, not a
+pre-existing gap the eviction-fix rounds' scrutiny happened to expose.**
+Every version of this method before commit `90e373cc` — the original
+pre-PR-#2128 implementation and every round-1-through-4 revision alike —
+`return`s immediately inside the "IP changed within 5 minutes" branch,
+_before_ the line that writes `current_ip` into the tracker is ever reached:
+
+```python
+# every version before 90e373cc (checked directly against 95db016b, the
+# round-4 revision, and against the pre-PR-#2128 original)
+if time_diff < 300:
+    alert = SecurityAlert(...)
+    await self._add_alert(db, alert)
+    return alert                              # <- exits BEFORE the write below
+self._session_ips[key].append((current_ip, now))
+```
+
+So in every version before round 5, the attacker's IP was never written back
+on the alert path at all — the tracker kept whatever pre-hijack entry it
+already had, and a repeat request from the same attacker IP correctly
+re-compared against that unchanged pre-hijack IP and alerted again. Round 5
+removed the early return specifically to fix the write-after-evict gap (a
+real, necessary fix), but the unconditional replacement write is what
+introduced this new failure mode as a side effect. It is fair to call this
+newly introduced by round 5, precisely: the eviction-fix rounds' scrutiny is
+what put fresh eyes on these lines, but the bug itself did not exist in any
+form before round 5's specific rewrite.
+
+**Fix: split "the full observed-IP log" from "the IP the hijack decision is
+compared against."** A new tracker, `_session_trusted_ip` — capped, swept,
+and read-before/write-after-evict protected the same way as every other
+tracker in this file — holds only the single IP/timestamp pair a comparison
+is made against. `_session_ips` is unchanged in role: a full per-call
+observation log (including attacker IPs) kept for audit/forensics, no longer
+what the decision reads. The trusted tracker advances to `current_ip`
+whenever a call does _not_ fire an alert (first observation, a matching IP
+refreshing its timestamp, or an IP change slow enough — ≥ 5 minutes, this
+method's own existing definition of "not suspicious" — to not be flagged);
+when an alert _does_ fire, the trusted tracker is left at its pre-alert value
+instead of being advanced. This directly satisfies the review's framing —
+distinguish the trusted baseline from the most recently observed IP — without
+adding a new "confirmed hijack" state machine: the existing 5-minute window
+already decides when a changed IP has earned promotion to the new normal, and
+the only change is that an IP which just triggered an alert no longer
+qualifies by that route.
+
+**Verified by hand-tracing the full method for a four-step sequence, not
+just the three-call repro Codex gave:** trusted IP `A`, attacker IP `B`
+(alerts, `A` stays the baseline), `B` again (compares against the still-`A`
+baseline, alerts a second time), then legitimate `A` returns (compares
+against the still-`A` baseline, matches, no alert — `A`'s return is not
+mistaken for a hijack just because `B` was interleaved, since `B` was never
+promoted at any point).
+
+**Verification, round 6:** new `TestSessionHijackTrustedBaseline` class, 2
+tests — `test_repeated_attacker_ip_keeps_alerting` (Codex's exact 3-call
+repro) and `test_legitimate_ip_returning_after_attacker_ip_does_not_alert`
+(the 4-step trace above). Both verified to **fail** against commit
+`90e373cc` and **pass** after the fix. The existing round-5 regression test
+had its assertions corrected rather than left standing: it happened to pass
+against `90e373cc` and continues to pass now, but its old `previous_ip`
+assertions (each call's `previous_ip` equal to the _prior_ call's IP) encoded
+the exact promotion behavior this round removes — under the fix, all three
+calls compare against the same original IP, so `previous_ip` is now
+`"1.1.1.1"` on every one of the three, not a moving target. Two other
+existing tests (`TestReadBeforeEvictOrdering`'s and `TestWriteAfterEvictOrdering`'s
+session-hijack cases) were updated to seed the new `_session_trusted_ip`
+tracker alongside `_session_ips`, since eviction-ordering protection now has
+to hold for the tracker the decision actually reads. Full
+`test_security_monitoring.py` **24/24**.
+
+**Completion gate (round 6 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head, no
+migration touched); `pytest tests/ -m "not integration and not slow and not
+docker" --cov=app --cov-fail-under=51` (CI's exact Backend Unit Tests
+invocation) — **8103 passed, 2 skipped** (same two pre-existing, unrelated
+skips as round 5), coverage 58.66% (floor 51%); `cd frontend && npm run
+typecheck` (aliased 7.0.2 compiler) 0 errors; `cd frontend && npm run lint`
+0 errors (no frontend files touched this round). Files changed this round:
+`app/services/security_monitoring.py` (new `_session_trusted_ip` tracker,
+`detect_session_hijack` rewritten to compare against and advance it instead
+of `_session_ips`) and its test file (`TestSessionHijackTrustedBaseline`, 2
+new tests; 3 existing session-hijack tests updated); `docs/security-review/
+SEC-00-cross-cutting-baseline.md` and this file (round-6 write-up + this log
+entry); `CHANGELOG.md`. Same branch, same PR #2132.
+
+**Six review rounds on this file's session-hijack tracking now — the fifth
+straight round to find something, each a genuinely different shape (missing
+eviction, one-key-at-a-time eviction, read-after-evict, a fourth method with
+the same read-after-evict shape, write-after-evict, and now a semantic bug in
+what write-after-evict actually wrote) — worth carrying forward as the same
+caution rounds 4 and 5 each stated and were each subsequently proven right to
+have stated:** a clean result from a future pass over this exact code is
+worth substantially less evidentiary weight than the same result elsewhere,
+and remains the place to look hardest for one more angle before accepting
+"all fixed" at face value.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 5: read-before-evict was necessary but not sufficient — nothing wrote the new value back
+
+**Five rounds of Codex review on this same file's tracker-cap sweep now,
+across two PRs (#2128, #2132).** Round 4's fix (reviewed this round) added
+the fourth instance of the "read the current key's tracker entry into a
+local variable before calling `_enforce_key_caps()`" pattern first applied
+in round 3. That pattern is real and necessary — it stops eviction from
+corrupting the read a call uses to decide whether to alert — but Codex found
+it is not sufficient: nothing in it ever re-inserts the current key's entry
+into the tracker **after** eviction runs. A call whose key was the batch-
+eviction target could still correctly detect and alert on this call (using
+the protected pre-eviction read), while leaving the tracker holding no entry
+at all for that key afterward. The next call from the same key then finds no
+baseline and is scored as a first-ever observation — an ongoing attack stops
+being detected right after its first (correctly fired) alert.
+
+**Finding 1 (P2, the substantive fix): `detect_session_hijack` loses its
+tracked baseline the moment its hijack alert fires, if the session's key was
+also this call's eviction target.** Its read (`session_data`) and its write
+(appending `(current_ip, now)`) are two separate steps with
+`_enforce_key_caps()` in between, and the write was gated behind "no alert
+fired" via an early `return alert` on the hijack path:
+
+```python
+session_data = self._session_ips.get(key, [])   # read, before evict
+self._enforce_key_caps()                        # can still delete the entry
+if session_data:
+    if time_diff < 300:
+        ...
+        return alert                             # returns before writing
+self._session_ips[key].append((current_ip, now)) # only reached if no alert
+```
+
+Codex's reproduction: call 1, with the session's key as the eviction target,
+correctly fires the `session_hijack` alert. Call 2, immediately after, from
+the same session: `None`. Verified directly — `git stash`-ing the fix and
+running the new two-call test against commit `95db016b` reproduces exactly
+that: `alert1` is a `SecurityAlert`, `alert2` is `None`.
+
+**Fixed by removing the early return:** the method now always rebuilds
+`self._session_ips[key]` from the pre-eviction `session_data` plus this
+call's own `(current_ip, now)` (trimmed to the last 10 entries) and returns
+the alert (or `None`) at the end, regardless of which path was taken. This
+closes the eviction-loses-the-entry gap described above.
+
+**Correction (round 6/round 7, superseding the paragraph below as
+originally written):** this entry originally went on to claim a _second_
+bug here — that the pre-fix code never advancing a hijacked session's "last
+known IP" past its pre-hijack value was itself a correctness gap, and that
+comparing against "the attacker's actual most recent IP" was the right
+behavior. **That claim was wrong and is superseded — see the round-6 entry
+below.** Preserving the pre-hijack IP is correct; round 5's actual fix (this
+entry), by writing `current_ip` back unconditionally including on the alert
+path, is exactly the bug round 6 found and reverted (it silently promoted
+the attacker's IP to "trusted," so a repeat attack from the same IP stopped
+alerting after the first hit). Left in place immediately below, unedited,
+as the record of what round 5 believed at the time — see
+`SEC-00-cross-cutting-baseline.md`'s matching correction for the fuller
+account, and this rotation's round-4 "Attribution correction" for the
+established precedent of correcting in place rather than deleting:
+
+> even with no eviction at all, the pre-fix code never advanced a hijacked
+> session's "last known IP" past its pre-hijack value, so every later
+> request was compared against increasingly stale ground truth instead of
+> the attacker's actual most recent IP. _(Superseded — see above.)_
+
+**Checked individually, not assumed, whether `_check_rate_limit`,
+`detect_brute_force`, and `detect_data_exfiltration` share this exact gap —
+they do not, empirically.** In all three, the read and the write are the
+same statement block, executed unconditionally, before
+`_enforce_key_caps()` is called (e.g. `detect_brute_force`: append, filter
+into a local var, _then_ `_enforce_key_caps()`). Because the write happens
+first, the current call's key always carries the freshest timestamp in the
+tracker by the time eviction runs, and `_enforce_key_caps()` evicts the
+_oldest_ keys — the current key structurally cannot be among them. Verified
+by `git stash`-ing the source fix and running the three corresponding new
+tests against `95db016b`: all three **pass unmodified**. Only the
+`detect_session_hijack` test fails against that commit.
+
+**Fix applied to all five methods anyway, for uniformity, and the
+alternative (excluding the current key from eviction) considered and
+rejected for this tracker shape:** two ways to close the gap were available
+— (A) always write the current call's contribution back after eviction
+runs, or (B) exclude the current call's key from eviction outright. (B) is
+the wrong default for a tracker where an attacker can mint many _distinct_
+keys cheaply and flood the cap; that concern does not apply here, since
+every key in these five trackers already _is_ one attacker-controlled
+identity (an IP, a session id, a user id) — there is no cheaper sub-value
+underneath a key to churn — so excluding the one key a call is actively
+using would have been safe for this tracker's actual shape. (A) was chosen
+anyway: it makes all five methods follow one uniform read/evict/write
+ordering rather than four doing write-then-evict and a fifth doing
+evict-then-write-with-exclusion, and after five rounds of this exact logic
+needing correction, one provable mechanism applied everywhere was judged
+worth the few extra lines in the three methods that did not strictly need
+it. See `SEC-00-cross-cutting-baseline.md`'s round-5 write-up for the full
+reasoning.
+
+**Verification:** 4 new tests in a new `TestWriteAfterEvictOrdering` class —
+one two-call sequence per affected method (call 1 fires its alert and puts
+the key up for eviction, call 2 asserts the tracker still has a live
+baseline), plus a third call in the `detect_session_hijack` test
+specifically to confirm the fix generalizes past the exact two-call
+reproduction Codex gave. `test_session_hijack_detects_a_second_and_third_ip_
+change_in_a_row` fails against `95db016b` and passes after the fix; the
+other three pass against `95db016b` unmodified (as the empirical check
+above found) and continue to pass after — they stand as regression guards
+against a future refactor reintroducing the same early-return-before-write
+shape, not as reproductions of a bug that was ever live in those three.
+`test_security_monitoring.py` **22/22**, up from 18.
+
+**Finding 2 (P3, doc/tooling accuracy): `backend/scripts/
+json_column_ast_sweep.py`'s "N files" summary counted `__init__.py` even
+though the sweep itself skips it while parsing** — `total_files` was
+`len(list(MODELS_DIR.glob("*.py")))` (44, every `.py` file), while `sweep()`
+explicitly excludes `__init__.py` (43 actually parsed). The script's own
+printed summary line, `backend/scripts/README.md`'s "Expected Output" block,
+and this round's own prior-round Codex reply all quoted the inflated 44.
+**Fixed:** both `total_files` and `sweep()` now iterate a single shared
+`_model_files()` helper that applies the `__init__.py` exclusion once, so the
+two can never drift apart again the way they just had. Re-ran the script —
+confirmed **43 files**, same 179 distinct names / 230 declarations (the
+name/declaration counts were never affected; only the file count in the
+summary line was wrong). `backend/scripts/README.md`'s "Expected Output"
+block updated to match.
+
+**Five review rounds on the same tracker-cap logic now, in one PR/its
+predecessor.** Stated plainly, per the standing instruction in this file not
+to fold a repeat finding into routine "more polish" language: round 1 added
+eviction but missed a tracker; round 2 fixed that but introduced the
+read-after-evict ordering bug; round 3 fixed that ordering in three of four
+methods; round 4 found and fixed the fourth, explicitly re-auditing all five
+eviction call sites against all five tracker reads and calling all five
+"correctly ordered" — and still missed that read-before-write does not imply
+write-after-evict; round 5 (this entry) fixed that. Every prior round's
+"checked every method, all fixed" framing was narrower than it read, each
+time in a different way. That repetition, not any single round's fix, is
+the fact worth carrying forward: a clean result from a future pass over this
+exact tracker-cap code is worth less evidentiary weight here than the same
+result elsewhere, and is exactly the place to look hardest for one more
+angle before accepting "audited all five, all correct" — round 4 wrote
+almost that exact sentence and was still one fix short.
+
+**Completion gate (round 5 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head, no
+migration touched); `pytest tests/ -m "not integration and not slow and not
+docker" --cov=app --cov-fail-under=51` (CI's exact Backend Unit Tests
+invocation) — **8101 passed, 2 skipped** (both pre-existing skips, unrelated
+to this change: optional `pywebpush` dependency, and a `roles` table that no
+longer exists post-migration), coverage 58.66% (floor 51%); `cd frontend &&
+npm run typecheck` (aliased 7.0.2 compiler) 0 errors; `cd frontend && npm run
+lint` 0 errors, 0 warnings (no frontend files touched this round). Files
+changed this round: `app/services/security_monitoring.py` (write-after-evict
+on all five methods) and its test file (`TestWriteAfterEvictOrdering`, 4 new
+tests); `backend/scripts/json_column_ast_sweep.py` (shared file-count
+helper) and `backend/scripts/README.md`; `docs/security-review/
+SEC-00-cross-cutting-baseline.md` and this file (round-5 write-up + this log
+entry); `CHANGELOG.md`. Same branch, same PR #2132.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 4: the same false-negative-alerting bug found a fourth time, plus an attribution correction
+
+**Four rounds of Codex review on this same file's tracker-cap sweep now,
+across two PRs (#2128, #2132). Said plainly rather than folded into "more
+polish": round 1 fixed a real gap, round 2 fixed two gaps in round 1's own
+fix, round 3 fixed a false-negative-alerting regression that (per this
+round's own correction, below) actually dated to round 1, and round 4 —
+this entry — found the _identical_ bug shape a fourth time, in a method
+round 3's own explicit "checked every method, not just the one Codex named"
+pass did not catch.** That pattern — a "complete" audit missing a same-shaped
+instance three rounds running — is the headline finding of this round, not a
+footnote to it.
+
+**Finding 1 (P2, real bug): `_check_rate_limit` had the same read-after-evict
+ordering bug as the three methods round 3 fixed.** It calls
+`self._evict_stale_tracking_keys()` (which calls `self._enforce_key_caps()`
+internally) as its first statement, before reading or appending to
+`self._api_calls[ip]` — the identical shape Codex found in
+`detect_session_hijack`/`detect_data_exfiltration`/`detect_brute_force` last
+round. When `_api_calls` is over its key cap and the current IP is the
+least-recently-active key (e.g. it already has calls toward the threshold),
+eviction deletes its history before the append, the request is undercounted
+as call #1, and no `rate_limit_exceeded` alert fires. Reproduced by Codex
+with a 10-key cap, the victim IP holding 2 prior calls toward a 3-call
+threshold as the oldest tracker entry, and 20 newer filler IPs.
+
+Likely missed by round 3 because `_check_rate_limit` evicts through
+`_evict_stale_tracking_keys()` (a wrapper that also runs the throttled
+time-based sweep) rather than a direct `_enforce_key_caps()` call the way the
+other three methods do — a review scanning for direct `_enforce_key_caps()`
+call sites would not have surfaced it.
+
+**Fixed the same way as round 3:** the current call is appended and the
+filtered 1-minute window is captured into a local variable (`calls`) before
+`_evict_stale_tracking_keys()` runs; every subsequent read (threshold check,
+alert details) uses that local variable. 1 new regression test,
+`test_rate_limit_alert_survives_batch_eviction_of_the_victim_ip` in
+`TestReadBeforeEvictOrdering`, verified to **fail** against the pre-round-4
+code and **pass** after; `test_security_monitoring.py` **18/18**, up from 17.
+
+**Final exhaustive audit performed this round, not skipped:** every method
+that reads any of the five in-memory trackers for a specific key _and_ has an
+eviction call anywhere in its own body was listed and individually checked.
+Five methods have that shape (`_check_rate_limit`, `detect_brute_force`'s two
+branches, `detect_session_hijack`, `detect_data_exfiltration`); all five are
+now correctly ordered, and no other method in the file calls either eviction
+function. See `SEC-00-cross-cutting-baseline.md`'s round-4 write-up for the
+full table.
+
+**Finding 2 (P2, doc accuracy): the AST sweep script sweep 9 claimed was
+"checked into `docs/security-review/`" did not exist anywhere in the repo.**
+Confirmed via `git ls-tree`, `rg --files`, and `find` — no
+`json_column_ast_sweep.py` or equivalent, under `docs/` or anywhere else. This
+defeated the sweep's stated purpose: a future reviewer re-deriving the method
+by hand is exactly the failure mode that produced sweep 9's three prior
+miscounts (132 → wrong scope, wrong name list, structurally incomplete name
+list). **Fixed:** the script now exists at
+`backend/scripts/json_column_ast_sweep.py` (next to the project's other
+verification scripts, matching `backend/scripts/README.md`'s existing
+convention, rather than under `docs/`) and reproduces the claimed figures
+exactly — `python3 scripts/json_column_ast_sweep.py` prints **179 distinct
+attribute names, 230 `Column(...)` declarations referencing JSON** on the
+current tree. `SEC-00-cross-cutting-baseline.md` and `backend/scripts/
+README.md` both updated to reference the real path and command.
+
+**Finding 3 (P2, doc accuracy — historical-record correction): this file
+(and `SEC-00-cross-cutting-baseline.md`) misattributed the read-after-evict
+regression to round 2 (commit `df7438e0`).** Codex checked the actual
+commits; that attribution is wrong. `git show 3b6b65e4 --
+app/services/security_monitoring.py` shows round 1 is the commit that first
+added `self._enforce_key_caps()` to the top of `detect_session_hijack` and
+`detect_data_exfiltration`, before either method's own tracker read —
+predating round 2 entirely. `git show df7438e0 --
+app/services/security_monitoring.py` shows round 2 touches only
+`_enforce_key_caps()`'s internal eviction strategy (one-key-at-a-time →
+90%-of-cap batch) and folds in `_external_endpoints` capping; it does not
+add, move, or touch the call sites inside either affected method at all —
+their diffs in that commit are empty. The corrected framing: **introduced in
+round 1's `3b6b65e4`, widened (more keys evicted per over-cap call, raising
+the odds any given current key is caught) in round 2's `df7438e0`, fixed in
+round 3.** Every place in `SEC-00-cross-cutting-baseline.md` and this file
+that carried the round-2-only attribution has been corrected to this framing.
+Historical PR bodies on #2128/#2132 are left as the record of what was
+believed at the time rather than rewritten after the fact — this doc-level
+correction is the authoritative account going forward.
+
+**Completion gate (round 4 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/` (including the new
+`backend/scripts/json_column_ast_sweep.py`); `validate_migrations.py
+--strict` unchanged (399 revisions, single head, no migration touched);
+`pytest tests/ -m "not integration and not slow and not docker"` (matching
+CI's Backend Unit Tests invocation) all pass including
+`test_security_monitoring.py` **18/18**; `cd frontend && npm run typecheck`
+(aliased 7.0.2 compiler) 0 errors; `cd frontend && npm run lint` 0 errors, 0
+warnings. Files changed this round: `app/services/security_monitoring.py`
+(the `_check_rate_limit` reordering) and its test file;
+`backend/scripts/json_column_ast_sweep.py` (new) and `backend/scripts/
+README.md`; `docs/security-review/SEC-00-cross-cutting-baseline.md` and this
+file (attribution correction + script reference + this log entry);
+`CHANGELOG.md`. Same branch, same PR #2132.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 3: a real regression in round 2's own fix, plus two more corrections
+
+**This is the third round of Codex catching something real in this same PR's
+sweep-7/sweep-9 write-ups — worth stating plainly rather than folding into
+"more polish."** Round 1 fixed a genuine gap. Round 2 fixed two more gaps in
+round 1's own fix. Round 3 is different in kind: it caught an actual
+**regression** — a false negative in security alerting — that (per the
+round-4 correction above) dated to round 1's own fix, not merely an
+incomplete one; round 2 only widened it. And by the time Codex's round-3
+review landed, **PR #2128 (rounds 1–2) had already been merged to `main`** at
+merge commit `2b3231a3`, so this regression was live and unfixed on `main`
+for the window between that merge and this follow-up PR's merge. That window
+is a real gap, not a process footnote — see the "Live-on-`main` window" note
+below.
+
+**Finding 1 (P2 in the bot's own severity, but the most serious of the
+three): `detect_session_hijack` silently skipped its own alert.** Round 1
+(commit `3b6b65e4`) added `self._enforce_key_caps()` to the top of
+`detect_session_hijack`, `detect_data_exfiltration`, and (already present
+since the cap was first introduced, predating round 1) `detect_brute_force`
+already had it there too. **Corrected on round 4 review** — an earlier
+version of this entry, and of `SEC-00-cross-cutting-baseline.md`, attributed
+this to round 2 (commit `df7438e0`); `git show` on both commits confirms
+`3b6b65e4` is the one that added the call at the top of each method, and
+`df7438e0` only changed `_enforce_key_caps()`'s internal eviction batching,
+without touching either call site. In all three, the eviction call ran
+**before** the
+method read/built its own tracker entry for the current key. `_enforce_key_
+caps()` evicts the least-recently-active keys once a tracker is over its
+5,000-key cap — a decision about the _whole_ tracker, unrelated to whether
+this call's own key is meaningfully "cold." If the current session/IP/user
+happened to be picked in that eviction batch, its history was deleted a few
+lines before the method read it: `detect_session_hijack` saw no prior IP and
+silently treated an ongoing hijack as this session's first-ever observation
+(no alert); `detect_brute_force` saw an empty attempt list and undercounted
+threshold checks; `detect_data_exfiltration` undercounted the running 24h
+transfer total. This is a straightforward false negative in the alerting
+sense — an attacker riding a hijacked session became indistinguishable from
+a session simply never seen before.
+
+Per the review instruction not to assume the bug was confined to
+`detect_session_hijack`, all three methods with this "read the tracker for
+this call's own key, and also evict from that same tracker" shape were
+checked — not just the one Codex named — and all three had it.
+
+**Fixed by reordering, not by evicting less:** each method now reads (and,
+where relevant, appends to/filters) its own tracker entry into a local
+variable **before** `_enforce_key_caps()` runs, and uses that local variable
+for every subsequent decision rather than re-reading the dict (which a
+same-call eviction could have reset). `_enforce_key_caps()` still runs
+unconditionally on every non-early-return call — this is purely a reorder
+within each method, not a change to how often capping happens, so round 1's
+cap-enforcement guarantee is intact. 3 new tests
+(`TestReadBeforeEvictOrdering`), each reproducing the exact bug shape — fill
+the tracker above its cap with the victim key as the single oldest entry,
+call the real method, assert the alert that should fire still does — all
+verified to **fail** against the pre-round-3 commit `df7438e0` and **pass**
+after; `test_security_monitoring.py` **17/17**, up from 14.
+
+**Live-on-`main` window:** `df7438e0` (round 2) merged to `main` via #2128 at
+`2b3231a3` before this fix was ready. Between that merge and this follow-up
+PR merging, `detect_session_hijack`/`detect_brute_force`/`detect_data_
+exfiltration` on `main` could silently skip a real alert under sustained
+tracker churn — a false negative in production security monitoring, not a
+theoretical one. No mitigating factor beyond the window being whatever
+elapsed between the two merges; recorded here so the gap is visible in the
+history rather than only in a diff.
+
+**Finding 2: the "132 distinct JSON/`MutableDict`-typed model attributes"
+figure (round 2's own correction of round 1's sweep 9) was itself wrong.**
+It came from a regex/line-based scan that cannot see a multiline
+declaration:
+
+```python
+report_email_recipients = Column(
+    JSON, ...
+)
+```
+
+— third time this exact sweep's method needed correcting in this PR (round 1:
+too narrow a directory scope; round 2: too narrow a name list; round 3: the
+name list itself was structurally incomplete). Re-swept with an actual `ast`
+walk (`ast.parse` per `backend/app/models/*.py` file, walking `ast.Assign`/
+`ast.AnnAssign` nodes whose value is a `Column(...)` call — recursed through
+`MutableDict.as_mutable(...)` wrapping — checking for `JSON` anywhere in that
+call's arguments via a recursive subtree walk, not a line match). **Corrected
+count: 179 distinct names, 230 total declarations** — up from 132, an
+increase of 47, matching what a naive single-line-regex comparison run on the
+current tree also shows missing (42 names on a slightly different regex
+baseline of 137; the exact 132-vs-137 discrepancy against the original
+ad hoc method is not reconciled, and is moot next to the structural method
+replacing it). Re-ran the bug-detection sweep (nested bracket mutation +
+shallow-copy-then-reassign) against the full 179-name list, whole `app/`
+tree: the nested-mutation check is field-name-agnostic so its 12 hits are
+unchanged and already cleared; the shallow-copy check against the 42 newly-
+found names found zero shallow-copy sites and, on the 7 direct reassignment
+sites checked by hand, zero bugs (one list-copy-plus-append that's safe by
+construction, one already using `copy.deepcopy()`, five assigning a value
+built fresh rather than derived from the column's own prior value). **Clean
+— 0 bugs**, same conclusion as before, now resting on a method that won't
+need a fourth correction for the same reason.
+
+**Finding 3: this file's own completion-gate write-up conflicted with
+CLAUDE.md.** Every prior revision reported "eslint 0 errors, 8 pre-existing
+warnings, unrelated, well under `max-warnings 10`" and treated that as
+gate-passed. CLAUDE.md's "Fix All Errors — Non-Negotiable" section lists
+warnings alongside errors explicitly and says "if you discover it, you own
+it... by default in the same commit" — `max-warnings 10` is a CI threshold,
+not a carve-out from that rule, and "pre-existing, unrelated" is close to the
+exact phrase the doc calls out as not a valid reason to skip a fix. Per the
+Hard Stop clause (only for a fix that would "genuinely exceed the current
+task," its own example being "hundreds of strict-mode violations across
+unrelated files"), 8 warnings in 3 files did not meet that bar. All 8 were
+attempted and **all 8 were fixed** — 3× `testing-library/no-node-access` in
+`StorageAreasPage.test.tsx` (raw `querySelector`/`querySelectorAll` replaced
+with scoped `within(...)` queries plus two added `data-testid`s in the
+source component; same 17/17 tests, snapshot unchanged), 2× the same rule in
+`DocumentsPage.test.tsx` (`.closest('div.stat-card')` replaced with a
+`data-testid` on the card), and 1× `react-refresh/only-export-components` in
+`RoleSetup.tsx` (the non-component export `buildPositionTemplates`, plus its
+two exclusive helpers, moved to a new file, `positionTemplates.ts` — pure
+data/logic, no JSX or hooks, so a plain `.ts` module; two test files that
+referenced the old location updated to match). See
+`SEC-00-cross-cutting-baseline.md`'s completion-gate section for the
+per-warning detail. **Result: `eslint --max-warnings 10` now reports 0
+errors, 0 warnings — not "under the cap."**
+
+Full completion gate re-run clean: `flake8`/`black --check`/
+`isort --check-only` on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (399 revisions, single head, unchanged); the five scoped test files
+plus `test_security_monitoring.py` (17/17) all pass; `npm run typecheck` 0
+errors; `npm run lint` 0 errors, 0 warnings. Opened as a new PR/branch per
+Pitfall #24, not pushed to the merged-and-closed `claude/security-review-
+sec00-pass3` — see the Open PR section above for the link.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex review fixes on PR #2128
+
+Codex left 4 P2 comments on PR #2128, all legitimate methodology gaps in the
+same-day pass-3 sweeps. Verified each against real code and fixed:
+
+- **Tracker sweep (Pitfall #9) was scoped to module-level globals only.**
+  `SecurityMonitoringService` (`app/services/security_monitoring.py`) is a
+  process-wide singleton with four `self.<dict>` trackers
+  (`_login_attempts`/`_session_ips`/`_data_transfers`/`_api_calls`), invisible
+  to that grep. Read the code rather than trusting Codex's "happen to be
+  bounded" claim: all four share one cap (`_MAX_TRACKING_KEYS`), but
+  `detect_session_hijack`/`detect_data_exfiltration` never called the
+  eviction function themselves, and the only caller that did
+  (`detect_brute_force`) is reachable only from the password `/auth/login`
+  endpoint — an SSO/OAuth-only org would never enforce the cap on
+  `_session_ips`/`_data_transfers`, which grow on every request. **Fixed**
+  (2-line change): both methods now call `self._enforce_key_caps()` on
+  entry, mirroring the existing pattern. `test_security_monitoring.py`
+  (10/10) unchanged.
+- **JSON shallow-copy sweep (Pitfall #12) covered 3 field names in 2
+  directories.** Broadened to all 132 JSON/`MutableDict`-typed model
+  attributes across the whole `app/` tree, using field-name-agnostic
+  structural patterns (nested bracket mutation, shallow-copy idioms) rather
+  than a fixed name list. Codex's specific example
+  (`onboarding.py:815`, `.settings =` one directory above the original
+  scope) checked out safe (`copy.deepcopy()` at the top of the function) —
+  method broadened, conclusion unchanged: 0 bugs across ~40+ sites checked
+  (up from 16).
+- **Route-auth-coverage method description dropped a scan root.** The
+  `app/api/public/*` routers are mounted directly in `backend/main.py`, never
+  through `api/v1/api.py`; the doc's stated method (api.py-registrations
+  only) couldn't have found them, even though the number carried forward
+  (69) happened to still be right. Corrected the method to name both scan
+  roots explicitly, corrected the stale `public/*` subtotal (22 → verified
+  20, matching pass 1's own original count), and documented one AST
+  false-positive the wider scan surfaced (`inventory.py`'s `/ws` WebSocket
+  route authenticates in-body, not via `Depends()` — correctly gated, not a
+  gap).
+- **Completion gate quoted bare `tsc --noEmit`.** Per CLAUDE.md's two-
+  TypeScript-installs section, that resolves the 5.9.3 lint-compatibility
+  compiler, not the 7.0.2 one `npm run typecheck` forces via
+  `scripts/tsc-native.mjs`. Re-ran with the correct command — 0 errors — and
+  fixed the doc to say `npm run typecheck` throughout.
+
+Full completion gate re-run clean after the source fix: `flake8`/
+`black --check`/`isort --check-only` on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (399 revisions, single head); the five
+scoped test files (`test_like_escaping.py`, `test_database_schema.py`,
+`test_capacity_locking.py`, `test_migration_create_all_tables.py`,
+`test_security_monitoring.py`) all pass; `npm run typecheck` 0 errors;
+`eslint .` 0 errors / 8 pre-existing warnings. Same branch, same PR #2128.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 2: the round-1 fix itself had two more gaps
+
+Same day, same PR, same file. Codex reviewed the round-1 fix commit
+(`3b6b65e4`) itself and left 2 more P2 comments — this is the second time in
+one PR that Codex caught a real gap in this pass's own tracker-cap sweep, so
+it is recorded plainly rather than folded quietly into the round-1 writeup:
+
+- **The round-1 fix made `_enforce_key_caps()` run on a hot path, and the
+  eviction it did was one-key-at-a-time.** `detect_session_hijack` — which
+  now calls `_enforce_key_caps()` — fires on every authenticated response
+  through `security_middleware.py`. Once a tracker reached its 5,000-key
+  cap, the old eviction logic computed `overflow = len - cap` (which is 1,
+  the very next call after the cap is first hit), sorted the _entire_
+  ~5,000-entry tracker to find that one key, evicted it, then immediately
+  the caller added its own new entry — leaving the tracker back at exactly
+  the cap. Every subsequent distinct session under sustained churn repeated
+  the full `O(n log n)` sort. A memory safeguard had become a per-request
+  CPU cost on the hot path it was added to. **Fixed:** eviction is now
+  batched — once a tracker exceeds the cap, it is trimmed down to 90% of the
+  cap (`_EVICTION_TARGET_RATIO`) in one pass, buying ~500 entries of
+  headroom before the sort has to run again, instead of re-sorting on every
+  single call once saturated.
+- **`_external_endpoints` — a fifth tracker, missed entirely by round 1.**
+  It's a `set()`, not a dict, grown by `detect_data_exfiltration` adding
+  every distinct external `destination` seen. Round 1's fix made
+  `detect_data_exfiltration` call `_enforce_key_caps()`, but that helper's
+  loop only ever iterated the four _dict_ trackers — it never touched the
+  set. A 200-entry cap for it did exist, in `_evict_stale_tracking_keys()`,
+  but that method's own caller (`_check_rate_limit`, reachable only through
+  `analyze_request`) is never invoked anywhere in the running app —
+  dead code. So the fifth tracker could grow unbounded, on the exact same
+  growth path (`detect_data_exfiltration`) round 1 had just "fixed," for the
+  same underlying reason: a broadened sweep pattern that should have caught
+  a `set()` tracker did not get followed through to checking whether _this_
+  set specifically had an effective, reachable cap. **Fixed:**
+  `_enforce_key_caps()` now caps `_external_endpoints` too (arbitrary
+  eviction, since a set has no per-entry activity timestamp to sort by), on
+  the same call already made from `detect_data_exfiltration`'s entry. The
+  now-redundant (and, per the finding, unreachable) capping block inside
+  `_evict_stale_tracking_keys()` was removed rather than left as dead code
+  behind a real one.
+
+Both fixes are the smaller, safer diff consistent with the existing
+sort-and-evict structure — not a redesign (e.g. no switch to
+`collections.OrderedDict`). 4 new tests added to
+`test_security_monitoring.py`: batched-eviction-not-one-at-a-time, bounded
+growth under simulated sustained churn with the sort call count asserted
+amortized (not once per call), the external-endpoint set capped directly via
+`_enforce_key_caps()`, and the same proven end-to-end through
+`detect_data_exfiltration()` itself (its actual production growth path).
+All 4 verified to fail against the pre-round-2 code (`3b6b65e4`) and pass
+after; full suite 14/14. Full completion gate re-run clean (same commands as
+round 1, see above): `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` still 399
+revisions, single head; the five scoped test files all pass; `npm run
+typecheck` 0 errors; `eslint .` 0 errors / 8 pre-existing warnings (same set
+as round 1, unrelated to this change).
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — 0 findings, 4 new sweep classes added
+
+Pass 3 opens the reset rotation. Re-verified all five of pass 1/2's standing
+sweeps against current code — codebase grew to 399 Alembic revisions (from 381) and 1536 routes across 80 `app/api/` files (from 1526/80): formula
+injection in CSV exports (clean, 0 raw `csv.writer` sites), `SET NULL`
+nullability (clean, guard test), proxy-IP attribution (clean, same 3 hits),
+Alembic chain integrity (clean, single head `4e7e125cb00f`), and LIKE-wildcard
+escaping (clean, `test_like_escaping.py` 2/2). Route auth coverage re-check:
+69 ungated routes, all within the same five already-accounted features
+(auth, event_requests public routes, elections token-scoped routes,
+onboarding bootstrap, `public/*`) — no new gap.
+
+Extended the file with four sweep classes named in the rotation's own
+"typical categories" list that SEC-00 had not yet run as an explicit
+whole-codebase pass, each a CLAUDE.md-documented recurring defect class:
+`BaseHTTPMiddleware` usage (Pitfall #4, clean — 0 imports), unbounded
+in-memory request-state trackers (Pitfall #9, clean — the two found both cap
+
+- evict), `window.confirm`/`alert`/`prompt` (Pitfall #16, clean — 0 raw calls,
+  ESLint rule still wired), and JSON-column shallow-copy-then-nested-mutate
+  (Pitfall #12, clean — all 16 `.settings`/`.positions`/`.config` reassignment
+  sites found across `app/services/` and `app/api/v1/endpoints/` either
+  `copy.deepcopy()` or mutate only a top-level key). **Zero findings** — every
+  invariant already held; this pass converts scattered per-feature correctness
+  into one standing cross-cutting sweep record. Docs-only, no source changes.
+  Completion gate green: `flake8`/`black --check`/`isort --check-only` clean on
+  `app/ tests/ alembic/`; `validate_migrations.py --strict` passed; the four
+  touched guard-test files (`test_like_escaping.py`,
+  `test_database_schema.py::test_set_null_fks_are_nullable`,
+  `test_capacity_locking.py`, `test_migration_create_all_tables.py`) all pass;
+  `tsc --noEmit` 0 errors; `eslint .` 0 errors / 8 pre-existing warnings. Next:
+  feature 01, Auth & session lifecycle.
+
+---
+
+### 2026-08-31 — Feature 34 (Frontend shared, pass 3) ✅ PR #2118 merged (rounds 2/3, Codex-caught fixes)
+
+PR #2118 merged, carrying FE3-34-1/3's fixes and the FE3-34-2/4/5
+`KNOWN_LIMITATIONS.md` entries onto `main`. All checks passed, no
+unresolved review threads. Combined with round 1's #2112, feature 34 is
+fully closed for this rotation cycle — the last ⏳ row, completing pass 2
+(2026-08-27 → 2026-08-31). Per the precedent set at pass 1's close
+(`bdd5fc06`), every row in the Rotation table is reset to ⬜ for pass 3;
+next: feature 00, cross-cutting baseline, re-run against current code.
 
 ---
 
@@ -4217,9 +5890,12 @@ in scope; re-reporting something they fixed is not.
 Ordered by risk: unauthenticated and money-handling surfaces first, then the
 data-carrying modules, then the supporting infrastructure.
 
-**Pass 1 complete (2026-08-25 → 2026-08-27):** every row below went ✅
-(PRs #1799–#1918, see the Log for detail on each). Reset to ⬜ for pass 2 —
-each row's prior PR is recorded in the Log, not repeated here.
+**Pass 1 complete (2026-08-25 → 2026-08-27):** every row went ✅
+(PRs #1799–#1918, see the Log for detail on each).
+
+**Pass 2 complete (2026-08-27 → 2026-08-31):** every row below went ✅
+again (PRs #1924–#2118, see the Log for detail on each). Reset to ⬜ for
+pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -4228,36 +5904,36 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.

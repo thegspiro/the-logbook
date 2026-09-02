@@ -12,7 +12,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { OperationalRankResponse, RankValidationIssue } from '../../services/api';
-import { POSITION_LABELS } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 
 interface RankForm {
   rank_code: string;
@@ -228,7 +228,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                             key={pos}
                             className="bg-theme-accent-blue-muted text-theme-accent-blue rounded px-1.5 py-0.5 text-[10px] font-medium"
                           >
-                            {POSITION_LABELS[pos] ?? pos}
+                            {positionLabel(pos)}
                           </span>
                         ))}
                         <button
@@ -293,7 +293,7 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
                                 : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:text-theme-accent-blue border'
                             }`}
                           >
-                            {POSITION_LABELS[pos] ?? pos}
+                            {positionLabel(pos)}
                           </button>
                         );
                       })}
