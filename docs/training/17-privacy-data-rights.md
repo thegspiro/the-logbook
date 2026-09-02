@@ -33,7 +33,7 @@ handle departures, and answer records requests.
 Some things the department may want to do with your information are optional —
 they are not needed to run the department, so you decide.
 
-Go to **My Account → Security → Privacy Choices**.
+Go to **My Account → Privacy → Privacy Choices**. The same tab holds **Profile visibility**, where you choose which of your contact details (work email, personal email, phone, mobile, mailing address) other members can see. Leadership can always see everything; your date of birth and emergency contacts are never shown to other members.
 
 | Choice                         | What it means if you turn it on                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------------------------------ |

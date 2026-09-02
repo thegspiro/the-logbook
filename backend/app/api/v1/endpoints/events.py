@@ -105,6 +105,7 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
+from app.utils.contact_visibility import load_contact_policy
 from app.utils.event_attachments import ATTACHMENT_UPLOAD_DIR as attachment_upload_dir
 from app.utils.event_attachments import is_path_in_org
 from app.utils.mime_validation import detect_mime_type
@@ -1791,12 +1792,22 @@ async def get_eligible_members(
     )
     members = members_result.scalars().all()
 
+    # events.manage reaches several operational positions, so this is a
+    # member-facing list: the email answers to the department's ceiling and
+    # the member's own profile-visibility choice, with members-managers
+    # exempt from the choice — the same policy as the directory.
+    policy = await load_contact_policy(
+        db,
+        current_user.organization_id,
+        is_manager=user_has_permission(current_user, "members.manage"),
+    )
+
     return [
         {
             "id": member.id,
             "first_name": member.first_name,
             "last_name": member.last_name,
-            "email": member.email,
+            "email": policy.email_for(member),
         }
         for member in members
     ]

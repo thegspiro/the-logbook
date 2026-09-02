@@ -449,9 +449,9 @@ Finalize is blocked]**
 
 > "Everyone else got the text and you didn't? Here's the fix."
 
-**[SCREEN: Settings → Security → Privacy Choices, showing "(not answered)"]**
+**[SCREEN: Settings → Privacy → Privacy Choices, showing "(not answered)"]**
 
-> "Settings, Security, Privacy Choices. See 'not answered'? That counts as no."
+> "Settings, Privacy, Privacy Choices. See 'not answered'? That counts as no."
 
 **[CALLOUT: "Not answered = no. Silence is never consent."]**
 

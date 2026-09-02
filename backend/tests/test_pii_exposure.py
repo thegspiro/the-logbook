@@ -22,19 +22,31 @@ from fastapi import HTTPException
 from app.api.v1.endpoints.users import (
     _clear_directory_only_profile_metadata,
     _clear_hidden_contact_fields,
+    _profile_response,
     _redact_contact_fields,
+    _withhold_profile_visibility,
     get_user_with_roles,
 )
 from app.models.user import Position, User, UserStatus
 from app.schemas.organization import OrganizationSettingsResponse
-from app.schemas.user import UserProfileResponse
+from app.schemas.user import (
+    PROFILE_VISIBILITY_DEFAULTS,
+    ProfileVisibility,
+    UserProfileResponse,
+    normalize_profile_visibility,
+    resolve_profile_visibility,
+)
+from app.services.user_service import UserService
 
 pytestmark = [pytest.mark.unit]
 
 
-def _member() -> User:
+def _member(profile_visibility: dict | None = None) -> User:
     user = User(
         id=str(uuid.uuid4()),
+        # NULL by default: the state every pre-existing row is in, which must
+        # resolve to exactly the behaviour the redaction had before the column.
+        profile_visibility=profile_visibility,
         organization_id=str(uuid.uuid4()),
         username="jsmith",
         email="jsmith@example.com",
@@ -86,6 +98,14 @@ def _member() -> User:
 
 
 ALL_VISIBLE = {"show_email": True, "show_phone": True, "show_mobile": True}
+DEFAULT_CHOICE = ProfileVisibility(**PROFILE_VISIBILITY_DEFAULTS)
+SHARE_EVERYTHING = {
+    "email": True,
+    "personal_email": True,
+    "phone": True,
+    "mobile": True,
+    "address": True,
+}
 
 
 class TestWithRolesContactRedaction:
@@ -107,9 +127,11 @@ class TestWithRolesContactRedaction:
         assert result.phone is None
         assert result.mobile is None
 
-    def test_home_address_is_never_shown_to_non_admins(self):
-        # The roster endpoint has no visibility flag for these at all, so
-        # "all flags on" must still not disclose them.
+    def test_home_address_is_hidden_unless_the_member_opts_in(self):
+        # The organisation's setting has no flag for these at all: they are
+        # the member's own call, and a member who has never chosen (NULL
+        # column) has not opted in — so "all org flags on" must still not
+        # disclose them.
         result = _redact_contact_fields(_member(), ALL_VISIBLE, is_admin=False)
 
         assert result.personal_email is None
@@ -274,7 +296,7 @@ class TestProfileContactRedaction:
         roster = _redact_contact_fields(member, {}, is_admin=False)
 
         payload = UserProfileResponse.model_validate(member)
-        _clear_hidden_contact_fields(payload, {})
+        _clear_hidden_contact_fields(payload, {}, DEFAULT_CHOICE)
 
         for field in (
             "email",
@@ -293,26 +315,274 @@ class TestProfileContactRedaction:
     def test_honors_each_visibility_flag_independently(self):
         payload = UserProfileResponse.model_validate(_member())
         _clear_hidden_contact_fields(
-            payload, {"show_email": True, "show_phone": False, "show_mobile": True}
+            payload,
+            {"show_email": True, "show_phone": False, "show_mobile": True},
+            DEFAULT_CHOICE,
         )
 
         assert payload.email == "jsmith@example.com"
         assert payload.phone is None
         assert payload.mobile == "555-0199"
 
-    def test_home_address_is_never_shown_even_when_all_flags_are_on(self):
+    def test_home_address_is_hidden_by_default_even_when_all_flags_are_on(self):
         payload = UserProfileResponse.model_validate(_member())
-        _clear_hidden_contact_fields(payload, ALL_VISIBLE)
+        _clear_hidden_contact_fields(payload, ALL_VISIBLE, DEFAULT_CHOICE)
 
         assert payload.address_street is None
         assert payload.personal_email is None
 
     def test_non_contact_fields_survive_redaction(self):
         payload = UserProfileResponse.model_validate(_member())
-        _clear_hidden_contact_fields(payload, {})
+        _clear_hidden_contact_fields(payload, {}, DEFAULT_CHOICE)
 
         assert payload.first_name == "Jordan"
         assert payload.username == "jsmith"
+
+
+class TestMemberPreferenceRedaction:
+    """The member's own `profile_visibility` choice, combined with the org ceiling.
+
+    Work contact fields show only when the organisation allows them AND the
+    member does. Personal email and the home address answer to the member
+    alone — there is no organisation flag for them, so the org switch being
+    off must not hide them once the member has opted in, and the org switch
+    being on must not reveal them while the member has not.
+    """
+
+    def test_member_can_hide_a_field_the_org_would_show(self):
+        member = _member({**SHARE_EVERYTHING, "email": False, "mobile": False})
+        result = _redact_contact_fields(member, ALL_VISIBLE, is_admin=False)
+
+        assert result.email is None
+        assert result.mobile is None
+        assert result.phone == "555-0100"
+
+    def test_org_ceiling_still_wins_over_a_member_who_shares(self):
+        member = _member(SHARE_EVERYTHING)
+        result = _redact_contact_fields(member, {}, is_admin=False)
+
+        assert result.email is None
+        assert result.phone is None
+        assert result.mobile is None
+
+    def test_personal_email_answers_to_the_member_alone(self):
+        member = _member(SHARE_EVERYTHING)
+        # Org switch off: the ceiling covers work contact fields only.
+        result = _redact_contact_fields(member, {}, is_admin=False)
+
+        assert result.personal_email == "jsmith@example.org"
+
+    def test_address_is_shown_as_a_whole_when_opted_in(self):
+        member = _member({**PROFILE_VISIBILITY_DEFAULTS, "address": True})
+        result = _redact_contact_fields(member, {}, is_admin=False)
+
+        assert result.address_street == "12 Ladder Lane"
+        assert result.address_city == "Oakville"
+        assert result.address_state == "VA"
+        assert result.address_zip == "22046"
+        assert result.address_country == "US"
+
+    def test_address_is_hidden_as_a_whole_when_not(self):
+        member = _member({**SHARE_EVERYTHING, "address": False})
+        result = _redact_contact_fields(member, ALL_VISIBLE, is_admin=False)
+
+        for field in (
+            "address_street",
+            "address_city",
+            "address_state",
+            "address_zip",
+            "address_country",
+        ):
+            assert getattr(result, field) is None, field
+
+    def test_detail_endpoint_and_roster_agree_on_the_member_choice(self):
+        member = _member({**SHARE_EVERYTHING, "phone": False})
+        roster = _redact_contact_fields(member, ALL_VISIBLE, is_admin=False)
+
+        payload = UserProfileResponse.model_validate(member)
+        _clear_hidden_contact_fields(
+            payload, ALL_VISIBLE, resolve_profile_visibility(member)
+        )
+
+        for field in ("email", "phone", "mobile", "personal_email", "address_street"):
+            assert getattr(payload, field) == getattr(roster, field), field
+        assert payload.phone is None
+        assert payload.address_street == "12 Ladder Lane"
+
+    def test_members_manager_is_not_subject_to_the_member_choice(self):
+        member = _member({**SHARE_EVERYTHING, "email": False, "address": False})
+        result = _redact_contact_fields(member, {}, is_admin=True)
+
+        assert result.email == "jsmith@example.com"
+        assert result.address_street == "12 Ladder Lane"
+
+
+class TestProfileVisibilityResolver:
+    """NULL and malformed storage resolve to the defaults, never to an error."""
+
+    def test_null_column_is_the_defaults(self):
+        assert normalize_profile_visibility(None) == PROFILE_VISIBILITY_DEFAULTS
+
+    def test_defaults_reproduce_the_pre_column_behaviour(self):
+        # Work contact fields shown where the org allows; personal email and
+        # address hidden. Changing these changes every existing installation's
+        # roster on upgrade, so they are pinned by value.
+        assert PROFILE_VISIBILITY_DEFAULTS == {
+            "email": True,
+            "personal_email": False,
+            "phone": True,
+            "mobile": True,
+            "address": False,
+        }
+
+    def test_partial_dict_fills_missing_keys_from_defaults(self):
+        assert normalize_profile_visibility({"address": True}) == {
+            **PROFILE_VISIBILITY_DEFAULTS,
+            "address": True,
+        }
+
+    def test_only_genuine_booleans_are_honoured(self):
+        stored = {"email": "no", "phone": 0, "mobile": 1, "address": "true", "x": 1}
+        assert normalize_profile_visibility(stored) == PROFILE_VISIBILITY_DEFAULTS
+
+    def test_non_dict_storage_is_the_defaults(self):
+        assert normalize_profile_visibility(["email"]) == PROFILE_VISIBILITY_DEFAULTS
+        assert normalize_profile_visibility("email") == PROFILE_VISIBILITY_DEFAULTS
+
+    def test_resolver_tolerates_an_object_without_the_attribute(self):
+        class Bare:
+            pass
+
+        assert resolve_profile_visibility(Bare()) == DEFAULT_CHOICE
+
+    def test_schema_refuses_partial_extra_and_non_bool(self):
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            ProfileVisibility(**{**SHARE_EVERYTHING, "address": "true"})
+        with pytest.raises(pydantic.ValidationError):
+            ProfileVisibility(
+                **{k: v for k, v in SHARE_EVERYTHING.items() if k != "address"}
+            )
+        with pytest.raises(pydantic.ValidationError):
+            ProfileVisibility(**SHARE_EVERYTHING, date_of_birth=True)
+
+
+class _ScalarsResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._rows
+
+
+class TestListUsersHonorsMemberPreference:
+    """`GET /users` (the directory) applies the member choice inside the org ceiling."""
+
+    @staticmethod
+    def _service_for(user: User) -> UserService:
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_ScalarsResult([user]))
+        return UserService(db)
+
+    async def test_member_hiding_phone_is_hidden_on_the_directory(self):
+        member = _member({**SHARE_EVERYTHING, "phone": False})
+        rows = await self._service_for(member).get_users_for_organization(
+            organization_id=uuid.UUID(member.organization_id),
+            include_contact_info=True,
+            contact_settings={"contact_info_visibility": ALL_VISIBLE},
+        )
+
+        assert rows[0].phone is None
+        assert rows[0].email == "jsmith@example.com"
+        assert rows[0].mobile == "555-0199"
+
+    async def test_org_switch_off_hides_everything_regardless(self):
+        member = _member(SHARE_EVERYTHING)
+        rows = await self._service_for(member).get_users_for_organization(
+            organization_id=uuid.UUID(member.organization_id),
+            include_contact_info=False,
+            contact_settings=None,
+        )
+
+        assert rows[0].email is None
+        assert rows[0].phone is None
+        assert rows[0].mobile is None
+
+    async def test_members_manager_is_exempt_from_the_member_choice(self):
+        # The management table and its CSV export must keep what leadership
+        # keeps on the profile; the org ceiling still applies to them here.
+        member = _member({**SHARE_EVERYTHING, "phone": False, "mobile": False})
+        rows = await self._service_for(member).get_users_for_organization(
+            organization_id=uuid.UUID(member.organization_id),
+            include_contact_info=True,
+            contact_settings={
+                "contact_info_visibility": {**ALL_VISIBLE, "show_mobile": False}
+            },
+            honor_member_choice=False,
+        )
+
+        assert rows[0].phone == "555-0100"
+        assert rows[0].mobile is None
+
+
+class TestWithholdProfileVisibility:
+    """Every route serialising UserProfileResponse withholds the choice object
+    from anyone but the subject and members-managers — including the two
+    PATCH routes a users.edit holder may use on a colleague."""
+
+    @staticmethod
+    def _payload() -> UserProfileResponse:
+        return UserProfileResponse.model_validate(_member(SHARE_EVERYTHING))
+
+    def test_subject_keeps_it(self):
+        payload = self._payload()
+        _withhold_profile_visibility(payload, _caller_with([]), is_self=True)
+
+        assert payload.profile_visibility is not None
+
+    def test_members_manager_keeps_it(self):
+        payload = self._payload()
+        _withhold_profile_visibility(
+            payload, _caller_with(["members.manage"]), is_self=False
+        )
+
+        assert payload.profile_visibility is not None
+
+    def test_users_edit_holder_does_not(self):
+        payload = self._payload()
+        _withhold_profile_visibility(
+            payload, _caller_with(["users.edit", "users.view"]), is_self=False
+        )
+
+        assert payload.profile_visibility is None
+
+    def test_profile_writes_hand_the_row_back_to_subject_and_managers(self):
+        # The row itself, serialised by FastAPI as before — not a rebuilt
+        # payload — so the write handlers stay indifferent to row shape.
+        member = _member(SHARE_EVERYTHING)
+        assert _profile_response(member, _caller_with([]), is_self=True) is member
+        assert (
+            _profile_response(member, _caller_with(["members.manage"]), is_self=False)
+            is member
+        )
+
+    def test_profile_writes_withhold_the_choice_from_a_users_edit_holder(self):
+        member = _member(SHARE_EVERYTHING)
+        result = _profile_response(member, _caller_with(["users.edit"]), is_self=False)
+
+        assert isinstance(result, UserProfileResponse)
+        assert result.profile_visibility is None
+        assert result.address_street == "12 Ladder Lane"
+
+
+def _caller_with(permissions: list[str]) -> MagicMock:
+    return _caller(
+        user_id=str(uuid.uuid4()), org_id=str(uuid.uuid4()), permissions=permissions
+    )
 
 
 class TestDirectoryProfileMetadataRedaction:
@@ -435,6 +705,74 @@ class TestProfileEndpointAppliesRedaction:
 
         assert result.address_street == "12 Ladder Lane"
         assert result.personal_email == "jsmith@example.org"
+
+    async def test_plain_viewer_sees_what_the_member_opted_to_share(self):
+        subject = _member({**PROFILE_VISIBILITY_DEFAULTS, "address": True})
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.view"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.address_street == "12 Ladder Lane"
+        assert result.address_zip == "22046"
+        # Still under the org ceiling (patched to {} in _call_endpoint).
+        assert result.email is None
+
+    async def test_plain_viewer_never_receives_the_choice_object(self):
+        # The nulls say nothing about whether a field is empty or withheld;
+        # the choice object would say exactly that.
+        subject = _member({**SHARE_EVERYTHING, "address": False})
+        for permission in ("users.view", "members.view"):
+            caller = _caller(
+                user_id=str(uuid.uuid4()),
+                org_id=subject.organization_id,
+                permissions=[permission],
+            )
+
+            result = await _call_endpoint(subject, caller)
+
+            assert result.profile_visibility is None, permission
+
+    async def test_member_receives_their_own_resolved_choice(self):
+        subject = _member()  # NULL column
+        caller = _caller(
+            user_id=subject.id,
+            org_id=subject.organization_id,
+            permissions=[],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.profile_visibility == DEFAULT_CHOICE
+
+    async def test_members_manager_receives_the_resolved_choice(self):
+        subject = _member({**PROFILE_VISIBILITY_DEFAULTS, "mobile": False})
+        caller = _caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.manage"],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.profile_visibility is not None
+        assert result.profile_visibility.mobile is False
+        assert result.profile_visibility.email is True
+
+    async def test_malformed_storage_resolves_without_raising(self):
+        subject = _member({"email": "yes", "junk": 1})
+        caller = _caller(
+            user_id=subject.id,
+            org_id=subject.organization_id,
+            permissions=[],
+        )
+
+        result = await _call_endpoint(subject, caller)
+
+        assert result.profile_visibility == DEFAULT_CHOICE
 
     async def test_plain_viewer_gets_no_dob_or_emergency_contacts(self):
         subject = _member()

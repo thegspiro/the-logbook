@@ -7,7 +7,7 @@
  * them ends up spelling "administrative" differently from the rest.
  */
 
-import { MemberClass, MemberStatus, MembershipType } from '../constants/enums';
+import { MEMBERSHIP_TYPE_LABELS, MemberClass, MemberStatus, MembershipType } from '../constants/enums';
 
 /**
  * Legacy `membership_type` -> the member class it implies.
@@ -59,6 +59,23 @@ export function isAdministrativeMember(memberClass?: string | null, membershipTy
 
 /** Shown under a rank field the administrative class has disabled. */
 export const ADMINISTRATIVE_RANK_HINT = 'Administrative members do not hold an operational rank.';
+
+/**
+ * Human label for a stored `membership_type`, e.g. "Active member",
+ * "Life member", "Administrative". Built-in types come from
+ * `MEMBERSHIP_TYPE_LABELS`; an org-configured tier id (`senior`) is humanized
+ * as-is, because the tier's display name lives in org settings a plain member
+ * cannot read. Empty string for no type.
+ */
+export function membershipTypeLabel(membershipType?: string | null): string {
+  const raw = membershipType?.trim().toLowerCase();
+  if (!raw) return '';
+  const label = MEMBERSHIP_TYPE_LABELS[raw] ?? raw.replace(/_/g, ' ');
+  // "Administrative member" is redundant and "Prospective member" reads as a
+  // status; the ladder positions get the noun, the class does not.
+  if (raw === MembershipType.ADMINISTRATIVE) return label;
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)} member`;
+}
 
 /**
  * A single "membership type" picked in a form -> the class/status pair to send.

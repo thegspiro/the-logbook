@@ -70,6 +70,7 @@ from app.models.user import (
     UserStatus,
     user_positions,
 )
+from app.schemas.user import resolve_profile_visibility
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
 from app.utils.model_updates import apply_updates
@@ -8118,6 +8119,14 @@ class InventoryService:
             if over_allowance:
                 over_allowance_count += 1
 
+            # The org setting is the ceiling; within it the member's own
+            # profile-visibility choice decides. Without this the planner was
+            # a way round a preference the directory and profile honour.
+            member_choice = resolve_profile_visibility(u)
+            show_email = contact_visibility.get("show_email") and member_choice.email
+            show_phone = contact_visibility.get("show_phone") and member_choice.phone
+            show_mobile = contact_visibility.get("show_mobile") and member_choice.mobile
+
             members.append(
                 {
                     "user_id": u.id,
@@ -8129,17 +8138,11 @@ class InventoryService:
                         u.status.value if hasattr(u.status, "value") else u.status
                     ),
                     "membership_type": u.membership_type,
-                    "email": (
-                        u.email if contact_visibility.get("show_email") else None
-                    ),
+                    "email": u.email if show_email else None,
                     "phone": (
                         u.phone
-                        if contact_visibility.get("show_phone") and u.phone
-                        else (
-                            u.mobile
-                            if contact_visibility.get("show_mobile") and u.mobile
-                            else None
-                        )
+                        if show_phone and u.phone
+                        else (u.mobile if show_mobile and u.mobile else None)
                     ),
                     "needed_size": needed_size,
                     "has_size_on_file": has_size,

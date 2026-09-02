@@ -10,7 +10,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.forms import FormCategory, FormStatus
@@ -34,6 +39,7 @@ from app.schemas.forms import (  # Form schemas; Field schemas; Submission schem
     SubmissionsListResponse,
 )
 from app.services.forms_service import FormsService
+from app.utils.contact_visibility import load_contact_policy
 
 router = APIRouter()
 
@@ -182,11 +188,21 @@ async def member_lookup(
     **Authentication required**
     Returns matching members by name, badge number, or email.
     """
+    # Any signed-in member can search here (the field appears inside prospect
+    # applications and event requests), so the email column answers to the
+    # same policy as the directory: the department's ceiling and the member's
+    # own choice, with members-managers exempt from the latter.
+    policy = await load_contact_policy(
+        db,
+        current_user.organization_id,
+        is_manager=user_has_permission(current_user, "members.manage"),
+    )
     service = FormsService(db)
     members = await service.search_members(
         organization_id=current_user.organization_id,
         query=q,
         limit=limit,
+        contact_policy=policy,
     )
     return MemberLookupResponse(members=members, total=len(members))
 

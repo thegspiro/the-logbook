@@ -41,6 +41,40 @@ export interface ContactInfoSettings {
   show_mobile: boolean;
 }
 
+/**
+ * Which of a member's own contact fields other members may see. The member's
+ * choice; the department's `ContactInfoSettings` is a ceiling over the three
+ * work fields on top of it. Personal email and the mailing address answer to
+ * the member alone. Mirrors `ProfileVisibility` in backend/app/schemas/user.py.
+ */
+export interface ProfileVisibility {
+  email: boolean;
+  personal_email: boolean;
+  phone: boolean;
+  mobile: boolean;
+  address: boolean;
+}
+
+export type ProfileVisibilityField = keyof ProfileVisibility;
+
+/** Every field, in display order, so a loop can never miss one under `noUncheckedIndexedAccess`. */
+export const PROFILE_VISIBILITY_FIELDS: readonly ProfileVisibilityField[] = [
+  'email',
+  'personal_email',
+  'phone',
+  'mobile',
+  'address',
+];
+
+/** What a member who has never chosen gets — identical to the backend defaults. */
+export const DEFAULT_PROFILE_VISIBILITY: ProfileVisibility = {
+  email: true,
+  personal_email: false,
+  phone: true,
+  mobile: true,
+  address: false,
+};
+
 export interface MembershipIdSettings {
   enabled: boolean;
   auto_generate: boolean;
