@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A mixed election could skip an eligible voter entirely, and a legacy title-keyed vote could be double-counted (2026-09-02)
+
+**Fixed**
+
+- **A member eligible only for a plain position (not any ballot item) on a
+  mixed election never received a ballot at all** — the decision to skip a
+  member with zero eligible ballot items ran before their position
+  eligibility was even checked, so an otherwise-eligible voter for a
+  restricted position was excluded outright whenever they also failed an
+  unrelated ballot item's voter-type rules. Fixed by checking both forms of
+  eligibility before deciding whether a member's ballot would be empty.
+- **A vote cast before positions were normalized could fail to block a
+  second vote for the same contest,** if that vote's candidate was one of the
+  older ones keyed by title rather than by the ballot item's id: the
+  duplicate-vote check only recognized the newer id-based match. Fixed by
+  using the same broadened match already used elsewhere in the same
+  submission path, so an old title-keyed vote is recognized as a duplicate
+  everywhere it needs to be.
+
+**Known limitation (flagged, not fixed):** an eligible member's plain
+position vote in a mixed election has no way to be cast today — see
+`KNOWN_LIMITATIONS.md`.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-26, ELEC-27, ELEC-28).
+
 ### A member moved to a custom membership tier kept voting rights a restricted ballot meant to exclude, and four token-ballot races/gaps (2026-09-02)
 
 **Fixed**

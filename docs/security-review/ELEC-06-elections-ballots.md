@@ -647,24 +647,188 @@ documentation-accuracy findings with no code to fix — see the corrected
 `.with_for_update()` inventory above and `PROGRESS.md` / `CHANGELOG.md`'s
 corrected finding-id enumeration.
 
-**Completion gate (pass 3, after all three Codex rounds):**
+### ELEC-26 — P1 — Mixed-election item-skip decided before positional eligibility was computed, excluding a position-only-eligible voter — ✅ FIXED
 
-| Check                                                                               | Result                                                                      |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                       | ✅ 0 violations                                                             |
-| `black --check app/ tests/ alembic/`                                                | ✅ clean                                                                    |
-| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                         | ✅ clean                                                                    |
-| `python3 scripts/validate_migrations.py --strict`                                   | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration in this round |
-| `pytest tests/ -q -k "election or ballot or vote or quorum"`                        | ✅ 475 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed   |
-| `pytest tests/test_election_codex_round2.py tests/test_election_codex_round3.py -q` | ✅ 23 passed, 0 failed                                                      |
-| `pytest tests/ -q` (full backend suite)                                             | ✅ 9795 passed, 21 skipped (pre-existing/environmental), 0 failed           |
-| `tsc --noEmit` / `eslint .`                                                         | not run — no frontend file changed this round                               |
+**What:** `send_ballot_emails` computed `eligible_items` and, when a
+recipient had zero of them, immediately `continue`d to the next recipient —
+skipping them with no token and no email. That decision ran **before**
+`eligible_positions` (added by ELEC-23, this same pass, round 2) was ever
+computed. In a mixed election (an election with both `ballot_items` and
+`positions` configured — the schema explicitly allows a candidate to be
+nominated for a plain position untied to any item), a recipient who fails
+every structured item's `eligible_voter_types` but qualifies for a
+restricted plain position was excluded outright, even though
+`eligible_positions` would have come back non-empty for them a few lines
+later. ELEC-23 fixed the _token snapshot_ to include such a voter's
+positions when it did run; this bug meant the code often never reached that
+snapshot for exactly the voters it exists to cover.
+
+**Impact:** an eligible voter for a plain-position contest (e.g. Secretary,
+restricted to administrative members) never receives a ballot at all if they
+also fail an unrelated item's voter-type restriction (e.g. a Board Seat
+restricted to operational members) — no email, no token, no record in
+`skipped_details` beyond "no eligible ballot items," which misdescribes the
+real reason (they were never eligible for items in the first place; they
+were eligible for a position). This can change the outcome of the position's
+election by silently shrinking its electorate, and is invisible to the
+secretary sending the ballot unless they cross-reference eligibility by hand.
+
+**Where:** `election_service.py:6041-6073` pre-fix numbering (the ballot-items
+empty check, computed and decided before the positions block that follows
+it).
+
+**Fix:** restructured so both `eligible_items` and `eligible_positions` are
+computed in full before any skip decision is made. The skip decision itself
+is now a single combined check: a recipient is skipped only when they
+qualify for **neither** structure the election actually defines — a plain
+position with no `position_eligibility` rules is unrestricted (everyone
+qualifies), so it never triggers a skip on its own; a position with rules
+requires appearing in `eligible_positions`; an election with ballot items
+requires appearing in `eligible_items`. When both structures are defined and
+the recipient fails both, the skip reason now says so explicitly ("Not
+eligible for any ballot item or position in this election") rather than
+reporting only the item-side failure. Guarded by
+`TestMixedElectionItemFailureDoesNotSkipPositionEligible` (2 tests) in
+`tests/test_election_codex_round4.py`, confirmed to fail pre-fix via
+`git stash` (both tests failed: `sent == 0`, `skipped == 1` before the fix).
+
+### ELEC-27 — P2 — `submit_ballot_with_token`'s NULL-position duplicate-vote check used the item's storage position, not its full candidate-position set — ✅ FIXED
+
+**What:** `submit_ballot_with_token` already computes
+`item_candidate_positions = ballot_item_candidate_positions(ballot_item)` —
+the broader set of `Candidate.position` values that legitimately belong to a
+ballot item, covering a legacy item's title-keyed candidates as well as its
+own `position`/id (ELEC-22's helper). It uses that set correctly in the
+rankings, multi-select, and plain-candidate-UUID validation branches a few
+lines later. But the duplicate-vote check immediately above those branches —
+the one guarding a pre-normalization `Vote.position IS NULL` row — still
+filtered its inner candidate subquery on `Candidate.position == position`
+(the single _storage_ value: the item's own `position` field, or the item id
+when absent), not `item_candidate_positions`. This is the exact shape of gap
+ELEC-22 fixed in the eligibility allow-list, reopened in the
+duplicate-detection query that ELEC-22 didn't touch.
+
+**Impact:** a voter with an old, pre-normalization vote (`position IS NULL`)
+against a legacy item's title-keyed candidate, who also holds a second,
+unused voting token for the same election, could submit a second vote for
+that same contest. The old vote's candidate has `position == <title>`, but
+the pre-fix subquery only matched `Candidate.position == <item id>` (since a
+legacy item has no `position` field of its own) — so the existing vote was
+invisible to the dedup check, the new vote was recorded and counted, and the
+voter's real tally for that contest became two instead of one.
+
+**Where:** `election_service.py:7743-7763` pre-fix numbering (the NULL-position
+subquery inside the per-vote duplicate check).
+
+**Fix:** the subquery's inner `Candidate` filter now uses
+`Candidate.position.in_(item_candidate_positions)`, the same set already
+used by every other candidate-validation branch in this method and by
+ELEC-22's fix in `cast_vote_with_token` — one consistent definition of
+"which positions belong to this item," not two that can drift. Guarded by
+`TestSubmitBallotLegacyNullPositionDedup` (2 tests: the duplicate is now
+caught, and a genuinely fresh voter is still unaffected) in
+`tests/test_election_codex_round4.py`, confirmed to fail pre-fix via
+`git stash` (the duplicate-submission test wrongly succeeded before the fix).
+
+### ELEC-28 — P1 — The public ballot UI has no way to render or submit a plain-position contest, even for a mixed election the backend now correctly issues one for — 🚩 FLAGGED
+
+**What:** ELEC-23 (round 2) and ELEC-26 (above) fixed the backend so that a
+mixed election's `send_ballot_emails` correctly snapshots `eligible_positions`
+on the token and issues a ballot to a recipient who qualifies for a plain
+position, independent of their ballot-item eligibility. `/ballot/lookup`
+(`lookup_ballot_by_token`) correctly returns that recipient's eligible
+`election.positions` entries and their candidates. But
+`frontend/src/pages/BallotVotingPage.tsx` — the only UI the public,
+token-based ballot flow renders — derives its entire form from
+`election.ballot_items` alone (`const ballotItems = election.ballot_items ||
+[]`, `getCandidatesForItem`, `choices` keyed by `item.id`) and never reads
+`election.positions` at all. Its single submission path,
+`handleConfirmSubmit`, always POSTs to `/elections/ballot/vote/bulk`
+(`submit_ballot_with_token`), which only accepts `ballot_item_id`-keyed
+votes. The backend does expose a route shaped for a single positional vote —
+`POST /elections/ballot/vote` (`cast_vote_with_token`) — but grepping the
+frontend confirms it is never called from anywhere in `frontend/src`; the
+only caller of the authenticated, non-token `ElectionBallot.tsx` component
+(which _does_ render `election.positions`) is the logged-in
+`electionService.castVote()` → `/elections/{id}/vote` path, a completely
+separate, authenticated voting flow unrelated to the emailed-token ballot.
+
+**Impact:** a member who is eligible for a plain-position contest in a mixed
+election but ineligible for every structured ballot item now correctly
+receives a ballot email and a live token (ELEC-26), but the page that token
+opens shows **zero contests** — `ballotItems` is empty, so the item loop
+renders nothing, and there is no rendering path for `election.positions` at
+all. Worse, a member eligible for _both_ an item and a position sees only
+the item; submitting that visible ballot spends the token
+(`voting_token.used = True` in `submit_ballot_with_token`), and there is no
+way back to cast the positional vote afterward — the token, which is
+single-use by design (R-1), is gone. The net effect: through the product's
+actual public ballot UI today, a plain-position contest inside a mixed
+election cannot be voted on at all by an emailed-token recipient, regardless
+of how correct the backend's eligibility computation is.
+
+**Fix: not applied — this is a product/UX decision, not a mechanical bug.**
+Investigated whether an existing code path could be safely reused rather
+than designed from scratch, and concluded it cannot:
+
+- `ElectionBallot.tsx` already renders `election.positions` and multiple
+  voting methods, but it is wired to the **authenticated** flow
+  (`electionService.checkEligibility`/`castVote` against
+  `/elections/{id}/...`, which require a logged-in `current_user`) — it has
+  no token awareness and cannot be dropped into the anonymous, token-based
+  `BallotVotingPage.tsx` without rebuilding its eligibility and submission
+  plumbing around a token instead of a session.
+- The backend's single-vote token route, `POST /elections/ballot/vote`
+  (`cast_vote_with_token`), is unused by any current frontend code — wiring
+  it up is not "flip a flag," it's adding a first caller, with a rendering
+  and per-position submission-state model `BallotVotingPage.tsx` does not
+  have today (its `choices` state, confirmation summary, and validation are
+  all keyed by ballot-item id).
+- Both the bulk (`/ballot/vote/bulk`) and single (`/ballot/vote`) token
+  routes mark the token `used = True` on completion (`election_service.py`,
+  `submit_ballot_with_token` and `cast_vote_with_token` respectively) — the
+  token is genuinely single-use. A ballot spanning both structures needs
+  either one new combined endpoint or careful sequencing of two calls before
+  the token is marked used, plus new UI state to hold both an item ballot
+  and a position ballot in one confirmation step. That is a new ballot
+  contract, not a routing fix.
+
+Building this hastily on a live election/voting page risks getting ballot
+semantics wrong in a way that is worse than the current gap (e.g., double
+token use, a position vote silently dropped on partial failure, or
+inconsistent confirmation-summary text) — exactly the class of mistake this
+rotation's standard (see ELEC-14, ELEC-16) holds should be flagged for a
+human product decision rather than guessed at during a security-review pass.
+Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+**Round 4: 2 fixed (ELEC-26, ELEC-27), 1 flagged (ELEC-28).** Findings
+posted by Codex against commit `dab1d1baf` (before round 3's `53c81b92a`) —
+round 3 did not touch this code, so both backend findings were still open
+against current code. Both confirmed real by tracing the actual functions
+(not taken on Codex's word) and fixed with regression tests that fail
+pre-fix via `git stash`. The third (frontend) finding was investigated in
+full, confirmed real, and flagged per the standard above rather than forcing
+a rushed UI change into a security-review PR.
+
+**Completion gate (pass 3, after all four Codex rounds):**
+
+| Check                                                                                                                   | Result                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                           | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                                                                                    | ✅ clean                                                                    |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                                                             | ✅ clean                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                       | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration in this round |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"`                                                            | ✅ 479 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed   |
+| `pytest tests/test_election_codex_round2.py tests/test_election_codex_round3.py tests/test_election_codex_round4.py -q` | ✅ 27 passed, 0 failed                                                      |
+| `pytest tests/ -q` (full backend suite)                                                                                 | ✅ 9799 passed, 21 skipped (pre-existing/environmental), 0 failed           |
+| `tsc --noEmit` / `eslint .`                                                                                             | not run — no frontend file changed this round (ELEC-28 flagged, not fixed)  |
 
 New guard tests: `tests/test_election_codex_round2.py` (2 new/updated tests
 for ELEC-24's lock-order fix, plus this round's update to
 `TestVoidManualBallotBatchLocking`'s two tests for ELEC-25's new election
-lock) and `tests/test_election_codex_round3.py` (7 tests across ELEC-22 and
-ELEC-23, plus 3 new tests for ELEC-25 in this round).
+lock), `tests/test_election_codex_round3.py` (7 tests across ELEC-22 and
+ELEC-23, plus 3 new tests for ELEC-25), and `tests/test_election_codex_round4.py`
+(new file, 4 tests: 2 for ELEC-26, 2 for ELEC-27).
 `tests/test_election_codex_fixes.py`'s `TestTokenVoteNullPositionDedup._token()`
 stub was also given an explicit `eligible_item_ids=None` default — ELEC-21's
 fix reads that attribute unconditionally (as the real `VotingToken` model

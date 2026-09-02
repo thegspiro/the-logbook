@@ -6038,8 +6038,13 @@ Best regards,
                 )
                 continue
 
-            # Empty ballot prevention: skip members who have zero eligible
-            # ballot items so they don't receive a confusing empty ballot.
+            # Empty ballot prevention: compute eligible ballot items, but do
+            # NOT decide to skip yet — a mixed election may still owe this
+            # recipient a ballot for a plain position even when they are
+            # ineligible for every structured item (see the positions block
+            # below). Deciding on items alone here excluded a voter who was
+            # eligible only for a plain position: eligible_positions had not
+            # even been computed yet.
             eligible_items: List[Dict] = []
             if election.ballot_items:
                 eligible_items = await self._get_eligible_ballot_items_for_user(
@@ -6048,29 +6053,6 @@ Best regards,
                     organization_id=str(organization_id),
                     organization=organization,
                 )
-                if not eligible_items:
-                    skipped_count += 1
-                    reason = await self._get_ineligibility_reason_for_user(
-                        user=recipient,
-                        election=election,
-                        organization_id=str(organization_id),
-                        organization=organization,
-                    ) or (
-                        "No eligible ballot items — role type and "
-                        "attendance did not match any item requirements"
-                    )
-                    skipped_details.append(
-                        {
-                            "user_id": str(recipient.id),
-                            "name": recipient.full_name or recipient.username,
-                            "reason": reason,
-                        }
-                    )
-                    logger.info(
-                        f"Skipping ballot email for user={recipient.id} "
-                        f"({reason}) | election={election_id}"
-                    )
-                    continue
 
             # Positions: snapshot which of this election's plain positions
             # this recipient may vote for, mirroring the per-item snapshot
@@ -6104,29 +6086,69 @@ Best regards,
                     voter_types = pos_rules.get("voter_types", ["all"])
                     if await self._user_has_role_type(recipient, voter_types):
                         eligible_positions.append(pos)
-                # Only disqualify the recipient outright when they have
-                # nothing else to vote on either — a mixed election may
-                # still owe them a ballot for the items they *are*
-                # eligible for (already checked above).
-                if not eligible_positions and not eligible_items:
-                    skipped_count += 1
+
+            # Empty ballot prevention: decide now that BOTH eligibility sets
+            # above are known. A mixed election defines ballot items and/or
+            # plain positions independently, so a recipient is skipped only
+            # when they qualify for neither structure the election actually
+            # defines — being eligible for one plain position is enough to
+            # warrant a ballot even if every structured item excludes them,
+            # and vice versa. Positions with no position_eligibility rules
+            # are unrestricted (everyone qualifies), so they never trigger a
+            # skip on their own.
+            items_defined = bool(election.ballot_items)
+            positions_restricted = bool(election.positions) and bool(
+                election.position_eligibility
+            )
+            positions_unrestricted = bool(election.positions) and not (
+                election.position_eligibility
+            )
+
+            qualifies = positions_unrestricted
+            if items_defined:
+                qualifies = qualifies or bool(eligible_items)
+            if positions_restricted:
+                qualifies = qualifies or bool(eligible_positions)
+
+            if (
+                items_defined or positions_restricted or positions_unrestricted
+            ) and not qualifies:
+                skipped_count += 1
+                if items_defined and positions_restricted:
+                    reason = (
+                        "Not eligible for any ballot item or position in "
+                        "this election — role type, attendance, and "
+                        "membership did not match any item or position "
+                        "requirements"
+                    )
+                elif positions_restricted:
                     reason = (
                         "Not eligible for any position in this election — "
                         "membership type does not match any position's "
                         "voter-type rules"
                     )
-                    skipped_details.append(
-                        {
-                            "user_id": str(recipient.id),
-                            "name": recipient.full_name or recipient.username,
-                            "reason": reason,
-                        }
+                else:
+                    reason = await self._get_ineligibility_reason_for_user(
+                        user=recipient,
+                        election=election,
+                        organization_id=str(organization_id),
+                        organization=organization,
+                    ) or (
+                        "No eligible ballot items — role type and "
+                        "attendance did not match any item requirements"
                     )
-                    logger.info(
-                        f"Skipping ballot email for user={recipient.id} "
-                        f"({reason}) | election={election_id}"
-                    )
-                    continue
+                skipped_details.append(
+                    {
+                        "user_id": str(recipient.id),
+                        "name": recipient.full_name or recipient.username,
+                        "reason": reason,
+                    }
+                )
+                logger.info(
+                    f"Skipping ballot email for user={recipient.id} "
+                    f"({reason}) | election={election_id}"
+                )
+                continue
 
             # Build ballot items lists for the email
             items_html, items_text = self._build_ballot_items_lists(eligible_items)
@@ -7738,8 +7760,14 @@ Best regards,
             # namespace (`test:` prefix). Votes stored before position
             # normalization have position IS NULL, so a same-position filter
             # alone would let a token that voted pre-deploy vote again —
-            # treat a NULL-position vote for a candidate of this position as
-            # a vote on this item (read-time handling, no migration).
+            # treat a NULL-position vote for a candidate whose position is
+            # in item_candidate_positions (not just `position` itself) as a
+            # vote on this item: a legacy item's candidates may be keyed by
+            # title instead of the item id (read-time handling, no
+            # migration). Using `position` alone here would miss a NULL-
+            # position vote cast against a title-keyed legacy candidate,
+            # letting the same voter cast a second, differently-keyed vote
+            # for the same contest.
             existing_check = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election.id)
@@ -7753,7 +7781,7 @@ Best regards,
                             Vote.candidate_id.in_(
                                 select(Candidate.id)
                                 .where(Candidate.election_id == election.id)
-                                .where(Candidate.position == position)
+                                .where(Candidate.position.in_(item_candidate_positions))
                             ),
                         ),
                     )

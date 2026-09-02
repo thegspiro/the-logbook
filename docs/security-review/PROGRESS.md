@@ -17,10 +17,65 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (Feature 06,
-Elections & ballots, pass 3) — 10 fixed, 2 flagged across three Codex review
+Elections & ballots, pass 3) — 12 fixed, 3 flagged across four Codex review
 rounds, 1 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 4) — 2 fixed, 1 flagged — PR #2162
+
+Codex posted 3 more findings against commit `dab1d1baf` (the state before
+round 3's `53c81b92a` fix landed — round 3 did not touch this code, so both
+backend findings were still open). Re-verified each against current code
+independently, same standard as all prior rounds:
+
+- **ELEC-26 (P1, fixed):** `send_ballot_emails`'s "skip recipients with zero
+  eligible ballot items" check decided to skip a recipient **before**
+  `eligible_positions` (ELEC-23's snapshot) was computed. In a mixed
+  election, a recipient eligible for a plain position but ineligible for
+  every structured item was excluded outright — no token, no email — despite
+  `eligible_positions` coming back non-empty for them moments later in the
+  original code. Fixed by computing both eligibility sets first, then
+  deciding to skip only when the recipient qualifies for neither structure
+  the election actually defines.
+- **ELEC-27 (P2, fixed):** `submit_ballot_with_token`'s NULL-position
+  duplicate-vote subquery filtered on `Candidate.position == position` (the
+  item's storage value) instead of the broader `item_candidate_positions`
+  set (`ballot_item_candidate_positions()`, ELEC-22's helper) already used by
+  every other candidate-validation branch in the same method. A voter with
+  an old NULL-position vote against a title-keyed legacy candidate, plus a
+  fresh unused token, could have that vote missed by the dedup check and cast
+  a second vote for the same contest — the same shape of bug ELEC-22 fixed,
+  just in the duplicate-detection query instead of the eligibility
+  allow-list. Fixed by using `item_candidate_positions` in this subquery too.
+- **ELEC-28 (P1, flagged):** the public, token-based ballot page
+  (`BallotVotingPage.tsx`) renders and submits only `election.ballot_items`
+  — it never reads `election.positions` or calls the backend's single-vote
+  positional route (`POST /elections/ballot/vote`, confirmed unused by any
+  frontend code). So even with ELEC-23/ELEC-26 correctly issuing a mixed
+  election's position-only-eligible voters a live token, the page that token
+  opens has no way to render or submit their positional vote — and
+  submitting the visible item ballot spends the single-use token, with no
+  way back. Investigated whether a small, safe reuse of existing UI
+  (`ElectionBallot.tsx`, which does render positions) was possible: it is
+  not — that component is wired to the authenticated, non-token voting flow
+  and would need its eligibility/submission plumbing rebuilt around a token.
+  Building new ballot-rendering UI, form state, and a submission contract is
+  a product decision, not a mechanical fix, so this is flagged rather than
+  guessed at, per this rotation's own standard (ELEC-14, ELEC-16).
+
+Both fixes guarded by regression tests in `tests/test_election_codex_round4.py`
+(new file, 4 tests), each confirmed to fail pre-fix via `git stash`.
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 479
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9799
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched (ELEC-28 flagged, not fixed), so `tsc`/`eslint` not run. All 3
+review threads replied to and resolved. See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-26/27/28) for the full
+write-up. `KNOWN_LIMITATIONS.md` updated for ELEC-28. Rotation row 06
+remains ⏳ (awaiting PR merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 3) — 1 fixed, 2 docs-only — PR #2162
 

@@ -1661,6 +1661,26 @@ position model to the ballot-item model the public page already uses, including
 its submission shape. Needs an owner decision on whether to converge the two
 ballots or retire one of them. This loop does not make that call.
 
+**Update (2026-09-02, security review ELEC-28):** the backend-side half of
+this gap is now closed for eligibility purposes — `send_ballot_emails`
+correctly snapshots `eligible_positions` on the token for a mixed election
+(ELEC-23, ELEC-26 in `docs/security-review/ELEC-06-elections-ballots.md`),
+and `/ballot/lookup` correctly returns the eligible positions and their
+candidates to that token. But this UI gap means it doesn't matter: a member
+eligible **only** for a plain position in a mixed election (ineligible for
+every structured ballot item) now correctly receives a live token, opens
+`BallotVotingPage`, and sees an **empty ballot** — no positions render, so
+there is nothing to vote on. A member eligible for both a position and an
+item sees only the item, and submitting it spends the single-use token with
+no way back to the position vote. Confirmed the backend's single-vote token
+route (`POST /elections/ballot/vote`, `cast_vote_with_token`) that could in
+principle carry a positional vote is not called from any current frontend
+code — there is no wiring to repurpose, only a route to design a UI and
+submission contract around. Through the product today, a plain-position
+contest inside a mixed election cannot be voted on by an emailed-token
+recipient at all. Not fixed for the same reason as the original finding: it
+is a UI/submission-contract design decision, not a mechanical fix.
+
 ## Training — The Student View of a Cohort Has No Frontend (2026-08-12)
 
 The API implements it. `GET /training/cohorts/{id}` served to a member on the
