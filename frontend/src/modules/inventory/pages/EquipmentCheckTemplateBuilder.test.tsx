@@ -394,26 +394,35 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     const user = userEvent.setup();
     renderBuilder();
 
+    // Filtered rather than counted or indexed: a debounce timer left running
+    // by an earlier test in this file can land its own patch among these, so
+    // neither the number of writes nor the position of any one of them is
+    // stable. Both assertions below are about which *type* edit reached the
+    // server, which is the thing this test is actually about.
+    //
+    // The count form is what took main red on 2026-09-02. It held for as long
+    // as the flush happened to win its race with the 1.5s autosave debounce,
+    // and under `--coverage` — which is how CI runs this suite, and only CI —
+    // the run is slow enough that the timer lands first and a second write
+    // appears. Passing without coverage and failing with it is the signature.
+    const typeWrites = (): Record<string, unknown>[] =>
+      (updateCheckItem.mock.calls as unknown[][])
+        .map((call) => call[1] as Record<string, unknown> | undefined)
+        .filter((patch): patch is Record<string, unknown> => patch?.check_type !== undefined);
+
     // Laptop width: the row carries its own type buttons and a selection
     // checkbox; `Edit Radio` is the phone editor's label (pitfall #28a).
     await screen.findByRole('button', { name: 'Radio selection checkbox' });
     fireEvent.click(screen.getAllByRole('button', { name: 'Count' })[0] as HTMLElement);
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
-    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledTimes(1));
-    expect(updateCheckItem.mock.calls[0]?.[1]).toMatchObject({ check_type: 'count' });
+    await waitFor(() => expect(typeWrites()).toContainEqual(expect.objectContaining({ check_type: 'count' })));
 
     // The newer edit, made while the flush is still in the air.
     fireEvent.click(screen.getAllByRole('button', { name: 'Level' })[0] as HTMLElement);
     rejectFlush({ response: { data: { detail: 'Item is locked' } } });
 
-    // Filtered rather than indexed: a debounce timer left running by an
-    // earlier test in this file can land its own patch in between, and the
-    // assertion is about which *type* edit survives the retry.
-    const typeWrites = (): Record<string, unknown>[] =>
-      (updateCheckItem.mock.calls as unknown[][])
-        .map((call) => call[1] as Record<string, unknown> | undefined)
-        .filter((patch): patch is Record<string, unknown> => patch?.check_type !== undefined);
-    await waitFor(() => expect(typeWrites().length).toBeGreaterThan(1), { timeout: 8000 });
+    const countWrites = typeWrites().length;
+    await waitFor(() => expect(typeWrites().length).toBeGreaterThan(countWrites), { timeout: 8000 });
     const written = typeWrites();
     expect(written[written.length - 1]).toMatchObject({ check_type: 'level' });
   }, 20_000);
