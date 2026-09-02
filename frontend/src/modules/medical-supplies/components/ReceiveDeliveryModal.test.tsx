@@ -4,12 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
 const mockReceiveDelivery = vi.fn();
+const mockGetItems = vi.fn();
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
   medicalSuppliesService: {
     receiveDelivery: (...args: unknown[]) => mockReceiveDelivery(...args) as unknown,
+    getItems: (...args: unknown[]) => mockGetItems(...args) as unknown,
   },
 }));
 
@@ -29,23 +31,27 @@ vi.mock('react-hot-toast', () => ({
 
 import { ReceiveDeliveryModal } from './ReceiveDeliveryModal';
 
-const items = [
-  { id: 'item-1', name: '4x4 Gauze' },
-  { id: 'item-2', name: 'Epi 1:1000' },
-] as never;
+const renderModal = () => renderWithRouter(<ReceiveDeliveryModal onClose={vi.fn()} onSaved={vi.fn()} />);
 
-const renderModal = () => renderWithRouter(<ReceiveDeliveryModal items={items} onClose={vi.fn()} onSaved={vi.fn()} />);
+const chooseItem = async (input: HTMLElement, name: string, id: string) => {
+  mockGetItems.mockImplementation(({ search }: { search?: string }) =>
+    Promise.resolve({ items: search === name ? [{ id, name }] : [], total: 1, skip: 0, limit: 20 })
+  );
+  await userEvent.type(input, name);
+  await userEvent.click(await screen.findByRole('option', { name }));
+};
 
 describe('ReceiveDeliveryModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockReceiveDelivery.mockResolvedValue([]);
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
   });
 
   it('records a complete line', async () => {
     renderModal();
 
-    await userEvent.selectOptions(screen.getByLabelText(/^Item/), 'item-1');
+    await chooseItem(screen.getByLabelText(/^Item/), '4x4 Gauze', 'item-1');
     await userEvent.type(screen.getByLabelText('Qty'), '12');
     await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
 
@@ -61,12 +67,11 @@ describe('ReceiveDeliveryModal', () => {
     // only found out by recounting.
     renderModal();
 
-    await userEvent.selectOptions(screen.getByLabelText(/^Item/), 'item-1');
+    await chooseItem(screen.getByLabelText(/^Item/), '4x4 Gauze', 'item-1');
     await userEvent.type(screen.getByLabelText('Qty'), '12');
 
     await userEvent.click(screen.getByRole('button', { name: 'Add line' }));
-    const itemSelects = screen.getAllByLabelText(/^Item/);
-    await userEvent.selectOptions(itemSelects[1] as HTMLElement, 'item-2');
+    await chooseItem(screen.getByRole('combobox'), 'Epi 1:1000', 'item-2');
 
     await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
 
@@ -89,7 +94,7 @@ describe('ReceiveDeliveryModal', () => {
     // actually touched are held to the completeness rule.
     renderModal();
 
-    await userEvent.selectOptions(screen.getByLabelText(/^Item/), 'item-1');
+    await chooseItem(screen.getByLabelText(/^Item/), '4x4 Gauze', 'item-1');
     await userEvent.type(screen.getByLabelText('Qty'), '12');
     await userEvent.click(screen.getByRole('button', { name: 'Add line' }));
 
@@ -107,5 +112,19 @@ describe('ReceiveDeliveryModal', () => {
 
     expect(mockReceiveDelivery).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('at least one line'));
+  });
+
+  it('selects a delivery item through the server even when it is not on the table page', async () => {
+    renderModal();
+
+    await chooseItem(screen.getByLabelText(/^Item/), 'Record 250 supply', 'item-250');
+    await userEvent.type(screen.getByLabelText('Qty'), '3');
+    await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
+
+    await waitFor(() => expect(mockReceiveDelivery).toHaveBeenCalled());
+    expect(mockGetItems).toHaveBeenCalledWith({ search: 'Record 250 supply', active_only: true, limit: 20 });
+    expect(mockReceiveDelivery).toHaveBeenCalledWith([
+      expect.objectContaining({ inventory_item_id: 'item-250', quantity: 3 }),
+    ]);
   });
 });

@@ -150,6 +150,7 @@ describe('MedicalSuppliesPage', () => {
       expect(mockGetItems).toHaveBeenCalledWith({
         search: undefined,
         category_id: undefined,
+        skip: 0,
         limit: 200,
       })
     );
@@ -257,5 +258,43 @@ describe('MedicalSuppliesPage', () => {
     await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledWith(30));
 
     expect(await screen.findByText(/Expiring within 30d/i)).toBeInTheDocument();
+  });
+
+  it('navigates beyond the first 200 supplies and reports the visible range', async () => {
+    mockGetItems.mockImplementation(({ skip = 0 }: { skip?: number }) =>
+      Promise.resolve({
+        items: [{ id: `item-${skip}`, name: skip === 200 ? 'Supply 201' : 'Supply 1', quantity: 1 }],
+        total: 201,
+        skip,
+        limit: 200,
+      })
+    );
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    expect(await screen.findByText('Showing 1–1 of 201')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(await screen.findByText('Supply 201')).toBeInTheDocument();
+    expect(screen.getByText('Showing 201–201 of 201')).toBeInTheDocument();
+    expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 200, limit: 200 }));
+  });
+
+  it('resets to the first page when a search filter changes', async () => {
+    mockGetItems.mockImplementation(({ skip = 0 }: { skip?: number }) =>
+      Promise.resolve({ items: [{ id: 'item-1', name: 'Gauze', quantity: 1 }], total: 201, skip, limit: 200 })
+    );
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 200 })));
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search medical supplies' }), 'gauze');
+
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze', skip: 0 }))
+    );
   });
 });

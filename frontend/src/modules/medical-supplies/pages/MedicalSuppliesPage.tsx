@@ -41,6 +41,7 @@ import { EXPIRY_WINDOW_DAYS } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
+const PAGE_SIZE = 200;
 
 /** Severity of a dated lot, by how long is left on it. */
 function expiryTone(days: number | undefined): string {
@@ -93,25 +94,28 @@ const MedicalSuppliesPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const [itemPage, setItemPage] = useState({ total: 0, skip: 0, limit: PAGE_SIZE });
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
   const load = useCallback(async () => {
-    setIsLoading(true);
     try {
       const [summaryData, itemsData, categoryData, expiringData] = await Promise.all([
         medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS),
         medicalSuppliesService.getItems({
           search: search || undefined,
           category_id: categoryFilter || undefined,
-          limit: 200,
+          skip: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
         }),
         medicalSuppliesService.getCategories(),
         medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS),
       ]);
       setSummary(summaryData);
       setItems(itemsData.items);
+      setItemPage({ total: itemsData.total, skip: itemsData.skip, limit: itemsData.limit });
       setCategories(categoryData);
       setExpiring(expiringData);
     } catch (err: unknown) {
@@ -119,7 +123,7 @@ const MedicalSuppliesPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [search, categoryFilter]);
+  }, [search, categoryFilter, page]);
 
   useEffect(() => {
     void load();
@@ -339,7 +343,10 @@ const MedicalSuppliesPage: React.FC = () => {
               <input
                 type="search"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(0);
+                }}
                 placeholder="Search supplies"
                 aria-label="Search medical supplies"
                 className="form-input w-full pl-9"
@@ -347,7 +354,10 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(0);
+              }}
               aria-label="Filter by category"
               className="form-input w-auto"
             >
@@ -443,6 +453,31 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
           )}
 
+          {itemPage.total > 0 && (
+            <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={itemPage.skip === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <p className="text-theme-text-muted text-sm" aria-live="polite">
+                Showing {formatNumber(itemPage.skip + 1)}–
+                {formatNumber(Math.min(itemPage.skip + items.length, itemPage.total))} of {formatNumber(itemPage.total)}
+              </p>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={itemPage.skip + itemPage.limit >= itemPage.total}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </nav>
+          )}
+
           {lowStockItems.length > 0 && (
             <p className="text-theme-text-muted mt-3 text-xs">
               {formatNumber(lowStockItems.length)} item(s) at or below their reorder point.
@@ -464,9 +499,7 @@ const MedicalSuppliesPage: React.FC = () => {
         <MedicalItemFormModal categories={categories} onClose={() => setShowItemModal(false)} onSaved={handleSaved} />
       )}
 
-      {showDeliveryModal && (
-        <ReceiveDeliveryModal items={items} onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />
-      )}
+      {showDeliveryModal && <ReceiveDeliveryModal onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />}
     </div>
   );
 };
