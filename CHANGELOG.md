@@ -138,18 +138,22 @@ boundary.
   screen you were standing on, and "EMS" reads as a different seat rather than
   as the same one spelled another way. Every screen that shows a seat name now
   resolves it through one helper (`positionLabel`), so there is no second copy
-  of the mapping left to drift. Custom seats a department defines itself are
-  not in that mapping — their labels live in the department's scheduling
-  settings, read by the screens that offer them — and are unchanged.
+  of the mapping left to drift. A seat a department defined itself resolves
+  through the same `customPositions` the template form's dropdown is built
+  from, so its admin-chosen label now reaches the board and the roster too
+  rather than showing there as its slug.
 - **The same token reached print and email.** A printed shift roster's
   right-hand column and the shift-reminder emails' crew list were built from
   the token as well ("EMS", "Ems"), and a shift assignment notification told a
   member they had been assigned to the "ems position". These now go through
   `position_label` in `app/utils/positions.py`, the backend half of the same
   mapping, asserted against the frontend's copy from source so the two cannot
-  disagree. On a 32-character receipt a label wider than the seat column falls
-  back to its first word, because the renderer's mid-word cut
-  ("DRIVER/OPERA") reads as a printer fault.
+  disagree. On a 32-character receipt a label wider than the seat column drops
+  the alternative after a slash — "Driver/Operator" is two names for one seat,
+  and the renderer's mid-word cut ("DRIVER/OPERA") reads as a printer fault —
+  and is otherwise truncated rather than reduced to its first word, which
+  would print a department's "Assistant Chief" and "Assistant Driver"
+  identically.
 - **`POSITION_LABELS` held three keys for one seat** — `EMS`, `ems` and `EMT`,
   all mapping to "EMT" — which is also why the shift assign dropdown, built by
   iterating that map, offered "EMT" three times, two of them tokens no member

@@ -430,7 +430,8 @@ export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
  *
  * Resolve a stored value through `positionLabel()`
  * (`modules/scheduling/utils/positionLabels.ts`) rather than indexing this map
- * directly: it folds those aliases, so a legacy row still names its seat.
+ * directly: it folds those aliases, so a legacy row still names its seat, and
+ * it knows the seats a department defined itself, which are not in here.
  */
 export const POSITION_LABELS: Record<string, string> = {
   officer: 'Officer',
