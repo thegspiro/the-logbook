@@ -480,6 +480,121 @@ class TestDocumentsSummaryAccess:
             }
 
 
+class TestFolderListing:
+    """Folder pagination is applied after ACL filtering and stays constant-query."""
+
+    async def test_total_counts_the_level_and_the_page_is_one_query(self):
+        svc = _svc()
+        member = _user(uid="u1", roles=[([], "ff")])
+        # Four folders exist; the leadership-only one is not admitted, so the
+        # level holds three and the caller asks for the second of them.
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f1"),
+            _folder(FolderVisibility.LEADERSHIP, fid="hidden"),
+            _folder(FolderVisibility.ORGANIZATION, fid="f2"),
+            _folder(FolderVisibility.ORGANIZATION, fid="f3"),
+        ]
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 3
+        folder = SimpleNamespace(id="f2")
+        page_result = MagicMock()
+        page_result.all.return_value = [(folder, 0)]
+        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result, page_result])
+
+        folders, total = await svc.get_folders(
+            "org-1", current_user=member, skip=1, limit=1
+        )
+
+        assert total == 3
+        assert [item.id for item in folders] == ["f2"]
+        assert folders[0].document_count == 0
+        # One ACL pass, one COUNT, one grouped-count page. Never a count query
+        # per folder, whatever the level holds or the page returns.
+        assert svc.db.execute.await_count == 3
+
+    async def test_ordering_breaks_ties_on_id(self):
+        """Two folders sharing sort_order and name must still order stably, or
+        a row can appear on two pages or on neither as the caller walks them."""
+        svc = _svc()
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f1")
+        ]
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 1
+        page_result = MagicMock()
+        page_result.all.return_value = [(SimpleNamespace(id="f1"), 0)]
+        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result, page_result])
+
+        await svc.get_folders("org-1", current_user=_user(), skip=0, limit=10)
+
+        page_statement = str(svc.db.execute.await_args_list[2].args[0])
+        assert "document_folders.id" in page_statement.split("ORDER BY", 1)[1]
+
+    async def test_page_past_total_skips_the_page_query(self):
+        svc = _svc()
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f1")
+        ]
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 1
+        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result])
+
+        folders, total = await svc.get_folders(
+            "org-1", current_user=_user(), skip=1, limit=10
+        )
+
+        assert folders == []
+        assert total == 1
+        assert svc.db.execute.await_count == 2
+
+    async def test_no_accessible_folder_skips_count_and_page(self):
+        svc = _svc()
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.LEADERSHIP, fid="hidden")
+        ]
+        svc.db.execute = AsyncMock(side_effect=[acl_result])
+
+        folders, total = await svc.get_folders(
+            "org-1", current_user=_user(uid="u1", roles=[([], "ff")])
+        )
+
+        assert (folders, total) == ([], 0)
+        assert svc.db.execute.await_count == 1
+
+    async def test_level_is_filtered_to_the_ancestor_aware_set(self):
+        """The restriction that hides a folder can live on its parent, and a
+        query filtered to one parent level cannot see it. So the level query
+        must carry the accessible-id filter, not just a per-row check."""
+        svc = _svc()
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="root"),
+            _folder(
+                FolderVisibility.ORGANIZATION,
+                fid="child",
+                parent_id="locked",
+            ),
+            _folder(FolderVisibility.LEADERSHIP, fid="locked"),
+        ]
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 0
+        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result])
+
+        folders, total = await svc.get_folders(
+            "org-1",
+            parent_id="locked",
+            current_user=_user(uid="u1", roles=[([], "ff")]),
+        )
+
+        assert (folders, total) == ([], 0)
+        level_statement = str(svc.db.execute.await_args_list[1].args[0])
+        assert "document_folders.id IN" in level_statement
+
+
 class TestAttachDocumentNames:
     """DOC2-1: the response declares uploader_name/folder_name and the UI renders
     "Uploaded by {uploader_name}", but the ORM row has neither — so they must be

@@ -39,6 +39,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Full write-up: `docs/security-review/MS-09-medical-screening.md` (feature
 09, pass 3, MS-7/MS-8/MS-9).
+### Document folder listings are paginated, and stopped costing a query per folder (2026-09-02)
+
+**Changed**
+
+- **`GET /documents/folders` takes `skip`/`limit` and returns the level's real
+  total.** It previously returned every folder at a level in one response and
+  reported `total` as the length of what it had just sent, so the number could
+  never tell a caller there was more. The response gains `skip` and `limit`
+  alongside `total`; `DocumentsPage` pages each level independently at twelve
+  cards, and entering a folder starts that level at its first page.
+
+**Fixed**
+
+- **A folder listing issued one `SELECT COUNT(*)` per folder to fill in the
+  document counts.** One grouped subquery now covers the page, so a department
+  with a wide folder tree stops paying a round trip per card.
+
+- **Folder ordering had no tie-breaker.** Two folders sharing a `sort_order`
+  and a name ordered arbitrarily, so a row could appear on two pages or on
+  neither while a caller walked them. `document_folders.id` now settles it.
+
+**Note on the access path.** Pagination is applied after the ancestor-aware ACL
+filter, not to a flat per-folder visibility check: a restriction can live on an
+ancestor, and a query filtered to one parent level cannot see it. The set comes
+from `accessible_folder_ids`, which is the same rule the by-id fetch uses.
 
 ### The member roster silently dropped platoon (and other) assignments from every response (2026-09-02)
 

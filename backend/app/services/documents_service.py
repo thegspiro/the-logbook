@@ -125,18 +125,29 @@ class DocumentsService:
         organization_id: UUID,
         parent_id: Optional[UUID] = None,
         current_user: Optional[User] = None,
-    ) -> List[DocumentFolder]:
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[DocumentFolder], int]:
         """
-        Get folders the user is allowed to see.
+        Get one page of the folders the user is allowed to see, and the total.
 
         Access rules:
         - visibility='organization' → visible to all org members
         - visibility='leadership'   → only users with leadership permissions
         - visibility='owner'        → only the owner_user_id + leadership
         - allowed_roles (if set)    → only users with a matching role slug
+        - required_permissions      → only users holding one of them
 
-        Users with documents.manage, members.manage, or wildcard '*'
-        bypass all restrictions (leadership override).
+        A folder is admitted only if every folder on its path to the root
+        admits the user, so the set comes from accessible_folder_ids rather
+        than a per-row check here: a restriction lives on the ancestor, and a
+        query filtered to one parent level cannot see it. Delegating also
+        keeps this listing's answer equal to the by-id fetch's, which is what
+        the two copies of the rule failed to do before.
+
+        Ordering carries DocumentFolder.id as a final tie-breaker. Without it
+        two folders sharing a sort_order and name order arbitrarily, and a row
+        can appear on two pages or on neither while the caller walks them.
         """
         query = select(DocumentFolder).where(
             DocumentFolder.organization_id == str(organization_id)
@@ -147,35 +158,47 @@ class DocumentsService:
         else:
             query = query.where(DocumentFolder.parent_id.is_(None))
 
-        query = query.order_by(DocumentFolder.sort_order, DocumentFolder.name)
-        result = await self.db.execute(query)
-        folders = result.scalars().all()
-
-        # Apply access filtering if a user is provided.
-        #
-        # Delegated to can_access_folder rather than repeated here. This block
-        # used to re-implement the same rules inline, and the two copies did
-        # not stay equal: the by-id path learned required_permissions while the
-        # listing kept its own visibility-only walk, so a permission-gated
-        # folder stayed hidden from a direct fetch and listed in the browser.
-        # One owner for the rule is what keeps those answers the same.
         if current_user is not None:
-            folders = [
-                folder
-                for folder in folders
-                if await self.can_access_folder(folder, organization_id, current_user)
-            ]
+            accessible = await self.accessible_folder_ids(organization_id, current_user)
+            if not accessible:
+                return [], 0
+            query = query.where(DocumentFolder.id.in_(accessible))
 
-        # Add document counts
-        for folder in folders:
-            count_result = await self.db.execute(
-                select(func.count(Document.id))
-                .where(Document.folder_id == folder.id)
-                .where(Document.status == DocumentStatus.ACTIVE)
+        total = (
+            await self.db.execute(select(func.count()).select_from(query.subquery()))
+        ).scalar_one()
+        if total == 0 or skip >= total:
+            return [], total
+
+        # One grouped subquery instead of a count per folder. The previous
+        # per-folder loop issued a query for every row on the page, so a
+        # department with a wide folder tree paid a round trip per card.
+        counts = (
+            select(
+                Document.folder_id,
+                func.count(Document.id).label("document_count"),
             )
-            folder.document_count = count_result.scalar() or 0
+            .where(Document.status == DocumentStatus.ACTIVE)
+            .group_by(Document.folder_id)
+            .subquery()
+        )
+        page = (
+            query.add_columns(func.coalesce(counts.c.document_count, 0))
+            .outerjoin(counts, counts.c.folder_id == DocumentFolder.id)
+            .order_by(
+                DocumentFolder.sort_order,
+                DocumentFolder.name,
+                DocumentFolder.id,
+            )
+            .offset(skip)
+            .limit(limit)
+        )
+        folders: List[DocumentFolder] = []
+        for folder, document_count in (await self.db.execute(page)).all():
+            folder.document_count = document_count
+            folders.append(folder)
 
-        return folders
+        return folders, total
 
     async def get_folder_by_id(
         self, folder_id: UUID, organization_id: UUID

@@ -6,10 +6,15 @@ import api from './apiClient';
 import type { DocumentFolder, DocumentRecord, DocumentsSummary } from './formsServices';
 
 export const documentsService = {
-  async getFolders(parentId?: string): Promise<{ folders: DocumentFolder[]; total: number }> {
-    const params: Record<string, string> = {};
-    if (parentId) params.parent_id = parentId;
-    const response = await api.get<{ folders: DocumentFolder[]; total: number }>('/documents/folders', { params });
+  async getFolders(params?: {
+    parent_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ folders: DocumentFolder[]; total: number; skip: number; limit: number }> {
+    const response = await api.get<{ folders: DocumentFolder[]; total: number; skip: number; limit: number }>(
+      '/documents/folders',
+      { params }
+    );
     return response.data;
   },
 

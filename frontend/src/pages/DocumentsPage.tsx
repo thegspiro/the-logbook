@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { Breadcrumbs, type BreadcrumbItem } from '../components/ux/Breadcrumbs';
+import { Pagination } from '../components/ux/Pagination';
 import {
   FileText,
   FolderOpen,
@@ -36,6 +37,9 @@ type ViewMode = 'grid' | 'list';
 // never visible or reachable anywhere in this page (Codex finding on #1827).
 const ALL_DOCUMENTS = '__all__';
 const DOCUMENTS_PAGE_SIZE = 50;
+// Folders are cards in a three-column grid, so a page is sized to fill whole
+// rows at every breakpoint (1, 2 and 3 across) rather than leave a ragged tail.
+const FOLDER_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const DocumentsPage: React.FC = () => {
@@ -45,6 +49,8 @@ const DocumentsPage: React.FC = () => {
 
   // Data state
   const [folders, setFolders] = useState<DocFolder[]>([]);
+  const [folderTotal, setFolderTotal] = useState(0);
+  const [folderSkip, setFolderSkip] = useState(0);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [documentsTotal, setDocumentsTotal] = useState(0);
   const [summary, setSummary] = useState<DocumentsSummary | null>(null);
@@ -89,16 +95,24 @@ const DocumentsPage: React.FC = () => {
   const currentFolder = folderPath[folderPath.length - 1];
   const selectedFolder = showAllDocuments ? ALL_DOCUMENTS : currentFolder?.id;
 
-  const fetchFolders = useCallback(async (parentId: string | undefined, generation: number) => {
+  const fetchFolders = useCallback(async (parentId: string | undefined, generation: number, skip = 0) => {
     setFoldersLoading(true);
     setFoldersError(null);
     try {
-      const response = await documentsService.getFolders(parentId);
+      const response = await documentsService.getFolders({
+        ...(parentId ? { parent_id: parentId } : {}),
+        skip,
+        limit: FOLDER_PAGE_SIZE,
+      });
       // Envelope responses put the array a level down, where the service's
       // asArray guard does not reach — and `folders` is mapped and measured
       // without checking, so an envelope missing the key crashes the page.
       if (generation !== levelGeneration.current) return false;
       setFolders(asArray(response.folders));
+      // The server's count, not the page length: the page is capped at
+      // FOLDER_PAGE_SIZE, so measuring it here would report a full page as the
+      // whole level and hide every folder past the first page.
+      setFolderTotal(response.total);
       return true;
     } catch {
       if (generation === levelGeneration.current) {
@@ -160,19 +174,20 @@ const DocumentsPage: React.FC = () => {
     if (showAllDocuments) return;
     const generation = ++levelGeneration.current;
     const loadFolders = async () => {
-      const succeeded = await fetchFolders(currentFolder?.id, generation);
+      const succeeded = await fetchFolders(currentFolder?.id, generation, folderSkip);
       if (!succeeded && generation === levelGeneration.current && currentFolder) {
         setError(
           `The folder “${currentFolder.name}” is no longer accessible. Returned to the nearest accessible location.`
         );
         setFolderPath((path) => path.slice(0, -1));
+        setFolderSkip(0);
       }
     };
     void loadFolders();
     return () => {
       levelGeneration.current += 1;
     };
-  }, [currentFolder, showAllDocuments, fetchFolders]);
+  }, [currentFolder, folderSkip, showAllDocuments, fetchFolders]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
@@ -210,14 +225,14 @@ const DocumentsPage: React.FC = () => {
       });
       setShowCreateFolder(false);
       setFolderForm({ name: '', description: '' });
-      await fetchFolders(currentFolder?.id, ++levelGeneration.current);
+      await fetchFolders(currentFolder?.id, ++levelGeneration.current, folderSkip);
       await fetchSummary();
     } catch {
       setError('Unable to create folder. Please check your connection and try again.');
     } finally {
       setActionLoading(false);
     }
-  }, [folderForm, currentFolder, fetchFolders, fetchSummary]);
+  }, [folderForm, currentFolder, folderSkip, fetchFolders, fetchSummary]);
 
   const handleUploadDocument = useCallback(async () => {
     if (!uploadForm.file) return;
@@ -243,7 +258,7 @@ const DocumentsPage: React.FC = () => {
         folder: currentFolder?.id ?? '',
         file: null,
       });
-      if (!showAllDocuments) await fetchFolders(currentFolder?.id, ++levelGeneration.current);
+      if (!showAllDocuments) await fetchFolders(currentFolder?.id, ++levelGeneration.current, folderSkip);
       await fetchSummary();
       if (selectedFolder) {
         await fetchDocuments(selectedFolder, debouncedSearch);
@@ -257,6 +272,7 @@ const DocumentsPage: React.FC = () => {
     uploadForm,
     selectedFolder,
     currentFolder,
+    folderSkip,
     showAllDocuments,
     debouncedSearch,
     fetchFolders,
@@ -271,7 +287,7 @@ const DocumentsPage: React.FC = () => {
       try {
         await documentsService.deleteDocument(documentId);
         setDeleteConfirm(null);
-        if (!showAllDocuments) await fetchFolders(currentFolder?.id, ++levelGeneration.current);
+        if (!showAllDocuments) await fetchFolders(currentFolder?.id, ++levelGeneration.current, folderSkip);
         await fetchSummary();
         if (selectedFolder) {
           await fetchDocuments(selectedFolder, debouncedSearch);
@@ -282,7 +298,16 @@ const DocumentsPage: React.FC = () => {
         setActionLoading(false);
       }
     },
-    [selectedFolder, currentFolder, showAllDocuments, debouncedSearch, fetchFolders, fetchSummary, fetchDocuments]
+    [
+      selectedFolder,
+      currentFolder,
+      folderSkip,
+      showAllDocuments,
+      debouncedSearch,
+      fetchFolders,
+      fetchSummary,
+      fetchDocuments,
+    ]
   );
 
   const handleDownloadDocument = useCallback(async (doc: DocumentRecord) => {
@@ -305,6 +330,10 @@ const DocumentsPage: React.FC = () => {
   const handleFolderSelect = useCallback((folder: DocFolder) => {
     requestGeneration.current += 1;
     setFolderPath((path) => [...path, folder]);
+    // Each level pages independently, so entering one starts at its first
+    // page. React batches this with the path change, so the level effect
+    // still runs once rather than fetching the old level's page first.
+    setFolderSkip(0);
     setShowAllDocuments(false);
     setError(null);
   }, []);
@@ -312,6 +341,7 @@ const DocumentsPage: React.FC = () => {
   const handleClearFolder = useCallback(() => {
     requestGeneration.current += 1;
     setFolderPath([]);
+    setFolderSkip(0);
     setShowAllDocuments(false);
     setDocuments([]);
     setError(null);
@@ -344,7 +374,10 @@ const DocumentsPage: React.FC = () => {
       : folderPath.map((folder, index) => ({
           label: folder.name,
           ...(index < folderPath.length - 1 && {
-            onClick: () => setFolderPath((path) => path.slice(0, index + 1)),
+            onClick: () => {
+              setFolderPath((path) => path.slice(0, index + 1));
+              setFolderSkip(0);
+            },
             ariaLabel: `Go to folder ${folder.name}`,
           }),
         }))),
@@ -596,6 +629,15 @@ const DocumentsPage: React.FC = () => {
                 <FolderOpen className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
                 <p className="text-theme-text-secondary">No folders in this location.</p>
               </div>
+            )}
+            {!foldersLoading && !foldersError && folderTotal > FOLDER_PAGE_SIZE && (
+              <Pagination
+                currentPage={Math.floor(folderSkip / FOLDER_PAGE_SIZE) + 1}
+                totalItems={folderTotal}
+                pageSize={FOLDER_PAGE_SIZE}
+                onPageChange={(page) => setFolderSkip((page - 1) * FOLDER_PAGE_SIZE)}
+                className="mt-4"
+              />
             )}
           </div>
         )}

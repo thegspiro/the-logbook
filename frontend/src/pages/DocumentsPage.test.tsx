@@ -62,7 +62,12 @@ beforeEach(() => {
   mockGetSummary.mockReset();
   mockDownloadDocument.mockReset();
   mockCreateFolder.mockReset();
-  mockGetFolders.mockResolvedValue({ folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 });
+  mockGetFolders.mockResolvedValue({
+    folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }],
+    total: 1,
+    skip: 0,
+    limit: 12,
+  });
   mockGetDocuments.mockResolvedValue({ documents: [], total: 0, skip: 0, limit: 50 });
   mockCreateFolder.mockResolvedValue({ id: 'created' });
   mockGetSummary.mockResolvedValue({
@@ -239,6 +244,8 @@ describe('DocumentsPage', () => {
         { id: 'f2', name: 'Policies', document_count: 0 },
       ],
       total: 2,
+      skip: 0,
+      limit: 12,
     });
     mockGetDocuments
       .mockResolvedValueOnce({ documents: [makeDocument({ name: 'SOP' })], total: 1, skip: 0, limit: 50 })
@@ -284,11 +291,11 @@ describe('DocumentsPage', () => {
 
   it('loads child folders and documents for each entered level', async () => {
     const user = userEvent.setup();
-    mockGetFolders.mockImplementation((parentId?: string) =>
+    mockGetFolders.mockImplementation((params?: { parent_id?: string }) =>
       Promise.resolve(
-        parentId === 'f1'
+        params?.parent_id === 'f1'
           ? { folders: [{ id: 'f2', name: 'Training', document_count: 0 }], total: 1 }
-          : parentId === 'f2'
+          : params?.parent_id === 'f2'
             ? { folders: [], total: 0 }
             : { folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 }
       )
@@ -297,15 +304,15 @@ describe('DocumentsPage', () => {
     await user.click(await screen.findByRole('button', { name: /sops/i }));
     await user.click(await screen.findByRole('button', { name: /training/i }));
 
-    await waitFor(() => expect(mockGetFolders).toHaveBeenCalledWith('f2'));
+    await waitFor(() => expect(mockGetFolders).toHaveBeenCalledWith({ parent_id: 'f2', skip: 0, limit: 12 }));
     expect(mockGetDocuments).toHaveBeenCalledWith({ folder_id: 'f2', skip: 0, limit: 50 });
   });
 
   it('traverses ancestors with accessible breadcrumb labels', async () => {
     const user = userEvent.setup();
-    mockGetFolders.mockImplementation((parentId?: string) =>
+    mockGetFolders.mockImplementation((params?: { parent_id?: string }) =>
       Promise.resolve(
-        parentId === 'f1'
+        params?.parent_id === 'f1'
           ? { folders: [{ id: 'f2', name: 'Training', document_count: 0 }], total: 1 }
           : { folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 }
       )
@@ -315,7 +322,7 @@ describe('DocumentsPage', () => {
     await user.click(await screen.findByRole('button', { name: /training/i }));
     await user.click(screen.getByRole('button', { name: 'Go to folder SOPs' }));
 
-    await waitFor(() => expect(mockGetFolders).toHaveBeenLastCalledWith('f1'));
+    await waitFor(() => expect(mockGetFolders).toHaveBeenLastCalledWith({ parent_id: 'f1', skip: 0, limit: 12 }));
     expect(screen.queryByText('Training', { selector: '[aria-current="page"]' })).not.toBeInTheDocument();
   });
 
@@ -355,11 +362,86 @@ describe('DocumentsPage', () => {
     expect(screen.getByText('SOPs', { selector: '[aria-current="page"]' })).toBeInTheDocument();
   });
 
+  describe('folder pagination', () => {
+    const page = (ids: string[], total: number, skip: number) => ({
+      folders: ids.map((id) => ({ id, name: `Folder ${id}`, document_count: 0 })),
+      total,
+      skip,
+      limit: 12,
+    });
+
+    beforeEach(() => {
+      mockGetFolders.mockReset();
+    });
+
+    it('does not offer pagination for a level that fits on one page', async () => {
+      mockGetFolders.mockResolvedValue(page(['f1'], 1, 0));
+
+      renderWithRouter(<DocumentsPage />);
+
+      await screen.findByRole('button', { name: /folder f1/i });
+      expect(screen.queryByRole('navigation', { name: /pagination/i })).not.toBeInTheDocument();
+    });
+
+    it('pages a level without leaving it', async () => {
+      const user = userEvent.setup();
+      mockGetFolders.mockImplementation((params?: { skip?: number }) =>
+        Promise.resolve(params?.skip === 12 ? page(['f13'], 13, 12) : page(['f1'], 13, 0))
+      );
+
+      renderWithRouter(<DocumentsPage />);
+      await screen.findByRole('button', { name: /folder f1/i });
+      await user.click(screen.getByRole('button', { name: 'Next page' }));
+
+      expect(await screen.findByRole('button', { name: /folder f13/i })).toBeInTheDocument();
+      // The level did not change, so the parent stays as it was and only the
+      // offset moves.
+      expect(mockGetFolders).toHaveBeenLastCalledWith({ skip: 12, limit: 12 });
+    });
+
+    it('starts a newly entered level at its first page', async () => {
+      // Regression guard: folderSkip is page state, not level state. Carrying
+      // page 2's offset into a child that has one page shows an empty folder
+      // that is not empty.
+      const user = userEvent.setup();
+      mockGetFolders.mockImplementation((params?: { parent_id?: string; skip?: number }) => {
+        if (params?.parent_id === 'f13') return Promise.resolve(page(['child'], 1, 0));
+        return Promise.resolve(params?.skip === 12 ? page(['f13'], 13, 12) : page(['f1'], 13, 0));
+      });
+
+      renderWithRouter(<DocumentsPage />);
+      await screen.findByRole('button', { name: /folder f1/i });
+      await user.click(screen.getByRole('button', { name: 'Next page' }));
+      await user.click(await screen.findByRole('button', { name: /folder f13/i }));
+
+      await waitFor(() => expect(mockGetFolders).toHaveBeenLastCalledWith({ parent_id: 'f13', skip: 0, limit: 12 }));
+      expect(await screen.findByRole('button', { name: /folder child/i })).toBeInTheDocument();
+    });
+
+    it('reports the level total, not the page length', async () => {
+      // A full page of twelve out of thirty. Measuring the returned array for
+      // the total would call it "of 12" and hide the other eighteen behind a
+      // control that thinks there is nowhere to go.
+      // Zero-padded so "Folder f01" cannot also match f10 through f12.
+      const ids = Array.from({ length: 12 }, (_unused, index) => `f${String(index + 1).padStart(2, '0')}`);
+      mockGetFolders.mockResolvedValue(page(ids, 30, 0));
+
+      renderWithRouter(<DocumentsPage />);
+
+      await screen.findByRole('button', { name: /folder f01/i });
+      // The count is split across spans, so match on the assembled text.
+      const range = await screen.findByText(
+        (_content, element) => element?.textContent?.replace(/\s+/g, ' ').trim() === 'Showing 1 – 12 of 30'
+      );
+      expect(range).toBeInTheDocument();
+    });
+  });
+
   it('ignores stale child-folder responses after returning to root', async () => {
     const user = userEvent.setup();
     let resolveChildren: ((value: object) => void) | undefined;
-    mockGetFolders.mockImplementation((parentId?: string) => {
-      if (parentId === 'f1') return new Promise<object>((resolve) => (resolveChildren = resolve));
+    mockGetFolders.mockImplementation((params?: { parent_id?: string }) => {
+      if (params?.parent_id === 'f1') return new Promise<object>((resolve) => (resolveChildren = resolve));
       return Promise.resolve({ folders: [{ id: 'f1', name: 'SOPs', document_count: 0 }], total: 1 });
     });
     renderWithRouter(<DocumentsPage />);
