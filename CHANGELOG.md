@@ -7,6 +7,327 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Document folder listings are paginated, and stopped costing a query per folder (2026-09-02)
+
+**Changed**
+
+- **`GET /documents/folders` takes `skip`/`limit` and returns the level's real
+  total.** It previously returned every folder at a level in one response and
+  reported `total` as the length of what it had just sent, so the number could
+  never tell a caller there was more. The response gains `skip` and `limit`
+  alongside `total`; `DocumentsPage` pages each level independently at twelve
+  cards, and entering a folder starts that level at its first page.
+
+**Fixed**
+
+- **A folder listing issued one `SELECT COUNT(*)` per folder to fill in the
+  document counts.** One grouped subquery now covers the page, so a department
+  with a wide folder tree stops paying a round trip per card.
+
+- **Folder ordering had no tie-breaker.** Two folders sharing a `sort_order`
+  and a name ordered arbitrarily, so a row could appear on two pages or on
+  neither while a caller walked them. `document_folders.id` now settles it.
+
+**Note on the access path.** Pagination is applied after the ancestor-aware ACL
+filter, not to a flat per-folder visibility check: a restriction can live on an
+ancestor, and a query filtered to one parent level cannot see it. The set comes
+from `accessible_folder_ids`, which is the same rule the by-id fetch uses.
+
+### The member roster silently dropped platoon (and other) assignments from every response (2026-09-02)
+
+**Fixed**
+
+- **`GET /users` declared `platoon`, `member_class`, `member_status` and
+  `compliance_exempt` on its response schema but never populated them from
+  the real member record.** The Platoon Roster Panel reads platoon straight
+  from this endpoint to show each member's current assignment, so it always
+  rendered every member as unassigned regardless of their real platoon.
+  Fixed for `platoon`, which had a real consumer; the other three are left
+  unset pending a decision on which roster fields belong at which
+  permission tier (see below).
+
+Full write-up: `docs/security-review/USR-07-users-organizations.md`
+(USR-7).
+
+### Flagged: the member directory's new reduced view for non-managers is not backed by a matching API change (2026-09-02)
+
+**Not fixed — flagged for a product decision.** A recent change gave members
+without `members.manage` a visibly reduced "Member Directory" (no username,
+no hire date, no export/bulk actions) instead of the full management table.
+The underlying `GET /users` API was not changed to match: every member
+already receives the full field set in the JSON response regardless of the
+UI's rendering choice, so the reduced view is a display preference, not an
+access boundary. Not a cross-tenant leak. See `docs/KNOWN_LIMITATIONS.md`
+and `docs/security-review/USR-07-users-organizations.md` (USR-8) for detail
+and why a straightforward fix isn't safe (25+ other call sites depend on the
+current, unfiltered response).
+
+### A double vote through the full-ballot link's backward-compatible single-choice form could slip past the database's own safety net (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing multiple approvals on one contest
+  while the rest of the ballot allows only one), **submitting through the
+  full-ballot link's older single-choice form computed a different
+  internal fingerprint than the single-vote link would for the identical
+  vote**, so the database's own safety-net check for a near-simultaneous
+  double vote could not recognize the two as the same vote. Fixed so both
+  routes compute the same fingerprint for that contest regardless of which
+  submission form was used.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-39).
+
+### A double vote on an unusually-configured contest could slip past the database's own safety net, and a legitimate vote could be wrongly rejected as a duplicate of an unrelated contest (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing several selections on one contest
+  while the rest of the ballot allows only one), **the database's own
+  safety-net check for a near-simultaneous double vote no longer
+  recognized two vote attempts on that contest as the same vote** when
+  they arrived through the single-vote link and the full-ballot link at
+  (or near) the same moment — even though every other duplicate-vote
+  protection in the system treats them as identical. Fixed so both routes
+  compute the same internal fingerprint for that contest, restoring the
+  safety net.
+- **A legitimate vote on one contest could be wrongly rejected as a
+  duplicate of a completely different contest,** when one contest's
+  displayed title happened to be identical to another contest's internal
+  identifier. Fixed so the duplicate check no longer confuses two distinct
+  contests that merely share a name this way.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-37, ELEC-38).
+
+### A colliding position name could bypass eligibility on the full-ballot submission route, and a legacy contest's votes could be double-counted across routes (2026-09-02)
+
+**Fixed**
+
+- **Submitting a full ballot in one request could vote on a restricted
+  election position using a token that was never granted that
+  permission,** the same naming-collision bypass fixed for the
+  single-vote and ballot-preview routes previously — the full-ballot
+  route checked only the ballot-item permission and never the position's
+  own eligibility rule when the two happened to share a name. Fixed by
+  applying the same collision-aware check, now defined once and reused by
+  every vote-submission route so it cannot drift between them again.
+- **A voter holding two separate unused ballot links for the same election
+  could cast one vote through the single-vote link and a second through
+  the full-ballot link for the very same legacy contest, and have both
+  counted,** because the two routes recorded that contest under two
+  different internal labels and neither route's duplicate check — nor the
+  database's own safety-net constraint — recognized the other's label as
+  the same contest. Fixed by making both routes recognize every label a
+  legacy contest can be recorded under, and by making both routes record
+  the same canonical label going forward so the database-level safety net
+  also closes the gap for a near-simultaneous submission.
+- **A member whose membership tier is configured as ineligible to vote
+  could still receive a live, emailed ballot credential for a plain
+  position, specifically on an election that set no position-specific
+  eligibility rules at all** — a narrower prior fix only closed this gap
+  when the election configured an (empty) rule for that position. Fixed so
+  the tier-wide ban applies to every election with plain positions,
+  regardless of whether position-specific rules are configured.
+- **The fix for the naming-collision bypass above had a gap of its own:**
+  when a legacy contest happened to share a name with two different
+  restricted positions at once (via its internal id and its displayed
+  title respectively), the check picked one of the two names to verify —
+  effectively at random — instead of requiring the vote to clear both. A
+  token granted access to only one of the two names could, depending on
+  that random pick, still bypass the other. Fixed to require clearing
+  every colliding name, not just one.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-33, ELEC-34, ELEC-35).
+
+### A mixed election's plain-position ballots ignored a global voting ban and an admin override, and a token could be closed with a legitimate vote still pending (2026-09-02)
+
+**Fixed**
+
+- **A member whose membership tier is configured as ineligible to vote
+  (e.g. a probationary tier) could still receive a live, emailed ballot
+  credential for a plain-position contest in a mixed election,** even
+  though the same global ban already correctly excluded them from every
+  structured ballot item on the same election. Fixed by applying the same
+  tier check to both kinds of contest.
+- **An administrator's per-voter override — meant to grant a specific
+  member eligibility for every contest on a ballot — was honored for
+  structured ballot items but silently ignored for plain positions,** so an
+  overridden member could still be denied a position vote their override
+  was supposed to guarantee. Fixed by applying the override to both kinds
+  of contest identically.
+- **In a mixed election, casting a vote for a plain position could
+  prematurely mark a voter's ballot as fully submitted while a legitimate
+  ballot-item vote was still outstanding,** causing that second, valid vote
+  to be rejected as a duplicate submission. Fixed so a ballot is only
+  considered complete once every contest the voter is eligible for —
+  positions and items alike — has actually been voted on.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-30, ELEC-31, ELEC-32).
+
+### A colliding position name let an emailed ballot bypass its own eligibility restriction (2026-09-02)
+
+**Fixed**
+
+- **A restricted election position could be voted on by a token that was
+  never granted that permission,** if an unrelated, unrestricted ballot
+  contest happened to share its exact name. Voting eligibility sent by
+  email is checked per-candidate against one of two independent rule sets
+  depending on how that candidate is classified; a naming collision between
+  the two caused the classification to pick only one rule set and skip the
+  other entirely, so a voter authorized for the unrestricted contest could
+  cast a vote for the restricted one under the same name. Fixed by
+  detecting the collision and requiring both rule sets to authorize the
+  vote whenever a candidate's name matches both.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-29).
+
+### A mixed election could skip an eligible voter entirely, and a legacy title-keyed vote could be double-counted (2026-09-02)
+
+**Fixed**
+
+- **A member eligible only for a plain position (not any ballot item) on a
+  mixed election never received a ballot at all** — the decision to skip a
+  member with zero eligible ballot items ran before their position
+  eligibility was even checked, so an otherwise-eligible voter for a
+  restricted position was excluded outright whenever they also failed an
+  unrelated ballot item's voter-type rules. Fixed by checking both forms of
+  eligibility before deciding whether a member's ballot would be empty.
+- **A vote cast before positions were normalized could fail to block a
+  second vote for the same contest,** if that vote's candidate was one of the
+  older ones keyed by title rather than by the ballot item's id: the
+  duplicate-vote check only recognized the newer id-based match. Fixed by
+  using the same broadened match already used elsewhere in the same
+  submission path, so an old title-keyed vote is recognized as a duplicate
+  everywhere it needs to be.
+
+**Known limitation (flagged, not fixed):** an eligible member's plain
+position vote in a mixed election has no way to be cast today — see
+`KNOWN_LIMITATIONS.md`.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-26, ELEC-27, ELEC-28).
+
+### A member moved to a custom membership tier kept voting rights a restricted ballot meant to exclude, and four token-ballot races/gaps (2026-09-02)
+
+**Fixed**
+
+- **A member moved onto a department's own custom membership tier (e.g.
+  "Senior") kept counting as an operational/regular voter for ballots
+  restricted to that category,** even though a custom tier is documented to
+  match none of the built-in voter categories. Caused by an unrelated,
+  correct fix for shift scheduling that started preserving a member's prior
+  class/status across a tier switch — election eligibility read the same two
+  columns and inherited the carryover. Fixed by re-checking the member's
+  live membership tier before trusting those columns for ballot eligibility.
+- **Officer attestation of a paper-ballot batch could race a concurrent
+  election close:** the attestation only locked the batch, not the election,
+  so a batch attested moments before close could be confirmed after the
+  election had already generated its certified results excluding it. Fixed
+  with a locking read on the election status.
+- **A vote submitted through an emailed ballot link could read stale
+  election/token state past its own row lock:** the lock was acquired
+  correctly, but the already-cached (pre-lock) Python objects were returned
+  instead of the freshly locked row's values, the same class of bug
+  previously fixed once in this release for meeting quorum. Fixed by
+  refreshing the locked objects from the row lock.
+- **Voiding a paper-ballot batch was not safe against two officers voiding
+  the same batch at once** — both could load the same votes before either
+  committed, and the second commit silently overwrote the first officer's
+  recorded reason and timestamp. Fixed by locking the batch first and
+  refusing a second void of an already-voided one.
+- **A single-candidate selection on one ballot item could be bound to a
+  different ballot item in the same election** via a crafted vote-bulk
+  submission, letting an ineligible candidate appear in the wrong contest.
+  Fixed by requiring the candidate to belong to the named item, matching the
+  check already applied to ranked and multi-select ballot items.
+- **The single-vote ballot-link endpoint didn't check which ballot items a
+  voter's token was actually restricted to,** only a position restriction
+  that's never set for item-based elections — so a token limited to one
+  ballot item could still vote on a different, possibly restricted item.
+  Fixed by enforcing the same per-item restriction the bulk vote-submission
+  endpoint already enforced, and by no longer showing a restricted item's
+  candidates to a token that can't vote for them.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-13, ELEC-15, ELEC-17, ELEC-18, ELEC-20, ELEC-21).
+
+### A legacy ballot item lost its candidates, and a positional candidate outside any ballot item could bypass eligibility entirely (2026-09-02)
+
+**Fixed**
+
+- **A candidate-selection ballot item created before ballot items carried
+  their own "position" field lost every one of its candidates on the ballot
+  link,** and rejected them if submitted anyway: the eligibility checks
+  added for the previous fix above only recognized a candidate as belonging
+  to an item by the item's id, dropping the by-title matching the voting
+  page and eligibility checks elsewhere in the app already relied on for
+  these older items. Fixed by matching a candidate to its item by title
+  when the item has no explicit position, consistently everywhere that
+  match is made.
+- **A candidate running for a plain position that isn't tied to any ballot
+  item had no eligibility check at all, on an election that also had
+  ballot items** — an org could restrict a position (e.g. "Secretary") to
+  a particular membership category, and a member outside that category
+  could still vote for it, because the restriction was never captured on
+  their ballot link in the first place whenever the election also used
+  ballot items. Fixed by capturing that restriction regardless of whether
+  the election also has ballot items, and by checking each candidate
+  against the one restriction that actually applies to it.
+- **Attesting a paper-ballot batch and deleting its election could deadlock
+  against each other** under heavy concurrent use, because the two
+  operations locked the batch and the election in opposite orders. Fixed
+  by locking them in the same order everywhere.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-22, ELEC-23, ELEC-24).
+
+### Voiding a paper-ballot batch could deadlock against a concurrent election deletion (2026-09-02)
+
+**Fixed**
+
+- **Voiding a paper-ballot batch and deleting its election could deadlock
+  against each other** under heavy concurrent use, the same lock-order
+  problem already fixed for batch attestation — voiding locked the batch
+  before the election, while deletion locks the election before its
+  batches. Fixed by locking them in the same order everywhere.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-25).
+
+### Four more finance foreign keys are now scoped to the caller's organization (2026-09-02)
+
+**Fixed**
+
+- **A purchase request's linked apparatus/facility, a budget category's
+  parent, an approval chain's budget category, and an approval step's email
+  template could all be set to another organization's row.** Each is an
+  `ondelete="SET NULL"` foreign key exposed as a free client-supplied string,
+  and none was checked against the caller's own organization before being
+  saved — so the other organization later deleting its own apparatus,
+  facility, budget category or email template would silently null out this
+  organization's reference. Fixed the same way an earlier pass fixed the
+  identical gap on a budget's station: every one of these fields is now
+  validated against the caller's organization before it is persisted, on
+  both create and update.
+
+### A denied purchase request, expense report or check request could still be approved and paid (2026-09-02)
+
+**Fixed**
+
+- **Denying one step in a multi-step approval chain didn't stop the rest of
+  the chain.** The remaining steps stayed pending, so the request kept
+  showing up as awaiting approval — and approving the last of them reversed
+  the denial and charged the budget for a request the department had
+  refused. This was already fixed on `main` (also closing a follow-on token-
+  expiry gap and a gap for chains that were denied before the fix shipped);
+  this pass independently re-verified the fix is complete and correct.
+
 ### Quick Add: starting a log entry on a phone is now two taps from anywhere (2026-09-01)
 
 **Added**

@@ -210,15 +210,16 @@ async def list_documents(
             await service.get_folder_by_id(folder_uuid, current_user.organization_id),
             "Folder",
         )
-        if not service.can_access_folder(folder, current_user):
+        if not await service.can_access_folder(
+            folder, current_user.organization_id, current_user
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this folder",
             )
 
-    # Restrict the listing to folders the caller may access (None = leadership,
-    # no restriction) so a folder-less listing can't surface documents from
-    # restricted/owner-only folders.
+    # Restrict the listing to folders whose full ancestry admits the caller so
+    # a folder-less listing can't surface documents from restricted trees.
     accessible = await service.accessible_folder_ids(
         current_user.organization_id, current_user
     )
@@ -275,7 +276,9 @@ async def upload_document(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
             )
-        if not service.can_access_folder(folder, current_user):
+        if not await service.can_access_folder(
+            folder, current_user.organization_id, current_user
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to upload to this folder",
@@ -578,4 +581,4 @@ async def get_documents_summary(
 ):
     """Get documents module summary statistics"""
     service = DocumentsService(db)
-    return await service.get_summary(current_user.organization_id)
+    return await service.get_summary(current_user.organization_id, current_user)

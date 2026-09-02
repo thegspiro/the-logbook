@@ -174,6 +174,10 @@ async function confirm(label: string | RegExp) {
  * viewport set by one `describe` survives into the next one unless it is set
  * again. Tests that depend on a width should say which one they mean.
  */
+// The autosave debounce in EquipmentCheckTemplateBuilder. Mirrored here so a
+// test that has to outwait it says why, rather than carrying a bare number.
+const AUTOSAVE_DEBOUNCE_MS = 1500;
+
 const VIEWPORT_WIDTHS = { phone: 390, tablet: 900, laptop: 1440 } as const;
 
 const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
@@ -382,6 +386,21 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     // edit, backwards for a retry of an older one. The member's latest change
     // silently reverted on the automatic retry.
     mockViewport('laptop');
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Radio selection checkbox' });
+
+    // Drain before arming, not tolerate afterwards. A debounce timer left
+    // running by an earlier test in this file fires up to AUTOSAVE_DEBOUNCE_MS
+    // into this one, and if it lands *after* the one-shot below is installed
+    // it consumes the deferred rejection: the flush then succeeds on the
+    // resolved fallback, the retry path never runs, `rejectFlush` rejects
+    // some other test's request whose error is swallowed, and the level edit
+    // arrives by its own ordinary debounce. Every assertion below would still
+    // pass, against a run that never exercised the failure this test is named
+    // for. Waiting the window out first is what makes that unreachable.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+
     updateCheckItem.mockReset();
     let rejectFlush!: (reason: unknown) => void;
     updateCheckItem.mockImplementationOnce(
@@ -391,29 +410,35 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
         })
     );
     updateCheckItem.mockResolvedValue({});
-    const user = userEvent.setup();
-    renderBuilder();
+
+    // Filtered rather than counted or indexed: a debounce timer left running
+    // by an earlier test in this file can land its own patch among these, so
+    // neither the number of writes nor the position of any one of them is
+    // stable. Both assertions below are about which *type* edit reached the
+    // server, which is the thing this test is actually about.
+    //
+    // The count form is what took main red on 2026-09-02. It held for as long
+    // as the flush happened to win its race with the 1.5s autosave debounce,
+    // and under `--coverage` — which is how CI runs this suite, and only CI —
+    // the run is slow enough that the timer lands first and a second write
+    // appears. Passing without coverage and failing with it is the signature.
+    const typeWrites = (): Record<string, unknown>[] =>
+      (updateCheckItem.mock.calls as unknown[][])
+        .map((call) => call[1] as Record<string, unknown> | undefined)
+        .filter((patch): patch is Record<string, unknown> => patch?.check_type !== undefined);
 
     // Laptop width: the row carries its own type buttons and a selection
     // checkbox; `Edit Radio` is the phone editor's label (pitfall #28a).
-    await screen.findByRole('button', { name: 'Radio selection checkbox' });
     fireEvent.click(screen.getAllByRole('button', { name: 'Count' })[0] as HTMLElement);
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
-    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledTimes(1));
-    expect(updateCheckItem.mock.calls[0]?.[1]).toMatchObject({ check_type: 'count' });
+    await waitFor(() => expect(typeWrites()).toContainEqual(expect.objectContaining({ check_type: 'count' })));
 
     // The newer edit, made while the flush is still in the air.
     fireEvent.click(screen.getAllByRole('button', { name: 'Level' })[0] as HTMLElement);
     rejectFlush({ response: { data: { detail: 'Item is locked' } } });
 
-    // Filtered rather than indexed: a debounce timer left running by an
-    // earlier test in this file can land its own patch in between, and the
-    // assertion is about which *type* edit survives the retry.
-    const typeWrites = (): Record<string, unknown>[] =>
-      (updateCheckItem.mock.calls as unknown[][])
-        .map((call) => call[1] as Record<string, unknown> | undefined)
-        .filter((patch): patch is Record<string, unknown> => patch?.check_type !== undefined);
-    await waitFor(() => expect(typeWrites().length).toBeGreaterThan(1), { timeout: 8000 });
+    const countWrites = typeWrites().length;
+    await waitFor(() => expect(typeWrites().length).toBeGreaterThan(countWrites), { timeout: 8000 });
     const written = typeWrites();
     expect(written[written.length - 1]).toMatchObject({ check_type: 'level' });
   }, 20_000);
@@ -1601,7 +1626,7 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
     // the template holding the preset twice.
     await waitFor(() => expect(updateEquipmentCheckTemplate).toHaveBeenCalled());
     expect(addCompartment).not.toHaveBeenCalled();
-  });
+  }, 15_000);
 
   it('marks the template unsaved so the preset is not lost on navigation', async () => {
     // The JSON and CSV import branches marked it; the vehicle preset did not.
@@ -1840,7 +1865,7 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
     // its own test and can fire during this one. Draining it here, before
     // wiring up this test's own mock behaviour, keeps that unrelated retry
     // from being mistaken for the one this test controls.
-    await new Promise((resolve) => setTimeout(resolve, 1700));
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
     updateCheckItem.mockClear();
 
     let releaseFirstFlush: (() => void) | null = null;
@@ -1893,5 +1918,10 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
         .map(([, patch]) => patch);
       expect(patches[patches.length - 1]).toEqual({ is_required: true });
     });
-  });
+    // Spends AUTOSAVE_DEBOUNCE_MS draining before it starts, then waits out
+    // two more real debounce windows. That does not fit vitest's 5s default,
+    // and it was only ever passing because it landed just under it — 4.7s on
+    // an idle machine. Under `--coverage`, which is how CI runs this suite,
+    // it tips over and the job fails on a timeout rather than an assertion.
+  }, 20_000);
 });

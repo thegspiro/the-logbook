@@ -16,10 +16,1045 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. [#2138](https://github.com/thegspiro/the-logbook/pull/2138) (Feature
-04, Storefront & payments, pass 3) merged after six Codex review rounds —
-see the Log below for detail. Rotation row 04 → ✅. Next: 05 Finance &
-approvals.
+[#2177](https://github.com/thegspiro/the-logbook/pull/2177) (Feature 08,
+Membership pipeline, pass 4 + pass 4 round 2 + pass 4 round 3 + pass 4 round 4) — #2176 (pass 3's Codex-fix commit) merged mid-investigation of a 4th
+round of Codex findings against that same commit. Per CLAUDE.md Pitfall #24
+(never reuse a merged PR's branch — see #2173's identical precedent against
+#2162 in the elections feature), pass 4 landed as a fresh branch off `main`
+and this new PR rather than a push to the now-closed
+`claude/security-review-membership-pipeline` branch. Pass 4: 3 fixed, 1
+flagged. Pass 4 round 2 (Codex reviewing pass 4's own fix commit): 1 more
+fixed. Pass 4 round 3 (Codex reviewing round 2's fix commit): 1 more fixed,
+1 refuted (claimed deadlock does not reproduce against the actual code).
+Pass 4 round 4 (Codex reviewing round 3's fix commit): 1 more fixed
+(narrowed, not closed, the residual limitation MP-23 documented). See the
+Log below for detail.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 4) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
+
+Codex reviewed round 3's fix commit (`0d9a981a`, MP-24/MP-25) and posted 1
+new finding against `create_election_package`'s fallback branch — the same
+branch MP-23 (round 2) had already flagged as a documented residual
+limitation, not fixed it.
+
+**MP-26 (P2, fixed)** — the fallback branch (reached when `current_step`
+doesn't itself govern the PII policy — e.g. the applicant already advanced
+past every `election_vote` stage) discarded a caller-supplied `step_id`
+entirely and always guessed the pipeline's first-configured `election_vote`
+step by `sort_order`, even when `step_id` was already validated by MP-5
+(pass 3) to belong to the exact governing pipeline. `advanceApplicant` (the
+only frontend caller) always sends `step_id` as the stage the applicant
+just entered, so on the same race MP-24 guards on the `current_step`-side,
+the fallback could pick an earlier, more permissive stage than the one the
+request actually named and the applicant actually just passed through.
+Independently verified the fallback was exactly the unconditional
+sort-order guess Codex described, and that MP-5's own check only confirms
+pipeline membership, never `step_type` — so `step_id` needed one more check
+(is it actually an `election_vote` step?) before it could safely be trusted
+here, which is what MP-20 originally objected to trusting it for
+unconditionally. Fixed: within the fallback, a supplied `step_id` is now
+re-checked for `step_type == ELECTION_VOTE` and preferred over the
+sort-order guess when it passes; a `step_id` naming a real but wrong-type
+step still falls through unchanged (the pass-4 "wrong step_id" case is
+unaffected). MP-24's mismatch check needed no change — it only fires when
+`current_step` itself governed, never true once this fallback is reached.
+
+**Residual limitation, narrowed, not closed:** a pipeline with multiple
+`election_vote` stages where _neither_ `current_step` _nor_ a
+type-checked `step_id` identifies one (step_id omitted, or wrong type) is
+still genuinely ambiguous — `docs/KNOWN_LIMITATIONS.md` updated to reflect
+the narrower scope rather than removed, since the case isn't fully closed.
+
+Guard tests in `test_membership_pipeline_pass4_round4_codex.py` (5 tests):
+the core regression, its mirror (proving "prefer the named stage" not
+"prefer the stricter one"), a wrong-type step_id (unaffected), an omitted
+step_id (unaffected), and a single-election-vote-stage regression guard.
+The core regression assertion independently confirmed to fail against the
+pre-fix code via `git stash`; the other 4 confirmed to already pass
+unchanged against that same pre-fix code, so the fix is additive.
+
+Full completion gate clean: flake8/black/isort on `app/ tests/ alembic/`
+(1 new test file needed `black` reformatting, applied), `validate_
+migrations.py --strict` (409 revisions, single head, no schema change),
+full backend suite `pytest tests/ -q` — 9877 passed / 21 skipped
+(pre-existing/environmental) / 0 failed (baseline was 9872 before this
+commit; +5 for the new round-4 guard tests). Full detail in
+`MP-08-membership-pipeline.md` → Pass 4, round 4. Rotation row 08 → ⏳
+(awaiting PR merge/close of the currently-open review threads).
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 3) — 1 fixed, 1 refuted (Codex review of PR #2177's `da29d880`)
+
+Codex reviewed round 2's fix commit (`da29d880`, MP-23's
+`prospect.current_step` preference) and posted 2 new findings against
+`membership_pipeline_service.py`.
+
+**MP-24 (P1, fixed)** — `create_election_package` resolved its PII-policy
+from `prospect.current_step` (MP-23) but never checked the caller-supplied
+`step_id` against it. `advanceApplicant`'s two-request pattern (commit the
+advance, then a separate request to create the package naming the
+just-entered stage) leaves a window where `current_step` can move again
+before the second request lands, so the package could end up stored under
+one `step_id` while a different stage's `package_fields` actually governed
+the snapshot. Fixed: reject (`ValueError` → 400) when a supplied `step_id`
+disagrees with the `current_step` the policy was just resolved from — this
+only fires on the genuine race (never when `step_id` is omitted, and never
+for the pre-existing "named step isn't the election step" case pass 4
+already covers). Guard tests in
+`test_membership_pipeline_pass4_round3_codex.py` (3 tests); the race
+assertion independently confirmed to fail against the pre-fix code via
+`git stash`.
+
+**MP-25 (P2, refuted, no fix)** — claimed a lock-order deadlock between
+`update_election_package`'s locking read (which joins the `election`
+relationship, `lazy="joined"`, into its `SELECT ... FOR UPDATE`) and
+`ElectionService.close_election` (claimed to lock the election first, then
+write linked packages via `_sync_package_statuses`). Independently traced
+`close_election` line by line: it **commits** after locking the election
+(releasing that lock) well before `_sync_package_statuses` ever touches a
+package row, and that method's own package read isn't even a locking read —
+only its final `UPDATE` takes a row lock, in a transaction that by then holds
+no election lock at all. A lock-order deadlock needs both transactions
+holding one resource while waiting on the other simultaneously; the commit
+boundary here structurally prevents that. Documented in full — including why
+the underlying "joined eager load also locks the joined row" mechanic is
+still real and worth knowing, and why narrowing it isn't a safe same-day
+change (the eager load is load-bearing for response serialization:
+`election_title`/`election_status`/`election_end_date` read `self.election`
+synchronously) — in `MP-08-membership-pipeline.md` → Pass 4, round 3.
+
+Full completion gate clean: flake8/black/isort on `app/ tests/ alembic/`,
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change), full backend suite `pytest tests/ -q` — 9872 passed / 21 skipped /
+0 failed (baseline was 9869 before this commit; +3 for the new guard tests).
+Full detail in `MP-08-membership-pipeline.md` → Pass 4, round 3. Rotation
+row 08 → ⏳ (awaiting PR merge/close of the currently-open review threads).
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 2) — 1 fixed (Codex review of PR #2177's own fix commit)
+
+Codex reviewed pass 4's fix commit (`6c9bb09e`) and posted 1 new finding
+against the `create_election_package` field-policy fix that same commit had
+just landed (MP-20). Independently re-verified against the current code —
+confirmed real.
+
+**Fixed (1):** MP-23 — MP-20's fix resolved `package_fields` policy via
+`next(...)` over the pipeline's steps, which always returns the _first_
+`election_vote`-typed step by `sort_order`. `add_step` has no uniqueness
+check on `step_type` (confirmed by reading it), so a pipeline with multiple
+`election_vote` stages is reachable, and an earlier, more permissive stage
+could silently govern a package that belongs to a later, stricter stage the
+applicant actually reached. Fixed by preferring `prospect.current_step` —
+set only by `create_prospect`/`advance_prospect`/`regress_prospect`, and
+excluded from the generic prospect-update path, so it is never
+client-controlled — when it is itself an `election_vote` step in the
+governing pipeline; falls back to MP-20's original lookup only when the
+prospect's current step isn't an `election_vote` step at all (matches pass
+4 exactly for the common single-stage case).
+
+**Residual limitation (not a new flag — an explicit boundary on the MP-23
+fix, mirrored to `KNOWN_LIMITATIONS.md`):** a pipeline with multiple
+`election_vote` stages where the prospect's current step matches none of
+them (e.g. requested after the applicant already advanced past every vote
+stage) remains genuinely ambiguous — there is no single correct "the" stage
+to resolve without a product decision on what that should mean.
+
+New guard tests: `backend/tests/test_membership_pipeline_pass4_round2_codex.py`
+(3 tests — the multi-stage regression, its mirror-direction guard, and a
+single-stage regression guard). The multi-stage assertion independently
+confirmed to fail against the pre-fix code (`git stash` on
+`membership_pipeline_service.py`) before the fix was applied. Completion
+gate clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change); full backend suite `pytest tests/ -q` — 9869 passed / 21 skipped
+(pre-existing/environmental) / 0 failed (baseline was 9866 passed before this
+PR's last commit; +3 for the new round-2 guard tests). Full detail in
+`MP-08-membership-pipeline.md` → Pass 4, round 2. Rotation row 08 → ⏳
+(awaiting PR merge). Next: 09 medical screening (PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4) — 3 fixed, 1 flagged (Codex review on PR #2177)
+
+Codex reviewed pass 3's fix commit (merged as #2176) and posted 4 new
+findings against `membership_pipeline_service.py`. Independently re-traced
+every one against the current code (not the bot's say-so) — all 4 real.
+
+**Fixed (3, counted as 2 findings — MP-20 covers two angles of one
+mechanism):** MP-20 — `create_election_package`'s `package_fields`
+PII-minimization policy (a) was resolved from whatever `step_id` the caller
+supplied, optional and never checked for being the pipeline's actual
+`election_vote` step, so a caller could get full capture just by omitting it
+or naming a different step — fixed by deriving policy from the pipeline's
+own `election_vote`-typed step directly; and (b) a brand-new,
+never-configured election stage had no `package_fields` at all (neither
+`DEFAULT_STAGE_CONFIGS.election_vote` nor the "Membership Vote" preset set
+it), over-capturing PII the UI displays as unchecked — fixed on the
+frontend by having the "Membership Vote" preset (the only UI path that can
+produce a savable new election stage) persist the UI's own displayed
+defaults, without touching the shared `defaultStageConfig` merge path an
+existing stage's edit flow depends on for preserving its legacy
+capture-everything behavior. MP-21 — `update_election_package`'s
+status-changing path reopened the pass-3-fixed (MP-16) assignment race by
+reading the package with a plain, unlocked call instead of
+`lock_for_update=True` — locked here too, mirroring
+`assign_package_to_election` (CLAUDE.md Pitfall #27).
+
+**Flagged (1, mirrored to `KNOWN_LIMITATIONS.md`):** MP-22 — pass 3's
+document-deletion reorder (MP-18: remove file, then delete DB row + commit)
+can still lose the file if something after a successful `os.remove` fails
+(most plausibly the commit). A genuine two-sided reliability tradeoff, not a
+one-sided gap: reverting the order reopens MP-18 (an untracked orphaned PII
+file), and a full rename-to-trash/restore-on-rollback scheme is more
+machinery than a rare, retry-safe compound failure justifies as a same-day
+fix.
+
+New guard tests: `backend/tests/test_membership_pipeline_pass4_codex.py` (7
+tests) plus one fixture update in `test_membership_pipeline_pass3_codex.py`;
+`StageConfigModal.test.tsx` (+2 tests). Every new/changed assertion
+confirmed to fail against the pre-fix code via `git stash`. Completion gate
+clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change); `tsc`/`eslint` clean on the touched frontend files; full backend
+suite 9866 passed/21 skipped (pre-existing/environmental)/0 failed. Full
+detail in `MP-08-membership-pipeline.md` → Pass 4. Rotation row 08 → ⏳
+(awaiting PR merge). Next: 09 medical screening (PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) ✅ merged — PR #2176
+
+Merged to `main` as commit `7fb9c2e9`. Rotation row 08 continued into pass 4
+above (Codex reviewed this pass's own fix commit before the next feature
+started). Next: 09 medical screening, once pass 4 merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) — 5 fixed, 2 flagged (Codex review on PR #2176)
+
+The pass 3 draft (full re-verification, zero code diff since pass 2's
+byte-identical merge) concluded "no new findings." Codex's review of that
+draft found 6 real issues it had missed, plus a 7th (unbounded prospect
+reads on `/widget-summary` and `/pipelines`) restated in a review comment
+mirroring MP-10's already-flagged class. Independently re-traced every one
+against the current code (not the bot's say-so) — all 7 confirmed real.
+
+**Fixed (5):** MP-13 unvalidated cross-tenant `form_id` in step config
+(`add_step`/`update_step`/`create_pipeline`'s inline steps all now validate
+in-org before persisting, mirroring the existing `email_template_id`
+pattern); MP-14 N+1 query in `list_event_links` (batch-fetched instead of
+per-row); MP-15 election-package PII over-collection ignoring the stage's
+configured `package_fields` (CLAUDE.md Pitfall #19 — a config switch with no
+reader; wired one that preserves the prior full-capture behavior for every
+pipeline that never configured it); MP-16 election-package assignment race
+with no row lock (CLAUDE.md Pitfall #27 — locked the package and election
+rows, made the status check a locking read); MP-17 no state machine on
+election-package `status` (mirrors MP-9's fix for
+`ProspectStatus.TRANSFERRED` — system-derived states can no longer be set or
+cleared through the generic update); MP-18 document deletion could orphan
+the file on a failed `os.remove` (reordered so the file removal happens
+before the metadata commit, and a failed removal now raises instead of
+being swallowed).
+
+**Flagged (1 full + half of a 2nd, both mirrored to `KNOWN_LIMITATIONS.md`):**
+MP-19's `/widget-summary` half (unbounded prospect-row materialization for
+aggregate counts and an uncapped `details` list — same class as MP-10, a
+response-contract change to fix properly); MP-10 itself remains open,
+unchanged. MP-19's `/pipelines` half **was** fixed (aggregate count query
+instead of eager-loading every prospect row, no contract change).
+
+New guard tests: `backend/tests/test_membership_pipeline_pass3_codex.py`
+(26 tests), each independently confirmed to fail against the pre-fix code
+via `git stash` on the two changed source files. Completion gate clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, single head, no schema change); scoped
+election/membership/prospect/pipeline suite (49 files) 808 passed/0 failed;
+full backend suite 9859 passed/21 skipped (pre-existing/environmental)/0
+failed (9833 baseline + 26 new guard tests). No frontend file changed, so
+`tsc`/`eslint` were not re-run this pass. Full detail in `MP-08-membership-pipeline.md` → Pass 3. Rotation row 08 → ⏳ (awaiting PR merge). Next: 09 medical screening
+(PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 07 (Users & organizations, pass 3) ✅ merged — PR #2175
+
+Merged to `main` as commit `9860bde5`. Rotation row 07 → ✅. Next: 08
+Membership pipeline.
+
+---
+
+### 2026-09-02 — Feature 07 (Users & organizations, pass 3) — 1 fixed, 1 flagged — PR #2175
+
+Full-domain diff review since pass 2's merge (PR #1949, commit `6823bece`).
+Enumerated all 62 routes across `users.py`/`organizations.py`/
+`member_status.py`/`member_leaves.py`, traced every by-id fetch for
+`organization_id` scoping and the one client-supplied FK on a create path
+for in-org validation (CLAUDE.md Pitfall #14/XC-1/XC-3) — no gap found,
+everything already correctly scoped.
+
+- **USR-7 (LOW, fixed):** `UserListResponse` declares
+  `platoon`/`member_class`/`member_status`/`compliance_exempt`, but
+  `UserService.get_users_for_organization` never populated any of the four
+  — `GET /users` silently returned the schema default for all four
+  regardless of the real column value. `PlatoonRosterPanel.tsx` reads
+  `platoon` straight from this endpoint, so every member showed as
+  unassigned. Fixed for `platoon` (the field with a real, broken consumer);
+  the other three left unset — see USR-8. Guarded by
+  `tests/test_user_list_platoon.py`, confirmed to fail pre-fix via
+  `git stash`.
+- **USR-8 (MED, flagged):** `GET /users` sends the full admin roster record
+  (username, hire date, membership number, rank, station) to every
+  `members.view` holder — every default position. A 2026-09-01/02 frontend
+  change now presents a visibly reduced "Member Directory" for
+  non-managers, implying an access boundary that doesn't exist
+  server-side: the hidden fields are still in the JSON response. Not fixed
+  — 25+ frontend files depend on the current unfiltered response for
+  legitimate purposes, so trimming it is a response-shape product
+  decision, not a drop-in. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+Completion gate clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged); scoped suite
+323 passed/1 skipped (pre-existing)/0 failed; full backend suite 9833
+passed/21 skipped (pre-existing/environmental)/0 failed; `tsc --noEmit` 0
+errors; `eslint .` 0 errors (no frontend file touched). See
+`USR-07-users-organizations.md`'s Pass 3 section for the full write-up.
+Rotation row 07 → ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) ✅ merged — PR #2173
+
+PR #2173 (round 7's continuation branch, after its predecessor #2162 merged
+mid-task) merged to `main` as merge commit `860abcc2`. Final tally across
+both PRs of this pass: 23 fixed, 5 flagged across ten Codex review rounds, 1
+re-verified open (ELEC-12). Rotation row 06 → ✅. Next: 07 users &
+organizations.
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 10) — 1 fixed, 1 flagged (ELEC-39, ELEC-40) — PR #2173
+
+Codex posted 2 findings against commit `16a62a2d5` (round 9's own fix
+commit), both about further gaps in the same vote-deduplication
+mechanism. Re-verified each independently, same standard as every prior
+round in this pass.
+
+- **ELEC-39 (P1, fixed):** `submit_ballot_with_token`'s backward-compatible
+  `choice` UUID form (write-in/approve/deny/a plain candidate id — the one
+  vote-submission branch that isn't gated to a specific voting method the
+  way `rankings`/`candidate_ids` are) still hardcoded its dedup-hash
+  discriminator to `""`, even after ELEC-37 (round 9) made
+  `cast_vote_with_token` resolve an item's `voting_method` override for the
+  same purpose. An item overriding a `simple_majority` election to
+  `approval` hashed `f"cand:{id}"` via the single-vote route and `""` via
+  the bulk route's `choice` form for the identical logical vote — reopening
+  the exact cross-route hash mismatch ELEC-37 closed for the other two
+  branches. Fixed by routing the `choice` branch through the same
+  `_dedup_discriminator(election, candidate_id, None, item=ballot_item)`
+  call already used elsewhere, instead of the literal `""`. New tests in
+  `tests/test_election_codex_round10.py` (3 tests, including one
+  end-to-end test asserting the actual **persisted** `vote_dedup_hash`
+  matches the single-vote route's — a plain unit assertion on the
+  discriminator helper alone would still pass with the bug present, since
+  that helper was already correct before this round).
+- **ELEC-40 (P1, flagged — not code-fixed):** the ELEC-38 (round 9) fix
+  narrowed the duplicate-vote pre-check's alias set on the reasoning that a
+  dropped alias is always still caught by the `vote_dedup_hash` UNIQUE
+  constraint. That reasoning assumed every existing vote's hash was
+  computed under the current, id-based convention (ELEC-34, round 7) — it
+  does not hold for a vote `cast_vote_with_token` wrote for a legacy item
+  _before_ ELEC-34 landed, since that route's stored `Vote.position` has
+  always been the item's title (ELEC-34 only changed the hash input, never
+  the column), and a pre-ELEC-34 row's hash was itself computed against
+  that title, not the item's id. On a title/id collision between two
+  ballot items, dropping the colliding title alias can therefore miss a
+  genuinely pre-ELEC-34 vote both at the pre-check AND at the UNIQUE
+  constraint, letting a second token vote again. Not code-fixed: the two
+  candidate fixes (revert the ELEC-38 narrowing, or backfill-migrate
+  existing dedup hashes to the id-based formula) trade against each other
+  or need a data migration — both are owner decisions, not something to
+  guess at during a review pass. Severity in practice is narrow (requires
+  a deliberately-or-coincidentally colliding alias pair in an election that
+  already had a pre-ELEC-34 vote). Mirrored to `docs/KNOWN_LIMITATIONS.md`,
+  correcting that entry's prior overstated "still caught by the UNIQUE
+  constraint" claim.
+
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 511
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9831
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. ELEC-39's review thread replied to and
+resolved; ELEC-40's thread replied to with the analysis above and left
+open for the PR owner, not resolved. See `ELEC-06-elections-ballots.md`'s
+Pass 3 section (ELEC-39/40) for the full write-up. Rotation row 06 remains
+⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 9) — 2 more fixed (ELEC-37, ELEC-38) — PR #2173
+
+Codex posted 2 findings against commit `8a989764c` (round 8's own fix
+commit), both about gaps in the ELEC-34 vote-deduplication mechanism.
+
+- **ELEC-37 (P1, fixed):** `cast_vote_with_token`'s dedup-hash
+  discriminator (`_dedup_discriminator`) resolved the vote's method purely
+  from `election.voting_method`, ignoring a ballot item's own
+  `voting_method` override — which `submit_ballot_with_token` already
+  resolves inline for the same purpose. An item overriding e.g. a
+  `simple_majority` election to `approval` produced `f"cand:{id}"` from the
+  bulk route and `""` from the single-vote route for the identical vote, so
+  the `vote_dedup_hash` UNIQUE constraint (the documented backstop for a
+  race that bypasses the pre-insert duplicate check) could no longer catch
+  two tokens racing on the same item through the two different routes.
+  Fixed by adding `_effective_voting_method(election, item)` (mirroring the
+  existing `_dedup_position_key` precedent for the position component) and
+  threading the matched ballot item through `_dedup_discriminator` in
+  `cast_vote_with_token`. A related TOCTOU note (the duplicate-check SELECT
+  reads before the token/election row lock refreshes the snapshot) was
+  traced and found already covered: InnoDB checks a UNIQUE index against
+  the latest committed row at INSERT time regardless of the inserting
+  transaction's snapshot, so the actual backstop is unaffected by the
+  pre-check's staleness — not a fresh instance of the ELEC-17/24 class, and
+  not changed this round; reasoning recorded in the full write-up.
+- **ELEC-38 (P2, fixed):** `ballot_item_candidate_positions()`'s title/id
+  fallback (needed so a legacy candidate stored under either alias is still
+  found) let the ELEC-34 duplicate-vote pre-check in both routes match a
+  _different_ ballot item's already-stored vote whenever one item's title
+  happened to equal another item's id — the schema enforces only unique
+  item ids, not title-vs-id uniqueness across items. Reproduced exactly as
+  reported: voting on item `{id: "budget", ...}` then item `{id: "officer",
+title: "budget", ...}` in the same bulk submission got the second vote
+  rejected as a duplicate of the first. Checked whether `Vote`/`Candidate`
+  already carry enough information to fully disambiguate two colliding
+  items — they do not (no `ballot_item_id` column on either; `Candidate.position`
+  carries the identical ambiguity) — so full candidate/vote _ownership_
+  disambiguation on a collision is flagged as a known limitation requiring
+  a schema change (`docs/KNOWN_LIMITATIONS.md`), not forced as an
+  application-only fix. The narrower, reported bug (false-positive
+  duplicate rejection) _is_ fixable without a schema change, because
+  under-matching in a duplicate pre-check is safe (a genuine repeat vote is
+  always dedup-hashed against the item's own canonical id, never its
+  title, so the UNIQUE constraint still catches it) while over-matching
+  (this bug) is not. Fixed by adding `_dedup_scoped_item_aliases(item,
+all_items)`, used only at the two duplicate-check call sites — the
+  broader alias set is left untouched everywhere it decides candidate
+  ownership/eligibility, to avoid the exact regression the original
+  function's docstring warns against.
+
+New regression tests in `tests/test_election_codex_round9.py` (new file,
+11 tests: 4 for ELEC-37, 3 end-to-end + 4 unit for ELEC-38), confirmed to
+fail pre-fix via `git stash` (the module fails to import — the helper
+functions it exercises don't exist pre-fix). Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged, no migration this round); scoped
+suite (`-k "election or ballot or vote or quorum"`) 508 passed/1 skipped
+(pre-existing)/0 failed; full backend suite 9828 passed/21 skipped
+(pre-existing/environmental)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. Both review threads replied to and resolved on
+#2173. See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-37/38)
+for the full write-up. Rotation row 06 remains ⏳ (awaiting PR #2173
+merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 8) — 1 more fixed (ELEC-36) — PR #2173
+
+Codex posted 1 finding against commit `097f1c37e` (round 7's own
+`_token_eligibility_error` fix, ELEC-33) about a bug in that fix's own
+collision-detection logic.
+
+- **ELEC-36 (P1, fixed):** when a candidate's ballot item collides with a
+  restricted plain position under _multiple_ aliases at once — a legacy
+  item (no explicit `position` field) whose `id` equals one configured
+  plain position's name and whose `title` equals a _different_ configured
+  plain position's name, both present in `election.positions` — the
+  helper computed `colliding_positions` as the set of every colliding
+  alias and then checked eligibility against `next(iter(colliding_positions))`,
+  an arbitrary member (Python set iteration order depends on hash
+  seeding), not necessarily the specific alias this vote actually needs to
+  clear. A token eligible for only one of the two colliding positions
+  could, depending on which label the arbitrary pick happened to favor,
+  have its candidate checked against the position it _is_ eligible for
+  instead of the one it is not — bypassing that position's eligibility
+  restriction entirely. Confirmed reachable: `BallotItemInput.id` accepts
+  `^[A-Za-z0-9_-]+$` (so an id like `Treasurer` is valid), `title` has no
+  overlap restriction against `id` or against `election.positions`, and
+  nothing in schema or service validation prevents both aliases from also
+  appearing in `election.positions` at once.
+
+Fixed by requiring eligibility for _every_ colliding position rather than
+one arbitrarily chosen member of the set — failing closed on which alias
+is "real" instead of guessing, in the one shared `_token_eligibility_error()`
+helper (confirmed via grep to be the only place this logic lives — exactly
+two call sites, `cast_vote_with_token` and `submit_ballot_with_token`, both
+already routed through it per ELEC-33's own goal — so the fix closes both
+routes at once). New regression tests in
+`tests/test_election_codex_round8.py`
+(`TestMultiCollisionRequiresEligibilityForEveryColludingPosition`, 3
+tests), confirmed one fails pre-fix via `git stash` (a token eligible for
+"Treasurer" but not the item's other colliding alias "Secretary" was
+wrongly accepted). Completion gate re-run clean: flake8/black/isort on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` (409 revisions,
+unchanged, no migration this round); scoped suite (`-k "election or
+ballot or vote or quorum"`) 497 passed/1 skipped (pre-existing)/0 failed;
+full backend suite 9817 passed/21 skipped (pre-existing/environmental)/0
+failed. No frontend file touched, so `tsc`/`eslint` not run. Review thread
+replied to and resolved on #2173. See `ELEC-06-elections-ballots.md`'s
+Pass 3 section (ELEC-36) for the full write-up. Rotation row 06 remains ⏳
+(awaiting PR #2173 merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 7 continued) — 1 more fixed (ELEC-35) — PR #2173
+
+A third finding surfaced during triage of round 7's original two (ELEC-33,
+ELEC-34, logged below) — not a new Codex post against a specific commit,
+but a gap noticed while re-reading round 6's ELEC-30 fix alongside it.
+Folded into the same PR #2173 per this rotation's "one PR at a time"
+process, since #2162 (round 7's would-be target) is closed/merged.
+
+- **ELEC-35 (P1, fixed):** round 6's ELEC-30 fix gated
+  `_member_voting_gates()` (the global membership-tier voting ban) on
+  `election.positions and election.position_eligibility` — both truthy.
+  Round 6's own fixture covered a position with an _empty rule_
+  (`position_eligibility` truthy, no restriction for that one position).
+  It did not cover an election with plain positions and **no**
+  `position_eligibility` at all (a falsy `{}`/`None`) — a distinct
+  condition under which the branch, and the tier gate inside it, never ran
+  at all. A member on a tier with `voting_eligible: False` on such an
+  election still received a token with `eligible_positions=None` — read
+  downstream as unrestricted — and could cast a counted positional vote
+  despite the tier ban already excluding them from every ballot item on
+  the same election.
+
+Fixed by moving the gate to run on `election.positions` alone,
+independent of whether `position_eligibility` is configured for any
+position — `eligible_positions` is now always a list (never left `None`)
+whenever the election defines positions, with the "no rules for this
+position" behavior (unrestricted for a tier-eligible member) preserved via
+`(election.position_eligibility or {}).get(pos)`. The downstream
+empty-ballot-prevention `qualifies` check was simplified to read
+`eligible_positions` directly rather than carrying a separate
+"unrestricted positions always qualify" carve-out that would have
+otherwise overridden a tier-banned member's now-correctly-empty snapshot
+back to "qualifies."
+
+Fix guarded by 2 new regression tests in `tests/test_election_codex_round7.py`
+(`TestTierBanAppliesWithoutAnyPositionEligibilityRules`), confirmed failing
+pre-fix via `git stash`. One pre-existing test file
+(`test_election_reopen_test_ballots.py`) needed a one-line mock fixup
+(`.settings` on a hand-built `organization` `SimpleNamespace`) since the
+tier gate now reaches that code on every election with positions, not only
+ones with `position_eligibility` configured. Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged); scoped suite (`-k "election or
+ballot or vote or quorum"`) 494 passed/1 skipped (pre-existing)/0 failed;
+full backend suite 9814 passed/21 skipped (pre-existing/environmental)/0
+failed. No frontend file touched, so `tsc`/`eslint` not run. Review thread
+replied to and resolved on #2162 (accepts both on a merged PR). See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-35) for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR #2173 merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 7) — 2 fixed — PR #2173 (follow-up to merged #2162)
+
+**PR split note:** #2162 merged (rounds 1-6, through commit `c4e0e7eb2`)
+while this round's fix was still in progress on its own branch — a race
+with this rotation's own "one PR at a time" process, not a violation of
+it: the merge happened out-of-band while round 7 review comments were
+being fetched and addressed. The two round-7 review threads were replied
+to and resolved on #2162 as normal (GitHub accepts both actions on a
+merged PR), but with the branch deleted post-merge the code fix itself
+was pushed as a new branch and opened as [#2173](https://github.com/thegspiro/the-logbook/pull/2173) —
+branched from #2162's final commit (`c4e0e7eb2`, already an ancestor of
+`main` by then) and merged forward onto current `main`, not rebased.
+
+Codex posted 2 more findings against commit `44fcbfe8e` (round 5's own fix
+commit) — both about gaps in that fix (and, for the second, round 2's
+ELEC-27 fix) specifically in the bulk ballot submission path
+(`submit_ballot_with_token`, the `/ballot/vote/bulk` route), which neither
+earlier round touched. Re-verified each against current code independently,
+same standard as all prior rounds:
+
+- **ELEC-33 (P1, fixed):** round 5's ELEC-29 fix closed the
+  position/ballot-item namespace-collision bypass in `cast_vote_with_token`
+  (single-vote route) and `lookup_ballot_by_token`, but
+  `submit_ballot_with_token` (bulk route) has the identical vulnerability
+  and was never touched: its per-item eligibility check only ever consulted
+  `eligible_item_ids`, so a token eligible for a colliding ballot item but
+  NOT eligible for the colliding restricted plain position
+  (`eligible_positions=[]`) could still submit that position's candidate
+  through the bulk route.
+- **ELEC-34 (P1, fixed):** for a legacy ballot item (no explicit
+  `position` field), the bulk route stores `Vote.position` as the item's
+  id while the single-vote route stores it as the resolved candidate's own
+  position (historically the item's title) — two different literal
+  strings for the same contest. Each route's duplicate-vote check, and
+  each route's `vote_dedup_hash` (the database UNIQUE-constraint
+  backstop), compared only against its own route's convention, so a voter
+  holding two unused tokens could cast one vote through each route and
+  have both counted. ELEC-27 (round 2) had already fixed this for
+  _historical_ NULL-position rows; these are two _current_ non-NULL rows
+  from the two live routes, which ELEC-27 never addressed.
+
+Fixed by extracting the ELEC-29 collision check into one shared
+`_token_eligibility_error()` helper used by both vote-submission routes
+(ELEC-33) — which also corrected a latent gap in the original collision
+test itself, detecting a collision via any alias in
+`ballot_item_candidate_positions(item)` rather than only whichever literal
+a given route resolved to, since the bulk route's resolved value for a
+legacy item is an id that can never equal a plain position name even
+though the item's title does. ELEC-34 fixed at two layers: widened both
+routes' duplicate-vote SELECT to match every item alias instead of a
+single literal, and normalized the `vote_dedup_hash` position component
+(new `_dedup_position_key()` helper) to the item id for a legacy item
+regardless of route, closing the residual concurrent-race gap the
+SELECT-based fix alone cannot reach.
+
+Fix guarded by 5 new regression tests in `tests/test_election_codex_round7.py`
+(new file: 2 for ELEC-33, 3 for ELEC-34), 4 of 5 confirmed failing pre-fix
+via `git stash` (the fifth is a sanity check that a fully-eligible token
+still succeeds, which passes on both sides of the fix by design).
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 492
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9812
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. Both review threads replied to and
+resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-33/34)
+for the full write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 6) — 3 fixed — PR #2162
+
+Codex posted 3 more findings against commit `67511fa77` (round 4's own fix
+commit, before round 5's `44fcbfe8e` — round 5 touched a different
+function, `cast_vote_with_token`'s candidate classification (ELEC-29), not
+this eligibility-computation code, so all three were still open).
+Re-verified each against current code independently, same standard as all
+prior rounds:
+
+- **ELEC-30 (P1, fixed):** the positional-eligibility snapshot round 4's
+  ELEC-26 added to `send_ballot_emails` appended positions to
+  `eligible_positions` with no check on the recipient's membership-tier
+  `voting_eligible` flag — the same global ban
+  `annotate_ballot_items_for_user` already applies to every ballot item
+  regardless of that item's own rules. A member on a tier with
+  `voting_eligible: False` (the shipped "probationary" tier) could still
+  receive a live token/credential good for a plain-position contest.
+- **ELEC-31 (P1, fixed):** the same positional snapshot never consulted
+  `election.voter_overrides` (the "secretary override"), which
+  `annotate_ballot_items_for_user` already treats as blanket eligibility
+  for every ballot item. An overridden recipient whose role failed a
+  restricted position's `voter_types` rule still had that position
+  excluded from `eligible_positions` — the override's contract was honored
+  for items and silently ignored for positions on the same ballot.
+- **ELEC-32 (P2, fixed):** `cast_vote_with_token`'s "mark this token fully
+  used" check measured only `eligible_positions` coverage, never
+  `eligible_item_ids` — even though the same single-vote route also
+  accepts item-scoped candidate votes and records them into the identical
+  `positions_voted` list. In a mixed simple-majority election where a
+  recipient is eligible for at least one ballot item and a strict, non-empty
+  subset of the plain positions, casting the last eligible position vote
+  first set `used=True` immediately, and the still-outstanding, legitimate
+  item vote was then rejected as "already been fully submitted."
+
+Both P1s share one root cause: the positional path was computed
+independently of, and more permissively than, the item path's two
+established gates. Fixed by extracting the item path's tier-ban and
+override checks into a new shared helper,
+`ElectionService._member_voting_gates()`, and having both the item path
+(no behavior change — same computation, one definition) and the positional
+path call it. ELEC-32 fixed by folding each eligible ballot item's
+candidate-position label(s) (via the existing `ballot_item_candidate_positions()`
+helper) into the same completion set `eligible_positions` already
+contributes to, so "ballot fully cast" requires covering both scopes at
+once regardless of which one a given vote happens to satisfy.
+
+Fix guarded by 5 new regression tests in `tests/test_election_codex_round6.py`
+(new file: 1 for ELEC-30, 2 for ELEC-31, 2 for ELEC-32), all 5 confirmed
+failing pre-fix via `git stash`. Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged — no migration needed); scoped suite
+(`-k "election or ballot or vote or quorum"`) 487 passed/1 skipped
+(pre-existing)/0 failed; full backend suite 9807 passed/21 skipped
+(pre-existing/environmental)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. Both review threads replied to and resolved. See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-30/31/32) for the
+full write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 5) — 1 fixed — PR #2162
+
+Codex posted 1 more finding against commit `53c81b92a` (the state before
+round 4's `67511fa77` fix landed — round 4 did not touch this code, so it
+was still open). Re-verified against current code independently, same
+standard as all prior rounds:
+
+- **ELEC-29 (P1, fixed):** `cast_vote_with_token` classified a candidate as
+  item-scoped the moment its position resolved to _any_ ballot item (a
+  `next(...)` first-match lookup via `ballot_item_candidate_positions()`,
+  ELEC-22's helper) and, when it matched, checked only
+  `eligible_item_ids` — never `eligible_positions` — even when that same
+  position value was _also_ a plain `election.positions` entry governed by
+  `position_eligibility`. Nothing in `ElectionBase`/`ElectionUpdate`
+  (`app/schemas/election.py`) forbids a plain position colliding with a
+  ballot item's position/title/id, and `send_ballot_emails` computes
+  `eligible_item_ids` and `eligible_positions` independently — so a
+  recipient ineligible for a restricted plain position but eligible for an
+  unrestricted, same-named legacy ballot item got a token that could vote
+  for the restricted position's candidate anyway. The public
+  `/ballot/lookup` endpoint (`lookup_ballot_by_token`) had the identical
+  shape, exempting a colliding candidate from the `eligible_positions`
+  filter unconditionally. Confirmed reachable end-to-end (schema permits
+  the collision, token issuance produces the exact mismatched-scope token
+  Codex described, `Candidate.position` is a single column so the same row
+  serves both namespaces at once). Fixed at both call sites by detecting
+  the collision directly (does this position value also appear in the
+  plain `election.positions` list?) and requiring a colliding candidate to
+  clear _both_ applicable eligibility checks, rather than trusting
+  whichever scope an iteration order resolved first. `submit_ballot_with_token`
+  needed no change (it resolves votes by an explicit client-supplied
+  `ballot_item_id`, never by position classification) and the authenticated
+  `cast_vote`/`check_voter_eligibility` path was already checking both
+  namespaces unconditionally. A write-time schema rejection of the
+  collision was considered and rejected: `ElectionUpdate` fields merge
+  independently against the row's existing state, so that validation
+  belongs in the service layer against the merged effective state, not a
+  DB-unaware Pydantic model, and would risk rejecting elections already in
+  this shape.
+
+Fix guarded by 3 new regression tests in `tests/test_election_codex_round5.py`
+(new file), 2 confirmed failing pre-fix via `git stash`. Completion gate
+re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 482
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9802
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. Review thread replied to and resolved.
+See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-29) for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 4) — 2 fixed, 1 flagged — PR #2162
+
+Codex posted 3 more findings against commit `dab1d1baf` (the state before
+round 3's `53c81b92a` fix landed — round 3 did not touch this code, so both
+backend findings were still open). Re-verified each against current code
+independently, same standard as all prior rounds:
+
+- **ELEC-26 (P1, fixed):** `send_ballot_emails`'s "skip recipients with zero
+  eligible ballot items" check decided to skip a recipient **before**
+  `eligible_positions` (ELEC-23's snapshot) was computed. In a mixed
+  election, a recipient eligible for a plain position but ineligible for
+  every structured item was excluded outright — no token, no email — despite
+  `eligible_positions` coming back non-empty for them moments later in the
+  original code. Fixed by computing both eligibility sets first, then
+  deciding to skip only when the recipient qualifies for neither structure
+  the election actually defines.
+- **ELEC-27 (P2, fixed):** `submit_ballot_with_token`'s NULL-position
+  duplicate-vote subquery filtered on `Candidate.position == position` (the
+  item's storage value) instead of the broader `item_candidate_positions`
+  set (`ballot_item_candidate_positions()`, ELEC-22's helper) already used by
+  every other candidate-validation branch in the same method. A voter with
+  an old NULL-position vote against a title-keyed legacy candidate, plus a
+  fresh unused token, could have that vote missed by the dedup check and cast
+  a second vote for the same contest — the same shape of bug ELEC-22 fixed,
+  just in the duplicate-detection query instead of the eligibility
+  allow-list. Fixed by using `item_candidate_positions` in this subquery too.
+- **ELEC-28 (P1, flagged):** the public, token-based ballot page
+  (`BallotVotingPage.tsx`) renders and submits only `election.ballot_items`
+  — it never reads `election.positions` or calls the backend's single-vote
+  positional route (`POST /elections/ballot/vote`, confirmed unused by any
+  frontend code). So even with ELEC-23/ELEC-26 correctly issuing a mixed
+  election's position-only-eligible voters a live token, the page that token
+  opens has no way to render or submit their positional vote — and
+  submitting the visible item ballot spends the single-use token, with no
+  way back. Investigated whether a small, safe reuse of existing UI
+  (`ElectionBallot.tsx`, which does render positions) was possible: it is
+  not — that component is wired to the authenticated, non-token voting flow
+  and would need its eligibility/submission plumbing rebuilt around a token.
+  Building new ballot-rendering UI, form state, and a submission contract is
+  a product decision, not a mechanical fix, so this is flagged rather than
+  guessed at, per this rotation's own standard (ELEC-14, ELEC-16).
+
+Both fixes guarded by regression tests in `tests/test_election_codex_round4.py`
+(new file, 4 tests), each confirmed to fail pre-fix via `git stash`.
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 479
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9799
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched (ELEC-28 flagged, not fixed), so `tsc`/`eslint` not run. All 3
+review threads replied to and resolved. See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-26/27/28) for the full
+write-up. `KNOWN_LIMITATIONS.md` updated for ELEC-28. Rotation row 06
+remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 3) — 1 fixed, 2 docs-only — PR #2162
+
+Codex reviewed round 2's fix commit (merged with a concurrent unrelated
+commit into `dab1d1baf`) and posted 3 more findings, all P2. Re-verified
+each against current code independently, same standard as rounds 1 and 2:
+
+- **ELEC-25 (P2, fixed):** `void_manual_ballot_batch` (ELEC-18's fix, round
+  1. had the identical lock-order problem ELEC-24 fixed for
+     `attest_manual_ballot_batch` — it locked the batch before the election
+     (via a join), while election deletion locks the election before its
+     batches. A concurrent void and delete could deadlock under InnoDB, and
+     neither path retries. Fixed by locking the election first, matching the
+     order used everywhere else. Confirmed by reading `close_election` that
+     voiding does not need attestation's additional close-race protection: it
+     has no OPEN-status gate to race, and results are always computed live
+     rather than snapshotted at close, so only the lock order needed fixing.
+- **Stale `.with_for_update()` inventory (P2, docs-only):** this file's own
+  Pass 3 section in `ELEC-06-elections-ballots.md` still stated the
+  pre-round-1 count and list (10 sites) after two rounds of fixes had
+  already added four more. Corrected to the actual current count (14) with
+  a full per-site table.
+- **Mismatched finding ids between this file and the canonical doc
+  (P2, docs-only):** this file's round-1 log entry used `ELEC-19b`/`ELEC-20`
+  for what `ELEC-06-elections-ballots.md` canonically calls `ELEC-20`/
+  `ELEC-21`, and omitted `ELEC-18` (the void-race fix) entirely despite
+  claiming to enumerate all 6 of round 1's fixes. Corrected both id
+  mismatches and restored the missing `ELEC-18` entry below;
+  `CHANGELOG.md`'s matching `[Unreleased]` entry had the same wrong ids and
+  was corrected too.
+
+The one code fix is guarded by `TestVoidManualBallotBatchLocksElectionFirst`
+(3 tests, `tests/test_election_codex_round3.py`), confirmed to fail pre-fix
+via `git stash`; the two pre-existing `TestVoidManualBallotBatchLocking`
+tests in `tests/test_election_codex_round2.py` were updated for the new
+lock in their call sequence. Completion gate re-run clean: flake8/black/isort
+on `app/ tests/ alembic/`; `validate_migrations.py --strict` (409 revisions,
+unchanged — no migration needed); scoped suite (`-k "election or ballot or
+vote or quorum"`) 475 passed/1 skipped (pre-existing)/0 failed; full backend
+suite 9795 passed/21 skipped (pre-existing/environmental)/0 failed. No
+frontend file touched, so `tsc`/`eslint` not run. All 3 review threads
+replied to and resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section
+(ELEC-25) for the full write-up. Rotation row 06 remains ⏳ (awaiting PR
+merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 2) — 3 fixed — PR #2162
+
+Codex reviewed round 1's fix commit (`d07af4143`) itself and posted 3 more
+findings — 2 P1s and a P2 — specifically on those fixes, not on the
+original pass. Re-verified each against current code independently, same
+standard as round 1: **all 3 confirmed real and fixed.**
+
+- **ELEC-22 (P1, fixed):** round 1's new per-item eligibility checks
+  (ELEC-20/21) matched a candidate to its ballot item by the item's
+  `position` field or its `id` — but a legacy ballot item persisted without
+  an explicit `position` field ties its candidates by _title_ instead, a
+  convention the voting UI (`BallotVotingPage.tsx`) and
+  `check_voter_eligibility` already relied on before this review touched
+  the file. The id-only allow-list emptied every such item's candidate list
+  on `/ballot/lookup` and rejected the same candidates on both token-vote
+  routes. Fixed with a shared `ballot_item_candidate_positions()` helper
+  (position, else title-or-id) used consistently across all three call
+  sites, so the lookup filter and both submission checks agree.
+- **ELEC-23 (P1, fixed):** a candidate nominated for a plain
+  `election.positions` entry (not tied to any ballot item — the schema
+  allows both on the same election) had its eligibility checked nowhere at
+  all whenever the election also had ballot items: `send_ballot_emails`
+  unconditionally skipped snapshotting `eligible_positions` in that case,
+  and `cast_vote_with_token`'s item check is a no-op for a candidate that
+  doesn't resolve to an item. Worse in kind than ELEC-21 — that was a
+  check that fired but read the wrong field; this was no check firing at
+  all. Fixed by snapshotting `eligible_positions` whenever
+  `election.positions` has configured rules regardless of ballot items,
+  and restructuring `cast_vote_with_token` (and `lookup_ballot_by_token`)
+  so each candidate is judged by exactly one snapshot — item-scoped
+  candidates by `eligible_item_ids`, everything else by
+  `eligible_positions` — so populating the latter for mixed elections
+  can't collaterally reject legitimate item votes.
+- **ELEC-24 (P2, fixed):** ELEC-15's election-row lock in
+  `attest_manual_ballot_batch` was acquired _after_ the batch lock —
+  child-then-parent — while election deletion's `ON DELETE CASCADE` locks
+  parent-then-child. A concurrent attest and delete could deadlock under
+  InnoDB, and neither path retries. Fixed by acquiring the election lock
+  first, matching the parent-to-child order; ELEC-15's serialization
+  property (both locks still held before either check) is unchanged.
+
+All 3 fixes guarded by regression tests in `tests/test_election_codex_round3.py`
+(new file, 7 tests) plus 2 new/updated tests in the existing
+`TestAttestationLocksElection` class in `test_election_codex_round2.py`,
+each confirmed to fail pre-fix via `git stash`. Completion gate re-run
+clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 472
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9792
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. All 3 review threads replied to and
+resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 1) — 6 fixed, 2 flagged — PR #2162
+
+Codex reviewed this PR's initial "0 fixes, 0 new findings" write-up and
+posted 8 findings disputing it, several P1. Re-traced each against current
+code independently (not on Codex's word, same standard applied to the
+original pass) — **6 confirmed real and fixed, 2 confirmed real and
+flagged.** The diff-based "byte-identical to pass 2" scoping that produced
+the original conclusion was not itself wrong; the error was treating
+"unchanged since pass 2" as "still correct" when pass 2 had not caught these
+either:
+
+- **ELEC-13 (P2, fixed):** `6b5a82fa` (landed after pass 2's own diff
+  baseline, so missed by this pass's re-diff against that baseline) changed
+  `_reconcile_membership` to preserve `member_class`/`member_status` across
+  a switch onto a custom membership tier, for shift-eligibility reasons —
+  but `ElectionService._user_has_role_type` reads those same columns for
+  restricted-ballot eligibility, so a member moved onto a custom tier kept
+  matching `operational`/`regular` when the tier is documented to match
+  neither. Fixed by re-deriving from the _live_ `membership_type` when it's
+  an unrecognized tier, discarding the carried-over columns for eligibility
+  purposes only.
+- **ELEC-14 (P2, flagged):** `verify_vote_receipt` takes its credential as a
+  bare GET query param, not body/fragment — this pass's summary claim that
+  all 4 public token routes avoid that was wrong for this one route (pass
+  1's own table had it right). Not fixed: changing the HTTP method is a
+  public API-contract decision, not a mechanical one, given this exact GET
+  shape is documented across `wiki/`, `ARCHITECTURE.md`, and training
+  materials as a stable external endpoint.
+- **ELEC-15 (P1, fixed):** `attest_manual_ballot_batch` locked the batch but
+  read the election's status with a plain (non-locking) select;
+  `close_election` locks the election independently, so the two locks never
+  serialize against each other. Fixed by making the election read
+  `.with_for_update()` too.
+- **ELEC-16 (P2, flagged):** `list_manual_ballot_batches` is unbounded — the
+  same abuse-resistance shape as the already-flagged ELEC-12, missed when
+  this pass called the manual-ballot surface "read in full." Flagged for the
+  same reason as ELEC-12 (pagination/cap are product decisions).
+- **ELEC-17 (P1, fixed):** `_lock_token_ballot_for_submission`'s locking
+  re-selects lacked `populate_existing=True`, so with `expire_on_commit=False`
+  they returned the already-cached (pre-lock) election/token state despite
+  correctly acquiring the row lock — the identical bug class pass 2 already
+  found and fixed once in `quorum_service.py`, present here too and missed
+  by both pass 1 and pass 2.
+- **ELEC-18 (P2, fixed):** `void_manual_ballot_batch` ran plain (non-locking)
+  selects of both `ManualBallotBatch` and `Vote`, with no check for a batch
+  already voided — two concurrent voids could both load the same
+  not-yet-voided votes before either committed, both succeed, and the later
+  ORM flush would overwrite the first officer's
+  `deleted_by`/`deletion_reason`/`deleted_at`, corrupting the forensic
+  attribution the operation exists to preserve. Fixed by locking the batch
+  first (`.with_for_update()`), returning early with "already voided" if a
+  concurrent void already committed, and locking the vote select too.
+- **ELEC-20 (P1, fixed):** `submit_ballot_with_token`'s plain-candidate-UUID
+  `choice` branch didn't check `candidate.position == position` the way the
+  `rankings`/`candidate_ids` branches do, letting a crafted submission bind
+  a candidate from one ballot item onto a different item.
+- **ELEC-21 (P1, fixed):** `cast_vote_with_token` (the single-vote route)
+  checked only `eligible_positions`, which is always `None` for ballot-item
+  elections, and never checked `eligible_item_ids` — reintroducing the R-1
+  bypass on this specific route (the bulk route already enforced it). Also
+  tightened `lookup_ballot_by_token` to stop disclosing a restricted item's
+  candidates in the first place.
+
+All 6 fixes guarded by new regression tests in
+`tests/test_election_codex_round2.py` (12 tests), each confirmed to fail
+pre-fix via `git stash`. Completion gate re-run clean: flake8/black/isort on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` (409 revisions,
+unchanged — no migration needed); scoped suite (`-k "election or ballot or
+vote or quorum"`) 464 passed/1 skipped (pre-existing)/0 failed; full backend
+suite 9784 passed/21 skipped (pre-existing/environmental)/0 failed. No
+frontend file touched, so `tsc`/`eslint` not run. All 8 review threads
+replied to; the 6 fixed and 2 flagged-with-explanation threads resolved. See
+`ELEC-06-elections-ballots.md`'s Pass 3 section for the full write-up.
+Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) — 0 fixes, 1 re-verified open (ELEC-12) — PR #2162
+
+Unshallowed the clone (it started shallow at 803 commits) to trace history
+past a rewritten-history boundary, the same obstacle FIN-05 pass 3 named.
+Pass 2's fix commit (`a518957e5`) is confirmed an ancestor of `origin/main`
+by `git merge-base --is-ancestor`. Diffed the full elections domain from
+there: **zero change** in `elections.py`, `election_service.py`,
+`quorum_service.py`, `models/election.py`, `schemas/election.py` (byte-
+identical to pass 2's landing state) and no elections-table migration among
+the 55 that landed since (checked by content, not filename — the one hit
+only lists `elections.view`/`elections.manage` among many permission
+strings in an unrelated cross-cutting onboarding fix). No elections-specific
+frontend change either.
+
+With nothing changed, re-verified rather than re-derived: route inventory
+re-confirmed exactly 65 routes / 56 `require_permission` / 5
+authenticated-only / 4 public by direct count; no OR-gate
+`require_permission(a, b)` call exists in the module (Pitfall #23 class,
+n/a here); baseline-grant check confirmed `DEFAULT_POSITIONS["member"]`
+carries only `elections.view`, never `elections.manage`; the manual-ballot-
+batch surface (`attest`/`void`/`list`, `election_service.py:3502-3766`) read
+in full for the first time by name in this file — org-scoped, row-locked,
+and separation-of-duties enforced in code (an officer cannot attest their
+own batch); the 4 public token routes re-read against their compensating
+controls with no drift from pass 1's description. ELEC-12 (unbounded
+`SavedBallotTemplate` list/create, LOW/MED, flagged in pass 1) re-verified
+still open and unchanged — both remedies remain product decisions, already
+mirrored in `KNOWN_LIMITATIONS.md`.
+
+**Superseded by the Codex-round entry above** — the "read in full" and
+"no drift" claims in this entry's second paragraph did not hold up; 6 real
+findings existed at the time this entry was written.
+
+Completion gate: flake8/black/isort clean on `app/ tests/ alembic/`
+(isort 9.0.1, CI's pin); `validate_migrations.py --strict` (409 revisions,
+single head); `pytest -k "election or ballot or vote or quorum"` 452
+passed/1 skipped (pre-existing)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. See `ELEC-06-elections-ballots.md`'s Pass 3 section
+for the full write-up. Rotation row 06 → ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) ✅ merged — PR #2159
+
+PR #2159 merged clean: a `CHANGELOG.md` conflict against `main` (two
+unrelated `[Unreleased]` sections) resolved by keeping both entries, 17/17
+CI checks green on the merge commit, Codex review completed with no
+findings. Rotation row 05 → ✅. Next: 06 elections & ballots.
+
+### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) — 4 fixes, 0 flagged — PR #2159
+
+Pass 2's own closing PR (#1946) merged onto a rewritten history — its head
+commit is not an ancestor of `origin/main`, the same effect AUTH-01/SF-04/
+this file's own pass 1 already documented. The real landing point of pass
+2's fixes is commit `0eb84bf2` (2026-08-28), identified by content match (its
+diff to this file is pass 2's own +200-line section verbatim). Scoped from
+there: two commits touch the finance module in `0eb84bf2..HEAD`
+(`8729c68a`, `6b5a82fa`), both already merged to `main` before this pass
+started, from an unrelated review cycle rather than this rotation.
+
+**FIN-19 through FIN-22 (already fixed on `main`), independently
+re-verified correct:** a denied approval step didn't terminate the rest of
+the chain (later steps stayed `PENDING` and could still be approved,
+reversing the denial and encumbering budget against a refused request);
+`_advance_reachable_steps` read a `DENIED` prior step as resolved, minting
+a fresh 7-day email token for a refused request; `Budget.station_id` was
+never org-validated (Pitfall 14c); and a department's pre-existing
+`DENIED`-then-`PENDING` chains needed both a runtime guard and a backfill
+migration, since the runtime fix alone doesn't reach rows already in the
+database. All four traced through the actual code (not taken on the commit
+messages' word) and confirmed sound.
+
+**FIN-23 through FIN-26, found this pass and fixed — the same Pitfall-14c
+class as FIN-21, four more instances of it in the same file:**
+`PurchaseRequest.apparatus_id`/`facility_id`, `BudgetCategory.parent_
+category_id` (self-referential), `ApprovalChain.budget_category_id`, and
+`ApprovalChainStep.email_template_id` are all client-supplied,
+`ondelete="SET NULL"` foreign keys that were never validated against the
+caller's organization — three of the four had no FK-validation call at all,
+not just a missing field in an existing check. No cross-org data leak (none
+of the four relationships is eager-loaded into a response beyond the bare
+id), but each is the same dangling-reference/cross-org-`SET NULL` side
+channel Pitfall 14c names. Fixed with the same `assert_in_org` pattern
+already used for `station_id`: extended the shared `_validate_finance_fks`
+for `apparatus_id`/`facility_id`, added three new sibling helpers for the
+other three, and wired `create_approval_chain`'s own inline `steps` loop
+(which builds `ApprovalChainStep` rows directly, bypassing `add_chain_step`
+entirely) so the common one-call chain-creation path is covered too, not
+just the standalone add/update-step endpoints.
+
+13 new tests (`tests/test_finance_chain_fk_validation.py`), 11 of 13
+confirmed to fail against the pre-fix code via `git stash` (the remaining 2
+are "accepts a valid in-org id" cases paired with a "rejects" test in the
+same class, which can't fail pre-fix by construction). Full completion gate
+clean: flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, single head); scoped tests (`-k "finance or dues
+or approval or budget or export"`) 270 passed/1 skipped (pre-existing)/0
+failed; full backend suite 9771 passed/21 skipped (pre-existing)/0 failed;
+`tsc --noEmit` and `eslint .` both 0 errors (no frontend file touched).
+Pass 1/2's FIN-1 through FIN-18 re-verified still hold against current code.
+See `docs/security-review/FIN-05-finance-approvals.md`'s Pass 3 section for
+the full write-up. Rotation row 05 → ✅. Next: 06 elections & ballots.
 
 ---
 
@@ -5904,10 +6939,10 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⏳     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |

@@ -8,6 +8,7 @@ visibility, and the allowed-roles restriction, plus the permission/role
 collection helpers. Pure logic; no DB.
 """
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,7 +21,7 @@ from app.api.v1.endpoints.documents import (
     download_document,
 )
 from app.models.document import Document, DocumentFolder, FolderVisibility
-from app.models.user import Organization
+from app.models.user import Organization, User
 from app.services.documents_service import (
     DocumentsService,
     _get_user_permissions,
@@ -45,6 +46,8 @@ def _folder(
     allowed_roles=None,
     fid="f1",
     required_permissions=None,
+    parent_id=None,
+    organization_id="org-1",
 ):
     # required_permissions is spelled out rather than defaulted away: the ACL
     # reads it directly instead of via getattr, because a getattr default would
@@ -56,6 +59,8 @@ def _folder(
         owner_user_id=owner_user_id,
         allowed_roles=allowed_roles,
         required_permissions=required_permissions,
+        parent_id=parent_id,
+        organization_id=organization_id,
     )
 
 
@@ -64,15 +69,15 @@ def _svc():
 
 
 class TestHelpers:
-    def test_collect_permissions_across_roles(self):
+    async def test_collect_permissions_across_roles(self):
         user = _user(roles=[(["a", "b"], "r1"), (["b", "c"], "r2")])
         assert _get_user_permissions(user) == {"a", "b", "c"}
 
-    def test_collect_role_slugs(self):
+    async def test_collect_role_slugs(self):
         user = _user(roles=[([], "chief"), ([], "secretary")])
         assert _get_user_role_slugs(user) == {"chief", "secretary"}
 
-    def test_is_leadership(self):
+    async def test_is_leadership(self):
         assert _is_leadership({"documents.manage"}) is True
         assert _is_leadership({"members.manage"}) is True
         assert _is_leadership({"*"}) is True
@@ -80,53 +85,145 @@ class TestHelpers:
 
 
 class TestCanAccessFolder:
-    def test_leadership_sees_everything(self):
+    async def test_leadership_sees_everything(self):
         user = _user(roles=[(["documents.manage"], "chief")])
         # Even a leadership-only folder is visible to leadership.
         folder = _folder(FolderVisibility.LEADERSHIP)
-        assert _svc().can_access_folder(folder, user) is True
+        assert await _svc().can_access_folder(folder, "org-1", user) is True
 
-    def test_leadership_visibility_blocks_non_leadership(self):
+    async def test_leadership_visibility_blocks_non_leadership(self):
         user = _user(roles=[(["events.view"], "ff")])
         folder = _folder(FolderVisibility.LEADERSHIP)
-        assert _svc().can_access_folder(folder, user) is False
+        assert await _svc().can_access_folder(folder, "org-1", user) is False
 
-    def test_owner_visibility_owner_allowed(self):
+    async def test_owner_visibility_owner_allowed(self):
         user = _user(uid="u1", roles=[([], "ff")])
         folder = _folder(FolderVisibility.OWNER, owner_user_id="u1")
-        assert _svc().can_access_folder(folder, user) is True
+        assert await _svc().can_access_folder(folder, "org-1", user) is True
 
-    def test_owner_visibility_non_owner_blocked(self):
+    async def test_owner_visibility_non_owner_blocked(self):
         user = _user(uid="u2", roles=[([], "ff")])
         folder = _folder(FolderVisibility.OWNER, owner_user_id="u1")
-        assert _svc().can_access_folder(folder, user) is False
+        assert await _svc().can_access_folder(folder, "org-1", user) is False
 
-    def test_owner_visibility_no_owner_blocked(self):
+    async def test_owner_visibility_no_owner_blocked(self):
         user = _user(uid="u1", roles=[([], "ff")])
         folder = _folder(FolderVisibility.OWNER, owner_user_id=None)
-        assert _svc().can_access_folder(folder, user) is False
+        assert await _svc().can_access_folder(folder, "org-1", user) is False
 
-    def test_organization_visibility_open_to_all(self):
+    async def test_organization_visibility_open_to_all(self):
         user = _user(roles=[([], "ff")])
         folder = _folder(FolderVisibility.ORGANIZATION)
-        assert _svc().can_access_folder(folder, user) is True
+        assert await _svc().can_access_folder(folder, "org-1", user) is True
 
-    def test_organization_with_allowed_roles_match(self):
+    async def test_organization_with_allowed_roles_match(self):
         user = _user(roles=[([], "officer")])
         folder = _folder(
             FolderVisibility.ORGANIZATION, allowed_roles=["officer", "chief"]
         )
-        assert _svc().can_access_folder(folder, user) is True
+        assert await _svc().can_access_folder(folder, "org-1", user) is True
 
-    def test_organization_with_allowed_roles_no_match(self):
+    async def test_organization_with_allowed_roles_no_match(self):
         user = _user(roles=[([], "ff")])
         folder = _folder(FolderVisibility.ORGANIZATION, allowed_roles=["officer"])
-        assert _svc().can_access_folder(folder, user) is False
+        assert await _svc().can_access_folder(folder, "org-1", user) is False
 
-    def test_none_visibility_defaults_to_organization(self):
+    async def test_none_visibility_defaults_to_organization(self):
         user = _user(roles=[([], "ff")])
         folder = _folder(None)
-        assert _svc().can_access_folder(folder, user) is True
+        assert await _svc().can_access_folder(folder, "org-1", user) is True
+
+
+class TestFolderHierarchyAccess:
+    """Every restriction in the path to the root is an authorization gate."""
+
+    async def _access(self, child, user, *ancestors):
+        folders = {str(folder.id): folder for folder in (child, *ancestors)}
+        return await _svc().can_access_folder(
+            child, "org-1", user, folders_by_id=folders
+        )
+
+    async def test_org_child_under_leadership_parent_is_denied(self):
+        parent = _folder(FolderVisibility.LEADERSHIP, fid="parent")
+        child = _folder(FolderVisibility.ORGANIZATION, fid="child", parent_id="parent")
+        assert not await self._access(child, _user(roles=[([], "ff")]), parent)
+
+    async def test_child_under_another_members_owner_parent_is_denied(self):
+        parent = _folder(FolderVisibility.OWNER, fid="parent", owner_user_id="owner")
+        child = _folder(FolderVisibility.ORGANIZATION, fid="child", parent_id="parent")
+        assert not await self._access(child, _user(uid="other"), parent)
+
+    async def test_role_and_required_permission_ancestors_both_apply(self):
+        root = _folder(
+            FolderVisibility.ORGANIZATION,
+            fid="root",
+            required_permissions=["facilities.view_sensitive"],
+        )
+        parent = _folder(
+            FolderVisibility.ORGANIZATION,
+            fid="parent",
+            parent_id="root",
+            allowed_roles=["officer"],
+        )
+        child = _folder(FolderVisibility.ORGANIZATION, fid="child", parent_id="parent")
+        assert not await self._access(
+            child, _user(roles=[([], "officer")]), parent, root
+        )
+        assert not await self._access(
+            child,
+            _user(roles=[(["facilities.view_sensitive"], "member")]),
+            parent,
+            root,
+        )
+        assert await self._access(
+            child,
+            _user(roles=[(["facilities.view_sensitive"], "officer")]),
+            parent,
+            root,
+        )
+
+    async def test_missing_and_cross_org_ancestors_fail_closed(self):
+        child = _folder(FolderVisibility.ORGANIZATION, fid="child", parent_id="missing")
+        assert not await self._access(child, _user())
+
+        foreign = _folder(
+            FolderVisibility.ORGANIZATION,
+            fid="foreign",
+            organization_id="org-2",
+        )
+        child.parent_id = "foreign"
+        assert not await self._access(child, _user(), foreign)
+
+    async def test_cycle_terminates_and_fails_closed(self):
+        first = _folder(FolderVisibility.ORGANIZATION, fid="first", parent_id="second")
+        second = _folder(FolderVisibility.ORGANIZATION, fid="second", parent_id="first")
+        assert not await self._access(first, _user(), second)
+
+    async def test_owner_is_admitted_through_member_root(self):
+        root = _folder(FolderVisibility.ORGANIZATION, fid="members")
+        child = _folder(
+            FolderVisibility.OWNER,
+            fid="personal",
+            parent_id="members",
+            owner_user_id="u1",
+        )
+        assert await self._access(child, _user(uid="u1"), root)
+
+    async def test_facility_grant_is_admitted_through_facility_root(self):
+        permissions = ["facilities.view_sensitive"]
+        root = _folder(
+            FolderVisibility.ORGANIZATION,
+            fid="facilities",
+            required_permissions=permissions,
+        )
+        child = _folder(
+            FolderVisibility.ORGANIZATION,
+            fid="facility",
+            parent_id="facilities",
+            required_permissions=permissions,
+        )
+        user = _user(roles=[(["facilities.view_sensitive"], "treasurer")])
+        assert await self._access(child, user, root)
 
 
 class TestCanAccessDocument:
@@ -180,19 +277,20 @@ class TestAccessibleFolderIds:
     """A folder-less document listing must be restricted to folders the caller
     can access, or it leaks documents from restricted/owner-only folders."""
 
-    async def test_leadership_has_no_restriction(self):
-        """The fast path still applies — but only once the org is known to hold
-        no permission-gated folder, which costs the one folder read below."""
+    async def test_leadership_receives_explicit_accessible_ids(self):
         svc = _svc()
         result = MagicMock()
-        result.all.return_value = [
+        result.scalars.return_value.all.return_value = [
             _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
             _folder(FolderVisibility.LEADERSHIP, fid="f-lead"),
         ]
         svc.db.execute = AsyncMock(return_value=result)
 
         chief = _user(roles=[(["documents.manage"], "chief")])
-        assert await svc.accessible_folder_ids("org-1", chief) is None
+        assert await svc.accessible_folder_ids("org-1", chief) == {
+            "f-org",
+            "f-lead",
+        }
 
     async def test_leadership_is_still_filtered_by_required_permissions(self):
         """ "No restriction" would hand a documents administrator the facility
@@ -200,7 +298,7 @@ class TestAccessibleFolderIds:
         leak the field was added to close."""
         svc = _svc()
         result = MagicMock()
-        result.all.return_value = [
+        result.scalars.return_value.all.return_value = [
             _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
             _folder(
                 FolderVisibility.ORGANIZATION,
@@ -233,7 +331,7 @@ class TestAccessibleFolderIds:
             ),
         ]
         result = MagicMock()
-        result.all.return_value = folders
+        result.scalars.return_value.all.return_value = folders
         svc.db.execute = AsyncMock(return_value=result)
 
         member = _user(uid="u1", roles=[([], "ff")])
@@ -242,25 +340,167 @@ class TestAccessibleFolderIds:
         # the officer-restricted folder.
         assert ids == {"f-org", "f-mine"}
 
+    async def test_accessible_child_is_hidden_beneath_inaccessible_ancestor(self):
+        svc = _svc()
+        folders = [
+            _folder(FolderVisibility.LEADERSHIP, fid="parent"),
+            _folder(
+                FolderVisibility.ORGANIZATION,
+                fid="child",
+                parent_id="parent",
+            ),
+        ]
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = folders
+        svc.db.execute = AsyncMock(return_value=result)
+
+        member = _user(roles=[([], "member")])
+        assert await svc.accessible_folder_ids("org-1", member) == set()
+
+
+@pytest.mark.integration
+class TestDocumentsSummaryAccess:
+    """Summary cards must describe the same rows the caller can browse."""
+
+    async def test_summary_matches_each_caller_access_scope(self, db_session):
+        org = Organization(name="Summary VFD", slug="documents-summary-access")
+        db_session.add(org)
+        await db_session.flush()
+
+        owner = User(
+            organization_id=org.id,
+            username="summary-owner",
+            email="summary-owner@example.com",
+        )
+        db_session.add(owner)
+        await db_session.flush()
+        owner_id = owner.id
+        folders = {
+            "open": DocumentFolder(organization_id=org.id, name="Open"),
+            "role": DocumentFolder(
+                organization_id=org.id,
+                name="Officers",
+                allowed_roles=["officer"],
+            ),
+            "owner": DocumentFolder(
+                organization_id=org.id,
+                name="Personal",
+                visibility=FolderVisibility.OWNER,
+                owner_user_id=owner_id,
+            ),
+            "sensitive": DocumentFolder(
+                organization_id=org.id,
+                name="Sensitive",
+                required_permissions=["facilities.view_sensitive"],
+            ),
+            "leadership": DocumentFolder(
+                organization_id=org.id,
+                name="Leadership",
+                visibility=FolderVisibility.LEADERSHIP,
+            ),
+        }
+        db_session.add_all(folders.values())
+        await db_session.flush()
+        folders["nested"] = DocumentFolder(
+            organization_id=org.id,
+            name="Nested open child",
+            parent_id=folders["leadership"].id,
+        )
+        db_session.add(folders["nested"])
+        await db_session.flush()
+
+        current = datetime.now(timezone.utc)
+        old = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        documents = [
+            Document(
+                organization_id=org.id,
+                folder_id=folders[key].id,
+                name=key,
+                file_size=size,
+                created_at=old if key == "owner" else current,
+            )
+            for key, size in [
+                ("open", 10),
+                ("role", 20),
+                ("owner", 30),
+                ("sensitive", 40),
+                ("leadership", 50),
+                ("nested", 60),
+            ]
+        ]
+        documents.extend(
+            [
+                Document(
+                    organization_id=org.id,
+                    name="Organization level",
+                    file_size=5,
+                    created_at=current,
+                ),
+                Document(
+                    organization_id=org.id,
+                    folder_id=folders["open"].id,
+                    name="Archived",
+                    file_size=100,
+                    status="archived",
+                    created_at=current,
+                ),
+            ]
+        )
+        db_session.add_all(documents)
+        await db_session.flush()
+
+        callers = [
+            (_user(roles=[([], "member")]), (2, 1, 15, 2)),
+            (_user(uid=owner_id, roles=[([], "member")]), (3, 2, 45, 2)),
+            (_user(roles=[([], "officer")]), (3, 2, 35, 3)),
+            (
+                _user(roles=[(["facilities.view_sensitive"], "facility-reader")]),
+                (3, 2, 55, 3),
+            ),
+            (
+                _user(roles=[(["documents.manage"], "leadership")]),
+                (6, 5, 175, 5),
+            ),
+        ]
+
+        service = DocumentsService(db_session)
+        for caller, expected in callers:
+            accessible_ids = await service.accessible_folder_ids(org.id, caller)
+            browsable, browsable_total = await service.get_documents(
+                org.id, accessible_folder_ids=accessible_ids, limit=100
+            )
+            summary = await service.get_summary(org.id, caller)
+
+            assert len(browsable) == browsable_total == expected[0]
+            assert summary == {
+                "total_documents": expected[0],
+                "total_folders": expected[1],
+                "total_size_bytes": expected[2],
+                "documents_this_month": expected[3],
+            }
+
 
 class TestFolderListing:
     """Folder pagination is applied after ACL filtering and stays constant-query."""
 
-    async def test_total_stable_pages_counts_and_access_filtering(self):
+    async def test_total_counts_the_level_and_the_page_is_one_query(self):
         svc = _svc()
         member = _user(uid="u1", roles=[([], "ff")])
-        accessible = [
+        # Four folders exist; the leadership-only one is not admitted, so the
+        # level holds three and the caller asks for the second of them.
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
             _folder(FolderVisibility.ORGANIZATION, fid="f1"),
             _folder(FolderVisibility.LEADERSHIP, fid="hidden"),
             _folder(FolderVisibility.ORGANIZATION, fid="f2"),
             _folder(FolderVisibility.ORGANIZATION, fid="f3"),
         ]
-        first_result = MagicMock()
-        first_result.all.return_value = accessible
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 3
         folder = SimpleNamespace(id="f2")
         page_result = MagicMock()
         page_result.all.return_value = [(folder, 0)]
-        svc.db.execute = AsyncMock(side_effect=[first_result, page_result])
+        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result, page_result])
 
         folders, total = await svc.get_folders(
             "org-1", current_user=member, skip=1, limit=1
@@ -269,17 +509,38 @@ class TestFolderListing:
         assert total == 3
         assert [item.id for item in folders] == ["f2"]
         assert folders[0].document_count == 0
-        access_statement = svc.db.execute.await_args_list[0].args[0]
-        assert "document_folders.id" in str(access_statement).split("ORDER BY", 1)[1]
-        # ACL projection plus one grouped-count page query: never one query per
-        # folder, regardless of the number of candidates or returned folders.
-        assert svc.db.execute.await_count == 2
+        # One ACL pass, one COUNT, one grouped-count page. Never a count query
+        # per folder, whatever the level holds or the page returns.
+        assert svc.db.execute.await_count == 3
 
-    async def test_page_past_total_uses_only_access_query(self):
+    async def test_ordering_breaks_ties_on_id(self):
+        """Two folders sharing sort_order and name must still order stably, or
+        a row can appear on two pages or on neither as the caller walks them."""
         svc = _svc()
-        result = MagicMock()
-        result.all.return_value = [_folder(FolderVisibility.ORGANIZATION, fid="f1")]
-        svc.db.execute = AsyncMock(return_value=result)
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f1")
+        ]
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 1
+        page_result = MagicMock()
+        page_result.all.return_value = [(SimpleNamespace(id="f1"), 0)]
+        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result, page_result])
+
+        await svc.get_folders("org-1", current_user=_user(), skip=0, limit=10)
+
+        page_statement = str(svc.db.execute.await_args_list[2].args[0])
+        assert "document_folders.id" in page_statement.split("ORDER BY", 1)[1]
+
+    async def test_page_past_total_skips_the_page_query(self):
+        svc = _svc()
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f1")
+        ]
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 1
+        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result])
 
         folders, total = await svc.get_folders(
             "org-1", current_user=_user(), skip=1, limit=10
@@ -287,7 +548,51 @@ class TestFolderListing:
 
         assert folders == []
         assert total == 1
+        assert svc.db.execute.await_count == 2
+
+    async def test_no_accessible_folder_skips_count_and_page(self):
+        svc = _svc()
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.LEADERSHIP, fid="hidden")
+        ]
+        svc.db.execute = AsyncMock(side_effect=[acl_result])
+
+        folders, total = await svc.get_folders(
+            "org-1", current_user=_user(uid="u1", roles=[([], "ff")])
+        )
+
+        assert (folders, total) == ([], 0)
         assert svc.db.execute.await_count == 1
+
+    async def test_level_is_filtered_to_the_ancestor_aware_set(self):
+        """The restriction that hides a folder can live on its parent, and a
+        query filtered to one parent level cannot see it. So the level query
+        must carry the accessible-id filter, not just a per-row check."""
+        svc = _svc()
+        acl_result = MagicMock()
+        acl_result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="root"),
+            _folder(
+                FolderVisibility.ORGANIZATION,
+                fid="child",
+                parent_id="locked",
+            ),
+            _folder(FolderVisibility.LEADERSHIP, fid="locked"),
+        ]
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 0
+        svc.db.execute = AsyncMock(side_effect=[acl_result, count_result])
+
+        folders, total = await svc.get_folders(
+            "org-1",
+            parent_id="locked",
+            current_user=_user(uid="u1", roles=[([], "ff")]),
+        )
+
+        assert (folders, total) == ([], 0)
+        level_statement = str(svc.db.execute.await_args_list[1].args[0])
+        assert "document_folders.id IN" in level_statement
 
 
 class TestAttachDocumentNames:
@@ -389,13 +694,13 @@ class TestParseUuidOr400:
     """DOC-10 finding #4: a malformed UUID at the request boundary must be a
     clean 4xx, not an unhandled 500."""
 
-    def test_a_valid_uuid_string_parses(self):
+    async def test_a_valid_uuid_string_parses(self):
         from uuid import UUID
 
         parsed = _parse_uuid_or_400("11111111-1111-1111-1111-111111111111", "folder_id")
         assert isinstance(parsed, UUID)
 
-    def test_a_malformed_value_is_a_clean_400_not_a_500(self):
+    async def test_a_malformed_value_is_a_clean_400_not_a_500(self):
         # The upload form's own placeholder value, sent as folder_id when an
         # org has no folders yet — this used to reach UUID(...) unguarded and
         # escape as an unhandled 500.
@@ -403,7 +708,7 @@ class TestParseUuidOr400:
             _parse_uuid_or_400("general", "folder_id")
         assert exc.value.status_code == 400
 
-    def test_an_empty_string_is_also_a_clean_400(self):
+    async def test_an_empty_string_is_also_a_clean_400(self):
         with pytest.raises(HTTPException) as exc:
             _parse_uuid_or_400("", "parent_id")
         assert exc.value.status_code == 400
@@ -414,17 +719,17 @@ class TestResolveDocumentName:
     optional and omits it when blank, so the endpoint must derive one rather
     than 422 on that normal, advertised path."""
 
-    def test_the_caller_supplied_name_wins(self):
+    async def test_the_caller_supplied_name_wins(self):
         assert _resolve_document_name("SOP 4.2", "sop-4-2.pdf") == "SOP 4.2"
 
-    def test_a_blank_name_falls_back_to_the_filename(self):
+    async def test_a_blank_name_falls_back_to_the_filename(self):
         assert _resolve_document_name("", "sop-4-2.pdf") == "sop-4-2.pdf"
         assert _resolve_document_name(None, "sop-4-2.pdf") == "sop-4-2.pdf"
 
-    def test_whitespace_only_name_falls_back_to_the_filename(self):
+    async def test_whitespace_only_name_falls_back_to_the_filename(self):
         assert _resolve_document_name("   ", "sop-4-2.pdf") == "sop-4-2.pdf"
 
-    def test_no_name_and_no_filename_gets_a_generic_default(self):
+    async def test_no_name_and_no_filename_gets_a_generic_default(self):
         assert _resolve_document_name(None, None) == "Untitled document"
 
 

@@ -25,7 +25,7 @@ beforeEach(() => {
 describe('documentsService', () => {
   // --- getFolders ---
   describe('getFolders', () => {
-    it('should GET /documents/folders without parentId', async () => {
+    it('should GET /documents/folders with no params', async () => {
       const data = { folders: [{ id: 'f1', name: 'Folder 1' }], total: 1, skip: 0, limit: 100 };
       mockGet.mockResolvedValueOnce({ data });
 
@@ -35,14 +35,32 @@ describe('documentsService', () => {
       expect(result).toEqual(data);
     });
 
-    it('should pass parent and pagination params when provided', async () => {
-      const data = { folders: [], total: 0, skip: 20, limit: 20 };
+    it('should pass parent_id param when provided', async () => {
+      const data = { folders: [], total: 0, skip: 0, limit: 100 };
       mockGet.mockResolvedValueOnce({ data });
 
-      await documentsService.getFolders({ parent_id: 'parent-1', skip: 20, limit: 20 });
+      await documentsService.getFolders({ parent_id: 'parent-1' });
+
+      expect(mockGet).toHaveBeenCalledWith('/documents/folders', { params: { parent_id: 'parent-1' } });
+    });
+
+    it('should forward skip and limit so the caller can page a level', async () => {
+      mockGet.mockResolvedValueOnce({ data: { folders: [], total: 40, skip: 24, limit: 12 } });
+
+      await documentsService.getFolders({ parent_id: 'parent-1', skip: 24, limit: 12 });
 
       expect(mockGet).toHaveBeenCalledWith('/documents/folders', {
-        params: { parent_id: 'parent-1', skip: 20, limit: 20 },
+        params: { parent_id: 'parent-1', skip: 24, limit: 12 },
+      });
+    });
+
+    it('forwards an opaque nested folder id without changing it', async () => {
+      mockGet.mockResolvedValueOnce({ data: { folders: [], total: 0, skip: 0, limit: 100 } });
+
+      await documentsService.getFolders({ parent_id: '8b653a70-665f-4fd4-9077-a23bc13f3984' });
+
+      expect(mockGet).toHaveBeenCalledWith('/documents/folders', {
+        params: { parent_id: '8b653a70-665f-4fd4-9077-a23bc13f3984' },
       });
     });
   });
@@ -97,7 +115,7 @@ describe('documentsService', () => {
     it('should GET /documents with params', async () => {
       const data = { documents: [{ id: 'd1' }], total: 1, skip: 0, limit: 20 };
       mockGet.mockResolvedValueOnce({ data });
-      const params = { folder_id: 'f1', search: 'report' };
+      const params = { folder_id: 'f1', skip: 25, limit: 50, search: 'report', status: 'archived' };
 
       const result = await documentsService.getDocuments(params);
 
