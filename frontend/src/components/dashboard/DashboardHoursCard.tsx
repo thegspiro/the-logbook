@@ -3,7 +3,8 @@ import { formatHours, roundHoursToQuarter, sumHoursToQuarter } from '../../utils
 
 export interface HoursSegment {
   label: string;
-  value: number;
+  /** Null means the source is disabled, unauthorized, or failed to load. */
+  value: number | null;
   /** Tailwind background class for the bar span and the legend dot. */
   colorClass: string;
   onClick?: (() => void) | undefined;
@@ -26,8 +27,11 @@ interface DashboardHoursCardProps {
 const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, segments, loading }) => {
   // Rounded once, here, so the bar spans, the legend figures and the total are
   // all the same numbers the reader is being asked to add up.
-  const rounded = segments.map((segment) => ({ ...segment, value: roundHoursToQuarter(segment.value) }));
-  const total = sumHoursToQuarter(rounded.map((segment) => segment.value));
+  const rounded = segments.map((segment) => ({
+    ...segment,
+    value: segment.value === null ? null : roundHoursToQuarter(segment.value),
+  }));
+  const total = sumHoursToQuarter(rounded.flatMap((segment) => (segment.value === null ? [] : [segment.value])));
 
   return (
     <section className="card p-4" aria-label={`My hours, ${monthLabel}`}>
@@ -49,7 +53,7 @@ const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, seg
             <div
               key={segment.label}
               className={segment.colorClass}
-              style={{ width: `${(segment.value / total) * 100}%` }}
+              style={{ width: `${((segment.value ?? 0) / total) * 100}%` }}
             />
           ))}
       </div>
@@ -60,7 +64,9 @@ const DashboardHoursCard: React.FC<DashboardHoursCardProps> = ({ monthLabel, seg
             <>
               <span className={`h-2 w-2 shrink-0 rounded-full ${segment.colorClass}`} aria-hidden="true" />
               <span className="text-theme-text-secondary flex-1 truncate text-left">{segment.label}</span>
-              <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(segment.value)}</span>
+              <span className="text-theme-text-primary font-bold tabular-nums">
+                {segment.value === null ? 'Unavailable' : formatHours(segment.value)}
+              </span>
             </>
           );
           return (

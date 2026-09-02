@@ -35,28 +35,58 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
   const [summaries, setSummaries] = useState<Record<string, SchedulingWidgetSummary>>({});
   const [editing, setEditing] = useState('today_staffing');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const saved = await schedulingService.getWidgetPreferences();
       setPreferences(saved);
       const today = getTodayLocalDate(timezone);
-      const results = await Promise.all(
-        WIDGETS.map(async ([key]) => {
-          const filters = saved.widgets[key] ?? DEFAULT_FILTERS;
-          const summary = await schedulingService.getWidgetSummary({
-            start_date: today,
-            end_date: addCalendarDays(today, filters.horizon_days - 1),
-            ...(filters.station_id ? { station_id: filters.station_id } : {}),
-            ...(filters.platoon ? { platoon: filters.platoon } : {}),
-          });
-          return [key, summary] as const;
-        })
+      const filterGroups = new Map<
+        string,
+        {
+          widgetKeys: string[];
+          params: Parameters<typeof schedulingService.getWidgetSummary>[0];
+        }
+      >();
+
+      for (const [widgetKey] of WIDGETS) {
+        const filters = saved.widgets[widgetKey] ?? DEFAULT_FILTERS;
+        const params = {
+          start_date: today,
+          end_date: addCalendarDays(today, filters.horizon_days - 1),
+          ...(filters.station_id ? { station_id: filters.station_id } : {}),
+          ...(filters.platoon ? { platoon: filters.platoon } : {}),
+        };
+        const filterKey = JSON.stringify([
+          params.start_date,
+          params.end_date,
+          params.station_id ?? null,
+          params.platoon ?? null,
+        ]);
+        const group = filterGroups.get(filterKey);
+        if (group) group.widgetKeys.push(widgetKey);
+        else filterGroups.set(filterKey, { widgetKeys: [widgetKey], params });
+      }
+
+      const groupedResults = await Promise.all(
+        [...filterGroups.values()].map(async ({ widgetKeys, params }) => ({
+          widgetKeys,
+          summary: await schedulingService.getWidgetSummary(params),
+        }))
       );
-      setSummaries(Object.fromEntries(results));
+      setSummaries(
+        Object.fromEntries(
+          groupedResults.flatMap(({ widgetKeys, summary }) => widgetKeys.map((widgetKey) => [widgetKey, summary]))
+        )
+      );
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Scheduling summaries could not be loaded.'));
+      const message = getErrorMessage(error, 'Scheduling summaries could not be loaded.');
+      setSummaries({});
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -157,7 +187,11 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
           </button>
         </div>
       </div>
-      {!enabled ? (
+      {loadError ? (
+        <div className="card p-5 text-sm text-red-700 dark:text-red-400" role="alert">
+          {loadError}
+        </div>
+      ) : !enabled ? (
         <div className="card p-5 text-sm" role="status">
           Scheduling is disabled for this organization.
         </div>

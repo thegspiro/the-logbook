@@ -1,6 +1,209 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+
+---
+
+## Pass 3 (2026-09-02)
+
+**Scope methodology.** Pass 2's own closing PR (#1946) merged onto a rewritten
+history: its head commit is not an ancestor of `origin/main` (confirmed with
+`git merge-base --is-ancestor`), the same rewritten-history effect AUTH-01/
+SF-04/pass-1-of-this-file already documented. The actual landing point of
+pass 2's fixes on `main`'s real ancestry is commit `0eb84bf2` (2026-08-28,
+"Add Testing Checklist module; fix messaging, documents, membership, finance,
+and various frontend issues") — confirmed by content match: its diff to
+`docs/security-review/FIN-05-finance-approvals.md` is the same +200-line pass
+2 section already in this file, and its `finance_service.py`/`schemas/
+finance.py` diff reproduces FIN-9 through FIN-18 verbatim. Scoped from there:
+`git log 0eb84bf2..origin/main -- <finance module paths>`, cross-checked
+against a full, non-pathspec-simplified walk to rule out the pathspec-miss
+failure mode pass 1 already hit once. Two real commits touch the finance
+module in that range (`8729c68a`, `6b5a82fa`); everything else the broader
+walk surfaced either doesn't touch finance files or is a squashed-history
+whole-file-add artifact from before the pass-2 boundary (`a67261be`, no
+parent commit, dated 2026-08-26 — the same class of false positive pass 1's
+header already flagged and excluded once).
+
+**Delta reviewed in full.** Both commits were already merged to `main` before
+this pass started (products of an unrelated review cycle, not this rotation),
+so this pass's job was independent re-verification, not authorship — read
+end-to-end against the model, confirmed each fix's own reasoning by tracing
+the code paths it touches, and confirmed test coverage exists and is not
+just descriptive:
+
+- **FIN-19 through FIN-22, already fixed on `main` prior to this pass,
+  independently re-verified correct.** `8729c68a` (2026-08-30) and `6b5a82fa`
+  (2026-09-01) fix four real defects in the approval-chain denial path — all
+  four re-derived from the code and confirmed sound (not taken on the commit
+  messages' word):
+  - **FIN-19 — denying a step never terminated the rest of the chain.**
+    `_finalize_denial` wrote only the entity's own status; every later
+    `PENDING` step record was left actionable, so `get_pending_approvals`
+    kept listing a refused request and approving the remaining steps ran
+    `_finalize_approval` on it — `_encumber_budget` charged against a denied
+    disbursement. Fixed by `_terminate_pending_steps`
+    (`finance_service.py:795`), called from both `deny_step` and
+    `deny_by_token` before `_finalize_denial`, marking every other `PENDING`
+    record `SKIPPED` and clearing its token.
+  - **FIN-20 — `_advance_reachable_steps` read a `DENIED` prior step as
+    resolved.** The reachability test only rejected a `PENDING` prior, so a
+    `DENIED` one read as "complete" — approving a later step of an
+    already-denied entity minted a fresh 7-day email token and sent an
+    external approver a live link for a refused request. Fixed with an
+    explicit early return on any `DENIED` record
+    (`finance_service.py:1217`) plus the `_PRIOR_STEP_SATISFIED` allowlist
+    (`APPROVED`/`AUTO_APPROVED`/`SENT`) replacing the old blocklist.
+    Re-verified `SKIPPED` cannot itself deadlock a live chain: the only
+    writer of `SKIPPED` is `_terminate_pending_steps`, always paired with a
+    `DENIED` sibling in the same chain, so the early-return above always
+    fires first — the prior-step loop that doesn't treat `SKIPPED` as
+    satisfied is never reached while a `SKIPPED` record exists.
+  - **FIN-21 — `Budget.station_id` (`ondelete="SET NULL"` FK to
+    `facilities`) was never org-validated.** `_validate_finance_fks`
+    (`finance_service.py:2809`) checked `budget_id`/`category_id`/
+    `fiscal_year_id` but not `station_id`, which `BudgetCreate`/
+    `BudgetUpdate` both expose as a free client-supplied string (Pitfall
+    14c). Fixed by adding an `assert_in_org` check for `station_id`.
+  - **FIN-22 — the runtime fix for FIN-19 doesn't reach rows already in an
+    existing department's database.** A department that had already hit
+    FIN-19 could hold a `DENIED` step followed by `PENDING` ones from before
+    the fix shipped; approving the last of those still reversed the denial.
+    Fixed two ways: `_ensure_current_step` now calls `_chain_is_denied`
+    (`finance_service.py:780`) and refuses to act on any chain already
+    carrying a denial regardless of when it was created, and migration
+    `20260901_1300_d5e1f6a8b037` backfills existing `DENIED`-then-`PENDING`
+    chains to `SKIPPED` with tokens cleared — guarded on `approval_step_
+records` existing (Pitfall #26; the table is `create_all`-only on a
+    fresh install) and deliberately irreversible (`downgrade` is a no-op —
+    reopening a refused chain is the defect, not a state worth restoring).
+  - All four verified against real code, not just the commit messages: read
+    every call site of `_terminate_pending_steps`/`_chain_is_denied`/
+    `_ensure_current_step` (all four action paths — `approve_step`,
+    `deny_step`, `approve_by_token`, `deny_by_token` — call
+    `_ensure_current_step`; only the two deny paths call
+    `_terminate_pending_steps`), confirmed `SKIPPED` has no other writer in
+    the codebase (`grep -rn SKIPPED backend/app` — one hit, this one), and
+    confirmed the migration guards table existence per Pitfall #26. Existing
+    tests (`test_finance_denied_chain_is_terminal.py`,
+    `test_finance_approval_tokens.py`) cover both the runtime guard and the
+    migration's own source (source-inspection style, since the backfill's
+    correctness can't be exercised as a `git stash`-reproducible failure —
+    there's no pre-fix code state to stash for a migration file). Full
+    scoped suite green (see completion gate below).
+
+**FIN-23 through FIN-26, found this pass — the same Pitfall-14c class as
+FIN-21, four more instances of it, in the same file, in functions adjacent to
+the ones FIN-21 fixed.** Grepping every `_id: Optional[str]` field in
+`schemas/finance.py` against what `_validate_finance_fks` actually checks
+surfaced four more client-supplied, `ondelete="SET NULL"` foreign keys with
+no org check at all — not narrowed like FIN-21 (missing one field on an
+otherwise-checked path), but entire create/update methods that never called
+any FK-scoping helper:
+
+- **FIN-23 — MED — `PurchaseRequest.apparatus_id`/`facility_id` unchecked.**
+  `finance_service.py:2809` (`_validate_finance_fks`, prior to this pass's
+  fix). Both fields are `ondelete="SET NULL"` FKs (`models/finance.py:573`,
+  `:578`) exposed as free strings on `PurchaseRequestCreate`/`Update`
+  (`schemas/finance.py:382-383`, `:400-401`) — and `_validate_finance_fks`
+  **is** already called from both `create_purchase_request`
+  (`finance_service.py:1555`) and `update_purchase_request` (`:1580`), so
+  this wasn't a missing call site, only a missing field inside the shared
+  helper. **Failure scenario:** an org sets `apparatus_id`/`facility_id` to
+  another org's apparatus/facility id (not itself a data leak — neither ever
+  appears eager-loaded in `PurchaseRequestResponse`, which serializes only
+  the bare id) — but that other org later deleting its own apparatus/facility
+  silently nulls this org's purchase-request attribution, a cross-tenant
+  side effect one org can trigger on another org's data by deleting its own
+  row. **Fix:** extended `_validate_finance_fks` with the same
+  `assert_in_org` pattern FIN-21 used for `station_id`, covering both create
+  and update automatically (both already call the shared helper).
+- **FIN-24 — MED — `BudgetCategory.parent_category_id` (self-referential)
+  unchecked.** `finance_service.py:260`/`:268` (now `:280`,
+  `_validate_budget_category_fks`) — `create_budget_category`/
+  `update_budget_category` called no FK-validation helper at all.
+  `ondelete="SET NULL"` FK to `budget_categories.id`
+  (`models/finance.py:243`). **Fix:** new `_validate_budget_category_fks`,
+  called from both create and update.
+- **FIN-25 — MED — `ApprovalChain.budget_category_id` unchecked.**
+  `finance_service.py:426`/`:443` (now `:457`,
+  `_validate_approval_chain_fks`) — `create_approval_chain`/
+  `update_approval_chain` called no FK-validation helper. `ondelete="SET
+NULL"` FK to `budget_categories.id` (`models/finance.py:363`). A chain
+  scoped to another org's budget category would silently apply to `applies_
+to` entities regardless of category once that category vanished (`SET
+NULL` clears the scoping filter, not the chain). **Fix:** new
+  `_validate_approval_chain_fks`, called from both create and update.
+- **FIN-26 — MED — `ApprovalChainStep.email_template_id` unchecked, on
+  _three_ creation paths.** `finance_service.py:461`/`:473` (now `:494`,
+  `:507`; helper `_validate_chain_step_fks` at `:472`) — `add_chain_step`/
+  `update_chain_step` called no FK-validation helper, **and**
+  `create_approval_chain`'s own `steps` parameter constructs
+  `ApprovalChainStep` rows directly in a loop (`finance_service.py:433-437`
+  prior to this pass) bypassing `add_chain_step` entirely — so fixing only
+  `add_chain_step` would have left the chain-creation-with-steps path (the
+  common case: `ApprovalChainCreate.steps` is how a chain is normally built
+  in one call) still unchecked. `ondelete="SET NULL"` FK to `email_
+templates.id` (`models/finance.py:431`); `EmailTemplate.organization_id`
+  is `nullable=False` (no org-agnostic system templates to special-case).
+  **Fix:** new `_validate_chain_step_fks`, called from `add_chain_step`,
+  `update_chain_step`, **and** inside `create_approval_chain`'s per-step
+  loop.
+
+None of FIN-23 through FIN-26 leak cross-org data on read — verified by
+checking every response schema and every `selectinload`/`joinedload` of the
+four relationships (`apparatus`, `facility`, `parent`/`children`, `budget_
+category`, `email_template`) in `finance_service.py`: none is eager-loaded
+into a serialized response beyond the bare id column already on each
+`*Response` schema. The risk is the dangling-reference/cross-org-`SET NULL`
+side channel Pitfall 14c itself names, identical in shape to FIN-21 — a
+department's own data can be silently altered by another org's unrelated
+delete, and (for FIN-25/FIN-26) a chain's approval routing or a step's email
+template can be pointed at another org's configuration with no ownership
+check on either side.
+
+**Fix applied, all four, same pattern as FIN-21 (`assert_in_org`, already
+imported and tested in this file):** `app/services/finance_service.py`
+imports `Apparatus` (`app.models.apparatus`) and `EmailTemplate`
+(`app.models.email_template`) alongside the existing `Facility` import;
+`_validate_finance_fks` gained `apparatus_id`/`facility_id` checks; three new
+sibling helpers (`_validate_budget_category_fks`, `_validate_approval_chain_
+fks`, `_validate_chain_step_fks`) cover the three call sites that had no
+FK-validation helper at all. 13 new tests in
+`tests/test_finance_chain_fk_validation.py`, one class per field group,
+following `test_finance_station_fk_validation.py`'s exact shape (mocked DB,
+no MySQL). Confirmed against the pre-fix code (`git stash` on
+`finance_service.py`, re-run, `git stash pop`): 11 of 13 failed — every test
+calling `_validate_budget_category_fks`/`_validate_approval_chain_fks`/
+`_validate_chain_step_fks` failed with `AttributeError` (the methods didn't
+exist yet), and both `apparatus_id`/`facility_id` "rejects" tests on the
+shared `_validate_finance_fks` failed by not raising. The remaining 2 (the
+`apparatus_id`/`facility_id` "accepts an in-org id" case) can't fail pre-fix
+by construction — a check that doesn't exist yet also doesn't reject a valid
+id — so their coverage is carried entirely by the paired "rejects" test in
+the same class.
+
+**Disposition: all six (FIN-19 through FIN-26) FIXED.** FIN-19–22 were
+already fixed on `main` before this pass and are re-verified correct here;
+FIN-23–26 are fixed in this pass's own commit. No open items from this
+pass's own review. Pass 1/2's FIN-1 through FIN-18 re-verified still hold
+against current code (route inventory unchanged at 66 routes, all carrying
+`require_permission`; `get_pending_approvals`' org-scoped `union_all` CTE
+unchanged; `.with_for_update()` present on all four approval-action reads;
+`SafeCsvWriter` still the only writer in `export_transactions`; the one
+`.like()` call still declares `escape=LIKE_ESCAPE_CHAR` against a
+system-generated prefix).
+
+**Completion gate (pass 3):** `flake8`/`black --check`/`isort --check-only`
+on `app/ tests/ alembic/` — clean (isort 9.0.1, matching CI's pin).
+`validate_migrations.py --strict` — 409 revisions, single head. `pytest
+tests/ -q -k "finance or dues or approval or budget or export"` — 270 passed
+(257 pre-existing + 13 new), 1 skipped (pre-existing, unrelated `py_vapid`
+optional dependency), 0 failed. Full backend suite (`pytest tests/ -q`) —
+9771 passed, 21 skipped (all pre-existing: `py_vapid`, Docker-unavailable
+integration tests, an opt-in API-contract suite gated behind an env var), 0
+failed. `tsc --noEmit` — 0 errors (no frontend file changed by this pass).
+`eslint .` — 0 errors/warnings (no frontend file changed).
 
 ---
 

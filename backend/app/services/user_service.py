@@ -66,6 +66,13 @@ class UserService:
                 "hire_date": user.hire_date,
                 "rank": user.rank,
                 "station": user.station,
+                "platoon": user.platoon,
+                # member_class/member_status/compliance_exempt are also
+                # declared on UserListResponse but deliberately left unset:
+                # compliance_exempt is a plausibly sensitive field, and
+                # populating it here would widen it to every members.view
+                # holder before a decision on which roster fields belong at
+                # that permission tier (see docs/KNOWN_LIMITATIONS.md, USR-8).
             }
 
             # Conditionally include contact information based on settings

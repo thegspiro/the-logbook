@@ -38,9 +38,10 @@ export const documentsService = {
 
   async getDocuments(params?: {
     folder_id?: string;
-    search?: string;
     skip?: number;
     limit?: number;
+    search?: string;
+    status?: string;
   }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
     const response = await api.get<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }>(
       '/documents',
