@@ -89,6 +89,227 @@ def ballot_item_candidate_positions(item: Dict) -> Set[str]:
     return {value for value in (item.get("title"), item.get("id")) if value}
 
 
+def _dedup_position_key(
+    item: Optional[Dict], effective_position: Optional[str]
+) -> Optional[str]:
+    """The position component fed into a vote's dedup hash (R-D5/ELEC-34).
+
+    An item with its own explicit "position" field, or a plain positional
+    candidate (``item`` is ``None``), is keyed by ``effective_position``
+    unchanged — unambiguous either way. A *legacy* item (no explicit
+    "position") is instead keyed by the item's own id: the one alias in
+    ``ballot_item_candidate_positions`` that is stable and identical no
+    matter which route computes it, unlike the title, which
+    ``cast_vote_with_token`` used to hash directly via
+    ``candidate.position``. Two tokens racing on the same legacy item
+    through different routes now hash to the same value, so the database's
+    UNIQUE constraint on ``vote_dedup_hash`` — the documented backstop for
+    when a race bypasses the pre-insert duplicate check — actually catches
+    the collision instead of silently accepting both (Codex round 7).
+
+    This governs only the dedup hash, never the stored ``Vote.position``
+    value itself (display, eligibility comparisons, and completion
+    tracking all keep using ``effective_position``/the route's own
+    convention) — the id is opaque and would make user-facing messages and
+    per-position result grouping unreadable.
+    """
+    if item is not None and not item.get("position"):
+        return item.get("id") or effective_position
+    return effective_position
+
+
+def _effective_voting_method(
+    election: "Election", item: Optional[Dict]
+) -> Optional[str]:
+    """The voting method that actually governs one vote's dedup discriminator.
+
+    A ballot item may override the election-level voting method
+    (``BallotItemInput.voting_method`` — see ``submit_ballot_with_token``,
+    which already resolves this override to decide which submission forms
+    it accepts). Both vote-submission routes must resolve the SAME override
+    when picking the dedup-hash discriminator (``_dedup_discriminator``), or
+    an item overriding e.g. a ``simple_majority`` election to ``approval``
+    hashes differently depending on which route cast the vote — one route
+    keys off the item, the other off the raw election column — and the
+    UNIQUE constraint on ``vote_dedup_hash`` stops being able to catch two
+    routes racing on the same logical vote (Codex round 9, ELEC-37).
+    Mirrors why ``_dedup_position_key`` exists for the position component.
+
+    ``item=None`` (a plain positional candidate, or a caller that does not
+    resolve a matching ballot item) falls back to the election's own
+    method — unchanged behavior for those callers.
+    """
+    if item is not None:
+        override = item.get("voting_method")
+        if override:
+            return override
+    return election.voting_method
+
+
+def _dedup_scoped_item_aliases(item: Dict, all_items: List[Dict]) -> Set[str]:
+    """The alias subset of ``ballot_item_candidate_positions(item)`` that is
+    safe to use when scanning *stored votes* for a prior vote on this item
+    (ELEC-38).
+
+    The schema enforces only unique item **ids** — nothing stops one item's
+    title from equaling a different item's id (or explicit position
+    override), so ``ballot_item_candidate_positions``' title/id fallback for
+    a legacy item can, on that collision, also match a genuinely different
+    item's votes. That broad match is what candidate lookups need (a real
+    legacy candidate can only be found by title, and narrowing there would
+    empty a legitimate item's candidate list — see
+    ``ballot_item_candidate_positions``'s own docstring), but it is a false
+    positive for duplicate-vote detection, which only has to decide whether
+    THIS submission would be a re-vote. Under-matching there is safe: new
+    votes for a legacy item are always hashed against the item's own id via
+    ``_dedup_position_key``/the bulk route's canonical ``position`` value,
+    never its title, so the database's ``vote_dedup_hash`` UNIQUE
+    constraint still catches a genuine duplicate on this item even when an
+    alias was dropped here to avoid colliding with a sibling item.
+
+    An item's own id is never dropped — ids are unique per election
+    (``unique_item_ids``), so it can never collide with anything. A
+    fallback alias (the title, for a legacy item) is dropped only when some
+    OTHER item in the same election already claims that exact string as its
+    own id or explicit position override — that other item is the
+    unambiguous owner of votes stored under it.
+    """
+    aliases = ballot_item_candidate_positions(item)
+    if item.get("position"):
+        # Explicit position — this item's one alias, never ambiguous.
+        return aliases
+    item_id = item.get("id")
+    other_canonical_keys = {
+        (other.get("position") or other.get("id"))
+        for other in all_items
+        if other.get("id") != item_id
+    }
+    return {
+        alias
+        for alias in aliases
+        if alias == item_id or alias not in other_canonical_keys
+    }
+
+
+def _token_eligibility_error(
+    voting_token: "VotingToken",
+    election: "Election",
+    effective_position: Optional[str],
+    matching_item: Optional[Dict],
+    *,
+    ineligible_item_message: Optional[str] = None,
+) -> Optional[str]:
+    """Enforce a voting token's per-item and per-position snapshots for one
+    candidate (R-1/R-D4/ELEC-29/ELEC-33).
+
+    Shared by ``cast_vote_with_token`` (single-vote route) and
+    ``submit_ballot_with_token`` (bulk route) so this collision-aware logic
+    is defined once: a ballot item's position/title/id can legitimately
+    collide with a plain ``election.positions`` entry (ELEC-29), so a
+    candidate scoped to an item can *also* be a plain-positional candidate,
+    and must clear both applicable eligibility snapshots rather than
+    whichever one a caller happened to check. Before ELEC-33, the bulk
+    route only checked ``eligible_item_ids`` and never applied this
+    collision check at all, leaving it reachable through a crafted bulk
+    request even after ELEC-29 closed it in the lookup and single-vote
+    routes.
+
+    Returns an error message if the token is not eligible, else ``None``.
+    """
+    if matching_item is not None:
+        if voting_token.eligible_item_ids is not None and matching_item.get(
+            "id"
+        ) not in set(voting_token.eligible_item_ids):
+            if ineligible_item_message is not None:
+                return ineligible_item_message
+            return (
+                f"You are not eligible to vote for {effective_position}"
+                if effective_position
+                else "You are not eligible to vote in this election"
+            )
+
+    # Nothing in schema validation stops a plain `election.positions` entry
+    # from equaling a ballot item's position/title/id (ELEC-29) — so a
+    # candidate can legitimately belong to *both* namespaces at once.
+    # Detecting that requires checking every alias the item can be known
+    # by, not only whichever literal this particular vote resolved to
+    # (`effective_position`): the bulk route resolves a legacy item's
+    # position to its id (the storage/dedup convention), while the
+    # collision is necessarily via the item's *title* — a random id is not
+    # going to equal a plain position name. Using `effective_position`
+    # alone here (ELEC-29's original check) missed that shape entirely,
+    # which is exactly how ELEC-33 stayed open in the bulk route (Codex
+    # round 7) after the single-vote route was fixed.
+    item_aliases = (
+        ballot_item_candidate_positions(matching_item)
+        if matching_item is not None
+        else set()
+    )
+    colliding_positions = (
+        item_aliases & set(election.positions)
+        if matching_item is not None and election.positions
+        else set()
+    )
+
+    if matching_item is None or colliding_positions:
+        # Either not scoped to any ballot item at all (a plain positional
+        # candidate, or this election has no ballot items), or scoped to
+        # both a ballot item AND a colliding plain position (ELEC-29) — in
+        # which case the item check above is necessary but not sufficient,
+        # and this candidate must also clear the send-time
+        # position-eligibility snapshot (R-D4). NULL snapshot = legacy
+        # token, or an election/position with no eligibility rules
+        # configured — unrestricted (documented fail-open, time-bounded by
+        # token expiry). This is deliberately *not* checked for an
+        # item-scoped candidate with no collision: `eligible_positions` is
+        # drawn from `election.positions` only, so applying it to a
+        # ballot-item candidate whose position never appears in that list
+        # would reject legitimate item votes outright.
+        #
+        # The value(s) checked against `eligible_positions` are the
+        # colliding plain-position labels themselves when any exist — not
+        # `effective_position`, which for a colliding legacy item in the
+        # bulk route is the item id — falling back to `effective_position`
+        # only for a genuinely plain (no matching_item) candidate.
+        #
+        # A legacy item's title *and* id can each separately collide with
+        # a *different* configured plain position at once (schema allows
+        # an id like "treasurer" alongside an unrelated title "Secretary",
+        # both also present in `election.positions`). Which alias is "the"
+        # position this vote is really for is inherently ambiguous — that
+        # ambiguity is exactly why both are matched at all (see
+        # `ballot_item_candidate_positions`) — so picking a single member
+        # via `next(iter(colliding_positions))` checked an arbitrary one
+        # (Python set iteration order depends on hash seeding) and let a
+        # token eligible for only one of the two colliding positions vote
+        # anyway, bypassing the other's restriction entirely (Codex round
+        # 8). Failing closed — requiring eligibility for every colliding
+        # label, not just one — closes that without guessing which alias
+        # is "real".
+        if voting_token.eligible_positions is not None:
+            if colliding_positions:
+                denied = sorted(
+                    label
+                    for label in colliding_positions
+                    if label not in voting_token.eligible_positions
+                )
+            else:
+                denied = (
+                    [effective_position]
+                    if effective_position not in voting_token.eligible_positions
+                    else []
+                )
+            if denied:
+                check_label = denied[0]
+                return (
+                    f"You are not eligible to vote for {check_label}"
+                    if check_label
+                    else "You are not eligible to vote in this election"
+                )
+
+    return None
+
+
 class ElectionService:
     """Service for election management"""
 
@@ -1516,15 +1737,27 @@ class ElectionService:
 
     @staticmethod
     def _dedup_discriminator(
-        election: Election, candidate_id, vote_rank: Optional[int]
+        election: Election,
+        candidate_id,
+        vote_rank: Optional[int],
+        item: Optional[Dict] = None,
     ) -> str:
-        """Pick the dedup-hash discriminator for this election's voting method."""
-        if election.voting_method == "ranked_choice":
+        """Pick the dedup-hash discriminator for this vote's *effective*
+        voting method (ELEC-37) — the matched ballot item's override if it
+        has one, else the election's. ``item`` defaults to ``None`` (the
+        election-only resolution) for callers that don't yet resolve a
+        matching ballot item (``cast_vote``, ``cast_proxy_vote``); pass the
+        matched item wherever one is available so an item-level override is
+        honored consistently — see ``_effective_voting_method``.
+
+        ``max_votes_per_position`` has no item-level override in the
+        schema, so it is always read from the election regardless of
+        ``item``.
+        """
+        method = _effective_voting_method(election, item)
+        if method == "ranked_choice":
             return f"rank:{vote_rank}"
-        if (
-            election.voting_method == "approval"
-            or (election.max_votes_per_position or 1) > 1
-        ):
+        if method == "approval" or (election.max_votes_per_position or 1) > 1:
             return f"cand:{candidate_id}"
         return ""
 
@@ -6105,9 +6338,12 @@ Best regards,
             # this recipient may vote for, mirroring the per-item snapshot
             # below — the token carries no user identity, so
             # position_eligibility (R-D4) can only be enforced at vote time
-            # from a send-time snapshot. None = no position rules on this
-            # election (unrestricted, and the used-token computation stays
-            # on election.positions).
+            # from a send-time snapshot. eligible_positions is always a list
+            # (never left None) whenever the election defines positions:
+            # None is reserved for "this election has no positions at all",
+            # and an empty list means "evaluated, ineligible for all" —
+            # see below for why that distinction matters even when no
+            # per-position rules exist.
             #
             # Deliberately NOT gated on "no ballot items": the schema
             # allows an election to configure both `positions` and
@@ -6121,17 +6357,25 @@ Best regards,
             # token eligible for one item could vote for *any* plain
             # position with no eligibility check at all.
             eligible_positions: Optional[List[str]] = None
-            if election.positions and election.position_eligibility:
+            if election.positions:
                 # Apply the same two universal gates the item snapshot above
-                # goes through (_member_voting_gates): a globally
-                # voting-ineligible tier fails every position outright — an
-                # unrestricted position ("no rules for this position ->
-                # everyone may vote", below) is not an exemption from a
-                # global ban any more than an unrestricted ballot item is —
-                # and an election override grants every position
-                # unconditionally, the positional mirror of the override
-                # already bypassing every ballot item's voter-type rules
-                # (Codex round 6, ELEC-30/ELEC-31).
+                # goes through (_member_voting_gates), and do so
+                # unconditionally on election.positions rather than only
+                # when position_eligibility is configured: a globally
+                # voting-ineligible tier must fail every position outright
+                # whether or not any per-position rule exists to
+                # independently reject the member — the absence of
+                # position-specific rules is "no rules for this position ->
+                # everyone [whose tier allows voting] may vote for it", not
+                # an exemption from the tier ban itself (Codex round 7,
+                # ELEC-35 — evaluating this gate only inside the
+                # `and election.position_eligibility` branch let a
+                # tier-banned member with no position rules configured
+                # receive an eligible_positions=None token, which the vote
+                # path reads as unrestricted). An election override grants
+                # every position unconditionally, the positional mirror of
+                # the override already bypassing every ballot item's
+                # voter-type rules (Codex round 6, ELEC-30/ELEC-31).
                 tier_voting_eligible, has_override = await self._member_voting_gates(
                     recipient, election, str(organization_id), organization
                 )
@@ -6141,10 +6385,11 @@ Best regards,
                         if has_override:
                             eligible_positions.append(pos)
                             continue
-                        pos_rules = election.position_eligibility.get(pos)
+                        pos_rules = (election.position_eligibility or {}).get(pos)
                         if not pos_rules:
-                            # No rules for this position → everyone may vote
-                            # (mirrors check_voter_eligibility).
+                            # No rules for this position → everyone whose
+                            # tier permits voting may vote for it (mirrors
+                            # check_voter_eligibility).
                             eligible_positions.append(pos)
                             continue
                         voter_types = pos_rules.get("voter_types", ["all"])
@@ -6156,7 +6401,12 @@ Best regards,
                     # annotate_ballot_items_for_user failing every item for
                     # the same member. Empty (not None) so downstream code
                     # correctly reads this as "evaluated, ineligible for
-                    # all", not "unrestricted".
+                    # all", not "unrestricted". This is what closes
+                    # ELEC-35: previously this branch was only reachable
+                    # when position_eligibility was configured, so a
+                    # tier-banned member on an election with plain
+                    # positions and no position rules fell through with
+                    # eligible_positions left at its None default instead.
                     eligible_positions = []
 
             # Empty ballot prevention: decide now that BOTH eligibility sets
@@ -6165,39 +6415,35 @@ Best regards,
             # when they qualify for neither structure the election actually
             # defines — being eligible for one plain position is enough to
             # warrant a ballot even if every structured item excludes them,
-            # and vice versa. Positions with no position_eligibility rules
-            # are unrestricted (everyone qualifies), so they never trigger a
-            # skip on their own.
+            # and vice versa. eligible_positions is authoritative for
+            # whether the recipient qualifies via positions: it is already
+            # empty for a tier-banned member even when no position_eligibility
+            # rules exist (see above), so there is no separate "unrestricted
+            # positions always qualify" carve-out here any more.
             items_defined = bool(election.ballot_items)
-            positions_restricted = bool(election.positions) and bool(
-                election.position_eligibility
-            )
-            positions_unrestricted = bool(election.positions) and not (
-                election.position_eligibility
-            )
+            positions_defined = bool(election.positions)
 
-            qualifies = positions_unrestricted
+            qualifies = False
             if items_defined:
                 qualifies = qualifies or bool(eligible_items)
-            if positions_restricted:
+            if positions_defined:
                 qualifies = qualifies or bool(eligible_positions)
 
-            if (
-                items_defined or positions_restricted or positions_unrestricted
-            ) and not qualifies:
+            if (items_defined or positions_defined) and not qualifies:
                 skipped_count += 1
-                if items_defined and positions_restricted:
+                if items_defined and positions_defined:
                     reason = (
                         "Not eligible for any ballot item or position in "
                         "this election — role type, attendance, and "
                         "membership did not match any item or position "
                         "requirements"
                     )
-                elif positions_restricted:
+                elif positions_defined:
                     reason = (
                         "Not eligible for any position in this election — "
                         "membership type does not match any position's "
-                        "voter-type rules"
+                        "voter-type rules, or this membership tier is not "
+                        "voting-eligible"
                     )
                 else:
                     reason = await self._get_ineligibility_reason_for_user(
@@ -7443,58 +7689,18 @@ Best regards,
             else None
         )
 
-        # Nothing in schema validation stops a plain `election.positions`
-        # entry from equaling a ballot item's position/title/id (ELEC-29) —
-        # so `effective_position` can legitimately belong to *both*
-        # namespaces at once. Detecting that directly (rather than trusting
-        # which one `matching_item` above happened to resolve first) is what
-        # lets a colliding candidate be held to both applicable checks below
-        # instead of silently skipping whichever one lost the race.
-        is_plain_position = bool(
-            effective_position is not None
-            and election.positions
-            and effective_position in election.positions
+        # Enforce the token's per-item AND (when this candidate's position
+        # collides with a plain election.positions entry, ELEC-29)
+        # per-position eligibility snapshots — shared with the bulk route
+        # in `_token_eligibility_error` (ELEC-33) so the two routes cannot
+        # drift again. Without the item check, a token scoped to one
+        # ballot item could vote on any other item's candidate via this
+        # single-vote route (R-1).
+        eligibility_error = _token_eligibility_error(
+            voting_token, election, effective_position, matching_item
         )
-
-        if matching_item is not None:
-            # Enforce the token's per-item eligibility snapshot for
-            # ballot-item elections (R-1). Without this a token scoped to
-            # one ballot item could vote on any other item's candidate via
-            # this single-vote route, even though `submit_ballot_with_token`
-            # (the bulk route) already enforces `eligible_item_ids`.
-            if voting_token.eligible_item_ids is not None and matching_item.get(
-                "id"
-            ) not in set(voting_token.eligible_item_ids):
-                return None, (
-                    f"You are not eligible to vote for {effective_position}"
-                    if effective_position
-                    else "You are not eligible to vote in this election"
-                )
-
-        if matching_item is None or is_plain_position:
-            # Either not scoped to any ballot item at all (a plain
-            # positional candidate, or this election has no ballot items),
-            # or scoped to both a ballot item AND a colliding plain position
-            # (ELEC-29) — in which case the item check above is necessary
-            # but not sufficient, and this candidate must also clear the
-            # send-time position-eligibility snapshot (R-D4). NULL snapshot
-            # = legacy token, or an election/position with no eligibility
-            # rules configured — unrestricted (documented fail-open,
-            # time-bounded by token expiry). This is deliberately *not*
-            # checked for an item-scoped candidate with no collision:
-            # `eligible_positions` is drawn from `election.positions` only,
-            # so applying it to a ballot-item candidate whose position never
-            # appears in that list would reject legitimate item votes
-            # outright.
-            if (
-                voting_token.eligible_positions is not None
-                and effective_position not in voting_token.eligible_positions
-            ):
-                return None, (
-                    f"You are not eligible to vote for {effective_position}"
-                    if effective_position
-                    else "You are not eligible to vote in this election"
-                )
+        if eligibility_error:
+            return None, eligibility_error
 
         # Method-aware duplicate and limit checks — the token-path mirror of
         # cast_vote's rules (R-D5): approval records one vote per approved
@@ -7511,15 +7717,36 @@ Best regards,
         # Handled at read time — no migration: a NULL-position vote for a
         # candidate running for the effective position counts as a vote for
         # that position.
+        #
+        # A legacy ballot item (no explicit "position" field) can have prior
+        # votes stored under either of its aliases — its title (this route's
+        # historical convention, via candidate.position) or its id (the
+        # bulk route's convention, `submit_ballot_with_token` below) —
+        # depending on which route cast them. Matching only
+        # `effective_position` missed the other route's rows, letting the
+        # same voter cast one vote through each (Codex round 7, ELEC-34).
+        # Compare against every alias this item's candidates can be keyed
+        # under, not just the one this call resolved.
+        # Scoped, not the raw alias set: a legacy item's title can equal a
+        # different item's id/explicit position (ELEC-38), and this route's
+        # own duplicate/limit checks below key off `position_votes` alone —
+        # unlike the bulk route, there is no separate candidate-ownership
+        # use of this alias set to preserve, so it is safe to narrow here
+        # too (see _dedup_scoped_item_aliases).
+        position_aliases = (
+            _dedup_scoped_item_aliases(matching_item, election.ballot_items or [])
+            if matching_item is not None
+            else ({effective_position} if effective_position else set())
+        )
         if effective_position:
             position_filter = or_(
-                Vote.position == effective_position,
+                Vote.position.in_(position_aliases),
                 and_(
                     Vote.position.is_(None),
                     Vote.candidate_id.in_(
                         select(Candidate.id)
                         .where(Candidate.election_id == election.id)
-                        .where(Candidate.position == effective_position)
+                        .where(Candidate.position.in_(position_aliases))
                     ),
                 ),
             )
@@ -7583,9 +7810,9 @@ Best regards,
             vote_dedup_hash=self._compute_vote_dedup_hash(
                 election.id,
                 dedup_voter,
-                effective_position,
+                _dedup_position_key(matching_item, effective_position),
                 discriminator=self._dedup_discriminator(
-                    election, candidate_id, vote_rank
+                    election, candidate_id, vote_rank, item=matching_item
                 ),
             ),
         )
@@ -7755,17 +7982,6 @@ Best regards,
         # Build a lookup of ballot items by ID
         item_map = {item.get("id"): item for item in ballot_items}
 
-        # Per-item eligibility snapshotted on the token at send time.
-        # None = legacy token (issued before this column existed) — no
-        # restriction; a list restricts non-abstain votes to those items.
-        # SECURITY: without this check any token holder could vote on items
-        # restricted to other member classes by POSTing their ids.
-        allowed_item_ids = (
-            set(voting_token.eligible_item_ids)
-            if voting_token.eligible_item_ids is not None
-            else None
-        )
-
         # Get all accepted candidates for this election
         candidate_result = await self.db.execute(
             select(Candidate)
@@ -7791,7 +8007,17 @@ Best regards,
         def _create_token_vote(
             cand_id, vote_position: str, rank: Optional[int], discriminator: str
         ) -> Vote:
-            """Build/sign/chain one Vote row and append it to created_votes."""
+            """Build/sign/chain one Vote row and append it to created_votes.
+
+            ``vote_position`` is always the caller's already-canonical
+            ``ballot_item.get("position") or ballot_item_id`` (see the loop
+            below) — exactly what ``_dedup_position_key()`` would also
+            return for this item, so it is used directly for the dedup
+            hash here rather than routed through that helper a second time.
+            ``cast_vote_with_token`` is the one route that still needs the
+            helper, since its hash input (``effective_position``) is not
+            already in this canonical form for a legacy item (ELEC-34).
+            """
             new_vote = Vote(
                 # Explicit id: signatures cover it, computed pre-flush.
                 id=str(uuid4()),
@@ -7844,17 +8070,35 @@ Best regards,
                 abstentions += 1
                 continue
 
-            # Enforce per-item eligibility (voter types / attendance were
-            # evaluated when the ballot was issued and snapshotted on the token)
-            if allowed_item_ids is not None and ballot_item_id not in allowed_item_ids:
-                return (
-                    None,
-                    "You are not eligible to vote on: "
-                    f"{ballot_item.get('title', ballot_item_id)}",
-                )
-
             # Determine the position for this vote (use ballot item id as position)
             position = ballot_item.get("position") or ballot_item_id
+
+            # Enforce per-item eligibility (voter types / attendance were
+            # evaluated when the ballot was issued and snapshotted on the
+            # token) AND, when this item's position collides with a
+            # restricted plain `election.positions` entry (ELEC-29), the
+            # position-eligibility snapshot too. Shared with
+            # cast_vote_with_token via `_token_eligibility_error` (ELEC-33)
+            # so this collision-aware check can't drift between the two
+            # vote-submission routes again: before ELEC-33, this bulk route
+            # only ever checked `eligible_item_ids`, so a token ineligible
+            # for a colliding plain position (`eligible_positions=[]`)
+            # could still submit that position's candidate here.
+            # SECURITY: without the item-eligibility half, any token holder
+            # could vote on items restricted to other member classes by
+            # POSTing their ids.
+            eligibility_error = _token_eligibility_error(
+                voting_token,
+                election,
+                position,
+                ballot_item,
+                ineligible_item_message=(
+                    "You are not eligible to vote on: "
+                    f"{ballot_item.get('title', ballot_item_id)}"
+                ),
+            )
+            if eligibility_error:
+                return None, eligibility_error
 
             # The set of candidate.position values that legitimately belong
             # to this item — broader than `position` above, which is only
@@ -7880,6 +8124,30 @@ Best regards,
             # position vote cast against a title-keyed legacy candidate,
             # letting the same voter cast a second, differently-keyed vote
             # for the same contest.
+            #
+            # The non-NULL branch has the same gap one level up: a legacy
+            # item's votes may already be stored under either alias —
+            # `position` (this route's own convention, the item id) or the
+            # item's title (cast_vote_with_token's historical convention,
+            # via candidate.position) — depending on which route cast them.
+            # Matching only `position` missed a prior vote cast through the
+            # other route, letting the same voter cast one vote through each
+            # (Codex round 7, ELEC-34).
+            #
+            # For THIS check specifically (not candidate ownership above),
+            # use the collision-scoped alias set rather than the full one:
+            # the schema enforces only unique item ids, so a legacy item's
+            # title fallback can equal a DIFFERENT item's id, and matching
+            # on the raw alias would treat that other item's already-stored
+            # vote as a duplicate of this one (Codex round 9, ELEC-38).
+            # Dropping a colliding fallback alias here is safe — new votes
+            # for a legacy item are always dedup-hashed against its own
+            # canonical id, never its title, so the UNIQUE constraint on
+            # vote_dedup_hash still catches a genuine repeat on this exact
+            # item even when this pre-check no longer does.
+            dedup_check_positions = _dedup_scoped_item_aliases(
+                ballot_item, ballot_items
+            )
             existing_check = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election.id)
@@ -7887,13 +8155,13 @@ Best regards,
                 .where(Vote.is_test == voting_token.is_test)
                 .where(
                     or_(
-                        Vote.position == position,
+                        Vote.position.in_(dedup_check_positions),
                         and_(
                             Vote.position.is_(None),
                             Vote.candidate_id.in_(
                                 select(Candidate.id)
                                 .where(Candidate.election_id == election.id)
-                                .where(Candidate.position.in_(item_candidate_positions))
+                                .where(Candidate.position.in_(dedup_check_positions))
                             ),
                         ),
                     )
@@ -8060,10 +8328,30 @@ Best regards,
             if write_in_name and choice == "write_in":
                 write_in_candidate.name = html.escape(write_in_name.strip())
 
-            # Single-selection path — discriminator stays "" so dedup hashes
-            # remain byte-identical with rows written before the multi-select
-            # forms existed (the per-position pre-check above is the dedup).
-            _create_token_vote(candidate_id, position, None, "")
+            # Single-selection path (write-in/approve/deny/plain-UUID choice).
+            # Discriminator is resolved the same way the single-vote route
+            # resolves it (`_dedup_discriminator`, item-aware since ELEC-37)
+            # rather than hardcoded "": when this item overrides the
+            # election's voting method to "approval", the single-vote route
+            # already hashes this candidate with a `cand:{id}` discriminator,
+            # and this backward-compatible `choice` form is still accepted
+            # for an approval-overridden item (nothing method-gates it the
+            # way the `rankings`/`candidate_ids` branches above are gated).
+            # Hardcoding "" here left the two routes hashing the same
+            # logical approval vote differently, so two tokens racing
+            # through the two forms could both pass the pre-check and the
+            # UNIQUE constraint on `vote_dedup_hash` never saw a collision
+            # (Codex round 10). For every other method this still resolves
+            # to "" exactly as before — byte-identical dedup hashes with
+            # rows written before the multi-select forms existed.
+            _create_token_vote(
+                candidate_id,
+                position,
+                None,
+                self._dedup_discriminator(
+                    election, candidate_id, None, item=ballot_item
+                ),
+            )
 
         # Mark token as fully used
         voting_token.used = True

@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A double vote through the full-ballot link's backward-compatible single-choice form could slip past the database's own safety net (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing multiple approvals on one contest
+  while the rest of the ballot allows only one), **submitting through the
+  full-ballot link's older single-choice form computed a different
+  internal fingerprint than the single-vote link would for the identical
+  vote**, so the database's own safety-net check for a near-simultaneous
+  double vote could not recognize the two as the same vote. Fixed so both
+  routes compute the same fingerprint for that contest regardless of which
+  submission form was used.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-39).
+
+### A double vote on an unusually-configured contest could slip past the database's own safety net, and a legitimate vote could be wrongly rejected as a duplicate of an unrelated contest (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing several selections on one contest
+  while the rest of the ballot allows only one), **the database's own
+  safety-net check for a near-simultaneous double vote no longer
+  recognized two vote attempts on that contest as the same vote** when
+  they arrived through the single-vote link and the full-ballot link at
+  (or near) the same moment — even though every other duplicate-vote
+  protection in the system treats them as identical. Fixed so both routes
+  compute the same internal fingerprint for that contest, restoring the
+  safety net.
+- **A legitimate vote on one contest could be wrongly rejected as a
+  duplicate of a completely different contest,** when one contest's
+  displayed title happened to be identical to another contest's internal
+  identifier. Fixed so the duplicate check no longer confuses two distinct
+  contests that merely share a name this way.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-37, ELEC-38).
+
+### A colliding position name could bypass eligibility on the full-ballot submission route, and a legacy contest's votes could be double-counted across routes (2026-09-02)
+
+**Fixed**
+
+- **Submitting a full ballot in one request could vote on a restricted
+  election position using a token that was never granted that
+  permission,** the same naming-collision bypass fixed for the
+  single-vote and ballot-preview routes previously — the full-ballot
+  route checked only the ballot-item permission and never the position's
+  own eligibility rule when the two happened to share a name. Fixed by
+  applying the same collision-aware check, now defined once and reused by
+  every vote-submission route so it cannot drift between them again.
+- **A voter holding two separate unused ballot links for the same election
+  could cast one vote through the single-vote link and a second through
+  the full-ballot link for the very same legacy contest, and have both
+  counted,** because the two routes recorded that contest under two
+  different internal labels and neither route's duplicate check — nor the
+  database's own safety-net constraint — recognized the other's label as
+  the same contest. Fixed by making both routes recognize every label a
+  legacy contest can be recorded under, and by making both routes record
+  the same canonical label going forward so the database-level safety net
+  also closes the gap for a near-simultaneous submission.
+- **A member whose membership tier is configured as ineligible to vote
+  could still receive a live, emailed ballot credential for a plain
+  position, specifically on an election that set no position-specific
+  eligibility rules at all** — a narrower prior fix only closed this gap
+  when the election configured an (empty) rule for that position. Fixed so
+  the tier-wide ban applies to every election with plain positions,
+  regardless of whether position-specific rules are configured.
+- **The fix for the naming-collision bypass above had a gap of its own:**
+  when a legacy contest happened to share a name with two different
+  restricted positions at once (via its internal id and its displayed
+  title respectively), the check picked one of the two names to verify —
+  effectively at random — instead of requiring the vote to clear both. A
+  token granted access to only one of the two names could, depending on
+  that random pick, still bypass the other. Fixed to require clearing
+  every colliding name, not just one.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-33, ELEC-34, ELEC-35).
+
 ### A mixed election's plain-position ballots ignored a global voting ban and an admin override, and a token could be closed with a legitimate vote still pending (2026-09-02)
 
 **Fixed**

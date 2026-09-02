@@ -1795,6 +1795,77 @@ change for the manual-ballots admin screen), and a per-election batch cap
 needs an actual number picked by a human. (Security review ELEC-16,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
+## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
+
+A legacy ballot item (one persisted without its own `position` field) is
+matched by its `title` _or_ its `id` — `ballot_item_candidate_positions()`
+needs both, because a real candidate/vote for that item can be stored under
+either convention depending on which code wrote it, and matching only one
+would silently empty a legitimate item's candidate list. The schema
+(`BallotItemInput.unique_item_ids`) enforces only unique **ids** across an
+election's ballot items — nothing stops a _different_ item's `title` (or
+explicit `position` override) from equaling this item's `id`.
+
+When that collision happens, a stored `Candidate`/`Vote` row carrying that
+exact string is genuinely ambiguous: `Vote` has no `ballot_item_id` column,
+only `position` (a string) and `candidate_id`, and `Candidate.position`
+carries the identical ambiguity — which item a candidate was originally
+created "for" is not persisted anywhere once its position string is
+stored. Neither table can be joined back to a specific item's identity to
+settle the question.
+
+The one instance of this that was concretely reported (security review
+ELEC-38) — the duplicate-vote pre-check treating a different item's stored
+vote as a re-vote on this item — **is** fixed for votes written after
+ELEC-34 (round 7): that check only needs to decide "would this read as a
+re-vote," where under-matching is safe as long as a genuine repeat vote is
+dedup-hashed against the item's own canonical id, never its title, so the
+database's `vote_dedup_hash` UNIQUE constraint still catches an actual
+duplicate on that exact item even after a colliding alias is excluded from
+the pre-check. `_dedup_scoped_item_aliases()` drops a fallback alias from
+the pre-check whenever another item in the same election already claims
+that exact string as its own canonical key.
+
+**Correction (security review ELEC-40, round 10):** that "still caught by
+the UNIQUE constraint" guarantee does not reach a vote row whose
+`vote_dedup_hash` predates the id-based convention itself — i.e. a vote
+`cast_vote_with_token` wrote for a legacy item before ELEC-34 landed, back
+when the hash was computed against the title (`Vote.position`'s own value
+for that route, which ELEC-34 never changed — only the hash input was
+redirected to the item's id). For such a row, dropping its title alias
+from the pre-check removes the only mechanism that could have caught a
+second vote on it: the new vote hashes against the item's id, the old row
+against its title, and the two never collide. Genuinely rare in practice —
+it additionally requires the same election to already have a title/id
+alias collision between two ballot items — but real, and not fixable by
+adjusting the pre-check alone without reopening ELEC-38 (there is no way
+to keep both fixed with string matching, since the schema still cannot
+disambiguate the two colliding items apart from the string itself, per
+above). Flagged rather than guessed at; a full fix needs one of: reverting
+the pre-check narrowing (accepting ELEC-38's false-positive back) or a
+backfill migration re-hashing existing legacy-item votes to the id-based
+convention — both are product/data-migration decisions for an owner, not
+something to pick during a review pass.
+
+What is **not** fixed, and cannot be with today's schema: full
+disambiguation of candidate/vote _ownership_ when two items collide this
+way. If both colliding items happen to have real, legitimately
+title-keyed/id-keyed candidates stored under the exact same string, there
+is currently no way — for candidate-list rendering, eligibility, tallying,
+or any other consumer of `ballot_item_candidate_positions()` — to tell
+which item a given stored row actually belongs to; the function
+necessarily returns the union of both, and the broader (unscoped) alias
+matching it produces is deliberately left in place at those other call
+sites for exactly that reason. Fixing this fully would need a schema
+change — e.g. an explicit `ballot_item_id` column on `Candidate` and/or
+`Vote`, populated going forward and backfilled for existing rows where
+resolvable — which is a data-model decision for an owner, not something to
+guess at during a security-review pass. In practice this requires an
+admin to deliberately configure two ballot items whose alias sets collide
+in the same election; nothing else in the ballot-authoring UI encourages
+or warns against it today. (Security review ELEC-38,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 
 `list_users_with_roles` (`users.py:601`) and `get_archived_members`

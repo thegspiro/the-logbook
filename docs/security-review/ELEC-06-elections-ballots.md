@@ -1,6 +1,6 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2), [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (pass 3, rounds 1-6, merged before round 7's fix was ready — see [#2173](https://github.com/thegspiro/the-logbook/pull/2173)), [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (pass 3, round 7)
 
 ---
 
@@ -1130,6 +1130,651 @@ patched finding by finding.
 
 New guard tests: `tests/test_election_codex_round6.py` (new file, 5 tests:
 1 for ELEC-30, 2 for ELEC-31, 2 for ELEC-32).
+
+### ELEC-33 — P1 — `submit_ballot_with_token` never enforced positional scope for a ballot item colliding with a restricted plain position — ✅ FIXED
+
+**What:** Round 5's ELEC-29 fix closed the position/ballot-item
+namespace-collision bypass in `cast_vote_with_token` (the single-vote
+`/ballot/vote` route) and `lookup_ballot_by_token` (the `/ballot/lookup`
+route): both detect when a ballot item's position/title/id collides with a
+plain `election.positions` entry and require the candidate to clear
+`eligible_positions` too, not just `eligible_item_ids`. `submit_ballot_with_token`
+(the bulk `/ballot/vote/bulk` route, `backend/app/services/election_service.py`,
+~line 7928 pre-fix) was never touched by that fix and had the identical
+gap: its per-item eligibility check only ever consulted
+`voting_token.eligible_item_ids`. A token eligible for a colliding item but
+NOT eligible for the colliding plain position (`eligible_positions=[]`, or
+a list that omits it) could still submit that position's candidate through
+the bulk route — the exact ELEC-29 scenario, reachable through the one
+call site ELEC-29 didn't fix.
+
+**Verified reachable:** confirmed by tracing `submit_ballot_with_token`'s
+per-vote loop side by side with `cast_vote_with_token`'s post-ELEC-29 logic.
+Nothing in schema validation (`ElectionBase`/`ElectionUpdate` in
+`app/schemas/election.py`) prevents the collision (still true post-ELEC-29 —
+that fix was runtime-only, deliberately, per its own "Why" note), and
+`send_ballot_emails` still computes `eligible_item_ids` and
+`eligible_positions` independently, so the mismatched-token shape ELEC-29's
+own regression test constructs is producible for real. Reproduced with a
+regression test (`TestBulkRouteEnforcesPositionalScopeForCollidingItem` in
+`tests/test_election_codex_round7.py`) that fails pre-fix: a token eligible
+for an unrestricted legacy item titled "Secretary" but ineligible for the
+restricted plain "Secretary" position submits the colliding candidate
+through the bulk route with no error, and a `Vote` row is persisted.
+
+**Fix:** extracted the collision check into a shared module-level
+`_token_eligibility_error()` helper in `election_service.py`, used by both
+`cast_vote_with_token` and `submit_ballot_with_token`, so this logic is
+defined exactly once rather than re-implemented a third time. Fixing it
+this way also corrected a latent gap in the collision check itself: the
+original ELEC-29 code detected a collision by testing whether the single
+resolved `effective_position` value was literally present in
+`election.positions`. That works for `cast_vote_with_token` (whose
+resolved value is always one of the item's own aliases, by construction of
+the `matching_item` lookup), but the bulk route resolves a _legacy_ item's
+position to the item's id (`ballot_item.get("position") or ballot_item_id`)
+— an opaque id can never itself equal a human-readable plain position name,
+even though the item's _title_ does. The shared helper instead checks every
+alias in `ballot_item_candidate_positions(item)` against `election.positions`
+and, when one collides, checks `eligible_positions` against that colliding
+alias rather than whichever literal the caller happened to resolve —
+correct for both routes, and a strict improvement (not a behavior change)
+for `cast_vote_with_token`'s pre-existing, narrower check.
+
+New regression tests in `tests/test_election_codex_round7.py`
+(`TestBulkRouteEnforcesPositionalScopeForCollidingItem`) — confirmed
+failing pre-fix via `git stash`: the mismatched token's bulk submission
+succeeded and persisted a vote (asserted rejected with no vote persisted);
+a sanity test confirms a token eligible under both scopes still succeeds
+(unaffected either side of the fix, guarding against over-rejection).
+
+### ELEC-34 — P1 — A legacy ballot item's votes didn't dedup across the single-vote and bulk routes — ✅ FIXED
+
+**What:** For a ballot item with no explicit `position` field (a "legacy"
+item, per ELEC-22's title-or-id fallback,
+`ballot_item_candidate_positions()`), the two vote-submission routes stored
+(and hashed) two different literal `Vote.position` values for the same
+logical contest: `submit_ballot_with_token` (bulk route) always stores the
+item's id (`ballot_item.get("position") or ballot_item_id`), while
+`cast_vote_with_token` (single-vote route) falls back to the resolved
+candidate's own `.position` value — historically the item's _title_, since
+that is how legacy-item candidates are actually created. A voter holding
+two unused tokens for the same election could cast one vote through each
+route for this item: each route's pre-insert duplicate-vote SELECT
+compared only against its own convention (`Vote.position == position`),
+never the other route's literal, and each route's `vote_dedup_hash` — the
+database-level UNIQUE-constraint backstop the code explicitly documents as
+protecting "even if a race condition bypasses application checks" —
+likewise embedded the differing literal, so the two votes hashed
+differently and the constraint didn't catch it either. ELEC-27 (round 2)
+had already broadened the _historical_ `Vote.position IS NULL` dedup
+subquery to use `ballot_item_candidate_positions()`, but that only covers
+rows written before position normalization; these are two _current_,
+non-NULL rows from the two live routes, which ELEC-27 never addressed.
+
+**Verified reachable:** confirmed by reading exactly what each route writes
+to `Vote.position` for a legacy item and what each route's duplicate query
+filters on — see the "What" paragraph above; both are directly readable in
+`election_service.py` with no reachability caveats. Reproduced with
+regression tests in `tests/test_election_codex_round7.py`
+(`TestLegacyItemVoteDedupAcrossBothRoutes`) that fail pre-fix in both
+directions: a bulk vote followed by a single-vote-route vote for the same
+legacy item both succeed (asserted the second is rejected), and the
+reverse order also both succeed (asserted the same).
+
+**Fix, two layers (both changed, per the "and/or" in the finding — neither
+alone is defense in depth without the other):**
+
+1. **Read-time — widened both routes' duplicate-vote SELECT** to match
+   every alias in `ballot_item_candidate_positions(item)`
+   (`Vote.position.in_(item_candidate_positions)` /
+   `Vote.position.in_(position_aliases)`) instead of comparing against a
+   single literal. This is a superset of what each route already matched
+   (a legacy item's alias set always contains that route's own
+   convention), so it only widens what counts as "already voted," never
+   narrows it — no existing passing test asserts a specific pair of
+   distinct votes must both be accepted for the same legacy item.
+2. **Write-time — normalized the `vote_dedup_hash` position component**
+   via a new `_dedup_position_key()` helper: for a legacy item (no
+   explicit `position` field) the hash always uses the item's id —
+   already the bulk route's existing convention, so only
+   `cast_vote_with_token`'s hash computation changed — regardless of which
+   route computed it. This is deliberately scoped to the _hash_ only, not
+   the stored `Vote.position` display value itself: `Vote.position`
+   keeps each route's existing convention (unaffected — no change to
+   error messages, per-position result grouping, or `positions_voted`
+   completion tracking, none of which this finding was about), while the
+   hash — used solely for the database's uniqueness constraint — is now
+   identical across routes for the same contest. This closes the residual
+   concurrent-race gap the SELECT-based fix alone cannot: two truly
+   simultaneous submissions through different tokens would both read an
+   empty pre-insert SELECT no matter how it's widened, so the UNIQUE
+   constraint on `vote_dedup_hash` is the only backstop that can still
+   catch that shape — and only if both routes compute the same hash.
+
+Existing pre-fix rows keep whichever literal they were written with — no
+migration, consistent with ELEC-27's read-time-only precedent — and remain
+covered because the widened SELECT matches every alias, not just the
+post-fix canonical one.
+
+New regression tests in `tests/test_election_codex_round7.py`
+(`TestLegacyItemVoteDedupAcrossBothRoutes`) — confirmed failing pre-fix via
+`git stash` (both ordering tests, plus a hash-parity unit test that failed
+pre-fix with `ImportError` since `_dedup_position_key` didn't exist yet).
+
+### ELEC-35 — P1 — The positional tier ban only applied when a `position_eligibility` rule existed for the position, not whenever the election defines positions at all — ✅ FIXED
+
+**What:** Round 6's ELEC-30 fix made the positional-eligibility snapshot
+in `send_ballot_emails` call `_member_voting_gates()` — the same global
+membership-tier voting ban `annotate_ballot_items_for_user` already
+applies to ballot items — but only inside the
+`if election.positions and election.position_eligibility:` branch. Round
+6's own fixture covered a position with an _empty rule_ (`{"President":
+{}}` — `position_eligibility` truthy, just no restriction for that one
+position). It did not cover an election with plain positions and **no**
+`position_eligibility` configured at all (a falsy `{}` or `None`) — a
+distinct condition that skipped the branch, and therefore the tier-gate
+call, entirely. `eligible_positions` was left at its `None` default in
+that case, which the vote path (`cast_vote_with_token`'s
+`voting_token.eligible_positions is not None` checks) reads as
+unrestricted. This surfaced during triage of ELEC-33/34, not as a
+Codex-posted finding against a specific commit.
+
+**Impact:** a member on a membership tier with `benefits.voting_eligible
+== False` (e.g. the shipped "probationary" tier), on an election that
+defines plain positions but configures no position-eligibility rules for
+any of them, still received a live token with `eligible_positions=None` —
+an unrestricted credential — and could cast a counted positional vote
+despite the tier ban that already excludes them from every ballot item on
+the exact same election.
+
+**Where:** `election_service.py`, `send_ballot_emails`'s positional
+snapshot: `if election.positions and election.position_eligibility:`
+gated the entire tier/override check.
+
+**Fix:** the gate now runs on `if election.positions:` alone —
+`_member_voting_gates()` is evaluated whenever the election defines any
+plain position, independent of whether `position_eligibility` happens to
+be configured for it. `eligible_positions` is now always a list (never
+left at `None`) whenever `election.positions` is set: empty when the tier
+is banned and there is no override, otherwise populated per position
+using `(election.position_eligibility or {}).get(pos)` (absent rules ->
+unrestricted, same as before) so a tier-eligible member's behavior is
+unchanged. The downstream empty-ballot-prevention `qualifies` computation
+was simplified to match — it now reads `eligible_positions` directly
+rather than carrying a separate "positions_unrestricted always qualifies"
+carve-out that predates this fix and would otherwise still let a
+tier-banned member's now-correctly-empty snapshot be overridden back to
+"qualifies" for skip-decision purposes.
+
+New regression tests in `tests/test_election_codex_round7.py`
+(`TestTierBanAppliesWithoutAnyPositionEligibilityRules`, 2 tests) —
+confirmed failing pre-fix via `git stash`: the banned-member test found
+`sent == 1` (a live token issued) where the fix requires `sent == 0`. One
+pre-existing test file (`test_election_reopen_test_ballots.py`) required a
+one-line mock fixup — its hand-built `organization` `SimpleNamespace`
+lacked a `.settings` attribute, which `_member_voting_gates()` now always
+reads once `election.positions` is set.
+
+### ELEC-36 — P1 — The ELEC-33 collision check picked an arbitrary colliding position when a legacy item collided with two different plain positions at once — ✅ FIXED
+
+**What:** Round 7's ELEC-33 fix added `_token_eligibility_error()`, which
+detects when a ballot item's position/title/id collides with a restricted
+plain `election.positions` entry and, when it does, checks
+`voting_token.eligible_positions` against the colliding label. For a
+legacy item (no explicit `position` field), `ballot_item_candidate_positions()`
+returns up to two aliases — the item's `title` and its `id` — either of
+which can independently collide with a configured plain position. The fix
+computed `colliding_positions = item_aliases & set(election.positions)`
+correctly, but then selected which one to check with
+`next(iter(colliding_positions))` — an arbitrary member whenever the set
+has more than one element, since Python set iteration order depends on
+hash seeding, not on which alias this particular vote is actually for.
+
+**Impact:** an item `{"id": "Treasurer", "title": "Secretary"}` (no
+`position` field) where both "Treasurer" and "Secretary" are also
+independently configured, independently restricted plain positions in
+`election.positions`. A token eligible for "Treasurer" but explicitly
+NOT eligible for "Secretary" could, depending only on hash-seed luck, have
+its candidate checked against "Treasurer" (passes) instead of "Secretary"
+(the alias the check actually needed to enforce) — bypassing Secretary's
+positional eligibility restriction and casting a counted vote the token
+was never granted.
+
+**Verified reachable:** `BallotItemInput.id` (`app/schemas/election.py`)
+accepts any string matching `^[A-Za-z0-9_-]+$` up to 100 characters — a
+value like `Treasurer` is valid — and `title` has no validator preventing
+it from equaling a different `election.positions` entry, nor is there any
+cross-field check preventing an item's `id` and `title` from each equaling
+a _different_ member of `election.positions` at once. Nothing in
+`ElectionBase`/`ElectionUpdate` restricts `positions` from containing both
+values simultaneously either (this is the same absence of exclusivity
+ELEC-29 and ELEC-33 already documented — deliberate, since a ballot item
+and a plain position are allowed to legitimately share eligibility rules
+by name). Reproduced with a regression test
+(`TestMultiCollisionRequiresEligibilityForEveryColludingPosition` in
+`tests/test_election_codex_round8.py`) that fails pre-fix: a token
+eligible for "Treasurer" (one colliding alias) but not "Secretary" (the
+other) submits the colliding candidate through the bulk route
+(`submit_ballot_with_token`) with no error, and a `Vote` row is persisted.
+
+**Fix:** `_token_eligibility_error()` now requires the token to be
+eligible for **every** colliding position, not one arbitrarily chosen
+member of the set — failing closed on the ambiguity (which alias is "the"
+position this vote is for is inherently unresolvable from a legacy item
+alone; that ambiguity is exactly why both aliases are matched at all)
+rather than guessing. For the pre-existing single-collision case
+(`len(colliding_positions) == 1`) this is byte-identical to the prior
+behavior — only the 2+-alias case changes. Confirmed via grep that
+`_token_eligibility_error()` has exactly two call sites
+(`cast_vote_with_token` and `submit_ballot_with_token`), both already
+routed through the shared helper per ELEC-33's own centralization goal, so
+this one change closes the gap in both routes at once with no third call
+site to drift.
+
+New regression tests in `tests/test_election_codex_round8.py`
+(`TestMultiCollisionRequiresEligibilityForEveryColludingPosition`, 3
+tests) — confirmed one fails pre-fix via `git stash` (the token eligible
+for "Treasurer" but not "Secretary" was wrongly accepted, `result is not
+None`); the mirror-image test (eligible for "Secretary" but not
+"Treasurer") and a sanity test (eligible for both, must still succeed)
+guard against the fix over-rejecting. Both directions are asserted in the
+same test module/process specifically so that whichever alias hash-seed
+luck would have favored, at least one direction demonstrably failed
+pre-fix — the bug's own non-determinism can't hide behind a single
+lucky test run.
+
+**Round 7: 3 fixed (ELEC-33, ELEC-34, ELEC-35).** The first two findings
+were posted by Codex against commit `44fcbfe8e` (round 5's own fix commit)
+about gaps in that fix (and, for ELEC-34, round 2's ELEC-27 fix)
+specifically in `submit_ballot_with_token`, which neither earlier round's
+diff touched — both were still open against current code. The third
+surfaced during triage of the first two, in the positional-eligibility
+snapshot round 6 (ELEC-30) already touched. All three confirmed real by
+tracing the affected code path against its sibling (the bulk route against
+the single-vote route's post-ELEC-29 logic; the "no rules configured"
+branch against round 6's "empty rule" branch) rather than taking a
+paraphrase as final, and fixed by consolidating the collision check into
+one shared helper (`_token_eligibility_error`, ELEC-33), normalizing the
+dedup-hash position key at the one write path that diverged from the
+established convention (`_dedup_position_key`, ELEC-34), and widening the
+tier-gate condition from "positions AND rules configured" to "positions
+alone" (ELEC-35) — each fix reduces, rather than adds to, the number of
+independent places its underlying invariant ("which position values
+belong to this contest," "who may vote for a plain position at all") is
+implemented, so a later call site is less likely to drift the way these
+did.
+
+**PR split note:** #2162 merged (rounds 1-6 through commit `c4e0e7eb2`)
+while this round's fix was still in progress on its branch — a genuine
+race with this rotation's own "one PR at a time" process, not a process
+violation. All three round-7 review threads were replied to and resolved
+on #2162 as normal (GitHub accepts both on a merged PR), but the code fix
+itself landed in a new PR, [#2173](https://github.com/thegspiro/the-logbook/pull/2173),
+branched from #2162's final commit (already an ancestor of `main` by the
+time #2173 was opened) and merged forward onto current `main`.
+
+**Completion gate (pass 3, after round 7, ELEC-33/34/35):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 494 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round7.py -q`              | ✅ 7 passed, 0 failed                                                     |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9814 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round7.py` (7 tests total: 2
+for ELEC-33, 3 for ELEC-34 — one of which is a pure unit test of
+`_dedup_position_key` with no DB fixture — and 2 for ELEC-35).
+
+**Round 8: 1 fixed (ELEC-36).** Posted by Codex against commit
+`097f1c37e` (round 7's own ELEC-33 fix commit) about a bug in that fix's
+collision-detection logic — verified real by reading the actual
+`_token_eligibility_error()` implementation and confirming the multi-alias
+collision scenario is reachable through the schema, not by taking the
+paraphrase as final. This is the third round of scrutiny on this specific
+invariant (ELEC-29 opened it, ELEC-33 partially fixed it while
+introducing this gap, ELEC-36 closes it) — fixed by making the check
+exhaustive over every colliding alias rather than adding a fourth
+special case.
+
+**Completion gate (pass 3, after round 8, ELEC-36):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 497 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round8.py -q`              | ✅ 3 passed, 0 failed                                                     |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9817 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round8.py` (new file, 3
+tests, `TestMultiCollisionRequiresEligibilityForEveryColludingPosition` —
+both bypass directions plus a sanity check against over-rejection).
+
+### ELEC-37 — P1 — `cast_vote_with_token`'s dedup-hash discriminator ignored a ballot item's voting-method override — ✅ FIXED
+
+**What:** `election_service.py:1666-1690` (pre-fix) — `_dedup_discriminator()`
+picked the dedup-hash discriminator suffix (`""`, `f"rank:{n}"`, or
+`f"cand:{id}"`) purely from `election.voting_method` /
+`election.max_votes_per_position`. `submit_ballot_with_token`
+(`election_service.py:8109-8110` at the reported commit) already resolves a
+ballot item's own override first —
+`effective_method = ballot_item.get("voting_method") or election.voting_method`
+— because `BallotItemInput.voting_method` lets one item legitimately run
+under a different method than the election's own column.
+`cast_vote_with_token` (`election_service.py:7722-7726` at the reported
+commit) called `_dedup_discriminator(election, candidate_id, vote_rank)`
+with no item, so for an item overriding e.g. a `simple_majority` election
+to `approval`, the bulk route computed `f"cand:{candidate_id}"` and the
+single-vote route computed `""` for the identical logical vote.
+
+**Impact:** `vote_dedup_hash = SHA256(election_id:voter:position:discriminator)`
+is the database-level UNIQUE-constraint backstop the code's own comments
+cite as catching a double-vote race that bypasses the pre-insert SELECT
+(`"SECURITY: Database-level unique constraint on vote_dedup_hash prevents
+double-voting even if race condition bypasses application checks"`). Two
+tokens for the same voter racing on the same overridden item through the
+two different routes hashed to two different values, so the UNIQUE
+constraint had nothing to collide against and both inserts could commit —
+the exact race the backstop exists to catch.
+
+**Verified reachable:** confirmed by reading both routes' actual
+discriminator computation (not the paraphrase) — `submit_ballot_with_token`
+resolves the item override inline before dispatching to its
+`rankings`/`candidate_ids`/single-choice branches, while
+`_dedup_discriminator` had no `item` parameter to resolve one at all.
+`BallotItemInput.voting_method` (`schemas/election.py`) is a genuine,
+validated per-item override (`VALID_VOTING_METHODS`), not a legacy-only
+field.
+
+**Fix:** added `_effective_voting_method(election, item)` (mirroring
+`_dedup_position_key`'s precedent for the position component) and gave
+`_dedup_discriminator` an optional `item` parameter that resolves through
+it; `cast_vote_with_token` now passes its already-resolved `matching_item`.
+`max_votes_per_position` has no item-level override in the schema, so it is
+still read from the election unconditionally. `item=None` (the default)
+preserves prior behavior for `cast_vote` and `cast_proxy_vote`, neither of
+which resolves a matching ballot item today — those two authenticated (non-
+token) routes don't support per-item voting-method overrides in their
+duplicate-check business logic either, which is a separate, pre-existing
+gap outside what this finding reported; noted here rather than expanded
+into scope this round.
+
+**TOCTOU angle (raised alongside this finding, not a fresh instance):**
+Codex also flagged that `get_ballot_by_token` reads the election before
+`_lock_token_ballot_for_submission`'s `with_for_update()` lock, so the
+duplicate-check SELECT could run against a stale REPEATABLE READ snapshot.
+Traced this against `_lock_token_ballot_for_submission`'s own docstring
+(already applies the `with_for_update()` + `populate_existing=True` fix
+this exact staleness class needs, per the `quorum_service.py` precedent it
+cites) and against the duplicate-check SELECT itself
+(`election_service.py`, both routes): the SELECT is a plain (non-locking)
+read and can indeed still answer from a snapshot older than a just-released
+competing lock — but unlike the capacity-check class this repo's own
+`CLAUDE.md` documents (pitfall #27, where a stale count IS the entire
+enforcement), this pre-check is not the enforcement boundary. InnoDB checks
+a UNIQUE index against the latest committed state at INSERT time
+regardless of the inserting transaction's REPEATABLE READ snapshot — that
+is what makes `vote_dedup_hash`'s constraint a valid backstop at all. A
+stale pre-check can at worst let a doomed second INSERT reach the database
+before failing with `IntegrityError` (already handled — see both routes'
+`except IntegrityError` blocks), trading a friendlier "already voted"
+message for a generic one; it does not admit a second row. Not a fresh
+instance of the ELEC-17/24 staleness class and not fixed this round —
+flagged here so the reasoning is on record rather than re-litigated next
+pass.
+
+New regression tests in `tests/test_election_codex_round9.py`
+(`TestDedupDiscriminatorHonorsItemVotingMethodOverride`, 4 tests) —
+confirmed the module fails to import pre-fix (`_dedup_scoped_item_aliases`,
+added for ELEC-38 below, doesn't exist yet) via `git stash`; the two
+discriminator-matching tests independently reproduce the pre-fix mismatch
+by construction (`_dedup_discriminator` without an `item` argument returns
+`""` for this election/item pair, not `"cand:<id>"`).
+
+### ELEC-38 — P2 — The ELEC-34 duplicate-check alias broadening could match a different ballot item's vote when one item's title equals another's id — ✅ FIXED
+
+**What:** `ballot_item_candidate_positions()` matches a legacy item (no
+explicit `position` field) by its `title` **or** `id` — necessary so a real
+legacy candidate keyed under either convention is still found (see the
+function's own docstring; narrowing it outright would silently empty a
+legitimate item's candidate list, exactly the regression ELEC-34 avoided
+reintroducing). ELEC-34 (round 7) widened both routes' duplicate-vote
+pre-check to scan for this full alias set so a prior vote stored under
+either alias registers as "already voted on this item." But
+`BallotItemInput`'s schema (`schemas/election.py`) enforces only
+**unique ids** across an election's ballot items (`unique_item_ids`) —
+nothing stops a _different_ item's `title` (or explicit `position`
+override) from equaling this item's `id`, or vice versa. On that
+collision, the broadened alias set for one item also matches a
+completely different item's already-stored vote.
+
+**Impact:** item `{"id": "budget", "title": "Budget Approval"}` voted on
+first — stored `Vote.position = "budget"` (its own canonical id, per the
+bulk route's write convention). A second, distinct item `{"id":
+"officer", "title": "budget"}` in the SAME election (its title happens to
+equal the first item's id) is then processed: `ballot_item_candidate_positions()`
+for `officer` returns `{"officer", "budget"}`, and the duplicate-check
+SELECT (`Vote.position.in_(...)`, autoflushed against the just-created
+first vote within the same bulk submission) matches the first item's
+vote purely on the string `"budget"` — rejecting a legitimate, entirely
+separate vote on `officer` as though the voter had already voted on it.
+Reproduced exactly as described through both `submit_ballot_with_token`
+(single call covering both items) and `cast_vote_with_token` (two
+sequential calls, second one incorrectly blocked).
+
+**Verified reachable:** read the actual duplicate-check query/logic in
+both routes and confirmed it matches on alias-string overlap alone, with
+no join back to a stored item identity. Checked whether `Vote` (or
+`Candidate`) carries enough information to fully disambiguate two items
+that collide this way: **it does not** — `Vote` has no `ballot_item_id`
+column, only `position` (a string) and `candidate_id`; `Candidate.position`
+carries the exact same ambiguity a candidate's own row can't resolve,
+since which item a candidate was originally created "for" is not
+persisted anywhere once its position string is stored. Full disambiguation
+of "which item does this stored candidate/vote row belong to" when two
+items collide on an alias would need a schema change (e.g., an explicit
+`ballot_item_id` column on `Candidate` and/or `Vote`) — flagged as a
+**known limitation**, not fixed this round (see `docs/KNOWN_LIMITATIONS.md`).
+
+That said, the specific bug reported — the duplicate-vote _pre-check_
+producing a false-positive rejection — **is** fixable in application logic
+alone, because it only needs to decide "would this read as a re-vote,"
+where under-matching is safe: a genuine repeat vote on a legacy item is
+always dedup-hashed against that item's own canonical id (`_dedup_position_key`
+/ the bulk route's canonical `position` value), never its title, so
+`vote_dedup_hash`'s UNIQUE constraint still catches an actual duplicate on
+that exact item even after a colliding alias is dropped from this
+pre-check. Over-matching (this bug) has no such backstop — it fails a
+legitimate vote outright — so the fix only had to narrow, never widen.
+
+**Fix:** added `_dedup_scoped_item_aliases(item, all_items)`: returns
+`ballot_item_candidate_positions(item)` with a fallback (title) alias
+dropped whenever some OTHER item in the same election already claims that
+exact string as its own id or explicit `position` override — the item's
+own id is never dropped (ids are unique per election, so it can never
+collide). Used **only** at the two duplicate-check call sites
+(`submit_ballot_with_token`'s `existing_check` query, and
+`cast_vote_with_token`'s `position_aliases`) — the broader, unscoped
+`ballot_item_candidate_positions()` alias set is deliberately left
+untouched everywhere it decides candidate ownership/eligibility (e.g.
+`item_candidate_positions` in `submit_ballot_with_token`, still used for
+validating `choice`/`candidate_ids`/`rankings` belong to the right item),
+since narrowing candidate-ownership matching is exactly the regression the
+function's own docstring warns against.
+
+New regression tests in `tests/test_election_codex_round9.py`
+(`TestDuplicateCheckDoesNotCollideAcrossDistinctItems`, 3 tests, and
+`TestDedupScopedItemAliasesHelper`, 4 unit tests) — confirmed the module
+fails to import pre-fix via `git stash` (the helper doesn't exist yet); the
+end-to-end tests independently reproduce the exact reported rejection
+(`"You have already voted on: budget"` / `"already voted"`) against
+pre-fix logic by construction. A sanity test confirms a genuine repeat
+vote on the same item is still rejected after the narrowing.
+
+**Completion gate (pass 3, after round 9, ELEC-37/38):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 508 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round9.py -q`              | ✅ 11 passed, 0 failed                                                    |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9828 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round9.py` (new file, 11
+tests — 4 for ELEC-37, 3 end-to-end + 4 unit for ELEC-38).
+
+**Known limitation flagged this round:** two ballot items whose alias sets
+collide (one item's title equals another's id or explicit position) cannot
+be fully disambiguated for candidate/vote _ownership_ purposes without a
+schema change — see `docs/KNOWN_LIMITATIONS.md`. The duplicate-vote
+false-positive this collision caused is fixed (ELEC-38); a candidate
+mis-attribution in this same colliding scenario is not, and was not part
+of what was reported this round.
+
+### ELEC-39 — P1 — The bulk route's backward-compatible `choice` UUID form hardcoded a "" dedup discriminator regardless of an item's voting-method override — ✅ FIXED
+
+**What:** ELEC-37 (round 9) made `cast_vote_with_token` resolve the
+matched ballot item's `voting_method` override — via
+`_dedup_discriminator(..., item=matching_item)` — when picking its
+vote_dedup_hash discriminator, so an item overriding e.g. a
+`simple_majority` election to `"approval"` hashes `f"cand:{candidate_id}"`
+regardless of which route cast the vote. `submit_ballot_with_token`'s
+`rankings`/`candidate_ids` branches already resolve `effective_method`
+inline and pick a matching discriminator (`f"rank:{rank}"` /
+`f"cand:{cid}"`). But the same route's third, backward-compatible form —
+a plain candidate UUID in `choice` (also used for the `write_in`/
+`approve`/`deny` pseudo-choices) — was never gated to a voting method the
+way the other two branches are, and its call to `_create_token_vote(...)`
+still hardcoded the discriminator to `""` unconditionally.
+
+**Impact:** for an approval-overridden item, a token voting through
+`cast_vote_with_token` for candidate C hashes
+`f"cand:{C}"`; the same logical vote submitted through the bulk route's
+`choice` form (still accepted — nothing rejects a plain-UUID `choice` for
+an approval item) hashed `""`. Two tokens racing the same vote through the
+two different routes produced two different `vote_dedup_hash` values, so
+the UNIQUE constraint — the documented backstop for exactly this kind of
+cross-route race — never saw a collision and both inserts could succeed.
+
+**Fix:** the `choice`-form branch now computes its discriminator the same
+way the other two branches do — `self._dedup_discriminator(election,
+candidate_id, None, item=ballot_item)` — instead of a literal `""`. For
+every voting method other than `approval` (and outside the unrelated
+`max_votes_per_position > 1` case `_dedup_discriminator` also already
+handles), this still resolves to `""`, so dedup hashes for rows written
+under the pre-existing, non-overridden common case are byte-identical to
+before this fix.
+
+New regression tests in `tests/test_election_codex_round10.py`
+(`TestBulkChoiceFormDiscriminatorHonorsItemVotingMethodOverride`, 2 unit
+tests on the discriminator value alone, and
+`TestBulkChoiceFormEndToEndDedupHash`, 1 end-to-end test that submits a
+real ballot through `submit_ballot_with_token`'s `choice` form and asserts
+the **persisted** `Vote.vote_dedup_hash` matches what `cast_vote_with_token`
+would compute for the identical logical vote — the unit-level assertions
+alone would still pass even if the fix were reverted, since
+`_dedup_discriminator` itself was already correct; only exercising the
+real bulk code path proves line 8334 actually calls it). Confirmed failing
+pre-fix via `git stash`.
+
+**Completion gate (pass 3, after round 10, ELEC-39):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 511 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round10.py -q`             | ✅ 3 passed, 0 failed                                                     |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9831 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round10.py` (new file, 3 tests).
+
+### ELEC-40 — P1 — `_dedup_scoped_item_aliases`'s collision-avoidance can miss a vote genuinely historical to `cast_vote_with_token`'s own title-based write convention — 🚩 FLAGGED (not code-fixed this round)
+
+**What:** Codex's ELEC-38 report (round 9) and this codebase's own reply on
+it both reasoned that dropping a colliding fallback alias from the
+duplicate-vote *pre-check* is safe because "a genuine repeat vote is always
+dedup-hashed against the item's own canonical id... so the UNIQUE
+constraint still catches an actual duplicate on that exact item even after
+a colliding alias is excluded from the pre-check." That reasoning has an
+unstated assumption: it only holds for votes whose `vote_dedup_hash` was
+itself computed under the **current**, id-based convention
+(`_dedup_position_key`, ELEC-34/round 7). It does not hold for a vote row
+that predates that convention.
+
+`cast_vote_with_token` has never changed what it writes into the `Vote.position`
+**column** for a legacy item — that has always been, and still is,
+`effective_position` (`candidate.position`, the item's **title** for a
+legacy candidate; see `_dedup_position_key`'s own docstring: "This governs
+only the dedup hash, never the stored `Vote.position` value itself").
+ELEC-34 only changed what feeds the **hash**. So: a vote cast through
+`cast_vote_with_token` for a legacy item, at any time — including right
+now, not only "historically" in a pre-migration sense, though the sharpest
+case is a genuinely pre-ELEC-34 production row whose `vote_dedup_hash` was
+computed with the *old* (title-based) formula — is stored with
+`Vote.position == <title>`. If that title collides with a sibling item's
+canonical key, `_dedup_scoped_item_aliases()` drops it from the pre-check's
+alias set, and:
+
+- The **pre-check** no longer finds that row (by construction — that's the
+  point of the narrowing), so it will not reject a second vote on the same
+  item with the friendly "you have already voted" message.
+- For a genuinely pre-ELEC-34 row specifically, the **UNIQUE constraint**
+  does not save it either: its `vote_dedup_hash` was computed against the
+  title, not the item's id, so a new vote's id-based hash cannot collide
+  with it. (A row written by `cast_vote_with_token` *after* ELEC-34 does
+  still hash against the item's own id like everything else, so the UNIQUE
+  constraint remains the backstop for that case — only genuinely
+  pre-ELEC-34 rows are exposed to an actual bypassed double vote; more
+  recent title-keyed rows lose only the friendly pre-check message, not
+  the UNIQUE-constraint backstop.)
+
+**Why not code-fixed this round:** the two candidate fixes both have real
+costs and neither is obviously correct without a product decision:
+
+1. Revert `_dedup_scoped_item_aliases()`'s narrowing (go back to the full,
+   unscoped alias set for the pre-check) — closes this gap for historical
+   title-keyed rows, but reopens ELEC-38's false-positive (a legitimate
+   vote on a *different* item rejected as a duplicate merely because its
+   alias string collides). Given the schema cannot disambiguate the two
+   items apart from the string itself (see ELEC-38 / `KNOWN_LIMITATIONS.md`),
+   there is no way to keep both fixed with a pre-check alone.
+2. Backfill-migrate every existing `Vote.vote_dedup_hash` to the current
+   id-based formula for legacy items — closes the gap at the source, but
+   is exactly the kind of data migration this rotation's own rules (see
+   `CLAUDE.md`) say needs an owner decision, not a same-round guess: it
+   touches every historical vote row and needs a decision on scope
+   (all elections, or only ones with a detected collision), rollback
+   plan, and whether re-hashing an already-cast, cryptographically-signed
+   vote's dedup component is acceptable for a closed election's audit
+   trail.
+
+**Severity in practice:** requires the coincidence of (a) an admin having
+configured two ballot items whose alias sets collide in the same election
+— already established as rare and unencouraged by the ballot-authoring UI
+(ELEC-38) — **and** (b) that same election already having a vote cast
+through `cast_vote_with_token` for the colliding item before ELEC-34
+landed, **and** (c) a voter holding a second, unused token for that
+election. Flagged rather than guessed at; mirrored to
+`docs/KNOWN_LIMITATIONS.md`, correcting that entry's prior overstated "the
+UNIQUE constraint still catches an actual duplicate" claim to the
+narrower, accurate one above.
 
 ---
 
