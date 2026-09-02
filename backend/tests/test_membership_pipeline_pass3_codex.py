@@ -360,6 +360,12 @@ class TestElectionPackagePIIFields:
             org_id,
             {
                 "name": "Vote",
+                # step_type matters as of MP-08 pass 4: create_election_package
+                # now resolves package_fields from the pipeline's actual
+                # election_vote step rather than trusting whatever step_id the
+                # caller names, so this fixture has to be one for the honored
+                # config to be found at all.
+                "step_type": "election_vote",
                 "config": {
                     "package_fields": {
                         "include_email": True,
