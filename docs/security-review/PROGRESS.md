@@ -16,9 +16,48 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[#2175](https://github.com/thegspiro/the-logbook/pull/2175) (Feature 07,
+Users & organizations, pass 3) — 1 fixed (USR-7), 1 flagged (USR-8). See the
+Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 07 (Users & organizations, pass 3) — 1 fixed, 1 flagged — PR #2175
+
+Full-domain diff review since pass 2's merge (PR #1949, commit `6823bece`).
+Enumerated all 62 routes across `users.py`/`organizations.py`/
+`member_status.py`/`member_leaves.py`, traced every by-id fetch for
+`organization_id` scoping and the one client-supplied FK on a create path
+for in-org validation (CLAUDE.md Pitfall #14/XC-1/XC-3) — no gap found,
+everything already correctly scoped.
+
+- **USR-7 (LOW, fixed):** `UserListResponse` declares
+  `platoon`/`member_class`/`member_status`/`compliance_exempt`, but
+  `UserService.get_users_for_organization` never populated any of the four
+  — `GET /users` silently returned the schema default for all four
+  regardless of the real column value. `PlatoonRosterPanel.tsx` reads
+  `platoon` straight from this endpoint, so every member showed as
+  unassigned. Fixed for `platoon` (the field with a real, broken consumer);
+  the other three left unset — see USR-8. Guarded by
+  `tests/test_user_list_platoon.py`, confirmed to fail pre-fix via
+  `git stash`.
+- **USR-8 (MED, flagged):** `GET /users` sends the full admin roster record
+  (username, hire date, membership number, rank, station) to every
+  `members.view` holder — every default position. A 2026-09-01/02 frontend
+  change now presents a visibly reduced "Member Directory" for
+  non-managers, implying an access boundary that doesn't exist
+  server-side: the hidden fields are still in the JSON response. Not fixed
+  — 25+ frontend files depend on the current unfiltered response for
+  legitimate purposes, so trimming it is a response-shape product
+  decision, not a drop-in. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+Completion gate clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged); scoped suite
+323 passed/1 skipped (pre-existing)/0 failed; full backend suite 9833
+passed/21 skipped (pre-existing/environmental)/0 failed; `tsc --noEmit` 0
+errors; `eslint .` 0 errors (no frontend file touched). See
+`USR-07-users-organizations.md`'s Pass 3 section for the full write-up.
+Rotation row 07 → ⏳ (awaiting PR merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) ✅ merged — PR #2173
 
@@ -6637,7 +6676,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | 🔄     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
