@@ -626,7 +626,7 @@ describe('Dashboard', () => {
       // non-empty branch -- which used to hard-code "notifications" even when
       // only the message request had failed.
       mockGetMyNotifications.mockResolvedValue({
-        logs: [{ id: 'n1', title: 'Drill reminder', is_read: false, created_at: '2026-09-01T12:00:00Z' }],
+        logs: [{ id: 'n1', subject: 'Drill reminder', message: 'Tuesday', sent_at: '2026-09-01T12:00:00Z' }],
         total: 1,
       });
       mockGetInbox.mockRejectedValue(new Error('offline'));
@@ -825,6 +825,29 @@ describe('Dashboard', () => {
       const callsAfterFirst = mockGetOpenShifts.mock.calls.length;
       await user.click(retry);
       expect(mockGetOpenShifts.mock.calls.length).toBe(callsAfterFirst);
+    });
+
+    it('keeps notification rows visible when both message calls are retried', async () => {
+      // Both message subrequests failed, notifications did not. Retrying both
+      // must not read as an initial load: the Updates card's loading branch
+      // covers the notification rows too, so it would skeleton over content
+      // that is fine -- indefinitely if either retry hangs.
+      mockGetInbox.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+      mockGetUnreadCount.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+      mockGetMyNotifications.mockResolvedValue({
+        logs: [{ id: 'n1', subject: 'Drill reminder', message: 'Tuesday', sent_at: '2026-09-01T12:00:00Z' }],
+        total: 1,
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      expect(await within(updates).findByText('Drill reminder')).toBeInTheDocument();
+
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+
+      expect(within(updates).getByText('Drill reminder')).toBeInTheDocument();
     });
 
     it('re-enables the Retry control once its request settles', async () => {

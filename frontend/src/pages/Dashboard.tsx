@@ -606,7 +606,12 @@ const Dashboard: React.FC = () => {
 
   // `only` retries a single subrequest. A retry also skips the loading flag,
   // for the reason given on loadMyShifts.
-  const loadDeptMessages = async (only?: 'inbox' | 'unread') => {
+  const loadDeptMessages = async (only?: 'inbox' | 'unread' | 'both') => {
+    // 'both' is a retry of both subrequests, distinct from undefined, which is
+    // the initial load. Without that distinction retrying both raises
+    // loadingMessages, and the Updates card's loading branch covers the
+    // notification rows too -- so a card whose notifications loaded fine goes
+    // to skeletons, indefinitely if either retry hangs.
     const isRetry = only !== undefined;
     if (!isRetry) setLoadingMessages(true);
     const wantInbox = only !== 'unread';
@@ -635,7 +640,7 @@ const Dashboard: React.FC = () => {
 
   // The retry the Updates card offers: whichever half actually failed.
   const retryDeptMessages = () => {
-    if (inboxError && unreadCountError) return loadDeptMessages();
+    if (inboxError && unreadCountError) return loadDeptMessages('both');
     if (inboxError) return loadDeptMessages('inbox');
     if (unreadCountError) return loadDeptMessages('unread');
     return Promise.resolve();
