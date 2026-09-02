@@ -557,6 +557,86 @@ describe('Dashboard', () => {
     });
   });
 
+  describe('retry preserves what is already known', () => {
+    it('keeps the open-shift failure showing while the retry is still in flight', async () => {
+      // Clearing the error before the replacement arrives puts "0 open" back on
+      // screen -- a confident wrong number -- for as long as the retry takes.
+      mockGetOpenShifts.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Open shifts unavailable')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Retry schedule' }));
+
+      // The retry never settles, so the failure state must still stand.
+      expect(screen.getByText('Open shifts unavailable')).toBeInTheDocument();
+    });
+
+    it('keeps loaded messages visible while a notification retry is in flight', async () => {
+      mockGetInbox.mockResolvedValue([
+        { id: 'm1', title: 'Station meeting', body: 'Tuesday', is_read: false, requires_acknowledgment: false },
+      ]);
+      mockGetMyNotifications
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      expect(await within(updates).findByText('Station meeting')).toBeInTheDocument();
+
+      await user.click(within(updates).getByRole('button', { name: 'Retry notifications' }));
+
+      expect(within(updates).getByText('Station meeting')).toBeInTheDocument();
+    });
+
+    it('keeps training progress that already loaded when a retry rejects it', async () => {
+      mockGetTrainingEnrollments.mockResolvedValue([
+        { id: 'e1', program: { name: 'Program 1' }, progress_percentage: 40, status: 'active' },
+        { id: 'e2', program: { name: 'Program 2' }, progress_percentage: 10, status: 'active' },
+      ]);
+      // e1 loads, e2 fails. On the retry e1 now fails too -- its known answer
+      // must survive rather than be replaced by the retry's results alone.
+      mockGetEnrollmentProgress.mockImplementation((id: string) => {
+        const call = mockGetEnrollmentProgress.mock.calls.filter((c) => c[0] === id).length;
+        if (id === 'e1' && call === 1) {
+          return Promise.resolve({
+            requirement_progress: [{ status: 'in_progress', requirement: { name: 'Pump Ops' } }],
+          });
+        }
+        return Promise.reject(new Error('offline'));
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText(/Next requirement: Pump Ops/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Retry training' }));
+
+      await waitFor(() => {
+        expect(mockGetEnrollmentProgress.mock.calls.length).toBeGreaterThan(2);
+      });
+      expect(screen.getByText(/Next requirement: Pump Ops/)).toBeInTheDocument();
+    });
+
+    it('names the partial Updates retry for the source that actually failed', async () => {
+      // The feed still has a notification row, so the card takes its
+      // non-empty branch -- which used to hard-code "notifications" even when
+      // only the message request had failed.
+      mockGetMyNotifications.mockResolvedValue({
+        logs: [{ id: 'n1', title: 'Drill reminder', is_read: false, created_at: '2026-09-01T12:00:00Z' }],
+        total: 1,
+      });
+      mockGetInbox.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: 'Retry updates' })).toBeInTheDocument();
+    });
+  });
+
   it('names each Retry control by the source it retries', async () => {
     // Several of these render together when the dashboard is half-broken, and
     // a screen reader reads only the button's own name.

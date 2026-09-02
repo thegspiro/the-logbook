@@ -483,7 +483,7 @@ const Dashboard: React.FC = () => {
 
   const loadMyEquipment = async (isRetry = false) => {
     if (!isRetry) setLoadingMyEquipment(true);
-    setEquipmentError(false);
+    if (!isRetry) setEquipmentError(false);
     if (!isModuleOn('inventory')) {
       setLoadingMyEquipment(false);
       return;
@@ -525,7 +525,7 @@ const Dashboard: React.FC = () => {
 
   const loadUpcomingEvents = async (isRetry = false) => {
     if (!isRetry) setLoadingUpcomingEvents(true);
-    setUpcomingEventsError(false);
+    if (!isRetry) setUpcomingEventsError(false);
     try {
       // Bounded to the window the list renders, and to a limit that can hold
       // it. The old shape asked for the 5 soonest events of any future date
@@ -557,9 +557,11 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadNotifications = async () => {
-    setLoadingNotifications(true);
-    setNotificationsError(false);
+  const loadNotifications = async (isRetry = false) => {
+    // The Updates card's loading branch covers messages too, so raising this
+    // on a retry replaces successfully loaded inbox rows with skeletons.
+    if (!isRetry) setLoadingNotifications(true);
+    if (!isRetry) setNotificationsError(false);
     if (!isModuleOn('notifications')) {
       setNotifications([]);
       setLoadingNotifications(false);
@@ -573,10 +575,11 @@ const Dashboard: React.FC = () => {
         limit: 10,
       });
       setNotifications(data.logs || []);
+      setNotificationsError(false);
     } catch {
       setNotificationsError(true);
     } finally {
-      setLoadingNotifications(false);
+      if (!isRetry) setLoadingNotifications(false);
     }
   };
 
@@ -663,7 +666,11 @@ const Dashboard: React.FC = () => {
   // hanging request then hides the preserved rows indefinitely.
   const loadMyShifts = async (isRetry = false) => {
     if (!isRetry) setLoadingMyShifts(true);
-    setMyShiftsError(false);
+    // Cleared up front only on first load. On a retry the error is what the
+    // section is currently rendering, and dropping it before the replacement
+    // arrives puts a confident wrong value on screen for as long as the retry
+    // takes -- forever, if it hangs. The success path clears it instead.
+    if (!isRetry) setMyShiftsError(false);
     if (!isModuleOn('scheduling')) {
       setMyShifts([]);
       setLoadingMyShifts(false);
@@ -679,6 +686,7 @@ const Dashboard: React.FC = () => {
         limit: SHIFT_FETCH_LIMIT,
       });
       setMyShifts(data.shifts || []);
+      setMyShiftsError(false);
     } catch {
       setMyShiftsError(true);
     } finally {
@@ -688,7 +696,7 @@ const Dashboard: React.FC = () => {
 
   const loadOpenShifts = async (isRetry = false) => {
     if (!isRetry) setLoadingOpenShifts(true);
-    setOpenShiftsError(false);
+    if (!isRetry) setOpenShiftsError(false);
     if (!isModuleOn('scheduling')) {
       setOpenShifts([]);
       setLoadingOpenShifts(false);
@@ -702,6 +710,7 @@ const Dashboard: React.FC = () => {
         end_date: addCalendarDays(today, TIMELINE_LOOKAHEAD_DAYS),
       });
       setOpenShifts(data);
+      setOpenShiftsError(false);
     } catch {
       setOpenShiftsError(true);
     } finally {
@@ -891,14 +900,21 @@ const Dashboard: React.FC = () => {
       // loaded fine — with a Retry that keeps querying the invisible one.
       const shown = data.slice(0, PROGRAMS_SHOWN);
       const results = await Promise.allSettled(shown.map((e) => trainingProgramService.getEnrollmentProgress(e.id)));
-      const details = new Map<string, MemberProgramProgress>();
-      results.forEach((result, i) => {
-        if (result.status === 'fulfilled') {
-          const item = shown[i];
-          if (item) details.set(item.id, result.value);
-        }
+      // Merged into what is already known, not swapped for it. A retry reissues
+      // every shown row, so replacing the map means one transient failure on a
+      // row that had loaded drops its next requirement and deadline -- and the
+      // row then claims "All requirements in progress", which is a statement,
+      // not a gap. A rejection here leaves the previous answer standing.
+      setProgressDetails((previous) => {
+        const details = new Map(previous);
+        results.forEach((result, i) => {
+          if (result.status === 'fulfilled') {
+            const item = shown[i];
+            if (item) details.set(item.id, result.value);
+          }
+        });
+        return details;
       });
-      setProgressDetails(details);
       setTrainingError(results.some((result) => result.status === 'rejected'));
     } catch {
       setTrainingError(true);
@@ -1703,7 +1719,7 @@ const Dashboard: React.FC = () => {
                       onRetry={() => {
                         void Promise.all([
                           ...(messagesError ? [retryDeptMessages()] : []),
-                          ...(notificationsError ? [loadNotifications()] : []),
+                          ...(notificationsError ? [loadNotifications(true)] : []),
                         ]);
                       }}
                     />
@@ -1715,11 +1731,14 @@ const Dashboard: React.FC = () => {
                     {(messagesError || notificationsError) && (
                       <SectionError
                         message="Some updates could not be verified."
-                        source="notifications"
+                        // The handler retries only what failed, so the name has
+                        // to follow it: hard-coding one source tells a screen
+                        // reader the button refreshes a healthy feed.
+                        source={messagesError ? 'updates' : 'notifications'}
                         onRetry={() => {
                           void Promise.all([
                             ...(messagesError ? [retryDeptMessages()] : []),
-                            ...(notificationsError ? [loadNotifications()] : []),
+                            ...(notificationsError ? [loadNotifications(true)] : []),
                           ]);
                         }}
                       />
