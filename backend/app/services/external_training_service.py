@@ -29,7 +29,7 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import User
-from app.utils.url_validator import validate_integration_url
+from app.utils.ssrf_transport import SSRFSafeAsyncTransport, join_endpoint
 
 
 class ExternalTrainingSyncService:
@@ -37,7 +37,12 @@ class ExternalTrainingSyncService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.http_client = httpx.AsyncClient(timeout=30.0)
+        self.http_client = httpx.AsyncClient(
+            timeout=30.0,
+            transport=SSRFSafeAsyncTransport(),
+            follow_redirects=False,
+            trust_env=False,
+        )
 
     async def close(self):
         """Close HTTP client connections"""
@@ -45,17 +50,9 @@ class ExternalTrainingSyncService:
 
     @staticmethod
     def _validate_provider_url(provider: ExternalTrainingProvider) -> None:
-        """SSRF guard: re-validate the provider base URL before any
-        server-side request. The URL is admin-supplied and also validated
-        at write time, but DNS can change between then and now (rebinding),
-        so every network entry point must call this first.
-
-        Raises ValueError if the URL is missing, non-HTTPS, or resolves to
-        a private/metadata address.
-        """
+        """Require a base URL; the transport validates each composed URL."""
         if not provider.api_base_url:
             raise ValueError("Provider API base URL is not configured")
-        validate_integration_url(provider.api_base_url)
 
     # ==========================================
     # Connection Testing
@@ -113,7 +110,7 @@ class ExternalTrainingSyncService:
         config = provider.config or {}
 
         # GET /sites is the simplest authenticated endpoint to verify the token
-        test_url = f"{provider.api_base_url.rstrip('/')}/sites"
+        test_url = join_endpoint(provider.api_base_url, "/sites")
 
         response = await self.http_client.get(test_url, headers=headers)
 
@@ -164,7 +161,7 @@ class ExternalTrainingSyncService:
             return False, "API base URL is required"
 
         headers = self._get_auth_headers(provider)
-        test_url = f"{provider.api_base_url.rstrip('/')}/api/v1/status"
+        test_url = join_endpoint(provider.api_base_url, "/api/v1/status")
 
         response = await self.http_client.get(test_url, headers=headers)
 
@@ -183,7 +180,7 @@ class ExternalTrainingSyncService:
             return False, "API base URL and API key are required"
 
         headers = self._get_auth_headers(provider)
-        test_url = f"{provider.api_base_url.rstrip('/')}/api/v1/account"
+        test_url = join_endpoint(provider.api_base_url, "/api/v1/account")
 
         response = await self.http_client.get(test_url, headers=headers)
 
@@ -205,7 +202,7 @@ class ExternalTrainingSyncService:
         test_endpoint = config.get("test_endpoint", "/health")
 
         headers = self._get_auth_headers(provider)
-        test_url = f"{provider.api_base_url.rstrip('/')}{test_endpoint}"
+        test_url = join_endpoint(provider.api_base_url, test_endpoint)
 
         response = await self.http_client.get(test_url, headers=headers)
 
@@ -467,7 +464,7 @@ class ExternalTrainingSyncService:
         self._validate_provider_url(provider)
         headers = self._get_auth_headers(provider)
         site_id = self._get_vector_site_id(provider)
-        url = f"{provider.api_base_url.rstrip('/')}/sites/{site_id}/categories"
+        url = join_endpoint(provider.api_base_url, f"/sites/{site_id}/categories")
 
         response = await self._vs_request(provider, "GET", url, headers=headers)
         response.raise_for_status()
@@ -582,7 +579,7 @@ class ExternalTrainingSyncService:
         elif not records_endpoint.startswith(f"/sites/{site_id}"):
             records_endpoint = f"/sites/{site_id}/{records_endpoint.lstrip('/')}"
 
-        url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
+        url = join_endpoint(provider.api_base_url, records_endpoint)
 
         # Vector Solutions uses startrow/count pagination (max 1000)
         page_size = min(int(config.get("page_size", 1000)), 1000)
@@ -759,7 +756,7 @@ class ExternalTrainingSyncService:
         config = provider.config or {}
 
         records_endpoint = config.get("records_endpoint", "/api/v1/training/records")
-        url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
+        url = join_endpoint(provider.api_base_url, records_endpoint)
 
         params = {
             "start": from_date.isoformat(),
@@ -808,7 +805,7 @@ class ExternalTrainingSyncService:
         config = provider.config or {}
 
         records_endpoint = config.get("records_endpoint", "/api/v1/training")
-        url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
+        url = join_endpoint(provider.api_base_url, records_endpoint)
 
         params = {
             "from": from_date.isoformat(),
@@ -857,7 +854,7 @@ class ExternalTrainingSyncService:
         config = provider.config or {}
 
         records_endpoint = config.get("records_endpoint", "/training/records")
-        url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
+        url = join_endpoint(provider.api_base_url, records_endpoint)
 
         # Get custom parameter names from config
         param_mapping = config.get("param_mapping", {})
