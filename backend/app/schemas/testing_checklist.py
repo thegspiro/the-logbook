@@ -132,7 +132,12 @@ class TestingCheckResponse(UTCResponseBase):
     note: Optional[str] = None
     params: Optional[dict[str, str]] = None
     checked_at: Optional[datetime] = None
-    user_id: str
+    # Nullable because testing_checklist_entries.user_id is an ON DELETE SET
+    # NULL FK and the model keeps the row deliberately: an archived run is the
+    # record of what was found then, so hard-deleting a member must not rewrite
+    # it. Declaring this required meant one such row raised a Pydantic
+    # ValidationError and 500'd the shared run for the whole department.
+    user_id: Optional[str] = None
     # Who made the mark, and from which seat. Both are resolved at read time
     # from the users table; `tested_as` is the snapshot taken at write time,
     # because a mark made before a promotion no longer describes the account.

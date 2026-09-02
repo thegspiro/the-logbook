@@ -85,6 +85,17 @@ class TestWriteSideRejectsForeignPaths:
         assert is_path_in_org(ATTACKER_FILE, None) is False
         assert is_path_in_org(None, ATTACKER_ORG) is False
 
+    @pytest.mark.parametrize("bad", [1, 1.5, True, ["/tmp/x"], {"p": "/tmp/x"}])
+    def test_a_non_string_file_path_is_a_400_not_a_500(self, bad):
+        """`attachments` is typed List[Dict[str, Any]] — it has to be, because
+        the upload handler writes file_size as an int and description as None —
+        so a create request can legitimately arrive carrying a non-string
+        file_path. os.path.realpath then raised TypeError, which the event
+        endpoints do not catch: a malformed request 500'd."""
+        assert is_path_in_org(bad, ATTACKER_ORG) is False
+        with pytest.raises(ValueError, match="uploaded to this organization"):
+            validate_attachments_for_org([{"file_path": bad}], ATTACKER_ORG)
+
 
 class TestReadSideRefusesAnAlreadyStoredForeignPath:
     """Defence in depth: the download must not serve a row that predates — or

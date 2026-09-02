@@ -37,7 +37,11 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.services.label_printer_service import LANGUAGE_ZPL, LabelPrinterService
-from app.services.label_service import LabelService, required_permissions_for_module
+from app.services.label_service import (
+    UNSET,
+    LabelService,
+    required_permissions_for_module,
+)
 from app.utils.label_renderer import SYMBOLOGY_CODE128
 from app.utils.printer_transport import PrinterUnreachableError
 
@@ -155,7 +159,12 @@ async def set_label_preset(
             organization_id=current_user.organization_id,
             module=module,
             preset=data.preset,
-            printer_id=data.printer_id,
+            # Absent means "leave the remembered destination alone"; an
+            # explicit null clears it. Passing data.printer_id unconditionally
+            # made a save that never mentioned a printer erase one.
+            printer_id=(
+                data.printer_id if "printer_id" in data.model_fields_set else UNSET
+            ),
             custom_width=data.custom_width,
             custom_height=data.custom_height,
             symbology=data.symbology,

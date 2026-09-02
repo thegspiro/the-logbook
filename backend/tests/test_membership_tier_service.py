@@ -12,6 +12,8 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.services.membership_tier_service import MembershipTierService
 
 TIERS = [
@@ -178,3 +180,116 @@ class TestMeetingAttendancePct:
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         # eligible = {m2}; m1 (during leave) does not count -> 1/1.
         assert pct == 100.0
+
+
+class TestAdvanceAllStaysOnTheLadder:
+    """The nightly job must not promote members who are not on the ladder.
+
+    ``membership_type`` also carries the four legacy values that are *not*
+    tiers in the shipped defaults — administrative, honorary, retired,
+    prospective. Treating an unrecognised value as sort_order 0 put them on
+    rung zero and climbed: an administrative member woke up ``active``, and
+    because setting ``membership_type`` reconciles the class, ``operational``
+    with it — able to self-sign up for shifts, matching operational ballots,
+    and past the rank-clearing guard, which asks about the *new* type.
+    """
+
+    @staticmethod
+    def _org():
+        return SimpleNamespace(
+            id="org-1",
+            settings={"membership_tiers": {"auto_advance": True, "tiers": TIERS}},
+        )
+
+    @staticmethod
+    def _member(membership_type, years=12, rank="captain"):
+        return SimpleNamespace(
+            id=f"u-{membership_type}",
+            full_name=f"Pat {membership_type.title()}",
+            membership_type=membership_type,
+            member_class=None,
+            membership_type_changed_at=None,
+            rank=rank,
+            deleted_at=None,
+            hire_date=date.today().replace(year=date.today().year - years),
+        )
+
+    def _db(self, org, members):
+        """Answers the org read, the batch read, then one locked read each."""
+        queue = [
+            MagicMock(scalar_one_or_none=MagicMock(return_value=org)),
+            MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=members))
+                )
+            ),
+        ]
+        by_id = {m.id: m for m in members}
+
+        async def _execute(statement, *_args, **_kwargs):
+            if queue:
+                return queue.pop(0)
+            # The locked re-read. Resolved by the id in the statement rather
+            # than by position: a member skipped before the lock consumes no
+            # read, so a positional fake hands the next candidate the wrong
+            # row and the test passes or fails for the wrong reason.
+            wanted = next(iter(statement.compile().params.values()), None)
+            return MagicMock(
+                scalar_one_or_none=MagicMock(return_value=by_id.get(wanted))
+            )
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=_execute)
+        db.commit = AsyncMock()
+        return db
+
+    async def _advance(self, members, monkeypatch):
+        import app.services.membership_tier_service as module
+
+        monkeypatch.setattr(module, "log_audit_event", AsyncMock())
+        db = self._db(self._org(), members)
+        return await MembershipTierService(db).advance_all("org-1", "admin-1")
+
+    @pytest.mark.parametrize(
+        "membership_type", ["administrative", "honorary", "retired", "prospective"]
+    )
+    async def test_a_type_that_is_not_a_tier_is_left_alone(
+        self, membership_type, monkeypatch
+    ):
+        member = self._member(membership_type)
+
+        result = await self._advance([member], monkeypatch)
+
+        assert member.membership_type == membership_type
+        assert member.rank == "captain"
+        assert result["advanced"] == 0
+        assert result["off_ladder"] == 1
+
+    async def test_a_member_on_the_ladder_still_advances(self, monkeypatch):
+        member = self._member("active", years=12)
+
+        result = await self._advance([member], monkeypatch)
+
+        assert member.membership_type == "senior"
+        assert result["advanced"] == 1
+        assert result["off_ladder"] == 0
+
+    async def test_the_skip_does_not_stop_the_scan(self, monkeypatch):
+        """One off-ladder member must not shorten the rest of the roster."""
+        administrative = self._member("administrative")
+        operational = self._member("active", years=12)
+
+        result = await self._advance([administrative, operational], monkeypatch)
+
+        assert administrative.membership_type == "administrative"
+        assert operational.membership_type == "senior"
+        assert (result["advanced"], result["off_ladder"]) == (1, 1)
+
+    async def test_a_member_already_at_their_tier_is_not_counted_off_ladder(
+        self, monkeypatch
+    ):
+        member = self._member("senior", years=12)
+
+        result = await self._advance([member], monkeypatch)
+
+        assert (result["advanced"], result["off_ladder"]) == (0, 0)

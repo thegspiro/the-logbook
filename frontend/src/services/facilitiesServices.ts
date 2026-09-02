@@ -506,8 +506,10 @@ export type UpdatePayload<T> = { [K in keyof T]?: T[K] | null | undefined };
 
 export const facilitiesService = {
   // Facility Types
-  async getTypes(): Promise<FacilityType[]> {
-    const response = await api.get<FacilityType[]>('/facilities/types');
+  /** Omit `is_active` for both states — which is what the settings screen,
+   *  the only place that can reactivate one, needs. */
+  async getTypes(params?: { is_active?: boolean }): Promise<FacilityType[]> {
+    const response = await api.get<FacilityType[]>('/facilities/types', { params });
     return asArray(response.data);
   },
   async createType(data: FacilityTypeCreate): Promise<FacilityType> {
@@ -523,8 +525,8 @@ export const facilitiesService = {
   },
 
   // Facility Statuses
-  async getStatuses(): Promise<FacilityStatus[]> {
-    const response = await api.get<FacilityStatus[]>('/facilities/statuses');
+  async getStatuses(params?: { is_active?: boolean }): Promise<FacilityStatus[]> {
+    const response = await api.get<FacilityStatus[]>('/facilities/statuses', { params });
     return asArray(response.data);
   },
   async createStatus(data: FacilityStatusCreate): Promise<FacilityStatus> {
@@ -666,7 +668,14 @@ export const facilitiesService = {
   },
 
   // Maintenance Types
-  async getMaintenanceTypes(params?: { skip?: number; limit?: number }): Promise<MaintenanceType[]> {
+  async getMaintenanceTypes(params?: {
+    skip?: number;
+    limit?: number;
+    /** Both states. The endpoint filters to active by default, which hid a
+     *  deactivated type from the settings screen — the only place that can
+     *  edit or reactivate it. */
+    include_inactive?: boolean;
+  }): Promise<MaintenanceType[]> {
     const response = await api.get<MaintenanceType[]>('/facilities/maintenance-types', { params });
     return asArray(response.data);
   },
@@ -677,7 +686,6 @@ export const facilitiesService = {
     default_interval_value?: number;
     default_interval_unit?: string;
     is_active?: boolean;
-    sort_order?: number;
   }): Promise<MaintenanceType> {
     const response = await api.post<MaintenanceType>('/facilities/maintenance-types', data);
     return response.data;

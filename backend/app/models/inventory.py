@@ -852,6 +852,14 @@ class ItemIssuance(Base):
     # Cost snapshot — records replacement_cost at the time of issuance
     unit_cost_at_issuance = Column(Numeric(10, 2))
 
+    # {lot_id: units still owed back to that lot}, for an issuance drawn from
+    # the lot ledger. A lot-stocked item's `quantity` column is consulted by
+    # nothing, so crediting a return there loses the units; the return has to
+    # go back to the lots it came out of. NULL for an issuance taken from the
+    # column ledger, and for every row written before this column existed —
+    # both of which still return to `quantity`, which is right for them.
+    lot_allocations = Column(JSON, nullable=True)
+
     # Cost recovery for lost/damaged items
     charge_status = Column(
         Enum(ChargeStatus, values_callable=_enum_values),

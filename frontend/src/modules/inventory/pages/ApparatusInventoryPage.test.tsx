@@ -82,6 +82,18 @@ const inventory = (items: ReturnType<typeof makeItem>[]) => ({
 describe('ApparatusInventoryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // `renderWithRouter` wraps a real BrowserRouter over jsdom's one shared
+    // history, and the page writes its choice back as `?apparatus=<id>`. Every
+    // test that picks an apparatus therefore leaves that in the URL, and the
+    // next render starts with it already selected — which is a page that
+    // loads inventory immediately. Reset the address, as the sibling suites
+    // that hit this do.
+    window.history.pushState({}, '', '/scheduling/apparatus-inventory');
+    // clearAllMocks clears calls, not return values: the member-view test
+    // installs `false` here and it would otherwise stand for the rest of the
+    // file. Re-establish the manager default every test so a single test's
+    // override cannot outlive it (CLAUDE.md pitfall #28).
+    mockCheckPermission.mockReturnValue(true);
     mockGetApparatusList.mockResolvedValue({
       items: [{ id: 'app-1', unitNumber: 'E-1', name: 'Engine 1' }],
       total: 1,

@@ -261,11 +261,18 @@ export const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
   },
 ];
 
-/** Metadata stored in an event template's `positions` field. */
+/**
+ * Metadata stored in an event template's `positions` field.
+ *
+ * `flat_positions` holds seat *objects* for anything saved by the current
+ * form and bare names for anything older, the same two shapes a flat seat
+ * list can take. Typing it as `string[]` is what let the backend reader bind
+ * an entry in as a seat name and store a seat inside a seat.
+ */
 export interface EventTemplateMeta {
   event_type?: string;
   resources?: ResourceUnit[];
-  flat_positions?: string[];
+  flat_positions?: Array<string | PositionEntry>;
 }
 
 /**

@@ -188,7 +188,10 @@ export const TestingChecklistPage: React.FC = () => {
   useKeyboardShortcuts([
     { key: 'j', handler: () => moveFocus(1), description: 'Next page' },
     { key: 'k', handler: () => moveFocus(-1), description: 'Previous page' },
-    { key: 'n', handler: jumpToNextUntested, description: 'Jump to the next untested page' },
+    // 'u', not 'n': `useNavigationShortcuts` binds 'n' to /notifications
+    // app-wide, and both hooks attach their own document listener, so the key
+    // did both — and navigating away is what the tester saw.
+    { key: 'u', handler: jumpToNextUntested, description: 'Jump to the next untested page' },
     { key: 'p', handler: () => markFocused('pass'), description: 'Mark the focused page as passing' },
     { key: 'f', handler: () => markFocused('fail'), description: 'Mark the focused page as failing' },
     { key: 'b', handler: () => markFocused('blocked'), description: 'Mark the focused page as blocked' },
@@ -235,12 +238,12 @@ export const TestingChecklistPage: React.FC = () => {
   });
 
   const handleExportCsv = () => {
-    downloadCsv(buildRunCsv(exportContext()), runFileName(run, 'run', 'csv'));
+    downloadCsv(buildRunCsv(exportContext()), runFileName(run, 'run', 'csv', tz));
     toast.success('Run exported as CSV');
   };
 
   const handleExportMatrix = () => {
-    downloadCsv(buildPermissionMatrixCsv(exportContext()), runFileName(run, 'permissions', 'csv'));
+    downloadCsv(buildPermissionMatrixCsv(exportContext()), runFileName(run, 'permissions', 'csv', tz));
     toast.success('Permission matrix exported');
   };
 
@@ -653,7 +656,7 @@ export const TestingChecklistPage: React.FC = () => {
 
       <p className="text-theme-text-muted -mt-2 text-xs">
         Keyboard: <kbd>j</kbd>/<kbd>k</kbd> move between boxes · <kbd>p</kbd>/<kbd>f</kbd>/<kbd>b</kbd> mark the focused
-        one pass, fail or blocked · <kbd>n</kbd> jump to the next page with no mark.
+        one pass, fail or blocked · <kbd>u</kbd> jump to the next page with no mark.
       </p>
 
       {visibleGroups.length === 0 && (

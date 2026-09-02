@@ -986,8 +986,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       .then((data) => {
         if (cancelled) return;
         setLastCheckData(data);
-        // Only pre-populate if the user hasn't started filling in yet (no draft)
-        if (Object.keys(results).length > 0) return;
         const seed: Record<string, ItemResult> = {};
         for (const comp of compartments) {
           for (const item of comp.items) {
@@ -1008,7 +1006,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           }
         }
         if (Object.keys(seed).length > 0) {
-          setResults(seed);
+          // The "don't overwrite what the crew already entered" decision has to
+          // be made against CURRENT state, not the `results` in this closure.
+          // This effect deliberately omits `results` from its deps, so that
+          // binding is the mount-render `{}` forever — and the IndexedDB draft
+          // restore lands in the window between this request going out and its
+          // response arriving. Reading the stale binding therefore replaced a
+          // just-restored truck check with the carried-count seed and, via the
+          // autosave effect, wrote the wiped state back over the draft.
+          setResults((current) => (Object.keys(current).length > 0 ? current : seed));
         }
       })
       .catch(() => {

@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from app.models.event import (
+    AttendeeVisibility,
     CheckInWindowType,
     EventType,
     RecurrencePattern,
@@ -37,6 +38,7 @@ _EVENT_TYPES = {e.value for e in EventType}
 _CHECKIN_WINDOW_TYPES = {e.value for e in CheckInWindowType}
 _RECURRENCE_PATTERNS = {e.value for e in RecurrencePattern}
 _RSVP_STATUSES = {e.value for e in RSVPStatus}
+_ATTENDEE_VISIBILITIES = {e.value for e in AttendeeVisibility}
 
 
 def _enum_check(valid: set, field: str):
@@ -115,6 +117,9 @@ class EventDefaultsUpdate(BaseModel):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     event_type: Optional[str] = Field(None, max_length=100)
     check_in_window_type: Optional[str] = Field(None, max_length=50)
@@ -124,6 +129,10 @@ class EventDefaultsUpdate(BaseModel):
     requires_rsvp: Optional[bool] = None
     allowed_rsvp_statuses: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
+    # The org-wide fallback for events that set no override of their own. Unlike
+    # the per-event column, this one has no "inherit" state — it is the bottom
+    # of the chain, so None here means "leave the setting unchanged".
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     is_mandatory: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
@@ -213,6 +222,14 @@ class EventBase(BaseModel):
         description="Membership tier IDs required to attend; null means all member types",
     )
     allow_guests: bool = Field(default=False)
+    attendee_visibility: Optional[str] = Field(
+        default=None,
+        max_length=20,
+        description=(
+            "Who may see the attendee list: 'members' or 'managers'. "
+            "Null inherits the organization's events default."
+        ),
+    )
     send_reminders: bool = Field(default=True)
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(
@@ -260,7 +277,13 @@ class EventBase(BaseModel):
         description="Organization-defined custom event category",
     )
     custom_fields: Optional[Dict[str, Any]] = None
-    attachments: Optional[List[Dict[str, str]]] = None
+    # Dict[str, Any], not Dict[str, str]: the upload handler writes `file_size`
+    # as an int and `description` as None, so the narrower type made every
+    # EventResponse for an event with an attachment a 500 — the upload itself
+    # returns 201 (its own response is Dict[str, Any]), and from then on the
+    # detail page, the edit form, publish, duplicate and cancel all fail, with
+    # deleting the attachment the only way back.
+    attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: bool = False
 
 
@@ -272,6 +295,9 @@ class EventCreate(EventBase):
     )
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
+    )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
     )
 
     @model_validator(mode="before")
@@ -303,6 +329,9 @@ class EventUpdate(BaseModel):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -325,6 +354,10 @@ class EventUpdate(BaseModel):
     is_mandatory: Optional[bool] = None
     mandatory_membership_types: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
+    # An explicit null here means "go back to inheriting the org default" — a
+    # real value the organizer can choose, not an omission. The frontend must
+    # send it rather than dropping the key, and apply_updates writes it.
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
@@ -340,7 +373,10 @@ class EventUpdate(BaseModel):
         description="Organization-defined custom event category",
     )
     custom_fields: Optional[Dict[str, Any]] = None
-    attachments: Optional[List[Dict[str, str]]] = None
+    # See EventBase.attachments: an uploaded attachment carries an int
+    # file_size and a null description, so a PATCH that echoes back what a
+    # GET returned would 422 on the narrower type.
+    attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: Optional[bool] = None
 
     @model_validator(mode="after")
@@ -358,6 +394,37 @@ class EventCancel(BaseModel):
     send_notifications: bool = Field(
         default=False, description="Send cancellation notifications to RSVPs"
     )
+
+
+class UserRSVPSummary(UTCResponseBase):
+    """The calling member's own RSVP, echoed back on the event detail response.
+
+    Exists so the RSVP modal can open prefilled. Before this, "Update RSVP"
+    reset to defaults every time, which quietly discarded whatever the member
+    had typed — and, once guests began consuming capacity, silently released
+    the seats their guests were holding.
+
+    Carries the caller's own record, but deliberately NOT their
+    ``dietary_restrictions`` or ``accessibility_needs``. Those are
+    accommodation data, and ``GET /events/{id}`` is a cacheable response — the
+    frontend keeps GETs in an in-memory stale-while-revalidate cache, and
+    nothing excludes ordinary event detail from it. Putting them here turned
+    the app's most-visited endpoint into a PHI-bearing one.
+
+    Their absence costs only that those two boxes start empty when the modal
+    reopens, which is what happened before prefill existed. ``guest_count`` is
+    the field prefill was actually for: without it a member editing a note
+    silently released the seats their guests were holding.
+
+    If these are ever needed on screen, they belong behind an endpoint listed
+    in ``UNCACHEABLE_PREFIXES`` — not here.
+    """
+
+    status: str
+    guest_count: int = 0
+    notes: Optional[str] = None
+
+    model_config = _response_config
 
 
 class EventResponse(EventBase, UTCResponseBase):
@@ -403,6 +470,24 @@ class EventResponse(EventBase, UTCResponseBase):
     user_rsvp_status: Optional[str] = None  # Current user's RSVP status
     location_name: Optional[str] = None  # Name of the location if location_id is set
 
+    # Waitlist standing for the calling member. Both are per-request rather
+    # than per-event, so they are supplied by the endpoint, not read off the
+    # model. Position is 1-based over responded_at ascending — the same order
+    # promote_from_waitlist actually promotes in.
+    waitlist_count: Optional[int] = None
+    user_waitlist_position: Optional[int] = None
+    # True when the caller is waitlisted with a party larger than the event
+    # holds, so promotion will never reach them. They get no position, and the
+    # UI must say why rather than promising a spot that cannot open.
+    user_waitlist_exceeds_capacity: bool = False
+    # Seats taken (sum of 1 + guest_count over going RSVPs). See EventListItem.
+    occupied_seats: Optional[int] = None
+
+    # The caller's own RSVP in full, so "Update RSVP" can open prefilled
+    # instead of blank. Their own record, so the accommodation fields are fine
+    # here — this is not the roster other members see.
+    user_rsvp: Optional["UserRSVPSummary"] = None
+
     model_config = _response_config
 
 
@@ -428,6 +513,19 @@ class EventListItem(UTCResponseBase):
     recurrence_parent_id: Optional[UUID] = None
     rsvp_count: Optional[int] = None
     going_count: Optional[int] = None
+    # How many are waiting, for the "N waiting" line on a waitlisted card.
+    # Position is not here on purpose — ranking per row needs a window
+    # function, and the card already knows *that* the member is waitlisted
+    # from user_rsvp_status. Position lives on the detail response.
+    waitlist_count: Optional[int] = None
+    # Seats taken, not members going: a member with two guests fills three.
+    # Capacity UI must use this against max_attendees; going_count remains the
+    # people count.
+    occupied_seats: Optional[int] = None
+    # Which responses this event accepts. The list surfaces RSVP controls now,
+    # and without this they were hardcoded to Going/Not Going — so an event
+    # configured for "maybe" only rendered a button the API always rejected.
+    allowed_rsvp_statuses: Optional[List[str]] = None
     user_rsvp_status: Optional[str] = None
 
     # Fields the member-facing list needs to tell an urgent event from a
@@ -499,6 +597,26 @@ class RSVPResponse(RSVPBase, UTCResponseBase):
     override_duration_minutes: Optional[int] = None
     overridden_by: Optional[UUID] = None
     overridden_at: Optional[datetime] = None
+
+    model_config = _response_config
+
+
+class EventAttendeeResponse(UTCResponseBase):
+    """One row of the going-only roster an ordinary member may see.
+
+    Deliberately NOT built on ``RSVPBase``/``RSVPResponse``. Those carry
+    ``user_email``, ``notes``, ``dietary_restrictions``,
+    ``accessibility_needs``, ``guest_count`` and the whole check-in and
+    override block — contact details, medical/accommodation information and
+    attendance performance that belong to the organizer view alone. Inheriting
+    from them to save a few lines is exactly how those fields would reach every
+    member in the department, so this schema is a flat, explicit allowlist and
+    must stay one.
+    """
+
+    user_id: UUID
+    user_name: Optional[str] = None
+    status: str
 
     model_config = _response_config
 
@@ -758,6 +876,9 @@ class EventTemplateCreate(BaseModel):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -783,6 +904,7 @@ class EventTemplateCreate(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: bool = False
     allow_guests: bool = False
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
@@ -802,6 +924,9 @@ class EventTemplateUpdate(BaseModel):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -816,6 +941,7 @@ class EventTemplateUpdate(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: Optional[bool] = None
     allow_guests: Optional[bool] = None
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = Field(None, ge=0)
     check_in_minutes_after: Optional[int] = Field(None, ge=0)
@@ -847,6 +973,7 @@ class EventTemplateResponse(UTCResponseBase):
     max_attendees: Optional[int] = None
     is_mandatory: bool
     allow_guests: bool
+    attendee_visibility: Optional[str] = None
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = None
     check_in_minutes_after: Optional[int] = None
@@ -1026,7 +1153,9 @@ class RecurringEventCreate(BaseModel):
         description="Organization-defined custom event category",
     )
     custom_fields: Optional[Dict[str, Any]] = None
-    attachments: Optional[List[Dict[str, str]]] = None
+    # Same shape as EventBase.attachments — a series built from an event that
+    # already carries one must not be refused for it.
+    attachments: Optional[List[Dict[str, Any]]] = None
     allowed_rsvp_statuses: Optional[List[str]] = Field(
         default=None,
         description="Allowed RSVP statuses. Defaults to ['going', 'not_going']",

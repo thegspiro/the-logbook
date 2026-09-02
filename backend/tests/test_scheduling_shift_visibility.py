@@ -1,12 +1,16 @@
 """Member-facing shift lists use the same eligibility answer as signup."""
 
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.api.v1.endpoints import scheduling
-from app.services.scheduling_service import SchedulingService
+from app.services.scheduling_service import (
+    MEMBER_SHIFT_WINDOW_DAYS,
+    SchedulingService,
+)
 
 
 @pytest.fixture
@@ -62,6 +66,74 @@ async def test_member_pagination_happens_after_visibility_filter(monkeypatch, sh
 
     assert page == [shifts[1]]
     assert total == 1
+
+
+class TestCandidateWindowIsBounded:
+    """Eligibility cannot be a WHERE clause, so the date window is the bound.
+
+    Every candidate row has to be fetched before it can be filtered, and the
+    officer path on this same endpoint paginates in SQL — so an unbounded
+    member request read the organization's whole shift table for one page,
+    invisibly to anyone testing as an admin.
+    """
+
+    def test_an_open_ended_pair_looks_forward_from_today(self):
+        start, end = SchedulingService._bound_shift_window(None, None)
+
+        assert start == date.today()
+        assert end - start == timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
+
+    def test_an_open_end_is_anchored_on_the_start_the_caller_gave(self):
+        start, end = SchedulingService._bound_shift_window(date(2026, 3, 1), None)
+
+        assert start == date(2026, 3, 1)
+        assert end == date(2026, 3, 1) + timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
+
+    def test_an_open_start_looks_back_from_the_end(self):
+        start, end = SchedulingService._bound_shift_window(None, date(2026, 3, 1))
+
+        assert end == date(2026, 3, 1)
+        assert start == date(2026, 3, 1) - timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
+
+    def test_a_range_inside_the_window_is_left_exactly_as_asked(self):
+        given = (date(2026, 3, 1), date(2026, 3, 8))
+
+        assert SchedulingService._bound_shift_window(*given) == given
+
+    def test_an_oversized_range_is_clamped_not_rejected(self):
+        # A 400 here would mean a member gets an error where an officer, on
+        # the same endpoint, gets a page.
+        start, end = SchedulingService._bound_shift_window(
+            date(2026, 1, 1), date(2030, 1, 1)
+        )
+
+        assert start == date(2026, 1, 1)
+        assert end == date(2026, 1, 1) + timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
+
+    async def test_the_query_carries_both_bounds_when_the_caller_gave_none(
+        self, monkeypatch, shifts
+    ):
+        result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: shifts))
+        db = SimpleNamespace(execute=AsyncMock(return_value=result))
+        monkeypatch.setattr(
+            scheduling.ShiftEligibilityService,
+            "get_eligible_positions_bulk",
+            AsyncMock(return_value={"ordinary": [], "admin": ["support"]}),
+        )
+        user = SimpleNamespace(id="member", organization_id="org")
+
+        await SchedulingService(db).get_member_visible_shifts(user, "org")
+
+        bounds = sorted(
+            value
+            for value in db.execute.await_args[0][0].compile().params.values()
+            if isinstance(value, date)
+        )
+
+        assert bounds == [
+            date.today(),
+            date.today() + timedelta(days=MEMBER_SHIFT_WINDOW_DAYS),
+        ]
 
 
 def test_event_resource_seats_preserve_administrative_access():
