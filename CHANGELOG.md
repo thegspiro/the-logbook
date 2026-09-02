@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Four more finance foreign keys are now scoped to the caller's organization (2026-09-02)
+
+**Fixed**
+
+- **A purchase request's linked apparatus/facility, a budget category's
+  parent, an approval chain's budget category, and an approval step's email
+  template could all be set to another organization's row.** Each is an
+  `ondelete="SET NULL"` foreign key exposed as a free client-supplied string,
+  and none was checked against the caller's own organization before being
+  saved — so the other organization later deleting its own apparatus,
+  facility, budget category or email template would silently null out this
+  organization's reference. Fixed the same way an earlier pass fixed the
+  identical gap on a budget's station: every one of these fields is now
+  validated against the caller's organization before it is persisted, on
+  both create and update.
+
+### A denied purchase request, expense report or check request could still be approved and paid (2026-09-02)
+
+**Fixed**
+
+- **Denying one step in a multi-step approval chain didn't stop the rest of
+  the chain.** The remaining steps stayed pending, so the request kept
+  showing up as awaiting approval — and approving the last of them reversed
+  the denial and charged the budget for a request the department had
+  refused. This was already fixed on `main` (also closing a follow-on token-
+  expiry gap and a gap for chains that were denied before the fix shipped);
+  this pass independently re-verified the fix is complete and correct.
+
 ### A member can now see who's going, RSVP without being asked, and know where they stand on a waitlist (2026-09-01)
 
 **Added**
