@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**263 tables · 4458 columns · 848 foreign keys**
+**263 tables · 4459 columns · 848 foreign keys**
 
 ---
 
@@ -605,7 +605,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 57 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 58 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -9232,6 +9232,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `referred_by_user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `emergency_contacts` | JSON | yes |  | `list()` |  |
 | `notification_preferences` | JSON | yes |  | `dict()` |  |
+| `profile_visibility` | JSON | yes |  |  |  |
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
 | `member_class` | VARCHAR(20) | yes | IDX |  |  |
 | `member_status` | VARCHAR(20) | yes | IDX |  |  |
