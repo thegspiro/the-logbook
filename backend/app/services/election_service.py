@@ -3778,7 +3778,29 @@ class ElectionService:
         the single-vote endpoint — rows are retained with deleted_at/by and
         the reason, and appear in the forensics report.
         """
-        # Lock the batch first — it's the row every void of this batch
+        # Lock the election FIRST, before the batch and votes, matching
+        # delete_election's parent-to-child order: the DELETE on `elections`
+        # takes the election row's lock, and the ON DELETE CASCADE that
+        # removes its manual_ballot_batches (and their votes) locks each
+        # child row only after that. Locking the batch (and, via the old
+        # join, the election) before that would be child-then-parent — a
+        # concurrent void and delete can each hold one row and wait on the
+        # other, an InnoDB deadlock neither endpoint retries. Unlike
+        # attest_manual_ballot_batch (ELEC-15/24), voiding never gates on the
+        # election's OPEN/CLOSED status and results are always computed live
+        # from current vote/batch state rather than snapshotted at close, so
+        # this lock exists only to fix the ordering — it adds no new
+        # serialization with close_election.
+        election_result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        if election_result.scalar_one_or_none() is None:
+            return 0, "Election not found"
+
+        # Lock the batch next — it's the row every void of this batch
         # contends on. Without this, two concurrent voids can both load the
         # same not-yet-voided votes before either commits, both report
         # success, and the later ORM flush overwrites the first officer's
@@ -3800,10 +3822,10 @@ class ElectionService:
         if batch is not None and batch.status == "voided":
             return 0, "This batch has already been voided"
 
+        # The election is already locked and org-scoped above, so the votes
+        # query no longer needs to join Election just to filter by org.
         result = await self.db.execute(
             select(Vote)
-            .join(Election, Vote.election_id == Election.id)
-            .where(Election.organization_id == str(organization_id))
             .where(Vote.election_id == str(election_id))
             .where(Vote.manual_batch_id == batch_id)
             .where(Vote.is_manual.is_(True))

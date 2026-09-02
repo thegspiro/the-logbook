@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   candidates to a token that can't vote for them.
 
 Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
-(ELEC-13, ELEC-15, ELEC-17, ELEC-19b, ELEC-20).
+(ELEC-13, ELEC-15, ELEC-17, ELEC-18, ELEC-20, ELEC-21).
 
 ### A legacy ballot item lost its candidates, and a positional candidate outside any ballot item could bypass eligibility entirely (2026-09-02)
 
@@ -80,6 +80,19 @@ Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
 
 Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
 (ELEC-22, ELEC-23, ELEC-24).
+
+### Voiding a paper-ballot batch could deadlock against a concurrent election deletion (2026-09-02)
+
+**Fixed**
+
+- **Voiding a paper-ballot batch and deleting its election could deadlock
+  against each other** under heavy concurrent use, the same lock-order
+  problem already fixed for batch attestation — voiding locked the batch
+  before the election, while deletion locks the election before its
+  batches. Fixed by locking them in the same order everywhere.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-25).
 
 ### Four more finance foreign keys are now scoped to the caller's organization (2026-09-02)
 

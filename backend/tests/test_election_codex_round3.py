@@ -22,16 +22,31 @@ Covers the findings confirmed real against current code:
    whenever `election.ballot_items` was truthy) — authorization failed open
    for exactly the case a restricted position exists to prevent.
 
-Finding 3 (attestation/deletion lock ordering, ELEC-24) is covered by
-`TestAttestationLocksElection.test_election_locked_before_batch` in
-`test_election_codex_round2.py`, extending the existing class for that
+3. (ELEC-25, P2 — round 3 of Codex review) `void_manual_ballot_batch`
+   locked `ManualBallotBatch` (and, via a join, `Vote`/`Election`) with no
+   election lock acquired first — the same child-then-parent order ELEC-24
+   fixed for `attest_manual_ballot_batch`. `delete_election` locks the
+   `elections` row via its `DELETE` statement, then `ON DELETE CASCADE`
+   locks each dependent `manual_ballot_batches` row — parent-then-child. A
+   concurrent void and delete could each hold one row and wait on the
+   other, an InnoDB deadlock neither endpoint retries. Fixed by acquiring
+   the election lock first, matching deletion's order. Unlike attestation,
+   voiding does not gate on election status and results are computed live
+   rather than snapshotted at close, so no OPEN-status check was added —
+   see ELEC-25 in `docs/security-review/ELEC-06-elections-ballots.md` for
+   the full reasoning.
+
+Finding 3's earlier sibling (attestation/deletion lock ordering, ELEC-24)
+is covered by `TestAttestationLocksElection.test_election_locked_before_batch`
+in `test_election_codex_round2.py`, extending the existing class for that
 fix rather than duplicating its fixtures here.
 """
 
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import select, text
@@ -450,3 +465,113 @@ class TestMixedElectionPositionalCandidateFailsClosed:
 
         assert error is None, f"Eligible item vote wrongly rejected: {error}"
         assert vote is not None
+
+
+# ===================================================================
+# Finding 3 (ELEC-25) — void_manual_ballot_batch must lock the election
+# before the batch/vote locks, matching delete_election's parent-to-child
+# order (the same class of deadlock risk ELEC-24 fixed for attestation)
+# ===================================================================
+
+
+def _scalar_result(value):
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = value
+    return result
+
+
+def _result_returning(scalar=None, scalars_all=None) -> MagicMock:
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = scalar
+    result.scalars.return_value.all.return_value = scalars_all or []
+    return result
+
+
+def _make_void_service() -> ElectionService:
+    db = AsyncMock()
+    db.add = MagicMock()
+    return ElectionService(db)
+
+
+class TestVoidManualBallotBatchLocksElectionFirst:
+    async def test_election_locked_before_batch_and_votes(self):
+        """ELEC-25: the election lock must be acquired before the batch and
+        vote locks. delete_election locks `elections` via its DELETE
+        statement, then ON DELETE CASCADE locks each dependent
+        manual_ballot_batches row — parent-then-child. Locking the batch
+        (and, via the old join, the election) first is the reverse order,
+        which can deadlock against a concurrent delete."""
+        service = _make_void_service()
+        election = SimpleNamespace(id="election-1")
+        batch = SimpleNamespace(id="batch-1", status="pending")
+        vote = SimpleNamespace(
+            id="vote-1", deleted_at=None, deleted_by=None, deletion_reason=None
+        )
+        service.db.execute.side_effect = [
+            _scalar_result(election),
+            _scalar_result(batch),
+            _result_returning(scalars_all=[vote]),
+        ]
+        service._audit = AsyncMock()
+
+        count, error = await service.void_manual_ballot_batch(
+            election_id=uuid.UUID(int=0),
+            organization_id=uuid.UUID(int=0),
+            batch_id="batch-1",
+            deleted_by="officer-1",
+            reason="mis-keyed",
+        )
+
+        assert error is None
+        assert count == 1
+        election_query = service.db.execute.await_args_list[0].args[0]
+        batch_query = service.db.execute.await_args_list[1].args[0]
+        votes_query = service.db.execute.await_args_list[2].args[0]
+        assert "elections" in str(election_query).lower()
+        assert "manual_ballot_batches" in str(batch_query).lower()
+        assert "votes" in str(votes_query).lower()
+        assert election_query._for_update_arg is not None
+        assert batch_query._for_update_arg is not None
+        assert votes_query._for_update_arg is not None
+
+    async def test_election_not_found_short_circuits(self):
+        """If the election/org pair doesn't resolve, void must fail closed
+        instead of falling through to lock a batch under an unverified
+        election/org combination."""
+        service = _make_void_service()
+        service.db.execute.side_effect = [_scalar_result(None)]
+
+        count, error = await service.void_manual_ballot_batch(
+            election_id=uuid.UUID(int=0),
+            organization_id=uuid.UUID(int=0),
+            batch_id="batch-1",
+            deleted_by="officer-1",
+            reason="mis-keyed",
+        )
+
+        assert count == 0
+        assert error == "Election not found"
+        assert service.db.execute.await_count == 1
+
+    async def test_already_voided_batch_still_refused_after_election_lock(self):
+        """The already-voided short-circuit (ELEC-18) must keep working now
+        that an election lock precedes it."""
+        service = _make_void_service()
+        election = SimpleNamespace(id="election-1")
+        batch = SimpleNamespace(id="batch-1", status="voided")
+        service.db.execute.side_effect = [
+            _scalar_result(election),
+            _scalar_result(batch),
+        ]
+
+        count, error = await service.void_manual_ballot_batch(
+            election_id=uuid.UUID(int=0),
+            organization_id=uuid.UUID(int=0),
+            batch_id="batch-1",
+            deleted_by="officer-2",
+            reason="duplicate attempt",
+        )
+
+        assert count == 0
+        assert error == "This batch has already been voided"
+        assert service.db.execute.await_count == 2

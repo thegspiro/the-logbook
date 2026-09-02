@@ -102,6 +102,33 @@ depth applied here, not re-reading everything:**
   byte-identical to pass 2, i.e. present since at least pass 2 and missed by
   it too.
 
+  **Re-enumerated again after all three Codex rounds' fixes (round 3 review,
+  Codex finding: this count was already stale in the commit that introduced
+  it — round 1's ELEC-15 and ELEC-18 fixes, and round 3's ELEC-25 fix, each
+  added a site): 14 `.with_for_update()` sites, not 10.** Current
+  `grep -n "with_for_update" election_service.py` output, by enclosing
+  function:
+
+  | Line   | Function                            | Locks                                                     |
+  | ------ | ----------------------------------- | --------------------------------------------------------- |
+  | `1148` | `cast_vote`                         | the caller's own prior vote (dedup)                       |
+  | `1390` | `_get_user_votes`                   | conditional on `for_update=True` (used by `cast_vote`)    |
+  | `3030` | `open_nominations`                  | `Election`                                                |
+  | `3086` | `close_nominations`                 | `Election`                                                |
+  | `3324` | `record_manual_ballots`             | `Election`                                                |
+  | `3584` | `attest_manual_ballot_batch`        | `Election` — added by ELEC-15, reordered first by ELEC-24 |
+  | `3602` | `attest_manual_ballot_batch`        | `ManualBallotBatch`                                       |
+  | `3798` | `void_manual_ballot_batch`          | `Election` — **new, ELEC-25 (round 3)**                   |
+  | `3819` | `void_manual_ballot_batch`          | `ManualBallotBatch` — added by ELEC-18                    |
+  | `3833` | `void_manual_ballot_batch`          | `Vote` — added by ELEC-18                                 |
+  | `4511` | `close_election`                    | `Election`                                                |
+  | `4765` | `open_election`                     | `Election`                                                |
+  | `7241` | `_lock_token_ballot_for_submission` | `Election` (`populate_existing=True` added by ELEC-17)    |
+  | `7252` | `_lock_token_ballot_for_submission` | `VotingToken` (`populate_existing=True` added by ELEC-17) |
+
+  (A 15th occurrence of the string, at line 7229, is a docstring reference,
+  not a call site.) See ELEC-25 below for the fix that added the newest one.
+
 **Codex review on this PR raised 8 findings against this pass's initial
 "0 fixes, 0 new findings" write-up. Each was independently re-traced against
 current code (not taken on either the original pass's or Codex's word) per
@@ -560,7 +587,67 @@ to fail pre-fix via `git stash`.
 real against current code before fixing — the same "verify, don't defer to
 either party" standard round 1 applied to the initial 8 findings.
 
-**Completion gate (pass 3, after both Codex rounds):**
+### ELEC-25 — P2 — Voiding a manual-ballot batch had the same lock-order deadlock risk ELEC-24 fixed for attestation — ✅ FIXED
+
+**What:** `void_manual_ballot_batch` (ELEC-18, round 1) locks
+`ManualBallotBatch` first, then resolves `Vote` through a
+`.join(Election).where(Election.organization_id == ...)` `FOR UPDATE`
+select — which, on a join, locks the matching `Election` row too, but only
+_after_ the batch lock. That is the identical child-then-parent order
+ELEC-24 fixed for `attest_manual_ballot_batch`: `delete_election` locks the
+`elections` row via its `DELETE` statement, and MySQL's `ON DELETE CASCADE`
+on `manual_ballot_batches.election_id` then locks each batch row as it
+cascades — parent-then-child. A concurrent void and delete on the same
+election can each hold one row and block on the other (void holds the
+batch, waits on the election via the join; delete holds the election, waits
+on the batch via the cascade) — the same InnoDB deadlock shape as ELEC-24,
+on a path ELEC-24's fix did not touch. Neither endpoint retries on a
+deadlock error.
+
+**Where:** `election_service.py:3793-3812` pre-fix numbering
+(`void_manual_ballot_batch`: batch lock, then `Vote`+`Election` join lock).
+
+**Does voiding need the same close-race protection ELEC-15/24 gave
+attestation?** No — checked by reading `close_election` directly rather
+than assuming. Attestation needed it because the batch's `pending →
+confirmed` _transition_ is gated on the election being `OPEN`, and a stale
+read of that status let a confirm slip past a concurrent close. Voiding has
+no such gate: it never checks election status at all (matching
+`soft_delete_vote`, the single-vote correction path, which is likewise
+status-agnostic), and it can void a batch of any status, including an
+already-`confirmed` one, at any time. More fundamentally, `close_election`
+never snapshots or certifies vote/batch state — `get_election_results` and
+`build_certified_results_pdf` recompute live from current `Vote.deleted_at`
+and `ManualBallotBatch.status` on every call, so a void's effect on results
+is identical whether it happens before or after close. There is therefore
+no lifecycle race for a lock to prevent here — only the lock-ordering
+deadlock, which is what this fix addresses.
+
+**Fix:** the election row is now locked _first_ (`.with_for_update()`,
+returning `"Election not found"` if the org/election pair doesn't resolve),
+_before_ the batch lock, matching `delete_election`'s and (post-ELEC-24)
+`attest_manual_ballot_batch`'s parent-to-child order. The subsequent votes
+query no longer needs to join `Election` for its organization filter, since
+the election is already locked and org-scoped by the new first query.
+`close_election` never locks the batch, so this reorder introduces no new
+deadlock risk on that path — same reasoning ELEC-24 documented for
+attestation.
+
+Guarded by `TestVoidManualBallotBatchLocksElectionFirst` (3 tests: lock
+order across all three queries, election-not-found short-circuit, and the
+already-voided short-circuit still working with the new first query) in
+`tests/test_election_codex_round3.py`, confirmed to fail pre-fix via
+`git stash`. The two pre-existing `TestVoidManualBallotBatchLocking` tests
+in `tests/test_election_codex_round2.py` were updated to include the new
+election-lock mock in their call sequence (the same treatment ELEC-24 gave
+`TestAttestationLocksElection.test_election_read_is_locking`).
+
+**Round 3: 1 fixed (ELEC-25).** The other two round-3 Codex findings were
+documentation-accuracy findings with no code to fix — see the corrected
+`.with_for_update()` inventory above and `PROGRESS.md` / `CHANGELOG.md`'s
+corrected finding-id enumeration.
+
+**Completion gate (pass 3, after all three Codex rounds):**
 
 | Check                                                                               | Result                                                                      |
 | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -568,18 +655,20 @@ either party" standard round 1 applied to the initial 8 findings.
 | `black --check app/ tests/ alembic/`                                                | ✅ clean                                                                    |
 | `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)                         | ✅ clean                                                                    |
 | `python3 scripts/validate_migrations.py --strict`                                   | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration in this round |
-| `pytest tests/ -q -k "election or ballot or vote or quorum"`                        | ✅ 472 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed   |
-| `pytest tests/test_election_codex_round2.py tests/test_election_codex_round3.py -q` | ✅ 20 passed, 0 failed                                                      |
-| `pytest tests/ -q` (full backend suite)                                             | ✅ 9792 passed, 21 skipped (pre-existing/environmental), 0 failed           |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"`                        | ✅ 475 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed   |
+| `pytest tests/test_election_codex_round2.py tests/test_election_codex_round3.py -q` | ✅ 23 passed, 0 failed                                                      |
+| `pytest tests/ -q` (full backend suite)                                             | ✅ 9795 passed, 21 skipped (pre-existing/environmental), 0 failed           |
 | `tsc --noEmit` / `eslint .`                                                         | not run — no frontend file changed this round                               |
 
 New guard tests: `tests/test_election_codex_round2.py` (2 new/updated tests
-for ELEC-24's lock-order fix) and `tests/test_election_codex_round3.py`
-(new file, 7 tests across ELEC-22 and ELEC-23). `tests/test_election_codex_fixes.py`'s
-`TestTokenVoteNullPositionDedup._token()` stub was also given an explicit
-`eligible_item_ids=None` default — ELEC-21's fix reads that attribute
-unconditionally (as the real `VotingToken` model always has it), which a
-stub predating the field did not.
+for ELEC-24's lock-order fix, plus this round's update to
+`TestVoidManualBallotBatchLocking`'s two tests for ELEC-25's new election
+lock) and `tests/test_election_codex_round3.py` (7 tests across ELEC-22 and
+ELEC-23, plus 3 new tests for ELEC-25 in this round).
+`tests/test_election_codex_fixes.py`'s `TestTokenVoteNullPositionDedup._token()`
+stub was also given an explicit `eligible_item_ids=None` default — ELEC-21's
+fix reads that attribute unconditionally (as the real `VotingToken` model
+always has it), which a stub predating the field did not.
 
 ---
 

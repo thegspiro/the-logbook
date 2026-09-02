@@ -17,10 +17,54 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (Feature 06,
-Elections & ballots, pass 3) — 9 fixed, 2 flagged across two Codex review
+Elections & ballots, pass 3) — 10 fixed, 2 flagged across three Codex review
 rounds, 1 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 3) — 1 fixed, 2 docs-only — PR #2162
+
+Codex reviewed round 2's fix commit (merged with a concurrent unrelated
+commit into `dab1d1baf`) and posted 3 more findings, all P2. Re-verified
+each against current code independently, same standard as rounds 1 and 2:
+
+- **ELEC-25 (P2, fixed):** `void_manual_ballot_batch` (ELEC-18's fix, round
+  1. had the identical lock-order problem ELEC-24 fixed for
+     `attest_manual_ballot_batch` — it locked the batch before the election
+     (via a join), while election deletion locks the election before its
+     batches. A concurrent void and delete could deadlock under InnoDB, and
+     neither path retries. Fixed by locking the election first, matching the
+     order used everywhere else. Confirmed by reading `close_election` that
+     voiding does not need attestation's additional close-race protection: it
+     has no OPEN-status gate to race, and results are always computed live
+     rather than snapshotted at close, so only the lock order needed fixing.
+- **Stale `.with_for_update()` inventory (P2, docs-only):** this file's own
+  Pass 3 section in `ELEC-06-elections-ballots.md` still stated the
+  pre-round-1 count and list (10 sites) after two rounds of fixes had
+  already added four more. Corrected to the actual current count (14) with
+  a full per-site table.
+- **Mismatched finding ids between this file and the canonical doc
+  (P2, docs-only):** this file's round-1 log entry used `ELEC-19b`/`ELEC-20`
+  for what `ELEC-06-elections-ballots.md` canonically calls `ELEC-20`/
+  `ELEC-21`, and omitted `ELEC-18` (the void-race fix) entirely despite
+  claiming to enumerate all 6 of round 1's fixes. Corrected both id
+  mismatches and restored the missing `ELEC-18` entry below;
+  `CHANGELOG.md`'s matching `[Unreleased]` entry had the same wrong ids and
+  was corrected too.
+
+The one code fix is guarded by `TestVoidManualBallotBatchLocksElectionFirst`
+(3 tests, `tests/test_election_codex_round3.py`), confirmed to fail pre-fix
+via `git stash`; the two pre-existing `TestVoidManualBallotBatchLocking`
+tests in `tests/test_election_codex_round2.py` were updated for the new
+lock in their call sequence. Completion gate re-run clean: flake8/black/isort
+on `app/ tests/ alembic/`; `validate_migrations.py --strict` (409 revisions,
+unchanged — no migration needed); scoped suite (`-k "election or ballot or
+vote or quorum"`) 475 passed/1 skipped (pre-existing)/0 failed; full backend
+suite 9795 passed/21 skipped (pre-existing/environmental)/0 failed. No
+frontend file touched, so `tsc`/`eslint` not run. All 3 review threads
+replied to and resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section
+(ELEC-25) for the full write-up. Rotation row 06 remains ⏳ (awaiting PR
+merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 2) — 3 fixed — PR #2162
 
@@ -119,11 +163,20 @@ either:
   correctly acquiring the row lock — the identical bug class pass 2 already
   found and fixed once in `quorum_service.py`, present here too and missed
   by both pass 1 and pass 2.
-- **ELEC-19b (P1, fixed):** `submit_ballot_with_token`'s plain-candidate-UUID
+- **ELEC-18 (P2, fixed):** `void_manual_ballot_batch` ran plain (non-locking)
+  selects of both `ManualBallotBatch` and `Vote`, with no check for a batch
+  already voided — two concurrent voids could both load the same
+  not-yet-voided votes before either committed, both succeed, and the later
+  ORM flush would overwrite the first officer's
+  `deleted_by`/`deletion_reason`/`deleted_at`, corrupting the forensic
+  attribution the operation exists to preserve. Fixed by locking the batch
+  first (`.with_for_update()`), returning early with "already voided" if a
+  concurrent void already committed, and locking the vote select too.
+- **ELEC-20 (P1, fixed):** `submit_ballot_with_token`'s plain-candidate-UUID
   `choice` branch didn't check `candidate.position == position` the way the
   `rankings`/`candidate_ids` branches do, letting a crafted submission bind
   a candidate from one ballot item onto a different item.
-- **ELEC-20 (P1, fixed):** `cast_vote_with_token` (the single-vote route)
+- **ELEC-21 (P1, fixed):** `cast_vote_with_token` (the single-vote route)
   checked only `eligible_positions`, which is always `None` for ballot-item
   elections, and never checked `eligible_item_ids` — reintroducing the R-1
   bypass on this specific route (the bulk route already enforced it). Also

@@ -263,6 +263,7 @@ class TestTokenLockRepopulatesExisting:
 class TestVoidManualBallotBatchLocking:
     async def test_batch_and_votes_selects_are_locking(self):
         service = _make_service()
+        election = SimpleNamespace(id="election-1")
         batch = SimpleNamespace(id="batch-1", status="pending")
         vote = SimpleNamespace(
             id="vote-1",
@@ -270,7 +271,12 @@ class TestVoidManualBallotBatchLocking:
             deleted_by=None,
             deletion_reason=None,
         )
+        # ELEC-25 (round 3): the election lock is acquired FIRST, before the
+        # batch/vote locks, matching delete_election's parent-to-child order
+        # — see TestVoidManualBallotBatchLocksElectionFirst in
+        # test_election_codex_round3.py for the dedicated lock-order test.
         service.db.execute.side_effect = [
+            _scalar_result(election),
             _scalar_result(batch),
             _result_returning(scalars_all=[vote]),
         ]
@@ -286,8 +292,8 @@ class TestVoidManualBallotBatchLocking:
 
         assert error is None
         assert count == 1
-        batch_query = service.db.execute.await_args_list[0].args[0]
-        votes_query = service.db.execute.await_args_list[1].args[0]
+        batch_query = service.db.execute.await_args_list[1].args[0]
+        votes_query = service.db.execute.await_args_list[2].args[0]
         assert batch_query._for_update_arg is not None
         assert votes_query._for_update_arg is not None
         assert batch.status == "voided"
@@ -298,8 +304,12 @@ class TestVoidManualBallotBatchLocking:
         serialize on the batch lock, and the loser sees status='voided'
         already committed instead of re-processing the same votes."""
         service = _make_service()
+        election = SimpleNamespace(id="election-1")
         batch = SimpleNamespace(id="batch-1", status="voided")
-        service.db.execute.side_effect = [_scalar_result(batch)]
+        service.db.execute.side_effect = [
+            _scalar_result(election),
+            _scalar_result(batch),
+        ]
 
         count, error = await service.void_manual_ballot_batch(
             election_id=UUID(int=0),
@@ -311,7 +321,7 @@ class TestVoidManualBallotBatchLocking:
 
         assert count == 0
         assert error == "This batch has already been voided"
-        assert service.db.execute.await_count == 1
+        assert service.db.execute.await_count == 2
 
 
 # ===================================================================
