@@ -773,8 +773,11 @@ const Dashboard: React.FC = () => {
       // retry would land last and put the shift they just took back on the open
       // list. Every non-initial call to these loaders goes through the guard,
       // which is what makes "last write wins" mean the newest request.
-      void runRetry('myShifts', () => loadMyShifts(true));
-      void runRetry('openShifts', () => loadOpenShifts(true));
+      // runFresh, not runRetry: this read must reflect the signup, so it
+      // queues behind any read already in flight rather than joining one that
+      // started before it.
+      void runFresh('myShifts', () => loadMyShifts(true));
+      void runFresh('openShifts', () => loadOpenShifts(true));
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
     } finally {
@@ -1248,20 +1251,55 @@ const Dashboard: React.FC = () => {
   const retriesInFlight = useRef(new Map<string, Promise<unknown>>());
   const [busyLoaders, setBusyLoaders] = useState<ReadonlySet<string>>(new Set());
 
-  const runRetry = useCallback((key: string, run: () => Promise<unknown>): Promise<unknown> => {
-    const existing = retriesInFlight.current.get(key);
-    // Joined, not queued: a second press while the first is still running is
-    // the same request, so it waits on the same promise instead of issuing
-    // another.
-    if (existing) return existing;
-    const started = run().finally(() => {
-      retriesInFlight.current.delete(key);
-      setBusyLoaders(new Set(retriesInFlight.current.keys()));
+  // Registers `started` under `key` and clears it on settle -- but only if it
+  // is still the entry registered, so a queued successor is not deleted by its
+  // predecessor finishing.
+  const track = useCallback((key: string, begin: () => Promise<unknown>): Promise<unknown> => {
+    const started: Promise<unknown> = begin().finally(() => {
+      if (retriesInFlight.current.get(key) === started) {
+        retriesInFlight.current.delete(key);
+        setBusyLoaders(new Set(retriesInFlight.current.keys()));
+      }
     });
     retriesInFlight.current.set(key, started);
     setBusyLoaders(new Set(retriesInFlight.current.keys()));
     return started;
   }, []);
+
+  const runRetry = useCallback(
+    (key: string, run: () => Promise<unknown>): Promise<unknown> => {
+      const existing = retriesInFlight.current.get(key);
+      // Joined, not queued: a second press while the first is still running is
+      // the same request, so it waits on the same promise instead of issuing
+      // another. Sound only because these reads are idempotent -- see runFresh
+      // for the case where they are not.
+      if (existing) return existing;
+      return track(key, run);
+    },
+    [track]
+  );
+
+  // Queued behind whatever is running, never joined to it.
+  //
+  // After a mutation, joining is wrong: a read that started before the change
+  // answers from before it. Joining the post-signup refresh to a read already
+  // in flight can therefore repopulate the shift the member just took, and
+  // nothing later corrects it, because the guard counted that refresh as done.
+  const runFresh = useCallback(
+    (key: string, run: () => Promise<unknown>): Promise<unknown> => {
+      const existing = retriesInFlight.current.get(key);
+      // The predecessor's rejection is not this call's failure, so it is
+      // swallowed here rather than skipping the fresh read.
+      const after = existing
+        ? existing.then(
+            () => undefined,
+            () => undefined
+          )
+        : Promise.resolve();
+      return track(key, () => after.then(run));
+    },
+    [track]
+  );
 
   const anyBusy = useCallback((...keys: string[]) => keys.some((key) => busyLoaders.has(key)), [busyLoaders]);
 

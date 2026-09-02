@@ -1023,21 +1023,24 @@ describe('Dashboard', () => {
       });
     });
 
-    it('serialises the post-signup refresh with an open-shift request already running', async () => {
-      // A member can sign up from a row that survived a failed load while its
-      // Retry is still in flight. handleSignup used to call the loaders
-      // directly, so if its pair settled first the older request would land
-      // last and put the shift they just took back on the open list.
+    it('queues the post-signup read behind an older one rather than joining it', async () => {
+      // Coalescing is right for idempotent refreshes and wrong after a
+      // mutation: a read that started before the signup answers from before
+      // it, so joining it can repopulate the shift the member just took -- and
+      // nothing later corrects it, because the guard counts that refresh as
+      // done. The post-signup read queues instead.
+      let releaseOlder: ((value: ShiftRecord[]) => void) | undefined;
       mockGetOpenShifts
         .mockResolvedValueOnce([makeShift({ id: 'open-1' })])
-        .mockImplementation(() => new Promise(() => {}));
+        .mockImplementationOnce(() => new Promise<ShiftRecord[]>((resolve) => (releaseOlder = resolve)))
+        .mockResolvedValue([]);
 
       const user = userEvent.setup();
       renderWithRouter(<Dashboard />);
 
       await user.click(await screen.findByRole('button', { name: /sign up/i }));
 
-      // A refresh is left hanging on the openShifts key before the signup.
+      // An older read is left in flight before the mutation.
       await act(async () => {
         void registeredPullToRefresh?.();
         await Promise.resolve();
@@ -1049,9 +1052,61 @@ describe('Dashboard', () => {
         expect(mockSignupForShift).toHaveBeenCalledWith('open-1', { position: 'firefighter' });
       });
 
-      // The post-signup refresh joins the in-flight request rather than
-      // starting a competing one.
+      // While the older read is still running, the fresh one has not started.
       expect(mockGetOpenShifts.mock.calls.length).toBe(callsBeforeSignup);
+
+      await act(async () => {
+        releaseOlder?.([makeShift({ id: 'open-1' })]);
+        await Promise.resolve();
+      });
+
+      // Once it settles, the post-signup read runs -- so the stale row the
+      // older response carried is corrected rather than left standing.
+      await waitFor(() => {
+        expect(mockGetOpenShifts.mock.calls.length).toBeGreaterThan(callsBeforeSignup);
+      });
+    });
+
+    it('keeps a queued read registered when the one it waited on settles', async () => {
+      // The predecessor's completion must not deregister its successor. If it
+      // does, the key reads idle while the queued read is still running, and
+      // the next mutation starts a competing request instead of queueing --
+      // undoing the serialisation one step later.
+      let releaseFirst: ((value: ShiftRecord[]) => void) | undefined;
+      let releaseSecond: ((value: ShiftRecord[]) => void) | undefined;
+      mockGetOpenShifts
+        .mockResolvedValueOnce([makeShift({ id: 'open-1' })])
+        .mockImplementationOnce(() => new Promise<ShiftRecord[]>((resolve) => (releaseFirst = resolve)))
+        .mockImplementationOnce(() => new Promise<ShiftRecord[]>((resolve) => (releaseSecond = resolve)))
+        .mockResolvedValue([]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /sign up/i }));
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      await user.click(await screen.findByRole('button', { name: /confirm/i }));
+      await waitFor(() => expect(mockSignupForShift).toHaveBeenCalled());
+
+      // Release the older read; the queued post-signup read now starts and
+      // hangs in turn.
+      await act(async () => {
+        releaseFirst?.([makeShift({ id: 'open-1' })]);
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(mockGetOpenShifts.mock.calls.length).toBe(3));
+
+      // A second signup must queue behind that still-running read, not race it.
+      await user.click(await screen.findByRole('button', { name: /sign up/i }));
+      await user.click(await screen.findByRole('button', { name: /confirm/i }));
+      await waitFor(() => expect(mockSignupForShift).toHaveBeenCalledTimes(2));
+
+      expect(mockGetOpenShifts.mock.calls.length).toBe(3);
+      expect(releaseSecond).toBeDefined();
     });
 
     it('re-enables the Retry control once its request settles', async () => {
