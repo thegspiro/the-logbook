@@ -95,7 +95,7 @@ describe('documentsService', () => {
     it('should GET /documents with params', async () => {
       const data = { documents: [{ id: 'd1' }], total: 1, skip: 0, limit: 20 };
       mockGet.mockResolvedValueOnce({ data });
-      const params = { folder_id: 'f1', search: 'report' };
+      const params = { folder_id: 'f1', skip: 25, limit: 50, search: 'report', status: 'archived' };
 
       const result = await documentsService.getDocuments(params);
 
