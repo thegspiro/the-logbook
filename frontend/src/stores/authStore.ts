@@ -214,19 +214,6 @@ interface AuthState {
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
-  /**
-   * Mark the session `loadUser()` is about to establish as a fresh sign-in
-   * rather than a page reload of one already in progress — for a caller
-   * that authenticates the member itself (the OAuth redirect callback) and
-   * so never goes through `login()`/`completeMfaLogin()`/`register()`,
-   * which set this inline. Without it, `claimDeviceForMember` sees
-   * `signInPending === false`, and on a device with no recorded owner yet
-   * (this purge mechanism's first run, or any local data left by a path
-   * that predates it) that reads as "reload of an already-open session"
-   * instead of "someone new is signing in" — skipping the purge and
-   * handing the new member whatever the previous one left behind.
-   */
-  markFreshSignIn: () => void;
   clearError: () => void;
   clearLogoutPurgeNotice: () => void;
   checkPermission: (permission: string) => boolean;
@@ -539,15 +526,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.error('loadUser failed with unexpected error:', appError.message);
       }
     }
-  },
-
-  markFreshSignIn: () => {
-    signInPending = true;
-    // SEC: fresh session starts with a clean cache — same as login/mfaLogin/
-    // register, which this call site stands in for.
-    clearCache();
-    clearInFlight();
-    invalidateRanksCache();
   },
 
   clearError: () => {

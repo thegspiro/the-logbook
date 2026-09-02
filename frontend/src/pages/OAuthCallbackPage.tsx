@@ -15,7 +15,6 @@ import { markSignInPending, useAuthStore } from '../stores/authStore';
 export const OAuthCallbackPage: React.FC = () => {
   const navigate = useNavigate();
   const loadUser = useAuthStore((s) => s.loadUser);
-  const markFreshSignIn = useAuthStore((s) => s.markFreshSignIn);
   const [failed, setFailed] = useState(false);
   // StrictMode mounts effects twice in dev; guard so we only run once.
   const ran = useRef(false);
@@ -50,12 +49,6 @@ export const OAuthCallbackPage: React.FC = () => {
       markSignInPending();
       // The httpOnly cookies are set; tell loadUser a session may exist.
       localStorage.setItem('has_session', '1');
-      // SEC: this redirect reloads the whole module, so signInPending would
-      // otherwise read false — indistinguishable from a page refresh of an
-      // already-open session. Mark it fresh before loadUser() resolves the
-      // member, or a shared device with no recorded owner yet skips the
-      // prior member's data purge and hands it straight to this one.
-      markFreshSignIn();
       try {
         await loadUser();
       } catch {
@@ -69,7 +62,7 @@ export const OAuthCallbackPage: React.FC = () => {
     };
 
     void finish();
-  }, [loadUser, markFreshSignIn, navigate]);
+  }, [loadUser, navigate]);
 
   return (
     <main className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
