@@ -922,7 +922,15 @@ const Dashboard: React.FC = () => {
         administrative:
           adminHoursFailed || !canLoadAdminHours ? previous.administrative : (adminHoursSummary?.totalHours ?? null),
       }));
-      if (canLoadTraining && !trainingFailed) setMyCerts(trainingSummary?.certifications ?? []);
+      // Certifications are not a figure, they are an input to the readiness
+      // verdict -- the thing that renders "Clear to respond". Preserving the
+      // last good value is right for hours.training, which is only ever
+      // displayed, and unsafe here: a credential that expired or was revoked
+      // since the previous response would keep clearing the member while the
+      // banner said only that readiness was not fully verified. So they are
+      // cleared on failure, exactly as loadMyScreenings clears its own stale
+      // input for the same reason.
+      if (canLoadTraining) setMyCerts(trainingFailed ? [] : (trainingSummary?.certifications ?? []));
     } catch {
       // Hours are non-critical
     } finally {
@@ -1255,17 +1263,23 @@ const Dashboard: React.FC = () => {
     // flags up front here would do what it did on the inline Retry -- the
     // header ignores loadingHours, so "Hours unavailable" would revert to an
     // exact stale partial total for the duration of a slow refresh.
+    // Through runRetry, not around it: the gesture is not blocked while a
+    // section Retry is in flight, so calling the loaders directly would start a
+    // second request for the same source. If the newer one settles first the
+    // older lands last, restoring an error over data that had just recovered --
+    // the same race the keyed guard was added to stop, arriving by a different
+    // door. Sharing the keys makes a concurrent gesture join the retry instead.
     await Promise.all([
-      loadDeptMessages('both'),
-      loadHours(true),
-      loadUpcomingEvents(true),
-      loadNotifications(true),
-      loadMyShifts(true),
-      loadOpenShifts(true),
-      loadMySeats(true),
-      loadMyScreenings(true),
-      loadTrainingProgress(true),
-      loadMyEquipment(true),
+      runRetry('messages', () => loadDeptMessages('both')),
+      runRetry('hours', () => loadHours(true)),
+      runRetry('events', () => loadUpcomingEvents(true)),
+      runRetry('notifications', () => loadNotifications(true)),
+      runRetry('myShifts', () => loadMyShifts(true)),
+      runRetry('openShifts', () => loadOpenShifts(true)),
+      runRetry('seats', () => loadMySeats(true)),
+      runRetry('screenings', () => loadMyScreenings(true)),
+      runRetry('training', () => loadTrainingProgress(true)),
+      runRetry('equipment', () => loadMyEquipment(true)),
       ...(activeTab === 'department' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
       ...(activeTab === 'department' && canViewChiefOperations ? [loadOperations()] : []),
       ...(activeTab === 'department' && canViewAssets ? [loadAssetWidgets()] : []),
@@ -1545,7 +1559,16 @@ const Dashboard: React.FC = () => {
                   <SectionError
                     message="Readiness could not be fully verified."
                     source="readiness"
-                    busy={anyBusy('hours', 'seats', 'screenings')}
+                    // Mirrors the handler's conditions exactly. Listing every
+                    // possible source unconditionally lets a slow hours retry
+                    // disable this control even when readiness failed only on
+                    // seats -- blocking recovery of a source the button would
+                    // have been the one to retry.
+                    busy={anyBusy(
+                      ...(certificationsError ? ['hours'] : []),
+                      ...(seatsError ? ['seats'] : []),
+                      ...(screeningsError ? ['screenings'] : [])
+                    )}
                     onRetry={() => {
                       // Only the failed sources. Reloading the healthy ones
                       // disturbs the Hours card for a readiness failure, and a
@@ -1661,7 +1684,11 @@ const Dashboard: React.FC = () => {
                       <SectionError
                         message="Some schedule information could not be verified."
                         source="schedule"
-                        busy={anyBusy('myShifts', 'openShifts', 'events')}
+                        busy={anyBusy(
+                          ...(myShiftsError ? ['myShifts'] : []),
+                          ...(openShiftsError ? ['openShifts'] : []),
+                          ...(upcomingEventsError ? ['events'] : [])
+                        )}
                         onRetry={() => {
                           if (myShiftsError) void runRetry('myShifts', () => loadMyShifts(true));
                           if (openShiftsError) void runRetry('openShifts', () => loadOpenShifts(true));
@@ -1796,7 +1823,10 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Updates could not be fully verified."
                       source="updates"
-                      busy={anyBusy('messages', 'notifications')}
+                      busy={anyBusy(
+                        ...(messagesError ? ['messages'] : []),
+                        ...(notificationsError ? ['notifications'] : [])
+                      )}
                       onRetry={() => {
                         if (messagesError) void runRetry('messages', retryDeptMessages);
                         if (notificationsError) void runRetry('notifications', () => loadNotifications(true));
@@ -1814,7 +1844,10 @@ const Dashboard: React.FC = () => {
                         // to follow it: hard-coding one source tells a screen
                         // reader the button refreshes a healthy feed.
                         source={messagesError ? 'updates' : 'notifications'}
-                        busy={anyBusy('messages', 'notifications')}
+                        busy={anyBusy(
+                          ...(messagesError ? ['messages'] : []),
+                          ...(notificationsError ? ['notifications'] : [])
+                        )}
                         onRetry={() => {
                           if (messagesError) void runRetry('messages', retryDeptMessages);
                           if (notificationsError) void runRetry('notifications', () => loadNotifications(true));

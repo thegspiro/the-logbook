@@ -904,6 +904,81 @@ describe('Dashboard', () => {
       expect(screen.queryByText(/5 hrs in/)).not.toBeInTheDocument();
     });
 
+    it('drops stale certifications from the readiness verdict when a refresh fails', async () => {
+      // The safety case. Certifications are an input to "Clear to respond",
+      // not a figure on a card: keeping the last good snapshot means a
+      // credential that expired or was revoked since then still clears the
+      // member, with only a banner saying readiness was "not fully verified".
+      mockGetMyTraining
+        .mockResolvedValueOnce({
+          hours_summary: { total_hours: 1, hours_this_month: 1 },
+          certifications: [
+            {
+              id: 'c1',
+              course_name: 'EMT-B',
+              expiration_date: '2030-01-01',
+              is_expired: false,
+              days_until_expiry: 900,
+            },
+          ],
+        })
+        .mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+
+      // The first load succeeded, so the failure has to arrive on a later
+      // refresh -- which is exactly the case the verdict must not survive.
+      await act(async () => {
+        await registeredPullToRefresh?.();
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByText('Clear to respond')).not.toBeInTheDocument();
+      });
+    });
+
+    it('does not disable the readiness Retry for a loader it would not call', async () => {
+      // Readiness failed on seats only, so its handler retries seats only. A
+      // busy predicate naming every possible source lets a slow hours retry
+      // block recovery of a source this button owns.
+      mockGetEligiblePositions.mockRejectedValue(new Error('offline'));
+      mockGetSchedulingSummary
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Hours could not be fully verified.');
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      // certificationsError is false -- training loaded -- so readiness never
+      // calls loadHours and must stay live.
+      expect(screen.getByRole('button', { name: 'Retry readiness' })).not.toBeDisabled();
+    });
+
+    it('joins a pull-to-refresh to a section retry already in flight', async () => {
+      // The gesture is not blocked during a section retry, so calling the
+      // loaders directly would start a second request for the same source.
+      mockGetOpenShifts.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Some schedule information could not be verified.');
+      await user.click(screen.getByRole('button', { name: 'Retry schedule' }));
+      const callsAfterRetry = mockGetOpenShifts.mock.calls.length;
+
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      expect(mockGetOpenShifts.mock.calls.length).toBe(callsAfterRetry);
+    });
+
     it('re-enables the Retry control once its request settles', async () => {
       // The guard must not be a one-way door: a retry that fails has to be
       // retryable again.
