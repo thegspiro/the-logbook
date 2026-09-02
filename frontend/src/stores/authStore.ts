@@ -158,6 +158,22 @@ let signInPending = false;
  * surfaced to the member here — the discarded work belongs to the person who
  * left, not to the one reading the screen.
  */
+/**
+ * Declare that the session about to be loaded is a sign-in, not a reload.
+ *
+ * The OAuth callback cannot set the flag the way the password paths do: the
+ * provider redirect is a full page load, so this module is re-initialised and
+ * anything set before leaving is gone. Landing on the callback route with a
+ * provider's response *is* the sign-in, so that page says so here before
+ * calling loadUser. Without it the claim below reads a fresh OAuth sign-in as
+ * a page refresh, and on a device with no recorded owner — every device, the
+ * first time this ships — it hands the previous member's drafts and queued
+ * submissions to whoever signs in next.
+ */
+export const markSignInPending = (): void => {
+  signInPending = true;
+};
+
 const claimDeviceForMember = async (userId: string | undefined): Promise<void> => {
   if (!userId) return;
   const fresh = signInPending;

@@ -1665,20 +1665,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   }, []);
 
   const scheduleAutoSaveItem = useCallback(
-    (itemId: string, patch: Record<string, unknown>, options?: { immediate?: boolean; rearmStalePatch?: boolean }) => {
+    (itemId: string, patch: Record<string, unknown>, options?: { immediate?: boolean; asFallback?: boolean }) => {
       if (!isEditing || !itemId) return;
 
       const pending = autoSavePendingRef.current.get(itemId);
       if (pending) clearTimeout(pending.timer);
       // Merge rather than replace, so two edits to different fields of the same
-      // row inside the debounce window both survive. `rearmStalePatch` is set
-      // when a failed flush is putting its already-sent (and now possibly
-      // stale) patch back on the debounce: the member may have edited the
-      // same fields again while that flush was in flight, and that newer
-      // edit is what is sitting in `pending` right now. Flipping the spread
-      // order lets it win the conflict instead of being overwritten by the
-      // value the retry is resending.
-      const merged = options?.rearmStalePatch
+      // row inside the debounce window both survive. The supplied patch wins a
+      // conflict because it is the newer edit — except when the caller says
+      // otherwise: rearming a flush that failed re-offers a patch captured
+      // *before* anything pending, and letting it win reverts the member's
+      // latest keystroke on the retry.
+      const merged = options?.asFallback
         ? { ...patch, ...(pending?.patch ?? {}) }
         : { ...(pending?.patch ?? {}), ...patch };
 
@@ -1789,8 +1787,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           pendingPatches.map(([itemId, { patch }]) => equipmentCheckService.updateCheckItem(itemId, patch))
         );
       } catch (err: unknown) {
-        for (const [itemId, { patch }] of pendingPatches)
-          scheduleAutoSaveItem(itemId, patch, { rearmStalePatch: true });
+        // asFallback: these were captured before the member could edit again,
+        // and Save leaves the form live until it gets past this flush — so a
+        // field they have since changed keeps the newer value.
+        for (const [itemId, { patch }] of pendingPatches) {
+          scheduleAutoSaveItem(itemId, patch, { asFallback: true });
+        }
         toast.error(getErrorMessage(err, 'Could not save your latest edits'));
         return false;
       }

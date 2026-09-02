@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useAuthStore } from '../stores/authStore';
+import { markSignInPending, useAuthStore } from '../stores/authStore';
 
 /**
  * Landing page for the Google OAuth redirect.
@@ -42,6 +42,12 @@ export const OAuthCallbackPage: React.FC = () => {
     }
 
     const finish = async () => {
+      // A sign-in, not a refresh — and this page is the only place that can
+      // say so, because the provider redirect reloaded the whole app and took
+      // the store's own flag with it. The device-owner purge depends on the
+      // distinction: without this, an OAuth sign-in on a shared station
+      // silently inherits the previous member's drafts and queued work.
+      markSignInPending();
       // The httpOnly cookies are set; tell loadUser a session may exist.
       localStorage.setItem('has_session', '1');
       // SEC: this redirect reloads the whole module, so signInPending would
