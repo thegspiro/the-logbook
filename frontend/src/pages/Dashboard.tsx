@@ -173,6 +173,52 @@ interface FeedEntry {
   message?: InboxMessage;
 }
 
+interface SectionErrorProps {
+  message: string;
+  /**
+   * What this control retries, e.g. "schedule". Becomes "Retry schedule" as
+   * the button's accessible name.
+   *
+   * When several sources fail at once the dashboard shows several of these,
+   * and a screen reader walking the button list hears "Retry" every time --
+   * the adjacent message is not part of the button's name, so there is
+   * nothing to tell them apart by.
+   */
+  source: string;
+  /**
+   * True while the loaders behind this control are already running.
+   *
+   * Owned by the page, not by this component: a single failure can render two
+   * of these -- a training-summary failure puts a control on both the hours
+   * card and the readiness card, and both call loadHours. A guard held per
+   * rendered control leaves those two able to start concurrent loads, which is
+   * the race the guard exists to stop. The page keys it by loader instead.
+   */
+  busy: boolean;
+  onRetry: () => void;
+}
+
+const SectionError: React.FC<SectionErrorProps> = ({ message, source, busy, onRetry }) => {
+  return (
+    <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+      <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1">{message}</span>
+      {/* mobile-touch-target, not a hand-set height: at min-h-9 this rendered
+          57x36 and broke /dashboard's zero-budget tap-target check, which is
+          the one place a section error is guaranteed to appear. */}
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={busy}
+        aria-label={`Retry ${source}`}
+        className="btn-secondary mobile-touch-target shrink-0 px-3 py-1 text-xs font-semibold disabled:opacity-60"
+      >
+        {busy ? 'Retrying' : 'Retry'}
+      </button>
+    </div>
+  );
+};
+
 const TIMELINE_ACCENT: Record<TimelineKind, string> = {
   'my-shift': 'bg-theme-accent-blue',
   'open-shift': 'bg-theme-accent-green',
@@ -229,14 +275,17 @@ const Dashboard: React.FC = () => {
   const unreadCount = useNotificationCountStore((s) => s.unreadCount);
   const decrementUnread = useNotificationCountStore((s) => s.decrement);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
+  const [notificationsError, setNotificationsError] = useState(false);
 
   // Shifts (user's own upcoming shifts)
   const [myShifts, setMyShifts] = useState<ShiftRecord[]>([]);
   const [loadingMyShifts, setLoadingMyShifts] = useState(true);
+  const [myShiftsError, setMyShiftsError] = useState(false);
 
   // Open shifts (available to sign up for)
   const [openShifts, setOpenShifts] = useState<ShiftRecord[]>([]);
   const [loadingOpenShifts, setLoadingOpenShifts] = useState(true);
+  const [openShiftsError, setOpenShiftsError] = useState(false);
   const [signingUpShiftId, setSigningUpShiftId] = useState<string | null>(null);
   const [rsvpingEventId, setRsvpingEventId] = useState<string | null>(null);
   const [signupExpandedId, setSignupExpandedId] = useState<string | null>(null);
@@ -255,6 +304,10 @@ const Dashboard: React.FC = () => {
     administrative: null,
   });
   const [loadingHours, setLoadingHours] = useState(true);
+  const [hoursError, setHoursError] = useState(false);
+  const [certificationsError, setCertificationsError] = useState(false);
+  const [seatsError, setSeatsError] = useState(false);
+  const [screeningsError, setScreeningsError] = useState(false);
 
   // Certifications for the current user. One source for both the readiness
   // verdict and the "Needs you" rows, so the summary and the detail below it
@@ -274,6 +327,13 @@ const Dashboard: React.FC = () => {
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
+  // Two independent requests sit behind the Updates card, so they get two
+  // flags: retrying the pair when only the badge count failed re-runs a
+  // healthy inbox request that can now stall or fail, turning one recoverable
+  // failure into two.
+  const [inboxError, setInboxError] = useState(false);
+  const [unreadCountError, setUnreadCountError] = useState(false);
+  const messagesError = inboxError || unreadCountError;
   const [deptMsgUnread, setDeptMsgUnread] = useState(0);
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
 
@@ -281,14 +341,17 @@ const Dashboard: React.FC = () => {
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
   const [progressDetails, setProgressDetails] = useState<Map<string, MemberProgramProgress>>(new Map());
   const [loadingTraining, setLoadingTraining] = useState(true);
+  const [trainingError, setTrainingError] = useState(false);
 
   // Inventory
   const [myEquipment, setMyEquipment] = useState({ assigned: 0, checkedOut: 0, overdue: 0 });
   const [loadingMyEquipment, setLoadingMyEquipment] = useState(true);
+  const [equipmentError, setEquipmentError] = useState(false);
 
   // Upcoming events
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [loadingUpcomingEvents, setLoadingUpcomingEvents] = useState(true);
+  const [upcomingEventsError, setUpcomingEventsError] = useState(false);
 
   // Phones show the first two rows of the week and name the rest on one line.
   const [timelineExpandedOnMobile, setTimelineExpandedOnMobile] = useState(false);
@@ -351,8 +414,22 @@ const Dashboard: React.FC = () => {
         });
     }
 
-    void loadDeptMessages();
-    void loadUpcomingEvents();
+    // Registered under the same keys the retries use. The pull-to-refresh
+    // gesture is live from mount and a member can sign up from a cached row,
+    // so an unregistered first load is a read the guard cannot see: a gesture
+    // starts a second request for the same source instead of joining this one,
+    // and runFresh races this read instead of queueing behind it -- letting a
+    // response that predates the signup land last and put the taken shift back.
+    //
+    // Messages load as one call but are keyed per subrequest, so the single
+    // initial promise is registered under both keys. Splitting it into two
+    // 'inbox'/'unread' calls would make each one a *retry*, which skips the
+    // loading flag the Updates card is waiting on.
+    const initialMessages = loadDeptMessages();
+    void runRetry('messages:inbox', () => initialMessages);
+    void runRetry('messages:unread', () => initialMessages);
+    void runRetry('events', () => loadUpcomingEvents());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Module-owned loaders, held until the module config lands.
@@ -376,14 +453,15 @@ const Dashboard: React.FC = () => {
   // that never resolves.
   useEffect(() => {
     if (modulesLoading) return;
-    void loadNotifications();
-    void loadMyShifts();
-    void loadOpenShifts();
-    void loadMySeats();
-    void loadMyScreenings();
-    void loadTrainingProgress();
-    void loadMyEquipment();
-    void loadHours();
+    // Keyed for the same reason the first-load effect above is.
+    void runRetry('notifications', () => loadNotifications());
+    void runRetry('myShifts', () => loadMyShifts());
+    void runRetry('openShifts', () => loadOpenShifts());
+    void runRetry('seats', () => loadMySeats());
+    void runRetry('screenings', () => loadMyScreenings());
+    void runRetry('training', () => loadTrainingProgress());
+    void runRetry('equipment', () => loadMyEquipment());
+    void runRetry('hours', () => loadHours());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modulesLoading]);
 
@@ -431,7 +509,9 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadMyEquipment = async () => {
+  const loadMyEquipment = async (isRetry = false) => {
+    if (!isRetry) setLoadingMyEquipment(true);
+    if (!isRetry) setEquipmentError(false);
     if (!isModuleOn('inventory')) {
       setLoadingMyEquipment(false);
       return;
@@ -452,8 +532,9 @@ const Dashboard: React.FC = () => {
         checkedOut: data.active_checkouts.length,
         overdue: data.active_checkouts.filter((item) => item.is_overdue).length,
       });
+      setEquipmentError(false);
     } catch {
-      // Personal equipment is non-critical on the dashboard.
+      setEquipmentError(true);
     } finally {
       setLoadingMyEquipment(false);
     }
@@ -471,7 +552,9 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadUpcomingEvents = async () => {
+  const loadUpcomingEvents = async (isRetry = false) => {
+    if (!isRetry) setLoadingUpcomingEvents(true);
+    if (!isRetry) setUpcomingEventsError(false);
     try {
       // Bounded to the window the list renders, and to a limit that can hold
       // it. The old shape asked for the 5 soonest events of any future date
@@ -496,14 +579,19 @@ const Dashboard: React.FC = () => {
         (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
       );
       setUpcomingEvents(sorted);
+      setUpcomingEventsError(false);
     } catch {
-      // Upcoming events are non-critical
+      setUpcomingEventsError(true);
     } finally {
       setLoadingUpcomingEvents(false);
     }
   };
 
-  const loadNotifications = async () => {
+  const loadNotifications = async (isRetry = false) => {
+    // The Updates card's loading branch covers messages too, so raising this
+    // on a retry replaces successfully loaded inbox rows with skeletons.
+    if (!isRetry) setLoadingNotifications(true);
+    if (!isRetry) setNotificationsError(false);
     if (!isModuleOn('notifications')) {
       setNotifications([]);
       setLoadingNotifications(false);
@@ -517,36 +605,61 @@ const Dashboard: React.FC = () => {
         limit: 10,
       });
       setNotifications(data.logs || []);
+      setNotificationsError(false);
     } catch {
-      // Notifications are non-critical
+      setNotificationsError(true);
     } finally {
-      setLoadingNotifications(false);
+      if (!isRetry) setLoadingNotifications(false);
     }
   };
 
-  const loadDeptMessages = async () => {
-    try {
-      // include_read: false keeps the load to what still needs attention —
-      // resolved messages drop off on the next load, and already-read messages
-      // can't page a persistent standing notice out of the 10-item window
-      // (the backend exempts persistent messages from this filter, so they
-      // stay until an admin clears them). Full history lives on /messages.
-      //
-      // The badge uses the dedicated unread-count endpoint (which counts across
-      // ALL messages and treats ack-required messages as pending until
-      // acknowledged) rather than the length of this capped 10-item preview.
-      const [data, unread] = await Promise.all([
-        messagesService.getInbox({ include_read: false, limit: 10 }),
-        messagesService.getUnreadCount(),
-      ]);
-      setDeptMessages(data);
-      setDeptMsgUnread(unread.unread_count);
-    } catch {
-      // Messages are non-critical
-    } finally {
-      setLoadingMessages(false);
+  // `only` retries a single subrequest. A retry also skips the loading flag,
+  // for the reason given on loadMyShifts.
+  const loadDeptMessages = async (only?: 'inbox' | 'unread' | 'both') => {
+    // 'both' is a retry of both subrequests, distinct from undefined, which is
+    // the initial load. Without that distinction retrying both raises
+    // loadingMessages, and the Updates card's loading branch covers the
+    // notification rows too -- so a card whose notifications loaded fine goes
+    // to skeletons, indefinitely if either retry hangs.
+    const isRetry = only !== undefined;
+    if (!isRetry) setLoadingMessages(true);
+    const wantInbox = only !== 'unread';
+    const wantUnread = only !== 'inbox';
+    // Not cleared eagerly on a retry: both flags are assigned from the settled
+    // results below, so waiting costs nothing and keeps the banner up while the
+    // request is still in flight.
+    if (!isRetry && wantInbox) setInboxError(false);
+    if (!isRetry && wantUnread) setUnreadCountError(false);
+    // These endpoints are independent: a badge-count failure must not throw
+    // away messages the member can still read (and vice versa).
+    const [inboxResult, unreadResult] = await Promise.allSettled([
+      wantInbox ? messagesService.getInbox({ include_read: false, limit: 10 }) : Promise.resolve(null),
+      wantUnread ? messagesService.getUnreadCount() : Promise.resolve(null),
+    ]);
+    if (wantInbox) {
+      if (inboxResult.status === 'fulfilled' && inboxResult.value) setDeptMessages(inboxResult.value);
+      setInboxError(inboxResult.status === 'rejected');
     }
+    if (wantUnread) {
+      if (unreadResult.status === 'fulfilled' && unreadResult.value) setDeptMsgUnread(unreadResult.value.unread_count);
+      setUnreadCountError(unreadResult.status === 'rejected');
+    }
+    if (!isRetry) setLoadingMessages(false);
   };
+
+  // The retry the Updates card offers: whichever half actually failed.
+  // Keyed per subrequest for the same reason the refresh is: whichever half is
+  // already running, the other still gets its own turn.
+  //
+  // Called directly, never wrapped in a further runRetry('messages', ...). An
+  // outer key coalesces on the error snapshot taken at the first press, so a
+  // second press while that one is in flight returns the first promise and
+  // never retries a half that has failed since.
+  const retryDeptMessages = () =>
+    Promise.all([
+      ...(inboxError ? [runRetry('messages:inbox', () => loadDeptMessages('inbox'))] : []),
+      ...(unreadCountError ? [runRetry('messages:unread', () => loadDeptMessages('unread'))] : []),
+    ]);
 
   const markMessageRead = async (msgId: string) => {
     try {
@@ -590,7 +703,18 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadMyShifts = async () => {
+  // `isRetry` suppresses the loading flag, and every loader whose section
+  // renders a skeleton takes it. On first load the skeleton is right: there is
+  // nothing to show. On a retry the section is already populated and carrying
+  // an error banner, so raising the flag swaps that for a skeleton and a
+  // hanging request then hides the preserved rows indefinitely.
+  const loadMyShifts = async (isRetry = false) => {
+    if (!isRetry) setLoadingMyShifts(true);
+    // Cleared up front only on first load. On a retry the error is what the
+    // section is currently rendering, and dropping it before the replacement
+    // arrives puts a confident wrong value on screen for as long as the retry
+    // takes -- forever, if it hangs. The success path clears it instead.
+    if (!isRetry) setMyShiftsError(false);
     if (!isModuleOn('scheduling')) {
       setMyShifts([]);
       setLoadingMyShifts(false);
@@ -606,14 +730,17 @@ const Dashboard: React.FC = () => {
         limit: SHIFT_FETCH_LIMIT,
       });
       setMyShifts(data.shifts || []);
+      setMyShiftsError(false);
     } catch {
-      // Shifts are non-critical
+      setMyShiftsError(true);
     } finally {
       setLoadingMyShifts(false);
     }
   };
 
-  const loadOpenShifts = async () => {
+  const loadOpenShifts = async (isRetry = false) => {
+    if (!isRetry) setLoadingOpenShifts(true);
+    if (!isRetry) setOpenShiftsError(false);
     if (!isModuleOn('scheduling')) {
       setOpenShifts([]);
       setLoadingOpenShifts(false);
@@ -627,8 +754,9 @@ const Dashboard: React.FC = () => {
         end_date: addCalendarDays(today, TIMELINE_LOOKAHEAD_DAYS),
       });
       setOpenShifts(data);
+      setOpenShiftsError(false);
     } catch {
-      // Open shifts are non-critical
+      setOpenShiftsError(true);
     } finally {
       setLoadingOpenShifts(false);
     }
@@ -657,9 +785,19 @@ const Dashboard: React.FC = () => {
       await schedulingService.signupForShift(shiftId, { position: dashboardSignupPosition });
       toast.success('Signed up for shift');
       setSignupExpandedId(null);
-      // Refresh both lists: the signed-up shift moves from open to my shifts
-      void loadMyShifts();
-      void loadOpenShifts();
+      // Refresh both lists: the signed-up shift moves from open to my shifts.
+      //
+      // Through the same keyed guard as the Retry controls and the refresh
+      // gesture. A member can sign up from a row that survived a failed load
+      // while its Retry is still running; if this pair settled first, the older
+      // retry would land last and put the shift they just took back on the open
+      // list. Every non-initial call to these loaders goes through the guard,
+      // which is what makes "last write wins" mean the newest request.
+      // runFresh, not runRetry: this read must reflect the signup, so it
+      // queues behind any read already in flight rather than joining one that
+      // started before it.
+      void runFresh('myShifts', () => loadMyShifts(true));
+      void runFresh('openShifts', () => loadOpenShifts(true));
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
     } finally {
@@ -687,6 +825,12 @@ const Dashboard: React.FC = () => {
       } else {
         toast.success(savedStatus === 'going' ? "You're going" : 'Response saved');
       }
+      // The write above is local to the one row, so an events read that started
+      // before this mutation still replaces the whole array when it lands and
+      // takes the confirmed status with it -- the row offers RSVP buttons again
+      // until something else refreshes. Queued through the same key as the
+      // signup path, so this read lands after any older one.
+      void runFresh('events', () => loadUpcomingEvents(true));
     } catch (error) {
       toast.error(getErrorMessage(error, 'Could not save your RSVP'));
     } finally {
@@ -694,7 +838,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadMySeats = async () => {
+  const loadMySeats = async (isRetry = false) => {
+    if (!isRetry) setSeatsError(false);
     if (!isModuleOn('scheduling')) {
       setMySeats([]);
       return;
@@ -707,20 +852,25 @@ const Dashboard: React.FC = () => {
       // report, and "no seats" is not a readiness finding about them — the
       // verdict simply says nothing on the subject.
       setMySeats(data.is_excluded ? [] : data.positions);
+      setSeatsError(false);
     } catch {
+      setSeatsError(true);
       // Seat eligibility is non-critical; the verdict falls back to
       // certifications alone and says so.
     }
   };
 
-  const loadMyScreenings = async () => {
+  const loadMyScreenings = async (isRetry = false) => {
+    if (!isRetry) setScreeningsError(false);
     if (!isModuleOn('medical_screening')) {
       setMyScreenings(null);
       return;
     }
     try {
       setMyScreenings(await medicalScreeningService.getMyCompliance());
+      setScreeningsError(false);
     } catch {
+      setScreeningsError(true);
       // Clear rather than keep the last good answer. A pull-to-refresh that
       // fails would otherwise leave stale counts on screen while the scope note
       // still claims screenings were checked — and a member who has since gone
@@ -729,7 +879,15 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const loadHours = async () => {
+  const loadHours = async (isRetry = false) => {
+    if (!isRetry) setLoadingHours(true);
+    // The header chip reads hoursError directly and does not consult
+    // loadingHours, so clearing the flag up front on a retry puts the stale
+    // partial sum back on screen as an exact "N hrs in Month" -- and leaves it
+    // there for as long as the retry takes. `sourceFailed` sets the flag from
+    // the settled result either way, so the retry path simply waits.
+    if (!isRetry) setHoursError(false);
+    if (!isRetry) setCertificationsError(false);
     try {
       // Month-to-date in the organization's timezone, not UTC — near midnight
       // a UTC-derived date lands in the wrong month for half the country.
@@ -744,44 +902,82 @@ const Dashboard: React.FC = () => {
       // the whole department's entries.
       const canLoadAdminHours = checkPermission('admin_hours.view');
 
+      // Only a source that was actually attempted can fail. A member without
+      // training.view is not looking at a broken card, so a gated-off source
+      // must leave this false -- flipping it would pin an error banner and a
+      // Retry that re-runs the same gate and changes nothing.
+      let schedulingFailed = false;
+      let trainingFailed = false;
+      let adminHoursFailed = false;
       const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
         canLoadScheduling
           ? schedulingService.getSummary().catch((err) => {
               console.error('Failed to load scheduling summary:', err);
+              schedulingFailed = true;
               return null;
             })
           : Promise.resolve(null),
         canLoadTraining
           ? trainingModuleConfigService.getMyTraining().catch((err) => {
               console.error('Failed to load training summary:', err);
+              trainingFailed = true;
               return null;
             })
           : Promise.resolve(null),
         canLoadAdminHours
           ? adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
               console.error('Failed to load admin hours summary:', err);
+              adminHoursFailed = true;
               return null;
             })
           : Promise.resolve(null),
       ]);
+      // Assigned from the settled result rather than only ever set to true:
+      // a flag that a failure raises and only the eager pre-await reset clears
+      // can never come down on a successful retry, which skips that reset.
+      setHoursError(schedulingFailed || trainingFailed || adminHoursFailed);
+      setCertificationsError(trainingFailed);
       // All three are month-to-date, because the card says "My Hours, August"
       // and the total adds them together. Training and administrative hours
       // were previously lifetime figures — so the headline total summed two
       // lifetime numbers with one monthly one and meant nothing.
-      setHours({
-        training: trainingSummary?.hours_summary?.hours_this_month ?? null,
-        standby: schedulingSummary?.hours_worked_this_month ?? null,
-        administrative: adminHoursSummary?.totalHours ?? null,
-      });
-      setMyCerts(trainingSummary?.certifications ?? []);
+      // Per source, and only where this call actually has an answer. The three
+      // requests are independent, so rewriting all three from one call means a
+      // retry that recovers scheduling while training transiently fails wipes
+      // training's known figure -- recovery from one outage manufacturing a
+      // second. A source that was not attempted, or that rejected, leaves the
+      // last value it had.
+      setHours((previous) => ({
+        training:
+          trainingFailed || !canLoadTraining
+            ? previous.training
+            : (trainingSummary?.hours_summary?.hours_this_month ?? null),
+        standby:
+          schedulingFailed || !canLoadScheduling
+            ? previous.standby
+            : (schedulingSummary?.hours_worked_this_month ?? null),
+        administrative:
+          adminHoursFailed || !canLoadAdminHours ? previous.administrative : (adminHoursSummary?.totalHours ?? null),
+      }));
+      // Certifications are not a figure, they are an input to the readiness
+      // verdict -- the thing that renders "Clear to respond". Preserving the
+      // last good value is right for hours.training, which is only ever
+      // displayed, and unsafe here: a credential that expired or was revoked
+      // since the previous response would keep clearing the member while the
+      // banner said only that readiness was not fully verified. So they are
+      // cleared on failure, exactly as loadMyScreenings clears its own stale
+      // input for the same reason.
+      if (canLoadTraining) setMyCerts(trainingFailed ? [] : (trainingSummary?.certifications ?? []));
     } catch {
       // Hours are non-critical
     } finally {
-      setLoadingHours(false);
+      if (!isRetry) setLoadingHours(false);
     }
   };
 
-  const loadTrainingProgress = async () => {
+  const loadTrainingProgress = async (isRetry = false) => {
+    if (!isRetry) setLoadingTraining(true);
+    if (!isRetry) setTrainingError(false);
     if (!isModuleOn('training')) {
       setEnrollments([]);
       setLoadingTraining(false);
@@ -791,18 +987,30 @@ const Dashboard: React.FC = () => {
       const data = await trainingProgramService.getMyEnrollments('active');
       setEnrollments(data);
 
-      const top3 = data.slice(0, 3);
-      const results = await Promise.allSettled(top3.map((e) => trainingProgramService.getEnrollmentProgress(e.id)));
-      const details = new Map<string, MemberProgramProgress>();
-      results.forEach((result, i) => {
-        if (result.status === 'fulfilled') {
-          const item = top3[i];
-          if (item) details.set(item.id, result.value);
-        }
+      // Only the rows the card renders. Asking about a fourth enrollment
+      // nobody can see spends a request on it and, worse, lets its failure
+      // raise "Training progress could not be verified" over two rows that
+      // loaded fine — with a Retry that keeps querying the invisible one.
+      const shown = data.slice(0, PROGRAMS_SHOWN);
+      const results = await Promise.allSettled(shown.map((e) => trainingProgramService.getEnrollmentProgress(e.id)));
+      // Merged into what is already known, not swapped for it. A retry reissues
+      // every shown row, so replacing the map means one transient failure on a
+      // row that had loaded drops its next requirement and deadline -- and the
+      // row then claims "All requirements in progress", which is a statement,
+      // not a gap. A rejection here leaves the previous answer standing.
+      setProgressDetails((previous) => {
+        const details = new Map(previous);
+        results.forEach((result, i) => {
+          if (result.status === 'fulfilled') {
+            const item = shown[i];
+            if (item) details.set(item.id, result.value);
+          }
+        });
+        return details;
       });
-      setProgressDetails(details);
+      setTrainingError(results.some((result) => result.status === 'rejected'));
     } catch {
-      // Training is non-critical on dashboard
+      setTrainingError(true);
     } finally {
       setLoadingTraining(false);
     }
@@ -1060,24 +1268,139 @@ const Dashboard: React.FC = () => {
     },
   ];
 
-  const refreshDashboard = useCallback(async () => {
+  // Retries in flight, keyed by loader rather than by the control that started
+  // them. Two controls can sit over one loader -- a training-summary failure
+  // renders a Retry on both the hours card and the readiness card, and both
+  // call loadHours -- so a per-control guard leaves them able to run
+  // concurrently. If the later call settles first, the earlier one lands last
+  // and restores the error over data that had just recovered.
+  const retriesInFlight = useRef(new Map<string, Promise<unknown>>());
+  const [busyLoaders, setBusyLoaders] = useState<ReadonlySet<string>>(new Set());
+
+  // Registers `started` under `key` and clears it on settle -- but only if it
+  // is still the entry registered, so a queued successor is not deleted by its
+  // predecessor finishing.
+  const track = useCallback((key: string, begin: () => Promise<unknown>): Promise<unknown> => {
+    const started: Promise<unknown> = begin().finally(() => {
+      if (retriesInFlight.current.get(key) === started) {
+        retriesInFlight.current.delete(key);
+        setBusyLoaders(new Set(retriesInFlight.current.keys()));
+      }
+    });
+    retriesInFlight.current.set(key, started);
+    setBusyLoaders(new Set(retriesInFlight.current.keys()));
+    return started;
+  }, []);
+
+  const runRetry = useCallback(
+    (key: string, run: () => Promise<unknown>): Promise<unknown> => {
+      const existing = retriesInFlight.current.get(key);
+      // Joined, not queued: a second press while the first is still running is
+      // the same request, so it waits on the same promise instead of issuing
+      // another. Sound only because these reads are idempotent -- see runFresh
+      // for the case where they are not.
+      if (existing) return existing;
+      return track(key, run);
+    },
+    [track]
+  );
+
+  // Queued behind whatever is running, never joined to it.
+  //
+  // After a mutation, joining is wrong: a read that started before the change
+  // answers from before it. Joining the post-signup refresh to a read already
+  // in flight can therefore repopulate the shift the member just took, and
+  // nothing later corrects it, because the guard counted that refresh as done.
+  const runFresh = useCallback(
+    (key: string, run: () => Promise<unknown>): Promise<unknown> => {
+      const existing = retriesInFlight.current.get(key);
+      // The predecessor's rejection is not this call's failure, so it is
+      // swallowed here rather than skipping the fresh read.
+      const after = existing
+        ? existing.then(
+            () => undefined,
+            () => undefined
+          )
+        : Promise.resolve();
+      return track(key, () => after.then(run));
+    },
+    [track]
+  );
+
+  // A control is inert only when *every* source it would retry is already
+  // running -- not when any one of them is. Several controls here cover more
+  // than one source, and `some` disabled the whole control for a source that
+  // happened to be slow, blocking recovery of the other one: a hanging inbox
+  // retry left the Updates button dead while the unread count was failing and
+  // idle. Pressing a partially busy control is safe, because runRetry joins
+  // the half already in flight and starts only the half that is not.
+  const allBusy = useCallback(
+    (...keys: string[]) => keys.length > 0 && keys.every((key) => busyLoaders.has(key)),
+    [busyLoaders]
+  );
+
+  // Held in a ref and rewritten every render, then exposed through a stable
+  // callback. useRegisterPullToRefresh wants one identity for the lifetime of
+  // the page, and a useCallback with suppressed deps gives it that by freezing
+  // the closure from first render -- when useEnabledModules() is still
+  // answering permissively because the configuration has not landed. Pulling to
+  // refresh then called gated endpoints for modules the organization has
+  // disabled, took the 403, and raised an error the module-aware initial load
+  // had correctly avoided. The ref keeps the identity stable and the body
+  // current.
+  const refreshImpl = useRef<() => Promise<void>>(async () => {});
+  refreshImpl.current = async () => {
+    // `true` throughout: a pull-to-refresh runs with the page already on
+    // screen, so it is a refresh rather than a first load. Clearing the error
+    // flags up front here would do what it did on the inline Retry -- the
+    // header ignores loadingHours, so "Hours unavailable" would revert to an
+    // exact stale partial total for the duration of a slow refresh.
+    // Through runRetry, not around it: the gesture is not blocked while a
+    // section Retry is in flight, so calling the loaders directly would start a
+    // second request for the same source. If the newer one settles first the
+    // older lands last, restoring an error over data that had just recovered --
+    // the same race the keyed guard was added to stop, arriving by a different
+    // door. Sharing the keys makes a concurrent gesture join the retry instead.
     await Promise.all([
-      loadDeptMessages(),
-      loadHours(),
-      loadUpcomingEvents(),
-      loadNotifications(),
-      loadMyShifts(),
-      loadOpenShifts(),
-      loadMySeats(),
-      loadMyScreenings(),
-      loadTrainingProgress(),
-      loadMyEquipment(),
+      // The two message subrequests are keyed apart, so a refresh that joins an
+      // inbox-only retry still refreshes the unread count. Sharing one key made
+      // the refresh return that partial promise and skip the other half,
+      // leaving the badge stale.
+      runRetry('messages:inbox', () => loadDeptMessages('inbox')),
+      runRetry('messages:unread', () => loadDeptMessages('unread')),
+      runRetry('events', () => loadUpcomingEvents(true)),
+      // Module-owned loaders, held until the module config lands -- the same
+      // condition the mount effect applies, for the same reason: isModuleOn
+      // answers permissively while the configuration is unknown, so a refresh
+      // inside that window fires every gated endpoint and takes a 403 per
+      // disabled module, raising errors the module-aware first load avoids.
+      //
+      // Making this closure current rather than frozen was necessary and not
+      // sufficient: *current* during that window is still permissive. The
+      // window is short enough to miss locally and wide enough to hit on a
+      // loaded CI runner, which is where it was caught.
+      //
+      // Skipping loses nothing: the mount effect runs exactly these the moment
+      // modulesLoading flips.
+      ...(modulesLoading
+        ? []
+        : [
+            runRetry('hours', () => loadHours(true)),
+            runRetry('notifications', () => loadNotifications(true)),
+            runRetry('myShifts', () => loadMyShifts(true)),
+            runRetry('openShifts', () => loadOpenShifts(true)),
+            runRetry('seats', () => loadMySeats(true)),
+            runRetry('screenings', () => loadMyScreenings(true)),
+            runRetry('training', () => loadTrainingProgress(true)),
+            runRetry('equipment', () => loadMyEquipment(true)),
+          ]),
       ...(activeTab === 'department' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
       ...(activeTab === 'department' && canViewChiefOperations ? [loadOperations()] : []),
       ...(activeTab === 'department' && canViewAssets ? [loadAssetWidgets()] : []),
     ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, canViewAssets, canViewChiefOperations, canViewLegacyAdmin]);
+  };
+
+  const refreshDashboard = useCallback(() => refreshImpl.current(), []);
 
   useRegisterPullToRefresh(refreshDashboard);
 
@@ -1307,8 +1630,14 @@ const Dashboard: React.FC = () => {
             <span className="border-theme-surface-border bg-theme-surface text-theme-text-secondary inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-full border px-4 text-[13px]">
               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
-                <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(totalHours)}</span> hrs in{' '}
-                {monthLabel}
+                {hoursError ? (
+                  <span className="text-theme-text-primary font-bold">Hours unavailable for {monthLabel}</span>
+                ) : (
+                  <>
+                    <span className="text-theme-text-primary font-bold tabular-nums">{formatHours(totalHours)}</span>{' '}
+                    hrs in {monthLabel}
+                  </>
+                )}
               </span>
             </span>
           </div>
@@ -1340,6 +1669,37 @@ const Dashboard: React.FC = () => {
                 // page that cannot explain what grounded them.
                 onOpen={() => void navigate(myCerts.length > 0 ? '/training/my-training' : '/notifications?tab=inbox')}
               />
+              {(certificationsError || seatsError || screeningsError) && (
+                <div className="card">
+                  <SectionError
+                    message="Readiness could not be fully verified."
+                    source="readiness"
+                    // Mirrors the handler's conditions exactly. Listing every
+                    // possible source unconditionally lets a slow hours retry
+                    // disable this control even when readiness failed only on
+                    // seats -- blocking recovery of a source the button would
+                    // have been the one to retry.
+                    busy={allBusy(
+                      ...(certificationsError ? ['hours'] : []),
+                      ...(seatsError ? ['seats'] : []),
+                      ...(screeningsError ? ['screenings'] : [])
+                    )}
+                    onRetry={() => {
+                      // Only the failed sources. Reloading the healthy ones
+                      // disturbs the Hours card for a readiness failure, and a
+                      // transient rejection from a request that had succeeded
+                      // replaces good data with an unavailable state -- turning
+                      // one recoverable failure into several.
+                      //
+                      // 'hours' is the same key the hours card's own control
+                      // uses, which is what stops those two racing each other.
+                      if (certificationsError) void runRetry('hours', () => loadHours(true));
+                      if (seatsError) void runRetry('seats', () => loadMySeats(true));
+                      if (screeningsError) void runRetry('screenings', () => loadMyScreenings(true));
+                    }}
+                  />
+                </div>
+              )}
 
               <DashboardNeedsYou items={needsYouItems} />
 
@@ -1373,8 +1733,14 @@ const Dashboard: React.FC = () => {
                       Take a Shift
                     </span>
                     <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
-                      {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
+                      {openShiftsError ? (
+                        'Open shifts unavailable'
+                      ) : (
+                        <>
+                          <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
+                          {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
+                        </>
+                      )}
                     </span>
                   </span>
                 </button>
@@ -1429,6 +1795,22 @@ const Dashboard: React.FC = () => {
                   </div>
                 ) : (
                   <>
+                    {(myShiftsError || openShiftsError || upcomingEventsError) && (
+                      <SectionError
+                        message="Some schedule information could not be verified."
+                        source="schedule"
+                        busy={allBusy(
+                          ...(myShiftsError ? ['myShifts'] : []),
+                          ...(openShiftsError ? ['openShifts'] : []),
+                          ...(upcomingEventsError ? ['events'] : [])
+                        )}
+                        onRetry={() => {
+                          if (myShiftsError) void runRetry('myShifts', () => loadMyShifts(true));
+                          if (openShiftsError) void runRetry('openShifts', () => loadOpenShifts(true));
+                          if (upcomingEventsError) void runRetry('events', () => loadUpcomingEvents(true));
+                        }}
+                      />
+                    )}
                     <ul>{visibleTimeline.map(renderTimelineRow)}</ul>
 
                     {firstHiddenTimelineRow && (
@@ -1456,11 +1838,15 @@ const Dashboard: React.FC = () => {
                       }`}
                     >
                       <p className="text-theme-text-muted text-[13px]">
-                        {timeline.length === 0
-                          ? 'Nothing scheduled'
-                          : timeline.length > visibleTimeline.length
-                            ? `${timeline.length - visibleTimeline.length} more`
-                            : 'Nothing else'}{' '}
+                        {myShiftsError || openShiftsError || upcomingEventsError
+                          ? timeline.length > visibleTimeline.length
+                            ? `${timeline.length - visibleTimeline.length} more loaded item${timeline.length - visibleTimeline.length === 1 ? '' : 's'}`
+                            : 'Showing available schedule information'
+                          : timeline.length === 0
+                            ? 'Nothing scheduled'
+                            : timeline.length > visibleTimeline.length
+                              ? `${timeline.length - visibleTimeline.length} more`
+                              : 'Nothing else'}{' '}
                         through {formatCalendarDate(windowEnd, { month: 'short', day: 'numeric' })}
                         {laterOpenShifts > 0 && (
                           <>
@@ -1548,45 +1934,80 @@ const Dashboard: React.FC = () => {
                     ))}
                   </div>
                 ) : feed.length === 0 ? (
-                  <p className="text-theme-text-muted px-4 py-6 text-center text-sm">Nothing new</p>
+                  messagesError || notificationsError ? (
+                    <SectionError
+                      message="Updates could not be fully verified."
+                      source="updates"
+                      busy={allBusy(
+                        ...(inboxError ? ['messages:inbox'] : []),
+                        ...(unreadCountError ? ['messages:unread'] : []),
+                        ...(notificationsError ? ['notifications'] : [])
+                      )}
+                      onRetry={() => {
+                        if (messagesError) void retryDeptMessages();
+                        if (notificationsError) void runRetry('notifications', () => loadNotifications(true));
+                      }}
+                    />
+                  ) : (
+                    <p className="text-theme-text-muted px-4 py-6 text-center text-sm">Nothing new</p>
+                  )
                 ) : (
-                  <ul>
-                    {feed.slice(0, FEED_ROWS_SHOWN).map((entry) => {
-                      const msg = entry.message;
-                      const rowClass =
-                        'focus:ring-theme-focus-ring min-w-0 flex-1 cursor-pointer rounded text-left focus:ring-2 focus:outline-hidden';
-                      const rowInner = (
-                        <>
-                          <span className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
-                            {msg?.is_pinned && (
-                              <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                            )}
-                            <span className="truncate">{entry.title}</span>
-                            {entry.unread && (
-                              <span
-                                className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
-                                role="img"
-                                aria-label="Unread"
-                              />
-                            )}
-                            {msg?.is_persistent && (
-                              <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase">
-                                Persistent
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-theme-text-secondary mt-0.5 line-clamp-2 block text-[13px] whitespace-pre-line">
-                            {entry.body}
-                          </span>
-                          <span className="text-theme-text-muted mt-1 block text-xs">{entry.meta}</span>
-                        </>
-                      );
-                      return (
-                        <li
-                          key={entry.key}
-                          className="border-theme-surface-hover flex items-start gap-2 border-t px-4 py-3 first:border-t-0"
-                        >
-                          {/* The row and its Clear control are siblings, not
+                  <>
+                    {(messagesError || notificationsError) && (
+                      <SectionError
+                        message="Some updates could not be verified."
+                        // The handler retries only what failed, so the name has
+                        // to follow it: hard-coding one source tells a screen
+                        // reader the button refreshes a healthy feed.
+                        source={messagesError ? 'updates' : 'notifications'}
+                        busy={allBusy(
+                          ...(inboxError ? ['messages:inbox'] : []),
+                          ...(unreadCountError ? ['messages:unread'] : []),
+                          ...(notificationsError ? ['notifications'] : [])
+                        )}
+                        onRetry={() => {
+                          if (messagesError) void retryDeptMessages();
+                          if (notificationsError) void runRetry('notifications', () => loadNotifications(true));
+                        }}
+                      />
+                    )}
+                    <ul>
+                      {feed.slice(0, FEED_ROWS_SHOWN).map((entry) => {
+                        const msg = entry.message;
+                        const rowClass =
+                          'focus:ring-theme-focus-ring min-w-0 flex-1 cursor-pointer rounded text-left focus:ring-2 focus:outline-hidden';
+                        const rowInner = (
+                          <>
+                            <span className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
+                              {msg?.is_pinned && (
+                                <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                              )}
+                              <span className="truncate">{entry.title}</span>
+                              {entry.unread && (
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
+                                  role="img"
+                                  aria-label="Unread"
+                                />
+                              )}
+                              {msg?.is_persistent && (
+                                <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase">
+                                  Persistent
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-theme-text-secondary mt-0.5 line-clamp-2 block text-[13px] whitespace-pre-line">
+                              {entry.body}
+                            </span>
+                            <span className="text-theme-text-muted mt-1 block text-xs">{entry.meta}</span>
+                          </>
+                        );
+                        return (
+                          <li
+                            key={entry.key}
+                            className="border-theme-surface-hover flex items-start gap-2 border-t px-4 py-3 first:border-t-0"
+                          >
+                            {/* The row and its Clear control are siblings, not
                               nested buttons: a <button> inside a <button> is
                               invalid HTML, and the browser closes the outer
                               element early, handing assistive technology a
@@ -1598,48 +2019,49 @@ const Dashboard: React.FC = () => {
                               LinkifiedText stops click propagation on its
                               anchors, so following a link doesn't also fire the
                               row's navigation to the message. */}
-                          {msg ? (
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              onClick={entry.onClick}
-                              onKeyDown={(e) => {
-                                // Only the row itself activates the row. A
-                                // linkified body can hold focusable anchors,
-                                // and Enter on one bubbles here — without this
-                                // guard the row would swallow the keypress and
-                                // navigate to the message instead of opening
-                                // the link (the anchor's guard covers clicks
-                                // only).
-                                if (e.target !== e.currentTarget) return;
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  entry.onClick();
-                                }
-                              }}
-                              className={rowClass}
-                            >
-                              {rowInner}
-                            </div>
-                          ) : (
-                            <button onClick={entry.onClick} className={rowClass}>
-                              {rowInner}
-                            </button>
-                          )}
-                          {msg?.is_persistent && canManageMessages && (
-                            <button
-                              onClick={() => void clearPersistentMessage(msg.id)}
-                              className="text-theme-text-muted -mr-1 shrink-0 rounded p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400"
-                              title="Clear persistent message"
-                              aria-label={`Clear persistent message: ${entry.title}`}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                            {msg ? (
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                onClick={entry.onClick}
+                                onKeyDown={(e) => {
+                                  // Only the row itself activates the row. A
+                                  // linkified body can hold focusable anchors,
+                                  // and Enter on one bubbles here — without this
+                                  // guard the row would swallow the keypress and
+                                  // navigate to the message instead of opening
+                                  // the link (the anchor's guard covers clicks
+                                  // only).
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    entry.onClick();
+                                  }
+                                }}
+                                className={rowClass}
+                              >
+                                {rowInner}
+                              </div>
+                            ) : (
+                              <button onClick={entry.onClick} className={rowClass}>
+                                {rowInner}
+                              </button>
+                            )}
+                            {msg?.is_persistent && canManageMessages && (
+                              <button
+                                onClick={() => void clearPersistentMessage(msg.id)}
+                                className="text-theme-text-muted -mr-1 shrink-0 rounded p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400"
+                                title="Clear persistent message"
+                                aria-label={`Clear persistent message: ${entry.title}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
                 )}
 
                 <div className="border-theme-surface-border bg-theme-surface-secondary border-t px-4 py-2">
@@ -1654,7 +2076,7 @@ const Dashboard: React.FC = () => {
               </section>
 
               {/* Training progress */}
-              {!loadingTraining && enrollments.length > 0 && (
+              {!loadingTraining && (trainingError || enrollments.length > 0) && (
                 <section className="card p-4" aria-labelledby="training-progress-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="training-progress-heading" className="text-theme-text-primary text-[15px] font-bold">
@@ -1669,71 +2091,91 @@ const Dashboard: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="flex flex-col gap-4">
-                    {enrollments.slice(0, PROGRAMS_SHOWN).map((enrollment) => {
-                      const progress = progressDetails.get(enrollment.id);
-                      // Guard the array itself, not just `progress`: an
-                      // enrollment whose payload omits requirement_progress
-                      // would otherwise throw inside render and take the
-                      // whole dashboard down to the ErrorBoundary.
-                      const nextStep = progress?.requirement_progress?.find(
-                        (rp) => rp.status === 'not_started' || rp.status === 'in_progress'
-                      );
-                      const target = nextStep ? requirementTarget(nextStep) : null;
-                      const daysLeft = progress?.time_remaining_days;
-                      const pct = Math.round(enrollment.progress_percentage);
+                  {trainingError && (
+                    <SectionError
+                      message="Training progress could not be verified."
+                      source="training"
+                      busy={allBusy('training')}
+                      onRetry={() => void runRetry('training', () => loadTrainingProgress(true))}
+                    />
+                  )}
 
-                      return (
-                        <button
-                          key={enrollment.id}
-                          onClick={() => void navigate(`/training/my-progress/${enrollment.id}`)}
-                          className="w-full text-left"
-                          aria-label={`${enrollment.program?.name || 'Program'}: ${pct}% complete`}
-                        >
-                          <div className="mb-2 flex items-baseline justify-between gap-2">
-                            <span className="text-theme-text-primary min-w-0 truncate text-sm font-bold">
-                              {enrollment.program?.name || 'Program'}
-                            </span>
-                            <span className="text-theme-text-primary shrink-0 text-lg font-bold tabular-nums">
-                              {pct}%
-                            </span>
-                          </div>
-                          <div
-                            className="bg-theme-surface-hover mb-2 h-2.5 w-full overflow-hidden rounded-full"
-                            role="progressbar"
-                            aria-valuenow={pct}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label={`${enrollment.program?.name ?? 'Program'} progress`}
+                  {enrollments.length > 0 && (
+                    <div className="flex flex-col gap-4">
+                      {enrollments.slice(0, PROGRAMS_SHOWN).map((enrollment) => {
+                        const progress = progressDetails.get(enrollment.id);
+                        // Guard the array itself, not just `progress`: an
+                        // enrollment whose payload omits requirement_progress
+                        // would otherwise throw inside render and take the
+                        // whole dashboard down to the ErrorBoundary.
+                        const nextStep = progress?.requirement_progress?.find(
+                          (rp) => rp.status === 'not_started' || rp.status === 'in_progress'
+                        );
+                        const target = nextStep ? requirementTarget(nextStep) : null;
+                        const daysLeft = progress?.time_remaining_days;
+                        const pct = Math.round(enrollment.progress_percentage);
+
+                        return (
+                          <button
+                            key={enrollment.id}
+                            onClick={() => void navigate(`/training/my-progress/${enrollment.id}`)}
+                            className="w-full text-left"
+                            aria-label={`${enrollment.program?.name || 'Program'}: ${pct}% complete`}
                           >
+                            <div className="mb-2 flex items-baseline justify-between gap-2">
+                              <span className="text-theme-text-primary min-w-0 truncate text-sm font-bold">
+                                {enrollment.program?.name || 'Program'}
+                              </span>
+                              <span className="text-theme-text-primary shrink-0 text-lg font-bold tabular-nums">
+                                {pct}%
+                              </span>
+                            </div>
                             <div
-                              className={`h-2.5 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
-                              style={{ width: `${enrollment.progress_percentage}%` }}
-                            />
-                          </div>
-                          <p className="text-theme-text-secondary text-[13px] leading-relaxed">
-                            {nextStep ? (
-                              <>
-                                Next requirement: {nextStep.requirement?.name || 'Requirement'}
-                                {target ? ` (${target})` : ''}.
-                              </>
-                            ) : (
-                              'All requirements in progress.'
-                            )}
-                            {daysLeft !== null && daysLeft !== undefined && (
-                              <>
-                                {' '}
-                                <span className={daysLeft < 30 ? 'font-bold text-red-700 dark:text-red-400' : ''}>
-                                  {daysLeft} days
-                                </span>{' '}
-                                to complete.
-                              </>
-                            )}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
+                              className="bg-theme-surface-hover mb-2 h-2.5 w-full overflow-hidden rounded-full"
+                              role="progressbar"
+                              aria-valuenow={pct}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label={`${enrollment.program?.name ?? 'Program'} progress`}
+                            >
+                              <div
+                                className={`h-2.5 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
+                                style={{ width: `${enrollment.progress_percentage}%` }}
+                              />
+                            </div>
+                            <p className="text-theme-text-secondary text-[13px] leading-relaxed">
+                              {/* Three states, not two. No `progress` entry means the
+                                  detail request rejected and never loaded -- saying
+                                  "All requirements in progress" there is an
+                                  affirmative claim about this program that nothing
+                                  supports, and the section warning above does not
+                                  make it true. That sentence is reserved for a
+                                  payload that actually arrived and had no next step. */}
+                              {!progress ? (
+                                'Progress unavailable.'
+                              ) : nextStep ? (
+                                <>
+                                  Next requirement: {nextStep.requirement?.name || 'Requirement'}
+                                  {target ? ` (${target})` : ''}.
+                                </>
+                              ) : (
+                                'All requirements in progress.'
+                              )}
+                              {daysLeft !== null && daysLeft !== undefined && (
+                                <>
+                                  {' '}
+                                  <span className={daysLeft < 30 ? 'font-bold text-red-700 dark:text-red-400' : ''}>
+                                    {daysLeft} days
+                                  </span>{' '}
+                                  to complete.
+                                </>
+                              )}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {enrollments.length > PROGRAMS_SHOWN && (
                     <p className="text-theme-text-muted mt-3 text-xs">
@@ -1744,10 +2186,27 @@ const Dashboard: React.FC = () => {
                 </section>
               )}
 
-              <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
+              <div className="flex flex-col gap-2">
+                <DashboardHoursCard
+                  monthLabel={monthLabel}
+                  segments={hoursSegments}
+                  loading={loadingHours}
+                  totalUnverified={hoursError}
+                />
+                {hoursError && !loadingHours && (
+                  <div className="card">
+                    <SectionError
+                      message="Hours could not be fully verified."
+                      source="hours"
+                      busy={allBusy('hours')}
+                      onRetry={() => void runRetry('hours', () => loadHours(true))}
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* Issued gear — compact in the rail; the full picture is in Organization */}
-              {!loadingMyEquipment && (myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
+              {!loadingMyEquipment && (equipmentError || myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
                 <section className="card p-4" aria-labelledby="my-equipment-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="my-equipment-heading" className="text-theme-text-primary text-[15px] font-bold">
@@ -1761,22 +2220,34 @@ const Dashboard: React.FC = () => {
                       <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
-                  <dl className="flex flex-col gap-1.5 text-[13px]">
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-theme-text-secondary">Assigned items</dt>
-                      <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.assigned}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-theme-text-secondary">Checked out</dt>
-                      <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.checkedOut}</dd>
-                    </div>
-                    {myEquipment.overdue > 0 && (
+                  {equipmentError && (
+                    <SectionError
+                      message="Issued gear could not be verified."
+                      source="issued gear"
+                      busy={allBusy('equipment')}
+                      onRetry={() => void runRetry('equipment', () => loadMyEquipment(true))}
+                    />
+                  )}
+                  {!equipmentError && (
+                    <dl className="flex flex-col gap-1.5 text-[13px]">
                       <div className="flex items-center justify-between gap-2">
-                        <dt className="text-theme-text-secondary">Overdue</dt>
-                        <dd className="font-bold text-red-700 tabular-nums dark:text-red-400">{myEquipment.overdue}</dd>
+                        <dt className="text-theme-text-secondary">Assigned items</dt>
+                        <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.assigned}</dd>
                       </div>
-                    )}
-                  </dl>
+                      <div className="flex items-center justify-between gap-2">
+                        <dt className="text-theme-text-secondary">Checked out</dt>
+                        <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.checkedOut}</dd>
+                      </div>
+                      {myEquipment.overdue > 0 && (
+                        <div className="flex items-center justify-between gap-2">
+                          <dt className="text-theme-text-secondary">Overdue</dt>
+                          <dd className="font-bold text-red-700 tabular-nums dark:text-red-400">
+                            {myEquipment.overdue}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  )}
                 </section>
               )}
             </div>
