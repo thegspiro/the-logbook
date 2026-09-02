@@ -16,10 +16,65 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. [#2138](https://github.com/thegspiro/the-logbook/pull/2138) (Feature
-04, Storefront & payments, pass 3) merged after six Codex review rounds —
-see the Log below for detail. Rotation row 04 → ✅. Next: 05 Finance &
-approvals.
+[#2159](https://github.com/thegspiro/the-logbook/pull/2159) (Feature 05,
+Finance & approvals, pass 3) — 4 fixes (FIN-23–26), 0 flagged. See the Log
+below for detail.
+
+---
+
+### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) — 4 fixes, 0 flagged — PR #2159
+
+Pass 2's own closing PR (#1946) merged onto a rewritten history — its head
+commit is not an ancestor of `origin/main`, the same effect AUTH-01/SF-04/
+this file's own pass 1 already documented. The real landing point of pass
+2's fixes is commit `0eb84bf2` (2026-08-28), identified by content match (its
+diff to this file is pass 2's own +200-line section verbatim). Scoped from
+there: two commits touch the finance module in `0eb84bf2..HEAD`
+(`8729c68a`, `6b5a82fa`), both already merged to `main` before this pass
+started, from an unrelated review cycle rather than this rotation.
+
+**FIN-19 through FIN-22 (already fixed on `main`), independently
+re-verified correct:** a denied approval step didn't terminate the rest of
+the chain (later steps stayed `PENDING` and could still be approved,
+reversing the denial and encumbering budget against a refused request);
+`_advance_reachable_steps` read a `DENIED` prior step as resolved, minting
+a fresh 7-day email token for a refused request; `Budget.station_id` was
+never org-validated (Pitfall 14c); and a department's pre-existing
+`DENIED`-then-`PENDING` chains needed both a runtime guard and a backfill
+migration, since the runtime fix alone doesn't reach rows already in the
+database. All four traced through the actual code (not taken on the commit
+messages' word) and confirmed sound.
+
+**FIN-23 through FIN-26, found this pass and fixed — the same Pitfall-14c
+class as FIN-21, four more instances of it in the same file:**
+`PurchaseRequest.apparatus_id`/`facility_id`, `BudgetCategory.parent_
+category_id` (self-referential), `ApprovalChain.budget_category_id`, and
+`ApprovalChainStep.email_template_id` are all client-supplied,
+`ondelete="SET NULL"` foreign keys that were never validated against the
+caller's organization — three of the four had no FK-validation call at all,
+not just a missing field in an existing check. No cross-org data leak (none
+of the four relationships is eager-loaded into a response beyond the bare
+id), but each is the same dangling-reference/cross-org-`SET NULL` side
+channel Pitfall 14c names. Fixed with the same `assert_in_org` pattern
+already used for `station_id`: extended the shared `_validate_finance_fks`
+for `apparatus_id`/`facility_id`, added three new sibling helpers for the
+other three, and wired `create_approval_chain`'s own inline `steps` loop
+(which builds `ApprovalChainStep` rows directly, bypassing `add_chain_step`
+entirely) so the common one-call chain-creation path is covered too, not
+just the standalone add/update-step endpoints.
+
+13 new tests (`tests/test_finance_chain_fk_validation.py`), 11 of 13
+confirmed to fail against the pre-fix code via `git stash` (the remaining 2
+are "accepts a valid in-org id" cases paired with a "rejects" test in the
+same class, which can't fail pre-fix by construction). Full completion gate
+clean: flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, single head); scoped tests (`-k "finance or dues
+or approval or budget or export"`) 270 passed/1 skipped (pre-existing)/0
+failed; full backend suite 9771 passed/21 skipped (pre-existing)/0 failed;
+`tsc --noEmit` and `eslint .` both 0 errors (no frontend file touched).
+Pass 1/2's FIN-1 through FIN-18 re-verified still hold against current code.
+See `docs/security-review/FIN-05-finance-approvals.md`'s Pass 3 section for
+the full write-up. Rotation row 05 → ✅. Next: 06 elections & ballots.
 
 ---
 
@@ -5904,7 +5959,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
