@@ -1661,6 +1661,26 @@ position model to the ballot-item model the public page already uses, including
 its submission shape. Needs an owner decision on whether to converge the two
 ballots or retire one of them. This loop does not make that call.
 
+**Update (2026-09-02, security review ELEC-28):** the backend-side half of
+this gap is now closed for eligibility purposes — `send_ballot_emails`
+correctly snapshots `eligible_positions` on the token for a mixed election
+(ELEC-23, ELEC-26 in `docs/security-review/ELEC-06-elections-ballots.md`),
+and `/ballot/lookup` correctly returns the eligible positions and their
+candidates to that token. But this UI gap means it doesn't matter: a member
+eligible **only** for a plain position in a mixed election (ineligible for
+every structured ballot item) now correctly receives a live token, opens
+`BallotVotingPage`, and sees an **empty ballot** — no positions render, so
+there is nothing to vote on. A member eligible for both a position and an
+item sees only the item, and submitting it spends the single-use token with
+no way back to the position vote. Confirmed the backend's single-vote token
+route (`POST /elections/ballot/vote`, `cast_vote_with_token`) that could in
+principle carry a positional vote is not called from any current frontend
+code — there is no wiring to repurpose, only a route to design a UI and
+submission contract around. Through the product today, a plain-position
+contest inside a mixed election cannot be voted on by an emailed-token
+recipient at all. Not fixed for the same reason as the original finding: it
+is a UI/submission-contract design decision, not a mechanical fix.
+
 ## Training — The Student View of a Cohort Has No Frontend (2026-08-12)
 
 The API implements it. `GET /training/cohorts/{id}` served to a member on the
@@ -1734,6 +1754,118 @@ an owner decision elsewhere (FIN-7's export cap, the various CS-config
 thresholds). (Security review ELEC-12,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
+## Elections — Vote Receipt Verification Takes Its Credential as a GET Query Parameter (2026-09-02)
+
+`GET /elections/{id}/verify-receipt?receipt=...` (`verify_vote_receipt`)
+binds `receipt` as a bare scalar parameter on a `GET` route, so it travels
+in the URL query string rather than a request body — unlike the other three
+public token routes (`/ballot/lookup`, `/ballot/vote`, `/ballot/vote/bulk`),
+which all carry their credential in a POST body specifically so it never
+lands in server/proxy access logs or browser network history (R-D3). A
+receipt hash cannot cast, change, or reveal the content of a vote — it only
+confirms a matching vote was recorded, plus its timestamp and position — but
+it is still a value tied to one specific voter's one specific ballot, and a
+query-string value is more exposed than a body value to logging
+infrastructure the application doesn't control.
+
+Not fixed: converting this endpoint to `POST` with the receipt in the body
+would be a public API **shape** change, not a mechanical one. This exact
+`GET .../verify-receipt?receipt=` contract is documented as a stable,
+external-facing endpoint in `wiki/API-Reference.md`, `ARCHITECTURE.md`,
+`BALLOT_FORENSICS_GUIDE.md`, and the training materials — any of which may
+already have a caller depending on the GET shape — so changing it needs an
+owner decision about that external contract, not a guess made during a
+security-review pass. (Security review ELEC-14,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Elections — Manual Ballot Batch Listing Has No Bound (2026-09-02)
+
+`list_manual_ballot_batches` (`GET .../manual-ballots`) returns every
+paper-tally batch recorded for an election with `scalars().all()`, eagerly
+loads every batch's attestations, and aggregates every associated vote —
+with no pagination or per-election cap. Access control is sound
+(`elections.manage`-gated, org- and election-scoped, the same trust boundary
+as `SavedBallotTemplate` below), so this is a scaling concern rather than a
+leak: an election that accumulates many paper-tally sessions over a long
+voting window pays a growing, uncapped cost on every load of this listing.
+
+Not fixed for the same reason as the saved-ballot-templates item below:
+pagination changes the response envelope (a frontend-affecting contract
+change for the manual-ballots admin screen), and a per-election batch cap
+needs an actual number picked by a human. (Security review ELEC-16,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
+
+A legacy ballot item (one persisted without its own `position` field) is
+matched by its `title` _or_ its `id` — `ballot_item_candidate_positions()`
+needs both, because a real candidate/vote for that item can be stored under
+either convention depending on which code wrote it, and matching only one
+would silently empty a legitimate item's candidate list. The schema
+(`BallotItemInput.unique_item_ids`) enforces only unique **ids** across an
+election's ballot items — nothing stops a _different_ item's `title` (or
+explicit `position` override) from equaling this item's `id`.
+
+When that collision happens, a stored `Candidate`/`Vote` row carrying that
+exact string is genuinely ambiguous: `Vote` has no `ballot_item_id` column,
+only `position` (a string) and `candidate_id`, and `Candidate.position`
+carries the identical ambiguity — which item a candidate was originally
+created "for" is not persisted anywhere once its position string is
+stored. Neither table can be joined back to a specific item's identity to
+settle the question.
+
+The one instance of this that was concretely reported (security review
+ELEC-38) — the duplicate-vote pre-check treating a different item's stored
+vote as a re-vote on this item — **is** fixed for votes written after
+ELEC-34 (round 7): that check only needs to decide "would this read as a
+re-vote," where under-matching is safe as long as a genuine repeat vote is
+dedup-hashed against the item's own canonical id, never its title, so the
+database's `vote_dedup_hash` UNIQUE constraint still catches an actual
+duplicate on that exact item even after a colliding alias is excluded from
+the pre-check. `_dedup_scoped_item_aliases()` drops a fallback alias from
+the pre-check whenever another item in the same election already claims
+that exact string as its own canonical key.
+
+**Correction (security review ELEC-40, round 10):** that "still caught by
+the UNIQUE constraint" guarantee does not reach a vote row whose
+`vote_dedup_hash` predates the id-based convention itself — i.e. a vote
+`cast_vote_with_token` wrote for a legacy item before ELEC-34 landed, back
+when the hash was computed against the title (`Vote.position`'s own value
+for that route, which ELEC-34 never changed — only the hash input was
+redirected to the item's id). For such a row, dropping its title alias
+from the pre-check removes the only mechanism that could have caught a
+second vote on it: the new vote hashes against the item's id, the old row
+against its title, and the two never collide. Genuinely rare in practice —
+it additionally requires the same election to already have a title/id
+alias collision between two ballot items — but real, and not fixable by
+adjusting the pre-check alone without reopening ELEC-38 (there is no way
+to keep both fixed with string matching, since the schema still cannot
+disambiguate the two colliding items apart from the string itself, per
+above). Flagged rather than guessed at; a full fix needs one of: reverting
+the pre-check narrowing (accepting ELEC-38's false-positive back) or a
+backfill migration re-hashing existing legacy-item votes to the id-based
+convention — both are product/data-migration decisions for an owner, not
+something to pick during a review pass.
+
+What is **not** fixed, and cannot be with today's schema: full
+disambiguation of candidate/vote _ownership_ when two items collide this
+way. If both colliding items happen to have real, legitimately
+title-keyed/id-keyed candidates stored under the exact same string, there
+is currently no way — for candidate-list rendering, eligibility, tallying,
+or any other consumer of `ballot_item_candidate_positions()` — to tell
+which item a given stored row actually belongs to; the function
+necessarily returns the union of both, and the broader (unscoped) alias
+matching it produces is deliberately left in place at those other call
+sites for exactly that reason. Fixing this fully would need a schema
+change — e.g. an explicit `ballot_item_id` column on `Candidate` and/or
+`Vote`, populated going forward and backfilled for existing rows where
+resolvable — which is a data-model decision for an owner, not something to
+guess at during a security-review pass. In practice this requires an
+admin to deliberately configure two ballot items whose alias sets collide
+in the same election; nothing else in the ballot-authoring UI encourages
+or warns against it today. (Security review ELEC-38,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 
 `list_users_with_roles` (`users.py:601`) and `get_archived_members`
@@ -1758,6 +1890,33 @@ the full list (the Members admin page, the leave dashboard widget), which is
 a frontend-affecting decision, not a drop-in. (Security review USR-5,
 `docs/security-review/USR-07-users-organizations.md`.)
 
+## Users: `GET /users` Sends the Full Admin Roster Record to Every `members.view` Holder (2026-09-02)
+
+`members.view` — held by every default position, per the route's own
+docstring — is enough to receive the same `UserListResponse` shape
+`members.manage` gets: `username`, `hire_date`, `membership_number`, `rank`,
+and `station` for every member in the org
+(`app/services/user_service.py:24-91`, `app/schemas/user.py:271-298`). A
+2026-09-01/02 frontend change (`frontend/src/pages/Members.tsx`) now presents
+a visibly reduced "Member Directory" for callers without `members.manage` —
+no username, no Hire Date column, no export/bulk actions — framed as "a
+member without the grant gets a directory; a coordinator gets the management
+table." That framing implies an access-control boundary that does not exist
+server-side: every field the directory view hides is still in the JSON `GET
+/users` response reaching that caller's own browser, readable via devtools'
+Network tab or a direct authenticated call to the endpoint. Not a
+cross-tenant leak (org-scoped throughout) and not on the leadership-only PII
+list (DOB, emergency contacts) enforced elsewhere in this module — but a real
+mismatch between the UI's implied tiering and the actual wire payload.
+
+Not fixed: `GET /users` is consumed by 25+ frontend files beyond the roster
+page (scheduling, messaging, elections, meetings, waivers, shift reports),
+several of which need `rank`/`station`/`platoon` at the `members.view` tier
+for legitimate, non-directory purposes. Trimming the response naively would
+break those callers; the fix needs a decision on whether `GET /users` should
+serve two shapes by permission or a narrower directory endpoint should be
+split out. (Security review USR-8, `docs/security-review/USR-07-users-organizations.md`.)
+
 ## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
 
 `GET /prospective-members/election-packages` (`list_election_packages`) runs
@@ -1777,6 +1936,33 @@ package per prospect is a behavior change that could break an intended
 "regenerate before the vote" workflow, and pagination on the list endpoint is
 a response-envelope/frontend-contract change, not a drop-in. (Security review
 MP-10, `docs/security-review/MP-08-membership-pipeline.md`.)
+
+## Membership Pipeline — `/widget-summary` Loads Every Prospect Row to Count Them (2026-09-02)
+
+`GET /prospective-members/widget-summary` (`pipeline_widget_summary`,
+`membership_pipeline.py:118-168`) loads every full `ProspectiveMember` row in
+the organization — every column, unbounded — into Python just to compute
+`by_status` counts, three aging buckets, and (for a caller holding
+`prospective_members.manage`) a `details` list of every applicant's id/name/
+status. Same class as MP-10 above and the medical-screening/finance entries
+elsewhere on this page: access control is sound (org-scoped,
+permission-gated, and the manager-only `details` field is already withheld
+from view-only callers), so this is a scaling concern, not a leak — but a
+department with years of applicant history materializes its entire prospect
+table, full PII columns included, on every render of this dashboard widget.
+
+Not fixed: the aggregate counts (`by_status`/`aging`/`total`) could be
+computed with `GROUP BY`/`CASE` SQL instead of a full row scan without
+changing the response shape, but the `details` list itself has no natural
+cap in the current contract — capping it silently truncates what a manager
+sees, and paginating it is a response-envelope change for the frontend
+widget, the same class of decision MP-10 already declined to make
+unilaterally. (Security review MP-08 pass 3, PR #2176,
+`docs/security-review/MP-08-membership-pipeline.md`.) The sibling read in
+this same finding — `GET /pipelines`'s `selectinload(...prospects)` used
+only to `len()` the collection — **was** fixed in the same pass: it now
+counts prospects per pipeline with one aggregate query instead of
+eager-loading every row, with no response-shape change.
 
 ## Medical Screening — Requirement and Record Lists Are Unbounded (2026-08-06, mirrored 2026-08-25)
 

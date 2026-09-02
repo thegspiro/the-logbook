@@ -32,6 +32,8 @@ from sqlalchemy.orm import aliased, contains_eager, selectinload
 
 from app.api.dependencies import PaginationParams
 from app.core.config import settings
+from app.models.apparatus import Apparatus
+from app.models.email_template import EmailTemplate
 from app.models.facilities import Facility
 from app.models.finance import (
     ApprovalChain,
@@ -256,6 +258,7 @@ class FinanceService:
         return result.scalar_one_or_none()
 
     async def create_budget_category(self, org_id: str, **kwargs) -> BudgetCategory:
+        await self._validate_budget_category_fks(org_id, kwargs)
         cat = BudgetCategory(organization_id=org_id, **kwargs)
         self.db.add(cat)
         await self.db.flush()
@@ -265,6 +268,7 @@ class FinanceService:
     async def update_budget_category(
         self, cat_id: str, org_id: str, **kwargs
     ) -> BudgetCategory:
+        await self._validate_budget_category_fks(org_id, kwargs)
         cat = await self.get_budget_category(cat_id, org_id)
         if not cat:
             raise ValueError("Budget category not found")
@@ -272,6 +276,23 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(cat, ["updated_at"])
         return cat
+
+    async def _validate_budget_category_fks(self, org_id: str, data: dict) -> None:
+        """Reject a client-supplied ``parent_category_id`` outside the org.
+
+        Self-referential, ``ondelete="SET NULL"`` (Pitfall 14c). Same shape
+        as ``_validate_finance_fks``, kept separate because a budget category
+        create/update never carries the fields that helper checks.
+        """
+        parent_category_id = data.get("parent_category_id")
+        if parent_category_id:
+            await assert_in_org(
+                self.db,
+                BudgetCategory,
+                parent_category_id,
+                org_id,
+                label="Parent category",
+            )
 
     async def delete_budget_category(self, cat_id: str, org_id: str) -> None:
         cat = await self.get_budget_category(cat_id, org_id)
@@ -405,12 +426,14 @@ class FinanceService:
     async def create_approval_chain(
         self, org_id: str, created_by: str, steps: Optional[list] = None, **kwargs
     ) -> ApprovalChain:
+        await self._validate_approval_chain_fks(org_id, kwargs)
         chain = ApprovalChain(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(chain)
         await self.db.flush()
 
         if steps:
             for step_data in steps:
+                await self._validate_chain_step_fks(org_id, step_data)
                 step = ApprovalChainStep(chain_id=chain.id, **step_data)
                 self.db.add(step)
             await self.db.flush()
@@ -422,6 +445,7 @@ class FinanceService:
     async def update_approval_chain(
         self, chain_id: str, org_id: str, **kwargs
     ) -> ApprovalChain:
+        await self._validate_approval_chain_fks(org_id, kwargs)
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
@@ -429,6 +453,36 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(chain, ["updated_at"])
         return chain
+
+    async def _validate_approval_chain_fks(self, org_id: str, data: dict) -> None:
+        """Reject a client-supplied ``budget_category_id`` outside the org.
+
+        ``ondelete="SET NULL"`` (Pitfall 14c) — see ``_validate_finance_fks``.
+        """
+        budget_category_id = data.get("budget_category_id")
+        if budget_category_id:
+            await assert_in_org(
+                self.db,
+                BudgetCategory,
+                budget_category_id,
+                org_id,
+                label="Budget category",
+            )
+
+    async def _validate_chain_step_fks(self, org_id: str, data: dict) -> None:
+        """Reject a client-supplied ``email_template_id`` outside the org.
+
+        ``ondelete="SET NULL"`` (Pitfall 14c) — see ``_validate_finance_fks``.
+        """
+        email_template_id = data.get("email_template_id")
+        if email_template_id:
+            await assert_in_org(
+                self.db,
+                EmailTemplate,
+                email_template_id,
+                org_id,
+                label="Email template",
+            )
 
     async def delete_approval_chain(self, chain_id: str, org_id: str) -> None:
         chain = await self.get_approval_chain(chain_id, org_id)
@@ -443,6 +497,7 @@ class FinanceService:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
+        await self._validate_chain_step_fks(org_id, kwargs)
         step = ApprovalChainStep(chain_id=chain_id, **kwargs)
         self.db.add(step)
         await self.db.flush()
@@ -455,6 +510,7 @@ class FinanceService:
         chain = await self.get_approval_chain(chain_id, org_id)
         if not chain:
             raise ValueError("Approval chain not found")
+        await self._validate_chain_step_fks(org_id, kwargs)
         result = await self.db.execute(
             select(ApprovalChainStep).where(
                 ApprovalChainStep.id == step_id,
@@ -2759,12 +2815,13 @@ class FinanceService:
         ``budget_id`` would otherwise be silently ignored by the org-scoped
         budget write-helpers on approval/payment (encumbrance/spend never
         recorded, so the PR looks approved but the budget is untouched), and
-        (2) a foreign ``category_id``/``fiscal_year_id``/``station_id`` would
-        leave a dangling cross-tenant reference that skews category, fiscal-year
-        or per-station rollups. ``station_id`` is worse than a skewed rollup:
-        it is an ``ondelete="SET NULL"`` FK to facilities, so the other org
-        deleting that facility silently nulls this org's station attribution.
-        Only keys actually present in ``data`` are checked (update paths pass
+        (2) a foreign ``category_id``/``fiscal_year_id``/``station_id``/
+        ``apparatus_id``/``facility_id`` would leave a dangling cross-tenant
+        reference that skews category, fiscal-year, per-station or per-asset
+        rollups. Each of the latter three is worse than a skewed rollup: all
+        are ``ondelete="SET NULL"`` FKs, so the *other* org deleting that
+        facility/apparatus silently nulls this org's attribution. Only keys
+        actually present in ``data`` are checked (update paths pass
         ``exclude_unset`` dumps and a null clears rather than sets), so this
         never rejects an omitted or explicitly-cleared field.
         """
@@ -2780,3 +2837,13 @@ class FinanceService:
         station_id = data.get("station_id")
         if station_id:
             await assert_in_org(self.db, Facility, station_id, org_id, label="Station")
+        apparatus_id = data.get("apparatus_id")
+        if apparatus_id:
+            await assert_in_org(
+                self.db, Apparatus, apparatus_id, org_id, label="Apparatus"
+            )
+        facility_id = data.get("facility_id")
+        if facility_id:
+            await assert_in_org(
+                self.db, Facility, facility_id, org_id, label="Facility"
+            )
