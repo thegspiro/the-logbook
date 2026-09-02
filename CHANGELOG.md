@@ -422,6 +422,39 @@ Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
   the visible window; only the footer's "more later" line reads the longer
   reach it was added for.
 
+### A hire date, an expiry or any other calendar date read one day early west of UTC (2026-09-01)
+
+**Fixed**
+
+- **A MySQL `DATE` column displayed a day early for every department west of
+  UTC.** A hire date of 2020-12-06 printed "12/5/2020" in New York, "12/6/2020"
+  in Berlin, and shifted again for anyone whose browser was set somewhere else.
+  The column has no time and no timezone — it is a square on a calendar, the
+  same square for everyone — but it was being parsed as UTC midnight and then
+  rendered in the viewer's zone, which rolls it backwards for any negative
+  offset. Every date-only field in the app was affected: hire dates,
+  certification expiries, due dates, leave dates.
+- **The same shift named the wrong weekday**, which on anything schedule-shaped
+  is worse than a wrong number: a date-only value formatted with a weekday came
+  back as "Monday, Sep 14" for a date that is a Tuesday the 15th.
+- **"Days remaining" counts were one short.** `daysBetween` resolved its target
+  through the same shifted conversion, so a certification expiring on the 15th
+  reported thirteen days out on the 1st rather than fourteen — the direction
+  that makes a renewal look less urgent than it is.
+
+A bare `"YYYY-MM-DD"` is now recognised as a calendar date and pinned to UTC at
+both ends, parse and format, so the day written in the value is the day on the
+screen for every viewer. A value carrying a time is an instant and still
+converts to the viewer's timezone exactly as before — that distinction is what
+the fix turns on, and it is asserted in both directions so neither half can be
+restored by breaking the other. A `Date` object is still treated as an instant,
+because nothing can recover a date-only origin once one has been constructed.
+
+`formatCalendarDate` and the other calendar-space helpers are unchanged and
+remain the clearest way to say "this is a calendar date" where the author knows
+it. What changed is that a call site which _doesn't_ know it is no longer
+silently wrong.
+
 ### The member roster showed every member the membership coordinator's screen (2026-09-01)
 
 **Changed**
