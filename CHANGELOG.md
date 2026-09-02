@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documents & legal: folder/document/legal-revision edits gained an audit trail; two long-flagged findings confirmed already fixed by unrelated PRs (2026-09-02)
+
+**Fixed**
+
+- **Creating, renaming, or deleting a document folder — and editing a
+  document's own metadata — left no audit trail.** `document_uploaded`,
+  `document_downloaded` and `document_deleted` already logged; folder
+  create/update/delete and a document metadata edit did not. A folder
+  delete in particular cascades to every descendant folder and document
+  (and their backing files), with nothing recording who did it. Added
+  `folder_created`/`folder_updated`/`folder_deleted`/`document_updated`
+  audit events, matching the existing pattern exactly.
+- **Editing or discarding a proposed legal-document revision (Governance ->
+  Legal Documents) left no audit trail either**, unlike its siblings
+  propose/publish/revert. Added `legal.revision_updated` /
+  `legal.revision_discarded` audit events.
+
+**Documentation corrected, no code change needed**
+
+- Two previously-open findings — DOC-4 (the Documents stats summary
+  aggregated past folder access controls) and, separately, DOC-5 (folder
+  authorization wasn't hierarchical) — were each already fixed by a
+  separate, non-security-review PR shortly before this review reached the
+  feature. Both fixes were read in full and re-verified against current
+  code (not taken on faith): DOC-5's ancestor-walk authorization and DOC-4's
+  per-caller-scoped summary aggregate are both sound, and DOC-4's fix is
+  covered by a dedicated five-caller-tier test. `docs/KNOWN_LIMITATIONS.md`,
+  `docs/module-audit/documents.md`, and `docs/app-review/documents.md` had
+  been updated for DOC-5 but still described DOC-4 as open — corrected in
+  all three.
+
+Full write-up: `docs/security-review/DOC-10-documents-legal.md` (feature
+10, pass 3, DOC-27).
+
 ### Medical screening: audit trail gap closed, two dead compliance settings labelled honestly, one gap flagged (2026-09-02)
 
 **Fixed**

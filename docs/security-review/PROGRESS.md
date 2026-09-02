@@ -16,13 +16,72 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2182](https://github.com/thegspiro/the-logbook/pull/2182) (docs-only
-follow-up to #2180) — restores 384 lines of Pass 1/Pass 2 history in
-`MS-09-medical-screening.md` that #2180's merge accidentally dropped. See
-the Log below for detail. Feature 09 itself is done (#2180 merged); this
-is bookkeeping, not a new review pass.
+[#2187](https://github.com/thegspiro/the-logbook/pull/2187) — Feature 10
+(Documents & legal, pass 3). Rotation row 10 → ⏳ (awaiting PR merge).
 
 ---
+
+### 2026-09-02 — Feature 10 (Documents & legal, pass 3) — 1 fixed, 0 flagged (new); 2 stale-doc corrections
+
+Two unrelated, non-security-review PRs (#2160 "Normalize document system
+folder access" and #2171 "Scope document summaries to caller folder
+access") landed in this feature on 2026-09-02, just before this rotation
+reached it — both read in full as prior art and independently re-verified
+against current code, not taken on faith. #2160 fixes **DOC-5** (folder
+authorization is now hierarchical — walks every ancestor, fails closed on
+missing/cross-org/cyclic ancestry). #2171 fixes **DOC-4** (the documents
+stats summary now scopes every aggregate to the caller's accessible
+folders) — a finding this rotation's own pass 2 had left open, fixed by a
+PR neither this rotation nor #2160's author knew about. Both fixes verified
+sound: DOC-5 by reading the ancestor-walk logic directly, DOC-4 by a
+dedicated five-caller-tier test
+(`test_summary_matches_each_caller_access_scope`). `docs/KNOWN_LIMITATIONS.md`,
+`docs/module-audit/documents.md`, and `docs/app-review/documents.md` had
+been updated for DOC-5 by #2160 but still described DOC-4 as open —
+corrected in all three this pass, along with two other stale notes in
+`module-audit/documents.md` (`uploader_name`/`folder_name` dead fields and
+`get_folders` re-inlining `can_access_folder` were both already fixed by
+earlier passes and never back-corrected there).
+
+One new finding, fixed: **DOC-27 (LOW)** — folder create/update/delete and
+a document metadata edit had no audit trail (unlike
+upload/download/delete, which already log); a legal-revision edit/discard
+had none either (unlike propose/publish/revert). Added
+`folder_created`/`folder_updated`/`folder_deleted`/`document_updated` and
+`legal.revision_updated`/`legal.revision_discarded` audit events, matching
+each file's existing pattern exactly — purely additive, no behavior change.
+6 new guard tests across `test_documents_access.py` and
+`test_legal_documents.py`, each calling the endpoint function directly
+against a real `db_session` and asserting the `AuditLog` row; all 6
+confirmed failing on the intended assertion pre-fix via `git stash` of the
+two endpoint files.
+
+Re-verified still open, not re-flagged: **DOC-8** (legal revision list
+unbounded) and **DOC-9** (`get_folders` unbounded and N+1) — both unchanged
+on `main`. An unmerged branch
+(`codex/add-pagination-and-improve-folder-querying`, visible in this
+session's `git fetch` output) appears to address DOC-9 but is not on `main`
+as of this pass, so it is not credited.
+
+Completion gate: flake8/black/isort clean on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (410 revisions, single head, unchanged —
+no migration this pass); scoped suite (documents/legal/print/public-legal/
+facility-folder tests) 178 passed; full backend suite 9906 passed / 21
+skipped (pre-existing: Docker/registry unavailable, `pywebpush` not
+installed, API-contract server-mode opt-in) / 0 failed; no frontend file
+touched, so `tsc`/`eslint` were not run this pass (frontend was read for
+review only — confirmed via `git status`). Full detail in
+`DOC-10-documents-legal.md` → Pass 3. Rotation row 10 → ⏳ (awaiting PR
+merge). Next: 11 inventory, once this PR merges.
+
+### 2026-09-02 — Feature 09 doc-fix PR #2182 merged
+
+PR #2182 (docs-only follow-up to #2180, restoring the 384 lines of Pass
+1/Pass 2 history in `MS-09-medical-screening.md` that #2180's merge had
+accidentally dropped) merged into `main`. No code change, no security
+finding — bookkeeping only. Feature 09 stays ✅. Open PR row cleared.
+Rotation row 10 (Documents & legal, prefix DOC) → 🔄. Next up per the
+Rotation table.
 
 ### 2026-09-02 — Feature 09 doc fix — `MS-09-medical-screening.md` lost its Pass 1/Pass 2 history on merge — PR #2182
 
@@ -7031,7 +7090,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⏳     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |

@@ -207,6 +207,18 @@ async def update_revision(
             organization_id=organization_id,
             updates=payload.model_dump(exclude_unset=True),
         )
+        await log_audit_event(
+            db=db,
+            event_type="legal.revision_updated",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "document_type": revision.document_type.value,
+                "revision_id": str(revision.id),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
         await db.commit()
         await db.refresh(revision)
     except ValueError as e:
@@ -236,7 +248,20 @@ async def delete_revision(
     try:
         existing = await service.get_revision(revision_id, organization_id)
         _assert_may_modify(existing, current_user)
+        document_type = existing.document_type
         await service.delete_draft(revision_id, organization_id)
+        await log_audit_event(
+            db=db,
+            event_type="legal.revision_discarded",
+            event_category="administration",
+            severity="info",
+            event_data={
+                "document_type": document_type.value,
+                "revision_id": revision_id,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
         await db.commit()
     except ValueError as e:
         await db.rollback()

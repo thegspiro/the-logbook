@@ -14,14 +14,25 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
 from app.api.v1.endpoints.documents import (
     _parse_uuid_or_400,
     _resolve_document_name,
+    create_folder,
+    delete_folder,
     download_document,
+    update_document,
+    update_folder,
 )
+from app.models.audit import AuditLog
 from app.models.document import Document, DocumentFolder, FolderVisibility
 from app.models.user import Organization, User
+from app.schemas.documents import (
+    DocumentFolderCreate,
+    DocumentFolderUpdate,
+    DocumentUpdate,
+)
 from app.services.documents_service import (
     DocumentsService,
     _get_user_permissions,
@@ -1041,6 +1052,117 @@ class TestDownloadDocument:
                 document.id, db=db_session, current_user=self._caller(org.id)
             )
         assert exc.value.status_code == 403
+
+
+@pytest.mark.integration
+class TestFolderAndDocumentAuditLogging:
+    """DOC-27: folder create/update/delete and a document metadata edit had
+    no audit trail at all -- unlike document_uploaded/downloaded/deleted,
+    which already log. A folder delete in particular cascades to every
+    descendant folder and document (plus their backing files) with nothing
+    recording who did it.
+    """
+
+    async def _manager(self, db_session, org_id):
+        # A real row, not a SimpleNamespace stand-in: create_folder/create_draft
+        # insert `created_by` as an FK to `users.id`, which a synthetic id
+        # would violate.
+        user = User(
+            organization_id=org_id,
+            username="manager",
+            email="manager@example.com",
+        )
+        db_session.add(user)
+        await db_session.flush()
+        return user
+
+    async def _last_event(self, db_session, event_type):
+        result = await db_session.execute(
+            select(AuditLog)
+            .where(AuditLog.event_type == event_type)
+            .order_by(AuditLog.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def test_create_folder_is_audited(self, db_session):
+        org = Organization(name="Audit VFD", slug="audit-folder-create")
+        db_session.add(org)
+        await db_session.flush()
+
+        await create_folder(
+            DocumentFolderCreate(name="New Folder"),
+            db=db_session,
+            current_user=await self._manager(db_session, org.id),
+        )
+
+        entry = await self._last_event(db_session, "folder_created")
+        assert entry is not None
+        assert entry.event_data["name"] == "New Folder"
+        # Regression guard: str(FolderVisibility.ORGANIZATION) renders
+        # "FolderVisibility.ORGANIZATION" (Enum.__str__), not the schema
+        # value "organization" -- the audit event must use .value.
+        assert entry.event_data["visibility"] == "organization"
+
+    async def test_update_folder_is_audited(self, db_session):
+        org = Organization(name="Audit VFD", slug="audit-folder-update")
+        db_session.add(org)
+        await db_session.flush()
+        folder = DocumentFolder(organization_id=org.id, name="Original")
+        db_session.add(folder)
+        await db_session.flush()
+
+        await update_folder(
+            folder.id,
+            DocumentFolderUpdate(name="Renamed"),
+            db=db_session,
+            current_user=await self._manager(db_session, org.id),
+        )
+
+        entry = await self._last_event(db_session, "folder_updated")
+        assert entry is not None
+        assert entry.event_data["folder_id"] == str(folder.id)
+        assert "name" in entry.event_data["fields"]
+
+    async def test_delete_folder_is_audited(self, db_session):
+        org = Organization(name="Audit VFD", slug="audit-folder-delete")
+        db_session.add(org)
+        await db_session.flush()
+        folder = DocumentFolder(organization_id=org.id, name="Doomed")
+        db_session.add(folder)
+        await db_session.flush()
+        folder_id = folder.id
+
+        await delete_folder(
+            folder_id,
+            db=db_session,
+            current_user=await self._manager(db_session, org.id),
+        )
+
+        entry = await self._last_event(db_session, "folder_deleted")
+        assert entry is not None
+        assert entry.event_data["folder_id"] == str(folder_id)
+        assert entry.severity == "warning"
+
+    async def test_update_document_is_audited(self, db_session):
+        org = Organization(name="Audit VFD", slug="audit-document-update")
+        db_session.add(org)
+        await db_session.flush()
+        document = Document(organization_id=org.id, name="Original name")
+        db_session.add(document)
+        await db_session.flush()
+
+        await update_document(
+            document.id,
+            DocumentUpdate(name="Renamed"),
+            db=db_session,
+            current_user=await self._manager(db_session, org.id),
+        )
+
+        entry = await self._last_event(db_session, "document_updated")
+        assert entry is not None
+        assert entry.event_data["document_id"] == str(document.id)
+        assert "name" in entry.event_data["fields"]
 
 
 if __name__ == "__main__":  # pragma: no cover
