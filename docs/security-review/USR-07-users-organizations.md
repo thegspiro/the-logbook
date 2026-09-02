@@ -290,48 +290,53 @@ Two real feature changes since pass 1, both reviewed in full:
     different requests that can each read an operational, rankless
     member, each pass their own check, and each write only their own
     column — landing a row that is administrative _and_ ranked, which
-    neither request alone would have allowed. 1. **A fourth, unlocked writer.** `MembershipTierService.advance_all`
-    — the scheduled/unattended tier-advancement scan — also clears
-    rank on a move into an administrative tier, but its batch
-    `select(User)` carried no `.with_for_update()` at all. The
-    `TestEveryWriterIsCovered`/`TestTheTwoWritersSerialize` tests this
-    pass's first draft cited as proof only covered three writers,
-    not four, and never actually asserted the fourth's lock (which did
-    not exist). Fixed: each member `advance_all` is about to mutate is
-    now re-selected with `.with_for_update()` immediately before the
-    write, re-checking eligibility under the lock rather than locking
-    the whole batch upfront (hundreds of rows for the scan's whole
-    duration would have been its own contention problem). Guarded by
-    a new `TestTheTwoWritersSerialize` test asserting the lock via
-    source inspection. 2. **The lock alone wasn't enough on a self-update.** Neither locking
-    `SELECT` in `update_user_profile`/`change_membership_type` carried
-    `populate_existing=True`. On a self-update specifically,
-    `get_current_user` already loaded the same `User` row into this
-    request's session; with `expire_on_commit=False` (`core/database.py`)
-    that instance sits in the identity map, and a re-`SELECT` for a row
-    already there returns the cached pre-lock object without copying
-    the new row's columns onto it — the lock is acquired at the SQL
-    level, but `user.member_class`/`user.rank` could still read
-    whatever they were before a concurrent request's commit. The exact
-    shape ELEC-06 already found and fixed in `quorum_service.py`; this
-    file hadn't caught up. Fixed on both locking reads. 3. **An explicit `member_class: null` was judged against the wrong
-    value.** `resulting_class = update_data.get("member_class") or
-user.member_class` can't distinguish "the client omitted this
-    field" from "the client explicitly cleared it" — both read back as
-    `None` from `.get()`. An explicit null is a request to reset to
-    `DEFAULT_CLASS` (operational, per `_reconcile_membership`), not
-    "leave the old class in place" — so clearing an administrative
-    member's class while assigning a rank in the same request was
-    wrongly refused, judged against the stale administrative value
-    instead of the operational one the save would actually land on.
-    Fixed by checking `"member_class" in update_data` before falling
-    back to the stored value.
+    neither request alone would have allowed.
+    1. **A fourth, unlocked writer.** `MembershipTierService.advance_all`
+       — the scheduled/unattended tier-advancement scan — also clears
+       rank on a move into an administrative tier, but its batch
+       `select(User)` carried no `.with_for_update()` at all. The
+       `TestEveryWriterIsCovered`/`TestTheTwoWritersSerialize` tests this
+       pass's first draft cited as proof only covered three writers,
+       not four, and never actually asserted the fourth's lock (which did
+       not exist). Fixed: each member `advance_all` is about to mutate is
+       now re-selected with `.with_for_update()` immediately before the
+       write, re-checking eligibility under the lock rather than locking
+       the whole batch upfront (hundreds of rows for the scan's whole
+       duration would have been its own contention problem). Guarded by
+       a new `TestTheTwoWritersSerialize` test asserting the lock via
+       source inspection.
 
-        All three fixed and guarded: `test_the_automatic_tier_advancement_
+    2. **The lock alone wasn't enough on a self-update.** Neither locking
+       `SELECT` in `update_user_profile`/`change_membership_type` carried
+       `populate_existing=True`. On a self-update specifically,
+       `get_current_user` already loaded the same `User` row into this
+       request's session; with `expire_on_commit=False` (`core/database.py`)
+       that instance sits in the identity map, and a re-`SELECT` for a row
+       already there returns the cached pre-lock object without copying
+       the new row's columns onto it — the lock is acquired at the SQL
+       level, but `user.member_class`/`user.rank` could still read
+       whatever they were before a concurrent request's commit. The exact
+       shape ELEC-06 already found and fixed in `quorum_service.py`; this
+       file hadn't caught up. Fixed on both locking reads.
 
-    locks_each_member_it_advances`, `populate_existing`assertions added to
-    the two existing lock tests, and
-   `test_an_explicit_null_class_is_judged_as_the_resulting_default`    (all`test_administrative_rank_restriction.py`).
+    3. **An explicit `member_class: null` was judged against the wrong
+       value.** `resulting_class = update_data.get("member_class") or user.member_class`
+       can't distinguish "the client omitted this
+       field" from "the client explicitly cleared it" — both read back as
+       `None` from `.get()`. An explicit null is a request to reset to
+       `DEFAULT_CLASS` (operational, per `_reconcile_membership`), not
+       "leave the old class in place" — so clearing an administrative
+       member's class while assigning a rank in the same request was
+       wrongly refused, judged against the stale administrative value
+       instead of the operational one the save would actually land on.
+       Fixed by checking `"member_class" in update_data` before falling
+       back to the stored value.
+
+    All three fixed and guarded:
+    `test_the_automatic_tier_advancement_locks_each_member_it_advances`,
+    `populate_existing` assertions added to the two existing lock tests,
+    and `test_an_explicit_null_class_is_judged_as_the_resulting_default`
+    (all `test_administrative_rank_restriction.py`).
 
   - `_canonical_rank_or_400` closes a real, previously-live gap:
     `User.rank` is a plain unconstrained `String(100)`, so a typo'd rank
