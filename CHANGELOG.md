@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The member roster silently dropped platoon (and other) assignments from every response (2026-09-02)
+
+**Fixed**
+
+- **`GET /users` declared `platoon`, `member_class`, `member_status` and
+  `compliance_exempt` on its response schema but never populated them from
+  the real member record.** The Platoon Roster Panel reads platoon straight
+  from this endpoint to show each member's current assignment, so it always
+  rendered every member as unassigned regardless of their real platoon.
+  Fixed for `platoon`, which had a real consumer; the other three are left
+  unset pending a decision on which roster fields belong at which
+  permission tier (see below).
+
+Full write-up: `docs/security-review/USR-07-users-organizations.md`
+(USR-7).
+
+### Flagged: the member directory's new reduced view for non-managers is not backed by a matching API change (2026-09-02)
+
+**Not fixed — flagged for a product decision.** A recent change gave members
+without `members.manage` a visibly reduced "Member Directory" (no username,
+no hire date, no export/bulk actions) instead of the full management table.
+The underlying `GET /users` API was not changed to match: every member
+already receives the full field set in the JSON response regardless of the
+UI's rendering choice, so the reduced view is a display preference, not an
+access boundary. Not a cross-tenant leak. See `docs/KNOWN_LIMITATIONS.md`
+and `docs/security-review/USR-07-users-organizations.md` (USR-8) for detail
+and why a straightforward fix isn't safe (25+ other call sites depend on the
+current, unfiltered response).
+
 ### A double vote through the full-ballot link's backward-compatible single-choice form could slip past the database's own safety net (2026-09-02)
 
 **Fixed**
