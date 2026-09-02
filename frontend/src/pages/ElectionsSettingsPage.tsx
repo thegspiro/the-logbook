@@ -419,19 +419,35 @@ export const ElectionsSettingsPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex items-center gap-3">
+              {/* The switch carries its name in the markup, not only in
+                  `aria-label`: SettingsToggle renders that prop as the
+                  accessible name and nothing else, so passing it without
+                  visible text beside the control leaves a sighted member
+                  looking at a bare toggle while a screen reader announces it
+                  correctly. Same shape as EmailSettingsSection. */}
+              <div className="border-theme-surface-border flex items-center justify-between border-b py-3">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Anonymous voting by default</p>
+                  <p className="text-theme-text-muted text-xs">
+                    New elections hide who cast each ballot. Can be overridden per election.
+                  </p>
+                </div>
                 <Toggle
                   checked={settings.default_anonymous_voting ?? true}
                   onChange={(next) => updateField('default_anonymous_voting', next)}
-                  label="Anonymous voting by default"
                 />
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Allow write-in candidates by default</p>
+                  <p className="text-theme-text-muted text-xs">
+                    New ballot items accept a name that is not on the slate. Can be overridden per item.
+                  </p>
+                </div>
                 <Toggle
                   checked={settings.default_allow_write_ins ?? false}
                   onChange={(next) => updateField('default_allow_write_ins', next)}
-                  label="Allow write-in candidates by default"
                 />
               </div>
             </div>

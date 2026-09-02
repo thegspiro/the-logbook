@@ -2618,6 +2618,48 @@ count must fall through to no badge rather than warning about every rank.
   download endpoint now confines every resolved path to that directory.
 - Downloading a document is now recorded in the audit log.
 
+### Admin-hours requirement progress crashed for anyone who had logged hours (2026-08-25)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` raised
+  `TypeError: unsupported operand type(s) for /: 'decimal.Decimal' and 'float'`
+  whenever a member had approved hours against a required category. `func.sum`
+  returns a `Decimal` on MySQL and the requirement's stored JSON gives a float,
+  so the percentage calculation could not run. With **no** logged hours the
+  `or 0` fallback substitutes an int, every value stays float, and the endpoint
+  answered normally — so it worked for every member it had nothing to report
+  about and failed for every member it did.
+
+  The call site also hand-rolled the minutes-to-hours conversion that
+  `hours_from_minutes` performs at the five other sites in the same service. It
+  now uses the helper for the reported figure and grades on the raw figure,
+  which `app/utils/hours` requires in as many words: rounding before grading
+  turns a shortfall under an eighth of an hour into zero and marks a member
+  compliant while they are short.
+
+### The tamper-seal shortcut never fired (2026-08-25)
+
+**Fixed**
+
+- **A sealed bag could never clear its own contents count.**
+  `GET /equipment-checks/templates/{id}/last-seals` returns a bare dict keyed
+  by compartment id, so it carries none of the camelCase alias generation the
+  schema-backed responses get. It answered `seal_number` and `checked_at`,
+  while the check form types the payload as `LastSealRecord { sealNumber,
+checkedAt }` and casts the response without mapping it.
+
+  Every lookup was therefore `undefined`. `SealPanel` prefills its input from
+  the last count and decides `canClear` by comparing against it, so the tag
+  never prefilled, the panel told the crew _"No seal recorded at the last
+  count"_ on a bag whose seal **had** been recorded, and the one-tap
+  clear-the-contents shortcut — the reason a tamper seal is worth reading —
+  could not be reached at any number they typed. The seal was still filed, so
+  nothing looked broken; the bag was simply counted by hand every time.
+
+  Converted at the endpoint. The service keeps snake_case, which is what its
+  own tests assert.
+
 ### Admin hours: reading another member's requirement progress returned a 500 (2026-08-25)
 
 **Fixed**

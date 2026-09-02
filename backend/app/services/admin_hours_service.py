@@ -1840,11 +1840,25 @@ class AdminHoursService:
                 )
             )
             total_minutes = hours_result.scalar() or 0
-            logged_hours = round(total_minutes / 60, 2)
+            # `func.sum` hands back a Decimal on MySQL, and `required_hours`
+            # comes out of the profile's JSON as a float, so dividing one by
+            # the other raised TypeError -- but only once the member had
+            # actually logged approved hours against the category. With none,
+            # `or 0` substitutes an int and everything below is float, so the
+            # endpoint answered perfectly for anybody it had nothing to report
+            # about and 500ed for everybody it did.
+            #
+            # `hours_from_minutes` is what the five other call sites in this
+            # service use; this one hand-rolled it. Grading stays on the raw
+            # figure, which that module requires in as many words: rounding
+            # first turns a shortfall under an eighth of an hour into zero and
+            # marks a member compliant while they are short.
+            raw_hours = float(total_minutes) / 60.0
+            logged_hours = hours_from_minutes(total_minutes)
 
             status = "compliant"
-            if logged_hours < required_hours:
-                pct = (logged_hours / required_hours * 100) if required_hours else 0
+            if raw_hours < required_hours:
+                pct = (raw_hours / required_hours * 100) if required_hours else 0
                 if pct < (
                     best_profile.at_risk_threshold_override or config.at_risk_threshold
                 ):
