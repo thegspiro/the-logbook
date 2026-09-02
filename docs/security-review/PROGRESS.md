@@ -16,10 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2187](https://github.com/thegspiro/the-logbook/pull/2187) — Feature 10
-(Documents & legal, pass 3). Rotation row 10 → ⏳ (awaiting PR merge).
+None currently open.
 
 ---
+
+### 2026-09-02 — Feature 10 (Documents & legal, pass 3) ✅ merged — PR #2187
+
+Confirmed merged into `main` via a fresh `origin/main` fetch (merge commit
+`67873d77`). Rotation row 10 → ✅. Next: 11 Inventory (pass 4), now marked
+🔄.
 
 ### 2026-09-02 — Feature 10 (Documents & legal, pass 3) — 1 fixed, 0 flagged (new); 2 stale-doc corrections
 
@@ -7090,8 +7095,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⏳     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | 🔄     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
