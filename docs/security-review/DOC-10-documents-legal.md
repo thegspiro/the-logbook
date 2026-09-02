@@ -325,22 +325,14 @@ Scoping it to `accessible_folder_ids` is a behavior change to a stats
 endpoint some deployments may read as an org-wide total; left as an owner
 decision, already in `docs/KNOWN_LIMITATIONS.md`.
 
-### DOC-5 — LOW (design) — Folder ACL is per-folder, not hierarchical — 🚩 still flagged (unchanged, and now confirmed to extend to facility folders too)
+### DOC-5 — LOW (design) — Hierarchical folder ACL — ✅ FIXED (2026-09-02)
 
-Re-confirmed unchanged: `can_access_folder` (`documents_service.py:176-197`)
-inspects only a folder's own `visibility`/`allowed_roles`, never its
-ancestor chain. The apparatus and (newly reviewed this pass) facility
-sub-folder provisioning helpers both create children at
-`FolderVisibility.ORGANIZATION` under a `FolderVisibility.LEADERSHIP` root
-(`ensure_apparatus_folder`/`ensure_facility_folder`,
-`documents_service.py:585-830`) — so any `documents.view` holder can read
-those child folders directly, the same gap DOC-5 already describes for
-apparatus, now confirmed to apply identically to the facility hierarchy
-added since. Still a genuine product decision, not a clear bug — org-visible
-apparatus/facility files may be exactly what's wanted (crews reading their
-rig's manuals). Member personal folders remain unaffected
-(`FolderVisibility.OWNER`, individually scoped). Already in
-`docs/KNOWN_LIMITATIONS.md`.
+`can_access_folder` now walks the requested folder and every ancestor. Every
+node must admit the caller; missing, cross-organization, and cyclic ancestry
+fails closed. System roots are normalized so member owners and callers holding
+facility-sensitive grants pass the corresponding roots, while the apparatus
+tree remains leadership-only. `required_permissions` continues to take
+precedence over the general leadership bypass.
 
 ### DOC-6 — see module-audit — ✅ FIXED (pre-existing, re-confirmed)
 

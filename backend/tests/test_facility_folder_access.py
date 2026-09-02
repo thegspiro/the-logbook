@@ -16,7 +16,7 @@ import inspect
 from types import SimpleNamespace
 
 from app.api.v1.endpoints.facilities import _SENSITIVE_READ_PERMISSIONS
-from app.models.document import FolderVisibility
+from app.models.document import SYSTEM_FOLDERS, FolderVisibility
 from app.services.documents_service import (
     FACILITY_SENSITIVE_PERMISSIONS,
     DocumentsService,
@@ -162,6 +162,15 @@ class TestTheGateIsStampedOnTheFolderTreeItGuards:
             "required_permissions; migration a9c4e7b2f631 stamped the "
             "equivalent existing rows, so new facilities would be readable by "
             "anyone holding documents.view"
+        )
+
+    async def test_shared_system_folder_definitions_have_consistent_root_acls(self):
+        definitions = {folder["slug"]: folder for folder in SYSTEM_FOLDERS}
+        assert definitions["members"]["visibility"] == FolderVisibility.ORGANIZATION
+        assert definitions["apparatus"]["visibility"] == FolderVisibility.LEADERSHIP
+        assert definitions["facilities"]["visibility"] == FolderVisibility.ORGANIZATION
+        assert set(definitions["facilities"]["required_permissions"]) == set(
+            FACILITY_SENSITIVE_PERMISSIONS
         )
 
     async def test_apparatus_sub_folders_are_not_gated_on_facilities_grants(self):

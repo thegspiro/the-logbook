@@ -198,6 +198,32 @@ class TestFolderHierarchyAccess:
         second = _folder(FolderVisibility.ORGANIZATION, fid="second", parent_id="first")
         assert not await self._access(first, _user(), second)
 
+    async def test_owner_is_admitted_through_member_root(self):
+        root = _folder(FolderVisibility.ORGANIZATION, fid="members")
+        child = _folder(
+            FolderVisibility.OWNER,
+            fid="personal",
+            parent_id="members",
+            owner_user_id="u1",
+        )
+        assert await self._access(child, _user(uid="u1"), root)
+
+    async def test_facility_grant_is_admitted_through_facility_root(self):
+        permissions = ["facilities.view_sensitive"]
+        root = _folder(
+            FolderVisibility.ORGANIZATION,
+            fid="facilities",
+            required_permissions=permissions,
+        )
+        child = _folder(
+            FolderVisibility.ORGANIZATION,
+            fid="facility",
+            parent_id="facilities",
+            required_permissions=permissions,
+        )
+        user = _user(roles=[(["facilities.view_sensitive"], "treasurer")])
+        assert await self._access(child, user, root)
+
 
 class TestCanAccessDocument:
     """A by-id document fetch must honour the containing folder's access rules,

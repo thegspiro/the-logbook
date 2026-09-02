@@ -662,7 +662,7 @@ class DocumentsService:
         so only the member and leadership can see it.
 
         Folder hierarchy:
-          Member Files/              (system, visibility=leadership)
+          Member Files/              (system, visibility=organization)
             └── Last, First/         (owner=user, visibility=owner)
         """
         # Find the 'members' system folder
@@ -688,7 +688,7 @@ class DocumentsService:
                 color=members_def["color"],
                 sort_order=members_def["sort_order"],
                 is_system=True,
-                visibility=FolderVisibility.LEADERSHIP,
+                visibility=FolderVisibility.ORGANIZATION,
             )
             self.db.add(members_root)
             await self.db.flush()
@@ -887,7 +887,8 @@ class DocumentsService:
         under the 'Facility Files' system folder.
 
         Folder hierarchy:
-          Facility Files/                           (system, visibility=leadership)
+          Facility Files/                           (organization visibility,
+                                                     facility permission gate)
             └── Station 1 - Main St (display_name)/ (visibility=organization)
                 ├── Photos/
                 ├── Blueprints & Permits/
@@ -950,7 +951,7 @@ class DocumentsService:
                 color=facilities_def["color"],
                 sort_order=facilities_def["sort_order"],
                 is_system=True,
-                visibility=FolderVisibility.LEADERSHIP,
+                visibility=FolderVisibility.ORGANIZATION,
                 required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
             )
             self.db.add(facilities_root)
