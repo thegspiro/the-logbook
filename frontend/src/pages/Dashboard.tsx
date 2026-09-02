@@ -185,26 +185,20 @@ interface SectionErrorProps {
    * nothing to tell them apart by.
    */
   source: string;
-  /** Returns the retry's promise so the control can coalesce while it runs. */
-  onRetry: () => Promise<unknown>;
+  /**
+   * True while the loaders behind this control are already running.
+   *
+   * Owned by the page, not by this component: a single failure can render two
+   * of these -- a training-summary failure puts a control on both the hours
+   * card and the readiness card, and both call loadHours. A guard held per
+   * rendered control leaves those two able to start concurrent loads, which is
+   * the race the guard exists to stop. The page keys it by loader instead.
+   */
+  busy: boolean;
+  onRetry: () => void;
 }
 
-const SectionError: React.FC<SectionErrorProps> = ({ message, source, onRetry }) => {
-  // Owned here rather than at each call site, because the guard is only worth
-  // anything if every control has it. Without one the button stays live during
-  // a slow retry: a second click starts a second request for the same source,
-  // and if the second succeeds before the first finally rejects, the older
-  // failure lands last and puts the warning back over recovered data. The
-  // hours and readiness controls can race that way between two buttons,
-  // without anyone double-clicking either.
-  const [retrying, setRetrying] = useState(false);
-
-  const handleRetry = () => {
-    if (retrying) return;
-    setRetrying(true);
-    void onRetry().finally(() => setRetrying(false));
-  };
-
+const SectionError: React.FC<SectionErrorProps> = ({ message, source, busy, onRetry }) => {
   return (
     <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -214,12 +208,12 @@ const SectionError: React.FC<SectionErrorProps> = ({ message, source, onRetry })
           the one place a section error is guaranteed to appear. */}
       <button
         type="button"
-        onClick={handleRetry}
-        disabled={retrying}
+        onClick={onRetry}
+        disabled={busy}
         aria-label={`Retry ${source}`}
         className="btn-secondary mobile-touch-target shrink-0 px-3 py-1 text-xs font-semibold disabled:opacity-60"
       >
-        {retrying ? 'Retrying' : 'Retry'}
+        {busy ? 'Retrying' : 'Retry'}
       </button>
     </div>
   );
@@ -1229,18 +1223,49 @@ const Dashboard: React.FC = () => {
     },
   ];
 
+  // Retries in flight, keyed by loader rather than by the control that started
+  // them. Two controls can sit over one loader -- a training-summary failure
+  // renders a Retry on both the hours card and the readiness card, and both
+  // call loadHours -- so a per-control guard leaves them able to run
+  // concurrently. If the later call settles first, the earlier one lands last
+  // and restores the error over data that had just recovered.
+  const retriesInFlight = useRef(new Map<string, Promise<unknown>>());
+  const [busyLoaders, setBusyLoaders] = useState<ReadonlySet<string>>(new Set());
+
+  const runRetry = useCallback((key: string, run: () => Promise<unknown>): Promise<unknown> => {
+    const existing = retriesInFlight.current.get(key);
+    // Joined, not queued: a second press while the first is still running is
+    // the same request, so it waits on the same promise instead of issuing
+    // another.
+    if (existing) return existing;
+    const started = run().finally(() => {
+      retriesInFlight.current.delete(key);
+      setBusyLoaders(new Set(retriesInFlight.current.keys()));
+    });
+    retriesInFlight.current.set(key, started);
+    setBusyLoaders(new Set(retriesInFlight.current.keys()));
+    return started;
+  }, []);
+
+  const anyBusy = useCallback((...keys: string[]) => keys.some((key) => busyLoaders.has(key)), [busyLoaders]);
+
   const refreshDashboard = useCallback(async () => {
+    // `true` throughout: a pull-to-refresh runs with the page already on
+    // screen, so it is a refresh rather than a first load. Clearing the error
+    // flags up front here would do what it did on the inline Retry -- the
+    // header ignores loadingHours, so "Hours unavailable" would revert to an
+    // exact stale partial total for the duration of a slow refresh.
     await Promise.all([
-      loadDeptMessages(),
-      loadHours(),
-      loadUpcomingEvents(),
-      loadNotifications(),
-      loadMyShifts(),
-      loadOpenShifts(),
-      loadMySeats(),
-      loadMyScreenings(),
-      loadTrainingProgress(),
-      loadMyEquipment(),
+      loadDeptMessages('both'),
+      loadHours(true),
+      loadUpcomingEvents(true),
+      loadNotifications(true),
+      loadMyShifts(true),
+      loadOpenShifts(true),
+      loadMySeats(true),
+      loadMyScreenings(true),
+      loadTrainingProgress(true),
+      loadMyEquipment(true),
       ...(activeTab === 'department' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
       ...(activeTab === 'department' && canViewChiefOperations ? [loadOperations()] : []),
       ...(activeTab === 'department' && canViewAssets ? [loadAssetWidgets()] : []),
@@ -1520,17 +1545,19 @@ const Dashboard: React.FC = () => {
                   <SectionError
                     message="Readiness could not be fully verified."
                     source="readiness"
+                    busy={anyBusy('hours', 'seats', 'screenings')}
                     onRetry={() => {
                       // Only the failed sources. Reloading the healthy ones
                       // disturbs the Hours card for a readiness failure, and a
                       // transient rejection from a request that had succeeded
                       // replaces good data with an unavailable state -- turning
                       // one recoverable failure into several.
-                      const retries: Promise<void>[] = [];
-                      if (certificationsError) retries.push(loadHours(true));
-                      if (seatsError) retries.push(loadMySeats(true));
-                      if (screeningsError) retries.push(loadMyScreenings(true));
-                      return Promise.all(retries);
+                      //
+                      // 'hours' is the same key the hours card's own control
+                      // uses, which is what stops those two racing each other.
+                      if (certificationsError) void runRetry('hours', () => loadHours(true));
+                      if (seatsError) void runRetry('seats', () => loadMySeats(true));
+                      if (screeningsError) void runRetry('screenings', () => loadMyScreenings(true));
                     }}
                   />
                 </div>
@@ -1634,12 +1661,11 @@ const Dashboard: React.FC = () => {
                       <SectionError
                         message="Some schedule information could not be verified."
                         source="schedule"
+                        busy={anyBusy('myShifts', 'openShifts', 'events')}
                         onRetry={() => {
-                          const retries: Promise<void>[] = [];
-                          if (myShiftsError) retries.push(loadMyShifts(true));
-                          if (openShiftsError) retries.push(loadOpenShifts(true));
-                          if (upcomingEventsError) retries.push(loadUpcomingEvents(true));
-                          return Promise.all(retries);
+                          if (myShiftsError) void runRetry('myShifts', () => loadMyShifts(true));
+                          if (openShiftsError) void runRetry('openShifts', () => loadOpenShifts(true));
+                          if (upcomingEventsError) void runRetry('events', () => loadUpcomingEvents(true));
                         }}
                       />
                     )}
@@ -1770,11 +1796,10 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Updates could not be fully verified."
                       source="updates"
+                      busy={anyBusy('messages', 'notifications')}
                       onRetry={() => {
-                        return Promise.all([
-                          ...(messagesError ? [retryDeptMessages()] : []),
-                          ...(notificationsError ? [loadNotifications(true)] : []),
-                        ]);
+                        if (messagesError) void runRetry('messages', retryDeptMessages);
+                        if (notificationsError) void runRetry('notifications', () => loadNotifications(true));
                       }}
                     />
                   ) : (
@@ -1789,11 +1814,10 @@ const Dashboard: React.FC = () => {
                         // to follow it: hard-coding one source tells a screen
                         // reader the button refreshes a healthy feed.
                         source={messagesError ? 'updates' : 'notifications'}
+                        busy={anyBusy('messages', 'notifications')}
                         onRetry={() => {
-                          return Promise.all([
-                            ...(messagesError ? [retryDeptMessages()] : []),
-                            ...(notificationsError ? [loadNotifications(true)] : []),
-                          ]);
+                          if (messagesError) void runRetry('messages', retryDeptMessages);
+                          if (notificationsError) void runRetry('notifications', () => loadNotifications(true));
                         }}
                       />
                     )}
@@ -1921,7 +1945,8 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Training progress could not be verified."
                       source="training"
-                      onRetry={() => loadTrainingProgress(true)}
+                      busy={anyBusy('training')}
+                      onRetry={() => void runRetry('training', () => loadTrainingProgress(true))}
                     />
                   )}
 
@@ -2023,7 +2048,8 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Hours could not be fully verified."
                       source="hours"
-                      onRetry={() => loadHours(true)}
+                      busy={anyBusy('hours')}
+                      onRetry={() => void runRetry('hours', () => loadHours(true))}
                     />
                   </div>
                 )}
@@ -2048,7 +2074,8 @@ const Dashboard: React.FC = () => {
                     <SectionError
                       message="Issued gear could not be verified."
                       source="issued gear"
-                      onRetry={() => loadMyEquipment(true)}
+                      busy={anyBusy('equipment')}
+                      onRetry={() => void runRetry('equipment', () => loadMyEquipment(true))}
                     />
                   )}
                   {!equipmentError && (

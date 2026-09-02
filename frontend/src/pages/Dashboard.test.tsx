@@ -1,10 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import Dashboard from './Dashboard';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
 import { getTodayLocalDate, addCalendarDays } from '../utils/dateFormatting';
+
+// Capture the pull-to-refresh handler the page registers, so a test can drive
+// the gesture without mounting the layout provider.
+let registeredPullToRefresh: (() => Promise<void>) | undefined;
+vi.mock('../hooks/useRegisterPullToRefresh', () => ({
+  useRegisterPullToRefresh: (onRefresh: () => Promise<void>) => {
+    registeredPullToRefresh = onRefresh;
+  },
+}));
 
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
@@ -227,6 +236,7 @@ const ALL_SERVICE_MOCKS = [
 
 describe('Dashboard', () => {
   beforeEach(() => {
+    registeredPullToRefresh = undefined;
     // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
     // leaves implementations AND any unconsumed mockRejectedValueOnce still
     // queued, so a test that arms a one-shot rejection and then returns early
@@ -848,6 +858,50 @@ describe('Dashboard', () => {
       await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
 
       expect(within(updates).getByText('Drill reminder')).toBeInTheDocument();
+    });
+
+    it('shares the retry guard between the two controls over the same loader', async () => {
+      // A training-summary failure renders a Retry on both the hours card and
+      // the readiness card, and both call loadHours. A guard held per rendered
+      // control lets those two start concurrent loads -- and if the later one
+      // settles first, the earlier lands last and restores the error over data
+      // that had just recovered.
+      mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Hours could not be fully verified.');
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      // The readiness control sits over the same loader, so it is guarded too.
+      expect(screen.getByRole('button', { name: 'Retry readiness' })).toBeDisabled();
+      const callsAfterFirst = mockGetMyTraining.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: 'Retry readiness' }));
+      expect(mockGetMyTraining.mock.calls.length).toBe(callsAfterFirst);
+    });
+
+    it('keeps the hours failure showing through a pull-to-refresh', async () => {
+      // Pull-to-refresh runs with the page already on screen, so it is a
+      // refresh, not a first load. The header ignores loadingHours, so an
+      // eager clear here would revert "Total unavailable" to an exact stale
+      // partial total for as long as the refresh takes.
+      mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await within(card).findByText('Total unavailable');
+
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      expect(within(card).getByText('Total unavailable')).toBeInTheDocument();
+      expect(screen.queryByText(/5 hrs in/)).not.toBeInTheDocument();
     });
 
     it('re-enables the Retry control once its request settles', async () => {
