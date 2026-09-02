@@ -29,9 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   legacy contest can be recorded under, and by making both routes record
   the same canonical label going forward so the database-level safety net
   also closes the gap for a near-simultaneous submission.
+- **A member whose membership tier is configured as ineligible to vote
+  could still receive a live, emailed ballot credential for a plain
+  position, specifically on an election that set no position-specific
+  eligibility rules at all** — a narrower prior fix only closed this gap
+  when the election configured an (empty) rule for that position. Fixed so
+  the tier-wide ban applies to every election with plain positions,
+  regardless of whether position-specific rules are configured.
 
 Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
-(ELEC-33, ELEC-34).
+(ELEC-33, ELEC-34, ELEC-35).
 
 ### A mixed election's plain-position ballots ignored a global voting ban and an admin override, and a token could be closed with a legitimate vote still pending (2026-09-02)
 

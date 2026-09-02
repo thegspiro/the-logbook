@@ -19,10 +19,60 @@ feature. The rotation cannot outrun its own review queue.
 [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (Feature 06,
 Elections & ballots, pass 3, round 7 only — round 7's predecessor, #2162,
 merged mid-task before round 7's fix was ready; see the PR-split note
-below) — 18 fixed, 3 flagged across seven Codex review rounds, 1
+below) — 19 fixed, 3 flagged across seven Codex review rounds, 1
 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 7 continued) — 1 more fixed (ELEC-35) — PR #2173
+
+A third finding surfaced during triage of round 7's original two (ELEC-33,
+ELEC-34, logged below) — not a new Codex post against a specific commit,
+but a gap noticed while re-reading round 6's ELEC-30 fix alongside it.
+Folded into the same PR #2173 per this rotation's "one PR at a time"
+process, since #2162 (round 7's would-be target) is closed/merged.
+
+- **ELEC-35 (P1, fixed):** round 6's ELEC-30 fix gated
+  `_member_voting_gates()` (the global membership-tier voting ban) on
+  `election.positions and election.position_eligibility` — both truthy.
+  Round 6's own fixture covered a position with an _empty rule_
+  (`position_eligibility` truthy, no restriction for that one position).
+  It did not cover an election with plain positions and **no**
+  `position_eligibility` at all (a falsy `{}`/`None`) — a distinct
+  condition under which the branch, and the tier gate inside it, never ran
+  at all. A member on a tier with `voting_eligible: False` on such an
+  election still received a token with `eligible_positions=None` — read
+  downstream as unrestricted — and could cast a counted positional vote
+  despite the tier ban already excluding them from every ballot item on
+  the same election.
+
+Fixed by moving the gate to run on `election.positions` alone,
+independent of whether `position_eligibility` is configured for any
+position — `eligible_positions` is now always a list (never left `None`)
+whenever the election defines positions, with the "no rules for this
+position" behavior (unrestricted for a tier-eligible member) preserved via
+`(election.position_eligibility or {}).get(pos)`. The downstream
+empty-ballot-prevention `qualifies` check was simplified to read
+`eligible_positions` directly rather than carrying a separate
+"unrestricted positions always qualify" carve-out that would have
+otherwise overridden a tier-banned member's now-correctly-empty snapshot
+back to "qualifies."
+
+Fix guarded by 2 new regression tests in `tests/test_election_codex_round7.py`
+(`TestTierBanAppliesWithoutAnyPositionEligibilityRules`), confirmed failing
+pre-fix via `git stash`. One pre-existing test file
+(`test_election_reopen_test_ballots.py`) needed a one-line mock fixup
+(`.settings` on a hand-built `organization` `SimpleNamespace`) since the
+tier gate now reaches that code on every election with positions, not only
+ones with `position_eligibility` configured. Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged); scoped suite (`-k "election or
+ballot or vote or quorum"`) 494 passed/1 skipped (pre-existing)/0 failed;
+full backend suite 9814 passed/21 skipped (pre-existing/environmental)/0
+failed. No frontend file touched, so `tsc`/`eslint` not run. Review thread
+replied to and resolved on #2162 (accepts both on a merged PR). See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-35) for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR #2173 merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 7) — 2 fixed — PR #2173 (follow-up to merged #2162)
 

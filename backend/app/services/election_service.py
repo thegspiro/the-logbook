@@ -6233,9 +6233,12 @@ Best regards,
             # this recipient may vote for, mirroring the per-item snapshot
             # below — the token carries no user identity, so
             # position_eligibility (R-D4) can only be enforced at vote time
-            # from a send-time snapshot. None = no position rules on this
-            # election (unrestricted, and the used-token computation stays
-            # on election.positions).
+            # from a send-time snapshot. eligible_positions is always a list
+            # (never left None) whenever the election defines positions:
+            # None is reserved for "this election has no positions at all",
+            # and an empty list means "evaluated, ineligible for all" —
+            # see below for why that distinction matters even when no
+            # per-position rules exist.
             #
             # Deliberately NOT gated on "no ballot items": the schema
             # allows an election to configure both `positions` and
@@ -6249,17 +6252,25 @@ Best regards,
             # token eligible for one item could vote for *any* plain
             # position with no eligibility check at all.
             eligible_positions: Optional[List[str]] = None
-            if election.positions and election.position_eligibility:
+            if election.positions:
                 # Apply the same two universal gates the item snapshot above
-                # goes through (_member_voting_gates): a globally
-                # voting-ineligible tier fails every position outright — an
-                # unrestricted position ("no rules for this position ->
-                # everyone may vote", below) is not an exemption from a
-                # global ban any more than an unrestricted ballot item is —
-                # and an election override grants every position
-                # unconditionally, the positional mirror of the override
-                # already bypassing every ballot item's voter-type rules
-                # (Codex round 6, ELEC-30/ELEC-31).
+                # goes through (_member_voting_gates), and do so
+                # unconditionally on election.positions rather than only
+                # when position_eligibility is configured: a globally
+                # voting-ineligible tier must fail every position outright
+                # whether or not any per-position rule exists to
+                # independently reject the member — the absence of
+                # position-specific rules is "no rules for this position ->
+                # everyone [whose tier allows voting] may vote for it", not
+                # an exemption from the tier ban itself (Codex round 7,
+                # ELEC-35 — evaluating this gate only inside the
+                # `and election.position_eligibility` branch let a
+                # tier-banned member with no position rules configured
+                # receive an eligible_positions=None token, which the vote
+                # path reads as unrestricted). An election override grants
+                # every position unconditionally, the positional mirror of
+                # the override already bypassing every ballot item's
+                # voter-type rules (Codex round 6, ELEC-30/ELEC-31).
                 tier_voting_eligible, has_override = await self._member_voting_gates(
                     recipient, election, str(organization_id), organization
                 )
@@ -6269,10 +6280,11 @@ Best regards,
                         if has_override:
                             eligible_positions.append(pos)
                             continue
-                        pos_rules = election.position_eligibility.get(pos)
+                        pos_rules = (election.position_eligibility or {}).get(pos)
                         if not pos_rules:
-                            # No rules for this position → everyone may vote
-                            # (mirrors check_voter_eligibility).
+                            # No rules for this position → everyone whose
+                            # tier permits voting may vote for it (mirrors
+                            # check_voter_eligibility).
                             eligible_positions.append(pos)
                             continue
                         voter_types = pos_rules.get("voter_types", ["all"])
@@ -6284,7 +6296,12 @@ Best regards,
                     # annotate_ballot_items_for_user failing every item for
                     # the same member. Empty (not None) so downstream code
                     # correctly reads this as "evaluated, ineligible for
-                    # all", not "unrestricted".
+                    # all", not "unrestricted". This is what closes
+                    # ELEC-35: previously this branch was only reachable
+                    # when position_eligibility was configured, so a
+                    # tier-banned member on an election with plain
+                    # positions and no position rules fell through with
+                    # eligible_positions left at its None default instead.
                     eligible_positions = []
 
             # Empty ballot prevention: decide now that BOTH eligibility sets
@@ -6293,39 +6310,35 @@ Best regards,
             # when they qualify for neither structure the election actually
             # defines — being eligible for one plain position is enough to
             # warrant a ballot even if every structured item excludes them,
-            # and vice versa. Positions with no position_eligibility rules
-            # are unrestricted (everyone qualifies), so they never trigger a
-            # skip on their own.
+            # and vice versa. eligible_positions is authoritative for
+            # whether the recipient qualifies via positions: it is already
+            # empty for a tier-banned member even when no position_eligibility
+            # rules exist (see above), so there is no separate "unrestricted
+            # positions always qualify" carve-out here any more.
             items_defined = bool(election.ballot_items)
-            positions_restricted = bool(election.positions) and bool(
-                election.position_eligibility
-            )
-            positions_unrestricted = bool(election.positions) and not (
-                election.position_eligibility
-            )
+            positions_defined = bool(election.positions)
 
-            qualifies = positions_unrestricted
+            qualifies = False
             if items_defined:
                 qualifies = qualifies or bool(eligible_items)
-            if positions_restricted:
+            if positions_defined:
                 qualifies = qualifies or bool(eligible_positions)
 
-            if (
-                items_defined or positions_restricted or positions_unrestricted
-            ) and not qualifies:
+            if (items_defined or positions_defined) and not qualifies:
                 skipped_count += 1
-                if items_defined and positions_restricted:
+                if items_defined and positions_defined:
                     reason = (
                         "Not eligible for any ballot item or position in "
                         "this election — role type, attendance, and "
                         "membership did not match any item or position "
                         "requirements"
                     )
-                elif positions_restricted:
+                elif positions_defined:
                     reason = (
                         "Not eligible for any position in this election — "
                         "membership type does not match any position's "
-                        "voter-type rules"
+                        "voter-type rules, or this membership tier is not "
+                        "voting-eligible"
                     )
                 else:
                     reason = await self._get_ineligibility_reason_for_user(

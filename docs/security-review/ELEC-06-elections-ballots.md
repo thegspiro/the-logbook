@@ -1262,31 +1262,91 @@ New regression tests in `tests/test_election_codex_round7.py`
 `git stash` (both ordering tests, plus a hash-parity unit test that failed
 pre-fix with `ImportError` since `_dedup_position_key` didn't exist yet).
 
-**Round 7: 2 fixed (ELEC-33, ELEC-34).** Both findings posted by Codex
-against commit `44fcbfe8e` (round 5's own fix commit) about gaps in that
-fix (and, for ELEC-34, round 2's ELEC-27 fix) specifically in
-`submit_ballot_with_token`, which neither earlier round's diff touched —
-both were still open against current code. Both confirmed real by tracing
-the bulk route's logic side by side with the single-vote route's
-post-ELEC-29 logic rather than taking Codex's paraphrase as final, and
-fixed by consolidating the collision check into one shared helper
-(`_token_eligibility_error`, ELEC-33) and normalizing the dedup-hash
-position key at the one write path that diverged from the established
-convention (`_dedup_position_key`, ELEC-34) — both changes reduce, rather
-than add to, the number of independent places this "which position values
-belong to this contest" logic is implemented, so a fifth call site is less
-likely to drift the way this fourth one did.
+### ELEC-35 — P1 — The positional tier ban only applied when a `position_eligibility` rule existed for the position, not whenever the election defines positions at all — ✅ FIXED
+
+**What:** Round 6's ELEC-30 fix made the positional-eligibility snapshot
+in `send_ballot_emails` call `_member_voting_gates()` — the same global
+membership-tier voting ban `annotate_ballot_items_for_user` already
+applies to ballot items — but only inside the
+`if election.positions and election.position_eligibility:` branch. Round
+6's own fixture covered a position with an _empty rule_ (`{"President":
+{}}` — `position_eligibility` truthy, just no restriction for that one
+position). It did not cover an election with plain positions and **no**
+`position_eligibility` configured at all (a falsy `{}` or `None`) — a
+distinct condition that skipped the branch, and therefore the tier-gate
+call, entirely. `eligible_positions` was left at its `None` default in
+that case, which the vote path (`cast_vote_with_token`'s
+`voting_token.eligible_positions is not None` checks) reads as
+unrestricted. This surfaced during triage of ELEC-33/34, not as a
+Codex-posted finding against a specific commit.
+
+**Impact:** a member on a membership tier with `benefits.voting_eligible
+== False` (e.g. the shipped "probationary" tier), on an election that
+defines plain positions but configures no position-eligibility rules for
+any of them, still received a live token with `eligible_positions=None` —
+an unrestricted credential — and could cast a counted positional vote
+despite the tier ban that already excludes them from every ballot item on
+the exact same election.
+
+**Where:** `election_service.py`, `send_ballot_emails`'s positional
+snapshot: `if election.positions and election.position_eligibility:`
+gated the entire tier/override check.
+
+**Fix:** the gate now runs on `if election.positions:` alone —
+`_member_voting_gates()` is evaluated whenever the election defines any
+plain position, independent of whether `position_eligibility` happens to
+be configured for it. `eligible_positions` is now always a list (never
+left at `None`) whenever `election.positions` is set: empty when the tier
+is banned and there is no override, otherwise populated per position
+using `(election.position_eligibility or {}).get(pos)` (absent rules ->
+unrestricted, same as before) so a tier-eligible member's behavior is
+unchanged. The downstream empty-ballot-prevention `qualifies` computation
+was simplified to match — it now reads `eligible_positions` directly
+rather than carrying a separate "positions_unrestricted always qualifies"
+carve-out that predates this fix and would otherwise still let a
+tier-banned member's now-correctly-empty snapshot be overridden back to
+"qualifies" for skip-decision purposes.
+
+New regression tests in `tests/test_election_codex_round7.py`
+(`TestTierBanAppliesWithoutAnyPositionEligibilityRules`, 2 tests) —
+confirmed failing pre-fix via `git stash`: the banned-member test found
+`sent == 1` (a live token issued) where the fix requires `sent == 0`. One
+pre-existing test file (`test_election_reopen_test_ballots.py`) required a
+one-line mock fixup — its hand-built `organization` `SimpleNamespace`
+lacked a `.settings` attribute, which `_member_voting_gates()` now always
+reads once `election.positions` is set.
+
+**Round 7: 3 fixed (ELEC-33, ELEC-34, ELEC-35).** The first two findings
+were posted by Codex against commit `44fcbfe8e` (round 5's own fix commit)
+about gaps in that fix (and, for ELEC-34, round 2's ELEC-27 fix)
+specifically in `submit_ballot_with_token`, which neither earlier round's
+diff touched — both were still open against current code. The third
+surfaced during triage of the first two, in the positional-eligibility
+snapshot round 6 (ELEC-30) already touched. All three confirmed real by
+tracing the affected code path against its sibling (the bulk route against
+the single-vote route's post-ELEC-29 logic; the "no rules configured"
+branch against round 6's "empty rule" branch) rather than taking a
+paraphrase as final, and fixed by consolidating the collision check into
+one shared helper (`_token_eligibility_error`, ELEC-33), normalizing the
+dedup-hash position key at the one write path that diverged from the
+established convention (`_dedup_position_key`, ELEC-34), and widening the
+tier-gate condition from "positions AND rules configured" to "positions
+alone" (ELEC-35) — each fix reduces, rather than adds to, the number of
+independent places its underlying invariant ("which position values
+belong to this contest," "who may vote for a plain position at all") is
+implemented, so a later call site is less likely to drift the way these
+did.
 
 **PR split note:** #2162 merged (rounds 1-6 through commit `c4e0e7eb2`)
 while this round's fix was still in progress on its branch — a genuine
 race with this rotation's own "one PR at a time" process, not a process
-violation. The two round-7 review threads were replied to and resolved on
-#2162 as normal (GitHub accepts both on a merged PR), but the code fix
+violation. All three round-7 review threads were replied to and resolved
+on #2162 as normal (GitHub accepts both on a merged PR), but the code fix
 itself landed in a new PR, [#2173](https://github.com/thegspiro/the-logbook/pull/2173),
 branched from #2162's final commit (already an ancestor of `main` by the
 time #2173 was opened) and merged forward onto current `main`.
 
-**Completion gate (pass 3, after round 7):**
+**Completion gate (pass 3, after round 7, ELEC-33/34/35):**
 
 | Check                                                        | Result                                                                    |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------- |
@@ -1294,15 +1354,14 @@ time #2173 was opened) and merged forward onto current `main`.
 | `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
 | `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
 | `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
-| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 492 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
-| `pytest tests/test_election_codex_round7.py -q`              | ✅ 5 passed, 0 failed (4 of 5 confirmed failing pre-fix via `git stash`)  |
-| `pytest tests/ -q` (full backend suite)                      | ✅ 9812 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 494 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round7.py -q`              | ✅ 7 passed, 0 failed                                                     |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9814 passed, 21 skipped (pre-existing/environmental), 0 failed         |
 | `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
 
-New guard tests: `tests/test_election_codex_round7.py` (new file, 5 tests:
-2 for ELEC-33, 3 for ELEC-34 — one of which is a pure unit test of
-`_dedup_position_key` with no DB fixture, so it could not itself fail via
-missing eligibility logic pre-fix, only via the function not existing yet).
+New guard tests: `tests/test_election_codex_round7.py` (7 tests total: 2
+for ELEC-33, 3 for ELEC-34 — one of which is a pure unit test of
+`_dedup_position_key` with no DB fixture — and 2 for ELEC-35).
 
 ---
 

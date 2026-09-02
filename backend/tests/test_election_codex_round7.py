@@ -1,11 +1,15 @@
 """
 Elections — regression tests for the round-7 Codex review on PR #2162.
 
-Codex posted 2 findings against commit 44fcbfe8e (round 5's ELEC-29 fix),
-both about gaps in that fix (and, for the second finding, round 2's
-ELEC-27 fix) specifically in the bulk ballot submission path
-(``submit_ballot_with_token``, the ``/ballot/vote/bulk`` route), which
-neither earlier round touched. Both were verified real:
+PR #2162 merged (commit 14cfb3bdc) while this round's findings were still
+being verified, so the fix lands via a follow-up PR instead of further
+commits to the closed #2162. Codex posted 2 findings against commit
+44fcbfe8e (round 5's ELEC-29 fix), both about gaps in that fix (and, for
+the second finding, round 2's ELEC-27 fix) specifically in the bulk
+ballot submission path (``submit_ballot_with_token``, the
+``/ballot/vote/bulk`` route), which neither earlier round touched; a third
+finding surfaced during triage of those two, in the positional-eligibility
+snapshot round 6 (ELEC-30) already touched. All three were verified real:
 
 1. (ELEC-33, P1) ``cast_vote_with_token`` (the single-vote route) and
    ``lookup_ballot_by_token`` both detect when a ballot item's
@@ -28,6 +32,17 @@ neither earlier round touched. Both were verified real:
    holding two unused tokens could cast one vote for the same contest
    through each route and have both counted.
 
+3. (ELEC-35, P1) Round 6's ELEC-30 fix made the positional-eligibility
+   snapshot in ``send_ballot_emails`` call ``_member_voting_gates()`` (the
+   global membership-tier voting ban) only inside the
+   ``if election.positions and election.position_eligibility:`` branch.
+   Round 6's own fixture covered a position with an *empty rule*
+   (``position_eligibility`` truthy). An election with plain positions and
+   NO ``position_eligibility`` configured at all (a falsy ``{}``/``None``)
+   skipped the branch — and the tier gate — entirely, leaving
+   ``eligible_positions`` at its ``None`` default, which the vote path
+   reads as unrestricted.
+
 Fixed by:
 
 - Extracting the ELEC-29 collision check into a shared
@@ -45,16 +60,23 @@ Fixed by:
   and normalizing the ``vote_dedup_hash`` position component
   (``_dedup_position_key``) to the item id for a legacy item regardless of
   route, so the two routes see (and hash) each other's rows (ELEC-34).
+- Evaluating ``_member_voting_gates()`` whenever ``election.positions`` is
+  set, independent of whether ``position_eligibility`` is configured, so
+  the absence of position-specific rules is no longer read as an exemption
+  from the tier ban (ELEC-35).
 """
 
+import json
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.election import VotingToken
 from app.services.election_service import ElectionService
 
 pytestmark = [pytest.mark.integration]
@@ -64,19 +86,31 @@ def _uid() -> str:
     return str(uuid.uuid4())
 
 
-async def _make_org(db_session: AsyncSession, *, name: str) -> str:
+async def _make_org(db_session: AsyncSession, *, name: str, settings=None) -> str:
     org_id = _uid()
     await db_session.execute(
         text(
-            "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
-            "VALUES (:id, :name, 'fire_department', :slug, 'UTC')"
+            "INSERT INTO organizations "
+            "(id, name, organization_type, slug, timezone, settings) "
+            "VALUES (:id, :name, 'fire_department', :slug, 'UTC', :settings)"
         ),
-        {"id": org_id, "name": name, "slug": f"r7-{org_id[:8]}"},
+        {
+            "id": org_id,
+            "name": name,
+            "slug": f"r7-{org_id[:8]}",
+            "settings": (None if settings is None else json.dumps(settings)),
+        },
     )
     return org_id
 
 
-async def _make_user(db_session: AsyncSession, org_id: str, *, name: str) -> str:
+async def _make_user(
+    db_session: AsyncSession,
+    org_id: str,
+    *,
+    name: str,
+    membership_type: str = "operational",
+) -> str:
     user_id = _uid()
     await db_session.execute(
         text(
@@ -84,7 +118,7 @@ async def _make_user(db_session: AsyncSession, org_id: str, *, name: str) -> str
             "(id, organization_id, username, first_name, last_name, "
             "email, password_hash, status, membership_type) "
             "VALUES (:id, :org, :un, 'Round7', :ln, :em, 'hashed', "
-            "'active', 'operational')"
+            "'active', :mt)"
         ),
         {
             "id": user_id,
@@ -92,6 +126,7 @@ async def _make_user(db_session: AsyncSession, org_id: str, *, name: str) -> str
             "un": f"r7-{user_id[:8]}",
             "ln": name,
             "em": f"r7-{user_id[:8]}@test.com",
+            "mt": membership_type,
         },
     )
     return user_id
@@ -480,4 +515,191 @@ class TestLegacyItemVoteDedupAcrossBothRoutes:
             "Both routes must compute the same dedup-hash position key for "
             f"a legacy item; got bulk={bulk_dedup_key!r} "
             f"single={single_dedup_key!r}"
+        )
+
+
+# ===================================================================
+# Finding 3 (ELEC-35) — the tier voting ban must exclude a member from
+# every plain position even when the election configures NO
+# position_eligibility rules at all, not just when a named position has an
+# empty rule (round 6's ELEC-30 scenario)
+# ===================================================================
+
+
+class TestTierBanAppliesWithoutAnyPositionEligibilityRules:
+    @pytest.fixture
+    async def setup_no_rules_election(self, db_session: AsyncSession):
+        """A mixed OPEN election with a plain position ("President") and
+        NO `position_eligibility` configured at all (a falsy `{}`, not an
+        empty rule keyed to "President" — that distinction is exactly what
+        ELEC-35 is about: round 6 only fixed the latter)."""
+        org_id = await _make_org(
+            db_session,
+            name="Round7 No-Rules Tier FD",
+            settings={
+                "membership_tiers": {
+                    "tiers": [
+                        {
+                            "id": "probationary",
+                            "name": "Probationary",
+                            "benefits": {"voting_eligible": False},
+                        }
+                    ]
+                }
+            },
+        )
+        banned_member_id = await _make_user(
+            db_session,
+            org_id,
+            name="Banned Voter",
+            membership_type="probationary",
+        )
+        eligible_member_id = await _make_user(
+            db_session, org_id, name="Eligible Voter", membership_type="active"
+        )
+        election_id = _uid()
+        candidate_id = _uid()
+        salt = secrets.token_hex(32)
+        now = datetime.now(timezone.utc)
+
+        await db_session.execute(
+            text(
+                "INSERT INTO elections "
+                "(id, organization_id, title, election_type, positions, "
+                "position_eligibility, start_date, end_date, status, "
+                "anonymous_voting, allow_write_ins, max_votes_per_position, "
+                "voting_method, victory_condition, voter_anonymity_salt, "
+                "quorum_type, created_by, email_sent, "
+                "results_visible_immediately, enable_runoffs, runoff_type, "
+                "max_runoff_rounds, is_runoff, runoff_round, created_at, "
+                "updated_at) "
+                "VALUES (:id, :org, 'Round7 No-Rules Election', 'general', "
+                ":positions, :pos_elig, :start, :end, 'open', 1, 0, 1, "
+                "'simple_majority', 'most_votes', :salt, 'none', :creator, "
+                "0, 0, 0, 'top_two', 3, 0, 0, NOW(), NOW())"
+            ),
+            {
+                "id": election_id,
+                "org": org_id,
+                # No position_eligibility rules at all — falsy, not an
+                # empty-rule entry for "President" (round 6's scenario).
+                "positions": '["President"]',
+                "pos_elig": "{}",
+                "start": now - timedelta(days=1),
+                "end": now + timedelta(days=1),
+                "salt": salt,
+                "creator": eligible_member_id,
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO candidates "
+                "(id, election_id, name, position, accepted, is_write_in, "
+                "display_order, nomination_date, created_at, updated_at) "
+                "VALUES (:id, :eid, 'President Candidate', 'President', 1, "
+                "0, 0, NOW(), NOW(), NOW())"
+            ),
+            {"id": candidate_id, "eid": election_id},
+        )
+        await db_session.flush()
+
+        return {
+            "org_id": org_id,
+            "banned_member_id": banned_member_id,
+            "eligible_member_id": eligible_member_id,
+            "election_id": election_id,
+            "candidate_id": candidate_id,
+            "salt": salt,
+        }
+
+    async def test_tier_banned_member_gets_no_positional_credential(
+        self, db_session: AsyncSession, setup_no_rules_election
+    ):
+        """Root cause: with position_eligibility entirely absent, the old
+        code never called `_member_voting_gates()` at all, so
+        `eligible_positions` stayed at its `None` default — read as
+        unrestricted downstream. This banned member must instead be
+        skipped entirely, exactly as round 6 already guarantees when a
+        rule (even an empty one) exists for "President"."""
+        data = setup_no_rules_election
+        svc = ElectionService(db_session)
+
+        with patch(
+            "app.services.email_service.EmailService.send_batch",
+            new=AsyncMock(side_effect=lambda batch: [True] * len(batch)),
+        ):
+            sent, failed, skipped, skipped_details, _sent_ids = (
+                await svc.send_ballot_emails(
+                    election_id=uuid.UUID(data["election_id"]),
+                    organization_id=uuid.UUID(data["org_id"]),
+                    recipient_user_ids=[uuid.UUID(data["banned_member_id"])],
+                    base_ballot_url="https://fd.example/ballot",
+                )
+            )
+
+        assert sent == 0, (
+            "A globally voting-ineligible member must not receive a ballot "
+            "granting a live positional credential merely because no "
+            f"position_eligibility rules exist (ELEC-35) "
+            f"(failed={failed}, skipped_details={skipped_details})"
+        )
+        assert skipped == 1
+
+        tokens = (
+            (
+                await db_session.execute(
+                    select(VotingToken).where(
+                        VotingToken.election_id == data["election_id"]
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(tokens) == 0, (
+            "No token — and therefore no unrestricted eligible_positions=None "
+            "credential — may be issued to a member whose tier bans voting "
+            "outright, regardless of whether position_eligibility rules exist"
+        )
+
+    async def test_voting_eligible_member_still_gets_unrestricted_position(
+        self, db_session: AsyncSession, setup_no_rules_election
+    ):
+        """Sanity check: the fix must not over-reject. A member whose tier
+        permits voting must still receive the position, unrestricted, when
+        no position_eligibility rules exist for it."""
+        data = setup_no_rules_election
+        svc = ElectionService(db_session)
+
+        with patch(
+            "app.services.email_service.EmailService.send_batch",
+            new=AsyncMock(side_effect=lambda batch: [True] * len(batch)),
+        ):
+            sent, failed, skipped, skipped_details, _sent_ids = (
+                await svc.send_ballot_emails(
+                    election_id=uuid.UUID(data["election_id"]),
+                    organization_id=uuid.UUID(data["org_id"]),
+                    recipient_user_ids=[uuid.UUID(data["eligible_member_id"])],
+                    base_ballot_url="https://fd.example/ballot",
+                )
+            )
+        assert sent == 1, f"skipped_details={skipped_details}"
+        assert skipped == 0
+
+        token_row = (
+            (
+                await db_session.execute(
+                    select(VotingToken).where(
+                        VotingToken.election_id == data["election_id"]
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        assert token_row is not None
+        assert token_row.eligible_positions == ["President"], (
+            "A voting-eligible member must still receive an unrestricted "
+            f"position when no rules exist for it; got "
+            f"{token_row.eligible_positions!r}"
         )
