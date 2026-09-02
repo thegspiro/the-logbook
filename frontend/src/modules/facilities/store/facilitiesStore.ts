@@ -122,9 +122,14 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => {
     // Load lookup data (types, statuses, maintenance types)
     loadLookupData: async () => {
       try {
+        // Active only. This store feeds the pickers on the facility create and
+        // edit forms, and the types/statuses endpoints apply no filter by
+        // default — so deactivating a lookup on the settings screen changed
+        // nothing anywhere, which is a switch wired to nothing (pitfall #19).
+        // The settings screen calls the service directly and still sees both.
         const [types, statuses, maintTypes] = await Promise.all([
-          facilitiesService.getTypes(),
-          facilitiesService.getStatuses(),
+          facilitiesService.getTypes({ is_active: true }),
+          facilitiesService.getStatuses({ is_active: true }),
           facilitiesService.getMaintenanceTypes(),
         ]);
         set({
@@ -173,7 +178,22 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => {
     // Load full facility detail by ID
     loadFacilityDetail: async (facilityId: string) => {
       const request = ++latestDetailRequest;
-      set({ isLoadingDetail: true });
+      // Drop a different facility before the request goes out. The detail
+      // page's spinner guard is `isLoadingDetail && !facility`, so leaving
+      // the previous one in place renders the wrong facility's name, address
+      // and sections for the whole duration of this request — with a working
+      // Archive button in its header.
+      set((state) => ({
+        isLoadingDetail: true,
+        ...(state.selectedFacility && state.selectedFacility.id !== facilityId
+          ? {
+              selectedFacility: null,
+              selectedFacilityRooms: [],
+              selectedFacilitySystems: [],
+              selectedFacilityContacts: [],
+            }
+          : {}),
+      }));
       try {
         const facility = await facilitiesService.getFacility(facilityId);
         if (request === latestDetailRequest) {
@@ -294,12 +314,19 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => {
     },
 
     // UI state setters
-    clearSelectedFacility: () =>
+    clearSelectedFacility: () => {
+      // Invalidate any detail load still in flight. The detail page clears on
+      // unmount, but a request that resolves afterwards would otherwise write
+      // its facility back into a store nobody is looking at — and the next
+      // detail page then opens on it.
+      ++latestDetailRequest;
       set({
         selectedFacility: null,
         selectedFacilityRooms: [],
         selectedFacilitySystems: [],
         selectedFacilityContacts: [],
-      }),
+        isLoadingDetail: false,
+      });
+    },
   };
 });

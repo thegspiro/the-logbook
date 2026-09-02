@@ -8,7 +8,7 @@ shift's defined positions, the training target_position mapping, settings
 updates (deepcopy-safe), and the EVOC soft-warning path. DB mocked; no MySQL.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -71,8 +71,13 @@ def _scalars(items):
     return r
 
 
-def _user(rank="ff", membership_type="active"):
-    return SimpleNamespace(id="u1", rank=rank, membership_type=membership_type)
+def _user(rank="ff", membership_type="active", member_class=None):
+    return SimpleNamespace(
+        id="u1",
+        rank=rank,
+        membership_type=membership_type,
+        member_class=member_class,
+    )
 
 
 def _rank_rows(entries):
@@ -204,6 +209,70 @@ class TestGetEligiblePositions:
         )
 
         assert out == []
+
+    async def test_open_to_all_admits_a_member_on_an_org_configured_tier(self):
+        """A tier the split map does not know is not a non-riding class.
+
+        ``run_membership_tier_scan`` writes the tier id straight into
+        ``membership_type``, and ``split_membership_type`` returns ``(None,
+        None)`` for anything outside the seven legacy values — deliberately, so
+        it never guesses a class. Gating the bypass on ``== OPERATIONAL`` read
+        that "not established" as "not operational", so every member the
+        shipped ``senior`` tier had auto-advanced lost the shift: absent from
+        the member list, 403 on the detail, refused at signup.
+
+        The class is what answers this, and applying a tier no longer erases
+        it (``_reconcile_membership``), so a senior firefighter is still
+        recorded as operational and still rides.
+        """
+        org = _org()
+        shift = _shift(["driver", "officer"], open_to_all=True)
+        db = _db([_one(org), _one(shift)])
+
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None, membership_type="senior", member_class="operational"),
+            "org-1",
+            shift_id="sh1",
+        )
+
+        assert out == ["driver", "officer"]
+
+    async def test_open_to_all_does_not_bypass_for_an_unresolvable_class(self):
+        """The bypass waives the membership-type, rank, training and
+        qualification checks in one step, so it needs a class that is actually
+        established. A legacy row carrying a custom tier and no class — written
+        before the reconciler stopped erasing it — cannot supply one, and
+        reading that silence as "rides" handed every seat on the shift to a
+        tier a department may well have created for members who do not.
+
+        Not a block: they fall through to the normal path and are judged on
+        rank and training like anyone else. Here that yields nothing, because
+        this member has neither.
+        """
+        org = _org()
+        shift = _shift(["driver", "officer"], open_to_all=True)
+        db = _db([_one(org), _one(shift)])
+
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None, membership_type="support-tier"), "org-1", shift_id="sh1"
+        )
+
+        assert out == []
+
+    async def test_bulk_open_to_all_agrees_with_the_single_shift_answer(self):
+        """The two paths gate the bypass separately; they must not disagree."""
+        org = _org()
+        shift = _shift(["driver"], open_to_all=True)
+        user = _user(rank=None, membership_type="senior", member_class="operational")
+
+        single = await ShiftEligibilityService(
+            _db([_one(org), _one(shift)])
+        ).get_eligible_positions(user, "org-1", shift_id="sh1")
+        bulk = await ShiftEligibilityService(
+            _db([_one(org), _scalars([shift])])
+        ).get_eligible_positions_bulk(user, "org-1", ["sh1"])
+
+        assert bulk["sh1"] == single == ["driver"]
 
     async def test_administrative_positions_preserve_repeated_opted_in_seats(self):
         shift = _shift(
@@ -357,6 +426,94 @@ class TestGetEligiblePositions:
             _user(), "org-1", shift_id="sh1"
         )
         assert out == ["driver"]
+
+
+class TestBulkQualificationQueries:
+    """One statement for the member's cards, not one per shift date.
+
+    ``get_eligible_positions_bulk`` resolves qualifications per *distinct*
+    shift date, because a card current today may have lapsed by a shift three
+    months out. Asking the database once per date made a member's shift list
+    as many sequential round trips as the page had dates — a year of generated
+    shifts is ~365 of them for one request.
+    """
+
+    @staticmethod
+    def _shift_on(shift_id, day):
+        return SimpleNamespace(
+            id=shift_id,
+            organization_id="org-1",
+            positions=["ems"],
+            open_to_all_members=False,
+            apparatus_id=None,
+            shift_date=day,
+        )
+
+    async def test_query_count_does_not_grow_with_distinct_dates(self):
+        def _run(day_count):
+            shifts = [
+                self._shift_on(f"sh{i}", date(2026, 9, 1) + timedelta(days=i))
+                for i in range(day_count)
+            ]
+            db = _db([_one(_org()), _scalars(shifts)])
+            return db, shifts
+
+        db_one, shifts_one = _run(1)
+        await ShiftEligibilityService(db_one).get_eligible_positions_bulk(
+            _user(), "org-1", [s.id for s in shifts_one]
+        )
+        db_many, shifts_many = _run(40)
+        await ShiftEligibilityService(db_many).get_eligible_positions_bulk(
+            _user(), "org-1", [s.id for s in shifts_many]
+        )
+
+        assert db_many.execute.await_count == db_one.execute.await_count
+
+    async def test_a_card_granted_later_does_not_clear_an_earlier_shift(self):
+        """The Python window mirror has to keep ``granted_on`` honest."""
+
+        early = self._shift_on("sh-early", date(2026, 9, 1))
+        late = self._shift_on("sh-late", date(2026, 12, 1))
+        # rank map, held slugs, training, then the qualification windows
+        db = _db(
+            [
+                _one(_org()),
+                _scalars([early, late]),
+                _rank_rows([]),
+                _held_rows([]),
+                _rows([]),
+                _rows([("emt", date(2026, 10, 1), None)]),
+            ]
+        )
+
+        out = await ShiftEligibilityService(db).get_eligible_positions_bulk(
+            _user(rank=None), "org-1", ["sh-early", "sh-late"]
+        )
+
+        assert out["sh-early"] == []
+        assert out["sh-late"] == ["ems"]
+
+    async def test_an_expired_card_does_not_clear_a_later_shift(self):
+
+        early = self._shift_on("sh-early", date(2026, 9, 1))
+        late = self._shift_on("sh-late", date(2026, 12, 1))
+        db = _db(
+            [
+                _one(_org()),
+                _scalars([early, late]),
+                _rank_rows([]),
+                _held_rows([]),
+                _rows([]),
+                _rows([("emt", None, date(2026, 10, 1))]),
+            ]
+        )
+
+        out = await ShiftEligibilityService(db).get_eligible_positions_bulk(
+            _user(rank=None), "org-1", ["sh-early", "sh-late"]
+        )
+
+        assert out["sh-early"] == ["ems"]
+        assert out["sh-late"] == []
 
 
 class TestSettingsHelpers:

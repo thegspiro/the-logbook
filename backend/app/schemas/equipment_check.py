@@ -221,6 +221,22 @@ class CheckTemplateCompartmentCreate(BaseModel):
     items: Optional[List[CheckTemplateItemCreate]] = None
 
 
+class CompartmentReplaceRequest(BaseModel):
+    """Replace a template's whole compartment tree.
+
+    The builder's bulk-replacement paths promise to discard everything on the
+    template and load a preset or an import in its place. Both halves travel
+    together because they are one decision: a discard sent on its own commits
+    an empty template while the replacement exists only in the browser.
+
+    An empty list is a valid request — it clears the template.
+    """
+
+    compartments: List[CheckTemplateCompartmentCreate] = Field(
+        default_factory=list, max_length=250
+    )
+
+
 class CheckTemplateCompartmentUpdate(BaseModel):
     """Schema for updating a compartment."""
 

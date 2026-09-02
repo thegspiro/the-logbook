@@ -424,11 +424,13 @@ class TestAcknowledgmentReport:
         message = _msg("m1", "all", requires_acknowledgment=True)
         users = [self._user("u1", "Ann"), self._user("u2", "Ben")]
         now = datetime.now(timezone.utc)
-        read_u1 = SimpleNamespace(user_id="u1", read_at=now, acknowledged_at=now)
+        read_u1 = SimpleNamespace(
+            user_id="u1", read_at=now, acknowledged_at=now, revoked_at=None
+        )
 
         db = MagicMock()
         msg_res = MagicMock(scalar_one_or_none=MagicMock(return_value=message))
-        pending = SimpleNamespace(read_at=None, acknowledged_at=None)
+        pending = SimpleNamespace(read_at=None, acknowledged_at=None, revoked_at=None)
         recipients_res = MagicMock(
             all=MagicMock(return_value=[(users[0], read_u1), (users[1], pending)])
         )
@@ -621,6 +623,44 @@ class TestRescheduleGuard:
             "m1", "org-1", {"scheduled_at": None, "is_active": False}
         )
         assert err is None
+
+    async def test_widening_a_published_audience_reports_who_to_tell(self):
+        """The endpoint reads this to deliver to exactly the members added.
+
+        A published message whose audience widens is not "published by this
+        update" — `_published_by_update` is False — so the endpoint enqueued
+        nothing at all. The added members got a recipient row and no email.
+        """
+        published = SimpleNamespace(
+            scheduled_at=None,
+            target_type=None,
+            target_member_ids=None,
+            target_roles=None,
+            target_statuses=None,
+            organization_id="org-1",
+            id="m1",
+        )
+        db = self._db_with(published)
+        svc = MessagingService(db)
+        svc.reconcile_recipients = AsyncMock(return_value={"new-one"})
+
+        message, err = await svc.update_message("m1", "org-1", {"target_type": "all"})
+
+        assert err is None
+        assert message._published_by_update is False
+        assert message._newly_targeted == {"new-one"}
+
+    async def test_an_edit_that_touches_no_audience_field_tells_nobody(self):
+        published = SimpleNamespace(scheduled_at=None, title="Old title")
+        db = self._db_with(published)
+        svc = MessagingService(db)
+        svc.reconcile_recipients = AsyncMock()
+
+        message, err = await svc.update_message("m1", "org-1", {"title": "New title"})
+
+        assert err is None
+        assert message._newly_targeted == set()
+        svc.reconcile_recipients.assert_not_awaited()
 
     async def test_unrelated_edit_does_not_revalidate_legacy_audience(self):
         published = SimpleNamespace(scheduled_at=None, title="Old title")
@@ -844,6 +884,170 @@ class TestGetInboxMessage:
         assert "users.organization_id = :organization_id_1" in str(author_query)
 
 
+class TestRevokedRowsAreOutOfTheLiveFigures:
+    """A receipt kept as evidence is not an outstanding obligation.
+
+    A member who read but never acknowledged an acknowledgment-required
+    message keeps their row when the author narrows the audience — and the
+    read/acknowledge gate then refuses them. Counting that row in
+    `total_targeted` reports somebody as owing an acknowledgment they can no
+    longer give, and `total_targeted` stops describing the live audience.
+    """
+
+    @staticmethod
+    def _rows(*records):
+        result = MagicMock()
+        result.all.return_value = [
+            (
+                SimpleNamespace(
+                    id=f"u{i}",
+                    first_name="Pat",
+                    last_name=f"R{i}",
+                    username=f"pat{i}",
+                    status="active",
+                ),
+                rec,
+            )
+            for i, rec in enumerate(records)
+        ]
+        return result
+
+    @staticmethod
+    def _record(read=False, acked=False, revoked=False):
+        stamp = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        return SimpleNamespace(
+            read_at=stamp if read or acked else None,
+            acknowledged_at=stamp if acked else None,
+            revoked_at=stamp if revoked else None,
+        )
+
+    async def test_a_revoked_row_is_not_an_outstanding_acknowledgment(self):
+        svc = _svc()
+        message = SimpleNamespace(id="m1", requires_acknowledgment=True)
+        svc.get_message_by_id = AsyncMock(return_value=message)
+        svc._attach_author_names = AsyncMock()
+        svc.db.execute = AsyncMock(
+            return_value=self._rows(
+                self._record(acked=True),
+                self._record(read=True, revoked=True),
+            )
+        )
+
+        report = await svc.get_acknowledgment_report("m1", "org-1")
+
+        # One live member, who acknowledged. The removed one is neither in the
+        # denominator nor owing anything.
+        assert report["total_targeted"] == 1
+        assert report["total_acknowledged"] == 1
+        assert report["total_read"] == 1
+
+    async def test_the_receipt_is_still_listed_and_marked(self):
+        """Kept, because it is the only record that they read it — and sorted
+        last, since an unacknowledged revoked row is not an obligation."""
+        svc = _svc()
+        svc.get_message_by_id = AsyncMock(
+            return_value=SimpleNamespace(id="m1", requires_acknowledgment=True)
+        )
+        svc._attach_author_names = AsyncMock()
+        svc.db.execute = AsyncMock(
+            return_value=self._rows(
+                self._record(read=True, revoked=True),
+                self._record(),
+            )
+        )
+
+        report = await svc.get_acknowledgment_report("m1", "org-1")
+
+        assert len(report["recipients"]) == 2
+        assert report["recipients"][0]["removed_from_audience"] is False
+        assert report["recipients"][-1]["removed_from_audience"] is True
+        assert report["recipients"][-1]["is_read"] is True
+
+    async def test_the_flag_reaches_the_client(self):
+        """A key the response model does not declare never leaves the server.
+
+        The endpoint returns this report through ``AckReportResponse``, and
+        Pydantic drops anything the schema has no field for — so the admin
+        screen's "removed from audience" label rendered for nobody, and the
+        list showed a revoked receipt as an ordinary current-audience row
+        while the totals below it excluded that member. The service and the
+        schema have to be asserted together; either one alone passes.
+        """
+        svc = _svc()
+        svc.get_message_by_id = AsyncMock(
+            return_value=SimpleNamespace(id="m1", requires_acknowledgment=True)
+        )
+        svc._attach_author_names = AsyncMock()
+        svc.db.execute = AsyncMock(
+            return_value=self._rows(
+                self._record(read=True, revoked=True),
+                self._record(),
+            )
+        )
+
+        report = await svc.get_acknowledgment_report("m1", "org-1")
+        served = messages_endpoint.AckReportResponse.model_validate(report)
+
+        assert [r.removed_from_audience for r in served.recipients] == [False, True]
+
+    async def test_the_stats_denominator_is_the_live_audience(self):
+        svc = _svc()
+        svc.get_message_by_id = AsyncMock(return_value=SimpleNamespace(id="m1"))
+        captured = []
+
+        async def _execute(query, *a, **k):
+            captured.append(str(query))
+            result = MagicMock()
+            result.scalar.return_value = 0
+            return result
+
+        svc.db.execute = _execute
+        await svc.get_message_stats("m1", "org-1")
+
+        assert captured, "no counts were issued"
+        assert all("revoked_at IS NULL" in q for q in captured), captured
+
+
+class TestRevokedRowsGrantNothing:
+    """Every query that authorizes a member against a message must exclude a
+    row kept only as a receipt. They are separate queries with no shared
+    builder, so each is checked: missing the filter on any one of them leaves
+    a removed member with the inbox list, the badge, or the message itself."""
+
+    @staticmethod
+    async def _captured(coro_factory):
+        svc = _svc()
+        captured = []
+
+        async def _execute(query, *args, **kwargs):
+            captured.append(str(query))
+            result = MagicMock()
+            result.scalar.return_value = 0
+            result.scalar_one_or_none.return_value = None
+            result.all.return_value = []
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        svc.db.execute = _execute
+        await coro_factory(svc)
+        return captured
+
+    async def test_inbox_list_excludes_revoked_rows(self):
+        queries = await self._captured(lambda svc: svc.get_inbox("org1", "u1"))
+        assert any("revoked_at IS NULL" in q for q in queries), queries
+
+    async def test_unread_badge_excludes_revoked_rows(self):
+        queries = await self._captured(lambda svc: svc.get_unread_count("org1", "u1"))
+        assert any("revoked_at IS NULL" in q for q in queries), queries
+
+    async def test_the_visibility_gate_excludes_revoked_rows(self):
+        # Backs the detail screen, mark-as-read and acknowledge.
+        queries = await self._captured(
+            lambda svc: svc._visible_message_or_none("m1", "u1", "org1")
+        )
+        assert any("revoked_at IS NULL" in q for q in queries), queries
+
+
 class TestInboxDetailRoute:
     def test_detail_route_is_declared_before_the_admin_by_id_route(self):
         """/inbox/{message_id} must not be shadowed, and the literal
@@ -856,6 +1060,131 @@ class TestInboxDetailRoute:
 
         assert "/inbox/{message_id}" in paths
         assert paths.index("/inbox/unread-count") < paths.index("/inbox/{message_id}")
+
+
+class TestReconcileRecipients:
+    """Editing a message's audience must not destroy delivery evidence.
+
+    read_at/acknowledged_at live on the recipient row and nowhere else, so a
+    row deleted for falling out of the audience takes the proof of receipt
+    with it. That happens without anyone touching the message: _targeted_users
+    filters on User.is_active, so a member going on leave leaves the audience
+    and their acknowledgment goes too.
+    """
+
+    @staticmethod
+    def _row(user_id, read_at=None, acknowledged_at=None, revoked_at=None):
+        return SimpleNamespace(
+            user_id=user_id,
+            read_at=read_at,
+            acknowledged_at=acknowledged_at,
+            revoked_at=revoked_at,
+        )
+
+    async def _reconcile(self, existing_rows, targeted_ids):
+        svc = _svc()
+        svc.db.add = MagicMock()
+        svc.db.delete = AsyncMock()
+        svc._targeted_users = AsyncMock(
+            return_value=[SimpleNamespace(id=uid) for uid in targeted_ids]
+        )
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = existing_rows
+        svc.db.execute = AsyncMock(return_value=result)
+        added = await svc.reconcile_recipients(
+            SimpleNamespace(id="m1", organization_id="org1")
+        )
+        self.last_added = added
+        return [call.args[0] for call in svc.db.delete.await_args_list]
+
+    async def test_reports_the_members_it_added(self):
+        """The caller needs them: a widened audience has to be told.
+
+        The rows went in and nothing else happened — no email, no bell, no
+        SMS. The added members then showed in the acknowledgment report as
+        owing an acknowledgment, and counted against `total_targeted`, for a
+        notice that had never reached them by the channel of record.
+        """
+        await self._reconcile(
+            [self._row("already-here")], targeted_ids=["already-here", "new-one"]
+        )
+
+        assert self.last_added == {"new-one"}
+
+    async def test_reports_nothing_added_when_the_audience_only_shrinks(self):
+        await self._reconcile(
+            [self._row("staying"), self._row("leaving")], targeted_ids=["staying"]
+        )
+
+        assert self.last_added == set()
+
+    async def test_retains_an_acknowledged_row_dropped_from_the_audience(self):
+        signed = self._row(
+            "gone-signed",
+            read_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            acknowledged_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+        deleted = await self._reconcile([signed], targeted_ids=["still-here"])
+
+        assert signed not in deleted
+
+    async def test_a_retained_row_stops_granting_access(self):
+        """The row kept for evidence was also the row granting access.
+
+        Every visibility query — inbox list, unread badge, and the gate behind
+        read/acknowledge and the detail screen — joins to the recipient row
+        and asks nothing else. So narrowing a published message's audience
+        removed nobody who had already opened it: the notice stayed in their
+        inbox, and stayed openable by id.
+        """
+        signed = self._row(
+            "gone-signed",
+            read_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            acknowledged_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+        await self._reconcile([signed], targeted_ids=["still-here"])
+
+        assert signed.revoked_at is not None
+        # The receipt itself is untouched — that is what it is kept for.
+        assert signed.acknowledged_at == datetime(2026, 8, 1, tzinfo=timezone.utc)
+
+    async def test_returning_to_the_audience_restores_access(self):
+        """A member widened back in must see the message again, and must not
+        be re-notified: they were told the first time."""
+        back = self._row(
+            "returning",
+            read_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            revoked_at=datetime(2026, 8, 2, tzinfo=timezone.utc),
+        )
+        await self._reconcile([back], targeted_ids=["returning"])
+
+        assert back.revoked_at is None
+        assert self.last_added == set()
+
+    async def test_a_row_carrying_nothing_is_still_deleted_not_revoked(self):
+        empty = self._row("gone-unread")
+        deleted = await self._reconcile([empty], targeted_ids=["still-here"])
+
+        assert empty in deleted
+        assert empty.revoked_at is None
+
+    async def test_retains_a_read_row_dropped_from_the_audience(self):
+        seen = self._row("gone-read", read_at=datetime(2026, 8, 1, tzinfo=timezone.utc))
+        deleted = await self._reconcile([seen], targeted_ids=["still-here"])
+
+        assert seen not in deleted
+
+    async def test_prunes_a_row_that_carries_no_receipt(self):
+        never_engaged = self._row("gone-clean")
+        deleted = await self._reconcile([never_engaged], targeted_ids=["still-here"])
+
+        assert never_engaged in deleted
+
+    async def test_keeps_rows_still_in_the_audience(self):
+        current = self._row("still-here")
+        deleted = await self._reconcile([current], targeted_ids=["still-here"])
+
+        assert deleted == []
 
 
 if __name__ == "__main__":  # pragma: no cover

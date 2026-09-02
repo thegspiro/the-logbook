@@ -472,8 +472,20 @@ class DepartmentMessageRecipient(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # When this member entered the message's audience. The audience is
+    # mutable after publication — a widened targeting rule adds rows, a
+    # narrowed one revokes them — so this diverges from the message's own
+    # created_at, which is the case the delivery path has to tell apart, and
+    # every other stamp here is a state change against a row already present.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     read_at = Column(DateTime(timezone=True), nullable=True)
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    # Set when a published message's audience was narrowed and this member
+    # fell out of it, but the row carries a receipt worth keeping. The row is
+    # evidence from then on, not access: every visibility query filters on
+    # this, because they authorize on the row's existence alone and an author
+    # who removes somebody from an audience means to remove their access too.
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
 
     message = relationship("DepartmentMessage", back_populates="recipients")
     user = relationship("User", foreign_keys=[user_id])

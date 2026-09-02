@@ -201,6 +201,17 @@ def required_permissions_for_module(module: str) -> Optional[Tuple[str, ...]]:
     return entry[0] if entry else None
 
 
+#: "This caller did not mention the field" — distinct from an explicit ``None``,
+#: which means "clear it". ``None`` alone cannot express both, and conflating
+#: them is what let a save that carried no printer erase the one on file.
+class _Unset:
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "UNSET"
+
+
+UNSET = _Unset()
+
+
 class LabelService:
     """Position-scoped label presets and cross-module label generation."""
 
@@ -256,11 +267,21 @@ class LabelService:
         organization_id,
         module: str,
         preset: str,
-        printer_id: Optional[str] = None,
+        printer_id: Any = UNSET,
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
         symbology: str = SYMBOLOGY_CODE128,
     ) -> Dict[str, Any]:
+        """Store the label preset for the caller's position.
+
+        ``printer_id`` follows the update contract in CLAUDE.md pitfall #1:
+        omitted means "leave the remembered destination alone", an explicit
+        ``None`` clears it. The entry used to be rewritten wholesale, so any
+        save that did not carry a printer erased one — the inventory size
+        preset never sends one at all, and the print page sends none while its
+        printer list is still in flight. Nobody had to touch a control; opening
+        the page on a slow link was enough to lose the position's destination.
+        """
         from app.models.user import Position
 
         if not is_known_label_format(preset):
@@ -286,9 +307,11 @@ class LabelService:
         presets = settings.get("label_presets")
         if not isinstance(presets, dict):
             presets = {}
+        stored = presets.get(module)
+        stored_printer = stored.get("printer_id") if isinstance(stored, dict) else None
         presets[module] = {
             "preset": preset,
-            "printer_id": printer_id,
+            "printer_id": stored_printer if printer_id is UNSET else printer_id,
             "custom_width": custom_width,
             "custom_height": custom_height,
             "symbology": symbology,

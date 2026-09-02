@@ -54,7 +54,7 @@ export const TestingReportPrintPage: React.FC = () => {
   const tz = useTimezone();
   const canSeeAllTesters = checkPermission(SEE_ALL_TESTERS_PERMISSION);
 
-  const { results, otherMarks, run, summary, testerCount, gateTally, staleCount, isLoading, viewRun } =
+  const { results, otherMarks, run, summary, testerCount, gateTally, staleCount, isLoading, loadError, viewRun } =
     useTestingChecklist({ includeAllTesters: canSeeAllTesters });
 
   // `?run=<id>` prints an earlier pass; without it the current one.
@@ -65,11 +65,16 @@ export const TestingReportPrintPage: React.FC = () => {
 
   useEffect(() => {
     if (isLoading) return undefined;
+    // Not printed when the run failed to load. An empty `results` renders as a
+    // report stating there were no failures and that every gate behaved — the
+    // most confident possible reading of "we never got the data" — and the
+    // page then sent it to the printer unprompted.
+    if (loadError) return undefined;
     // Printed once the run has actually loaded, or the dialog opens over an
     // empty page and the reader prints nothing.
     const timer = setTimeout(() => window.print(), 600);
     return () => clearTimeout(timer);
-  }, [isLoading]);
+  }, [isLoading, loadError]);
 
   const marks = flattenRun({
     run,
@@ -131,6 +136,18 @@ export const TestingReportPrintPage: React.FC = () => {
 
   if (isLoading) {
     return <p style={{ padding: '2rem' }}>Loading the run…</p>;
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ padding: '2rem' }} role="alert">
+        <h1 style={{ fontSize: '18pt', fontWeight: 'bold', margin: '0 0 8pt 0' }}>The run could not be loaded</h1>
+        <p style={{ margin: '0 0 8pt 0' }}>{loadError}</p>
+        <p style={{ margin: 0 }}>
+          Nothing has been printed. Reload the page, or go back to the checklist and try again.
+        </p>
+      </div>
+    );
   }
 
   return (

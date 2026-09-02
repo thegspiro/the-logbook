@@ -58,7 +58,19 @@ export const labelService = {
 
   async setPreset(
     module: string,
-    data: { preset: string; printer_id?: string; custom_width?: number; custom_height?: number; symbology?: Symbology }
+    /**
+     * `printer_id` follows the update contract: omit the key to leave the
+     * position's remembered destination alone, send `null` to clear it. It is
+     * not `string | undefined` — with `exactOptionalPropertyTypes` those are
+     * the same wire value, and the caller needs the two to differ.
+     */
+    data: {
+      preset: string;
+      printer_id?: string | null;
+      custom_width?: number;
+      custom_height?: number;
+      symbology?: Symbology;
+    }
   ): Promise<LabelPresetResponse> {
     const res = await api.put<LabelPresetResponse>(`/label-preset/${module}`, data);
     return res.data;

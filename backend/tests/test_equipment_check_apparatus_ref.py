@@ -216,6 +216,13 @@ def _basic(apparatus_id="basic-1", apparatus_type="engine"):
     )
 
 
+def _shift_with_template(apparatus_id="app-1", template_id="shift-tmpl-1"):
+    """A shift whose ShiftTemplate names its checklists explicitly."""
+    shift = _shift(apparatus_id)
+    shift.template_id = template_id
+    return shift
+
+
 def _template(template_id, **kwargs):
     return SimpleNamespace(
         id=template_id,
@@ -311,6 +318,107 @@ class TestResolveTemplates:
         )
 
         assert [t.id for t in templates] == ["live"]
+
+    async def test_a_draft_apparatus_template_does_not_suppress_the_type_one(self):
+        """A draft is not a checklist, so it must not block the fallback.
+
+        `_advance_content_revision` sets is_active=False on every item or
+        compartment edit, and a new template now saves as a draft by default.
+        Deciding precedence before filtering meant an officer opening the
+        Engine 1 template took the published "Engine — start of shift"
+        checklist off every Engine 1 shift: `get_my_checklists` showed
+        nothing, and `submit_check` refused anyone who still had the form
+        open. Readiness and the reminder task filter first, so both went on
+        reporting a MISSING check for a checklist nobody was offered.
+        """
+        db = MagicMock()
+        db.execute = _queued_execute(
+            _scalars_first(_apparatus()),
+            _scalars_all([_template("draft-specific", is_active=False)]),
+            _scalars_all([_template("t-type", apparatus_type="engine")]),
+        )
+        svc = EquipmentCheckService(db)
+
+        templates = await svc._resolve_templates(
+            _shift("app-1"), "org-1", user_position=None
+        )
+
+        assert [t.id for t in templates] == ["t-type"]
+
+    async def test_a_published_apparatus_template_still_wins(self):
+        db = MagicMock()
+        db.execute = _queued_execute(
+            _scalars_first(_apparatus()),
+            _scalars_all(
+                [_template("live-specific"), _template("draft", is_active=False)]
+            ),
+        )
+        svc = EquipmentCheckService(db)
+
+        templates = await svc._resolve_templates(
+            _shift("app-1"), "org-1", user_position=None
+        )
+
+        assert [t.id for t in templates] == ["live-specific"]
+
+    async def test_a_draft_type_template_is_not_offered_either(self):
+        db = MagicMock()
+        db.execute = _queued_execute(
+            _scalars_first(_apparatus()),
+            _scalars_all([]),
+            _scalars_all([_template("draft-type", is_active=False)]),
+        )
+        svc = EquipmentCheckService(db)
+
+        templates = await svc._resolve_templates(
+            _shift("app-1"), "org-1", user_position=None
+        )
+
+        assert templates == []
+
+    async def test_a_linked_draft_checklist_is_not_offered(self):
+        """A shift template's explicit links go through the active filter too.
+
+        Editing a published checklist sets ``is_active=False``, so without
+        this the crew is handed the half-edited contents of a checklist an
+        officer is still working on. ``explicit`` stays True either way — it
+        is set from the link rows, not from what they resolve to — so this
+        resolves to nothing rather than falling through to the apparatus's
+        checklist, which is the documented precedence rule.
+        """
+        db = MagicMock()
+        db.execute = _queued_execute(
+            _scalars_all(["linked-draft"]),
+            _scalars_all([_template("linked-draft", is_active=False)]),
+        )
+        svc = EquipmentCheckService(db)
+
+        templates = await svc._resolve_templates(
+            _shift_with_template("app-1"), "org-1", user_position=None
+        )
+
+        assert templates == []
+
+    async def test_a_linked_published_checklist_is_offered_in_the_officers_order(self):
+        """The active ones survive, in the order the link rows name."""
+        db = MagicMock()
+        db.execute = _queued_execute(
+            _scalars_all(["second", "first"]),
+            _scalars_all(
+                [
+                    _template("first"),
+                    _template("second"),
+                    _template("linked-draft", is_active=False),
+                ]
+            ),
+        )
+        svc = EquipmentCheckService(db)
+
+        templates = await svc._resolve_templates(
+            _shift_with_template("app-1"), "org-1", user_position=None
+        )
+
+        assert [t.id for t in templates] == ["second", "first"]
 
     async def test_position_filter_still_applies(self):
         db = MagicMock()

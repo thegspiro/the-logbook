@@ -78,7 +78,10 @@ export type ChecklistState = Record<string, TestResult>;
 
 /** Another tester's mark on a page, as shown beside your own. */
 export interface OtherTesterMark {
-  userId: string;
+  /** The entry's own id — stable even when the tester's account is gone. */
+  markId: string;
+  /** Null once the account that made the mark is hard-deleted. */
+  userId: string | null;
   testerName: string;
   testedAs: string[];
   status: TestStatus;
@@ -198,6 +201,10 @@ export const useTestingChecklist = ({
   const [otherMarks, setOtherMarks] = useState<Record<string, OtherTesterMark[]>>({});
   const [testerCount, setTesterCount] = useState(0);
   const [run, setRun] = useState<TestingRun | null>(null);
+  // Read inside `update`, which is memoized on `save` alone and would otherwise
+  // close over a stale `run`.
+  const runRef = useRef<TestingRun | null>(null);
+  runRef.current = run;
   const [runs, setRuns] = useState<TestingRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -250,6 +257,10 @@ export const useTestingChecklist = ({
           continue;
         }
         (others[entry.routePath] ??= []).push({
+          // The entry id, not the tester id: a mark whose author was deleted
+          // has userId null, and two of them on one page would collide as
+          // React keys.
+          markId: entry.id,
           userId: entry.userId,
           testerName: entry.userName || 'another tester',
           testedAs: entry.testedAs ?? [],
@@ -313,6 +324,13 @@ export const useTestingChecklist = ({
 
   const update = useCallback(
     (path: string, change: (previous: TestResult) => TestResult, debounce: boolean) => {
+      // The endpoint only ever writes to the *current* run, so a write made
+      // while an archived one is on screen copies that run's status and note
+      // into today's, attributed to today's tester. The cards disable their
+      // controls, but the guard belongs here: the `:param` input was not
+      // disabled, and typing an id into it was enough to file a fabricated
+      // mark carrying a note from a pass that finished weeks ago.
+      if (runRef.current && !runRef.current.isCurrent) return;
       const previous = resultsRef.current[path];
       // Stamped locally as well as sent: the finding a mismatch represents has
       // to appear the moment the mark is made, not after the next reload —
@@ -337,8 +355,18 @@ export const useTestingChecklist = ({
         expectedAccess: expectedAccess ?? next.expectedAccess ?? null,
       };
 
+      // Cancel *and forget* any pending write for this path. Clearing the
+      // timer alone left the entry in the map with its `flush` closure still
+      // holding the superseded payload, so a later `flushPendingWrites()` —
+      // switching runs, or going back to the current one — re-sent it and
+      // reverted the mark. Typing a note and tapping Pass within the debounce
+      // window was enough: the pass was written, then undone on the next run
+      // switch, with no error.
       const pending = textTimers.current[path];
-      if (pending) clearTimeout(pending.timer);
+      if (pending) {
+        clearTimeout(pending.timer);
+        delete textTimers.current[path];
+      }
       if (debounce) {
         textTimers.current[path] = {
           timer: setTimeout(() => {

@@ -27,6 +27,8 @@ vi.mock('../../../hooks/useEnabledModules', () => ({
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 
 const savedEntries: TestingCheckEntry[] = [];
+/** Set to make the run load fail, as a dead API or a 500 would. */
+const loadFailure: { message: string | null } = { message: null };
 const currentRun = {
   id: 'run-1',
   sequence: 1,
@@ -40,13 +42,15 @@ const currentRun = {
 vi.mock('../services/api', () => ({
   testingChecklistService: {
     getRun: () =>
-      Promise.resolve({
-        entries: savedEntries,
-        run: currentRun,
-        runs: [currentRun],
-        includesAllTesters: true,
-        testerCount: new Set(savedEntries.map((entry) => entry.userId)).size,
-      }),
+      loadFailure.message
+        ? Promise.reject(new Error(loadFailure.message))
+        : Promise.resolve({
+            entries: savedEntries,
+            run: currentRun,
+            runs: [currentRun],
+            includesAllTesters: true,
+            testerCount: new Set(savedEntries.map((entry) => entry.userId)).size,
+          }),
     saveEntry: () => Promise.resolve(savedEntries[0]),
     startRun: () => Promise.resolve(currentRun),
     clearRun: () => Promise.resolve(0),
@@ -84,6 +88,7 @@ const cellsOfRowNamed = (label: string): string[] => {
 describe('TestingReportPrintPage', () => {
   beforeEach(() => {
     savedEntries.length = 0;
+    loadFailure.message = null;
     currentPermissions = ['settings.manage'];
     vi.spyOn(window, 'print').mockImplementation(() => undefined);
   });
@@ -174,5 +179,37 @@ describe('TestingReportPrintPage', () => {
     const cells = cellsOfRowNamed('Blocked');
     expect(cells[2]).toBe('Not tested');
     expect(Number(cells[3])).toBeGreaterThan(200);
+  });
+});
+
+describe('TestingReportPrintPage — when the run cannot be loaded', () => {
+  beforeEach(() => {
+    savedEntries.length = 0;
+    loadFailure.message = 'Service unavailable';
+    currentPermissions = ['settings.manage'];
+    vi.spyOn(window, 'print').mockImplementation(() => undefined);
+  });
+
+  it('says so instead of reporting a clean run', async () => {
+    // An empty `results` renders as a report stating there were no failures
+    // and that every gate behaved — the most confident possible reading of
+    // "we never got the data".
+    renderWithRouter(<TestingReportPrintPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded');
+    expect(screen.queryByText('Application testing report')).not.toBeInTheDocument();
+  });
+
+  it('does not send it to the printer', async () => {
+    vi.useFakeTimers();
+    try {
+      renderWithRouter(<TestingReportPrintPage />);
+      await vi.waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(window.print).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -20,6 +20,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
+from app.core.permissions import (
+    get_rank_default_permissions,
+    permission_matches_any,
+)
 from app.models.document import (
     Document,
     DocumentFolder,
@@ -48,10 +52,20 @@ FACILITY_SENSITIVE_PERMISSIONS = [
 
 
 def _get_user_permissions(user: User) -> Set[str]:
-    """Collect all permissions from a user's roles."""
+    """Collect a user's effective permissions.
+
+    Must resolve them the same way the HTTP layer does
+    (``_collect_user_permissions`` in api/dependencies.py): positions **and**
+    operational-rank defaults. Reading positions alone refused a chief whose
+    facilities grants come from their rank — the endpoint admitted them and
+    then the folder gate turned them away, so the file they were entitled to
+    was unreachable with no indication why.
+    """
     perms: Set[str] = set()
     for role in user.roles:
         perms.update(role.permissions or [])
+    if user.rank:
+        perms.update(get_rank_default_permissions(user.rank))
     return perms
 
 
@@ -186,9 +200,11 @@ class DocumentsService:
         user_perms = _get_user_permissions(user)
 
         if folder.required_permissions:
-            if not (user_perms & set(folder.required_permissions)) and (
-                "*" not in user_perms
-            ):
+            # permission_matches_any, not a raw set intersection: a member
+            # granted `facilities.*` holds every facilities permission, and an
+            # intersection sees none of them. It also subsumes the global "*"
+            # case this previously special-cased by hand.
+            if not permission_matches_any(folder.required_permissions, user_perms):
                 return False
 
         if _is_leadership(user_perms):
@@ -747,7 +763,6 @@ class DocumentsService:
                     color=sub_def["color"],
                     sort_order=sub_def["sort_order"],
                     visibility=FolderVisibility.ORGANIZATION,
-                    required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
                     is_system=False,
                 )
                 self.db.add(sub_folder)
@@ -933,6 +948,11 @@ class DocumentsService:
                     color=sub_def["color"],
                     sort_order=sub_def["sort_order"],
                     visibility=FolderVisibility.ORGANIZATION,
+                    # Matches migration a9c4e7b2f631, which stamped the whole
+                    # facility tree (slug 'facilities' or 'facility-%') on
+                    # existing installs. Without it here, every facility
+                    # created after that deploy reopens the same leak.
+                    required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
                     is_system=False,
                 )
                 self.db.add(sub_folder)

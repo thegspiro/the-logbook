@@ -151,9 +151,21 @@ class TestItemsCarryTheirLotStock:
 
 class TestAddLotsBulk:
     def _wire_items(self, mock_db, known_ids):
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = known_ids
-        mock_db.execute = AsyncMock(return_value=result)
+        """Answer the org-scope check with ids, and everything after it empty.
+
+        The first execute() resolves the client-supplied item ids against the
+        caller's org. The ones after it belong to the opening-balance
+        carry-forward, which reads ORM rows rather than ids — handing it the
+        same list gave it strings to call `.id` on. Carry-forward has its own
+        database-backed coverage in test_inventory_pool_lot_ledger.py; these
+        tests are about the delivery itself.
+        """
+        first = MagicMock()
+        first.scalars.return_value.all.return_value = known_ids
+        empty = MagicMock()
+        empty.scalars.return_value.all.return_value = []
+        answers = iter([first])
+        mock_db.execute = AsyncMock(side_effect=lambda *a, **k: next(answers, empty))
 
     async def test_receives_a_delivery_as_dated_lots(self, service, mock_db):
         self._wire_items(mock_db, ["i-1", "i-2"])

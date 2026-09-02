@@ -105,6 +105,56 @@ class TestSetPreset:
         assert position.settings["label_presets"]["apparatus"]["preset"] == "dymo_30334"
         assert position.settings["label_presets"]["inventory"]["preset"] == "rollo_2x1"
 
+    async def test_a_save_that_omits_the_printer_keeps_the_stored_one(self):
+        """Absent means "leave it alone", per the update contract.
+
+        The entry was rewritten wholesale, so any save that carried no printer
+        erased one: the inventory size preset never sends a printer at all,
+        and the print page sends none while its printer list is still in
+        flight. Opening the page on a slow link was enough to lose the
+        position's destination, with nobody touching a control.
+        """
+        position = SimpleNamespace(
+            settings={
+                "label_presets": {
+                    "inventory": {"preset": "rollo_2x1", "printer_id": "printer-2"}
+                }
+            }
+        )
+        svc, _ = _service("p", position)
+
+        r = await svc.set_preset(uuid4(), uuid4(), "inventory", "dymo_30334")
+
+        stored = position.settings["label_presets"]["inventory"]
+        assert stored["printer_id"] == "printer-2"
+        assert stored["preset"] == "dymo_30334"
+        assert r["printer_id"] == "printer-2"
+
+    async def test_an_explicit_none_still_clears_the_printer(self):
+        position = SimpleNamespace(
+            settings={
+                "label_presets": {
+                    "inventory": {"preset": "rollo_2x1", "printer_id": "printer-2"}
+                }
+            }
+        )
+        svc, _ = _service("p", position)
+
+        r = await svc.set_preset(
+            uuid4(), uuid4(), "inventory", "rollo_2x1", printer_id=None
+        )
+
+        assert position.settings["label_presets"]["inventory"]["printer_id"] is None
+        assert r["printer_id"] is None
+
+    async def test_a_first_save_with_no_printer_stores_none(self):
+        position = SimpleNamespace(settings=None)
+        svc, _ = _service("p", position)
+
+        await svc.set_preset(uuid4(), uuid4(), "inventory", "rollo_2x1")
+
+        assert position.settings["label_presets"]["inventory"]["printer_id"] is None
+
     async def test_rejects_unknown_preset(self):
         position = SimpleNamespace(settings={})
         svc, _ = _service("p", position)

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**263 tables · 4455 columns · 848 foreign keys**
+**263 tables · 4458 columns · 848 foreign keys**
 
 ---
 
@@ -324,7 +324,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_write_offs`](#inventory_write_offs) | `WriteOffRequest` | 18 | Write-Off Request model |
 | [`issuance_allowances`](#issuance_allowances) | `IssuanceAllowance` | 10 | Issuance Allowance model |
 | [`item_assignments`](#item_assignments) | `ItemAssignment` | 16 | Item Assignment model |
-| [`item_issuances`](#item_issuances) | `ItemIssuance` | 18 | Item Issuance model |
+| [`item_issuances`](#item_issuances) | `ItemIssuance` | 19 | Item Issuance model |
 | [`item_variant_groups`](#item_variant_groups) | `ItemVariantGroup` | 12 | Groups pool items that are size/color/style variants of the same |
 | [`maintenance_records`](#maintenance_records) | `MaintenanceRecord` | 24 | Maintenance Record model |
 | [`member_size_preferences`](#member_size_preferences) | `MemberSizePreferences` | 15 | Stores a member's preferred sizes for different garment types. |
@@ -423,7 +423,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 9 | Durable, per-recipient claim and result for an external delivery. |
 | [`department_message_reads`](#department_message_reads) | `DepartmentMessageRead` | 5 | Tracks which users have read/acknowledged a department message. |
-| [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 6 | Durable, queryable delivery and resolution state for one recipient. |
+| [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 8 | Durable, queryable delivery and resolution state for one recipient. |
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
 | [`notification_logs`](#notification_logs) | `NotificationLog` | 20 | Notification Log model |
 | [`notification_rules`](#notification_rules) | `NotificationRule` | 12 | Notification Rule model |
@@ -5070,6 +5070,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `return_notes` | TEXT | yes |  |  |  |
 | `is_returned` | BOOL | yes | IDX | `False` |  |
 | `unit_cost_at_issuance` | NUMERIC(10, 2) | yes |  |  |  |
+| `lot_allocations` | JSON | yes |  |  |  |
 | `charge_status` | ENUM(`none`, `pending`, `charged`, `waived`) | yes |  | `none` |  |
 | `charge_amount` | NUMERIC(10, 2) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -6191,8 +6192,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `message_id` | VARCHAR(36) | no | FK |  | → `department_messages.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `created_at` | DATETIME | yes |  | `now()` |  |
 | `read_at` | DATETIME | yes |  |  |  |
 | `acknowledged_at` | DATETIME | yes |  |  |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 

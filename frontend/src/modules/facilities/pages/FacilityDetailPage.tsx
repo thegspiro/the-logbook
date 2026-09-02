@@ -35,7 +35,7 @@ export default function FacilityDetailPage() {
   const navigate = useNavigate();
   const { canManage, canCreate, canEdit, canDelete, canMaintenance, canViewSensitive } = useFacilitiesAccess();
   const {
-    selectedFacility: facility,
+    selectedFacility,
     isLoadingDetail,
     facilityTypes,
     facilityStatuses,
@@ -45,6 +45,11 @@ export default function FacilityDetailPage() {
     restoreFacility,
     clearSelectedFacility,
   } = useFacilitiesStore();
+
+  // Only ever render the facility this route asks for. The store is shared, so
+  // it can hold a different one on the first render — and every section, and
+  // the Archive button in the header, would act on that one.
+  const facility = selectedFacility && selectedFacility.id === id ? selectedFacility : null;
 
   const [activeSection, setActiveSection] = useState<FacilitySectionId>('overview');
   const visibleSections = getVisibleFacilitySections(canViewSensitive);
