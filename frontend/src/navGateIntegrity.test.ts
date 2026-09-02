@@ -13,6 +13,12 @@
  * were one mistake made three times, on three surfaces nobody thinks of as
  * "navigation" at once. Hence a test rather than a fourth careful review.
  *
+ * Quick Add (`components/layout/quickAddActions.ts`) is the fourth such
+ * surface. It gets the strongest form of the check below, because unlike the
+ * others its entries are a typed export rather than literals inside a
+ * component: every row is resolved against the real route definition rather
+ * than against a hand-listed expectation.
+ *
  * Two invariants:
  *
  *  1. A nav gate must be a SUBSET of its route's gate. `checkPermission` does
@@ -29,6 +35,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MEDICAL_VIEW_PERMISSIONS } from './modules/medical-supplies/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from './modules/facilities/routes';
+import { QUICK_ADD_ACTIONS } from './components/layout/quickAddActions';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8');
@@ -203,4 +210,153 @@ describe('navigation gates match the routes they target', () => {
       "checkPermission)('inventory.manage')"
     );
   });
+});
+
+/** Every file that can define a `<Route>`, concatenated once. */
+const routeSources = (): string => {
+  const modulesDir = path.join(SRC, 'modules');
+  const files = fs
+    .readdirSync(modulesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(modulesDir, entry.name, 'routes.tsx'))
+    .filter((file) => fs.existsSync(file));
+  return [path.join(SRC, 'App.tsx'), ...files].map((file) => fs.readFileSync(file, 'utf8')).join('\n');
+};
+
+interface RouteGate {
+  permissions: string[];
+  module: string | null;
+  /** False when no `<Route>` declares this path at all. */
+  exists: boolean;
+}
+
+/**
+ * Read the gate a route actually enforces.
+ *
+ * The slice runs from the `path="…"` attribute to the next `<Route` so a
+ * neighbouring route's `ProtectedRoute` cannot bleed in, and only the first
+ * `<ProtectedRoute` opening tag inside it is read — that is the one wrapping
+ * the element, whatever `<Suspense>` sits either side of it.
+ */
+const routeGate = (sources: string, routePath: string): RouteGate => {
+  const marker = `path="${routePath}"`;
+  const start = sources.indexOf(marker);
+  if (start === -1) return { permissions: [], module: null, exists: false };
+
+  const nextRoute = sources.indexOf('<Route', start);
+  const block = sources.slice(start, nextRoute === -1 ? sources.length : nextRoute);
+
+  const guardStart = block.indexOf('<ProtectedRoute');
+  if (guardStart === -1) return { permissions: [], module: null, exists: true };
+  const guard = block.slice(guardStart, block.indexOf('>', guardStart));
+
+  const any = guard.match(/requiredAnyPermission=\{\[([^\]]*)\]\}/);
+  const single = guard.match(/requiredPermission="([^"]+)"/);
+  const module = guard.match(/requiredModule="([^"]+)"/);
+
+  const permissions = any?.[1]
+    ? [...any[1].matchAll(/'([^']+)'/g)].map((match) => match[1] as string)
+    : single?.[1]
+      ? [single[1]]
+      : [];
+
+  return { permissions, module: module?.[1] ?? null, exists: true };
+};
+
+describe('Quick Add offers only what its routes will open', () => {
+  const sources = routeSources();
+
+  // The checks below are all "gate A is no wider than gate B", which passes
+  // trivially if the resolver silently returns nothing. Pin its output against
+  // routes of each shape first, so a parser broken by a refactor fails here
+  // rather than quietly disarming everything after it.
+  it('resolves each shape of route gate', () => {
+    expect(routeGate(sources, '/events/admin')).toEqual({
+      permissions: ['events.manage'],
+      module: null,
+      exists: true,
+    });
+    expect(routeGate(sources, '/members/scan')).toEqual({
+      permissions: ['users.view', 'members.manage'],
+      module: null,
+      exists: true,
+    });
+    expect(routeGate(sources, '/training/submit')).toEqual({ permissions: [], module: 'training', exists: true });
+    expect(routeGate(sources, '/inventory/admin/requests')).toEqual({
+      permissions: ['inventory.manage'],
+      module: 'inventory',
+      exists: true,
+    });
+    expect(routeGate(sources, '/action-items')).toEqual({ permissions: [], module: null, exists: true });
+    expect(routeGate(sources, '/no/such/route')).toEqual({ permissions: [], module: null, exists: false });
+  });
+
+  it.each(QUICK_ADD_ACTIONS.map((action) => [action.id, action] as const))(
+    '%s targets a route that exists',
+    (_id, action) => {
+      // Query strings are the row's business, not the router's.
+      const bare = action.path.split('?')[0] ?? action.path;
+      expect(routeGate(sources, bare).exists, `no <Route> defines ${bare}`).toBe(true);
+    }
+  );
+
+  /**
+   * Resolved once, and split into the cases each check applies to. Selecting
+   * outside the test body rather than returning early inside it keeps every
+   * generated case an assertion — a skipped-by-`return` case reads as a pass.
+   */
+  const resolved = QUICK_ADD_ACTIONS.map((action) => {
+    const bare = action.path.split('?')[0] ?? action.path;
+    return {
+      action,
+      bare,
+      gate: routeGate(sources, bare),
+      offered: action.anyPermission ?? (action.permission ? [action.permission] : []),
+    };
+  });
+  const permissionGated = resolved.filter((entry) => entry.gate.permissions.length > 0);
+  const moduleGated = resolved.filter((entry) => entry.gate.module !== null);
+  const adminConsoles = resolved.filter(
+    (entry) => entry.bare.startsWith('/inventory/admin') || entry.bare.startsWith('/store/admin')
+  );
+
+  // Nothing below runs if these lists come back empty, and an `it.each` over
+  // an empty list is silence rather than a failure.
+  it('has cases of each kind to check', () => {
+    expect(permissionGated.length).toBeGreaterThan(0);
+    expect(moduleGated.length).toBeGreaterThan(0);
+    expect(adminConsoles.length).toBeGreaterThan(0);
+  });
+
+  // An action on an ungated route is exempt: offering it ungated is right, and
+  // offering it more narrowly only hides a row, never produces a refusal.
+  it.each(permissionGated.map((entry) => [entry.action.id, entry] as const))(
+    '%s carries a permission gate no wider than its route',
+    (_id, { action, bare, gate, offered }) => {
+      // Subset, not overlap: a grant that opens the row must also open the
+      // route, or the row is a link to Access Denied for whoever holds only
+      // the grant the route omits.
+      expect(offered.length, `${action.id} offers a gated route with no gate of its own`).toBeGreaterThan(0);
+      const notAccepted = offered.filter((permission) => !gate.permissions.includes(permission));
+      expect(notAccepted, `${action.id} advertises grants ${bare} does not accept`).toEqual([]);
+    }
+  );
+
+  it.each(moduleGated.map((entry) => [entry.action.id, entry] as const))(
+    '%s repeats its route module gate',
+    (_id, { action, bare, gate }) => {
+      // Without this the row survives a department switching the module off
+      // and lands on the "module is not enabled" refusal.
+      expect(action.requiresModule, `${action.id} ignores the ${gate.module} module gate on ${bare}`).toBe(gate.module);
+    }
+  );
+
+  // Same reasoning as the bottom bar's Store tab: the bar is member-facing,
+  // and a manage-only console reached from it is a refusal for most people.
+  it.each(adminConsoles.map((entry) => [entry.action.id, entry] as const))(
+    '%s does not offer an admin console ungated',
+    (_id, { action, offered }) => {
+      expect(offered.length, `${action.id} offers an admin console ungated`).toBeGreaterThan(0);
+    }
+  );
 });
