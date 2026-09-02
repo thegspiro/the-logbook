@@ -1964,6 +1964,33 @@ only to `len()` the collection — **was** fixed in the same pass: it now
 counts prospects per pipeline with one aggregate query instead of
 eager-loading every row, with no response-shape change.
 
+## Membership Pipeline — A Document Delete Can Lose the File If the Commit Fails After `os.remove` Succeeds (2026-09-02)
+
+`delete_prospect_document` (`membership_pipeline_service.py`) removes the
+prospect document's file from disk, then deletes the `ProspectDocument` row
+and commits. That ordering is deliberate (pass 3, MP-18): a failed
+`os.remove` now raises instead of being swallowed, and the metadata row
+survives specifically so it remains the one record an operator can retry
+cleanup against. But if `_log_activity`, `db.delete`, or the commit itself
+fails **after** a successful `os.remove`, the transaction rolls back while
+the file is already irrecoverably gone — the DB row survives (untouched by
+the failed transaction) pointing at a file that no longer exists.
+
+Not fixed: this is a genuine reliability tradeoff between two failure modes,
+not a one-sided gap. Reverting to commit-DB-first (this codebase's more
+common pattern elsewhere, e.g. `documents_service.delete_folder`) would
+reopen MP-18 — an untracked orphaned PII file with no row left to explain it
+— which is strictly worse than the residual risk here: a row surviving a
+failed commit is retry-safe, since a retry's `os.path.exists` check is
+already false and proceeds straight to a clean metadata delete. A
+rename-to-trash/restore-on-rollback scheme would close this gap without
+reopening MP-18, but is meaningfully more machinery (a new trash-file
+convention, restore-on-any-exception handling, a cleanup job for anything
+left behind if the restore itself fails) than a rare compound failure — an
+`os.remove` succeeding immediately followed by a DB commit failing —
+justifies as a same-day fix. (Security review MP-08 pass 4, PR #2177,
+`docs/security-review/MP-08-membership-pipeline.md`.)
+
 ## Medical Screening — Requirement and Record Lists Are Unbounded (2026-08-06, mirrored 2026-08-25)
 
 `list_requirements`/`list_records` (`medical_screening_service.py`) run

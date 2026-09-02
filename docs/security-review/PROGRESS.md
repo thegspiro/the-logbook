@@ -16,11 +16,70 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2176](https://github.com/thegspiro/the-logbook/pull/2176) (Feature 08,
-Membership pipeline, pass 3) — the pass 3 draft's "no new findings"
-conclusion did not hold: Codex's review of it found 6 real issues (plus a
-7th restated in a comment, mirroring the already-flagged MP-10). 5 fixed, 2
+[#2177](https://github.com/thegspiro/the-logbook/pull/2177) (Feature 08,
+Membership pipeline, pass 4) — #2176 (pass 3's Codex-fix commit) merged
+mid-investigation of a 4th round of Codex findings against that same commit.
+Per CLAUDE.md Pitfall #24 (never reuse a merged PR's branch — see #2173's
+identical precedent against #2162 in the elections feature), pass 4 landed
+as a fresh branch off `main` and this new PR rather than a push to the now-
+closed `claude/security-review-membership-pipeline` branch. 3 fixed, 1
 flagged. See the Log below for detail.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4) — 3 fixed, 1 flagged (Codex review on PR #2177)
+
+Codex reviewed pass 3's fix commit (merged as #2176) and posted 4 new
+findings against `membership_pipeline_service.py`. Independently re-traced
+every one against the current code (not the bot's say-so) — all 4 real.
+
+**Fixed (3, counted as 2 findings — MP-20 covers two angles of one
+mechanism):** MP-20 — `create_election_package`'s `package_fields`
+PII-minimization policy (a) was resolved from whatever `step_id` the caller
+supplied, optional and never checked for being the pipeline's actual
+`election_vote` step, so a caller could get full capture just by omitting it
+or naming a different step — fixed by deriving policy from the pipeline's
+own `election_vote`-typed step directly; and (b) a brand-new,
+never-configured election stage had no `package_fields` at all (neither
+`DEFAULT_STAGE_CONFIGS.election_vote` nor the "Membership Vote" preset set
+it), over-capturing PII the UI displays as unchecked — fixed on the
+frontend by having the "Membership Vote" preset (the only UI path that can
+produce a savable new election stage) persist the UI's own displayed
+defaults, without touching the shared `defaultStageConfig` merge path an
+existing stage's edit flow depends on for preserving its legacy
+capture-everything behavior. MP-21 — `update_election_package`'s
+status-changing path reopened the pass-3-fixed (MP-16) assignment race by
+reading the package with a plain, unlocked call instead of
+`lock_for_update=True` — locked here too, mirroring
+`assign_package_to_election` (CLAUDE.md Pitfall #27).
+
+**Flagged (1, mirrored to `KNOWN_LIMITATIONS.md`):** MP-22 — pass 3's
+document-deletion reorder (MP-18: remove file, then delete DB row + commit)
+can still lose the file if something after a successful `os.remove` fails
+(most plausibly the commit). A genuine two-sided reliability tradeoff, not a
+one-sided gap: reverting the order reopens MP-18 (an untracked orphaned PII
+file), and a full rename-to-trash/restore-on-rollback scheme is more
+machinery than a rare, retry-safe compound failure justifies as a same-day
+fix.
+
+New guard tests: `backend/tests/test_membership_pipeline_pass4_codex.py` (7
+tests) plus one fixture update in `test_membership_pipeline_pass3_codex.py`;
+`StageConfigModal.test.tsx` (+2 tests). Every new/changed assertion
+confirmed to fail against the pre-fix code via `git stash`. Completion gate
+clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change); `tsc`/`eslint` clean on the touched frontend files; full backend
+suite 9866 passed/21 skipped (pre-existing/environmental)/0 failed. Full
+detail in `MP-08-membership-pipeline.md` → Pass 4. Rotation row 08 → ⏳
+(awaiting PR merge). Next: 09 medical screening (PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) ✅ merged — PR #2176
+
+Merged to `main` as commit `7fb9c2e9`. Rotation row 08 continued into pass 4
+above (Codex reviewed this pass's own fix commit before the next feature
+started). Next: 09 medical screening, once pass 4 merges.
 
 ---
 

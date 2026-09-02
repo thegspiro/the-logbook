@@ -1,6 +1,145 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-02 (pass 4) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), [#2176](https://github.com/thegspiro/the-logbook/pull/2176) (pass 3), [#2177](https://github.com/thegspiro/the-logbook/pull/2177) (pass 4)
+
+---
+
+## Pass 4 (2026-09-02) — 3 fixed, 1 flagged (Codex review on PR #2177)
+
+> **Branch note:** Codex reviewed pass 3's fix commit while #2176 was still
+> open and posted 4 new findings. #2176 merged before the investigation
+> finished (this rotation's "one PR at a time" model), so — per CLAUDE.md
+> Pitfall #24 and the identical precedent of #2173 against #2162 in the
+> elections feature — this pass landed as a fresh branch off `main` and a new
+> PR (#2177) rather than a push to the now-closed `claude/security-review-membership-pipeline`
+> branch. Replies to the original findings are posted on #2176's threads
+> (still open for replies/resolution despite the PR being closed), pointing
+> here for the actual fix.
+
+### Findings (Codex review of PR #2176's fix commit)
+
+#### MP-20 — P1 — election-package PII policy trusted the caller's `step_id`, and a new stage had no policy at all — ✅ FIXED
+
+**What:** two angles on the same mechanism — `create_election_package`'s
+`package_fields` reader (added in pass 3 for MP-15).
+
+1. The reader resolved policy from whatever `step_id` the _caller_ supplied
+   on `ElectionPackageCreate` — optional, and never checked for being the
+   pipeline's actual `election_vote`-typed step. Even after a coordinator
+   saves a restrictive `package_fields`, a caller could still get full
+   capture by omitting `step_id`, or by naming a different, real, in-pipeline
+   step (which passes pass 3's own MP-5 in-org/in-pipeline check) — silently,
+   with no error and no sign anything was skipped.
+2. Separately: a brand-new, never-configured `election_vote` stage had no
+   `package_fields` at all, because neither `DEFAULT_STAGE_CONFIGS.election_vote`
+   nor the "Membership Vote" preset (`frontend/.../StageConfigModal.tsx`)
+   ever set it — even though `ElectionVoteConfig.tsx` displays
+   phone/address/DOB as **unchecked** by default. Pass 3's `package_fields is
+None -> capture everything` fallback (deliberately conservative, to avoid
+   silently narrowing existing pipelines) meant the normal, untouched
+   default UI workflow — not just legacy pipelines — still over-captured PII
+   the UI visually implies is excluded.
+
+**Where:** `create_election_package`, `membership_pipeline_service.py`;
+`StageConfigModal.tsx`, `frontend/src/modules/prospective-members/components/`.
+**Fix:**
+
+- Backend: `package_fields` is now resolved by finding the pipeline's own
+  `election_vote`-typed step directly (`s.step_type == PipelineStepType.ELECTION_VOTE`),
+  not by trusting `step_id` for anything beyond what MP-5 already validated
+  it for. A pipeline has at most one election stage in practice, so this
+  removes the client's ability to steer which step's config governs the
+  snapshot, while `step_id` is unchanged as the package's own step reference
+  and pass 3's "absent config -> capture everything" fallback is preserved
+  exactly when no `election_vote` step (or one with no saved `package_fields`)
+  exists.
+- Frontend: the "Membership Vote" preset's `config()` now includes
+  `package_fields: { ...DEFAULT_ELECTION_PACKAGE_FIELDS }` — the same object
+  `ElectionVoteConfig.tsx` already falls back to for _display_. This is the
+  only UI path that can actually produce a _savable_ new `election_vote`
+  stage: manually picking the "Election / Vote" type card leaves
+  `eligible_voter_roles` empty with no control anywhere in the modal to set
+  it (a separate, pre-existing gap, left untouched — out of scope here).
+  `DEFAULT_STAGE_CONFIGS.election_vote` itself was deliberately **not**
+  touched: it is also the merge base `StageConfigModal.tsx` spreads under an
+  _existing_ stage's config when opening it for editing
+  (`{ ...defaultStageConfig(editingStage.stage_type), ...editingStage.config }`),
+  so adding defaults there would have leaked into every edit of a legacy,
+  never-configured stage and silently narrowed its capture-everything
+  behavior on an unrelated save (exactly what pass 3 was protecting against).
+  Scoping the fix to the preset (rendered only when `!editingStage`) targets
+  new-stage creation without touching that merge path at all.
+
+Covered by `TestElectionPackageFieldPolicyIsNotClientChosen` (backend:
+omitted `step_id`, wrong-but-real `step_id`, correct `step_id`, and a
+pipeline with no election step at all, each against a prospect with real PII)
+and 2 new `StageConfigModal.test.tsx` cases (the preset persists the UI's
+defaults; editing an existing, never-configured stage leaves `package_fields`
+untouched even when saved).
+
+#### MP-21 — P1 — `update_election_package`'s status path reopened the pass-3-fixed assignment race — ✅ FIXED
+
+**What:** pass 3 (MP-16) locked `assign_package_to_election`'s read of the
+election package specifically because its status check has to be the
+locking read (CLAUDE.md Pitfall #27). `update_election_package` — the other
+write path that changes `pkg.status`, guarded by pass 3's MP-17
+state-machine check — still read the package with a plain, unlocked
+`get_election_package` call. A `{"status": "ready"}` reset racing a
+concurrent `assign_package_to_election` could validate against a stale
+snapshot of `pkg.status`, reopening the exact compounding scenario the
+MP-17 state machine exists to prevent.
+**Where:** `update_election_package`, `membership_pipeline_service.py`.
+**Fix:** the package is now fetched with `lock_for_update=True`, and the
+state-machine check runs against that same locked read — mirroring
+`assign_package_to_election` exactly. Covered by
+`TestElectionPackageUpdateLocking`: a source-inspection test (matching this
+rotation's established lock-wiring-guard pattern) confirming the lock is
+acquired before the `ELECTION_PACKAGE_SYSTEM_STATUSES` check, plus
+behavioral tests for the ordinary path and the already-`added_to_ballot`
+refusal case.
+
+#### MP-22 — P2 — document-deletion fix can still lose a file if a later step fails after `os.remove` succeeds — 🚩 FLAGGED
+
+**What:** pass 3's MP-18 fix reordered `delete_prospect_document` to remove
+the file from disk _before_ deleting the DB row and committing — correct for
+the `OSError` case that was pass 3's actual finding. But if `_log_activity`,
+`db.delete`, or the commit itself fails _after_ a successful `os.remove`, the
+transaction rolls back while the file is already irrecoverably gone; the DB
+row survives (untouched by the failed transaction) pointing at a file that no
+longer exists.
+**Where:** `delete_prospect_document`, `membership_pipeline_service.py`.
+**Disposition — FLAGGED, not fixed.** This is a genuine reliability
+tradeoff, not a one-sided gap: the current ordering is what this exact
+method was deliberately reordered _to_ in pass 3, specifically so an
+`OSError` on removal leaves the DB row as the one record an operator can
+retry cleanup against. Reverting to commit-DB-first (this codebase's more
+common pattern elsewhere, e.g. `documents_service.delete_folder`) would
+reopen MP-18 — an untracked orphaned PII file with no row left to explain
+it, which is strictly worse than the residual risk here: the row surviving a
+failed commit is retry-safe (a retry's `os.path.exists` check is already
+false, so it proceeds straight to a clean metadata delete). A full
+rename-to-trash/restore-on-rollback scheme (stage the file, commit the DB
+delete, only then permanently remove the staged file, restoring it if the
+commit fails) would close this gap without reopening MP-18, but is
+meaningfully more machinery — a new trash-file convention, restore-on-any-
+exception handling, and eventually a cleanup job for anything left in trash
+by a restore itself failing — than a rare compound failure (an `os.remove`
+succeeding immediately followed by a DB commit failing) justifies as a
+same-day fix on an already-twice-reviewed, election-adjacent surface.
+Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+### Completion gate (pass 4)
+
+| Check                                                                                    | Result                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                            | pass, 0 violations                                                                                                                                            |
+| `black --check app/ tests/ alembic/`                                                     | pass (1 file needed reformatting, applied, re-check pass)                                                                                                     |
+| `isort --check-only app/ tests/ alembic/`                                                | pass, 0 violations                                                                                                                                            |
+| `python3 scripts/validate_migrations.py --strict`                                        | pass — 409 revisions, single head (no schema change)                                                                                                          |
+| new/changed guard tests (`test_membership_pipeline_pass4_codex.py` + one pass-3 fixture) | 33 passed (7 new + 26 pass 3); the 3 new/changed assertions independently confirmed to fail against the pre-fix code (`git stash` on the changed source file) |
+| `StageConfigModal.test.tsx`                                                              | 45 passed (43 existing + 2 new); the 1 new save-path assertion confirmed to fail against the pre-fix component (`git stash`)                                  |
+| `tsc --noEmit` / `eslint` (frontend files touched this pass)                             | clean                                                                                                                                                         |
+| full backend suite (`pytest tests/ -q`)                                                  | 9866 passed / 21 skipped (pre-existing/environmental) / 0 failed                                                                                              |
 
 ---
 
