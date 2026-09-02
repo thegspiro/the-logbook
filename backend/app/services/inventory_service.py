@@ -1816,12 +1816,28 @@ class InventoryService:
         Use this instead of get_item_by_id when the caller intends to
         mutate the item's status, condition, quantity, or assignment
         fields, to prevent concurrent-modification races.
+
+        populate_existing=True is required, not cosmetic: several callers
+        (batch_return's per-scan candidate lookup, via _lookup_by_item_id /
+        lookup_by_code) already loaded this same InventoryItem, unlocked,
+        earlier in the same session/transaction. SQLAlchemy's identity map
+        returns that cached Python object for a second SELECT on the same
+        primary key and, by default, does NOT overwrite its already-loaded
+        attributes with the row this locking SELECT just fetched -- even
+        though the locking SELECT itself does see the latest committed data
+        at the SQL level (InnoDB locking reads bypass the REPEATABLE READ
+        snapshot). Without populate_existing, the lock is acquired but the
+        in-memory item.quantity / quantity_issued / status / condition the
+        caller then reads and mutates is the stale pre-lock copy, silently
+        defeating the whole point of locking. Confirmed empirically against
+        this app's own AsyncSession/model setup (SQLAlchemy 2.0.52).
         """
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.id == str(item_id))
             .where(InventoryItem.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
@@ -2594,11 +2610,23 @@ class InventoryService:
             # double-credits item.quantity for units returned only once
             # (Pitfall #27 -- the same shape review_return_request's INV-10
             # fix closed on its own request row).
+            #
+            # populate_existing=True is required here specifically because
+            # batch_return names this same issuance row with an earlier,
+            # unlocked SELECT before delegating to this method (see its
+            # comment) -- without it, this locking SELECT still acquires the
+            # lock but the identity map hands back that earlier, stale
+            # ItemIssuance object instead of refreshing it from the row this
+            # query just fetched, so is_returned can read False even though
+            # the row was returned (and committed) by another transaction
+            # while this one waited on the lock. Confirmed empirically; see
+            # _get_item_locked's docstring for the mechanism.
             result = await self.db.execute(
                 select(ItemIssuance)
                 .where(ItemIssuance.id == str(issuance_id))
                 .where(ItemIssuance.organization_id == str(organization_id))
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
             issuance = result.scalar_one_or_none()
             if not issuance:
@@ -2839,11 +2867,24 @@ class InventoryService:
             # the first's already-committed result instead of being
             # rejected (Pitfall #27, same shape as return_to_pool's
             # INV-10-style fix).
+            #
+            # populate_existing=True is required here specifically because
+            # batch_return names this same checkout row with an earlier,
+            # unlocked SELECT before delegating to this method (see its
+            # comment) -- without it, this locking SELECT still acquires the
+            # lock but the identity map hands back that earlier, stale
+            # CheckOutRecord object instead of refreshing it from the row
+            # this query just fetched, so is_returned can read False even
+            # though the row was checked in (and committed) by another
+            # transaction while this one waited on the lock. Confirmed
+            # empirically; see _get_item_locked's docstring for the
+            # mechanism.
             result = await self.db.execute(
                 select(CheckOutRecord)
                 .where(CheckOutRecord.id == str(checkout_id))
                 .where(CheckOutRecord.organization_id == str(organization_id))
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
             checkout = result.scalar_one_or_none()
             if not checkout:
