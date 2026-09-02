@@ -16,7 +16,7 @@ and no installation's roster changes on upgrade.
 reverts to the defaults, which is the only state the old code could express.
 
 Revision ID: a8c4d1e2f3b5
-Revises: f7b3c8d2e569
+Revises: a8e4c1f7b930
 Create Date: 2026-09-02 09:00:00.000000
 """
 
@@ -25,7 +25,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "a8c4d1e2f3b5"
-down_revision = "f7b3c8d2e569"
+down_revision = "a8e4c1f7b930"
 branch_labels = None
 depends_on = None
 
