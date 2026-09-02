@@ -17,10 +17,67 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (Feature 06,
-Elections & ballots, pass 3) — 16 fixed, 3 flagged across six Codex review
+Elections & ballots, pass 3) — 18 fixed, 3 flagged across seven Codex review
 rounds, 1 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 7) — 2 fixed — PR #2162
+
+Codex posted 2 more findings against commit `44fcbfe8e` (round 5's own fix
+commit) — both about gaps in that fix (and, for the second, round 2's
+ELEC-27 fix) specifically in the bulk ballot submission path
+(`submit_ballot_with_token`, the `/ballot/vote/bulk` route), which neither
+earlier round touched. Re-verified each against current code independently,
+same standard as all prior rounds:
+
+- **ELEC-33 (P1, fixed):** round 5's ELEC-29 fix closed the
+  position/ballot-item namespace-collision bypass in `cast_vote_with_token`
+  (single-vote route) and `lookup_ballot_by_token`, but
+  `submit_ballot_with_token` (bulk route) has the identical vulnerability
+  and was never touched: its per-item eligibility check only ever consulted
+  `eligible_item_ids`, so a token eligible for a colliding ballot item but
+  NOT eligible for the colliding restricted plain position
+  (`eligible_positions=[]`) could still submit that position's candidate
+  through the bulk route.
+- **ELEC-34 (P1, fixed):** for a legacy ballot item (no explicit
+  `position` field), the bulk route stores `Vote.position` as the item's
+  id while the single-vote route stores it as the resolved candidate's own
+  position (historically the item's title) — two different literal
+  strings for the same contest. Each route's duplicate-vote check, and
+  each route's `vote_dedup_hash` (the database UNIQUE-constraint
+  backstop), compared only against its own route's convention, so a voter
+  holding two unused tokens could cast one vote through each route and
+  have both counted. ELEC-27 (round 2) had already fixed this for
+  _historical_ NULL-position rows; these are two _current_ non-NULL rows
+  from the two live routes, which ELEC-27 never addressed.
+
+Fixed by extracting the ELEC-29 collision check into one shared
+`_token_eligibility_error()` helper used by both vote-submission routes
+(ELEC-33) — which also corrected a latent gap in the original collision
+test itself, detecting a collision via any alias in
+`ballot_item_candidate_positions(item)` rather than only whichever literal
+a given route resolved to, since the bulk route's resolved value for a
+legacy item is an id that can never equal a plain position name even
+though the item's title does. ELEC-34 fixed at two layers: widened both
+routes' duplicate-vote SELECT to match every item alias instead of a
+single literal, and normalized the `vote_dedup_hash` position component
+(new `_dedup_position_key()` helper) to the item id for a legacy item
+regardless of route, closing the residual concurrent-race gap the
+SELECT-based fix alone cannot reach.
+
+Fix guarded by 5 new regression tests in `tests/test_election_codex_round7.py`
+(new file: 2 for ELEC-33, 3 for ELEC-34), 4 of 5 confirmed failing pre-fix
+via `git stash` (the fifth is a sanity check that a fully-eligible token
+still succeeds, which passes on both sides of the fix by design).
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 492
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9812
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. Both review threads replied to and
+resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-33/34)
+for the full write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 6) — 3 fixed — PR #2162
 

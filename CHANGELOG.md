@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A colliding position name could bypass eligibility on the full-ballot submission route, and a legacy contest's votes could be double-counted across routes (2026-09-02)
+
+**Fixed**
+
+- **Submitting a full ballot in one request could vote on a restricted
+  election position using a token that was never granted that
+  permission,** the same naming-collision bypass fixed for the
+  single-vote and ballot-preview routes previously — the full-ballot
+  route checked only the ballot-item permission and never the position's
+  own eligibility rule when the two happened to share a name. Fixed by
+  applying the same collision-aware check, now defined once and reused by
+  every vote-submission route so it cannot drift between them again.
+- **A voter holding two separate unused ballot links for the same election
+  could cast one vote through the single-vote link and a second through
+  the full-ballot link for the very same legacy contest, and have both
+  counted,** because the two routes recorded that contest under two
+  different internal labels and neither route's duplicate check — nor the
+  database's own safety-net constraint — recognized the other's label as
+  the same contest. Fixed by making both routes recognize every label a
+  legacy contest can be recorded under, and by making both routes record
+  the same canonical label going forward so the database-level safety net
+  also closes the gap for a near-simultaneous submission.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-33, ELEC-34).
+
 ### A mixed election's plain-position ballots ignored a global voting ban and an admin override, and a token could be closed with a legitimate vote still pending (2026-09-02)
 
 **Fixed**

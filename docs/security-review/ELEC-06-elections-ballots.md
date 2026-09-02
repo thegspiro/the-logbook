@@ -1131,6 +1131,170 @@ patched finding by finding.
 New guard tests: `tests/test_election_codex_round6.py` (new file, 5 tests:
 1 for ELEC-30, 2 for ELEC-31, 2 for ELEC-32).
 
+### ELEC-33 — P1 — `submit_ballot_with_token` never enforced positional scope for a ballot item colliding with a restricted plain position — ✅ FIXED
+
+**What:** Round 5's ELEC-29 fix closed the position/ballot-item
+namespace-collision bypass in `cast_vote_with_token` (the single-vote
+`/ballot/vote` route) and `lookup_ballot_by_token` (the `/ballot/lookup`
+route): both detect when a ballot item's position/title/id collides with a
+plain `election.positions` entry and require the candidate to clear
+`eligible_positions` too, not just `eligible_item_ids`. `submit_ballot_with_token`
+(the bulk `/ballot/vote/bulk` route, `backend/app/services/election_service.py`,
+~line 7928 pre-fix) was never touched by that fix and had the identical
+gap: its per-item eligibility check only ever consulted
+`voting_token.eligible_item_ids`. A token eligible for a colliding item but
+NOT eligible for the colliding plain position (`eligible_positions=[]`, or
+a list that omits it) could still submit that position's candidate through
+the bulk route — the exact ELEC-29 scenario, reachable through the one
+call site ELEC-29 didn't fix.
+
+**Verified reachable:** confirmed by tracing `submit_ballot_with_token`'s
+per-vote loop side by side with `cast_vote_with_token`'s post-ELEC-29 logic.
+Nothing in schema validation (`ElectionBase`/`ElectionUpdate` in
+`app/schemas/election.py`) prevents the collision (still true post-ELEC-29 —
+that fix was runtime-only, deliberately, per its own "Why" note), and
+`send_ballot_emails` still computes `eligible_item_ids` and
+`eligible_positions` independently, so the mismatched-token shape ELEC-29's
+own regression test constructs is producible for real. Reproduced with a
+regression test (`TestBulkRouteEnforcesPositionalScopeForCollidingItem` in
+`tests/test_election_codex_round7.py`) that fails pre-fix: a token eligible
+for an unrestricted legacy item titled "Secretary" but ineligible for the
+restricted plain "Secretary" position submits the colliding candidate
+through the bulk route with no error, and a `Vote` row is persisted.
+
+**Fix:** extracted the collision check into a shared module-level
+`_token_eligibility_error()` helper in `election_service.py`, used by both
+`cast_vote_with_token` and `submit_ballot_with_token`, so this logic is
+defined exactly once rather than re-implemented a third time. Fixing it
+this way also corrected a latent gap in the collision check itself: the
+original ELEC-29 code detected a collision by testing whether the single
+resolved `effective_position` value was literally present in
+`election.positions`. That works for `cast_vote_with_token` (whose
+resolved value is always one of the item's own aliases, by construction of
+the `matching_item` lookup), but the bulk route resolves a _legacy_ item's
+position to the item's id (`ballot_item.get("position") or ballot_item_id`)
+— an opaque id can never itself equal a human-readable plain position name,
+even though the item's _title_ does. The shared helper instead checks every
+alias in `ballot_item_candidate_positions(item)` against `election.positions`
+and, when one collides, checks `eligible_positions` against that colliding
+alias rather than whichever literal the caller happened to resolve —
+correct for both routes, and a strict improvement (not a behavior change)
+for `cast_vote_with_token`'s pre-existing, narrower check.
+
+New regression tests in `tests/test_election_codex_round7.py`
+(`TestBulkRouteEnforcesPositionalScopeForCollidingItem`) — confirmed
+failing pre-fix via `git stash`: the mismatched token's bulk submission
+succeeded and persisted a vote (asserted rejected with no vote persisted);
+a sanity test confirms a token eligible under both scopes still succeeds
+(unaffected either side of the fix, guarding against over-rejection).
+
+### ELEC-34 — P1 — A legacy ballot item's votes didn't dedup across the single-vote and bulk routes — ✅ FIXED
+
+**What:** For a ballot item with no explicit `position` field (a "legacy"
+item, per ELEC-22's title-or-id fallback,
+`ballot_item_candidate_positions()`), the two vote-submission routes stored
+(and hashed) two different literal `Vote.position` values for the same
+logical contest: `submit_ballot_with_token` (bulk route) always stores the
+item's id (`ballot_item.get("position") or ballot_item_id`), while
+`cast_vote_with_token` (single-vote route) falls back to the resolved
+candidate's own `.position` value — historically the item's _title_, since
+that is how legacy-item candidates are actually created. A voter holding
+two unused tokens for the same election could cast one vote through each
+route for this item: each route's pre-insert duplicate-vote SELECT
+compared only against its own convention (`Vote.position == position`),
+never the other route's literal, and each route's `vote_dedup_hash` — the
+database-level UNIQUE-constraint backstop the code explicitly documents as
+protecting "even if a race condition bypasses application checks" —
+likewise embedded the differing literal, so the two votes hashed
+differently and the constraint didn't catch it either. ELEC-27 (round 2)
+had already broadened the _historical_ `Vote.position IS NULL` dedup
+subquery to use `ballot_item_candidate_positions()`, but that only covers
+rows written before position normalization; these are two _current_,
+non-NULL rows from the two live routes, which ELEC-27 never addressed.
+
+**Verified reachable:** confirmed by reading exactly what each route writes
+to `Vote.position` for a legacy item and what each route's duplicate query
+filters on — see the "What" paragraph above; both are directly readable in
+`election_service.py` with no reachability caveats. Reproduced with
+regression tests in `tests/test_election_codex_round7.py`
+(`TestLegacyItemVoteDedupAcrossBothRoutes`) that fail pre-fix in both
+directions: a bulk vote followed by a single-vote-route vote for the same
+legacy item both succeed (asserted the second is rejected), and the
+reverse order also both succeed (asserted the same).
+
+**Fix, two layers (both changed, per the "and/or" in the finding — neither
+alone is defense in depth without the other):**
+
+1. **Read-time — widened both routes' duplicate-vote SELECT** to match
+   every alias in `ballot_item_candidate_positions(item)`
+   (`Vote.position.in_(item_candidate_positions)` /
+   `Vote.position.in_(position_aliases)`) instead of comparing against a
+   single literal. This is a superset of what each route already matched
+   (a legacy item's alias set always contains that route's own
+   convention), so it only widens what counts as "already voted," never
+   narrows it — no existing passing test asserts a specific pair of
+   distinct votes must both be accepted for the same legacy item.
+2. **Write-time — normalized the `vote_dedup_hash` position component**
+   via a new `_dedup_position_key()` helper: for a legacy item (no
+   explicit `position` field) the hash always uses the item's id —
+   already the bulk route's existing convention, so only
+   `cast_vote_with_token`'s hash computation changed — regardless of which
+   route computed it. This is deliberately scoped to the _hash_ only, not
+   the stored `Vote.position` display value itself: `Vote.position`
+   keeps each route's existing convention (unaffected — no change to
+   error messages, per-position result grouping, or `positions_voted`
+   completion tracking, none of which this finding was about), while the
+   hash — used solely for the database's uniqueness constraint — is now
+   identical across routes for the same contest. This closes the residual
+   concurrent-race gap the SELECT-based fix alone cannot: two truly
+   simultaneous submissions through different tokens would both read an
+   empty pre-insert SELECT no matter how it's widened, so the UNIQUE
+   constraint on `vote_dedup_hash` is the only backstop that can still
+   catch that shape — and only if both routes compute the same hash.
+
+Existing pre-fix rows keep whichever literal they were written with — no
+migration, consistent with ELEC-27's read-time-only precedent — and remain
+covered because the widened SELECT matches every alias, not just the
+post-fix canonical one.
+
+New regression tests in `tests/test_election_codex_round7.py`
+(`TestLegacyItemVoteDedupAcrossBothRoutes`) — confirmed failing pre-fix via
+`git stash` (both ordering tests, plus a hash-parity unit test that failed
+pre-fix with `ImportError` since `_dedup_position_key` didn't exist yet).
+
+**Round 7: 2 fixed (ELEC-33, ELEC-34).** Both findings posted by Codex
+against commit `44fcbfe8e` (round 5's own fix commit) about gaps in that
+fix (and, for ELEC-34, round 2's ELEC-27 fix) specifically in
+`submit_ballot_with_token`, which neither earlier round's diff touched —
+both were still open against current code. Both confirmed real by tracing
+the bulk route's logic side by side with the single-vote route's
+post-ELEC-29 logic rather than taking Codex's paraphrase as final, and
+fixed by consolidating the collision check into one shared helper
+(`_token_eligibility_error`, ELEC-33) and normalizing the dedup-hash
+position key at the one write path that diverged from the established
+convention (`_dedup_position_key`, ELEC-34) — both changes reduce, rather
+than add to, the number of independent places this "which position values
+belong to this contest" logic is implemented, so a fifth call site is less
+likely to drift the way this fourth one did.
+
+**Completion gate (pass 3, after round 7):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 492 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round7.py -q`              | ✅ 5 passed, 0 failed (4 of 5 confirmed failing pre-fix via `git stash`)  |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9812 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round7.py` (new file, 5 tests:
+2 for ELEC-33, 3 for ELEC-34 — one of which is a pure unit test of
+`_dedup_position_key` with no DB fixture, so it could not itself fail via
+missing eligibility logic pre-fix, only via the function not existing yet).
+
 ---
 
 ## Pass 2 (2026-08-27)
