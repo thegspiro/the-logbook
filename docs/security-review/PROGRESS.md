@@ -17,10 +17,68 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [#2162](https://github.com/thegspiro/the-logbook/pull/2162) (Feature 06,
-Elections & ballots, pass 3) — 13 fixed, 3 flagged across five Codex review
+Elections & ballots, pass 3) — 16 fixed, 3 flagged across six Codex review
 rounds, 1 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 6) — 3 fixed — PR #2162
+
+Codex posted 3 more findings against commit `67511fa77` (round 4's own fix
+commit, before round 5's `44fcbfe8e` — round 5 touched a different
+function, `cast_vote_with_token`'s candidate classification (ELEC-29), not
+this eligibility-computation code, so all three were still open).
+Re-verified each against current code independently, same standard as all
+prior rounds:
+
+- **ELEC-30 (P1, fixed):** the positional-eligibility snapshot round 4's
+  ELEC-26 added to `send_ballot_emails` appended positions to
+  `eligible_positions` with no check on the recipient's membership-tier
+  `voting_eligible` flag — the same global ban
+  `annotate_ballot_items_for_user` already applies to every ballot item
+  regardless of that item's own rules. A member on a tier with
+  `voting_eligible: False` (the shipped "probationary" tier) could still
+  receive a live token/credential good for a plain-position contest.
+- **ELEC-31 (P1, fixed):** the same positional snapshot never consulted
+  `election.voter_overrides` (the "secretary override"), which
+  `annotate_ballot_items_for_user` already treats as blanket eligibility
+  for every ballot item. An overridden recipient whose role failed a
+  restricted position's `voter_types` rule still had that position
+  excluded from `eligible_positions` — the override's contract was honored
+  for items and silently ignored for positions on the same ballot.
+- **ELEC-32 (P2, fixed):** `cast_vote_with_token`'s "mark this token fully
+  used" check measured only `eligible_positions` coverage, never
+  `eligible_item_ids` — even though the same single-vote route also
+  accepts item-scoped candidate votes and records them into the identical
+  `positions_voted` list. In a mixed simple-majority election where a
+  recipient is eligible for at least one ballot item and a strict, non-empty
+  subset of the plain positions, casting the last eligible position vote
+  first set `used=True` immediately, and the still-outstanding, legitimate
+  item vote was then rejected as "already been fully submitted."
+
+Both P1s share one root cause: the positional path was computed
+independently of, and more permissively than, the item path's two
+established gates. Fixed by extracting the item path's tier-ban and
+override checks into a new shared helper,
+`ElectionService._member_voting_gates()`, and having both the item path
+(no behavior change — same computation, one definition) and the positional
+path call it. ELEC-32 fixed by folding each eligible ballot item's
+candidate-position label(s) (via the existing `ballot_item_candidate_positions()`
+helper) into the same completion set `eligible_positions` already
+contributes to, so "ballot fully cast" requires covering both scopes at
+once regardless of which one a given vote happens to satisfy.
+
+Fix guarded by 5 new regression tests in `tests/test_election_codex_round6.py`
+(new file: 1 for ELEC-30, 2 for ELEC-31, 2 for ELEC-32), all 5 confirmed
+failing pre-fix via `git stash`. Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged — no migration needed); scoped suite
+(`-k "election or ballot or vote or quorum"`) 487 passed/1 skipped
+(pre-existing)/0 failed; full backend suite 9807 passed/21 skipped
+(pre-existing/environmental)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. Both review threads replied to and resolved. See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-30/31/32) for the
+full write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 5) — 1 fixed — PR #2162
 

@@ -420,6 +420,58 @@ class ElectionService:
         html_parts.append("</ul>")
         return "\n".join(html_parts), "\n".join(text_parts)
 
+    async def _member_voting_gates(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+        organization: Optional["Organization"] = None,
+    ) -> Tuple[bool, bool]:
+        """The two universal eligibility gates a voter must clear before ANY
+        scope-specific rule (per-item ``eligible_voter_types``, per-position
+        ``voter_types``) is even considered.
+
+        Returns ``(tier_voting_eligible, has_override)``:
+
+        - ``tier_voting_eligible``: False when the member's membership tier
+          has ``benefits.voting_eligible == False`` (e.g. the shipped
+          "probationary" tier) — a global ban that applies regardless of
+          which scope (ballot item or plain position) is being evaluated.
+        - ``has_override``: True when this election's ``voter_overrides``
+          names this user — grants blanket eligibility for every scope,
+          bypassing per-item/per-position voter-type rules entirely.
+
+        Both ``annotate_ballot_items_for_user`` (item eligibility) and the
+        plain-position eligibility snapshot in ``send_ballot_emails`` apply
+        these identically. Before this helper existed, the item path
+        computed both gates inline and the newer positional path (ELEC-26)
+        computed neither — a globally banned member could still receive a
+        live positional credential, and an overridden member's override
+        didn't reach their positional votes (Codex round 6, ELEC-30/31).
+        """
+        if organization:
+            org = organization
+        else:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+        tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
+        tiers = tier_config.get("tiers", [])
+        member_tier_id = getattr(user, "membership_type", None) or "active"
+        tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
+        tier_voting_eligible = True
+        if tier_def:
+            tier_voting_eligible = tier_def.get("benefits", {}).get(
+                "voting_eligible", True
+            )
+
+        has_override = bool(
+            election.voter_overrides
+            and any(o.get("user_id") == str(user.id) for o in election.voter_overrides)
+        )
+        return tier_voting_eligible, has_override
+
     async def annotate_ballot_items_for_user(
         self,
         user: "User",
@@ -455,20 +507,15 @@ class ElectionService:
         member_tier_id = getattr(user, "membership_type", None) or "active"
         tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
 
-        # Check if tier is voting-eligible at all
-        tier_voting_eligible = True
+        # Human-readable tier name for the ineligibility reason below. The
+        # voting_eligible/override booleans themselves come from the shared
+        # gate helper so this path can never drift from the positional one.
         tier_name = member_tier_id
         if tier_def:
-            benefits = tier_def.get("benefits", {})
-            tier_voting_eligible = benefits.get("voting_eligible", True)
             tier_name = tier_def.get("name", member_tier_id)
-
-        # Secretary override check
-        has_override = False
-        if election.voter_overrides:
-            has_override = any(
-                o.get("user_id") == str(user.id) for o in election.voter_overrides
-            )
+        tier_voting_eligible, has_override = await self._member_voting_gates(
+            user, election, organization_id, org
+        )
 
         annotated_items: List[Dict] = []
         for item in ballot_items:
@@ -6075,17 +6122,42 @@ Best regards,
             # position with no eligibility check at all.
             eligible_positions: Optional[List[str]] = None
             if election.positions and election.position_eligibility:
-                eligible_positions = []
-                for pos in election.positions:
-                    pos_rules = election.position_eligibility.get(pos)
-                    if not pos_rules:
-                        # No rules for this position → everyone may vote
-                        # (mirrors check_voter_eligibility).
-                        eligible_positions.append(pos)
-                        continue
-                    voter_types = pos_rules.get("voter_types", ["all"])
-                    if await self._user_has_role_type(recipient, voter_types):
-                        eligible_positions.append(pos)
+                # Apply the same two universal gates the item snapshot above
+                # goes through (_member_voting_gates): a globally
+                # voting-ineligible tier fails every position outright — an
+                # unrestricted position ("no rules for this position ->
+                # everyone may vote", below) is not an exemption from a
+                # global ban any more than an unrestricted ballot item is —
+                # and an election override grants every position
+                # unconditionally, the positional mirror of the override
+                # already bypassing every ballot item's voter-type rules
+                # (Codex round 6, ELEC-30/ELEC-31).
+                tier_voting_eligible, has_override = await self._member_voting_gates(
+                    recipient, election, str(organization_id), organization
+                )
+                if tier_voting_eligible or has_override:
+                    eligible_positions = []
+                    for pos in election.positions:
+                        if has_override:
+                            eligible_positions.append(pos)
+                            continue
+                        pos_rules = election.position_eligibility.get(pos)
+                        if not pos_rules:
+                            # No rules for this position → everyone may vote
+                            # (mirrors check_voter_eligibility).
+                            eligible_positions.append(pos)
+                            continue
+                        voter_types = pos_rules.get("voter_types", ["all"])
+                        if await self._user_has_role_type(recipient, voter_types):
+                            eligible_positions.append(pos)
+                else:
+                    # Globally voting-ineligible tier and no override: zero
+                    # eligible positions — the positional mirror of
+                    # annotate_ballot_items_for_user failing every item for
+                    # the same member. Empty (not None) so downstream code
+                    # correctly reads this as "evaluated, ineligible for
+                    # all", not "unrestricted".
+                    eligible_positions = []
 
             # Empty ballot prevention: decide now that BOTH eligibility sets
             # above are known. A mixed election defines ballot items and/or
@@ -7562,14 +7634,36 @@ Best regards,
             if voting_token.eligible_positions is not None
             else (election.positions or [])
         )
+        # A mixed election's token can owe votes in BOTH scopes at once —
+        # plain positions AND ballot items — since this single-vote route
+        # also accepts item-scoped candidates (see `matching_item` above).
+        # Folding each eligible item's candidate-position label(s) into the
+        # same completion set `election_positions` already uses means
+        # "covered every position in eligible_positions" can no longer be
+        # mistaken for "ballot fully cast" while an eligible item is still
+        # unvoted — completion has to cover whichever scopes this token is
+        # actually eligible for (Codex round 6, ELEC-32). None
+        # eligible_item_ids = unrestricted (every ballot item), mirroring
+        # the None handling for eligible_positions above.
+        eligible_item_ids = (
+            set(voting_token.eligible_item_ids)
+            if voting_token.eligible_item_ids is not None
+            else None
+        )
+        item_position_labels: set = set()
+        for item in election.ballot_items or []:
+            if eligible_item_ids is None or item.get("id") in eligible_item_ids:
+                item_position_labels |= ballot_item_candidate_positions(item)
+        required_labels = set(election_positions) | item_position_labels
         if not multi_vote_method:
-            if not election_positions:
-                # Single-position election — token used after first vote
+            if not required_labels:
+                # Nothing owed in either scope — token used after first vote.
                 voting_token.used = True
                 voting_token.used_at = datetime.now(timezone.utc)
             else:
-                # Multi-position — check if all positions are now covered
-                remaining = set(election_positions) - set(positions_voted)
+                # Multi-scope — check if every owed position AND item has
+                # now been covered.
+                remaining = required_labels - set(positions_voted)
                 if not remaining:
                     voting_token.used = True
                     voting_token.used_at = datetime.now(timezone.utc)

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A mixed election's plain-position ballots ignored a global voting ban and an admin override, and a token could be closed with a legitimate vote still pending (2026-09-02)
+
+**Fixed**
+
+- **A member whose membership tier is configured as ineligible to vote
+  (e.g. a probationary tier) could still receive a live, emailed ballot
+  credential for a plain-position contest in a mixed election,** even
+  though the same global ban already correctly excluded them from every
+  structured ballot item on the same election. Fixed by applying the same
+  tier check to both kinds of contest.
+- **An administrator's per-voter override — meant to grant a specific
+  member eligibility for every contest on a ballot — was honored for
+  structured ballot items but silently ignored for plain positions,** so an
+  overridden member could still be denied a position vote their override
+  was supposed to guarantee. Fixed by applying the override to both kinds
+  of contest identically.
+- **In a mixed election, casting a vote for a plain position could
+  prematurely mark a voter's ballot as fully submitted while a legitimate
+  ballot-item vote was still outstanding,** causing that second, valid vote
+  to be rejected as a duplicate submission. Fixed so a ballot is only
+  considered complete once every contest the voter is eligible for —
+  positions and items alike — has actually been voted on.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-30, ELEC-31, ELEC-32).
+
 ### A colliding position name let an emailed ballot bypass its own eligibility restriction (2026-09-02)
 
 **Fixed**

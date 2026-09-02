@@ -970,6 +970,167 @@ the tradeoff).
 New guard tests: `tests/test_election_codex_round5.py` (new file, 3 tests
 for ELEC-29).
 
+### ELEC-30 — P1 — The positional-eligibility snapshot never applied the global membership-tier voting ban — ✅ FIXED
+
+**What:** Round 4's ELEC-26 fix taught `send_ballot_emails`
+(`backend/app/services/election_service.py`, ~line 6123) to snapshot which
+of an election's plain `positions` a recipient may vote for, mirroring the
+per-item snapshot already computed via `_get_eligible_ballot_items_for_user`
+→ `annotate_ballot_items_for_user`. The item side always checks the
+member's membership-tier `benefits.voting_eligible` flag first — a member
+on a tier with `voting_eligible: False` (the shipped "probationary" tier is
+one) fails **every** ballot item, regardless of that item's own
+`eligible_voter_types` rule. The new positional snapshot never performed
+this check at all: `if not pos_rules: eligible_positions.append(pos)`
+(unrestricted position) and the per-position `voter_types` check both ran
+with no reference to the recipient's tier, so a globally
+voting-ineligible member could still be appended to `eligible_positions`
+for any unrestricted or role-eligible position.
+
+**Verified reachable:** confirmed by reading `annotate_ballot_items_for_user`
+(lines 458-464 pre-fix) against the new positional block side by side — the
+item path computes `tier_voting_eligible` and gates on it before any
+per-item rule runs; the positional block never referenced it. A recipient
+whose `membership_type` resolves to a tier with `voting_eligible: False`
+in a mixed election with at least one plain position therefore received a
+token with `eligible_item_ids = []` (correctly banned from items) but a
+non-empty `eligible_positions` (incorrectly granted a live positional
+credential) whenever that election had an unrestricted position or a
+position whose `voter_types` happened to match the member's role.
+
+**Fix:** extracted the item path's tier check (and ELEC-31's override
+check) into a new shared helper, `ElectionService._member_voting_gates()`,
+returning `(tier_voting_eligible, has_override)` for a given user/election.
+`annotate_ballot_items_for_user` now calls it instead of computing the same
+two booleans inline (no behavior change there — same computation, one
+definition). The positional block now calls it too: when
+`tier_voting_eligible` is `False` and the recipient has no override,
+`eligible_positions` is set to `[]` outright — an empty, evaluated list
+(not `None`/unrestricted) — before any per-position rule is even
+considered, mirroring `annotate_ballot_items_for_user` failing every item
+for the same member. A globally banned member with no overriding
+ballot-item eligibility is therefore skipped entirely by the existing
+"empty ballot prevention" logic further down the same function, receiving
+no token at all — exactly the outcome a globally banned member already
+gets on the item-only side.
+
+### ELEC-31 — P1 — An election voter override didn't reach the positional-eligibility snapshot — ✅ FIXED
+
+**What:** `annotate_ballot_items_for_user` treats an entry in
+`election.voter_overrides` naming the recipient (the "secretary override")
+as blanket eligibility for every ballot item, bypassing that item's
+`eligible_voter_types` rule entirely. The positional snapshot added by
+ELEC-26 never consulted `voter_overrides` at all, so an overridden
+recipient whose role failed a restricted position's `voter_types` rule
+still had that position silently excluded from `eligible_positions` — the
+opposite of what the override is supposed to do. Concretely: an
+overridden recipient in a mixed election got a token with
+`eligible_item_ids` covering every ballot item (override honored) and
+`eligible_positions` omitting every position they fail on the normal
+role rules (override ignored) — `/ballot/lookup` would hide those
+positions and `cast_vote_with_token` would reject a vote for them,
+contradicting the override's contract as enforced on the item side of the
+exact same ballot.
+
+**Fix:** the same `_member_voting_gates()` helper introduced for ELEC-30
+also returns `has_override`. The positional block now checks it first, per
+position: when `has_override` is `True`, every position in
+`election.positions` is appended to `eligible_positions` unconditionally,
+before either the "no rules configured" or the `voter_types` branch runs —
+the positional mirror of `annotate_ballot_items_for_user`'s `if
+has_override: pass` short-circuit. An overridden recipient's positional
+snapshot can therefore never be narrower than an unrestricted one, matching
+the override's existing effect on ballot items.
+
+New regression tests for ELEC-30/31 in `tests/test_election_codex_round6.py`
+(`TestGloballyIneligibleTierExcludesPositions`,
+`TestVoterOverrideAppliesToPositions`) — confirmed failing pre-fix via
+`git stash` on `election_service.py`: the tier test found `sent == 1` (a
+live token issued) where the fix requires `sent == 0`; the override test
+found `token_row.eligible_positions == []` where the fix requires
+`["President"]`, and a follow-up test exercises the actual token
+`send_ballot_emails` issues end-to-end through `cast_vote_with_token` to
+confirm the override-eligible positional vote is accepted, not just
+present in the snapshot.
+
+### ELEC-32 — P2 — `cast_vote_with_token`'s completion check ignored outstanding ballot-item votes in a mixed election — ✅ FIXED
+
+**What:** `cast_vote_with_token`'s "mark this token fully used" logic
+(`backend/app/services/election_service.py`, ~line 7634 pre-fix) computed
+`election_positions` from `voting_token.eligible_positions` (falling back
+to `election.positions`) and considered the token complete once
+`positions_voted` covered that set. It never referenced
+`voting_token.eligible_item_ids` at all — even though this same single-vote
+route also accepts item-scoped candidates (via the `matching_item` branch
+above it, per ELEC-21/ELEC-29) and records their effective position into
+the identical `positions_voted` list. In a mixed simple-majority election
+where a recipient is eligible for at least one ballot item **and** a
+strict, non-empty subset of the plain positions, casting the last eligible
+_position_ vote first satisfied `election_positions` and set `used = True`
+immediately — while the eligible item vote was still outstanding. The
+follow-up item vote was then rejected by `get_ballot_by_token` with "This
+ballot has already been fully submitted," even though it was a legitimate,
+never-cast vote the recipient was entitled to.
+
+**Verified reachable:** confirmed by tracing the two branches side by side
+— `matching_item is None or is_plain_position` is not required for the
+item vote to land in `positions_voted`; any item-scoped candidate's
+`effective_position` is appended there regardless. The completion check
+below it, however, only ever measured `election_positions`
+(`eligible_positions`/`election.positions`), never the item side, so a
+token restricted to a strict subset of positions plus one or more eligible
+items could reach "used" purely from the positional votes.
+
+**Fix:** the completion set now folds in every eligible ballot item's
+candidate-position label(s) — using the same `ballot_item_candidate_positions()`
+helper ELEC-22/ELEC-27/ELEC-29 already rely on for "which position values
+belong to this item" — alongside `election_positions`, before deciding
+completion. `voting_token.eligible_item_ids is None` (legacy/unrestricted
+token) is treated the same way the existing `eligible_positions is None`
+case already is: every ballot item counts, not zero. "Ballot fully cast"
+now requires `positions_voted` to cover the union of both scopes, so a
+token cannot be marked used while either an eligible position or an
+eligible item remains unvoted, and casting either scope first can never
+foreclose the other.
+
+New regression tests in `tests/test_election_codex_round6.py`
+(`TestMixedTokenStaysLiveUntilBothScopesCovered`) — confirmed failing
+pre-fix via `git stash`: casting the eligible position first flipped
+`used` to `True` immediately (asserted `False`), and the follow-up item
+vote was rejected with "already been fully submitted" (asserted accepted,
+with the token only then flipping to `used = True`).
+
+**Round 6: 3 fixed (ELEC-30, ELEC-31, ELEC-32).** All three findings posted
+by Codex against commit `67511fa77` (round 4's own fix commit) in the
+mixed-election positional-eligibility code that fix introduced — round 5
+touched a different function (`cast_vote_with_token`'s candidate
+classification, ELEC-29) and did not touch this code, so all three were
+still open against current code. All three confirmed real by reading the
+flagged code against its item-side counterpart line by line (not taken on
+Codex's word), fixed by extracting the item side's two universal gates
+(tier ban, override) into a shared `_member_voting_gates()` helper reused
+by both scopes (ELEC-30/31), and by widening `cast_vote_with_token`'s
+completion set to cover both scopes at once (ELEC-32) — one root cause
+(the positional path computed independently of, and more permissively
+than, the item path's established gates) addressed uniformly rather than
+patched finding by finding.
+
+**Completion gate (pass 3, after round 6):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 487 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round6.py -q`              | ✅ 5 passed, 0 failed (all 5 confirmed failing pre-fix via `git stash`)   |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9807 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round6.py` (new file, 5 tests:
+1 for ELEC-30, 2 for ELEC-31, 2 for ELEC-32).
+
 ---
 
 ## Pass 2 (2026-08-27)
