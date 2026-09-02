@@ -173,6 +173,21 @@ interface FeedEntry {
   message?: InboxMessage;
 }
 
+interface SectionErrorProps {
+  message: string;
+  onRetry: () => void;
+}
+
+const SectionError: React.FC<SectionErrorProps> = ({ message, onRetry }) => (
+  <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+    <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+    <span className="min-w-0 flex-1">{message}</span>
+    <button type="button" onClick={onRetry} className="btn-secondary min-h-9 shrink-0 px-3 py-1 text-xs font-semibold">
+      Retry
+    </button>
+  </div>
+);
+
 const TIMELINE_ACCENT: Record<TimelineKind, string> = {
   'my-shift': 'bg-theme-accent-blue',
   'open-shift': 'bg-theme-accent-green',
@@ -229,14 +244,17 @@ const Dashboard: React.FC = () => {
   const unreadCount = useNotificationCountStore((s) => s.unreadCount);
   const decrementUnread = useNotificationCountStore((s) => s.decrement);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
+  const [notificationsError, setNotificationsError] = useState(false);
 
   // Shifts (user's own upcoming shifts)
   const [myShifts, setMyShifts] = useState<ShiftRecord[]>([]);
   const [loadingMyShifts, setLoadingMyShifts] = useState(true);
+  const [myShiftsError, setMyShiftsError] = useState(false);
 
   // Open shifts (available to sign up for)
   const [openShifts, setOpenShifts] = useState<ShiftRecord[]>([]);
   const [loadingOpenShifts, setLoadingOpenShifts] = useState(true);
+  const [openShiftsError, setOpenShiftsError] = useState(false);
   const [signingUpShiftId, setSigningUpShiftId] = useState<string | null>(null);
   const [rsvpingEventId, setRsvpingEventId] = useState<string | null>(null);
   const [signupExpandedId, setSignupExpandedId] = useState<string | null>(null);
@@ -251,6 +269,10 @@ const Dashboard: React.FC = () => {
     administrative: 0,
   });
   const [loadingHours, setLoadingHours] = useState(true);
+  const [hoursError, setHoursError] = useState(false);
+  const [certificationsError, setCertificationsError] = useState(false);
+  const [seatsError, setSeatsError] = useState(false);
+  const [screeningsError, setScreeningsError] = useState(false);
 
   // Certifications for the current user. One source for both the readiness
   // verdict and the "Needs you" rows, so the summary and the detail below it
@@ -270,6 +292,7 @@ const Dashboard: React.FC = () => {
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
+  const [messagesError, setMessagesError] = useState(false);
   const [deptMsgUnread, setDeptMsgUnread] = useState(0);
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
 
@@ -277,14 +300,17 @@ const Dashboard: React.FC = () => {
   const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
   const [progressDetails, setProgressDetails] = useState<Map<string, MemberProgramProgress>>(new Map());
   const [loadingTraining, setLoadingTraining] = useState(true);
+  const [trainingError, setTrainingError] = useState(false);
 
   // Inventory
   const [myEquipment, setMyEquipment] = useState({ assigned: 0, checkedOut: 0, overdue: 0 });
   const [loadingMyEquipment, setLoadingMyEquipment] = useState(true);
+  const [equipmentError, setEquipmentError] = useState(false);
 
   // Upcoming events
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [loadingUpcomingEvents, setLoadingUpcomingEvents] = useState(true);
+  const [upcomingEventsError, setUpcomingEventsError] = useState(false);
 
   // Phones show the first two rows of the week and name the rest on one line.
   const [timelineExpandedOnMobile, setTimelineExpandedOnMobile] = useState(false);
@@ -428,6 +454,8 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMyEquipment = async () => {
+    setLoadingMyEquipment(true);
+    setEquipmentError(false);
     if (!isModuleOn('inventory')) {
       setLoadingMyEquipment(false);
       return;
@@ -449,7 +477,7 @@ const Dashboard: React.FC = () => {
         overdue: data.active_checkouts.filter((item) => item.is_overdue).length,
       });
     } catch {
-      // Personal equipment is non-critical on the dashboard.
+      setEquipmentError(true);
     } finally {
       setLoadingMyEquipment(false);
     }
@@ -468,6 +496,8 @@ const Dashboard: React.FC = () => {
   };
 
   const loadUpcomingEvents = async () => {
+    setLoadingUpcomingEvents(true);
+    setUpcomingEventsError(false);
     try {
       // Bounded to the window the list renders, and to a limit that can hold
       // it. The old shape asked for the 5 soonest events of any future date
@@ -493,13 +523,15 @@ const Dashboard: React.FC = () => {
       );
       setUpcomingEvents(sorted);
     } catch {
-      // Upcoming events are non-critical
+      setUpcomingEventsError(true);
     } finally {
       setLoadingUpcomingEvents(false);
     }
   };
 
   const loadNotifications = async () => {
+    setLoadingNotifications(true);
+    setNotificationsError(false);
     if (!isModuleOn('notifications')) {
       setNotifications([]);
       setLoadingNotifications(false);
@@ -514,34 +546,25 @@ const Dashboard: React.FC = () => {
       });
       setNotifications(data.logs || []);
     } catch {
-      // Notifications are non-critical
+      setNotificationsError(true);
     } finally {
       setLoadingNotifications(false);
     }
   };
 
   const loadDeptMessages = async () => {
-    try {
-      // include_read: false keeps the load to what still needs attention —
-      // resolved messages drop off on the next load, and already-read messages
-      // can't page a persistent standing notice out of the 10-item window
-      // (the backend exempts persistent messages from this filter, so they
-      // stay until an admin clears them). Full history lives on /messages.
-      //
-      // The badge uses the dedicated unread-count endpoint (which counts across
-      // ALL messages and treats ack-required messages as pending until
-      // acknowledged) rather than the length of this capped 10-item preview.
-      const [data, unread] = await Promise.all([
-        messagesService.getInbox({ include_read: false, limit: 10 }),
-        messagesService.getUnreadCount(),
-      ]);
-      setDeptMessages(data);
-      setDeptMsgUnread(unread.unread_count);
-    } catch {
-      // Messages are non-critical
-    } finally {
-      setLoadingMessages(false);
-    }
+    setLoadingMessages(true);
+    setMessagesError(false);
+    // These endpoints are independent: a badge-count failure must not throw
+    // away messages the member can still read (and vice versa).
+    const [inboxResult, unreadResult] = await Promise.allSettled([
+      messagesService.getInbox({ include_read: false, limit: 10 }),
+      messagesService.getUnreadCount(),
+    ]);
+    if (inboxResult.status === 'fulfilled') setDeptMessages(inboxResult.value);
+    if (unreadResult.status === 'fulfilled') setDeptMsgUnread(unreadResult.value.unread_count);
+    setMessagesError(inboxResult.status === 'rejected' || unreadResult.status === 'rejected');
+    setLoadingMessages(false);
   };
 
   const markMessageRead = async (msgId: string) => {
@@ -587,6 +610,8 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMyShifts = async () => {
+    setLoadingMyShifts(true);
+    setMyShiftsError(false);
     if (!isModuleOn('scheduling')) {
       setMyShifts([]);
       setLoadingMyShifts(false);
@@ -603,13 +628,15 @@ const Dashboard: React.FC = () => {
       });
       setMyShifts(data.shifts || []);
     } catch {
-      // Shifts are non-critical
+      setMyShiftsError(true);
     } finally {
       setLoadingMyShifts(false);
     }
   };
 
   const loadOpenShifts = async () => {
+    setLoadingOpenShifts(true);
+    setOpenShiftsError(false);
     if (!isModuleOn('scheduling')) {
       setOpenShifts([]);
       setLoadingOpenShifts(false);
@@ -624,7 +651,7 @@ const Dashboard: React.FC = () => {
       });
       setOpenShifts(data);
     } catch {
-      // Open shifts are non-critical
+      setOpenShiftsError(true);
     } finally {
       setLoadingOpenShifts(false);
     }
@@ -691,6 +718,7 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMySeats = async () => {
+    setSeatsError(false);
     if (!isModuleOn('scheduling')) {
       setMySeats([]);
       return;
@@ -704,12 +732,14 @@ const Dashboard: React.FC = () => {
       // verdict simply says nothing on the subject.
       setMySeats(data.is_excluded ? [] : data.positions);
     } catch {
+      setSeatsError(true);
       // Seat eligibility is non-critical; the verdict falls back to
       // certifications alone and says so.
     }
   };
 
   const loadMyScreenings = async () => {
+    setScreeningsError(false);
     if (!isModuleOn('medical_screening')) {
       setMyScreenings(null);
       return;
@@ -717,6 +747,7 @@ const Dashboard: React.FC = () => {
     try {
       setMyScreenings(await medicalScreeningService.getMyCompliance());
     } catch {
+      setScreeningsError(true);
       // Clear rather than keep the last good answer. A pull-to-refresh that
       // fails would otherwise leave stale counts on screen while the scope note
       // still claims screenings were checked — and a member who has since gone
@@ -726,6 +757,9 @@ const Dashboard: React.FC = () => {
   };
 
   const loadHours = async () => {
+    setLoadingHours(true);
+    setHoursError(false);
+    setCertificationsError(false);
     try {
       // Month-to-date in the organization's timezone, not UTC — near midnight
       // a UTC-derived date lands in the wrong month for half the country.
@@ -733,20 +767,26 @@ const Dashboard: React.FC = () => {
       const monthStart = `${today.slice(0, 7)}-01`;
       const monthEnd = today;
 
+      let sourceFailed = false;
       const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
         schedulingService.getSummary().catch((err) => {
           console.error('Failed to load scheduling summary:', err);
+          sourceFailed = true;
           return null;
         }),
         trainingModuleConfigService.getMyTraining().catch((err) => {
           console.error('Failed to load training summary:', err);
+          sourceFailed = true;
+          setCertificationsError(true);
           return null;
         }),
         adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
           console.error('Failed to load admin hours summary:', err);
+          sourceFailed = true;
           return null;
         }),
       ]);
+      setHoursError(sourceFailed);
       // All three are month-to-date, because the card says "My Hours, August"
       // and the total adds them together. Training and administrative hours
       // were previously lifetime figures — so the headline total summed two
@@ -765,6 +805,8 @@ const Dashboard: React.FC = () => {
   };
 
   const loadTrainingProgress = async () => {
+    setLoadingTraining(true);
+    setTrainingError(false);
     if (!isModuleOn('training')) {
       setEnrollments([]);
       setLoadingTraining(false);
@@ -784,8 +826,9 @@ const Dashboard: React.FC = () => {
         }
       });
       setProgressDetails(details);
+      setTrainingError(results.some((result) => result.status === 'rejected'));
     } catch {
-      // Training is non-critical on dashboard
+      setTrainingError(true);
     } finally {
       setLoadingTraining(false);
     }
@@ -1323,6 +1366,16 @@ const Dashboard: React.FC = () => {
                 // page that cannot explain what grounded them.
                 onOpen={() => void navigate(myCerts.length > 0 ? '/training/my-training' : '/notifications?tab=inbox')}
               />
+              {(certificationsError || seatsError || screeningsError) && (
+                <div className="card">
+                  <SectionError
+                    message="Readiness could not be fully verified."
+                    onRetry={() => {
+                      void Promise.all([loadHours(), loadMySeats(), loadMyScreenings()]);
+                    }}
+                  />
+                </div>
+              )}
 
               <DashboardNeedsYou items={needsYouItems} />
 
@@ -1412,6 +1465,18 @@ const Dashboard: React.FC = () => {
                   </div>
                 ) : (
                   <>
+                    {(myShiftsError || openShiftsError || upcomingEventsError) && (
+                      <SectionError
+                        message="Some schedule information could not be verified."
+                        onRetry={() => {
+                          const retries: Promise<void>[] = [];
+                          if (myShiftsError) retries.push(loadMyShifts());
+                          if (openShiftsError) retries.push(loadOpenShifts());
+                          if (upcomingEventsError) retries.push(loadUpcomingEvents());
+                          void Promise.all(retries);
+                        }}
+                      />
+                    )}
                     <ul>{visibleTimeline.map(renderTimelineRow)}</ul>
 
                     {firstHiddenTimelineRow && (
@@ -1439,11 +1504,15 @@ const Dashboard: React.FC = () => {
                       }`}
                     >
                       <p className="text-theme-text-muted text-[13px]">
-                        {timeline.length === 0
-                          ? 'Nothing scheduled'
-                          : timeline.length > visibleTimeline.length
-                            ? `${timeline.length - visibleTimeline.length} more`
-                            : 'Nothing else'}{' '}
+                        {myShiftsError || openShiftsError || upcomingEventsError
+                          ? timeline.length > visibleTimeline.length
+                            ? `${timeline.length - visibleTimeline.length} more loaded item${timeline.length - visibleTimeline.length === 1 ? '' : 's'}`
+                            : 'Showing available schedule information'
+                          : timeline.length === 0
+                            ? 'Nothing scheduled'
+                            : timeline.length > visibleTimeline.length
+                              ? `${timeline.length - visibleTimeline.length} more`
+                              : 'Nothing else'}{' '}
                         through {formatCalendarDate(windowEnd, { month: 'short', day: 'numeric' })}
                         {laterOpenShifts > 0 && (
                           <>
@@ -1531,45 +1600,69 @@ const Dashboard: React.FC = () => {
                     ))}
                   </div>
                 ) : feed.length === 0 ? (
-                  <p className="text-theme-text-muted px-4 py-6 text-center text-sm">Nothing new</p>
+                  messagesError || notificationsError ? (
+                    <SectionError
+                      message="Updates could not be fully verified."
+                      onRetry={() => {
+                        void Promise.all([
+                          ...(messagesError ? [loadDeptMessages()] : []),
+                          ...(notificationsError ? [loadNotifications()] : []),
+                        ]);
+                      }}
+                    />
+                  ) : (
+                    <p className="text-theme-text-muted px-4 py-6 text-center text-sm">Nothing new</p>
+                  )
                 ) : (
-                  <ul>
-                    {feed.slice(0, FEED_ROWS_SHOWN).map((entry) => {
-                      const msg = entry.message;
-                      const rowClass =
-                        'focus:ring-theme-focus-ring min-w-0 flex-1 cursor-pointer rounded text-left focus:ring-2 focus:outline-hidden';
-                      const rowInner = (
-                        <>
-                          <span className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
-                            {msg?.is_pinned && (
-                              <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                            )}
-                            <span className="truncate">{entry.title}</span>
-                            {entry.unread && (
-                              <span
-                                className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
-                                role="img"
-                                aria-label="Unread"
-                              />
-                            )}
-                            {msg?.is_persistent && (
-                              <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase">
-                                Persistent
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-theme-text-secondary mt-0.5 line-clamp-2 block text-[13px] whitespace-pre-line">
-                            {entry.body}
-                          </span>
-                          <span className="text-theme-text-muted mt-1 block text-xs">{entry.meta}</span>
-                        </>
-                      );
-                      return (
-                        <li
-                          key={entry.key}
-                          className="border-theme-surface-hover flex items-start gap-2 border-t px-4 py-3 first:border-t-0"
-                        >
-                          {/* The row and its Clear control are siblings, not
+                  <>
+                    {(messagesError || notificationsError) && (
+                      <SectionError
+                        message="Some updates could not be verified."
+                        onRetry={() => {
+                          void Promise.all([
+                            ...(messagesError ? [loadDeptMessages()] : []),
+                            ...(notificationsError ? [loadNotifications()] : []),
+                          ]);
+                        }}
+                      />
+                    )}
+                    <ul>
+                      {feed.slice(0, FEED_ROWS_SHOWN).map((entry) => {
+                        const msg = entry.message;
+                        const rowClass =
+                          'focus:ring-theme-focus-ring min-w-0 flex-1 cursor-pointer rounded text-left focus:ring-2 focus:outline-hidden';
+                        const rowInner = (
+                          <>
+                            <span className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
+                              {msg?.is_pinned && (
+                                <Pin className="text-theme-accent-yellow h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                              )}
+                              <span className="truncate">{entry.title}</span>
+                              {entry.unread && (
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full bg-amber-400"
+                                  role="img"
+                                  aria-label="Unread"
+                                />
+                              )}
+                              {msg?.is_persistent && (
+                                <span className="bg-theme-surface-hover text-theme-text-muted shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-medium uppercase">
+                                  Persistent
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-theme-text-secondary mt-0.5 line-clamp-2 block text-[13px] whitespace-pre-line">
+                              {entry.body}
+                            </span>
+                            <span className="text-theme-text-muted mt-1 block text-xs">{entry.meta}</span>
+                          </>
+                        );
+                        return (
+                          <li
+                            key={entry.key}
+                            className="border-theme-surface-hover flex items-start gap-2 border-t px-4 py-3 first:border-t-0"
+                          >
+                            {/* The row and its Clear control are siblings, not
                               nested buttons: a <button> inside a <button> is
                               invalid HTML, and the browser closes the outer
                               element early, handing assistive technology a
@@ -1581,48 +1674,49 @@ const Dashboard: React.FC = () => {
                               LinkifiedText stops click propagation on its
                               anchors, so following a link doesn't also fire the
                               row's navigation to the message. */}
-                          {msg ? (
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              onClick={entry.onClick}
-                              onKeyDown={(e) => {
-                                // Only the row itself activates the row. A
-                                // linkified body can hold focusable anchors,
-                                // and Enter on one bubbles here — without this
-                                // guard the row would swallow the keypress and
-                                // navigate to the message instead of opening
-                                // the link (the anchor's guard covers clicks
-                                // only).
-                                if (e.target !== e.currentTarget) return;
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  entry.onClick();
-                                }
-                              }}
-                              className={rowClass}
-                            >
-                              {rowInner}
-                            </div>
-                          ) : (
-                            <button onClick={entry.onClick} className={rowClass}>
-                              {rowInner}
-                            </button>
-                          )}
-                          {msg?.is_persistent && canManageMessages && (
-                            <button
-                              onClick={() => void clearPersistentMessage(msg.id)}
-                              className="text-theme-text-muted -mr-1 shrink-0 rounded p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400"
-                              title="Clear persistent message"
-                              aria-label={`Clear persistent message: ${entry.title}`}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                            {msg ? (
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                onClick={entry.onClick}
+                                onKeyDown={(e) => {
+                                  // Only the row itself activates the row. A
+                                  // linkified body can hold focusable anchors,
+                                  // and Enter on one bubbles here — without this
+                                  // guard the row would swallow the keypress and
+                                  // navigate to the message instead of opening
+                                  // the link (the anchor's guard covers clicks
+                                  // only).
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    entry.onClick();
+                                  }
+                                }}
+                                className={rowClass}
+                              >
+                                {rowInner}
+                              </div>
+                            ) : (
+                              <button onClick={entry.onClick} className={rowClass}>
+                                {rowInner}
+                              </button>
+                            )}
+                            {msg?.is_persistent && canManageMessages && (
+                              <button
+                                onClick={() => void clearPersistentMessage(msg.id)}
+                                className="text-theme-text-muted -mr-1 shrink-0 rounded p-2 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400"
+                                title="Clear persistent message"
+                                aria-label={`Clear persistent message: ${entry.title}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
                 )}
 
                 <div className="border-theme-surface-border bg-theme-surface-secondary border-t px-4 py-2">
@@ -1637,7 +1731,7 @@ const Dashboard: React.FC = () => {
               </section>
 
               {/* Training progress */}
-              {!loadingTraining && enrollments.length > 0 && (
+              {!loadingTraining && (trainingError || enrollments.length > 0) && (
                 <section className="card p-4" aria-labelledby="training-progress-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="training-progress-heading" className="text-theme-text-primary text-[15px] font-bold">
@@ -1652,71 +1746,80 @@ const Dashboard: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="flex flex-col gap-4">
-                    {enrollments.slice(0, PROGRAMS_SHOWN).map((enrollment) => {
-                      const progress = progressDetails.get(enrollment.id);
-                      // Guard the array itself, not just `progress`: an
-                      // enrollment whose payload omits requirement_progress
-                      // would otherwise throw inside render and take the
-                      // whole dashboard down to the ErrorBoundary.
-                      const nextStep = progress?.requirement_progress?.find(
-                        (rp) => rp.status === 'not_started' || rp.status === 'in_progress'
-                      );
-                      const target = nextStep ? requirementTarget(nextStep) : null;
-                      const daysLeft = progress?.time_remaining_days;
-                      const pct = Math.round(enrollment.progress_percentage);
+                  {trainingError && (
+                    <SectionError
+                      message="Training progress could not be verified."
+                      onRetry={() => void loadTrainingProgress()}
+                    />
+                  )}
 
-                      return (
-                        <button
-                          key={enrollment.id}
-                          onClick={() => void navigate(`/training/my-progress/${enrollment.id}`)}
-                          className="w-full text-left"
-                          aria-label={`${enrollment.program?.name || 'Program'}: ${pct}% complete`}
-                        >
-                          <div className="mb-2 flex items-baseline justify-between gap-2">
-                            <span className="text-theme-text-primary min-w-0 truncate text-sm font-bold">
-                              {enrollment.program?.name || 'Program'}
-                            </span>
-                            <span className="text-theme-text-primary shrink-0 text-lg font-bold tabular-nums">
-                              {pct}%
-                            </span>
-                          </div>
-                          <div
-                            className="bg-theme-surface-hover mb-2 h-2.5 w-full overflow-hidden rounded-full"
-                            role="progressbar"
-                            aria-valuenow={pct}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label={`${enrollment.program?.name ?? 'Program'} progress`}
+                  {enrollments.length > 0 && (
+                    <div className="flex flex-col gap-4">
+                      {enrollments.slice(0, PROGRAMS_SHOWN).map((enrollment) => {
+                        const progress = progressDetails.get(enrollment.id);
+                        // Guard the array itself, not just `progress`: an
+                        // enrollment whose payload omits requirement_progress
+                        // would otherwise throw inside render and take the
+                        // whole dashboard down to the ErrorBoundary.
+                        const nextStep = progress?.requirement_progress?.find(
+                          (rp) => rp.status === 'not_started' || rp.status === 'in_progress'
+                        );
+                        const target = nextStep ? requirementTarget(nextStep) : null;
+                        const daysLeft = progress?.time_remaining_days;
+                        const pct = Math.round(enrollment.progress_percentage);
+
+                        return (
+                          <button
+                            key={enrollment.id}
+                            onClick={() => void navigate(`/training/my-progress/${enrollment.id}`)}
+                            className="w-full text-left"
+                            aria-label={`${enrollment.program?.name || 'Program'}: ${pct}% complete`}
                           >
+                            <div className="mb-2 flex items-baseline justify-between gap-2">
+                              <span className="text-theme-text-primary min-w-0 truncate text-sm font-bold">
+                                {enrollment.program?.name || 'Program'}
+                              </span>
+                              <span className="text-theme-text-primary shrink-0 text-lg font-bold tabular-nums">
+                                {pct}%
+                              </span>
+                            </div>
                             <div
-                              className={`h-2.5 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
-                              style={{ width: `${enrollment.progress_percentage}%` }}
-                            />
-                          </div>
-                          <p className="text-theme-text-secondary text-[13px] leading-relaxed">
-                            {nextStep ? (
-                              <>
-                                Next requirement: {nextStep.requirement?.name || 'Requirement'}
-                                {target ? ` (${target})` : ''}.
-                              </>
-                            ) : (
-                              'All requirements in progress.'
-                            )}
-                            {daysLeft !== null && daysLeft !== undefined && (
-                              <>
-                                {' '}
-                                <span className={daysLeft < 30 ? 'font-bold text-red-700 dark:text-red-400' : ''}>
-                                  {daysLeft} days
-                                </span>{' '}
-                                to complete.
-                              </>
-                            )}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
+                              className="bg-theme-surface-hover mb-2 h-2.5 w-full overflow-hidden rounded-full"
+                              role="progressbar"
+                              aria-valuenow={pct}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label={`${enrollment.program?.name ?? 'Program'} progress`}
+                            >
+                              <div
+                                className={`h-2.5 rounded-full transition-all ${getProgressBarColor(enrollment.progress_percentage)}`}
+                                style={{ width: `${enrollment.progress_percentage}%` }}
+                              />
+                            </div>
+                            <p className="text-theme-text-secondary text-[13px] leading-relaxed">
+                              {nextStep ? (
+                                <>
+                                  Next requirement: {nextStep.requirement?.name || 'Requirement'}
+                                  {target ? ` (${target})` : ''}.
+                                </>
+                              ) : (
+                                'All requirements in progress.'
+                              )}
+                              {daysLeft !== null && daysLeft !== undefined && (
+                                <>
+                                  {' '}
+                                  <span className={daysLeft < 30 ? 'font-bold text-red-700 dark:text-red-400' : ''}>
+                                    {daysLeft} days
+                                  </span>{' '}
+                                  to complete.
+                                </>
+                              )}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {enrollments.length > PROGRAMS_SHOWN && (
                     <p className="text-theme-text-muted mt-3 text-xs">
@@ -1727,10 +1830,17 @@ const Dashboard: React.FC = () => {
                 </section>
               )}
 
-              <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
+              <div className="flex flex-col gap-2">
+                <DashboardHoursCard monthLabel={monthLabel} segments={hoursSegments} loading={loadingHours} />
+                {hoursError && !loadingHours && (
+                  <div className="card">
+                    <SectionError message="Hours could not be fully verified." onRetry={() => void loadHours()} />
+                  </div>
+                )}
+              </div>
 
               {/* Issued gear — compact in the rail; the full picture is in Organization */}
-              {!loadingMyEquipment && (myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
+              {!loadingMyEquipment && (equipmentError || myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
                 <section className="card p-4" aria-labelledby="my-equipment-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="my-equipment-heading" className="text-theme-text-primary text-[15px] font-bold">
@@ -1744,22 +1854,29 @@ const Dashboard: React.FC = () => {
                       <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                   </div>
-                  <dl className="flex flex-col gap-1.5 text-[13px]">
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-theme-text-secondary">Assigned items</dt>
-                      <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.assigned}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-theme-text-secondary">Checked out</dt>
-                      <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.checkedOut}</dd>
-                    </div>
-                    {myEquipment.overdue > 0 && (
+                  {equipmentError && (
+                    <SectionError message="Issued gear could not be verified." onRetry={() => void loadMyEquipment()} />
+                  )}
+                  {!equipmentError && (
+                    <dl className="flex flex-col gap-1.5 text-[13px]">
                       <div className="flex items-center justify-between gap-2">
-                        <dt className="text-theme-text-secondary">Overdue</dt>
-                        <dd className="font-bold text-red-700 tabular-nums dark:text-red-400">{myEquipment.overdue}</dd>
+                        <dt className="text-theme-text-secondary">Assigned items</dt>
+                        <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.assigned}</dd>
                       </div>
-                    )}
-                  </dl>
+                      <div className="flex items-center justify-between gap-2">
+                        <dt className="text-theme-text-secondary">Checked out</dt>
+                        <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.checkedOut}</dd>
+                      </div>
+                      {myEquipment.overdue > 0 && (
+                        <div className="flex items-center justify-between gap-2">
+                          <dt className="text-theme-text-secondary">Overdue</dt>
+                          <dd className="font-bold text-red-700 tabular-nums dark:text-red-400">
+                            {myEquipment.overdue}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  )}
                 </section>
               )}
             </div>

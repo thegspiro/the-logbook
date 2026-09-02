@@ -43,6 +43,9 @@ const {
   mockGetInventorySummary,
   mockGetEligiblePositions,
   mockGetMyCompliance,
+  mockGetSchedulingSummary,
+  mockGetTrainingEnrollments,
+  mockGetAdminHoursSummary,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -61,15 +64,16 @@ const {
   mockGetInventorySummary: vi.fn(),
   mockGetEligiblePositions: vi.fn(),
   mockGetMyCompliance: vi.fn(),
+  mockGetSchedulingSummary: vi.fn(),
+  mockGetTrainingEnrollments: vi.fn(),
+  mockGetAdminHoursSummary: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getMyShifts: mockGetMyShifts,
     getOpenShifts: mockGetOpenShifts,
-    getSummary: vi
-      .fn()
-      .mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
+    getSummary: mockGetSchedulingSummary,
     signupForShift: mockSignupForShift,
     getEligiblePositions: mockGetEligiblePositions,
   },
@@ -88,7 +92,7 @@ vi.mock('../services/api', () => ({
     updateMessage: vi.fn().mockResolvedValue({}),
   },
   trainingProgramService: {
-    getMyEnrollments: vi.fn().mockResolvedValue([]),
+    getMyEnrollments: mockGetTrainingEnrollments,
     getEnrollmentProgress: vi.fn().mockResolvedValue({}),
   },
   trainingModuleConfigService: {
@@ -123,7 +127,7 @@ vi.mock('../services/api', () => ({
 
 vi.mock('../modules/admin-hours/services/api', () => ({
   adminHoursEntryService: {
-    getSummary: vi.fn().mockResolvedValue({ totalHours: 0 }),
+    getSummary: mockGetAdminHoursSummary,
   },
 }));
 
@@ -213,6 +217,14 @@ describe('Dashboard', () => {
       is_fully_compliant: true,
       days_until_next_expiration: null,
     });
+    mockGetSchedulingSummary.mockResolvedValue({
+      total_shifts: 0,
+      shifts_this_week: 0,
+      shifts_this_month: 0,
+      total_hours_this_month: 0,
+    });
+    mockGetTrainingEnrollments.mockResolvedValue([]);
+    mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 0 });
     mockCheckPermission.mockReturnValue(false);
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
@@ -223,6 +235,84 @@ describe('Dashboard', () => {
       active_checkouts: 0,
       overdue_checkouts: 0,
       maintenance_due_count: 0,
+    });
+  });
+
+  describe('section errors', () => {
+    it('shows explicit errors instead of successful-empty claims when initial personal data loads fail', async () => {
+      mockGetMyShifts.mockRejectedValue(new Error('offline'));
+      mockGetOpenShifts.mockRejectedValue(new Error('offline'));
+      mockGetEvents.mockRejectedValue(new Error('offline'));
+      mockGetInbox.mockRejectedValue(new Error('offline'));
+      mockGetMyNotifications.mockRejectedValue(new Error('offline'));
+      mockGetTrainingEnrollments.mockRejectedValue(new Error('offline'));
+      mockGetUserInventory.mockRejectedValue(new Error('offline'));
+      mockGetSchedulingSummary.mockRejectedValue(new Error('offline'));
+      mockGetMyTraining.mockRejectedValue(new Error('offline'));
+      mockGetAdminHoursSummary.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Some schedule information could not be verified.')).toBeInTheDocument();
+      expect(await screen.findByText('Updates could not be fully verified.')).toBeInTheDocument();
+      expect(await screen.findByText('Training progress could not be verified.')).toBeInTheDocument();
+      expect(await screen.findByText('Issued gear could not be verified.')).toBeInTheDocument();
+      expect(await screen.findByText('Hours could not be fully verified.')).toBeInTheDocument();
+      expect(screen.getByText('Readiness could not be fully verified.')).toBeInTheDocument();
+      expect(screen.queryByText(/Nothing scheduled through/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Nothing new')).not.toBeInTheDocument();
+    });
+
+    it('clears an updates error after a successful retry', async () => {
+      mockGetInbox.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Updates could not be fully verified.');
+      await user.click(within(updates).getByRole('button', { name: 'Retry' }));
+
+      await waitFor(() => expect(within(updates).getByText('Nothing new')).toBeInTheDocument());
+      expect(within(updates).queryByRole('alert')).not.toBeInTheDocument();
+      expect(mockGetInbox).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps successful timeline sources when open shifts fail, then fills them in on retry', async () => {
+      mockGetMyShifts.mockResolvedValue({
+        shifts: [makeShift({ id: 'mine', apparatus_name: 'Engine 7' })],
+        total: 1,
+      });
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'event-1',
+          title: 'Live Fire Drill',
+          event_type: 'training',
+          start_datetime: `${inWindow(3)}T14:00:00Z`,
+          end_datetime: `${inWindow(3)}T17:00:00Z`,
+          requires_rsvp: false,
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+      mockGetOpenShifts
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValueOnce([makeShift({ id: 'open-after-retry', shift_date: inWindow(4) })]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const timeline = await screen.findByRole('region', { name: 'Next 30 Days' });
+      expect(await within(timeline).findByText('Shift · Engine 7')).toBeInTheDocument();
+      expect(await within(timeline).findByText('Live Fire Drill')).toBeInTheDocument();
+      expect(within(timeline).queryByText(/Nothing scheduled/)).not.toBeInTheDocument();
+
+      await user.click(within(timeline).getByRole('button', { name: 'Retry' }));
+
+      expect(await within(timeline).findByText('Open Shift')).toBeInTheDocument();
+      await waitFor(() => expect(within(timeline).queryByRole('alert')).not.toBeInTheDocument());
+      expect(within(timeline).getByText('Shift · Engine 7')).toBeInTheDocument();
+      expect(within(timeline).getByText('Live Fire Drill')).toBeInTheDocument();
     });
   });
 
