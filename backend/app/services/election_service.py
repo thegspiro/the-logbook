@@ -8328,10 +8328,30 @@ Best regards,
             if write_in_name and choice == "write_in":
                 write_in_candidate.name = html.escape(write_in_name.strip())
 
-            # Single-selection path — discriminator stays "" so dedup hashes
-            # remain byte-identical with rows written before the multi-select
-            # forms existed (the per-position pre-check above is the dedup).
-            _create_token_vote(candidate_id, position, None, "")
+            # Single-selection path (write-in/approve/deny/plain-UUID choice).
+            # Discriminator is resolved the same way the single-vote route
+            # resolves it (`_dedup_discriminator`, item-aware since ELEC-37)
+            # rather than hardcoded "": when this item overrides the
+            # election's voting method to "approval", the single-vote route
+            # already hashes this candidate with a `cand:{id}` discriminator,
+            # and this backward-compatible `choice` form is still accepted
+            # for an approval-overridden item (nothing method-gates it the
+            # way the `rankings`/`candidate_ids` branches above are gated).
+            # Hardcoding "" here left the two routes hashing the same
+            # logical approval vote differently, so two tokens racing
+            # through the two forms could both pass the pre-check and the
+            # UNIQUE constraint on `vote_dedup_hash` never saw a collision
+            # (Codex round 10). For every other method this still resolves
+            # to "" exactly as before — byte-identical dedup hashes with
+            # rows written before the multi-select forms existed.
+            _create_token_vote(
+                candidate_id,
+                position,
+                None,
+                self._dedup_discriminator(
+                    election, candidate_id, None, item=ballot_item
+                ),
+            )
 
         # Mark token as fully used
         voting_token.used = True

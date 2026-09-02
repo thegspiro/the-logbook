@@ -1644,6 +1644,138 @@ false-positive this collision caused is fixed (ELEC-38); a candidate
 mis-attribution in this same colliding scenario is not, and was not part
 of what was reported this round.
 
+### ELEC-39 — P1 — The bulk route's backward-compatible `choice` UUID form hardcoded a "" dedup discriminator regardless of an item's voting-method override — ✅ FIXED
+
+**What:** ELEC-37 (round 9) made `cast_vote_with_token` resolve the
+matched ballot item's `voting_method` override — via
+`_dedup_discriminator(..., item=matching_item)` — when picking its
+vote_dedup_hash discriminator, so an item overriding e.g. a
+`simple_majority` election to `"approval"` hashes `f"cand:{candidate_id}"`
+regardless of which route cast the vote. `submit_ballot_with_token`'s
+`rankings`/`candidate_ids` branches already resolve `effective_method`
+inline and pick a matching discriminator (`f"rank:{rank}"` /
+`f"cand:{cid}"`). But the same route's third, backward-compatible form —
+a plain candidate UUID in `choice` (also used for the `write_in`/
+`approve`/`deny` pseudo-choices) — was never gated to a voting method the
+way the other two branches are, and its call to `_create_token_vote(...)`
+still hardcoded the discriminator to `""` unconditionally.
+
+**Impact:** for an approval-overridden item, a token voting through
+`cast_vote_with_token` for candidate C hashes
+`f"cand:{C}"`; the same logical vote submitted through the bulk route's
+`choice` form (still accepted — nothing rejects a plain-UUID `choice` for
+an approval item) hashed `""`. Two tokens racing the same vote through the
+two different routes produced two different `vote_dedup_hash` values, so
+the UNIQUE constraint — the documented backstop for exactly this kind of
+cross-route race — never saw a collision and both inserts could succeed.
+
+**Fix:** the `choice`-form branch now computes its discriminator the same
+way the other two branches do — `self._dedup_discriminator(election,
+candidate_id, None, item=ballot_item)` — instead of a literal `""`. For
+every voting method other than `approval` (and outside the unrelated
+`max_votes_per_position > 1` case `_dedup_discriminator` also already
+handles), this still resolves to `""`, so dedup hashes for rows written
+under the pre-existing, non-overridden common case are byte-identical to
+before this fix.
+
+New regression tests in `tests/test_election_codex_round10.py`
+(`TestBulkChoiceFormDiscriminatorHonorsItemVotingMethodOverride`, 2 unit
+tests on the discriminator value alone, and
+`TestBulkChoiceFormEndToEndDedupHash`, 1 end-to-end test that submits a
+real ballot through `submit_ballot_with_token`'s `choice` form and asserts
+the **persisted** `Vote.vote_dedup_hash` matches what `cast_vote_with_token`
+would compute for the identical logical vote — the unit-level assertions
+alone would still pass even if the fix were reverted, since
+`_dedup_discriminator` itself was already correct; only exercising the
+real bulk code path proves line 8334 actually calls it). Confirmed failing
+pre-fix via `git stash`.
+
+**Completion gate (pass 3, after round 10, ELEC-39):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations                                                           |
+| `black --check app/ tests/ alembic/`                         | ✅ clean                                                                  |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`) — no migration this round  |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 511 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `pytest tests/test_election_codex_round10.py -q`             | ✅ 3 passed, 0 failed                                                     |
+| `pytest tests/ -q` (full backend suite)                      | ✅ 9831 passed, 21 skipped (pre-existing/environmental), 0 failed         |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this round                             |
+
+New guard tests: `tests/test_election_codex_round10.py` (new file, 3 tests).
+
+### ELEC-40 — P1 — `_dedup_scoped_item_aliases`'s collision-avoidance can miss a vote genuinely historical to `cast_vote_with_token`'s own title-based write convention — 🚩 FLAGGED (not code-fixed this round)
+
+**What:** Codex's ELEC-38 report (round 9) and this codebase's own reply on
+it both reasoned that dropping a colliding fallback alias from the
+duplicate-vote *pre-check* is safe because "a genuine repeat vote is always
+dedup-hashed against the item's own canonical id... so the UNIQUE
+constraint still catches an actual duplicate on that exact item even after
+a colliding alias is excluded from the pre-check." That reasoning has an
+unstated assumption: it only holds for votes whose `vote_dedup_hash` was
+itself computed under the **current**, id-based convention
+(`_dedup_position_key`, ELEC-34/round 7). It does not hold for a vote row
+that predates that convention.
+
+`cast_vote_with_token` has never changed what it writes into the `Vote.position`
+**column** for a legacy item — that has always been, and still is,
+`effective_position` (`candidate.position`, the item's **title** for a
+legacy candidate; see `_dedup_position_key`'s own docstring: "This governs
+only the dedup hash, never the stored `Vote.position` value itself").
+ELEC-34 only changed what feeds the **hash**. So: a vote cast through
+`cast_vote_with_token` for a legacy item, at any time — including right
+now, not only "historically" in a pre-migration sense, though the sharpest
+case is a genuinely pre-ELEC-34 production row whose `vote_dedup_hash` was
+computed with the *old* (title-based) formula — is stored with
+`Vote.position == <title>`. If that title collides with a sibling item's
+canonical key, `_dedup_scoped_item_aliases()` drops it from the pre-check's
+alias set, and:
+
+- The **pre-check** no longer finds that row (by construction — that's the
+  point of the narrowing), so it will not reject a second vote on the same
+  item with the friendly "you have already voted" message.
+- For a genuinely pre-ELEC-34 row specifically, the **UNIQUE constraint**
+  does not save it either: its `vote_dedup_hash` was computed against the
+  title, not the item's id, so a new vote's id-based hash cannot collide
+  with it. (A row written by `cast_vote_with_token` *after* ELEC-34 does
+  still hash against the item's own id like everything else, so the UNIQUE
+  constraint remains the backstop for that case — only genuinely
+  pre-ELEC-34 rows are exposed to an actual bypassed double vote; more
+  recent title-keyed rows lose only the friendly pre-check message, not
+  the UNIQUE-constraint backstop.)
+
+**Why not code-fixed this round:** the two candidate fixes both have real
+costs and neither is obviously correct without a product decision:
+
+1. Revert `_dedup_scoped_item_aliases()`'s narrowing (go back to the full,
+   unscoped alias set for the pre-check) — closes this gap for historical
+   title-keyed rows, but reopens ELEC-38's false-positive (a legitimate
+   vote on a *different* item rejected as a duplicate merely because its
+   alias string collides). Given the schema cannot disambiguate the two
+   items apart from the string itself (see ELEC-38 / `KNOWN_LIMITATIONS.md`),
+   there is no way to keep both fixed with a pre-check alone.
+2. Backfill-migrate every existing `Vote.vote_dedup_hash` to the current
+   id-based formula for legacy items — closes the gap at the source, but
+   is exactly the kind of data migration this rotation's own rules (see
+   `CLAUDE.md`) say needs an owner decision, not a same-round guess: it
+   touches every historical vote row and needs a decision on scope
+   (all elections, or only ones with a detected collision), rollback
+   plan, and whether re-hashing an already-cast, cryptographically-signed
+   vote's dedup component is acceptable for a closed election's audit
+   trail.
+
+**Severity in practice:** requires the coincidence of (a) an admin having
+configured two ballot items whose alias sets collide in the same election
+— already established as rare and unencouraged by the ballot-authoring UI
+(ELEC-38) — **and** (b) that same election already having a vote cast
+through `cast_vote_with_token` for the colliding item before ELEC-34
+landed, **and** (c) a voter holding a second, unused token for that
+election. Flagged rather than guessed at; mirrored to
+`docs/KNOWN_LIMITATIONS.md`, correcting that entry's prior overstated "the
+UNIQUE constraint still catches an actual duplicate" claim to the
+narrower, accurate one above.
+
 ---
 
 ## Pass 2 (2026-08-27)

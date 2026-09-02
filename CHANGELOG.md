@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A double vote through the full-ballot link's backward-compatible single-choice form could slip past the database's own safety net (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing multiple approvals on one contest
+  while the rest of the ballot allows only one), **submitting through the
+  full-ballot link's older single-choice form computed a different
+  internal fingerprint than the single-vote link would for the identical
+  vote**, so the database's own safety-net check for a near-simultaneous
+  double vote could not recognize the two as the same vote. Fixed so both
+  routes compute the same fingerprint for that contest regardless of which
+  submission form was used.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-39).
+
 ### A double vote on an unusually-configured contest could slip past the database's own safety net, and a legitimate vote could be wrongly rejected as a duplicate of an unrelated contest (2026-09-02)
 
 **Fixed**

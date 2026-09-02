@@ -19,10 +19,68 @@ feature. The rotation cannot outrun its own review queue.
 [#2173](https://github.com/thegspiro/the-logbook/pull/2173) (Feature 06,
 Elections & ballots, pass 3, round 7 only — round 7's predecessor, #2162,
 merged mid-task before round 7's fix was ready; see the PR-split note
-below) — 22 fixed, 4 flagged across nine Codex review rounds, 1
+below) — 23 fixed, 5 flagged across ten Codex review rounds, 1
 re-verified open (ELEC-12). See the Log below for detail.
 
 ---
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 10) — 1 fixed, 1 flagged (ELEC-39, ELEC-40) — PR #2173
+
+Codex posted 2 findings against commit `16a62a2d5` (round 9's own fix
+commit), both about further gaps in the same vote-deduplication
+mechanism. Re-verified each independently, same standard as every prior
+round in this pass.
+
+- **ELEC-39 (P1, fixed):** `submit_ballot_with_token`'s backward-compatible
+  `choice` UUID form (write-in/approve/deny/a plain candidate id — the one
+  vote-submission branch that isn't gated to a specific voting method the
+  way `rankings`/`candidate_ids` are) still hardcoded its dedup-hash
+  discriminator to `""`, even after ELEC-37 (round 9) made
+  `cast_vote_with_token` resolve an item's `voting_method` override for the
+  same purpose. An item overriding a `simple_majority` election to
+  `approval` hashed `f"cand:{id}"` via the single-vote route and `""` via
+  the bulk route's `choice` form for the identical logical vote — reopening
+  the exact cross-route hash mismatch ELEC-37 closed for the other two
+  branches. Fixed by routing the `choice` branch through the same
+  `_dedup_discriminator(election, candidate_id, None, item=ballot_item)`
+  call already used elsewhere, instead of the literal `""`. New tests in
+  `tests/test_election_codex_round10.py` (3 tests, including one
+  end-to-end test asserting the actual **persisted** `vote_dedup_hash`
+  matches the single-vote route's — a plain unit assertion on the
+  discriminator helper alone would still pass with the bug present, since
+  that helper was already correct before this round).
+- **ELEC-40 (P1, flagged — not code-fixed):** the ELEC-38 (round 9) fix
+  narrowed the duplicate-vote pre-check's alias set on the reasoning that a
+  dropped alias is always still caught by the `vote_dedup_hash` UNIQUE
+  constraint. That reasoning assumed every existing vote's hash was
+  computed under the current, id-based convention (ELEC-34, round 7) — it
+  does not hold for a vote `cast_vote_with_token` wrote for a legacy item
+  *before* ELEC-34 landed, since that route's stored `Vote.position` has
+  always been the item's title (ELEC-34 only changed the hash input, never
+  the column), and a pre-ELEC-34 row's hash was itself computed against
+  that title, not the item's id. On a title/id collision between two
+  ballot items, dropping the colliding title alias can therefore miss a
+  genuinely pre-ELEC-34 vote both at the pre-check AND at the UNIQUE
+  constraint, letting a second token vote again. Not code-fixed: the two
+  candidate fixes (revert the ELEC-38 narrowing, or backfill-migrate
+  existing dedup hashes to the id-based formula) trade against each other
+  or need a data migration — both are owner decisions, not something to
+  guess at during a review pass. Severity in practice is narrow (requires
+  a deliberately-or-coincidentally colliding alias pair in an election that
+  already had a pre-ELEC-34 vote). Mirrored to `docs/KNOWN_LIMITATIONS.md`,
+  correcting that entry's prior overstated "still caught by the UNIQUE
+  constraint" claim.
+
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 511
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9831
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. ELEC-39's review thread replied to and
+resolved; ELEC-40's thread replied to with the analysis above and left
+open for the PR owner, not resolved. See `ELEC-06-elections-ballots.md`'s
+Pass 3 section (ELEC-39/40) for the full write-up. Rotation row 06 remains
+⏳ (awaiting PR merge).
 
 ### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 9) — 2 more fixed (ELEC-37, ELEC-38) — PR #2173
 
