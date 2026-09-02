@@ -16,21 +16,91 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2177](https://github.com/thegspiro/the-logbook/pull/2177) (Feature 08,
-Membership pipeline, pass 4 + pass 4 round 2 + pass 4 round 3 + pass 4 round 4) — #2176 (pass 3's Codex-fix commit) merged mid-investigation of a 4th
-round of Codex findings against that same commit. Per CLAUDE.md Pitfall #24
-(never reuse a merged PR's branch — see #2173's identical precedent against
-#2162 in the elections feature), pass 4 landed as a fresh branch off `main`
-and this new PR rather than a push to the now-closed
-`claude/security-review-membership-pipeline` branch. Pass 4: 3 fixed, 1
-flagged. Pass 4 round 2 (Codex reviewing pass 4's own fix commit): 1 more
-fixed. Pass 4 round 3 (Codex reviewing round 2's fix commit): 1 more fixed,
-1 refuted (claimed deadlock does not reproduce against the actual code).
-Pass 4 round 4 (Codex reviewing round 3's fix commit): 1 more fixed
-(narrowed, not closed, the residual limitation MP-23 documented). See the
-Log below for detail.
+[#2180](https://github.com/thegspiro/the-logbook/pull/2180) (Feature 09,
+Medical screening, pass 3) — 2 fixed, 1 flagged. See the Log below for
+detail.
 
 ---
+
+### 2026-09-02 — Feature 09 (Medical screening, pass 3) — 2 fixed, 1 flagged — PR #2180
+
+Byte-identical diff since pass 2's merge (`a14bf441`, PR #1952) across all
+four declared backend files and the whole `modules/medical-screening/`
+frontend directory — re-ran the full seven-dimension checklist directly
+against current code rather than trusting that. Enumerated all 14 routes
+and re-confirmed each one's auth dependency/permission string; re-traced
+every by-id query and the one create-path FK validation (`assert_in_org`)
+for org-scoping; re-confirmed no baseline position/rank grants
+`medical_screening.view`/`.manage`; re-confirmed PHI encryption
+(`EncryptedText`/`EncryptedJSON`) and SEC-00's JSON-column-sweep fix for
+`result_data` are both still intact; re-confirmed the cache-exclusion and
+module-gate wiring.
+
+Three findings, none a security exposure (no cross-tenant leak, no
+unauthenticated path, no PII widened beyond the existing permission gate):
+
+- **MS-7 (MED, flagged):** `create_record`/`update_record` place no
+  constraint between the caller and `data.user_id` — a
+  `medical_screening.manage` holder can self-create and self-clear their own
+  screening as `passed`, with `reviewed_by` tracking but not gating
+  anything. Needs a product decision (blocking self-review breaks the
+  legitimate single-administrator small-department case); mirrored to
+  `KNOWN_LIMITATIONS.md`.
+- **MS-8 (LOW, fixed):** `requirement_created`/`record_created` audit
+  events omitted the new row's own id — every sibling `_updated`/`_deleted`
+  event included it. Both now do, additive-only. Guarded by 4 new tests
+  (`test_medical_screening_create_audit_includes_id.py`), confirmed failing
+  on exactly the two intended assertions pre-fix via `git stash`.
+- **MS-9 (LOW, fixed — UI honesty, not wired):** `grace_period_days` and
+  `applies_to_roles` on a screening requirement are stored, editable, and
+  read by nothing in `get_compliance_status` — the same CLAUDE.md Pitfall
+  #19 shape already found and fixed once for a different table
+  (`compliance_configs.grace_period_days`). Same remedy applied: an honest
+  "Not enforced" notice on both fields in `ScreeningRequirementForm.tsx`,
+  not a silent behavior change (grace_period_days defaults to 30 on every
+  existing requirement, so wiring it would relax non-compliance flagging
+  installation-wide). Guarded by 3 new tests
+  (`test_medical_screening_requirement_fields_are_unwired.py`), confirmed
+  failing on the two notice-presence assertions pre-fix via `git stash`;
+  also corrected a stale/inaccurate exclusion comment in the sibling
+  `test_compliance_grace_period_is_unwired.py` that had claimed this file
+  was already a legitimate reader.
+
+Re-verified still open, not re-flagged: MS-6 (unbounded requirement/record
+lists, already mirrored to `KNOWN_LIMITATIONS.md`), the missing
+exactly-one-of `user_id`/`prospect_id` validation on create, and
+`get_compliance_status` not 404ing an unknown subject (confirmed still not
+an enumeration channel).
+
+Completion gate: flake8/black/isort clean on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (410 revisions, single head, unchanged —
+no migration); scoped suite (`-k "medical_screening or medical-screening or
+grace_period"`) 50 passed/1 skipped (pre-existing)/0 failed; full backend
+suite 9892 passed/21 skipped (pre-existing/environmental)/0 failed; `tsc
+--noEmit` 0 errors; `eslint .` 0 errors/warnings (frontend file touched:
+`ScreeningRequirementForm.tsx`, MS-9's notice text). See
+`MS-09-medical-screening.md`'s Pass 3 section for the full write-up.
+Rotation row 09 → ⏳ (awaiting PR merge). Next: 10 documents & legal.
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3/4) ✅ merged — PR #2177
+
+PR #2177 (Feature 08, Membership pipeline, pass 4 + pass 4 round 2 + pass 4
+round 3 + pass 4 round 4) merged into `main`. Recap: #2176 (pass 3's
+Codex-fix commit) merged mid-investigation of a 4th round of Codex findings
+against that same commit; per CLAUDE.md Pitfall #24 (never reuse a merged
+PR's branch — see #2173's identical precedent against #2162 in the
+elections feature), pass 4 landed as a fresh branch off `main` on this new
+PR rather than a push to the now-closed
+`claude/security-review-membership-pipeline` branch. Pass 4: 3 fixed, 1
+flagged (MP-20/21/22). Pass 4 round 2 (Codex reviewing pass 4's own fix
+commit): 1 more fixed (MP-23). Pass 4 round 3 (Codex reviewing round 2's
+fix commit): 1 more fixed, 1 refuted (MP-24 fixed; MP-25 claimed deadlock
+does not reproduce against the actual code). Pass 4 round 4 (Codex
+reviewing round 3's fix commit): 1 more fixed (MP-26, narrowing — not
+closing — the residual limitation MP-23 documented). Full detail already
+recorded below and in `MP-08-membership-pipeline.md`. CI green on the
+final head, no merge conflict, all review threads replied to/resolved.
+Rotation row 08 → ✅. Next: 09 medical screening (PHI).
 
 ### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 4) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
 
@@ -6942,8 +7012,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⏳     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⏳     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |

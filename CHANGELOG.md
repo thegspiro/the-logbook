@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Medical screening: audit trail gap closed, two dead compliance settings labelled honestly, one gap flagged (2026-09-02)
+
+**Fixed**
+
+- **Creating a screening requirement or record logged an audit event that
+  never named the row it was about.** `requirement_created`/`record_created`
+  audit entries omitted `requirement_id`/`record_id` — every sibling event
+  (`_updated`, `_deleted`) included it. An auditor investigating a specific
+  PHI record's creation could only correlate by user + timestamp + type,
+  which is ambiguous when the same subject gets two screenings of the same
+  type close together.
+- **The "Grace Period (days past expiration)" and "Applies to Roles" fields
+  on a screening requirement have never affected compliance.** Both are
+  stored and shown with no caveat; `get_compliance_status` applies a hard
+  expiration cutoff with no grace leeway, and evaluates every active
+  requirement against every subject regardless of the configured role list.
+  Both fields now say so on the form, rather than silently doing nothing —
+  the same remedy already used for the sibling
+  `compliance_configs.grace_period_days` gap. Wiring either is left for a
+  future change: `grace_period_days` defaults to 30 on every requirement
+  already on file, so wiring it would relax non-compliance flagging
+  installation-wide, not just for departments that opted in.
+
+**Flagged — not fixed**
+
+- **A screening record can be self-created and self-cleared.** Nothing stops
+  a `medical_screening.manage` holder from logging their own screening as
+  `passed`, with no reviewer distinct from the subject. See
+  `docs/KNOWN_LIMITATIONS.md` (MS-7).
+
+Full write-up: `docs/security-review/MS-09-medical-screening.md` (feature
+09, pass 3, MS-7/MS-8/MS-9).
+
 ### The member roster silently dropped platoon (and other) assignments from every response (2026-09-02)
 
 **Fixed**

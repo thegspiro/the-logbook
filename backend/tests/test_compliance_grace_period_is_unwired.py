@@ -30,11 +30,16 @@ _CONFIG_PAGE = (
 )
 _FIELD = "grace_period_days"
 
-#: Tables whose own `grace_period_days` IS read, and by whom. Named so a
-#: genuine reader is not mistaken for one of these.
+#: Files that reference a *different* table's own `grace_period_days` column
+#: of the same name, so this sweep (scoped to `compliance_configs`) doesn't
+#: mistake that unrelated field for a reader of this one.
 _OTHER_OWNERS = {
-    "app/services/training_enhancement_service.py",  # TrainingPathway's own
-    "app/services/medical_screening_service.py",  # MedicalScreeningConfig's own
+    # TrainingPathway.grace_period_days — read by training_enhancement_service.py.
+    "app/services/training_enhancement_service.py",
+    # ScreeningRequirement.grace_period_days — a distinct, *separately* unwired
+    # column (this file's own write-only site, not a reader of either table).
+    # See test_medical_screening_requirement_fields_are_unwired.py.
+    "app/services/medical_screening_service.py",
 }
 
 
