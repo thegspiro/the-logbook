@@ -1964,6 +1964,86 @@ only to `len()` the collection — **was** fixed in the same pass: it now
 counts prospects per pipeline with one aggregate query instead of
 eager-loading every row, with no response-shape change.
 
+## Membership Pipeline — A Document Delete Can Lose the File If the Commit Fails After `os.remove` Succeeds (2026-09-02)
+
+`delete_prospect_document` (`membership_pipeline_service.py`) removes the
+prospect document's file from disk, then deletes the `ProspectDocument` row
+and commits. That ordering is deliberate (pass 3, MP-18): a failed
+`os.remove` now raises instead of being swallowed, and the metadata row
+survives specifically so it remains the one record an operator can retry
+cleanup against. But if `_log_activity`, `db.delete`, or the commit itself
+fails **after** a successful `os.remove`, the transaction rolls back while
+the file is already irrecoverably gone — the DB row survives (untouched by
+the failed transaction) pointing at a file that no longer exists.
+
+Not fixed: this is a genuine reliability tradeoff between two failure modes,
+not a one-sided gap. Reverting to commit-DB-first (this codebase's more
+common pattern elsewhere, e.g. `documents_service.delete_folder`) would
+reopen MP-18 — an untracked orphaned PII file with no row left to explain it
+— which is strictly worse than the residual risk here: a row surviving a
+failed commit is retry-safe, since a retry's `os.path.exists` check is
+already false and proceeds straight to a clean metadata delete. A
+rename-to-trash/restore-on-rollback scheme would close this gap without
+reopening MP-18, but is meaningfully more machinery (a new trash-file
+convention, restore-on-any-exception handling, a cleanup job for anything
+left behind if the restore itself fails) than a rare compound failure — an
+`os.remove` succeeding immediately followed by a DB commit failing —
+justifies as a same-day fix. (Security review MP-08 pass 4, PR #2177,
+`docs/security-review/MP-08-membership-pipeline.md`.)
+
+## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02)
+
+`create_election_package` (`membership_pipeline_service.py`) resolves its
+PII-minimization `package_fields` policy from `prospect.current_step` when
+that step is itself an `election_vote` step in the governing pipeline — this
+is server-only state (`current_step_id` is set exclusively by
+`create_prospect`/`advance_prospect`/`regress_prospect`, and is excluded from
+the generic update path), so it correctly identifies the applicant's actual
+stage even when a pipeline has more than one `election_vote` step (`add_step`
+has no uniqueness constraint on `step_type`, so this is a reachable
+configuration; fixed in security review MP-08 pass 4 round 2, MP-23).
+
+When `current_step` is **not** an `election_vote` step at all — e.g. a
+package is requested (or re-requested) after the applicant has already
+advanced past every vote stage in the pipeline, or a caller overrides
+`pipeline_id` to one the prospect was never actually on — the code next
+checks a caller-supplied `step_id`, once it is confirmed (unlike the
+pre-existing MP-5 in-pipeline check, which never looked at `step_type`) to
+actually name an `election_vote` step of the governing pipeline: `step_id`
+is server-validated to belong to the pipeline either way, but only a
+type-checked one is trusted as a policy source, so a `step_id` naming a
+real, non-election step still falls through to the guess below rather than
+being trusted (fixed in security review MP-08 pass 4 round 4, MP-26).
+
+**Narrowed, not closed:** when _neither_ `current_step` _nor_ a
+type-checked `step_id` identifies an `election_vote` step — `step_id`
+omitted, or naming a real step of the wrong type — the code still falls
+back to the first `election_vote` step found in the pipeline's
+`sort_order`. With more than one such stage configured and no current or
+step_id match, that fallback remains a best-effort guess, not a resolution
+of "the" stage the package is for; an earlier stage's `package_fields`
+(more permissive, or unconfigured — meaning capture-everything) can still
+govern a package that conceptually belongs to a later, stricter stage the
+applicant already passed through. This is now a strictly smaller case than
+originally documented — it no longer includes the (now-fixed) situation
+where a caller supplies the correct stage's `step_id` — but it is not
+eliminated: nothing today requires a caller to supply `step_id` at all, or
+guarantees it identifies an election stage when supplied.
+
+This needs a product decision, not a drive-by fix: should a pipeline be
+allowed multiple `election_vote` stages at all, and if so, what does "the
+applicant's stage" mean once none of them is the applicant's _current_ one
+and no `step_id` names one either — the highest-`sort_order` stage they
+ever reached (would need step-progress history, not just
+`current_step_id`)? Should `step_id` become required rather than optional on
+`ElectionPackageCreate`, closing the gap by making the ambiguous case
+unreachable instead of merely rarer? Until that is decided, a pipeline with
+multiple `election_vote` stages, requested with no disambiguating `step_id`
+and no current match, remains an edge case with no fully-correct backend
+resolution in this fallback path. (Security review MP-08 pass 4 round 2,
+PR #2177, narrowed pass 4 round 4, MP-26, same PR,
+`docs/security-review/MP-08-membership-pipeline.md`.)
+
 ## Medical Screening — Requirement and Record Lists Are Unbounded (2026-08-06, mirrored 2026-08-25)
 
 `list_requirements`/`list_records` (`medical_screening_service.py`) run

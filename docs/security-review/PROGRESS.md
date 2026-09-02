@@ -16,11 +16,221 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2176](https://github.com/thegspiro/the-logbook/pull/2176) (Feature 08,
-Membership pipeline, pass 3) — the pass 3 draft's "no new findings"
-conclusion did not hold: Codex's review of it found 6 real issues (plus a
-7th restated in a comment, mirroring the already-flagged MP-10). 5 fixed, 2
-flagged. See the Log below for detail.
+[#2177](https://github.com/thegspiro/the-logbook/pull/2177) (Feature 08,
+Membership pipeline, pass 4 + pass 4 round 2 + pass 4 round 3 + pass 4 round 4) — #2176 (pass 3's Codex-fix commit) merged mid-investigation of a 4th
+round of Codex findings against that same commit. Per CLAUDE.md Pitfall #24
+(never reuse a merged PR's branch — see #2173's identical precedent against
+#2162 in the elections feature), pass 4 landed as a fresh branch off `main`
+and this new PR rather than a push to the now-closed
+`claude/security-review-membership-pipeline` branch. Pass 4: 3 fixed, 1
+flagged. Pass 4 round 2 (Codex reviewing pass 4's own fix commit): 1 more
+fixed. Pass 4 round 3 (Codex reviewing round 2's fix commit): 1 more fixed,
+1 refuted (claimed deadlock does not reproduce against the actual code).
+Pass 4 round 4 (Codex reviewing round 3's fix commit): 1 more fixed
+(narrowed, not closed, the residual limitation MP-23 documented). See the
+Log below for detail.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 4) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
+
+Codex reviewed round 3's fix commit (`0d9a981a`, MP-24/MP-25) and posted 1
+new finding against `create_election_package`'s fallback branch — the same
+branch MP-23 (round 2) had already flagged as a documented residual
+limitation, not fixed it.
+
+**MP-26 (P2, fixed)** — the fallback branch (reached when `current_step`
+doesn't itself govern the PII policy — e.g. the applicant already advanced
+past every `election_vote` stage) discarded a caller-supplied `step_id`
+entirely and always guessed the pipeline's first-configured `election_vote`
+step by `sort_order`, even when `step_id` was already validated by MP-5
+(pass 3) to belong to the exact governing pipeline. `advanceApplicant` (the
+only frontend caller) always sends `step_id` as the stage the applicant
+just entered, so on the same race MP-24 guards on the `current_step`-side,
+the fallback could pick an earlier, more permissive stage than the one the
+request actually named and the applicant actually just passed through.
+Independently verified the fallback was exactly the unconditional
+sort-order guess Codex described, and that MP-5's own check only confirms
+pipeline membership, never `step_type` — so `step_id` needed one more check
+(is it actually an `election_vote` step?) before it could safely be trusted
+here, which is what MP-20 originally objected to trusting it for
+unconditionally. Fixed: within the fallback, a supplied `step_id` is now
+re-checked for `step_type == ELECTION_VOTE` and preferred over the
+sort-order guess when it passes; a `step_id` naming a real but wrong-type
+step still falls through unchanged (the pass-4 "wrong step_id" case is
+unaffected). MP-24's mismatch check needed no change — it only fires when
+`current_step` itself governed, never true once this fallback is reached.
+
+**Residual limitation, narrowed, not closed:** a pipeline with multiple
+`election_vote` stages where _neither_ `current_step` _nor_ a
+type-checked `step_id` identifies one (step_id omitted, or wrong type) is
+still genuinely ambiguous — `docs/KNOWN_LIMITATIONS.md` updated to reflect
+the narrower scope rather than removed, since the case isn't fully closed.
+
+Guard tests in `test_membership_pipeline_pass4_round4_codex.py` (5 tests):
+the core regression, its mirror (proving "prefer the named stage" not
+"prefer the stricter one"), a wrong-type step_id (unaffected), an omitted
+step_id (unaffected), and a single-election-vote-stage regression guard.
+The core regression assertion independently confirmed to fail against the
+pre-fix code via `git stash`; the other 4 confirmed to already pass
+unchanged against that same pre-fix code, so the fix is additive.
+
+Full completion gate clean: flake8/black/isort on `app/ tests/ alembic/`
+(1 new test file needed `black` reformatting, applied), `validate_
+migrations.py --strict` (409 revisions, single head, no schema change),
+full backend suite `pytest tests/ -q` — 9877 passed / 21 skipped
+(pre-existing/environmental) / 0 failed (baseline was 9872 before this
+commit; +5 for the new round-4 guard tests). Full detail in
+`MP-08-membership-pipeline.md` → Pass 4, round 4. Rotation row 08 → ⏳
+(awaiting PR merge/close of the currently-open review threads).
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 3) — 1 fixed, 1 refuted (Codex review of PR #2177's `da29d880`)
+
+Codex reviewed round 2's fix commit (`da29d880`, MP-23's
+`prospect.current_step` preference) and posted 2 new findings against
+`membership_pipeline_service.py`.
+
+**MP-24 (P1, fixed)** — `create_election_package` resolved its PII-policy
+from `prospect.current_step` (MP-23) but never checked the caller-supplied
+`step_id` against it. `advanceApplicant`'s two-request pattern (commit the
+advance, then a separate request to create the package naming the
+just-entered stage) leaves a window where `current_step` can move again
+before the second request lands, so the package could end up stored under
+one `step_id` while a different stage's `package_fields` actually governed
+the snapshot. Fixed: reject (`ValueError` → 400) when a supplied `step_id`
+disagrees with the `current_step` the policy was just resolved from — this
+only fires on the genuine race (never when `step_id` is omitted, and never
+for the pre-existing "named step isn't the election step" case pass 4
+already covers). Guard tests in
+`test_membership_pipeline_pass4_round3_codex.py` (3 tests); the race
+assertion independently confirmed to fail against the pre-fix code via
+`git stash`.
+
+**MP-25 (P2, refuted, no fix)** — claimed a lock-order deadlock between
+`update_election_package`'s locking read (which joins the `election`
+relationship, `lazy="joined"`, into its `SELECT ... FOR UPDATE`) and
+`ElectionService.close_election` (claimed to lock the election first, then
+write linked packages via `_sync_package_statuses`). Independently traced
+`close_election` line by line: it **commits** after locking the election
+(releasing that lock) well before `_sync_package_statuses` ever touches a
+package row, and that method's own package read isn't even a locking read —
+only its final `UPDATE` takes a row lock, in a transaction that by then holds
+no election lock at all. A lock-order deadlock needs both transactions
+holding one resource while waiting on the other simultaneously; the commit
+boundary here structurally prevents that. Documented in full — including why
+the underlying "joined eager load also locks the joined row" mechanic is
+still real and worth knowing, and why narrowing it isn't a safe same-day
+change (the eager load is load-bearing for response serialization:
+`election_title`/`election_status`/`election_end_date` read `self.election`
+synchronously) — in `MP-08-membership-pipeline.md` → Pass 4, round 3.
+
+Full completion gate clean: flake8/black/isort on `app/ tests/ alembic/`,
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change), full backend suite `pytest tests/ -q` — 9872 passed / 21 skipped /
+0 failed (baseline was 9869 before this commit; +3 for the new guard tests).
+Full detail in `MP-08-membership-pipeline.md` → Pass 4, round 3. Rotation
+row 08 → ⏳ (awaiting PR merge/close of the currently-open review threads).
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 2) — 1 fixed (Codex review of PR #2177's own fix commit)
+
+Codex reviewed pass 4's fix commit (`6c9bb09e`) and posted 1 new finding
+against the `create_election_package` field-policy fix that same commit had
+just landed (MP-20). Independently re-verified against the current code —
+confirmed real.
+
+**Fixed (1):** MP-23 — MP-20's fix resolved `package_fields` policy via
+`next(...)` over the pipeline's steps, which always returns the _first_
+`election_vote`-typed step by `sort_order`. `add_step` has no uniqueness
+check on `step_type` (confirmed by reading it), so a pipeline with multiple
+`election_vote` stages is reachable, and an earlier, more permissive stage
+could silently govern a package that belongs to a later, stricter stage the
+applicant actually reached. Fixed by preferring `prospect.current_step` —
+set only by `create_prospect`/`advance_prospect`/`regress_prospect`, and
+excluded from the generic prospect-update path, so it is never
+client-controlled — when it is itself an `election_vote` step in the
+governing pipeline; falls back to MP-20's original lookup only when the
+prospect's current step isn't an `election_vote` step at all (matches pass
+4 exactly for the common single-stage case).
+
+**Residual limitation (not a new flag — an explicit boundary on the MP-23
+fix, mirrored to `KNOWN_LIMITATIONS.md`):** a pipeline with multiple
+`election_vote` stages where the prospect's current step matches none of
+them (e.g. requested after the applicant already advanced past every vote
+stage) remains genuinely ambiguous — there is no single correct "the" stage
+to resolve without a product decision on what that should mean.
+
+New guard tests: `backend/tests/test_membership_pipeline_pass4_round2_codex.py`
+(3 tests — the multi-stage regression, its mirror-direction guard, and a
+single-stage regression guard). The multi-stage assertion independently
+confirmed to fail against the pre-fix code (`git stash` on
+`membership_pipeline_service.py`) before the fix was applied. Completion
+gate clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change); full backend suite `pytest tests/ -q` — 9869 passed / 21 skipped
+(pre-existing/environmental) / 0 failed (baseline was 9866 passed before this
+PR's last commit; +3 for the new round-2 guard tests). Full detail in
+`MP-08-membership-pipeline.md` → Pass 4, round 2. Rotation row 08 → ⏳
+(awaiting PR merge). Next: 09 medical screening (PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4) — 3 fixed, 1 flagged (Codex review on PR #2177)
+
+Codex reviewed pass 3's fix commit (merged as #2176) and posted 4 new
+findings against `membership_pipeline_service.py`. Independently re-traced
+every one against the current code (not the bot's say-so) — all 4 real.
+
+**Fixed (3, counted as 2 findings — MP-20 covers two angles of one
+mechanism):** MP-20 — `create_election_package`'s `package_fields`
+PII-minimization policy (a) was resolved from whatever `step_id` the caller
+supplied, optional and never checked for being the pipeline's actual
+`election_vote` step, so a caller could get full capture just by omitting it
+or naming a different step — fixed by deriving policy from the pipeline's
+own `election_vote`-typed step directly; and (b) a brand-new,
+never-configured election stage had no `package_fields` at all (neither
+`DEFAULT_STAGE_CONFIGS.election_vote` nor the "Membership Vote" preset set
+it), over-capturing PII the UI displays as unchecked — fixed on the
+frontend by having the "Membership Vote" preset (the only UI path that can
+produce a savable new election stage) persist the UI's own displayed
+defaults, without touching the shared `defaultStageConfig` merge path an
+existing stage's edit flow depends on for preserving its legacy
+capture-everything behavior. MP-21 — `update_election_package`'s
+status-changing path reopened the pass-3-fixed (MP-16) assignment race by
+reading the package with a plain, unlocked call instead of
+`lock_for_update=True` — locked here too, mirroring
+`assign_package_to_election` (CLAUDE.md Pitfall #27).
+
+**Flagged (1, mirrored to `KNOWN_LIMITATIONS.md`):** MP-22 — pass 3's
+document-deletion reorder (MP-18: remove file, then delete DB row + commit)
+can still lose the file if something after a successful `os.remove` fails
+(most plausibly the commit). A genuine two-sided reliability tradeoff, not a
+one-sided gap: reverting the order reopens MP-18 (an untracked orphaned PII
+file), and a full rename-to-trash/restore-on-rollback scheme is more
+machinery than a rare, retry-safe compound failure justifies as a same-day
+fix.
+
+New guard tests: `backend/tests/test_membership_pipeline_pass4_codex.py` (7
+tests) plus one fixture update in `test_membership_pipeline_pass3_codex.py`;
+`StageConfigModal.test.tsx` (+2 tests). Every new/changed assertion
+confirmed to fail against the pre-fix code via `git stash`. Completion gate
+clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change); `tsc`/`eslint` clean on the touched frontend files; full backend
+suite 9866 passed/21 skipped (pre-existing/environmental)/0 failed. Full
+detail in `MP-08-membership-pipeline.md` → Pass 4. Rotation row 08 → ⏳
+(awaiting PR merge). Next: 09 medical screening (PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) ✅ merged — PR #2176
+
+Merged to `main` as commit `7fb9c2e9`. Rotation row 08 continued into pass 4
+above (Codex reviewed this pass's own fix commit before the next feature
+started). Next: 09 medical screening, once pass 4 merges.
 
 ---
 
