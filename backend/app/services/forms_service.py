@@ -31,6 +31,7 @@ from app.models.forms import (
     IntegrationType,
 )
 from app.models.user import Organization, User, UserStatus
+from app.utils.contact_visibility import ContactPolicy
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -2495,9 +2496,21 @@ class FormsService:
     # ============================================
 
     async def search_members(
-        self, organization_id: UUID, query: str, limit: int = 20
+        self,
+        organization_id: UUID,
+        query: str,
+        limit: int = 20,
+        contact_policy: Optional[ContactPolicy] = None,
     ) -> List[Dict[str, Any]]:
-        """Search members by name, membership number, or email for member_lookup fields"""
+        """Search members by name, membership number, or email for member_lookup fields.
+
+        The email column is disclosed only as *contact_policy* allows — the
+        organisation's ceiling and the member's own profile-visibility choice.
+        Without a policy the email is withheld: a caller that has not decided
+        who may see it must not show it by default. The search itself still
+        matches on email, so a member can be found by it without it being
+        displayed.
+        """
         search_term = like_pattern(query)
         result = await self.db.execute(
             select(User)
@@ -2528,7 +2541,7 @@ class FormsService:
                 "membership_number": u.membership_number,
                 "rank": u.rank,
                 "station": u.station,
-                "email": u.email,
+                "email": contact_policy.email_for(u) if contact_policy else None,
             }
             for u in users
         ]
