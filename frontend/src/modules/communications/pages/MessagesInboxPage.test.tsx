@@ -1,23 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { BrowserRouter } from 'react-router';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { BrowserRouter } from 'react-router';
 import type { InboxMessage } from '../../../services/adminServices';
 
 const mockGetInbox = vi.fn();
-const mockMarkAsRead = vi.fn();
-const mockAcknowledge = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   messagesService: {
     getInbox: (...args: unknown[]) => mockGetInbox(...args) as unknown,
-    markAsRead: (...args: unknown[]) => mockMarkAsRead(...args) as unknown,
-    acknowledge: (...args: unknown[]) => mockAcknowledge(...args) as unknown,
   },
-}));
-
-vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
 }));
 
 import MessagesInboxPage from './MessagesInboxPage';
@@ -46,38 +38,39 @@ const renderPage = () =>
 describe('MessagesInboxPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMarkAsRead.mockResolvedValue(undefined);
-    mockAcknowledge.mockResolvedValue(undefined);
   });
 
-  it('marks a message read the first time its body is expanded', async () => {
-    const user = userEvent.setup();
-    mockGetInbox.mockResolvedValue([msg({ requires_acknowledgment: false })]);
-    renderPage();
-
-    const titleButton = await screen.findByRole('button', { name: /Mandatory training/i });
-    await user.click(titleButton);
-
-    await waitFor(() => expect(mockMarkAsRead).toHaveBeenCalledWith('m1'));
-  });
-
-  it('acknowledges a message that requires it', async () => {
-    const user = userEvent.setup();
+  it('links each message to its own route so the detail view can lead back here', async () => {
     mockGetInbox.mockResolvedValue([msg()]);
     renderPage();
 
-    const titleButton = await screen.findByRole('button', { name: /Mandatory training/i });
-    await user.click(titleButton);
+    const link = await screen.findByRole('link', { name: /Mandatory training/i });
+    expect(link).toHaveAttribute('href', '/messages/m1');
+  });
 
-    const ackButton = await screen.findByRole('button', { name: /acknowledge/i });
-    await user.click(ackButton);
+  it('flags a message still awaiting acknowledgement', async () => {
+    mockGetInbox.mockResolvedValue([msg()]);
+    renderPage();
 
-    await waitFor(() => expect(mockAcknowledge).toHaveBeenCalledWith('m1'));
+    expect(await screen.findByText(/Action needed/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no messages', async () => {
     mockGetInbox.mockResolvedValue([]);
     renderPage();
     expect(await screen.findByText(/No messages/i)).toBeInTheDocument();
+  });
+
+  it('loads another page so older communications remain reachable', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) => msg({ id: `m${index}`, title: `Message ${index}` }));
+    mockGetInbox.mockResolvedValueOnce(firstPage).mockResolvedValueOnce([msg({ id: 'm20', title: 'Older message' })]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Load more messages/i }));
+
+    expect(await screen.findByText('Older message')).toBeInTheDocument();
+    expect(mockGetInbox).toHaveBeenLastCalledWith({ include_read: true, skip: 20, limit: 20 });
+    expect(screen.queryByRole('button', { name: /Load more messages/i })).not.toBeInTheDocument();
   });
 });

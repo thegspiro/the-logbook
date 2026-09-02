@@ -7,6 +7,2584 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The member roster silently dropped platoon (and other) assignments from every response (2026-09-02)
+
+**Fixed**
+
+- **`GET /users` declared `platoon`, `member_class`, `member_status` and
+  `compliance_exempt` on its response schema but never populated them from
+  the real member record.** The Platoon Roster Panel reads platoon straight
+  from this endpoint to show each member's current assignment, so it always
+  rendered every member as unassigned regardless of their real platoon.
+  Fixed for `platoon`, which had a real consumer; the other three are left
+  unset pending a decision on which roster fields belong at which
+  permission tier (see below).
+
+Full write-up: `docs/security-review/USR-07-users-organizations.md`
+(USR-7).
+
+### Flagged: the member directory's new reduced view for non-managers is not backed by a matching API change (2026-09-02)
+
+**Not fixed — flagged for a product decision.** A recent change gave members
+without `members.manage` a visibly reduced "Member Directory" (no username,
+no hire date, no export/bulk actions) instead of the full management table.
+The underlying `GET /users` API was not changed to match: every member
+already receives the full field set in the JSON response regardless of the
+UI's rendering choice, so the reduced view is a display preference, not an
+access boundary. Not a cross-tenant leak. See `docs/KNOWN_LIMITATIONS.md`
+and `docs/security-review/USR-07-users-organizations.md` (USR-8) for detail
+and why a straightforward fix isn't safe (25+ other call sites depend on the
+current, unfiltered response).
+
+### A double vote through the full-ballot link's backward-compatible single-choice form could slip past the database's own safety net (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing multiple approvals on one contest
+  while the rest of the ballot allows only one), **submitting through the
+  full-ballot link's older single-choice form computed a different
+  internal fingerprint than the single-vote link would for the identical
+  vote**, so the database's own safety-net check for a near-simultaneous
+  double vote could not recognize the two as the same vote. Fixed so both
+  routes compute the same fingerprint for that contest regardless of which
+  submission form was used.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-39).
+
+### A double vote on an unusually-configured contest could slip past the database's own safety net, and a legitimate vote could be wrongly rejected as a duplicate of an unrelated contest (2026-09-02)
+
+**Fixed**
+
+- **On a contest configured to accept votes differently from the rest of
+  its election** (for example, allowing several selections on one contest
+  while the rest of the ballot allows only one), **the database's own
+  safety-net check for a near-simultaneous double vote no longer
+  recognized two vote attempts on that contest as the same vote** when
+  they arrived through the single-vote link and the full-ballot link at
+  (or near) the same moment — even though every other duplicate-vote
+  protection in the system treats them as identical. Fixed so both routes
+  compute the same internal fingerprint for that contest, restoring the
+  safety net.
+- **A legitimate vote on one contest could be wrongly rejected as a
+  duplicate of a completely different contest,** when one contest's
+  displayed title happened to be identical to another contest's internal
+  identifier. Fixed so the duplicate check no longer confuses two distinct
+  contests that merely share a name this way.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-37, ELEC-38).
+
+### A colliding position name could bypass eligibility on the full-ballot submission route, and a legacy contest's votes could be double-counted across routes (2026-09-02)
+
+**Fixed**
+
+- **Submitting a full ballot in one request could vote on a restricted
+  election position using a token that was never granted that
+  permission,** the same naming-collision bypass fixed for the
+  single-vote and ballot-preview routes previously — the full-ballot
+  route checked only the ballot-item permission and never the position's
+  own eligibility rule when the two happened to share a name. Fixed by
+  applying the same collision-aware check, now defined once and reused by
+  every vote-submission route so it cannot drift between them again.
+- **A voter holding two separate unused ballot links for the same election
+  could cast one vote through the single-vote link and a second through
+  the full-ballot link for the very same legacy contest, and have both
+  counted,** because the two routes recorded that contest under two
+  different internal labels and neither route's duplicate check — nor the
+  database's own safety-net constraint — recognized the other's label as
+  the same contest. Fixed by making both routes recognize every label a
+  legacy contest can be recorded under, and by making both routes record
+  the same canonical label going forward so the database-level safety net
+  also closes the gap for a near-simultaneous submission.
+- **A member whose membership tier is configured as ineligible to vote
+  could still receive a live, emailed ballot credential for a plain
+  position, specifically on an election that set no position-specific
+  eligibility rules at all** — a narrower prior fix only closed this gap
+  when the election configured an (empty) rule for that position. Fixed so
+  the tier-wide ban applies to every election with plain positions,
+  regardless of whether position-specific rules are configured.
+- **The fix for the naming-collision bypass above had a gap of its own:**
+  when a legacy contest happened to share a name with two different
+  restricted positions at once (via its internal id and its displayed
+  title respectively), the check picked one of the two names to verify —
+  effectively at random — instead of requiring the vote to clear both. A
+  token granted access to only one of the two names could, depending on
+  that random pick, still bypass the other. Fixed to require clearing
+  every colliding name, not just one.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-33, ELEC-34, ELEC-35).
+
+### A mixed election's plain-position ballots ignored a global voting ban and an admin override, and a token could be closed with a legitimate vote still pending (2026-09-02)
+
+**Fixed**
+
+- **A member whose membership tier is configured as ineligible to vote
+  (e.g. a probationary tier) could still receive a live, emailed ballot
+  credential for a plain-position contest in a mixed election,** even
+  though the same global ban already correctly excluded them from every
+  structured ballot item on the same election. Fixed by applying the same
+  tier check to both kinds of contest.
+- **An administrator's per-voter override — meant to grant a specific
+  member eligibility for every contest on a ballot — was honored for
+  structured ballot items but silently ignored for plain positions,** so an
+  overridden member could still be denied a position vote their override
+  was supposed to guarantee. Fixed by applying the override to both kinds
+  of contest identically.
+- **In a mixed election, casting a vote for a plain position could
+  prematurely mark a voter's ballot as fully submitted while a legitimate
+  ballot-item vote was still outstanding,** causing that second, valid vote
+  to be rejected as a duplicate submission. Fixed so a ballot is only
+  considered complete once every contest the voter is eligible for —
+  positions and items alike — has actually been voted on.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-30, ELEC-31, ELEC-32).
+
+### A colliding position name let an emailed ballot bypass its own eligibility restriction (2026-09-02)
+
+**Fixed**
+
+- **A restricted election position could be voted on by a token that was
+  never granted that permission,** if an unrelated, unrestricted ballot
+  contest happened to share its exact name. Voting eligibility sent by
+  email is checked per-candidate against one of two independent rule sets
+  depending on how that candidate is classified; a naming collision between
+  the two caused the classification to pick only one rule set and skip the
+  other entirely, so a voter authorized for the unrestricted contest could
+  cast a vote for the restricted one under the same name. Fixed by
+  detecting the collision and requiring both rule sets to authorize the
+  vote whenever a candidate's name matches both.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-29).
+
+### A mixed election could skip an eligible voter entirely, and a legacy title-keyed vote could be double-counted (2026-09-02)
+
+**Fixed**
+
+- **A member eligible only for a plain position (not any ballot item) on a
+  mixed election never received a ballot at all** — the decision to skip a
+  member with zero eligible ballot items ran before their position
+  eligibility was even checked, so an otherwise-eligible voter for a
+  restricted position was excluded outright whenever they also failed an
+  unrelated ballot item's voter-type rules. Fixed by checking both forms of
+  eligibility before deciding whether a member's ballot would be empty.
+- **A vote cast before positions were normalized could fail to block a
+  second vote for the same contest,** if that vote's candidate was one of the
+  older ones keyed by title rather than by the ballot item's id: the
+  duplicate-vote check only recognized the newer id-based match. Fixed by
+  using the same broadened match already used elsewhere in the same
+  submission path, so an old title-keyed vote is recognized as a duplicate
+  everywhere it needs to be.
+
+**Known limitation (flagged, not fixed):** an eligible member's plain
+position vote in a mixed election has no way to be cast today — see
+`KNOWN_LIMITATIONS.md`.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-26, ELEC-27, ELEC-28).
+
+### A member moved to a custom membership tier kept voting rights a restricted ballot meant to exclude, and four token-ballot races/gaps (2026-09-02)
+
+**Fixed**
+
+- **A member moved onto a department's own custom membership tier (e.g.
+  "Senior") kept counting as an operational/regular voter for ballots
+  restricted to that category,** even though a custom tier is documented to
+  match none of the built-in voter categories. Caused by an unrelated,
+  correct fix for shift scheduling that started preserving a member's prior
+  class/status across a tier switch — election eligibility read the same two
+  columns and inherited the carryover. Fixed by re-checking the member's
+  live membership tier before trusting those columns for ballot eligibility.
+- **Officer attestation of a paper-ballot batch could race a concurrent
+  election close:** the attestation only locked the batch, not the election,
+  so a batch attested moments before close could be confirmed after the
+  election had already generated its certified results excluding it. Fixed
+  with a locking read on the election status.
+- **A vote submitted through an emailed ballot link could read stale
+  election/token state past its own row lock:** the lock was acquired
+  correctly, but the already-cached (pre-lock) Python objects were returned
+  instead of the freshly locked row's values, the same class of bug
+  previously fixed once in this release for meeting quorum. Fixed by
+  refreshing the locked objects from the row lock.
+- **Voiding a paper-ballot batch was not safe against two officers voiding
+  the same batch at once** — both could load the same votes before either
+  committed, and the second commit silently overwrote the first officer's
+  recorded reason and timestamp. Fixed by locking the batch first and
+  refusing a second void of an already-voided one.
+- **A single-candidate selection on one ballot item could be bound to a
+  different ballot item in the same election** via a crafted vote-bulk
+  submission, letting an ineligible candidate appear in the wrong contest.
+  Fixed by requiring the candidate to belong to the named item, matching the
+  check already applied to ranked and multi-select ballot items.
+- **The single-vote ballot-link endpoint didn't check which ballot items a
+  voter's token was actually restricted to,** only a position restriction
+  that's never set for item-based elections — so a token limited to one
+  ballot item could still vote on a different, possibly restricted item.
+  Fixed by enforcing the same per-item restriction the bulk vote-submission
+  endpoint already enforced, and by no longer showing a restricted item's
+  candidates to a token that can't vote for them.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-13, ELEC-15, ELEC-17, ELEC-18, ELEC-20, ELEC-21).
+
+### A legacy ballot item lost its candidates, and a positional candidate outside any ballot item could bypass eligibility entirely (2026-09-02)
+
+**Fixed**
+
+- **A candidate-selection ballot item created before ballot items carried
+  their own "position" field lost every one of its candidates on the ballot
+  link,** and rejected them if submitted anyway: the eligibility checks
+  added for the previous fix above only recognized a candidate as belonging
+  to an item by the item's id, dropping the by-title matching the voting
+  page and eligibility checks elsewhere in the app already relied on for
+  these older items. Fixed by matching a candidate to its item by title
+  when the item has no explicit position, consistently everywhere that
+  match is made.
+- **A candidate running for a plain position that isn't tied to any ballot
+  item had no eligibility check at all, on an election that also had
+  ballot items** — an org could restrict a position (e.g. "Secretary") to
+  a particular membership category, and a member outside that category
+  could still vote for it, because the restriction was never captured on
+  their ballot link in the first place whenever the election also used
+  ballot items. Fixed by capturing that restriction regardless of whether
+  the election also has ballot items, and by checking each candidate
+  against the one restriction that actually applies to it.
+- **Attesting a paper-ballot batch and deleting its election could deadlock
+  against each other** under heavy concurrent use, because the two
+  operations locked the batch and the election in opposite orders. Fixed
+  by locking them in the same order everywhere.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-22, ELEC-23, ELEC-24).
+
+### Voiding a paper-ballot batch could deadlock against a concurrent election deletion (2026-09-02)
+
+**Fixed**
+
+- **Voiding a paper-ballot batch and deleting its election could deadlock
+  against each other** under heavy concurrent use, the same lock-order
+  problem already fixed for batch attestation — voiding locked the batch
+  before the election, while deletion locks the election before its
+  batches. Fixed by locking them in the same order everywhere.
+
+Full write-up: `docs/security-review/ELEC-06-elections-ballots.md`
+(ELEC-25).
+
+### Four more finance foreign keys are now scoped to the caller's organization (2026-09-02)
+
+**Fixed**
+
+- **A purchase request's linked apparatus/facility, a budget category's
+  parent, an approval chain's budget category, and an approval step's email
+  template could all be set to another organization's row.** Each is an
+  `ondelete="SET NULL"` foreign key exposed as a free client-supplied string,
+  and none was checked against the caller's own organization before being
+  saved — so the other organization later deleting its own apparatus,
+  facility, budget category or email template would silently null out this
+  organization's reference. Fixed the same way an earlier pass fixed the
+  identical gap on a budget's station: every one of these fields is now
+  validated against the caller's organization before it is persisted, on
+  both create and update.
+
+### A denied purchase request, expense report or check request could still be approved and paid (2026-09-02)
+
+**Fixed**
+
+- **Denying one step in a multi-step approval chain didn't stop the rest of
+  the chain.** The remaining steps stayed pending, so the request kept
+  showing up as awaiting approval — and approving the last of them reversed
+  the denial and charged the budget for a request the department had
+  refused. This was already fixed on `main` (also closing a follow-on token-
+  expiry gap and a gap for chains that were denied before the fix shipped);
+  this pass independently re-verified the fix is complete and correct.
+
+### Quick Add: starting a log entry on a phone is now two taps from anywhere (2026-09-01)
+
+**Added**
+
+- **The centre of the phone bottom bar is an Add button.** It opens a short
+  list of the things a member actually logs — training hours, a rig check, an
+  action item, a shift report, clocking in, checking into a shift, scanning a
+  member ID, and for officers requesting equipment, creating an event or adding
+  a member. Before this, every one of them was reached the same way: tap More,
+  wait for the drawer, find the module, find the page, find its button. Four
+  taps and two page loads before the first field.
+- **Each row goes to the screen that already owns that entry.** Quick Add adds
+  no forms of its own, so there is no second path for the same data to drift
+  down and nothing that can fall behind a form's own validation rules.
+- **Rows appear only where the page behind them would actually open.** A row
+  gated more widely than its route is a link to Access Denied placed there by
+  the app itself. `navGateIntegrity.test.ts` now resolves every row against the
+  real route definition — the route must exist, the row's permissions must be a
+  subset of what the route accepts, and a route's module gate must be repeated
+  on the row.
+
+**Changed**
+
+- **The phone bar keeps five items; the configurable slots go from three to
+  two.** Six items on a 390px phone is 65px each and puts the action at an edge
+  rather than under the thumb. A bar layout saved before this shipped keeps its
+  first two destinations and is left intact on disk — the third is still one tap
+  away under More.
+
+**Documentation**
+
+- **[MOBILE_QUICK_ENTRY_REVIEW.md](docs/MOBILE_QUICK_ENTRY_REVIEW.md)** records
+  the review this came out of. Eleven findings remain open, each with its
+  evidence: the command palette is still keyboard-only and so unreachable on a
+  phone; no image input opens the camera directly; the offline queue carries two
+  kinds of write while replay protection exists on one create schema out of
+  many; a fuel log asks for eleven fields where the API needs four; and a phone
+  home screen still needs about a dozen requests to answer "what is waiting for
+  me". Nothing found blocks work.
+
+### A member can now see who's going, RSVP without being asked, and know where they stand on a waitlist (2026-09-01)
+
+**Added**
+
+- **The going list is visible to members.** An event's attendee list was
+  reachable only with `events.manage`, so an ordinary member saw aggregate
+  counts and nothing else. It is now shareable — names and going status only,
+  never contact details, RSVP notes, dietary restrictions, accessibility needs,
+  guest counts or check-in times, which stay in the organizer view. Who may see
+  it is an organization default with a per-event override in either direction.
+  **The default ships as managers-only**, so nothing changes for an existing
+  department until it opts in.
+- **A member can respond to an event that does not require a response.**
+  `requires_rsvp` now means "a response is expected" — it still drives the
+  Required badge, the deadline and the non-respondent reminder audience — and
+  no longer means "responses are permitted". Previously the API refused
+  outright, which left members with nothing to do on the majority of events.
+- **Waitlist standing.** The detail page says "You're #2 of 5 on the waitlist"
+  rather than only that a waitlist exists, ordered by the same column the
+  server actually promotes on.
+- **Inline RSVP from the dashboard**, matching the sign-up open shifts already
+  offered there.
+
+**Fixed**
+
+- **Guests occupy seats.** `allow_guests` had been on the model since the
+  beginning and was read nowhere, so guests were accepted on events that forbade
+  them; and capacity counted going _rows_, leaving guests out entirely, so a
+  capped event could be oversubscribed by however many guests attendees brought.
+  Capacity is now a sum of seats. **A capped event will fill sooner than it used
+  to** — that is the correction, not a regression — and existing events already
+  over the seat count are left alone rather than retroactively waitlisted; they
+  simply admit nobody new.
+- **The waitlist queue moves.** Releasing several seats now promotes several
+  members rather than one, and a party larger than the whole event is refused at
+  RSVP time instead of sitting at the head of the queue blocking everyone behind
+  it.
+- **"Apply to all future events" works on an optional series**, and now goes
+  through the same guarded write path as a single RSVP, so capacity, guests and
+  deadlines are enforced on every occurrence rather than none.
+- The RSVP modal opens with the member's existing response rather than blank —
+  which had quietly discarded their notes, and, once guests consumed capacity,
+  silently released the seats those guests were holding.
+
+### The dashboard's seven-day list is now thirty days, and its control says where it goes (2026-09-01)
+
+**Changed**
+
+- The dashboard card that merges a member's own shifts, open slots and events
+  covers **thirty days** rather than seven, and is titled **Next 30 Days**. It
+  was already a rolling window anchored to today, so it simply reaches further;
+  the six-row cap and the "N more through <date>" footer are unchanged.
+- **Its control is now "All Shifts", not "Full Schedule", and it opens the
+  month view.** The card lists drills and events alongside shifts, but
+  `/scheduling` holds shifts only — every tab there is shift-scoped and the
+  calendar endpoints return shifts — so a member who saw Thursday's drill on
+  the card and followed a promise of the _full_ schedule arrived somewhere it
+  could not be. Opening on the month view also fixes a phone mismatch: that
+  grid draws a month at every width, while the week view fetched only seven
+  days to fill it.
+- **Drills stop being crowded off the list.** The card's events and own-shifts
+  requests were capped at five records each, and the cap applied _before_ the
+  window filter rather than after — so five socials spread across the next six
+  months were enough to hide every drill in the coming month, on a card whose
+  own subtitle promises drills. Both requests now ask for the window the card
+  renders.
+- The footer's "N more open shifts" line **names the horizon it counts**. The
+  open-shift request deliberately reaches past the visible window so that line
+  has something to report, but it stops at sixty days; the wording no longer
+  implies it covers everything beyond the window.
+
+**Fixed**
+
+- The **"Take a Shift"** quick action counted open shifts up to sixty days out,
+  well past the window the card advertises — a number members read as "what is
+  open now", attached to a button that opens a schedule not showing those
+  shifts. Its count, and the short-staffed tally beside it, are now scoped to
+  the visible window; only the footer's "more later" line reads the longer
+  reach it was added for.
+
+### The member roster showed every member the membership coordinator's screen (2026-09-01)
+
+**Changed**
+
+- `/members` carries no permission gate — it is the department directory, open
+  to everyone — but it was rendering the coordinator's working screen to
+  everyone too: a username under each name, a hire date column, a per-row
+  Actions column, bulk-selection checkboxes with Print Badges and Export
+  Selected, a CSV export of the whole roster, and the title "Membership
+  Management — Manage department members and records". A firefighter looking up
+  who is on B platoon was reading a personnel management table. Those elements
+  are now shown only to holders of `members.manage`, the same grant that
+  already gated Add Member, Import CSV and Delete on this page; for a
+  coordinator nothing has changed. Everyone still gets the status counters, the
+  contact column their department has chosen to publish, search, filtering and
+  pagination, and the page is titled "Member Directory".
+- Search no longer matches a username for members who cannot see one. It is not
+  displayed anywhere on their page, so a row returned for "ladams" had no
+  visible reason to be there. Name, membership number and email — the three the
+  search box has always advertised — are unchanged, for everyone.
+- **Clicking a member's row opens their profile.** The only way in used to be
+  the pencil in the Actions column, which is now gone for most of the
+  department, so the row and the phone card carry it instead — for coordinators
+  as well, who keep the pencil. The member's name is a real link rather than
+  the row being a tab stop: a screen reader gets one target per row instead of
+  twenty-five, and the name can be middle-clicked or opened in a new tab.
+  Clicks that land on a checkbox or an action button are still theirs, so
+  selecting a member no longer risks navigating away from the list.
+
+**Note**
+
+This is a change to what the page _shows_, not to what the server _sends_. The
+member list endpoint still returns usernames and hire dates to anyone with
+`members.view`, so this declutters the screen — it is not a confidentiality
+boundary.
+
+### The schedule named a crew seat by its stored token, so the EMT seat read as "EMS" (2026-09-01)
+
+**Fixed**
+
+- **A shift built from a template with two EMT seats listed them as "EMS" on
+  the schedule.** The seat's stored token and its name on screen are two
+  different things: the token is canonical and lowercase (`ems`) because it is
+  what the signup API grants against, and the label is what a firefighter
+  reads, which everywhere the seat is _chosen_ — the template form, the
+  eligibility settings, the rank editor — is "EMT". The board, the phone day
+  sheet, My Shifts, the shift report crew list and both template summaries
+  printed the token instead, so the same seat had two names depending on which
+  screen you were standing on, and "EMS" reads as a different seat rather than
+  as the same one spelled another way. Every screen that shows a seat name now
+  resolves it through one helper (`positionLabel`), so there is no second copy
+  of the mapping left to drift. A seat a department defined itself resolves
+  through the same `customPositions` the template form's dropdown is built
+  from, so its admin-chosen label now reaches the board and the roster too
+  rather than showing there as its slug.
+- **The same token reached print and email.** A printed shift roster's
+  right-hand column and the shift-reminder emails' crew list were built from
+  the token as well ("EMS", "Ems"), and a shift assignment notification told a
+  member they had been assigned to the "ems position". These now go through
+  `position_label` in `app/utils/positions.py`, the backend half of the same
+  mapping, asserted against the frontend's copy from source so the two cannot
+  disagree. On a 32-character receipt a label wider than the seat column drops
+  the alternative after a slash — "Driver/Operator" is two names for one seat,
+  and the renderer's mid-word cut ("DRIVER/OPERA") reads as a printer fault —
+  and is otherwise truncated rather than reduced to its first word, which
+  would print a department's "Assistant Chief" and "Assistant Driver"
+  identically.
+- **`POSITION_LABELS` held three keys for one seat** — `EMS`, `ems` and `EMT`,
+  all mapping to "EMT" — which is also why the shift assign dropdown, built by
+  iterating that map, offered "EMT" three times, two of them tokens no member
+  can actually be signed up as. The map is now one entry per seat, keyed by the
+  canonical token, and the alias folding lives in the helper next to the
+  backend's own.
+
+### A concurrency race in the previous TOTP-replay fix let the same code complete two independent logins, three related MFA/brute-force gaps, and the identical race found one field over on re-review (2026-09-01)
+
+**Fixed**
+
+- **The just-landed fix for cross-endpoint TOTP replay had its own race:**
+  `_verify_and_consume_totp` read and later wrote `user.mfa_last_timestep`
+  with no row lock, so two concurrent requests carrying the SAME valid code
+  (e.g. a phishing relay racing a captured code against an attacker's own
+  `/mfa/login` and the legitimate holder's request elsewhere) could both
+  pass the replay check and both complete a session before either committed.
+  Fixed with a locking re-read (`.with_for_update()` +
+  `populate_existing=True`) before the check, the same pattern already used
+  elsewhere in this codebase for read-then-write races. Verified with two
+  real, independently-committing database sessions racing the identical code
+  — confirmed only one succeeds.
+- **`login`'s brute-force-detector reset fired on a correct password alone,
+  silently erasing the tally the MFA-failure wiring above had just started
+  accumulating.** The reset now only fires once a correct password is full
+  authentication (MFA disabled) — an MFA-enabled account's tally is reset
+  only by a successful second factor, matching the invariant this codebase
+  already enforces for the separate suspicious-IP counter.
+- **A transient failure persisting a security alert could turn an intended
+  401 into an unhandled 500** and lose the login attempt's other side
+  effects, because the failure — though caught — left the shared database
+  session unable to commit anything afterward. Fixed by isolating the alert
+  write in its own savepoint, the same pattern already used for audit-log
+  writes.
+- **Disabling MFA and immediately re-enrolling with a new authenticator
+  secret could spuriously reject a legitimate first code as a "replay,"**
+  because the replay-prevention marker from the old secret was never
+  cleared. Fixed by clearing it whenever a user's MFA secret changes.
+- **The identical concurrency race as the first fix above, one field over:**
+  a follow-up review of the whole change before it shipped found that
+  `/mfa/login`'s recovery-code check had the exact same unlocked
+  read-then-write shape as the TOTP race — sitting directly next to the code
+  that had just been fixed for it. A recovery code has no ~30–90s expiry to
+  outrun, so this was, if anything, an easier target. Fixed the same way:
+  a locking re-read before checking/consuming the code.
+
+5 new regression-test classes (7 tests), each individually confirmed to fail
+against the pre-fix code. Full write-up:
+`docs/security-review/AUTH-01-auth-session.md` (AUTH-9 through AUTH-13).
+
+### A TOTP code verified at an MFA management route could replay at login, and the MFA-code brute-force alert was unwired (2026-09-01)
+
+**Fixed**
+
+- **`mfa_verify_setup`, `mfa_disable`, and `POST /mfa/recovery-codes` verified
+  a live TOTP code without ever recording it as consumed, leaving that same
+  code still valid at `/mfa/login` for the rest of its ~30–90s window.** Only
+  `mfa_login` recorded the matched time-step (`user.mfa_last_timestep`); the
+  three management routes called the plain, stateless `verify_totp` check
+  instead. An attacker who already holds an account's password (a
+  prerequisite either way for any MFA-bypass discussion) gets a valid
+  `mfa_pending` challenge token for free from the password step alone; if
+  they then observe a code the legitimate user is actively using at one of
+  the three management routes (shoulder-surfing, a compromised endpoint, a
+  phishing-relay page), they could replay that same code at `/mfa/login` and
+  open a fully independent session of their own — nothing had marked the
+  code's time-step spent. Fixed by routing every TOTP-verifying route through
+  one shared `_verify_and_consume_totp()` primitive that always records the
+  consumed step on a match, closing the gap for all four routes at once. 3
+  new regression tests, including one that drives the real
+  `mfa_regenerate_recovery_codes` and `mfa_login` handlers end-to-end and is
+  confirmed to fail against the pre-fix code.
+- **`mfa_login` never fed `security_monitor.detect_brute_force`, so guessing
+  the second factor generated no history for this HIGH-severity alert.** The
+  per-account lockout and the suspicious-IP throttle already enforced against
+  MFA-code guessing and still do — this closes a purely alerting/audit gap,
+  not an enforcement one. `mfa_login`'s failure and success paths now call
+  `detect_brute_force` with `success=False`/`True`, mirroring `login`'s own
+  password-step wiring exactly. 2 new regression tests assert the call on
+  both paths.
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md` (AUTH-7,
+AUTH-8). A related non-idempotency gap in the recovery-codes regeneration
+endpoint (a retried request silently overwrites the codes shown on a prior
+call) was investigated and flagged, not fixed — see
+`docs/KNOWN_LIMITATIONS.md`.
+
+### A concurrent request for the same session could silently erase another request's session-hijack tracking data (2026-09-01)
+
+**Fixed**
+
+- **`detect_session_hijack` awaited the audit-log write and alert dispatch
+  BEFORE writing its decision back to the in-memory session trackers, and
+  those trackers are shared by every request through a single process-wide
+  security-monitoring instance.** This app's frontend routinely fires
+  several concurrent API calls under one session cookie (parallel data
+  fetches on page load), so two concurrent requests for the same session
+  were ordinary, not rare. When one such request's IP-change check fired a
+  hijack alert, it would suspend mid-request to log the alert to the
+  database — and if a second concurrent request for the same session
+  finished its own (legitimate) update to the tracker while the first was
+  suspended, the first request would resume and overwrite the second
+  request's update with its own, now-stale snapshot: silently erasing an
+  entry from the session's forensic IP history and, in some orderings,
+  moving the trusted-IP baseline's recorded time backward. Neither
+  request's own alert-or-not decision was affected — only the tracker data
+  used to evaluate the _next_ request for that session. Fixed by writing
+  the tracker state before dispatching the alert (matching the order this
+  file's three other tracking methods already used), so there is no longer
+  a gap in which a concurrent request's update can be silently discarded. 1
+  new regression test drives two genuinely concurrent requests for the same
+  session, one deliberately stalled mid-dispatch while the other completes,
+  and confirms the completed request's update survives; verified to fail
+  against the prior commit and pass after the fix.
+
+### A session-hijack alert could be silently waved through once enough real time passed, even under continuous attack (2026-09-01)
+
+**Fixed**
+
+- **The trusted-IP fix below (`detect_session_hijack`) correctly stopped an
+  alerting call from promoting the attacker's IP as the new trusted
+  baseline, but left that entry's stored TIMESTAMP unrefreshed on the same
+  path — and that timestamp is exactly what the method's own 5-minute
+  "IP changed, but it's been a while, probably roaming" leniency check
+  reads.** Under continuous attacker traffic, the stored timestamp stayed
+  pinned to whenever the trusted IP was last legitimately seen, while real
+  wall-clock time kept advancing on every subsequent attacker request —
+  so once enough time elapsed since that original sighting (regardless of
+  how many attacker requests happened in between), the leniency check
+  wrongly concluded the session must have gone idle, stopped alerting, and
+  silently promoted the attacker's now-longstanding IP to trusted. Fixed by
+  refreshing the stored timestamp to the current time on every call — alert
+  or not — while still leaving the trusted IP itself unchanged on the alert
+  path. The stored timestamp now means "the last time this session was
+  evaluated, by any IP," so the leniency window measures the gap since the
+  last time the session was looked at, not since its last legitimate
+  sighting — a continuously-attacked session never accumulates elapsed time
+  toward the leniency window, while a genuinely idle session (no requests
+  from anyone for 5+ minutes) still earns it exactly as before. 2 new
+  regression tests simulate ten minutes of continuous attacker traffic
+  (asserting every request still alerts and the legitimate IP's return is
+  still correctly recognized) and a genuinely idle 10-minute gap followed by
+  a legitimate IP change (asserting that case still does not alert); both
+  verified against the prior fix's commit.
+
+### A session-hijack alert silenced itself after firing once, because its own fix trusted the attacker's IP (2026-09-01)
+
+**Fixed**
+
+- **The write-after-evict fix below (`detect_session_hijack`) closed a real
+  gap but introduced a new one: on the path where a hijack alert fired, it
+  wrote the _attacker's_ IP back as the tracker's newest entry, and the next
+  comparison read only that newest entry.** So the very next request from
+  the same attacker IP compared its own IP against itself, found no change,
+  and returned no alert — an ongoing hijack was detected exactly once, then
+  went silent for as long as the attacker kept reusing the one IP. This bug
+  did not exist in any version of the method before that fix: every prior
+  revision returned immediately on the alert path, before ever reaching the
+  line that wrote the current IP back, so the tracker kept the pre-hijack IP
+  as the comparison baseline and a repeat attacker IP correctly re-alerted.
+  Fixed by splitting the full observed-IP audit log (unchanged — every
+  request is still recorded, attacker IPs included, for forensics) from a
+  new, separate tracker holding only the IP a hijack decision is actually
+  compared against. That trusted tracker advances to the current IP after a
+  call that does not fire an alert (a first observation, a matching IP, or
+  an IP change slow enough not to be flagged as suspicious) but is
+  deliberately left unchanged after a call that does — so an IP that just
+  triggered an alert is never promoted to "known good," and the same
+  attacker IP keeps triggering the alert on every subsequent request, while
+  a legitimate IP returning after an attacker IP was seen in between is
+  still correctly recognized and not flagged. 2 new regression tests
+  reproduce the exact silencing behavior (including the legitimate-IP-
+  returns case) and are verified to fail before this fix and pass after.
+
+### An evicted session lost its hijack baseline right after correctly firing its first alert (2026-09-01)
+
+**Fixed**
+
+- **The read-before-evict fix below (`detect_session_hijack` and three other
+  methods) was necessary but not sufficient: it protected the alert decision
+  on the call that fired, but nothing wrote that call's own contribution
+  back into the tracker afterward.** If the session's key was also this
+  call's batch-eviction target, `detect_session_hijack` correctly detected
+  the IP change and raised the `session_hijack` alert (using the protected
+  pre-eviction read) — but then returned without ever recording this call's
+  own IP, because the write only ran on the no-alert path. The tracker was
+  left holding no entry at all for that session. The very next request from
+  the same hijacked session found no baseline, was scored as a first-ever
+  observation, and no further alerts fired for an attack that was still
+  ongoing. Fixed by always rebuilding the session's tracker entry from its
+  pre-eviction history plus this call's own IP, regardless of which path was
+  taken — the tracker now always ends a call holding a live entry for the
+  session, so the next call has a real baseline. The same defensive
+  restructuring (write the current call's contribution back to the tracker
+  after eviction runs, not before) was applied to the other three affected
+  methods (`_check_rate_limit`, `detect_brute_force`,
+  `detect_data_exfiltration`) for consistency, though those three were
+  verified not to be exploitable the same way — they already wrote before
+  evicting, which incidentally protected them. 4 new regression tests
+  (including a three-call chain for the session-hijack case) reproduce the
+  exact failure shape and are verified to fail before this fix and pass
+  after.
+
+### Rate-limit alerts could also silently skip under tracker churn (2026-09-01)
+
+**Fixed**
+
+- **The same read-after-evict shape below (`detect_session_hijack`/
+  `detect_brute_force`/`detect_data_exfiltration`) was also present in
+  `_check_rate_limit`, missed by that fix.** It evicted stale tracking keys
+  before reading/appending to the current IP's call history rather than
+  after, via a different code path than the other three methods
+  (`_evict_stale_tracking_keys()` rather than a direct call to the shared
+  cap-enforcement helper) — which is why a review of the other three did not
+  also catch this one. If the requesting IP happened to be the
+  least-recently-active key in an over-capacity tracker, its prior calls
+  were evicted before the current request was counted, undercounting the
+  request as the first call from that IP and silently skipping a rate-limit
+  alert it should have raised. Fixed the same way: the current call is
+  captured into a local variable before eviction runs, so a same-call
+  eviction can no longer erase the count the alert decision depends on. 1
+  new regression test reproduces the exact failure shape and is verified to
+  fail before this fix and pass after.
+
+### Session-hijack/brute-force/data-exfiltration alerts could silently skip under tracker churn (2026-09-01)
+
+**Fixed**
+
+- **A regression in the same-day tracker-cap fix below could suppress a real
+  security alert.** That fix made `detect_session_hijack` (and, for the same
+  reason, `detect_data_exfiltration`) run cap-enforcement on entry, before
+  the method read its own tracker's prior entry for the session/user being
+  checked. If that exact entry happened to be evicted in the same call —
+  plausible under the sustained request churn the cap exists to survive —
+  the method found no prior history, silently treated an ongoing session
+  hijack as a first-ever observation, and never raised the alert.
+  `detect_brute_force` had the identical shape since the cap was first
+  introduced (predating the same-day fix) and undercounted failed-login
+  attempts the same way. This landed on `main` unfixed for a window between
+  the prior fix's merge and this one. Fixed by having each method capture
+  its own tracker read into a local variable before cap-enforcement runs, so
+  a same-call eviction can no longer erase the data the alert decision
+  depends on. 3 new regression tests reproduce the exact failure shape
+  (tracker filled above its cap with the affected session/IP/user as the
+  single oldest entry) and are verified to fail before this fix and pass
+  after.
+
+### Security monitoring trackers are capped on every write path (2026-09-01)
+
+**Fixed**
+
+- **Two of `SecurityMonitoringService`'s four in-memory trackers were never
+  capped for SSO/OAuth-only organizations.** `_session_ips` and
+  `_data_transfers` grow on every authenticated request, but the only code
+  path that enforced the process-wide size cap on them
+  (`detect_brute_force`) is reachable exclusively from the password
+  `/auth/login` endpoint. An organization authenticating entirely through
+  Google/Azure AD SSO never calls it, so those two dicts would grow without
+  bound for the life of the process. `detect_session_hijack` and
+  `detect_data_exfiltration` — the methods that actually write to them — now
+  enforce the cap themselves on entry, matching the existing pattern.
+- **Codex caught two more real problems in that same fix, same day.**
+  First: the cap-enforcement above runs unthrottled on a genuine hot path —
+  `detect_session_hijack` fires on every authenticated response — and the
+  eviction it added evicted exactly one key at a time. Once a tracker
+  reached its 5,000-key cap, every subsequent distinct session/IP/user
+  re-triggered a full `O(n log n)` sort of the entire tracker just to evict
+  the one key that had pushed it over, immediately putting it right back at
+  the cap for the next call. Sustained session churn turned a lightweight
+  memory safeguard into a persistent per-request CPU cost. Eviction now
+  drops a tracker to 90% of its cap in one batch, buying headroom (500
+  entries) before the sort has to run again — amortized instead of
+  per-call. Second: `_external_endpoints` — a fifth tracker, a `set()` that
+  `detect_data_exfiltration` grows with every distinct external destination
+  seen — was never actually capped by the fix above at all. The
+  cap-enforcement helper only iterated the four _dict_ trackers; the
+  200-entry cap that existed for the set lived in a different method whose
+  own application path turned out to be dead code (nothing on the set's
+  real growth path ever called it), so the set could grow unbounded exactly
+  like the bug this same fix was supposed to have closed. Both are now
+  fixed in the same cap-enforcement helper, on the same code path that
+  grows every tracker. `tests/test_security_monitoring.py` gained 4 tests
+  proving both fixes (bounded growth under simulated churn, batched
+  eviction, and the external-endpoint set staying capped through its real
+  call path); all 14 tests pass, and all 4 fail against the pre-fix code.
+
+### Adding a checklist item to the inventory catalog (2026-08-31)
+
+**Added**
+
+- A checklist position's **Linked Inventory Item** field can now create the
+  item it links to. Previously it only searched, and nothing seeds the catalog
+  — so on a new department the field always answered "No matching items." and
+  offered nothing further, on the one control whose purpose is making that
+  link. Typing a name with no match now offers to add it to the catalog and
+  link it in a single step, for anyone who can manage inventory.
+
+  The new catalog entry carries the name and nothing else. One catalog item is
+  stocked in many places — gauze in a jump bag, a cabinet and two rigs — each
+  counted on its own, so the position's required quantity and minimum stay with
+  that position and never become a department-wide reorder point.
+
+**Fixed**
+
+- The equivalent "Create … in inventory" action already offered by the
+  compartment's add-item bar had never worked: it created the item with no
+  stock on hand, which the catalog refused even though editing an item to the
+  same value had always been allowed. A pool item can now be created with
+  nothing on hand, which is what a catalog entry added from a checklist knows.
+
+### Settings screens are usable on a phone (2026-08-31)
+
+**Fixed**
+
+- The section row across the top of every settings screen (Organization,
+  Scheduling, Elections, Events, Email Templates, Checklist Settings and your
+  own account) rendered its pills at 36px tall, under the 44px a finger
+  reliably hits. They now grow to 44px on phones.
+- On a screen with enough sections to overflow a phone — Organization Settings
+  has six — the last pill sat off the right edge of the screen with no way to
+  reach it: the row scrolled sideways, but nothing told the browser it was a
+  scroll region, so a keyboard could not reach it and the overflow read as a
+  layout fault rather than a strip. Both the section row and the sub-page rail
+  beneath it now declare themselves as scrollable and are keyboard-reachable.
+- Organization Settings' "Upload logo" button was a 20px-tall text link.
+
+**Internal**
+
+Organization Settings was in the mobile presentation pass but the fixture
+account lacked `settings.manage`, so the pass had been measuring the dashboard
+under that route's name and reporting it green. It now signs in with the grant
+and measures the real page; `/account` joins it, so two of the seven screens
+built on the shared settings shell are exercised rather than none.
+
+### Frontend shared re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Entering a wrong or expired MFA code was treated as an expired session:
+  the app purged local data and hard-redirected to the login screen instead
+  of showing "invalid code, try again."
+- Loading your profile after an offline or interrupted connection could
+  silently discard unsynced shift-report drafts and equipment-check
+  submissions — now only a confirmed sign-out clears local data.
+
+### Equipment checklists moved from Scheduling to Inventory (2026-08-31)
+
+**Changed — action required**
+
+Equipment checklists are now part of the **Inventory** module rather than
+Shift Scheduling. A checklist is a list of inventory items — a checklist
+position already pointed at an item in the catalog, and the lots aboard a truck
+are drawn from the same stock — so the feature now lives with the things it
+tracks. Crews still start and complete checks from their shift; only authoring,
+reporting and the fleet views moved.
+
+Three things change for existing departments:
+
+- **The pages have new addresses, and the old ones no longer work.** Bookmarks
+  and links in previously-sent emails will land on the dashboard.
+
+  | Was                                       | Is now                                      |
+  | ----------------------------------------- | ------------------------------------------- |
+  | `/scheduling/equipment-check-templates/…` | `/inventory/admin/checklists/templates/…`   |
+  | `/scheduling/equipment-check-reports`     | `/inventory/admin/checklists/reports`       |
+  | `/scheduling/supply/expiring`             | `/inventory/admin/checklists/supply`        |
+  | `/scheduling/equipment`                   | `/inventory/checklists`                     |
+  | `/scheduling/equipment/checks`            | `/inventory/checklists/log`                 |
+  | `/scheduling/equipment/{id}`              | `/inventory/checklists/apparatus/{id}`      |
+  | `/scheduling/apparatus-inventory`         | `/inventory/checklists/apparatus-inventory` |
+  | `/scheduling?tab=equipment-checks`        | `/inventory/checklists/my`                  |
+
+- **The Equipment Checks tab is gone from the shift screen**, and with it the
+  Check Reports and Supply shortcuts in Officer tools. Equipment checks are no
+  longer part of Shift Scheduling in any sense — the whole feature is in
+  Inventory, and Scheduling links to it.
+
+  **Members now find their checklists in the navigation**, under Operations →
+  **My Checklists**. That row is new, and it is a genuine improvement: before
+  this, a member's only route to the checks they owed was a tab inside Shift
+  Scheduling. Officers get **Fleet Readiness** beside it.
+
+  From a shift itself nothing changes in practice: check-in and the shift
+  detail panel still offer "Start checklist", and shift finalization still
+  refuses to close on outstanding end-of-shift checks.
+
+  One consequence worth knowing: end-of-shift reminder notifications already
+  sitting in members' bells carry the old address and will land on the
+  dashboard. New ones point at the right place. These reminders age out within
+  a few days.
+
+- **The permissions were renamed** from `equipment_check.view` / `.manage` /
+  `.submit` to `inventory.check_view` / `inventory.check_manage` /
+  `inventory.check_submit`. Every position keeps exactly the authority it had —
+  a migration renames the stored grants, and the old names keep working for any
+  row it cannot reach. One consequence worth knowing: a position holding the
+  `inventory.*` wildcard now also grants the checklist permissions, as it
+  already did for medical supplies.
+
+- **Checklists now require the Inventory module.** A department that had
+  switched Inventory off has it switched back on automatically if it uses
+  equipment checks. If Inventory is later switched off deliberately, the
+  Equipment Checks tab disappears from the shift screen rather than erroring.
+
+**Added**
+
+- A shift template can now **name the equipment checklists its shifts carry**,
+  instead of every shift working them out from its vehicle. Naming them
+  replaces the vehicle's own; leaving them unticked keeps today's behaviour, so
+  nothing changes until a department uses it. Edit them on the shift template,
+  under the vehicle picker.
+
+- **Checklist settings now live with the checklists**, at Gear Admin >
+  Equipment Checklists > Checklist settings. These are the four that decide
+  when crews are prompted — start-of-shift and end-of-shift checklists, and how
+  early or late a member may still check in. They were edited from the shift
+  module's settings; the values themselves are unchanged and carried over
+  automatically, so nothing needs re-entering.
+
+**Removed**
+
+- **Four equipment-check settings that did nothing have been removed** —
+  "Enable equipment checks for shifts", "Require signature on completion",
+  "Block shift start when required items fail" and "Default expiration warning
+  (days)", all previously on Scheduling > Settings > Equipment. Every one of
+  them was stored, reported as saved, and read by no code anywhere: there is no
+  signature field on the check form to require, nothing consulted the warning
+  default (30 days was hardcoded), and a failed required item never blocked a
+  shift start. Switching any of them made no difference before and makes none
+  now, but the app no longer claims otherwise. The Equipment section of shift
+  settings is now a signpost to Inventory and shows no Save button, because it
+  has nothing left to save.
+
+### Checklist links, and who the `inventory.*` wildcard now covers (2026-08-31)
+
+**Changed — check your custom positions**
+
+- **A position granting `inventory.*` now also grants the equipment-checklist
+  permissions.** Those three grants used to be `equipment_check.view` /
+  `.manage` / `.submit`, which the `inventory.*` wildcard did not reach. Moving
+  checklists into Inventory renamed them to `inventory.check_view` /
+  `.check_manage` / `.check_submit`, and a module wildcard covers everything in
+  its module — so anyone holding `inventory.*` can now author and submit
+  equipment checklists. No seeded position or rank grants `inventory.*`, so
+  this only affects positions a department built for itself, typically a
+  quartermaster. If that is wider than you intend, replace `inventory.*` on
+  that position with the specific `inventory.` grants you want. The behaviour
+  is deliberate — a checklist is a list of inventory items — and is now pinned
+  by a test so it cannot drift unnoticed.
+
+**Fixed**
+
+- **Checklist shortcuts are no longer shown to people the destination turns
+  away.** Three links advertised pages their viewer could not open: "Manage
+  equipment checklists" in Scheduling's Equipment settings needs
+  `inventory.check_manage`, and "Check reports" and "Expiring on apparatus" on
+  the Equipment Checklists admin page need grants that authoring a checklist
+  does not imply — the seeded President position holds `check_manage` without
+  `check_view`, so Check reports was a dead end for them. Each link is now
+  shown only to whoever its page admits, matching the "Checklist settings" link
+  that already worked this way.
+
+### Checklist review follow-ups (2026-08-31)
+
+**Fixed**
+
+- **"Failed checks" on the chief dashboard now opens a filtered log.** The card
+  counted failures and linked to `/inventory/checklists/log?status=failed`, but
+  nothing read that filter — the officer landed on an unfiltered fortnight and
+  had to find the failures by eye. The log now honours `?status=`, says which
+  outcome it is showing, and offers one click back to all checks.
+- **Fleet Readiness has its own icon in the sidebar.** It shared one with "My
+  Checklists" directly above it, which is indistinguishable when the rail is
+  collapsed to icons.
+
+### Shift template checklist fixes (2026-08-31)
+
+**Fixed**
+
+- **A rejected shift template is no longer created anyway.** Naming a checklist
+  the department does not own reported "Unable to create template" — and left
+  the template behind regardless, so every retry added another copy. The
+  checklist ids are now checked before anything is written.
+- **Crews see the checklists in the order the officer arranged them.** A shift
+  template's checklists were shown to the crew in the checklists' own catalogue
+  order instead, so the running order on the truck could disagree with the one
+  named in the shift reminder. Both now follow the template.
+
+### A new crew experience for the equipment check (2026-08-31)
+
+**Added**
+
+- Crews can walk an equipment check one stop at a time instead of scrolling a
+  list of compartments. Each stop carries a map of the truck across the top
+  showing what is done, what has a fault and where you are; a single claim for
+  the whole stop where one is honest ("All 4 counts at par"); and a jump sheet
+  to reach any stop out of order, or read every item as one list. The check
+  finishes on the exceptions — the faults, the gaps and the restock lines —
+  rather than on 130 lines to scroll past. Not yet switched on for crews: the
+  template builder's preview shows it so departments can see it against their
+  own templates first.
+- A bag is now walked as a bag. Its pockets are a strip of numbered chips with
+  one pocket open at a time, and the claim, the restock line and the "read n
+  more gauges" hold all speak for the pocket in front of you rather than the
+  whole bag.
+- Counts carry forward from the last check. Twelve found against a par of ten
+  stays twelve for the next crew rather than resetting to par, and a carried
+  number is shown greyed until somebody confirms it, so a check cannot be
+  submitted complete on numbers nobody looked at.
+
+**Fixed**
+
+- A sealed container whose tag nobody had read yet had its contents counted as
+  already answered. A seal is evidence only once a crew has looked at it, so
+  the counting now waits for the tag to be confirmed.
+- An intact tamper seal no longer vouches for a container holding something
+  expired or due to be pulled. The check says which item, whether it has
+  expired or is inside its pull window, and which tag to re-seal with — a seal
+  proves nothing was taken, not that what is left is still usable.
+- On the equipment check, the "Out of service" and "Pass" buttons did not have
+  enough contrast against their labels to be read comfortably in sunlight or by
+  members with low vision, while "Fail" beside them did. All three now meet the
+  same standard, along with the submit button and the expiry and status badges.
+  The check also follows the high-contrast theme properly, which it previously
+  ignored.
+
+### Core infrastructure re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Several unauthenticated public endpoints (calendar, legal, kiosk display,
+  finance-approval token lookups, and three inbound webhook receivers)
+  effectively lost their rate limiting during a Redis outage — the
+  in-memory fallback reset an attacker's full request allowance on almost
+  every over-limit request instead of actually limiting them.
+- A public form/event-request/guest-check-in daily submission cap could get
+  permanently stuck denying legitimate traffic (instead of resetting the
+  next day) if a transient Redis error hit at exactly the wrong moment.
+- A failed database-engine shutdown could leave the app reporting itself as
+  still connected to a database it had actually lost.
+
+### Locations & kiosk guest check-in hardening (2026-08-31)
+
+**Fixed**
+
+- A guest check-in racing another sign-in for the same person and event
+  could, in rare cases, fail entirely instead of just skipping the
+  duplicate pipeline link — the guest's attendance now always records.
+- A deactivated organization's kiosk display codes and guest sign-in links
+  kept working indefinitely; they now stop resolving along with the rest
+  of the organization's public surface.
+- Moving a location to a different building without renaming it could
+  create an ambiguous duplicate with an existing location of the same name
+  in the target building — the uniqueness check now covers this case.
+- The guest-check-in daily sign-in limit could be exhausted by requests
+  sent before an event's check-in window opened (or after attendance was
+  finalized), denying legitimate guests later that day — those requests no
+  longer count against the limit.
+- Explicitly clearing a location's name or active status to null returned
+  a server error instead of a clear validation message; it's now rejected
+  up front.
+
+### Scheduled-task reliability fixes (2026-08-31)
+
+**Fixed**
+
+- A department message scheduled to publish could, in a batch with other
+  due messages, silently vanish forever if a different message in the same
+  batch failed to process first — the failed message no longer costs the
+  rest of the batch its delivery.
+- Reminders for overdue meeting-minutes action items were silently failing
+  every single time, with no error visible anywhere — they now send
+  correctly.
+- A shift with no currently-active assigned members was permanently marked
+  as "reminded" even though nobody was actually notified, so a member added
+  or reactivated later in the same window never received the pre-shift
+  reminder — fixed to match the equivalent end-of-shift-checklist behavior.
+- Extending recurring event series to their rolling 12-month horizon could,
+  on one series' failure, silently discard other series' already-generated
+  occurrences from the same run.
+- An external training-provider sync failure could cascade into every
+  provider synced after it in the same run being misreported as failed too.
+
+### Onboarding hardening and setup docs cleanup (2026-08-31)
+
+**Fixed**
+
+- The unauthenticated setup-status check (`GET /onboarding/status`), used by
+  the login page to detect a not-yet-configured instance, now has the same
+  per-route rate limiting as every other onboarding bootstrap endpoint —
+  it was the one anonymous route without one.
+- `frontend/.env.example`, `frontend/setup.sh`, and the setup documentation
+  no longer instruct operators to set a `VITE_SESSION_KEY` "for production" —
+  that variable has not been read by any code since onboarding data stopped
+  being encrypted client-side; the real protection is the backend's own
+  `ENCRYPTION_KEY`. Following the old instruction had no security effect
+  either way, but told operators otherwise.
+
+### Integrations fix (2026-08-31)
+
+**Fixed**
+
+- Testing an integration's connection, or checking Salesforce sync
+  readiness, could show a raw internal/connection error message instead of
+  a clean explanation if the underlying network call failed unexpectedly.
+  Errors now show a generic message while the details are still logged for
+  troubleshooting; the specific, intentional messages (e.g. "Salesforce
+  rejected these credentials") are unaffected.
+
+### Forms fix (2026-08-31)
+
+**Fixed**
+
+- If a form's cross-module integration (assigning equipment, registering
+  for an event, or creating an event request from a form submission) hit
+  an unexpected internal error, the submission's integration results could
+  show a raw internal error message instead of a clean explanation. Errors
+  now show a generic message while the details are still logged for
+  troubleshooting.
+
+### Meetings and minutes fixes (2026-08-31)
+
+**Fixed**
+
+- Clicking "Unlink" on a meeting minutes record's linked event showed an
+  "Event unlinked" success message, but the link was never actually
+  removed — it would reappear on the next page load. Unlinking now takes
+  effect immediately and persists.
+- Creating, editing, deleting, or approving a meeting record (or adding,
+  removing, or editing its attendees and action items) left no record of
+  who made the change or when. Meeting minutes already recorded this; the
+  meeting scheduling records now do too.
+- A rare failure while creating a meeting record from a calendar event
+  could surface an internal error message instead of a clean explanation.
+
+### Editing a medical supply category or item left no audit trail (2026-08-30)
+
+**Fixed**
+
+- Creating a medical supply category or item was recorded in the audit
+  trail; editing one afterward was not. Both edits are now recorded,
+  matching the general inventory page's own category and item edits.
+
+### Medical supplies summary fix (2026-08-30)
+
+**Fixed**
+
+- The medical supplies summary's "Low Stock" count only checked the first
+  500 active items, so a department with more than 500 active medical items
+  could have a low-stock item that never showed up in the headline count
+  even though it was correctly listed in the table below. The count now
+  covers the department's full medical supply catalog.
+
+### Grants & fundraising report and permission fixes (2026-08-30)
+
+**Fixed**
+
+- A grant or fundraising report covering a date range that included today
+  (the default) silently dropped every application or donation recorded
+  later that same day, understating the report's totals. The report now
+  includes the entire end date.
+- On the fundraising report, the percentage breakdown by payment method
+  showed 0.0% for every method as soon as two or more payment methods had
+  donations, with no error. Percentages now calculate correctly.
+- A member with view-only access to Grants & Fundraising could open the
+  campaigns, donors, dashboard, or an individual grant application's detail
+  page and see "New Campaign," "Add Donor," "New Application," "Add Item,"
+  "Record Expenditure," "Add Task," and "Add Note" buttons that failed when
+  clicked, with no explanation of why. Those controls are now hidden for
+  members who don't have permission to use them.
+- The dashboard's "Active Applications," "Pending Applications," and
+  "Active Campaigns" cards linked to a pre-filtered list, but the list page
+  ignored the filter and always showed everything. The link now filters
+  correctly.
+- The dashboard's "View Campaign" link on a recent donation went to a page
+  that doesn't exist and silently sent you back to the dashboard home. It
+  now goes to the campaigns list.
+- The Grants & Fundraising reports page could default to showing just one
+  day instead of the whole current year, depending on your department's
+  timezone and the exact time you opened it (most noticeable right around
+  New Year's). It now always defaults to your department's full current
+  year.
+- A grant applications or campaigns link with an old or mistyped status in
+  the URL showed a confusing empty list. It now shows the full unfiltered
+  list instead.
+- For departments with more than 100 grant applications, a status filter
+  on the applications page (including the dashboard's "Active"/"Pending"
+  links) only searched the newest 100 and could miss older matches. It now
+  searches up to the newest 1,000 (departments with more than 1,000
+  applications, or more than 1,000 sharing one status, can still miss
+  older ones — full pagination is tracked as a known limitation).
+- Changing the applications page's status filter again before the previous
+  filter's results had loaded could, in rare timing, leave the page
+  showing results for the filter you'd already changed away from. Fixed.
+- If the applications page's status filter failed to load (a network
+  error), it could keep showing applications from whichever filter was
+  selected before, alongside the error message. It now shows an empty
+  list until the filter loads successfully.
+
+### Admin hours CSV export now recovers from an expired session (2026-08-30)
+
+**Fixed**
+
+- Exporting the admin-hours entries CSV bypassed the app's usual
+  session-refresh handling, so if your session needed a refresh at the exact
+  moment you clicked Export CSV, the export failed with a generic error
+  instead of quietly refreshing and continuing like every other action on
+  the page. It now goes through the same handling as the rest of the app.
+- That same fix moved the export onto the app's standard 30-second request
+  timeout, which could have newly cut off a large department's unfiltered
+  export part-way through. The export no longer has a client-side timeout,
+  matching its previous behavior.
+- A failed export (e.g. a server error) showed a generic error message
+  instead of the specific reason, and lost the support code an
+  administrator could use to look it up — an app-wide gap in how a
+  file-download request decodes an error response, now fixed for every
+  export in the app, not just this one.
+
+### Bulk edits to a saved checklist now save every selected item (2026-08-30)
+
+**Fixed**
+
+- Selecting several items on a saved equipment-check template and applying a
+  bulk action — Set type, or Required/Optional — saved only the last item in
+  the selection. Every row updated on screen and the toast reported the full
+  count, so nothing looked wrong until the template was reloaded and the rest
+  reverted. All selected items are now saved.
+- Editing two different fields of the same item within about a second and a
+  half of each other kept only the field edited second. Both are now saved.
+
+### The equipment check template builder is one canvas (2026-08-30)
+
+**Changed**
+
+- Building an equipment check template no longer spreads the work across a
+  metadata sidebar, a three-step progress strip, a "Template readiness" card
+  and the location list. Sections, locations and items are now rows in a
+  single list, in the order a crew walks them.
+- An item's name, the kind of answer it asks for (Works / Count / Level /
+  Date) and the one number that answer is graded against are edited in the
+  row itself. Description, serial and lot numbers, image, critical minimum
+  and the inventory link moved behind a per-row disclosure, so opening
+  anything is no longer a prerequisite for a complete item.
+- Nesting a location inside another is now an indent button on the row
+  rather than a "Reparent: stored inside" dropdown listing every other
+  location. The dropdown is still available from the row's overflow menu.
+- Adding items is one box per location: type one and press Enter, or paste a
+  whole list and confirm a preview that names every line and lets you set
+  the check type for all of them at once. The separate Quick Add / Bulk
+  Add mode toggle is gone.
+- The reason Publish is unavailable is now a list of the specific things to
+  fix, beside the checklist. Each one says where the problem is and jumps to
+  the row that causes it, opening its location and putting the cursor in the
+  field that is empty.
+- The mobile preview is docked beside the checklist on laptops and tablets
+  and updates as you edit, instead of opening as a modal. On phones it is
+  still a modal, from the Tools menu.
+- Template details — description, timing, template type, who completes it
+  and which apparatus it applies to — moved into a panel opened from the
+  title bar, summarised as chips under the template name.
+- Phones keep the compact rows, the full-height item editor and the search
+  inventory add sheet; the new side-by-side row controls are a laptop and
+  tablet layout.
+- An item row keeps its name, answer type and grading numbers on one line at
+  every laptop width, including a 1280px screen with the side navigation
+  open. The row previously wrapped its controls onto a second line as soon
+  as the preview was docked beside it. Each number stays labelled once it
+  holds a value — "par 4" and "min 2" on a count, "30 days" on an expiry
+  warning — so a saved checklist never shows two adjacent numbers with no
+  way to tell which threshold is which.
+- Tablets and small laptops (below 1440px) now have the same "Before
+  publishing" list as wider screens, in a bar along the bottom of the
+  checklist that opens the list as a sheet. It was previously only reachable
+  by widening the window.
+- The vehicle-layout picker and the "How would you like to start?" card on an
+  empty template now match the rest of the checklist, and the picker replaces
+  that card rather than appearing above it. Each vehicle layout says how many
+  locations and items it brings in before you choose it.
+- On a brand-new template, adding the first location left it collapsed with
+  nowhere to type its items. It now opens ready for them.
+- The checklist preview no longer shows an answer left over from an item that
+  was since deleted, and resets when the questions themselves change.
+
+### Clearing a compliance setting on save now actually clears it (2026-08-30)
+
+**Fixed**
+
+- The compliance requirements configuration page (email report recipients,
+  reminder-days list, a profile's description, its threshold overrides, and
+  its membership-type/requirement selections) previously left the old value
+  in place if you cleared the field and saved — the page showed a success
+  toast, but the save was silently dropped for that field. Clearing and
+  saving now actually clears it.
+- The "Notify members when they become non-compliant" panel is now labelled
+  as not yet active — the setting is saved but nothing sends the
+  notification yet, so the page no longer implies it does.
+- A compliance profile whose officer had unchecked every required training
+  requirement (leaving it with none required) was graded against every
+  active org-wide requirement instead of none, once the fix above let that
+  empty selection actually reach the database — org-wide compliance
+  percentages and per-profile grading could be materially wrong for any
+  group meant to have no required certifications. A profile whose only
+  customization was a lenient or strict compliance-threshold override (with
+  no required-requirement override) also never had that override applied.
+  Both now compute correctly.
+- After clearing "Reminder Days Before Deadline" and saving, the compliance
+  configuration page immediately showed the old "30, 14, 7" suggested value
+  again on reload, even though the database correctly held no reminder
+  schedule. The field now reflects what was actually saved.
+
+### A training-effectiveness evaluation list could briefly cache member feedback (2026-08-29)
+
+**Fixed**
+
+- `GET /training/effectiveness/evaluations` — a member's own submitted
+  Kirkpatrick-model evaluation (or, for officers, every member's) carrying a
+  `user_id` alongside free-text comments, behavior observations, and results
+  notes — could be held in the browser's short-lived response cache for up
+  to 90 seconds, the same PII-caching gap already closed on the training
+  module's other per-member endpoints.
+
+### Direct label printing remembers the right destination and reports the result (2026-08-29)
+
+**Improved**
+
+- Each position now remembers its selected network printer independently for
+  each label-enabled module, falling back to the department default if that
+  printer is no longer available.
+- Direct-print actions name their physical destination, browser printing is
+  labelled separately, and a mismatched configured stock size must be resolved
+  before a network job can be sent.
+- Direct-print results remain on the page, including reported printer faults,
+  warnings, and the distinction between confirmed status and an unconfirmed
+  send.
+
+### Two training-officer dashboards could briefly cache member data (2026-08-29)
+
+**Fixed**
+
+- The department-wide competency heat map and the training dashboard's
+  at-risk/needs-intervention widgets (both show member names alongside
+  compliance status) could each be held in the browser's short-lived
+  response cache for up to 90 seconds, the same gap already closed on the
+  sibling compliance-matrix endpoint.
+- The training-session approval roster (attendee names + emails, opened via
+  an approval link) had the same short-lived caching gap.
+
+### Facility file edits could be silently swallowed, and the delete button was missing for some managers (2026-08-28)
+
+**Fixed**
+
+- Editing a facility photo's caption or a facility document's description no
+  longer uses the browser's native prompt dialog, which some browsers
+  silently block after repeated use — a blocked edit previously looked
+  identical to pressing Cancel, with no error shown.
+- Clearing a facility photo caption or document description to blank now
+  actually clears it, instead of leaving the old value in place.
+- Staff granted the dedicated "delete facility records" permission (without
+  full facility management access) can now see the delete button on
+  facility photos and documents, matching every other facility section.
+
+### Damaged inventory could be marked available, and received reorder stock couldn't be issued (2026-08-28)
+
+**Fixed**
+
+- Completing maintenance work and recording the item's condition as poor,
+  damaged, or out of service no longer allows that item to be returned to
+  service. "Return to service" now requires the item to actually be in
+  good condition — an item logged as damaged stays out of service until a
+  later inspection records a safe condition.
+- Two quartermasters acting on the same member-submitted return request at
+  the same time (one denying it, one physically receiving it) could
+  overwrite each other's decision. Reviewing a return request is now
+  serialized so only one outcome is ever recorded.
+- Stock recorded through the new reorder-receiving workflow now actually
+  becomes available to issue. Previously, receiving stock created a
+  purchase record but never updated the item's on-hand count, so newly
+  received units could not be checked out or issued to members.
+- The return-request review screen no longer carries a safety follow-up
+  choice (e.g. "send to write-off review") over from one reviewed request
+  to the next. A follow-up selected for a damaged item no longer applies
+  itself to the next request reviewed, even if that item was in good
+  condition.
+- Removed the "Transfer is immediate" checkbox from the item-transfer
+  screen — custody transfers have always taken effect immediately, and the
+  checkbox implied a deferred option that did not exist.
+- Custody-transfer audit log entries now record who performed the
+  transfer.
+
+### A facility's files were readable by the whole department through the Documents module (2026-08-27)
+
+**Fixed**
+
+- The Facility detail Files section stores each uploaded file in the shared
+  Documents module and keeps only a reference on the facility record. The
+  facility record is restricted to members holding "view sensitive facility
+  data", facility edit, or facility management — but the stored file was not.
+  Uploads landed outside any folder, and a file in no folder is treated as
+  organization-wide, so anyone who could open the Documents module could list
+  and download a facility's insurance policies, lease documents, capital
+  project files and inspection paperwork. The restriction on the record was
+  real; the file it pointed at was not covered by it.
+- Facility file folders are now restricted to the same three grants, and a
+  newly uploaded facility file is filed into its facility's folder as soon as
+  it is attached. Departments already using the Files section have their
+  existing facility folders corrected automatically on upgrade.
+- A documents administrator no longer sees facility files by virtue of that
+  role alone. Access to a facility's files now requires a facilities grant,
+  which is what the facility screens have always required.
+
+### Two people opening a facility's file tab for the first time at the same moment could get duplicate folders (2026-08-27)
+
+**Fixed**
+
+- The first time anyone opened a facility's Files tab, the app created that
+  facility's folder structure automatically. If two people did this within
+  the same moment (e.g. two officers opening the same new facility right
+  after it was added), both could end up creating a duplicate set of
+  folders instead of sharing one. This is now prevented.
+
+### Transferring a prospect to full membership could grant more access than the transferring member had, and a double-click could create two accounts for one prospect (2026-08-27)
+
+**Fixed**
+
+- Converting a prospective member into a full member could assign that new
+  account a role carrying more permissions than the staff member doing the
+  conversion actually had, including a role that controls the whole
+  organization — the same safeguard already applied when creating a member
+  directly now also applies when converting one from the prospect pipeline.
+- Two transfer requests submitted for the same prospect at nearly the same
+  time (e.g. a double-click, or two coordinators acting at once) could each
+  create a separate member account for that one prospect. The transfer now
+  serializes so only one account is ever created.
+
+### Creating a new member was completely broken, and a member's rank/class safeguard had three gaps (2026-08-27)
+
+**Fixed**
+
+- Creating a new member failed every time with a server error. Restoring
+  the account's password, initial roles, welcome-email option, mailing
+  address, and emergency contacts to the create-member form fixed it.
+- The safeguard that keeps an administrative member from also holding an
+  operational rank (which would carry chain-of-command permissions that
+  role isn't meant to have) had three gaps: the automatic, scheduled
+  tier-advancement process wasn't covered by it at all; a member updating
+  their own record could, in rare timing, still slip past it; and
+  clearing a member's classification back to the default while assigning
+  a rank in the same save was incorrectly rejected. All three are closed.
+
+### A voter with a stale browser session could be blocked from voting, and a recalculated quorum could read a stale attendee count (2026-08-27)
+
+**Fixed**
+
+- A member who received a ballot link by email, but who also had an
+  unrelated, expired or ended session from previously using the app in the
+  same browser, could be blocked from opening or voting on the ballot
+  entirely. The ballot link no longer requires a valid active session.
+- After changing a meeting's quorum settings, the quorum recount that runs
+  immediately afterward could occasionally use an out-of-date attendee
+  count from just before the change, rather than the current one.
+- A ballot-builder option was mislabeled as including probationary and
+  life members when it did not; an admin relying on the label could have
+  unintentionally left those members off a ballot meant to include them.
+  The label now correctly describes who the option reaches.
+
+### Two approvers acting at the same moment could double-charge a budget, and a budget's cap could be quietly bypassed (2026-08-27)
+
+**Fixed**
+
+- Approving or denying a purchase/expense/check-request approval step didn't
+  lock the step record while checking it was still pending. Two authorized
+  approvers acting on the same step within the same moment could both pass
+  that check and both finalize it — encumbering the associated budget twice
+  for what was really a single approval.
+- A multi-step approval chain (e.g. Supervisor, then Treasurer, then Chief)
+  didn't enforce that steps be acted on in order. A later reviewer — an
+  internal user, or an external emailed approver, who could each act at any
+  time — could approve or deny their step before earlier reviewers acted.
+  A denial finalizes the whole request immediately, so an out-of-order
+  denial could kill a request before earlier reviewers ever weighed in.
+  Approving or denying a step now requires that every earlier step in the
+  chain has already been resolved.
+- A chain that starts with an informational notice step (or has one
+  following only auto-approved steps) could get permanently stuck: the
+  notice was never marked sent until the first real approval, but nothing
+  could be approved until the notice was marked sent. Chains like this now
+  activate correctly from the start.
+- Every external approver's email invite/link was sent — and its one-week
+  expiry started — the moment a request was submitted, even for approvers
+  several steps down the chain. If earlier steps took a while to resolve,
+  a later approver's link could expire before it was ever their turn, with
+  no way to get a new one. Invites (and their expiry) now go out only once
+  it's actually that approver's turn.
+- A misconfigured approval chain with two steps at the same position could,
+  on some database configurations, cause the wrong one to be treated as
+  "current," blocking the step actually shown as actionable. Fixed to
+  consistently agree with what's shown as actionable.
+- Editing a budget's total amount didn't check it against what was already
+  spent or committed against that budget. A budget could be reduced below
+  its already-committed total and the reduction would be accepted, silently
+  breaking the guarantee that a budget's spending never exceeds its cap.
+- Updating a dues schedule's grace period would fail every time due to a
+  copy-paste error in field validation.
+- Requesting a finance export with a date range that mixed a plain date and
+  a fully-specified (timezone-included) date could crash instead of showing
+  a normal validation error.
+- One expense-report form still converted dollar amounts through
+  floating-point math when submitting, unlike the rest of the finance
+  module's forms, which could very rarely round a line-item amount
+  incorrectly.
+
+### Two paths could hand out permissions beyond what the requester held (2026-08-27)
+
+**Fixed**
+
+- Transferring a prospective member to full membership set their rank from
+  the request without checking whether the person doing the transfer held
+  that rank's permissions themselves — someone with only member-management
+  access could have transferred a prospect in at a chief-level rank and
+  granted them (or an account they controlled) admin-level permissions.
+  Transferring a prospect now goes through the same permission check as
+  creating a member directly.
+- Renaming an operational rank's code (e.g. correcting a typo or relabeling
+  it) moved every member who held that rank to the new code with no similar
+  check — renaming a rank to match a built-in senior rank's code would have
+  granted that rank's permissions to everyone who held the old one. Renaming
+  a rank to a name that grants more than the person renaming it holds
+  themselves is now blocked the same way; renaming to an ordinary custom
+  name is unaffected.
+
+### Testing runs, exports and permission checking (2026-08-27)
+
+**Added**
+
+- The testing checklist now works in **runs** — one named pass over the app,
+  e.g. "Pre-launch, build 1.4". Starting a new run archives the one before it:
+  its marks stay readable and exportable from the run picker instead of being
+  cleared away. The first mark opens a run on its own.
+- **Every mark is checked against what the app expected.** A refusal that
+  happened as predicted is counted as a gate verified; a page that opened for
+  an account that should have been refused is flagged where the mark was made,
+  counted in the header, and listed in the printed report as a permissions
+  defect.
+- Marks record the build they were made against, so after a deployment the ones
+  made on an earlier build are marked and can be filtered with **Needs
+  re-test**.
+- **Exports for reporting:** a CSV of every mark, a page-by-tester permission
+  matrix, a printable report (coverage, failures with notes, gate mismatches,
+  coverage by area) for saving as PDF, and the existing Markdown.
+- **Keyboard marking:** `j`/`k` to move between boxes, `p`/`f`/`b` to mark the
+  focused one, `n` to jump to the next page with no mark.
+
+### The testing checklist is now a module you can switch off (2026-08-27)
+
+**Changed**
+
+- The Testing Home at `/testing` — the page listing every screen in the app so
+  a department can walk them before going live — is now a module of its own,
+  and it is **off by default**. A department that was using it will find it
+  gone after this upgrade until an administrator turns **Testing Checklist**
+  back on under Settings → Modules. Nothing recorded is lost: marks and notes
+  stay in place and reappear when the module is switched on again.
+- While the module is off, the navigation entry, the page and the data behind
+  it all refuse — the same way every other switched-off module behaves.
+- The module is not offered during first-time setup. It is a tool for checking
+  an installation, not a decision a department needs to make while making
+  every other one.
+
+### A few training-related pages could briefly cache data they shouldn't (2026-08-27)
+
+**Fixed**
+
+- A training cohort's roster (names and emails), a program's per-member
+  enrollment-eligibility list, and an external training provider's internal
+  member mappings could each be held in the browser's short-lived response
+  cache for up to 90 seconds, instead of being excluded like other
+  member-identifying data.
+- A form-management page and a raw analytics-export download had the same
+  gap; a grants/fundraising list had a related gap that wasn't currently
+  reachable but is now closed as a precaution.
+- A shift-attendance lookup that failed for any reason (not just "no record
+  yet") was silently treated as "not checked in," which could hide a real
+  network or server problem from the person viewing it.
+
+### A logo-upload failure during setup could echo internal error details (2026-08-27)
+
+**Fixed**
+
+- If a logo image uploaded during first-time setup failed to process for an
+  unexpected reason, the error message shown could include raw internal
+  detail instead of a generic message — a follow-up finding from the
+  monitoring pass on the fixes below.
+
+### Security monitoring for session hijacking and data exfiltration was never actually running (2026-08-27)
+
+**Fixed**
+
+- A background security-monitoring check meant to detect session hijacking
+  and unusual bulk data downloads never ran, for any request, due to a
+  timing and naming bug — it looked for the signed-in user before the
+  request had been authenticated, under an attribute name nothing ever set.
+  Both checks now run correctly.
+- Rate limiting on the once-an-hour data-export endpoint could be reset
+  early by unrelated traffic in the fallback used during a Redis outage,
+  letting the hourly limit be worked around by spacing requests out.
+- A total database-connection failure at startup could include the
+  database password in the error message reaching logs/monitoring, on a
+  different code path than a similar issue fixed previously.
+- Three configuration checks that previously failed silently now warn at
+  startup instead: an unsupported JWT signing algorithm (previously only
+  caught an exact "none" value), a bot-challenge feature turned on without
+  its required secret key, and a dedicated audit-log signing key being
+  left unset.
+- An overly broad trusted-proxy network range (letting a client spoof
+  their IP address) is now flagged at startup instead of accepted silently.
+- A request-tracing ID supplied by the client was previously trusted and
+  echoed back verbatim into logs and a response header without validation;
+  it's now validated against the expected format first.
+
+### Administration dashboard settings could show a protected metric's name to the wrong admin, or fail to save under a race (2026-08-27)
+
+**Fixed**
+
+- If a stored dashboard-metric selection had fewer than three usable
+  entries (for example, an admin's chosen metric became permission-gated
+  or its module was turned off), the automatic fallback that fills the
+  remaining slots from the module's defaults could pick a metric the
+  viewing admin does not have permission to see. The metric's number
+  stayed hidden, but its name could still appear on the card.
+- Saving administration dashboard settings for the first time could fail
+  with a server error if two admins (or one admin double-submitting)
+  saved the same module's settings at nearly the same moment, instead of
+  the second save simply applying on top of the first.
+- One dashboard metric (event attendance rate, last 90 days) relied on an
+  assumption that was not independently verified in the query itself; the
+  query has been made independently self-checking as defense in depth.
+
+### Several background tasks could silently skip work, re-send old messages, or stop partway through (2026-08-27)
+
+**Fixed**
+
+- A cancelled shift still generated a "please review the attendance
+  records" email to its officer, because the check that finds
+  ended-shifts-to-review never excluded cancelled ones.
+- Some shift and end-of-shift reminders could be permanently silenced if
+  the shift had no crew, apparatus, or checklist assigned yet at the
+  moment the reminder task ran — even after one was assigned later, the
+  reminder never went out.
+- End-of-shift checklist reminders were still sent to members who had
+  since been deactivated.
+- A single failing item partway through a batch of inventory
+  notifications or scheduled emails could cause every later item in that
+  batch to fail for an unrelated reason, and in the worst case could
+  cause already-sent emails to be re-sent on the next run.
+- Nightly cleanup of expired records (old messages, error logs, form
+  submissions, etc.) had no error isolation between organizations, so one
+  organization's failure could abort the run for every organization
+  after it, and successful deletions were not recorded anywhere.
+- A background sync task could keep contacting whatever address was
+  configured for a connected Salesforce integration without re-validating
+  it, once a connection had already been established.
+- Three background tasks (compliance reports, external training sync,
+  Salesforce sync) and the officer-directory sync task did not correctly
+  skip organizations marked inactive, unlike every comparable task in the
+  same file.
+
+### First-time setup had a few unbounded requests and inconsistent safeguards (2026-08-27)
+
+**Fixed**
+
+- The initial setup wizard's IT-team, roles, and positions steps had no
+  limit on how many entries a single request could submit, unlike every
+  other list in setup — a very large submission could tie up the server
+  hashing passwords or creating roles for far more entries than any real
+  department would ever have.
+- Six of setup's save steps (department info, email, file storage, auth,
+  IT team, module selection) could still be replayed after setup finished,
+  unlike the rest of the wizard's steps, letting an old browser tab keep
+  rewriting the saved (but no longer used) setup data indefinitely.
+- Retrying a failed test-email or reset attempt during setup a few times
+  could lock the whole setup process (including creating the first admin
+  account) for 30 minutes, because unrelated setup requests shared one
+  rate limit.
+- Editing a saved meeting-minutes template relied entirely on the request
+  never containing fields it shouldn't (organization or ownership) rather
+  than actively rejecting them — no live issue, but fragile against a
+  future change.
+
+### Several reporting and dashboard figures were counted inconsistently, and a malformed report filter could return a server error (2026-08-27)
+
+**Fixed**
+
+- A custom report filter with an unexpected shape (an advanced pipeline
+  report grouping option) could return a generic server error instead of
+  falling back to the report's saved configuration.
+- Requesting attendance metrics for a single event still included every
+  other event's data in one of the reported averages.
+- The secretary's attendance dashboard now double-checks that a meeting
+  attendance record belongs to the requesting department, matching every
+  other aggregate in the dashboard.
+- The community-engagement dashboard counted every outside visitor ever
+  logged, instead of only those from public events who actually checked
+  in — inflating the figure next to it, which was already scoped
+  correctly.
+- Generating or printing barcode labels for prospective members or
+  current members is now recorded in the audit trail, matching every
+  other read of that kind of information.
+
+**Flagged for a future decision**
+
+- A saved report can be marked "scheduled" with an email delivery list,
+  but nothing currently generates or sends it on that schedule. The API
+  now reports that a schedule isn't actually in effect, for whenever a
+  saved-reports screen is built (none exists in the app today). See
+  `docs/KNOWN_LIMITATIONS.md`.
+
+### A denied role assignment during member creation could leave behind a live, unauthorized account (2026-08-27)
+
+**Fixed**
+
+- Creating a new member with roles the creator wasn't allowed to grant
+  correctly showed an error and blocked the request — but could silently
+  leave behind a real, active account with a working password and no
+  roles at all, because the account had already been saved to the
+  database before the permission check ran. Member creation now checks
+  role permissions before the account is created, so a denied request
+  leaves nothing behind.
+- The audit trail's tamper-detection didn't cover a log entry's category
+  or severity level, so someone with direct database access could have
+  quietly downgraded a critical security incident to a routine one
+  without leaving any trace of the change.
+- The blocked-access-attempts report was always empty — blocked requests
+  were being recorded to the audit log but never to the report itself,
+  so an admin checking for attack patterns would see nothing regardless
+  of how much traffic had actually been blocked.
+- Blocking a country that had previously been blocked and then unblocked
+  failed with a generic server error instead of succeeding.
+
+### Editing a form, form field, or form integration could turn a cleared field into a confusing server error (2026-08-27)
+
+**Fixed**
+
+- Clearing certain required fields while editing a form, one of its fields,
+  or a cross-module integration (e.g. equipment assignment, event
+  registration) returned a generic error instead of a clear message
+  explaining which field couldn't be empty.
+
+### An already-sent department message could go out a second time; email headers weren't fully sanitized (2026-08-27)
+
+**Fixed**
+
+- Rescheduling an already-sent department message to a time in the past
+  (rather than the future, which was already blocked) could make the
+  background delivery task treat it as newly due and send it out again —
+  a duplicate in-app notification, a duplicate email, and, for an urgent
+  message, a duplicate text to everyone it was targeted at.
+- A notification rule's description or configuration couldn't actually be
+  cleared through the update endpoint — the request appeared to succeed
+  but the old value silently remained.
+- The shared email-sending layer sanitized the Subject line and sender
+  name against header-injection characters but not the To, Cc, Reply-To,
+  or unsubscribe-link fields, and one settings field that feeds a Cc
+  address wasn't validated as an email address at all before reaching it.
+- Large email attachments sent to many recipients at once (e.g. a
+  generated election package sent to the full voter roster) had no size
+  limit and could consume a large amount of memory; a connection failure
+  partway through such a send could also crash the whole batch instead of
+  reporting which messages went out.
+- An internal cache used to remember an email's color scheme grew by one
+  entry for every email ever sent, with nothing ever clearing it out —
+  a slow, unbounded memory leak in any long-running server process.
+
+### A secretary could submit and approve their own meeting minutes; a foreign member could be assigned an action item (2026-08-27)
+
+**Fixed**
+
+- The same person could submit meeting minutes for approval and then
+  approve their own submission, with no second person involved — the
+  same self-certification gap already closed for finance requests,
+  skills tests, and admin hours. Approving minutes now requires someone
+  other than whoever submitted them.
+- Reassigning an action item on a meeting or a set of minutes to a
+  different owner didn't check that owner belonged to the same
+  department, unlike creating a new action item, which already did.
+- Editing a meeting, meeting minutes, a motion, or an action item and
+  clearing certain required fields could produce a generic server error
+  instead of a clear message. Clearing a meeting's notes or location
+  (which are optional) previously did nothing at all — the old value
+  silently stuck around.
+- Two coordinators bridging the same calendar event into meeting minutes
+  at the same time could both succeed, leaving two duplicate draft
+  minutes for one meeting. Two check-ins recalculating a meeting's
+  quorum at the same time could similarly overwrite each other's count.
+- Adding, editing, or deleting a motion or an action item on a set of
+  minutes, and changing a meeting's quorum override, left no record of
+  who made the change — every other edit to minutes already did.
+
+### Editing a medical supply, item, or category could turn a cleared field into a server error instead of a clear message (2026-08-27)
+
+**Fixed**
+
+- Clearing certain required fields while editing an inventory category, an
+  inventory item, or a stock lot (from either the medical supplies page or
+  the general inventory pages) could produce a generic server error instead
+  of telling the person what went wrong. Stock lot edits in particular could
+  fail with no error message at all. All three now report a clear,
+  specific message.
+
+### Deleting a grant opportunity could silently wipe out every application ever linked to it (2026-08-27)
+
+**Fixed**
+
+- Deleting a grant opportunity that still had applications attached either
+  crashed or, worse, silently deleted every one of those applications —
+  including their budget items, expenditures, compliance tasks, and notes.
+  An application is supposed to survive its opportunity being removed (it
+  may have started as a manual entry); it now does, with its opportunity
+  link simply cleared.
+- Moving a grant application from Awarded back to Active and then back to
+  Awarded duplicated the whole set of auto-generated compliance tasks
+  (progress reports, closeout report, equipment inventory) a second time.
+  Re-awarding a grant no longer regenerates tasks that already exist.
+- Two donations to the same campaign, or two expenditures against the same
+  budget line, recorded or edited at nearly the same moment, could each
+  read a stale running total and one could silently overwrite the other's
+  contribution. Both totals now serialize correctly under concurrent
+  writes.
+- A handful of grant/fundraising update actions (editing an opportunity,
+  application, budget item, expenditure, compliance task, campaign, donor,
+  donation, pledge, or fundraising event) could turn an attempt to clear an
+  optional field into an unhandled server error instead of a clean
+  validation message.
+- A couple of internal lookups (resolving a note's author name, and the
+  budget-item total recompute) were missing the department filter every
+  other query in this module already carries — closed for consistency,
+  though neither was reachable from outside the department in practice.
+
+### An officer with compliance access could look up any member's admin-hours progress, in any department (2026-08-27)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` restricted ordinary members to
+  their own id, but an officer holding compliance access could pass any
+  member's id — including one from a different department on the same
+  server — and get back that member's role/position data used to pick a
+  compliance profile. Now scoped to the officer's own department.
+- Two admin-hours entries clocked in at the same moment (a double-tap, or
+  two open tabs) could both succeed, leaving a member with two simultaneous
+  active sessions and no clean way to clock out of either. Clock-in now
+  serializes per member so only one can win.
+- An officer editing a still-pending admin-hours entry could set times that
+  span more than 24 hours, land in the future, or overlap another entry for
+  the same member — all guards the original entry already enforced, just
+  not re-checked on edit.
+- Two officers creating or updating event-to-admin-hours mappings for the
+  same event type at the same time could push the combined percentage over
+  100%, double-crediting part of an event's duration.
+- A malformed date on four admin-hours report/export endpoints crashed with
+  a server error instead of a clean "invalid date" message.
+- A few remaining internal admin-hours queries added since the last review
+  were missing the department filter every other query in the module
+  already carries — closed for consistency, though none were reachable
+  from outside the department in practice.
+
+### A compliance officer's "what's missing" report silently stopped at the newest 500 records (2026-08-26)
+
+**Fixed**
+
+- `GET /incomplete-records` fetched only the 500 most-recently-completed
+  training records, then filtered for missing fields in Python and stopped
+  once it found enough. For any department with more than 500 completed
+  records, an incomplete one older than that window was permanently
+  invisible with no signal the scan wasn't complete. The missing-field check
+  now runs in SQL, so the result covers the whole organization.
+- `update_compliance_config` and `update_compliance_profile` discarded an
+  explicit `null` before it ever reached the database, so a profile's
+  threshold override (documented as "null = use org default") could never
+  actually be reset — only overwritten with another number. Both now
+  distinguish an omitted field (leave alone) from an explicit null (clear
+  it), and reject a null against a field that can't be empty with a clean
+  error instead of a database crash.
+- Two concurrent first-time saves of an organization's compliance
+  configuration could crash one of them with a raw database error instead of
+  a clean "already exists" message.
+- A department's total-hours report could silently drop a member's hours if
+  their id were ever loaded as a different data type than usual — hardened
+  to match the fix already in place for the ISO-readiness report.
+
+### A skills-testing officer could void or return their own result, and the attempt cap could race (2026-08-26)
+
+**Fixed**
+
+- `void_test` and `return_test_for_correction` had no separation-of-duties
+  check, unlike their siblings `create_test` and `validate_test`. An
+  officer-candidate could void their own unfavorable official result out of
+  the pass-rate and average-score totals, or repeatedly return their own
+  pending submission for unlimited free redo cycles with no attempt spent.
+  Both now enforce the same `assert_different_person` check as
+  `validate_test`.
+- `assert_attempts_remaining`'s `max_attempts` cap counted validated tests
+  with a plain `SELECT` and no row lock, so two officers validating
+  different pending tests for the same candidate and requirement at the same
+  moment could both read the count as under the cap before either commits.
+  Fixed with a `FOR UPDATE` lock on the candidate's `RequirementProgress`
+  row plus a locking read on the count itself — a lock elsewhere does not
+  refresh an already-open transaction's snapshot.
+- `update_template` applied its payload with a blind `setattr` loop; an
+  explicit `null` against `name`, `sections`, or `score_pass_fail_criteria`
+  (all NOT NULL) raised an unhandled `IntegrityError` instead of a clean 400. Now routes through `apply_updates`.
+
+### The chief was missing from every notification meant to include them (2026-08-26)
+
+**Fixed**
+
+- **Role groups named position slugs no department is ever given.**
+  `LEADERSHIP_ROLE_SLUGS`, `ADMIN_NOTIFY_ROLE_SLUGS` and
+  `TRAINING_OFFICER_ROLE_SLUGS` are matched against `Position.slug`, and every
+  one of them named `"chief"`. The seeded chief's slug is `fire_chief`. So the
+  chief was silently absent from election rollback and deletion alerts, member
+  drop and auto-archive notices, the overdue-property report, and the store's
+  admin heads-up — and the election path reported a recipient count to whoever
+  rolled the election back that quietly excluded them. `"admin"`, which two of
+  the lists also named, has never been a position at all.
+
+  The groups now name **office keys**, expanded through `OFFICE_CATALOG` by a
+  new `position_slugs_for_offices`. That catalog's chief entry already knew
+  `fire_chief` and `chief` were one office; nothing else did. Expanding rather
+  than replacing matters: `chief` stays reachable, because an admin who names a
+  custom position "Chief" gets exactly that slug from `slugify` — which is why
+  this worked on some installations and not others, and so was never reported.
+  `"admin"` becomes `it_manager`, the System Owner position that actually
+  carries the authority these groups reach for.
+
+- **An officer check that could never be true.** `training_module_config`
+  compared `TRAINING_OFFICER_ROLE_SLUGS` against `Position.name` — the seeded
+  names are "Training Officer" and "Fire Chief" — so `is_officer` was
+  unconditionally `False` on every installation. A training officer opening
+  their own training page got the plain member's visibility policy: their own
+  history, hours and narrative hidden from them. Two independent defects in one
+  expression, both closed.
+
+- **`ROLE_CHIEF` is gone.** It was `"chief"`, a single slug. No single slug
+  answers "the chief", so the replacement is `CHIEF_POSITION_SLUGS`. Its
+  sharpest call site was `cert_alert_service`: an admin turning on "CC the chief
+  on escalation" got a toggle that could not do anything.
+
+- **Leadership members were emailed once per position held.**
+  `_notify_leadership` joined `User.roles` without `distinct`, so a member
+  holding `president` and the auto-assigned `member` came back twice — emailed
+  twice, and counted twice in the "N leadership members have been notified"
+  message. Pre-existing, and fixed here because making the chief match would
+  have added them to it. The join bought nothing: the positions were already
+  eager-loaded and the filter runs in Python.
+
+- **An EMS-only service was offered a fire department's apparatus.** The
+  scheduling defaults seated engine, ladder, tanker, brush, tower and hazmat for
+  every organization, and the settings panel unioned its own hardcoded copy of
+  that list over whatever the server sent — so those six were shown regardless,
+  with no control to remove them. They are now withheld from an EMS-only
+  agency, which keeps ambulance, rescue, boat, chief and utility. **Nothing is
+  invented**: no new apparatus type, no new staffing number.
+
+  The vehicle picker's fallback (`GET /scheduling/apparatus-options`) carried a
+  _second_ copy of the same eleven strings. `DEFAULT_APPARATUS_TYPES` is deleted
+  and the fallback reads the staffing templates directly — otherwise one of the
+  two would have been made agency-aware and the other not, and a new EMS
+  department would still have been offered Engine and Ladder as its entire
+  picker.
+
+**Scope**
+
+- **The scheduling change reaches existing organizations immediately.** Unlike
+  the rank and position seeds, nothing writes these defaults to a row —
+  `get_settings` reads the built-ins live on every request and folds a stored
+  row over them, and a row exists only once an admin has saved the panel. So
+  every organization that has never saved sees this on deploy; one that has
+  saved keeps what it saved. Templates already built are unaffected, because
+  their seats were copied at creation.
+- **Crew seats are untouched.** `"firefighter"` inside an apparatus default is a
+  `ShiftPosition` — a seat on a rig, a different namespace from rank codes and
+  position slugs — persisted verbatim into three untyped JSON columns and
+  cross-referenced by every organization's `eligible_positions`. Renaming one
+  would orphan those rows the way the `EMT`/`ems` divergence did, and would buy
+  nothing: an EMT is already eligible for a `firefighter` seat.
+- **Offline still shows the full set.** The frontend keeps the complete
+  fire-shaped copy as its offline and cold-cache fallback, because the browser
+  has no notion of the organization's agency type; the narrowing happens
+  server-side, where it is known.
+- **`compliance_officer` still resolves to nobody**, and `assistant_training_officer`
+  with it. Both are fallbacks behind `cert_alert_config`, which a department
+  fills in with its own slugs, so naming a position it may reasonably have
+  invented is the point. Recorded in `tests/test_role_group_slugs.py` as an
+  explicit exemption rather than left to be rediscovered.
+
+`tests/test_role_group_slugs.py` asserts every slug a role group produces is one
+a department can actually hold, and `tests/test_shift_settings_parity.py` closes
+the "kept in lockstep with the frontend" comment that nothing had been enforcing.
+
+### An EMS-only agency was seeded a fire department's positions (2026-08-26)
+
+**Fixed**
+
+- **Positions now follow the agency, as ranks already did.** `_create_default_roles`
+  wrote all 28 `DEFAULT_POSITIONS` to every organization regardless of
+  `organization_type`, so an EMS-only service was handed a **Firefighter**
+  position it can never fill, and read "Chief" in its rank list beside "Fire
+  Chief" in the position list. Positions are the primary source of permissions,
+  so this was the half of the vocabulary that mattered more — and the gap the
+  rank change had recorded in this file rather than closed.
+
+  An EMS-only service is now seeded no Firefighter, a Chief rather than a Fire
+  Chief, and a Driver / Operator rather than an Engineer. **Slugs are
+  untouched** — `fire_chief` still keys the permission registry, the office
+  catalog and the shift-eligibility fallback, so it must mean the same thing for
+  every agency. Only the selection and the wording vary.
+
+- **The onboarding wizard follows too, because otherwise the fix is cosmetic.**
+  `RoleSetup.tsx` carries its own copy of the position list and never fetches
+  one, and `save_session_roles` _creates_ a system position for any id it does
+  not already know. So a wizard that kept offering Firefighter to an EMS
+  department would put back the exact row the seed left out — with grants built
+  from two checkboxes instead of from `DEFAULT_POSITIONS`, because the create
+  branch does not apply `_merge_default_permissions`. The restored
+  `positionsConfig` goes through the same filter for the same reason: it is read
+  from `localStorage` and can predate this change.
+
+  The wizard's half of the rule lives in `config/agencyPositions.ts` rather than
+  in the screen, so the contract test that keeps the two languages honest —
+  `test_onboarding_position_template_parity.py`, which reads it as text — has a
+  small stable file to read instead of a 1,100-line component. It asserts both
+  directions: the wizard never offers a discipline position the backend declined
+  to seed, and it renames exactly what the backend renames.
+
+**Changed**
+
+- **One selection rule for ranks and positions**, in `core.permissions` beside
+  both registries: `DISCIPLINE_CODES_BY_ORG_TYPE`, `is_seeded_for` and
+  `label_for`. `default_ranks_for` was rewritten onto it and
+  `_COMMAND_RANK_CODES`, `RANK_CODES_BY_ORG_TYPE` and `RANK_LABELS_BY_ORG_TYPE`
+  are gone. Two copies of "an EMS-only agency calls this Chief" is the drift
+  this branch has spent its life deleting.
+
+  **Only disciplines are enumerated**, so officer rungs are universal by
+  construction. That also closes a hazard the review of the rank change flagged:
+  a rung added to `DEFAULT_RANKS` and left out of `_COMMAND_RANK_CODES` used to
+  be dropped from every seed silently. The failure direction is now the
+  recoverable one — a code nobody classifies reaches every agency — and the
+  golden sets in `tests/test_agency_position_seeding.py` are what force the
+  classification.
+
+- `_create_default_roles` takes the agency type as a **required** argument, so a
+  second caller has to decide rather than inherit a fire department by omission.
+  `RoleManagementService.initialize_default_roles` — uncalled, and previously
+  agency-blind — requires it too: an unwired seeder that hands every agency a
+  fire ladder is how this comes back. `core/seed.py` routes through
+  `default_positions_for("fire_department")`, the agency it builds.
+
+- The frontend's `OrganizationType` union is defined once, in the onboarding
+  store, rather than re-declared per screen. `test_enum_consistency.py` now
+  scans `.ts` as well as `.tsx` to find it — globbing `.tsx` alone had made "the
+  frontend does not define this type" and "it is defined somewhere sensible"
+  indistinguishable.
+
+- The onboarding status record keeps the **coerced** agency type.
+  `create_organization` silently falls back to `fire_department` for a type it
+  does not recognise, but the status row kept the raw argument — two answers to
+  the same question, and the status row is what a resumed wizard reads back.
+
+- Seeded positions no longer persist the registry's list **by reference**. The
+  seven rank-mirroring entries alias the rank registry's list object (pitfall
+  #23), so the row held a module constant behind a database column, one in-place
+  edit away from rewriting every other department's seed for the life of the
+  process.
+
+**Scope**
+
+- **New organizations only; no migration.** The seed runs once inside
+  `create_organization`, which rejects a second organization. An EMS service
+  already onboarded keeps the positions it was given — members are assigned to
+  those rows, and renaming or deleting one rewrites their record.
+- **Discipline positions confer nothing either way.** The auto-assigned `member`
+  position is a strict superset of the `firefighter` position's grants (18 vs
+  17, adding `equipment_check.submit`), so dropping Firefighter for an EMS
+  agency costs no permissions, and the asymmetry — fire keeps a discipline
+  position, EMS has none — is a naming matter, not an access one. The symmetric
+  alternative is a `DEFAULT_POSITIONS["emt"]` entry aliasing the EMT rank's
+  list; it is deliberately not added here, since it would seed a row that grants
+  strictly less than one every member already holds.
+- **`ems_supply_officer` stays universal.** Most fire departments run EMS, and
+  withholding it would be the mirror of the bug this closes.
+- **`DEFAULT_RANK_LABELS`** in `shift_eligibility_service` is still built from
+  the unfiltered `DEFAULT_RANKS` — deliberately, so a code with no stored row
+  still resolves — so an ineligibility message can still say "Fire Chief" to an
+  EMS agency that deleted that rank. Cosmetic, and left alone rather than made
+  agency-aware, because that map exists precisely to answer for codes the
+  organization was never seeded.
+- **`scripts/seed_test_users.py`** keeps its own hand-written position list,
+  which had already drifted from the registry before this change. It is a dev
+  fixture, not a source of truth.
+
+### The medic seat nobody could fill, three source badges that looked identical, and a writer for member qualifications (2026-08-26)
+
+**Fixed**
+
+- **A Paramedic could not fill the Paramedic seat.** The medic seat was added
+  to `ShiftPosition` while the Paramedic qualification still cleared only
+  `ems`, so the seat could be put on a shift and nothing cleared anybody for
+  it — the unfillable-seat failure of #1833 from the member's side.
+  `test_qualification_service.py` guarded the forward direction (every seat a
+  qualification grants is one the API can name) but not the reverse; it now
+  asserts every seat is reachable from a rank or a qualification, so a seat
+  cannot again exist with nothing granting it.
+- **Three eligibility sources rendered as the same badge.** The roster emits
+  `rank`, `position`, `qualification`, `training` and `open`, and the page had
+  styles for only three. `position` and `qualification` both fell back to the
+  rank badge's icon and colour, so a Lieutenant who also held the Lieutenant
+  position and an EMT card showed three identical violet chips. Each source
+  now has its own icon and colour.
+- The roster listed a member's rank twice. Onboarding gives
+  every member the system position mirroring their rank, and rank codes
+  share a slug vocabulary with position slugs, so a Lieutenant resolved
+  "lieutenant" on both the rank and held-position branches and each emitted
+  a badge. The frontend had no style for the held-position source, so it
+  fell back to the rank badge's icon and colour and the two were
+  indistinguishable. The roster now credits each slug once, and a genuine
+  held position renders distinctly. A qualification held independently of
+  rank — a Lieutenant who is also an EMT — still reports both.
+
+**Added**
+
+- **Completing a course now grants the qualification it certifies.**
+  `member_qualifications` is read by shift eligibility and had nothing writing
+  to it: a training officer recorded the class that happened, then had to grant
+  the qualification again on a different screen, and the second entry is the
+  one that gets forgotten — leaving a member certified on paper and
+  unqualified in the scheduler. `training_courses.grants_qualification` names
+  the code a course certifies, and `TrainingRecord` — which already carries the
+  completion date, the expiry, the certificate number and the issuing agency —
+  becomes the single place the fact is entered. Wired into all five paths that
+  write a training record, including CSV and historical import.
+
+  Backfilling an old class never pulls a live card's expiry backwards, so
+  importing history adds records without lapsing the certification a member is
+  actually working under. Set it per course under Training → Course Library
+  ("Certifies"); until a training officer does, completing a course grants
+  nothing and eligibility behaves exactly as before.
+
+- A qualification on the roster now carries the date it lapses, and turns amber
+  inside 60 days. The roster answers as of today, so without the date a card
+  expiring next week reads exactly like one good for another five years.
+- **Paramedic is a shift position distinct from EMT.** Both previously
+  collapsed into one `ems` bucket, so a department staffing an ALS unit
+  could not say a medic was required, and "was a paramedic, still an EMT"
+  was not a state the system could represent. This is the counterpart to the
+  EMT seat fix below: `EMT` and `EMS` really are one seat and now settle onto
+  one token, while a medic is a genuinely different seat and gets its own.
+  `paramedic` joins `CANONICAL_POSITIONS` and `ShiftPosition` together, so the
+  vocabularies stay the identical set `tests/test_position_slots.py` asserts,
+  and `20260826_1400_e2c8f5a71d40` folds a stored custom "Paramedic" seat onto
+  it — a department that needed a medic seat before there was one had no
+  option but to hand-roll it, and that seat was grantable by nothing. "Medic"
+  and other spellings a department chose are deliberately left alone: they stay
+  custom seats, and renaming one is what custom positions exist to prevent.
+
+  No rank seeds the medic seat: a licence is not something stripes confer, and
+  granting it by rank would have put every chief on the medic roster with no
+  card behind them. It is earned only by holding the Paramedic qualification.
+  Enable the seat per department under Scheduling Settings → Position Names.
+
+- The roster shows a certification's expiry beside the member, and switches
+  the badge to amber within 60 days of it — an officer staffing next month
+  sees the medic whose card runs out in three weeks rather than discovering
+  it when the roster silently shortens.
+
+### Membership standing stops being a "position", and three silent refusals get a reason (2026-08-26)
+
+**Changed**
+
+- **Onboarding no longer offers membership standing as a position.** The role
+  setup screen listed Probationary, Junior, Life, Administrative, Social and
+  Exempt beside Regular Member, and creating one wrote a permission-bearing
+  `positions` row. Those are a member's _class_ and _status_ — what kind of
+  member they are and where they sit on the ladder — not a job they hold, and
+  the User model's own taxonomy has always said so.
+
+  The cost was not cosmetic. A department that used them recorded standing in
+  two unconnected places: `member_class` / `member_status` on the member, which
+  every backend gate reads, and a held position that none of them do. Changing
+  one left the other stale, with nothing to reconcile them. And because the
+  position carried real grants, "reclassify this member" and "change what they
+  can see" were one action with no indication they were.
+
+  Regular Member stays — it is the genuine baseline position, it is in the
+  backend's `DEFAULT_POSITIONS`, and it carries the day-one grant set.
+
+  A migration recovers the standing from the installs that already have these
+  positions, taking the most specific one where a member holds several. It
+  **does not delete the positions**: each carries the `member` or
+  `probationary` grant template, and a member whose only position was
+  `life_member` would lose everything it gave them. Reclassifying somebody is
+  not a reason to cut their access, so the rows stay and a department can
+  retire them from the position editor once it is satisfied the standing is
+  right. Only members reading as plainly `operational` / `regular` are
+  touched, so anything more specific already on the member wins, and members
+  left deliberately unclassified by the previous migration (a custom
+  membership tier id) stay that way.
+
+**Fixed**
+
+- **A mistyped rank is refused at the write instead of failing three screens
+  later.** `User.rank` is a plain `String(100)` with no foreign key, so any
+  string at all could be stored — and `fire_cheif` does not fail loudly. It
+  matches no configured rank, so it resolves to no eligible seats and no
+  default permissions, and the member simply cannot sign up for anything. What
+  they see is "you are not qualified for this position", which reads as the
+  application being broken.
+
+  The codebase already knew about this class of problem:
+  `OperationalRankService.validate_ranks` exists to _report_ members whose
+  stored rank matches nothing. The same question is now asked one step earlier,
+  where it can still be answered by refusing the write with a message naming
+  the value and where to add it. Clearing a rank stays allowed — an empty value
+  is "no rank", not a bad one.
+
+  All three write paths refuse it in the same words — creating a member,
+  updating a profile, and transferring a prospect to full membership. The third
+  is the one that matters most: nobody watches a brand-new record fail to
+  appear on a shift roster, and the department has no reason to suspect the
+  rank field.
+
+  A rank counts as configured if the organization has a stored row for it **or**
+  it is one of the built-in seed codes. The second half is load-bearing:
+  seeding only ever fires into an empty table, so a department onboarded before
+  a code joined `DEFAULT_RANKS` has no row for it while shift eligibility still
+  honours it. Validating against stored rows alone would refuse a rank the rest
+  of the system treats as valid — which is the shape of the EMT seat bug fixed
+  earlier today.
+
+- **A retired, suspended or dropped member could still take a shift seat.**
+  `User.status` (the account and roster lifecycle) and `membership_type` (the
+  membership ladder) are separate axes that share three spellings, and nothing
+  reconciles them — correctly, since a probationary member has an active
+  account and a member on leave is still a regular member. But retiring
+  somebody through the members screen writes `status` and never touches
+  `membership_type`, so every rule that consulted only membership saw them as a
+  regular operational member.
+
+  Self-signup was one of those rules. `get_position_roster` already filtered on
+  the account being active, which made the roster _stricter_ than the endpoint
+  it exists to mirror: a department could see a member absent from the roster
+  and still watch them take a seat. Logging in was blocked either way, but a
+  session opened before the status change outlives it.
+
+  Account status is now checked ahead of everything else, including the
+  open-to-all bypass. "Open to all members" waives the membership-type and rank
+  checks; it does not make a dropped account a member again — and an open shift
+  is where a department is least likely to notice one on the roster.
+
+### Member class, member status, and qualifications become separate facts (2026-08-26)
+
+**Added**
+
+- **`member_class` and `member_status` on every member.** `membership_type`
+  held two independent facts in one column: what kind of member somebody is
+  (operational / administrative / social) and where they sit on the membership
+  ladder (prospective → probationary → regular → life → retired). Because they
+  shared a field, neither could be stated without losing the other — there was
+  no way to record a _probationary treasurer_, and nothing said whether a _life
+  member_ still rides.
+
+  Elections is where the fused field showed most. `ElectionService` could only
+  answer "is this member operational" as `membership_type == "active"`.
+
+  **Correction (2026-08-31).** This entry originally said the `operational`
+  category now "reads the member's class, and every operational standing
+  counts". That was true of `7204f9134` and **false ninety minutes later**:
+  `f65e4e7ae` ("Fix election voter category authorization", the same day)
+  reverted the widening because it was a disclosure — reading class alone
+  admitted probationary and retired members to a restricted ballot. The entry
+  was never updated, and the claim was propagated into the training guides,
+  the wiki and two video scripts before being caught on PR #2096.
+
+  **What the shipped code does**, per
+  `ElectionService._user_has_role_type`:
+
+  | Category         | Requires                                        |
+  | ---------------- | ----------------------------------------------- |
+  | `operational`    | operational class **and** regular status        |
+  | `regular`        | operational class **and** (regular **or** life) |
+  | `life`           | operational class **and** life status           |
+  | `probationary`   | operational class **and** probationary status   |
+  | `administrative` | administrative class                            |
+  | `social`         | social class                                    |
+
+  So the built-in categories **keep their legacy meaning**, and the real
+  changes are narrower than first written, one of them a tightening:
+
+  - **A life member now receives a `regular` ballot.** With one fused field
+    `life` and `regular` were mutually exclusive values, so they could not.
+  - **Every status category now also requires the operational class**, so an
+    administrative member with regular standing no longer receives ballots
+    restricted to active/life members. That is a **tightening**, and it is the
+    reason the widening was reverted.
+  - `administrative` and `social` are answered by class rather than by a value
+    that had to mean both things at once.
+
+  `membership_type` is kept and kept correct: ~160 call sites read it, and it
+  is now derived from the pair by `app/utils/membership.py`, reconciled on
+  every flush by a listener on `User`. Whichever side a caller writes wins, so
+  existing code is unchanged. The derivation is lossy in one direction on
+  purpose — the legacy vocabulary cannot express an administrative probationer
+  — and the two new columns are the authority when they disagree.
+
+  `honorary` backfills to the **social** class. That is not a new judgement
+  about honorary members; it is what the system already did with them, since
+  `honorary` has always sat in `DEFAULT_EXCLUDED_MEMBERSHIP_TYPES` beside
+  administrative and retired. Mapping them anywhere else would have widened
+  shift access on upgrade.
+
+  Neither column takes a database default, deliberately. A DDL default is
+  applied to raw-SQL inserts that name only `membership_type`, and would be
+  wrong for exactly the members who are not plain operational regulars —
+  silently promoting an administrative member into the operational class. NULL
+  means "nobody has set this" and readers derive from the legacy field; ORM
+  writes never leave it NULL.
+
+- **`member_qualifications` — what a member is certified to do.** Rank says
+  where a member sits in the chain of command; a qualification says what they
+  are trained to do. `User.rank` is one string, so a **Captain who is also a
+  Paramedic** — an entirely ordinary member of a volunteer department — had
+  nowhere to be recorded as both.
+
+  The standards already draw the line: Firefighter I/II is NFPA 1001,
+  apparatus operator is NFPA 1002, the officer ladder is NFPA 1021, and
+  EMT/Paramedic are EMS credentials on a separate track again.
+
+  Qualifications expire and ranks do not, which is the other half of why they
+  cannot share a column. Shift eligibility reads `expires_on` **as of the shift
+  date**, not as of today — the rule EVOC certifications already use for
+  drivers, and for the same reason: a card that is current when the roster is
+  built and expired when the truck rolls qualifies nobody to be on it. The
+  bulk path resolves this per distinct shift date rather than once per member,
+  since that is the one eligibility source that is not shift-independent.
+
+  The table starts empty. Nothing is inferred from existing rank or position
+  rows: a department that recorded somebody as an EMT _rank_ has said where
+  they sit, not which card they hold or when it expires, and inventing an
+  expiry date would be worse than having none.
+
+**Note**
+
+Ranks are unchanged. An EMS-only agency keeps EMT as its line rank, and a
+department that models EMT as a rank can carry on doing so — `emt` is now both
+a rank code and a qualification code, meaning two different things on purpose.
+Neither implies the other, and a department may use either or both.
+
+Admin screens for entering qualifications are not in this change; the model,
+the service and the eligibility reader are.
+
+### An EMT rank granted nothing, and EMS-only agencies were seeded firefighters (2026-08-26)
+
+**Fixed**
+
+- **A seeded rank that conferred no permissions at all.** Operational ranks
+  are seeded from `DEFAULT_RANKS` but resolve their permissions from a
+  separate registry, `OPERATIONAL_RANKS`, and the two had drifted: `emt` was
+  in the first and missing from the second. `get_rank_default_permissions("emt")`
+  answered `[]`, so a member whose only standing was the EMT rank held
+  nothing.
+
+  Unlike Firefighter there is no mirroring entry in `DEFAULT_POSITIONS`, so
+  nothing made up the difference — every other seeded rank had that backstop,
+  which is why the gap stayed invisible. EMT now carries the same
+  rank-and-file grants as Firefighter, from one shared list rather than two
+  that can drift.
+
+  **Firefighter and EMT are independent ranks, not a progression.** Plenty of
+  firefighters never certify as EMTs and plenty of EMTs never ride the engine;
+  neither implies the other. They share a permission list only because
+  standing at the bottom of the operational ladder is what decides what a
+  member may _see_, and that is the same question for both.
+
+- **An EMS-only agency was seeded a fire department's rank ladder.**
+  `seed_defaults` wrote the same eight ranks to every organization regardless
+  of `organization_type`, so an EMS-only service was handed "Fire Chief",
+  "Engineer" and "Firefighter" — a rank nobody there can ever hold. The seed
+  only ever fires into an empty table, so whatever it wrote on day one was
+  what the department lived with.
+
+  Ranks are now chosen by agency type: every agency gets the full officer
+  ladder, an EMS-only service gets EMT without Firefighter, and its
+  fire-specific labels are renamed (Chief, Driver / Operator). The rank
+  _codes_ stay shared across agency types deliberately — they key the
+  permission registry and the shift-eligibility fallback, so a code must mean
+  the same thing everywhere — and only the selection and labels vary. An
+  unknown or missing type falls back to the full set, because a department
+  seeded one rank too many can delete it while one seeded too few has no
+  indication anything is absent.
+
+  **This reaches new organizations only, and there is no migration.** The seed
+  fires solely into an empty table, so an EMS service already onboarded keeps
+  the fire ladder it was given and can edit the list by hand. Rewriting a
+  department's existing ranks would rename rows its members are already filed
+  under, which is worse than the wrong label. Note the contrast with the EMT
+  fix above: rank grants resolve from code at request time, so that one takes
+  effect for every existing installation the moment this deploys.
+
+  **Positions are not agency-aware, and were not changed here.** Onboarding
+  still seeds every `DEFAULT_POSITIONS` entry to every organization, so an
+  EMS-only department is still given "Fire Chief", "Engineer" and
+  "Firefighter" _positions_ — and positions, not ranks, are the primary source
+  of permissions. Until that is settled the two lists disagree on screen: the
+  rank reads "Chief" where the position beside it reads "Fire Chief". The
+  position registry is aliased into the rank registry (pitfall #23) and is
+  seeded once per organization at onboarding, so changing it is a data
+  migration rather than a registry edit, and it is left for its own change.
+
+- **A custom rank silently conferred nothing.** Rank defaults resolve from a
+  code-level registry keyed by `rank_code`, so a rank a department invents for
+  itself — Battalion Chief, Firefighter II — grants no permissions. That is
+  the intended design (positions are the primary source), but the editor
+  rendered a custom rank identically to a seeded one, leaving an admin to
+  discover it from a member who could not see anything. `RankResponse` now
+  reports `default_permission_count` and the rank editor marks a rank that
+  grants none.
+
+**Changed**
+
+- **Who may assign the EMT rank has narrowed, as a consequence of the fix.**
+  `_assert_rank_within_caller_ceiling` refuses to let anyone set a rank that
+  grants more than they hold themselves. While `emt` resolved to an empty list
+  that check passed trivially for everybody; it now requires all seventeen
+  grants. Of the seeded positions that can manage members, Fire Chief, Deputy
+  Chief, Assistant Chief, Captain, IT Manager and President are unaffected,
+  while Vice President, Secretary, Assistant Secretary and Membership
+  Coordinator can no longer assign it — and get a logged privilege-escalation
+  attempt when they try. This is the same ceiling those positions already hit
+  on `firefighter`, so EMT now behaves like every other line rank rather than
+  being the one that slipped through; a department that wants its membership
+  coordinator to file EMTs should grant that position the rank's view
+  permissions.
+
+**Removed**
+
+- `OPERATIONAL_ROLE_SLUGS` and `ADMINISTRATIVE_ROLE_SLUGS` from
+  `core.constants`. Each had exactly one reference in the codebase — its own
+  definition. They were not harmless: they read as a third authority on the
+  rank vocabulary and agreed with neither real one, listing `chief` where the
+  seed writes `fire_chief`, and offering `driver` and `paramedic`, which are
+  not ranks at all and grant nothing. The two documentation tables that still
+  listed them — in `docs/ENUM_CONVENTIONS.md` and `docs/TROUBLESHOOTING.md`,
+  the latter under an instruction to import them — go with them.
+
+`tests/test_rank_registry_agreement.py` now asserts the seed and the
+permission registry describe the same set in both directions, so a rank cannot
+again be offered to departments while conferring nothing.
+`tests/test_operational_rank_service.py` and
+`RanksSettingsSection.test.tsx` cover the reported count and the badge it
+drives, including the stale-response case where the field is absent — the
+count must fall through to no badge rather than warning about every rank.
+
+### Embroidery and engraving are not the same job (2026-08-26)
+
+**Fixed**
+
+- **`alembic upgrade head` could not run at all.** Three migrations took
+  `c4a91b7e2f08` as their parent — the size-order settle (#1819), a second
+  storefront grant backfill, and the notifications.view revoke (#1829) — so the
+  chain had three heads and every database job on `main` failed before a test
+  ran. Relinearized rather than merged, because the order changes the outcome:
+  the two storefront backfills guard each other, and running them the other way
+  round leaves `storefront.manage` off the Quartermaster on every existing
+  department.
+
+- **An engraved item was sent to the vendor as gold thread.** Personalization
+  was modelled as one process. A cloth item is embroidered and the thread has a
+  colour; a metal item is engraved and there is none. With only a thread colour
+  on the model, a challenge coin reached the purchase order and the CSV export
+  reading "Gold" — an instruction the engraver cannot follow — and the member's
+  preview stitched a coin in gold. Products now carry a personalization method,
+  set per item by the quartermaster, and thread belongs to embroidery alone.
+
+- **The Command Palette offered the store where the route would refuse it.**
+  `My Store Orders` carried no gate at all while `/store/orders` requires
+  `storefront.view` and the storefront module, so it answered Access Denied to
+  every member without the grant and to every department with the store
+  switched off. `Department Store` was permission-gated but not module-gated.
+  `navGateIntegrity.test.ts` now covers the storefront paths; it existed for
+  this class of defect but listed only `/medical-supplies` and `/inventory`.
+
+- **Thirteen corporate positions could not reach the store.** Treasurer,
+  secretary, board of directors, EMS supply officer, public outreach,
+  communications officer, historian, membership coordinator, training officer,
+  fundraising chair, assistant secretary, scheduling officer and meeting hall
+  coordinator held no storefront grant. The store is a member amenity, not an
+  officer tool. The omission hid because permissions union across positions and
+  every operational rank grants the store, so it only bit a member whose sole
+  position was one of these and who had no rank recorded.
+
+### An EMT could not sign up for the EMT seat on an ambulance (2026-08-26)
+
+**Fixed**
+
+- **The apparatus editor wrote a seat name nothing in the system grants.**
+  `ApparatusBasicPage` offered the EMT seat as the literal string `"EMT"`, and
+  built every ambulance from `['driver', 'EMT']`. Every other writer — the
+  shift template form, the scheduling settings, `ShiftPosition` on the wire,
+  `operational_ranks.eligible_positions`, the rank editor — spells that seat
+  `"ems"`.
+
+  Nothing grants `"EMT"`: not a rank, not a held position, not a completed
+  training program. `ShiftEligibilityService` intersects the member's granted
+  seats with the shift's own seats case-sensitively, so the intersection was
+  always empty and `POST /scheduling/shifts/{id}/signup` answered 403. An
+  ambulance created from the defaults had an EMT seat that no EMT could take.
+
+  **No setting could unblock it.** Adding `EMT` to the org's `open_positions`,
+  or marking the shift `open_to_all_members` — the flag that bypasses the rank
+  and membership-type checks entirely — both put `"EMT"` into the eligible set
+  and still failed, because `ShiftPosition` has no `EMT` member and the client
+  can only ever send `ems`. The seat was unnameable by the API that had to
+  fill it.
+
+  It was invisible on screen, which is why it read as the application being
+  broken rather than as a configuration problem: `POSITION_LABELS` maps `EMT`,
+  `EMS` and `ems` all to the label "EMT", so the seat rendered normally. The
+  label was also where the bad value came from — the editor built its option
+  text by capitalising the raw value, so `'ems'` would have displayed as "Ems"
+  and someone stored the label as the value to fix the display.
+
+  The seat _name_ is now settled on write by `canonical_position` in
+  `app/utils/positions.py`, alongside the seat _shape_ that helper already
+  owned, so no writer can reintroduce a spelling the signup API cannot name.
+  `ApparatusBasicPage` stores canonical values and takes its option text from
+  the shared `POSITION_LABELS`. `20260826_1200_d7a4e9c31b60` settles the rows
+  already stored across `basic_apparatus.positions`, `shifts.positions`,
+  `shift_templates.positions` and `apparatus.crew_positions` — the half a
+  write-side fix cannot do, since an ambulance created last month keeps its
+  unfillable seat until its row is rewritten. A department's own custom seat
+  round-trips verbatim; only known spellings fold.
+
+  `tests/test_position_slots.py` asserts the canonical set is exactly
+  `ShiftPosition` and parses `ApparatusBasicPage.tsx` for a non-canonical seat
+  value, so the two vocabularies cannot drift apart again.
+
+### Documents could be uploaded but never downloaded, and a dozen other Documents/Legal fixes (2026-08-26)
+
+**Added**
+
+- A Download action is now available wherever a document is listed —
+  members with `documents.manage` could previously upload and delete a
+  file but never open or download what was uploaded. It is hidden on
+  generated documents (published meeting minutes, property returns) that
+  have no separate file to download, and it applies the same folder access
+  rules as viewing the document.
+- A document uploaded with no folder previously had no way to be seen,
+  downloaded, or managed afterward — the upload succeeded, but the file
+  vanished from the page. An "All Documents" view now lists every document
+  the caller can see, including ones with no folder.
+
+**Fixed**
+
+- A malformed folder or document id in a request returned a server error
+  instead of a clean rejection.
+- Editing a folder to clear its parent, its owner, or a document's folder
+  reported success but silently left the old value in place. Clearing now
+  actually clears.
+- A folder could be moved into itself or one of its own sub-folders,
+  making it disappear from folder navigation. This is now rejected with a
+  clear error.
+- Clearing a folder's color or icon to blank could leave it in a state
+  that broke every later attempt to list or view it. Both fields now
+  require a value, matching how every folder already has one.
+- Uploading a document with the Document Name field left blank
+  (advertised in the UI as optional) returned an error instead of
+  defaulting to the file name, as promised.
+- A failed receipt-printer connection returned the printer's configured
+  network address to whoever triggered the print, including staff with no
+  access to printer settings. It now returns a generic message.
+- Publishing two proposed revisions of the same legal document (privacy
+  policy or terms of service) at nearly the same time could leave both
+  marked live, with the public page showing whichever write happened to
+  land last. Publishing is now serialized.
+- A department publishing custom privacy-policy and terms-of-service text
+  with different revision dates could have publishing one silently change
+  the date shown on the other. Each document keeps its own date, and an
+  org that migrated from the old shared-date format no longer has a stale
+  date resurface after it republishes.
+- The public legal-text endpoint keeps returning its original `lastUpdated`
+  field alongside the newer per-document dates, so an external client built
+  against the documented shape does not lose a field it may still rely on.
+- A tampered or corrupted document record could theoretically resolve to a
+  file outside the caller's own organization's upload directory; the
+  download endpoint now confines every resolved path to that directory.
+- Downloading a document is now recorded in the audit log.
+
 ### Admin-hours requirement progress crashed for anyone who had logged hours (2026-08-25)
 
 **Fixed**
@@ -65,6 +2643,489 @@ checkedAt }` and casts the response without mapping it.
   dependency populated, so the endpoint answered correctly for anyone who
   tried it on themselves. No screen calls it for another member yet, so this
   is an API fix rather than a visible one.
+
+### Every member could read every other member's notifications (2026-08-25)
+
+**Fixed**
+
+- **The Send Log is no longer part of the day-one grant set.** Three admin
+  tabs on the Notifications screen — Notification Rules, Email Templates and
+  Send Log — hang off `notifications.view`, and that permission was seeded to
+  the `member` position and to the Firefighter and Engineer ranks. Every
+  member had it.
+
+  The Send Log is the one that matters. `GET /notifications/logs` filters on
+  `organization_id` and nothing else, and each row carries the recipient's
+  email address, the subject and the full message body. So any member could
+  page through every notification the department had ever sent anyone else.
+
+  `notifications.view` is revoked at all three seed sites, and by
+  `20260825_2015_a1f7c34e9b02` on departments that have already onboarded —
+  the registry alone would not have done it, because
+  `DEFAULT_POSITIONS[rank]["permissions"]` _is_ the rank's list, so onboarding
+  writes those grants into system `positions` rows. The migration is scoped to
+  `is_system = True`; a position a department has customized is left as they
+  set it.
+
+  **Members lose nothing they can act on.** Their own inbox is
+  `GET /notifications/my`, which is gated on being signed in and no permission
+  at all, and the navigation entry points at `?tab=inbox`. What changes is
+  that Notifications now opens on their notifications, with no admin tabs
+  beside them.
+
+- **The Email Templates tab is gated on the permission it actually needs.**
+  The tab holds no editor — its only control navigates to
+  `/communications/email-templates`, which is behind `settings.manage`. Anyone
+  holding `notifications.view` alone was shown the tab, read a description of
+  what they could customize, clicked the button and landed on Access Denied.
+  It now follows `settings.manage`, on the `?tab=templates` deep link as well
+  as the button.
+
+### Photo-use consent is readable in one place, by the people who publish (2026-08-25)
+
+Every member can allow or refuse the use of their photo from their own
+settings, and the department has been collecting that answer for months. It
+was only ever readable one member at a time, from that member's profile —
+which is not a check anyone performs while choosing images for a newsletter,
+so in practice the answer was collected and never consulted.
+
+**Added**
+
+- **Photo Use Consent** (`/communications/photo-use-consent`, under Forms &
+  Comms) lists every member's answer in one place, with counts, a status
+  filter and a search. Members who **declined** and members who **never
+  answered** are counted separately: both mean "do not publish", but only one
+  of them describes somebody who can still be asked, so the second column
+  doubles as the follow-up list. Inactive members are hidden behind a toggle,
+  because a retired member's photo can still be in the archive.
+
+- **`users.view_consents`**, a permission that means only "read members'
+  privacy answers". It is seeded to the Communications Officer / PIO, the
+  Historian and Public Outreach positions, and backfilled onto existing
+  departments by `20260825_1900_c4a91b7e2f08`. The Historian and Public
+  Outreach share nothing with each other but broad grants like `users.view`,
+  which most officer positions hold — so letting them in on an existing
+  permission would have opened the roster to most of the department.
+
+The page **shows** consent; it does not enforce it. Nothing in the app
+publishes member photos on its own, so whoever publishes still has to look
+first. Anything built later that publishes photos from inside the app must
+check the consent itself.
+
+### Clearing certain medical-screening fields could crash the request (2026-08-25)
+
+**Fixed**
+
+- Editing a screening record or requirement and explicitly clearing its
+  status, screening type, or (for a requirement) its name returned a server
+  error instead of a clean rejection — those fields can't actually be
+  cleared, but the request used to fail with a raw database error rather
+  than a readable message. It now returns a normal validation error.
+
+### A membership applicant's file could reach a signer who could not otherwise view it (2026-08-25)
+
+**Fixed**
+
+- `POST /prospects/{id}/approve-step`, the endpoint a role holder (chief,
+  president, ...) uses to record one sign-off on a multi-approval pipeline
+  stage, returned the applicant's full record — date of birth, address,
+  coordinator notes and all — as its response, even to a signer who held no
+  view permission on applicants at all. It now returns only whether the
+  stage completed.
+- `PUT`/`DELETE /interviews/{id}` were not covered by the check that stops a
+  member from acting on their own prospective-membership file, because those
+  routes identify the interview by its own id rather than the applicant's —
+  so a coordinator who had once been an applicant themselves could alter or
+  delete the interview record from their own vetting. Both routes are now
+  covered.
+- Editing a prospective member's profile (`PUT /prospects/{id}`) silently
+  ignored an explicit request to clear a field — sending "no phone number"
+  returned success while the old value stayed on file. It now actually
+  clears the field, the same way every other edit path in the app does.
+- That same edit endpoint could also be used to mark an applicant
+  "transferred" (become a member) without them actually being converted, or
+  to un-transfer an existing member back onto the applicant board — a gap in
+  a different endpoint that a related fix had already closed elsewhere. Both
+  are now refused here too.
+
+### A member's audit history could show unrelated actions performed on someone else (2026-08-25)
+
+**Fixed**
+
+- `GET /users/{id}/audit-history` included any event where the viewed member
+  was merely the _actor_, even when that event's real target was a different
+  member — so viewing officer A's history could surface "A reset B's MFA"
+  entries naming B, under a page described as A's own record. Now only
+  includes an actor-only event when it has no separate target recorded at
+  all (a genuine self-action); events with a target are decided solely by
+  whether that target is the viewed member.
+- Two real audit event types — an administrator resetting a member's
+  two-factor authentication, and a compliance exemption being granted or
+  revoked — were being recorded but were invisible in this history because
+  neither was in the endpoint's event-type allowlist. Both now appear.
+
+### Leave-of-absence changes left no audit trail (2026-08-25)
+
+**Fixed**
+
+- Creating, editing, or deactivating a member's leave of absence never wrote
+  an audit event, despite the audit-history system having supported these
+  event types since it shipped. All three actions are now recorded, each
+  naming the affected member.
+
+### The finance approvals queue scanned every organization's pending steps (2026-08-25)
+
+**Fixed**
+
+- `GET /finance/approvals/pending` (`get_pending_approvals`) carried no
+  organization filter on its underlying query, scanning every tenant's
+  pending purchase-request/expense-report/check-request approval steps and
+  running two follow-up queries per record before a later, org-scoped check
+  discarded anything that wasn't the caller's. No data ever leaked across
+  organizations, but the query cost of loading one department's approvals
+  inbox scaled with the whole platform's pending-approval volume. Now
+  resolves each organization's own pending entities first, so the scan and
+  its per-record follow-up queries are confined to the caller's organization;
+  the returned results are unchanged.
+
+### A storefront manager could settle their own order's payment (2026-08-25)
+
+**Fixed**
+
+- `record_payment` — the method `mark_order_paid`, `waive_order_payment`, and
+  `refund_order` all delegate to for the actual ledger mutation, and also
+  directly reachable via `POST /orders/{order_id}/payments` — had no
+  separation-of-duties check, unlike those three. A `storefront.manage`
+  holder who also owned the target order could record a payment against it
+  (including settling it in full) with no guard, bypassing the same control
+  the other three payment actions already enforce. Now blocked the same way,
+  unless the call comes from the automated reconciliation path (no human
+  actor to conflict with).
+
+### A finance approval token could be used to approve your own request (2026-08-25)
+
+**Fixed**
+
+- The public token-based finance approval link (`approve_by_token`) never
+  checked whether the approver and the requester were the same person, for
+  an email-addressed approval step. If a chain step's approver email
+  happened to match the request's own submitter (plausible in a small
+  department, or by misconfiguration), that person could approve their own
+  purchase/expense/check request with no guard at all — contradicting the
+  documented invariant that self-approval is prevented by default at every
+  step. Now blocked unless the step explicitly sets `allow_self_approval`.
+
+### The Salesforce inbound webhook now caps how many records one request can carry (2026-08-25)
+
+**Fixed**
+
+- A validly-signed Salesforce webhook request had no limit on the number of
+  `records` it could carry, and each record costs 1-2 DB queries. The
+  endpoint is rate-limited per-request (30/min), not per-record, so a single
+  oversized request — from anyone holding a valid or leaked webhook secret —
+  could drive an effectively unbounded amount of DB work inside that budget.
+  A request over the cap is also no longer marked as a "seen" delivery
+  before it's validated, so a provider's retry of a corrected, smaller batch
+  isn't mistaken for a duplicate of the rejected one.
+  Requests over 500 records now get a 422 before any sync work runs.
+
+### Rank validation now matches its own permission gate, and a first-load race no longer 500s (2026-08-25)
+
+**Fixed**
+
+- **`GET /operational-ranks/validate` had no server-side permission check.**
+  Its only caller is the Settings rank screen, which is gated
+  `settings.manage` on the frontend — but the endpoint itself depended only on
+  `get_current_user`, so any authenticated member could call it directly and
+  see which members have a misconfigured rank. Now requires `settings.manage`,
+  matching its CRUD siblings in the same router.
+- **A brand-new organization's first rank-list load could 500 under
+  concurrency.** Two admins opening Settings at nearly the same moment could
+  both pass the "no ranks seeded yet" check and both attempt to seed the
+  defaults; the loser's insert hit the unique constraint and raised an
+  uncaught error instead of simply loading the ranks the winner had just
+  created. The seeding path now treats that race the same as "already
+  seeded."
+
+### OAuth login now honors a deactivated organization (2026-08-25)
+
+**Fixed**
+
+- **A member of a deactivated organization could still sign in via Google or
+  Microsoft.** The 2026-08-12 fix made password login require
+  `organizations.active IS TRUE`, but `oauth_service._link_existing_user`
+  still scoped to the earliest-created org with no `active` filter, and — if
+  no org matched — silently dropped the org filter entirely rather than
+  failing closed. It now filters on `Organization.active.is_(True)` and
+  returns the same indistinguishable `"no_account"` error the password path
+  uses when no active org exists, so a deactivated org's OAuth-linked members
+  are rejected the same way password users already are.
+
+### Reopening a finalized event returned 500, and error reports named nobody (2026-08-25)
+
+**Fixed**
+
+- **`POST /events/{id}/reopen-attendance` returned 500 for any event that has
+  a location.** `reopen_event_attendance` fetched the event with no eager
+  loads, and the endpoint serializes what it returns through
+  `_build_event_response`, whose first read is `event.location_obj`. Under the
+  async session that lazy load is IO outside the greenlet context, so it
+  raised `MissingGreenlet` — and it did so _after_ the reopen had committed,
+  so the lock was actually cleared while the chief saw a failure and the event
+  quietly stayed open. Events with no `location_id` short-circuit on the NULL
+  foreign key and never reach the load, which is why the endpoint passed
+  testing and failed on a real event. Every other path that builds an
+  `EventResponse` already carried the eager load; reopen was the one that did
+  not.
+
+**Changed**
+
+- **Error Monitoring names the affected member.** The detail block identified
+  them by the first eight characters of their UUID, which cannot be searched
+  for and does not answer the first question asked of a report — one member's
+  session, or the whole department. The list, stats and export endpoints now
+  resolve the stored id in a single batched, org-scoped query (pitfall #14a:
+  the id arrives from stored data, so the filter is what stops a stale row
+  naming another department's member) and return the member's name and
+  username. The page shows those with the full id beneath — full, because a
+  truncated one cannot be matched to a support ticket — and says
+  "Account not found" when the account has since been deleted, rather than
+  leaving an unexplained blank.
+
+### Every LIKE pattern is escaped in one place, and the database is told so (2026-08-25)
+
+**Fixed**
+
+- **Two search boxes interpolated raw user input into a SQL `LIKE` pattern.**
+  Typing `%` into the department-message admin search
+  (`messaging_service.py:124`) or the message-history search
+  (`message_history.py:80`) matched every row: the filter silently stopped
+  filtering, and the list's count query scanned the whole org's table behind
+  it. Both queries were correctly org-scoped, so this widened a result set
+  rather than crossing a tenant boundary — but a member searching `a_c` also
+  got `abc` back with nothing to indicate the term had been read as a pattern.
+
+- **The inventory barcode search reported the wrong matched field.** After
+  querying with the escaped pattern, `search_items_by_code` re-scanned the
+  results in Python against the _escaped_ string instead of the raw input, so
+  scanning an asset tag containing `%`, `_` or `\` fell through to the
+  `matched_field = "name"` default — the item was still found, it was just
+  attributed to the wrong field. Pre-existing; surfaced by the `flake8` run
+  the cleanup below forced.
+
+**Changed**
+
+- **All 76 `like` / `ilike` calls now declare `escape=LIKE_ESCAPE_CHAR`.**
+  Forty-seven escaped their input and then emitted `LIKE` with no `ESCAPE`
+  clause. MySQL's default escape character depends on `sql_mode`, so under
+  `NO_BACKSLASH_ESCAPES` the escaping is inert and every wildcard returns —
+  across all forty-seven at once, invisibly, because the escaping _looks_
+  present in review. The four system-generated patterns (`"ORD-2026-%"` and
+  friends) carry the kwarg too: it is inert for them, and covering them is what
+  leaves the invariant with no exceptions.
+
+- **The wildcard-escaping transform has one implementation again.**
+  `app/utils/sql_search.py` was written to own it — its docstring names the
+  seven modules it had been copy-pasted into — but only `storefront_service.py`
+  ever imported it. Fifteen files carried their own copy, which is why
+  forty-seven of them forgot the `escape=` kwarg. All fifteen now call
+  `like_pattern()`.
+
+**Added**
+
+- **`backend/tests/test_like_escaping.py`** fails on reintroduction of either
+  half: a `like`/`ilike` call without the escape kwarg, or a second copy of the
+  transform. No allowlist, so it cannot go stale.
+
+- **`docs/security-review/`** — an application-wide, feature-by-feature security
+  rotation (35 iterations, ordered by risk) with a per-iteration checklist,
+  findings template, and a `/security-review` command that opens one pull
+  request per feature and tends it to green before starting the next.
+
+### Governance: the department's organizational chart (2026-08-24)
+
+**Added**
+
+- **`/governance/org-chart`** — the department's chain of command, as an
+  outline or as a diagram. New tables `org_chart_nodes` and
+  `org_chart_node_holders`; `GET /org-chart`, `POST /org-chart/nodes`,
+  `PUT /org-chart/nodes/{id}`, `POST /org-chart/nodes/{id}/move`,
+  `DELETE /org-chart/nodes/{id}`.
+
+- **Reading is gated on authentication alone, deliberately.** The chart exists
+  so any member can work out who is in charge of an area without asking around;
+  a permission here would leave the general membership — the audience — outside
+  the one screen built for them. Editing is `orgchart.manage` OR
+  `settings.manage`, enforced server-side, and the page renders read-only
+  without either rather than offering controls that fail.
+
+- **A seat holds several people.** `org_chart_node_holders` is a separate
+  table for exactly this: a department with two deputy chiefs puts both in one
+  box instead of inventing two boxes that mean the same thing.
+
+- **A holder need not be a member.** `user_id` is nullable and `display_name`
+  carries a name with no account behind it, for the town attorney, a
+  mutual-aid liaison or a county fire marshal. Nothing else about that person
+  is stored and they gain no access.
+
+- **`position_id` assists a seat rather than defining it.** Linking a seat to a
+  position fills its holders from that position's assignees; **unlinking leaves
+  them in place.** An earlier draft made the position the seat's definition,
+  which meant a seat could not hold anyone the position did not — and a
+  department whose org chart differs from its permission structure, which is
+  most of them, could not draw its real chain of command.
+
+- **The chart starts empty and nothing is inferred.** A permission structure is
+  not an org chart. A guessed diagram is one nobody recognises, and correcting
+  it costs more than drawing it.
+
+### Attendance finalization: the lock is atomic, and reopening reconciles what it undoes (2026-08-24)
+
+Follow-ups to #1791, which shipped the lock itself. Both were raised in review
+there and deferred deliberately as too large to bolt on.
+
+**Fixed**
+
+- **Finalizing is an atomic transition, not a check followed by a hope.**
+  Finalize, reopen and every attendance writer now take a `SELECT … FOR UPDATE`
+  row lock on the event, and finalize commits the close in the same transaction
+  that holds it. Previously a check-in could commit between finalize's roster
+  snapshot and the close, leaving that member checked in, uncredited and behind
+  a lock with nothing on screen to explain it. A writer arriving mid-finalize
+  now blocks and then finds the event closed, which is the 409 it should always
+  have got. Crediting runs inside that same lock; an earlier draft of this
+  change ran it after the commit on the reasoning that a frozen roster needs no
+  lock, which is wrong — see the crediting bullet below.
+- **Reopening a training session serializes against its pending approval.**
+  Both `reopen_training_session` and `submit_training_approval` lock the
+  approval row, so an officer holding a page loaded before a reopen can no
+  longer commit an approval against a session a leader has just opened for
+  correction. Whichever transaction reaches the row first wins and the other
+  sees its outcome.
+- **Corrected hours reach the pipeline.** The progress ledger is idempotent per
+  (progress, source, source id), so re-finalizing a reopened session applied no
+  delta at all: the training record moved to the corrected figure while
+  certification and phase totals kept the original. `apply_requirement_credit`
+  takes a `restate` flag that reverses the recorded credit through the normal
+  reversal path and applies the new one; identical hours stay a no-op.
+- **An attendee removed during a reopen loses the credit.** Re-finalization
+  wrote records for whoever was on the roster and said nothing about anyone
+  dropped from it, so a member taken off a session kept both the completed
+  training record and the pipeline credit. Re-finalizing now diffs the new
+  roster against the previous approval's and revokes what the earlier finalize
+  gave. The training record is reverted to not-completed rather than deleted —
+  nothing on `TrainingRecord` records which session created it, and the
+  check-in auto-create path writes one before finalization ever runs, so
+  deleting could destroy a record this session never authored.
+- **A corrected category reaches the record.** Re-finalizing copies the
+  session's current category and course onto an existing training record, which
+  is what makes reopening to fix a mis-filed session actually take effect
+  instead of reporting success and leaving the old value in place.
+- **The series paths hold the rows they check.** `update_future_events`,
+  `cancel_series` and `delete_event_series` read the finalized state without
+  locking, so a bulk retime, cancel or delete could pass its check and then act
+  after a concurrent finalization committed — leaving credited hours attached
+  to event data that contradicts them.
+- **Crediting runs inside the event's row lock, not after it.** Committing the
+  close first released the lock while the credit loop was still working from a
+  captured roster, so a reopen landing mid-loop let stale writes overwrite a
+  correction, or recreate credit on an event since cancelled. One commit now
+  covers the close and every credit.
+- **A completed enrollment is no longer skipped.** Both the correction and the
+  revocation looked up enrollments with an `ACTIVE`-only filter, so when the
+  session's own credit was what carried a member past 100% — moving the
+  enrollment to `COMPLETED` — neither found anything to act on. Completed
+  enrollments are included; the progress updater already reactivates one whose
+  progress falls back below 100%.
+- **Credit left at a destination the session no longer feeds is reversed.**
+  Restating only the current destinations was not enough on a re-finalize: a
+  corrected program, requirement or category linkage moves the credit to
+  different requirement rows with different ledger keys, leaving the old ones
+  standing and the member counted twice, and a member corrected down to zero
+  hours is never queued for crediting at all, so their earlier credit survived
+  untouched. `reverse_credits_for_source_except` reconciles every ledger row
+  for the session against the destinations it now feeds.
+- **A failed pipeline update is no longer read as a revocation.** The sweep
+  above reverses every credit outside the set of destinations just credited, so
+  an update that _errored_ was indistinguishable from one the session no longer
+  feeds — and an `events.manage` caller without `training.manage` hits that
+  deterministically on every attendee they do not own, turning one refused
+  correction into a wholesale revocation of hours already earned. The feed now
+  reports whether each destination was resolved, and one unresolved answer
+  aborts the sweep for that session: stale credit left standing is visible and
+  corrects itself on the next re-finalize, whereas credit deleted on a guess
+  is silent and gone.
+- **A re-enrolled member is credited again.** Widening the enrollment lookup to
+  include `COMPLETED` made it ambiguous, because `enroll_member` rejects only an
+  _active_ enrollment — a member who finished a program and enrolled again holds
+  both rows, and the single-row fetch raised `MultipleResultsFound` into the
+  swallowing except clause. Enrollment selection is now explicit: the one
+  already carrying this session's credit wins (a re-finalize restates its own
+  earlier figure, which lives where it was first applied), then the active one,
+  then the most recent completed one.
+- **A pending confirmation no longer wipes the previous approval's credit.**
+  Reopening a session that requires an officer's confirmation queues no pipeline
+  updates by design — nothing is approved yet — but the reconciliation sweep ran
+  against that empty set anyway and reversed everything the _previous_ approval
+  had earned, before anyone confirmed what replaced it. If the officer never
+  submitted, the hours stayed gone. The sweep is now deferred to
+  `submit_training_approval`, which is the point at which the destination set is
+  real.
+
+### Three guards drawn from what #1795 got wrong (2026-08-24)
+
+**Changed**
+
+- **A forked migration chain now fails CI.** `validate_migrations.py` reported
+  two heads sharing a parent as a _warning_, so the one condition that breaks
+  `alembic upgrade head` for everyone after a merge went green — silently, with
+  both PRs passing and only the next person to migrate finding out. #1795 hit
+  exactly that when `main` landed a migration from the same parent. `--strict` is now implemented (the script had no argument parsing at all,
+  so the flag alone was inert — caught in review) and the CI step passes it.
+  Verified by forking the chain on purpose: exit 1 under `--strict`, exit 0
+  without.
+
+**Added**
+
+- **`tests/test_permission_gate_composition.py` checks gate _shape_, not
+  names.** `compliance.view` was not a badly-named permission — it opened no
+  page of its own, and only ever appeared as one alternative inside
+  `require_permission(...)`. The tell was the composition: a grant every member
+  holds, OR'd with an officer grant from a **different module**. Same-module
+  `x.view` OR `x.manage` is the intended pattern and is used at some seventy
+  endpoints; cross-module pairing is the anomaly. Review found the first draft
+  too narrow in two ways, both fixed: the elevated set is now derived from the
+  registry rather than matched on a `.manage` suffix, which was blind to
+  `events.edit`, `scheduling.assign`, `members.manage_id_cards` and
+  `inventory.manage_medical`; and the scan reads route-decorator
+  `dependencies=[...]` gates as well as signature ones, having previously
+  reached 1201 of 1202 while its own floor assertion looked healthy.
+
+  The rule exempts a gate that already names a baseline grant from the officer
+  grant's own module — `equipment_check.submit` beside `equipment_check.view`
+  means the endpoint is deliberately crew-facing. It flagged one endpoint on
+  introduction, recorded in `ALLOWED` as unadjudicated rather than quietly
+  waved through: `/supply/item-deployments` accepts `inventory.view` where the
+  sibling its docstring calls "the reverse" of it requires `inventory.manage`.
+
+**Documented**
+
+- **Pitfall 23 — a seeded rank grant reaches the database through a position.**
+  `operational_ranks` has no permissions column, which makes "ranks resolve at
+  runtime, so no migration is needed" sound obviously true. It is false:
+  `DEFAULT_POSITIONS["firefighter"]["permissions"]` _is_ the rank's list, and
+  onboarding writes a system position carrying a copy. That aliasing also
+  defeats naive analysis — a survey looking for `SOMETHING.name` literals sees
+  an empty list, because the entry is a reference, which is how the gap was
+  missed before review caught it.
+- **Pitfall 24 — do not reuse a branch name after its PR merges.** Correlated
+  with GitHub not firing `pull_request` workflows at all: on #1795 no workflow
+  ran for the first two commits over 45 minutes while `main` built normally.
+  GitHub also back-associates the old branch's runs with the new PR, so the
+  checks tab looks populated while nothing has run the new code. Causation
+  unproven and not reproducible on demand; a distinct branch name costs
+  nothing. Includes what to check when CI has not started, and the two ways
+  not to kick it.
 
 ### Community outreach requests: the settings now do what they say, and a confirmed date reaches the schedule (2026-08-24)
 

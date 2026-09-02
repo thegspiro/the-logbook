@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Shield,
   Building2,
+  Camera,
   UserCog,
   Globe,
   GraduationCap,
@@ -52,6 +53,7 @@ import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idC
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
+import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -172,7 +174,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
-    ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store', icon: Store } as NavItem] : []),
+    // The route requires `storefront.view` (modules/storefront/routes.tsx), so
+    // the module toggle alone is not the gate: a member whose department was
+    // seeded before the storefront module shipped holds no storefront grant
+    // and got Access Denied from an entry the navigation was still
+    // advertising. A nav gate has to be a subset of its route's gate.
+    ...(isModuleOn('storefront')
+      ? [{ label: 'Department Store', path: '/store', icon: Store, permission: 'storefront.view' } as NavItem]
+      : []),
     ...(isModuleOn('training')
       ? [
           {
@@ -267,18 +276,48 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               },
             ]
           : []),
+        // Equipment checklists. Two rows, because the two audiences want
+        // different things and one of them is everybody: a member wants the
+        // checks they owe, an officer wants the state of the fleet.
+        //
+        // "My Checklists" carries no permission gate on purpose. Walking a
+        // truck is the one thing every member does, the API narrows
+        // /my-checklists to the caller, and this row is now their only route
+        // to it — the Scheduling tab that used to carry them here is gone, and
+        // until it was added nothing in the nav pointed at checklists at all.
+        ...(isModuleOn('inventory')
+          ? [
+              {
+                label: 'My Checklists',
+                path: '/inventory/checklists/my',
+                icon: ClipboardCheck,
+              },
+              {
+                label: 'Fleet Readiness',
+                path: '/inventory/checklists',
+                // Not ClipboardCheck, which "My Checklists" directly above
+                // already uses. The rail collapses to a 20-unit icon-only
+                // strip where the label is replaced by a hover title, so two
+                // adjacent rows sharing a glyph are indistinguishable at a
+                // glance — and these two are for different audiences: the
+                // checks you owe versus the state of the fleet.
+                icon: ShieldCheck,
+                anyPermission: ['inventory.check_view', 'scheduling.manage'],
+              },
+            ]
+          : []),
         // The crew half of the same shelf: "we just used two of these",
         // recorded without starting a whole checklist. Gated on the default
         // member grant, matching the route's own gate — this is the medical
         // page most members actually need, and until now nothing in the nav
         // pointed at it.
-        ...(isModuleOn('scheduling')
+        ...(isModuleOn('inventory')
           ? [
               {
                 label: 'Apparatus Inventory',
-                path: '/scheduling/apparatus-inventory',
+                path: '/inventory/checklists/apparatus-inventory',
                 icon: Truck,
-                anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
+                anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
               },
             ]
           : []),
@@ -286,7 +325,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]
           : [{ label: 'Apparatus', path: '/apparatus-basic', icon: Truck }]),
-        ...(isModuleOn('facilities') ? [{ label: 'Facilities', path: '/facilities', icon: Building2 }] : []),
+        ...(isModuleOn('facilities')
+          ? [
+              {
+                label: 'Facilities',
+                path: '/facilities',
+                icon: Building2,
+                anyPermission: [...FACILITY_ENTRY_PERMISSIONS],
+              },
+            ]
+          : []),
       ],
     },
     // When Facilities module is off, show a lightweight Locations page
@@ -487,6 +535,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 icon: Megaphone,
                 permission: 'notifications.manage',
               },
+              {
+                label: 'Photo Use Consent',
+                path: '/communications/photo-use-consent',
+                icon: Camera,
+                anyPermission: ['users.view_consents', 'notifications.manage', 'members.manage', 'users.edit'],
+              },
               ...(isModuleOn('forms')
                 ? [{ label: 'Forms', path: '/forms', icon: FormInput, permission: 'forms.manage' }]
                 : []),
@@ -559,6 +613,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 icon: AlertTriangle,
                 permission: 'settings.manage',
               },
+              ...(isModuleOn('testing')
+                ? [
+                    {
+                      label: 'Testing Home',
+                      path: '/testing',
+                      icon: ClipboardCheck,
+                      permission: 'settings.manage',
+                    },
+                  ]
+                : []),
             ],
           } as NavItem,
         ]

@@ -31,9 +31,10 @@ import {
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
-import { MODULE_REGISTRY, type ModuleDefinition } from '../config';
+import { MODULE_REGISTRY, isAgencyFilteredOut, type ModuleDefinition } from '../config';
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { buildPositionTemplates } from './positionTemplates';
 
 /**
  * Build permission categories dynamically from the module registry.
@@ -73,398 +74,23 @@ const generateDefaultPermissions = (
 };
 
 /**
- * Generate permissions for a specific role type.
- * This ensures new modules get sensible defaults for each role.
+ * Positions the members category used to offer, which are really a member's
+ * class and status rather than a job they hold. They are set on the member
+ * record now, and migration c3d4e5f6a7b8 recovers the standing of anyone who
+ * already holds one.
+ *
+ * Kept as a named list because an in-flight onboarding session persists its
+ * position picks to localStorage: without this, resuming a session started
+ * before the change re-creates exactly what the migration just retired.
  */
-const generateRolePermissions = (
-  modules: ModuleDefinition[],
-  roleType: 'full_access' | 'leadership' | 'officer' | 'specialist' | 'member' | 'probationary',
-  specialties?: string[]
-): Record<string, { view: boolean; manage: boolean }> => {
-  const permissions: Record<string, { view: boolean; manage: boolean }> = {};
-
-  modules.forEach((module) => {
-    switch (roleType) {
-      case 'full_access':
-        // Full access to everything
-        permissions[module.id] = { view: true, manage: true };
-        break;
-      case 'leadership':
-        // Leaders can manage most things except sensitive system modules
-        permissions[module.id] = {
-          view: true,
-          manage: module.id !== 'settings',
-        };
-        break;
-      case 'officer':
-        // Officers can view everything, manage their area
-        permissions[module.id] = {
-          view: true,
-          manage: specialties?.includes(module.id) || false,
-        };
-        break;
-      case 'specialist':
-        // Specialists have narrow focus
-        permissions[module.id] = {
-          view: true,
-          manage: specialties?.includes(module.id) || false,
-        };
-        break;
-      case 'member':
-        // Standard members can view most things
-        permissions[module.id] = {
-          view: module.category !== 'System',
-          manage: false,
-        };
-        break;
-      case 'probationary':
-        // Limited view access
-        permissions[module.id] = {
-          view: ['members', 'events', 'documents', 'training', 'scheduling'].includes(module.id),
-          manage: false,
-        };
-        break;
-    }
-  });
-
-  return permissions;
-};
-
-/**
- * Build position templates dynamically using the module registry.
- * This ensures new modules are included in position permissions automatically.
- */
-const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
-  system: {
-    name: 'System / Special',
-    description: 'System administration and IT management positions',
-    positions: [
-      {
-        id: 'it_manager',
-        name: 'IT Manager',
-        description: 'Full system access - manages integrations, settings, and technical administration',
-        icon: Monitor,
-        priority: 100,
-        permissions: generateRolePermissions(modules, 'full_access'),
-      },
-    ],
-  },
-  operational_ranks: {
-    name: 'Operational Ranks',
-    description: 'Fire/EMS command and line positions',
-    positions: [
-      {
-        id: 'fire_chief',
-        name: 'Fire Chief',
-        description: 'Highest-ranking officer with full operational and administrative authority',
-        icon: Flame,
-        priority: 95,
-        permissions: generateRolePermissions(modules, 'full_access'),
-      },
-      {
-        id: 'deputy_chief',
-        name: 'Deputy Chief',
-        description: "Second in command, oversees operations in the Chief's absence",
-        icon: Flame,
-        priority: 90,
-        permissions: generateRolePermissions(modules, 'leadership'),
-      },
-      {
-        id: 'assistant_chief',
-        name: 'Assistant Chief',
-        description: 'Assists the Chief and Deputy Chief with operational oversight',
-        icon: Flame,
-        priority: 85,
-        permissions: generateRolePermissions(modules, 'leadership'),
-      },
-      {
-        id: 'captain',
-        name: 'Captain',
-        description: 'Company officer responsible for crew management and operations',
-        icon: Star,
-        priority: 70,
-        permissions: generateRolePermissions(modules, 'officer', [
-          'members',
-          'training',
-          'scheduling',
-          'events',
-          'apparatus',
-        ]),
-      },
-      {
-        id: 'lieutenant',
-        name: 'Lieutenant',
-        description: 'Company officer assisting the Captain with crew supervision',
-        icon: Star,
-        priority: 60,
-        permissions: generateRolePermissions(modules, 'officer', ['training', 'scheduling', 'events', 'apparatus']),
-      },
-      {
-        id: 'engineer',
-        name: 'Engineer / Driver Operator',
-        description: 'Apparatus operator responsible for vehicle operations and maintenance',
-        icon: Wrench,
-        priority: 40,
-        permissions: generateRolePermissions(modules, 'specialist', ['apparatus']),
-      },
-      {
-        id: 'firefighter',
-        name: 'Firefighter',
-        description: 'Line firefighter with standard operational access',
-        icon: Shield,
-        priority: 15,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'emt',
-        name: 'EMT',
-        description: 'Emergency Medical Technician providing patient care on EMS calls',
-        icon: HeartPulse,
-        priority: 10,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-    ],
-  },
-  leadership: {
-    name: 'Leadership',
-    description: 'Executive leadership positions',
-    positions: [
-      {
-        id: 'president',
-        name: 'President',
-        description: 'Top executive leader of the organization',
-        icon: Crown,
-        priority: 95,
-        permissions: generateRolePermissions(modules, 'full_access'),
-      },
-      {
-        id: 'vice_president',
-        name: 'Vice President',
-        description: 'Second in command, supports the President',
-        icon: Star,
-        priority: 80,
-        permissions: generateRolePermissions(modules, 'leadership'),
-      },
-      {
-        id: 'board_of_directors',
-        name: 'Board of Directors',
-        description: 'Governing board with oversight of organizational operations',
-        icon: Building2,
-        priority: 85,
-        permissions: generateRolePermissions(modules, 'leadership'),
-      },
-    ],
-  },
-  officers: {
-    name: 'Officers',
-    description: 'Elected or appointed officers with specific duties',
-    positions: [
-      {
-        id: 'secretary',
-        name: 'Secretary',
-        description: 'Records, communications, and elections',
-        icon: Briefcase,
-        priority: 75,
-        permissions: generateRolePermissions(modules, 'officer', [
-          'members',
-          'events',
-          'documents',
-          'elections',
-          'minutes',
-          'reports',
-          'prospective_members',
-        ]),
-      },
-      {
-        id: 'assistant_secretary',
-        name: 'Assistant Secretary',
-        description: 'Assists the secretary with records and communications',
-        icon: Briefcase,
-        priority: 70,
-        permissions: generateRolePermissions(modules, 'officer', ['members', 'events', 'documents', 'minutes']),
-      },
-      {
-        id: 'treasurer',
-        name: 'Treasurer',
-        description: 'Financial oversight and reporting',
-        icon: Briefcase,
-        priority: 75,
-        permissions: generateRolePermissions(modules, 'officer', ['documents', 'reports']),
-      },
-      {
-        id: 'training_officer',
-        name: 'Training Officer',
-        description: 'Manages training programs and certifications',
-        icon: GraduationCap,
-        priority: 65,
-        permissions: generateRolePermissions(modules, 'specialist', ['training', 'events', 'documents']),
-      },
-      {
-        id: 'safety_officer',
-        name: 'Safety Officer',
-        description: 'Safety compliance and oversight',
-        icon: Shield,
-        priority: 65,
-        permissions: generateRolePermissions(modules, 'specialist', [
-          'training',
-          'events',
-          'documents',
-          'inventory',
-          'reports',
-          'forms',
-        ]),
-      },
-      {
-        id: 'communications_officer',
-        name: 'Communications Officer / PIO',
-        description: 'Public information, website, social media, newsletters, and notification management',
-        icon: Megaphone,
-        priority: 55,
-        permissions: generateRolePermissions(modules, 'specialist', ['notifications', 'mobile', 'events', 'documents']),
-      },
-    ],
-  },
-  support: {
-    name: 'Support Positions',
-    description: 'Specialized support and operational positions',
-    positions: [
-      {
-        id: 'quartermaster',
-        name: 'Quartermaster',
-        description: 'Equipment and inventory management',
-        icon: Wrench,
-        priority: 85,
-        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'storefront']),
-      },
-      {
-        id: 'scheduling_officer',
-        name: 'Scheduling Officer',
-        description: 'Manages duty rosters and shift scheduling',
-        icon: ClipboardList,
-        priority: 55,
-        permissions: generateRolePermissions(modules, 'specialist', ['scheduling']),
-      },
-      {
-        id: 'public_outreach',
-        name: 'Public Outreach',
-        description: 'Community events and public education',
-        icon: Users,
-        priority: 55,
-        permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents']),
-      },
-      {
-        id: 'historian',
-        name: 'Historian',
-        description: 'Maintains organizational history, archives, and records',
-        icon: ClipboardList,
-        priority: 45,
-        permissions: generateRolePermissions(modules, 'specialist', ['documents', 'events']),
-      },
-      {
-        id: 'apparatus_officer',
-        name: 'Apparatus Officer',
-        description: 'Day-to-day fleet tracking, maintenance logging, and equipment checks',
-        icon: Truck,
-        priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['apparatus', 'inventory', 'storefront']),
-      },
-      {
-        id: 'membership_coordinator',
-        name: 'Membership Coordinator',
-        description: 'Manages member records, applications, and onboarding/offboarding',
-        icon: UserPlus,
-        priority: 55,
-        permissions: generateRolePermissions(modules, 'specialist', ['members', 'prospective_members']),
-      },
-      {
-        id: 'fundraising_chair',
-        name: 'Fundraising Chair',
-        description: 'Coordinates fundraising activities and campaigns',
-        icon: BadgeCheck,
-        priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['events', 'documents', 'reports']),
-      },
-      {
-        id: 'meeting_hall_coordinator',
-        name: 'Meeting Hall Coordinator',
-        description: 'Manages meeting hall and location bookings',
-        icon: ClipboardList,
-        priority: 60,
-        permissions: generateRolePermissions(modules, 'specialist', ['events', 'scheduling']),
-      },
-      {
-        id: 'facilities_manager',
-        name: 'Facilities Manager',
-        description: 'Day-to-day building management, maintenance logging, and inspections',
-        icon: Building2,
-        priority: 50,
-        permissions: generateRolePermissions(modules, 'specialist', ['inventory', 'facilities', 'storefront']),
-      },
-    ],
-  },
-  members: {
-    name: 'Member Positions',
-    description: 'Standard and special member access levels',
-    positions: [
-      {
-        id: 'member',
-        name: 'Regular Member',
-        description: 'Regular department member',
-        icon: Users,
-        priority: 10,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'probationary_member',
-        name: 'Probationary Member',
-        description: 'New members with limited access during their trial period',
-        icon: UserPlus,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'junior_member',
-        name: 'Junior Member',
-        description: 'Youth or junior participants with restricted access',
-        icon: Users,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'life_member',
-        name: 'Life Member',
-        description: 'Long-serving members with honorary status',
-        icon: BadgeCheck,
-        priority: 10,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'administrative_member',
-        name: 'Administrative Member',
-        description: 'Members focused on administrative and support duties',
-        icon: Briefcase,
-        priority: 8,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'social_member',
-        name: 'Social / Associate Member',
-        description: 'Non-operational members involved socially',
-        icon: Users,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'exempt_member',
-        name: 'Exempt / Retired Member',
-        description: 'Former active members with limited access',
-        icon: BadgeCheck,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-    ],
-  },
-});
+const RETIRED_STANDING_SLUGS = new Set([
+  'probationary_member',
+  'junior_member',
+  'life_member',
+  'administrative_member',
+  'social_member',
+  'exempt_member',
+]);
 
 // Icon lookup map for serialization/deserialization
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -511,28 +137,73 @@ const PositionSetup: React.FC = () => {
   const lastSaved = useOnboardingStore((state) => state.lastSaved);
   const savedPositionsConfig = useOnboardingStore((state) => state.positionsConfig);
   const setPositionsConfig = useOnboardingStore((state) => state.setPositionsConfig);
+  const organizationType = useOnboardingStore((state) => state.organizationType);
 
   // Build permission categories and position templates from the module registry
   // This ensures new modules automatically appear in position configuration
   const permissionCategories = useMemo(() => buildPermissionCategories(MODULE_REGISTRY), []);
-  const positionTemplates = useMemo(() => buildPositionTemplates(MODULE_REGISTRY), []);
+  const positionTemplates = useMemo(
+    () => buildPositionTemplates(MODULE_REGISTRY, organizationType),
+    [organizationType]
+  );
+
+  // Flattened view of the agency-filtered templates, for reconciling a restored
+  // config against them. A custom position an admin invented has no template
+  // and is kept as-is.
+  const templatesById = useMemo(
+    () =>
+      new Map(
+        Object.values(positionTemplates).flatMap((category) =>
+          category.positions.map((position) => [position.id, position] as const)
+        )
+      ),
+    [positionTemplates]
+  );
 
   // Selected positions - restore from Zustand store if available, otherwise use defaults
   const [selectedPositions, setSelectedPositions] = useState<Record<string, RoleConfig>>(() => {
-    // Restore from persisted store if available
+    // Restore from persisted store if available.
+    //
+    // The restored map goes through the same agency filter as a fresh one, and
+    // has to. It is read from localStorage, so it can predate this filter
+    // existing — an EMS department that reached this step on an earlier build
+    // has `firefighter` sitting in its saved config, ticked. Submitting it does
+    // not merely show a position in error: `save_session_roles` finds no system
+    // position with that slug and *creates* one, putting back exactly the row
+    // the backend declined to seed. Names are refreshed from the template for
+    // the same reason, so a config saved as "Fire Chief" reads "Chief".
     if (savedPositionsConfig) {
       const restored: Record<string, RoleConfig> = {};
       for (const [posId, saved] of Object.entries(savedPositionsConfig)) {
+        // Two independent reasons a saved pick must not come back, and both
+        // have to run. Dropped by slug rather than by "not in the current
+        // templates", which would also discard the custom positions a
+        // department built in this very session.
+        //
+        // 1. A membership standing, which is no longer a position at all: this
+        //    restore is what would put one back, because handleContinue
+        //    submits whatever is here — recreating the permission-bearing row
+        //    *after* the recovery migration has already reclassified those
+        //    members.
+        if (RETIRED_STANDING_SLUGS.has(posId)) continue;
+        // 2. A discipline position this agency does not have. Same mechanism,
+        //    different cause: the config predates the agency filter, so an EMS
+        //    service resuming an older session still has `firefighter` ticked.
+        const template = templatesById.get(posId);
+        if (!template && isAgencyFilteredOut(posId, organizationType)) continue;
         restored[posId] = {
           ...saved,
+          ...(template ? { name: template.name } : {}),
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
         };
       }
       return restored;
     }
 
-    // Build templates for initial state
-    const templates = buildPositionTemplates(MODULE_REGISTRY);
+    // Build templates for initial state. The store default is the full fire
+    // set, so a wizard resumed with a cleared store offers one position too
+    // many rather than silently hiding one.
+    const templates = buildPositionTemplates(MODULE_REGISTRY, organizationType);
 
     // Pre-select essential positions
     const initial: Record<string, RoleConfig> = {};

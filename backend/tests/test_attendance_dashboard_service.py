@@ -12,6 +12,8 @@ from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.services.attendance_dashboard_service import AttendanceDashboardService
 
 
@@ -215,7 +217,9 @@ class TestVotingEligibility:
 class TestWaivers:
     async def test_grant_creates_record_when_absent(self):
         db = MagicMock()
-        db.execute = AsyncMock(return_value=_one(None))  # no existing attendee
+        # assert_in_org(Meeting), assert_in_org(User), then the existing-
+        # attendee lookup (no existing attendee).
+        db.execute = AsyncMock(side_effect=[_one("m1"), _one("u1"), _one(None)])
         db.add = MagicMock()
         db.commit = AsyncMock()
         out = await AttendanceDashboardService(db).grant_waiver(
@@ -234,7 +238,7 @@ class TestWaivers:
             waiver_granted_at=None,
         )
         db = MagicMock()
-        db.execute = AsyncMock(return_value=_one(existing))
+        db.execute = AsyncMock(side_effect=[_one("m1"), _one("u1"), _one(existing)])
         db.add = MagicMock()
         db.commit = AsyncMock()
         await AttendanceDashboardService(db).grant_waiver(
@@ -243,6 +247,18 @@ class TestWaivers:
         assert existing.waiver_reason == "Sick"
         assert existing.excused is True
         db.add.assert_not_called()
+
+    async def test_grant_rejects_meeting_outside_org(self):
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(None))  # Meeting not in org
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        with pytest.raises(ValueError, match="Meeting"):
+            await AttendanceDashboardService(db).grant_waiver(
+                "m1", "u1", "org-1", "admin", "Out of town"
+            )
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
 
     async def test_list_waivers_resolves_names(self):
         waiver = SimpleNamespace(
@@ -264,6 +280,4 @@ class TestWaivers:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    import pytest
-
     raise SystemExit(pytest.main([__file__, "-v"]))

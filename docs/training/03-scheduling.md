@@ -232,9 +232,9 @@ Times are printed in the department's configured timezone, not UTC.
 
 ### Apparatus check sheet
 
-**Required permission:** `equipment_check.view`, `equipment_check.submit`, or
-`equipment_check.manage` — the same permissions that open the template itself.
-A member who only holds `equipment_check.submit` gets the checklists for the
+**Required permission:** `inventory.check_view`, `inventory.check_submit`, or
+`inventory.check_manage` — the same permissions that open the template itself.
+A member who only holds `inventory.check_submit` gets the checklists for the
 positions they actually check, exactly as they do on screen.
 
 From **Equipment Check Templates**, click the printer icon on a template. The
@@ -631,6 +631,12 @@ members that the rest of the schedule does not.
   required only `scheduling.view`, which every signed-in member holds
   implicitly. Anyone who used Platoon Management before and does not hold
   `scheduling.manage` will now get a permission error there.
+
+![Platoon Management refusing a member who does not hold scheduling.manage: an Access Denied page offering Return to Dashboard](./images/19-01-platoons-permission-error.png)
+
+_Shot as the member, because the refusal is the subject — an administrator's
+capture would show the working page and teach the opposite. The refusal is the
+page-level one, not an empty roster: nothing on `/scheduling/platoons` renders._
 
 ### The roster, and who sees it
 
@@ -1071,7 +1077,7 @@ which positions are open to everyone regardless of rank.
 
 **How it affects shift signup:**
 
-- Every open slot in the Dashboard's **Next 7 Days** list offers a **Sign Up**
+- Every open slot in the Dashboard's **Next 30 Days** list offers a **Sign Up**
   button. Eligibility is checked when you press it, not before — the row gives
   no advance warning
 - Pressing **Sign Up** expands the row into a position dropdown holding **only
@@ -1233,7 +1239,7 @@ see its tracked positions compartment by compartment: what is aboard, the lots
 and expiration dates on each one, and the ready stock on the shelf behind it.
 
 **No check is required and no shift is required.** It is readable at any hour by
-any member with `equipment_check.submit` — the default member position — because
+any member with `inventory.check_submit` — the default member position — because
 recording what you just used is crew work, and putting it behind an officer
 permission is the thing that leaves the bracket empty until morning.
 
@@ -1470,7 +1476,7 @@ already says.
 | A position carries lots **and** you are inside a check           | You get the per-lot **Correct** control only. The older single-date "replaced — new date" affordance appears only where there are no lots to correct, so one fact never has two contradictory inputs                              |
 | A template is cloned to a second rig                             | The catalog link comes with it. It used to be dropped silently, which is how a department stands up its second engine with nothing tracked                                                                                        |
 | A shelf lot is deleted while units from it are on a truck        | The truck's record survives. Lot number and expiration are copied onto the deployed record rather than read through the shelf lot                                                                                                 |
-| A member has `equipment_check.submit` but not `inventory.manage` | They can report use, recount, swap and correct lots. They cannot create a new catalog item from the quick-add bar                                                                                                                 |
+| A member has `inventory.check_submit` but not `inventory.manage` | They can report use, recount, swap and correct lots. They cannot create a new catalog item from the quick-add bar                                                                                                                 |
 
 ### Shift Finalization _(2026-03-28)_
 
@@ -1650,20 +1656,19 @@ override is still logged and still audited.
 Navigate to **Scheduling > Settings > Shift Reports** to configure the shift completion report workflow. This settings tab connects the scheduling module to the training module and controls how officers file post-shift reports.
 
 The tab is a **section navigator, not a page of cards** — you pick one section
-at a time from the list and it fills the panel. There are eight: Feature
-Toggles, Checklist Timing, Post-Shift Validation, Feedback Defaults, Apparatus
-Skills, Form Sections, Review Workflow and Rating Scale. (The section is
-labelled **Form Sections**; earlier versions of this guide called it "Report
-Form Sections".)
+at a time from the list and it fills the panel. There are seven: Feature
+Toggles, Post-Shift Validation, Feedback Defaults, Apparatus Skills, Form
+Sections, Review Workflow and Rating Scale. (The section is labelled **Form
+Sections**; earlier versions of this guide called it "Report Form Sections".)
 
-![Shift Reports settings with the Checklist Timing section selected](./images/03-34-settings-checklist-timing.png)
+#### Checklist Timing — now in Inventory _(2026-08-31)_
 
-#### Checklist Timing
-
-| Setting                | Default | Description                                              |
-| ---------------------- | ------- | -------------------------------------------------------- |
-| Start of shift enabled | On      | Whether start-of-shift equipment checklists are prompted |
-| End of shift enabled   | On      | Whether end-of-shift equipment checklists are prompted   |
+This section used to sit here, as an eighth. Equipment checklists are an
+Inventory feature, so the settings that govern them moved with the rest: they
+are now at **Gear Admin > Equipment Checklists > Checklist settings**. See
+[Inventory](./05-inventory.md). What they control is unchanged — whether crews
+are prompted at shift start and shift end, and how long the check-in link stays
+usable.
 
 #### Post-Shift Validation
 
@@ -2107,10 +2112,12 @@ The self-signup button visibility on the Open Shifts tab had a fallback permissi
 
 ### Dashboard Shift Display
 
-The dashboard's shift panels were merged into a single **Next 7 Days**
+The dashboard's shift panels were merged into a single **Next 30 Days**
 timeline: your own shifts (marked **Yours**), open slots you can sign up for,
-and upcoming events in one seven-day list, with a line noting how much more
-lies beyond the window. The old "My Upcoming Shifts" filtering rules carry
+and upcoming events in one thirty-day list, with a line noting how much more
+lies beyond the window. The **All Shifts** control in its header opens the
+scheduling calendar on the month view — shifts only, since drills and events
+live in their own modules. The old "My Upcoming Shifts" filtering rules carry
 over — declined and cancelled assignments do not appear:
 
 - Declined assignments (shifts you said "no" to)
@@ -2125,7 +2132,7 @@ Shifts**, where each card carries its badge and the bulk Confirm All /
 Decline All bar sits above them. What the dashboard promises is narrower —
 that everything marked Yours is a shift you are still on.
 
-![The dashboard's Next 7 Days timeline, listing the member's own shifts alongside open slots and events](./images/03-60-dashboard-my-shifts.png)
+![The dashboard's Next 30 Days timeline, listing the member's own shifts alongside open slots and events](./images/03-60-dashboard-my-shifts.png)
 
 ### Desktop Camera Scanning
 
@@ -2335,7 +2342,6 @@ The scheduling page now supports `?tab=` query parameters for direct navigation 
 | `?tab=my-shifts`        | My Shifts           |
 | `?tab=open-shifts`      | Open Shifts         |
 | `?tab=requests`         | Requests            |
-| `?tab=equipment-checks` | Equipment Checks    |
 | `?tab=shift-reports`    | Shift Reports       |
 
 Shift notifications automatically deep-link to the correct tab. For example, clicking a shift assignment notification opens the scheduling page with My Shifts selected and the shift highlighted.
@@ -2853,7 +2859,7 @@ same record.
 Also changed:
 
 - **Standalone (non-shift) equipment checks still accept
-  `equipment_check.submit`** as well as `equipment_check.manage`, so ordinary
+  `inventory.check_submit`** as well as `inventory.check_manage`, so ordinary
   members keep the ad-hoc check they had.
 - **Deep nested storage paths now fit** in a check item's recorded location.
 - **A compartment cannot be made its own parent.**
@@ -3045,3 +3051,114 @@ screenshot it, or promise it in this release.
 A crew member without `inventory.manage` could move **any** quantity from ready
 stock onto the truck, and dispose of lots that were never aboard it. A swap is
 now bounded by the lot it replaces, and that lot has to actually be on the item.
+
+---
+
+## Building a Check Template: One List You Scroll _(2026-08-30)_
+
+**The builder was rebuilt, not restyled.** If you learned this screen before
+August 30, the controls you are looking for are not where they were — most of
+them are not there at all.
+
+**What is gone:** the metadata sidebar, the three-step progress strip along the
+top, the "Template readiness" card, and the Quick Add / Bulk Add mode toggle.
+
+**What replaced all of it:** sections, locations and items are rows in **one
+list, in the order a crew walks the rig**.
+
+### The row is the editor
+
+An item's **name**, its **answer type** — Works / Count / Level / Date — and
+the **one number that answer is graded against** are edited directly in the
+row.
+
+Everything else — description, serial and lot numbers, image, critical minimum,
+the inventory link — sits behind a **disclosure on that row**. This is the
+change that decides how long a template takes to build: opening the disclosure
+is no longer a prerequisite for a complete item. Fill a whole rig's worth of
+names and answer types without opening anything.
+
+Numbers stay labelled once they hold a value — "par 4" and "min 2" on a count,
+"30 days" on an expiry warning — so a finished checklist never shows two
+adjacent numbers with no way to tell which threshold is which.
+
+### Adding items
+
+**One box per location.** Type an item and press **Enter**. Or paste a whole
+list and confirm a preview that names every line and lets you set the answer
+type for all of them at once.
+
+### Nesting a location
+
+**The indent button on the row.** It used to be a "Reparent: stored inside"
+dropdown listing every other location on the template; that is still available
+from the row's overflow menu for moving something a long way.
+
+### Publish tells you exactly what is wrong
+
+Instead of a readiness score, you get **a list of the specific things to fix**
+beside the checklist. Each entry names where the problem is, and clicking it
+**jumps to the row, opens its location, and puts your cursor in the empty
+field.**
+
+On tablets and smaller laptops (below 1440px) that list is a bar along the
+bottom of the checklist that opens as a sheet — it used to be reachable only by
+widening the window.
+
+### The preview
+
+**The preview docks only at 1440px and wider** (`isWideCanvas`). Below that —
+which includes tablets and a good many laptops, a 1366px screen among them —
+the Preview control opens the modal, exactly as it does on a phone. The rail
+costs 344px, and under 1440 that leaves a canvas too narrow to edit in.
+
+Where it docks, it updates as you edit rather than making you open and close a
+modal each time.
+
+**Phones keep the layout they had:** compact rows, the full-height item editor,
+and the search-inventory add sheet.
+
+### Starting from a vehicle layout
+
+The vehicle-layout picker and the "How would you like to start?" card on an
+empty template now match the rest of the checklist, and the picker **replaces**
+that card rather than appearing above it. Each layout says how many locations
+and items it brings in before you choose it.
+
+On a brand-new template, adding the first location now **opens it ready for
+items** — it used to arrive collapsed with nowhere to type.
+
+> **[SCREENSHOT — REPLACE the equipment check template builder capture, wide
+> canvas.** _Demo data:_ an engine template with three locations, one nested
+> inside another, at least one item of each answer type, and the "Before
+> publishing" list showing two outstanding items. **Set the viewport to at
+> least 1440px** — the preview does not dock below that, so a 1366px laptop
+> cannot produce this shot. **The old capture shows a sidebar, a progress strip
+> and a readiness card, none of which exist.**]**
+
+> **[SCREENSHOT — REPLACE the equipment check template builder capture, phone
+> (390×844).** _Demo data:_ the same template; capture the compact rows with
+> the blockers bar along the bottom.**]**
+
+### Bulk edits and bulk deletes
+
+- **A bulk edit now saves every item you selected**, not just the last one.
+- **A bulk delete is retry-safe.** If the request is sent twice — a flaky
+  connection, a double tap — the second one cannot delete whatever happens to
+  be occupying those positions by then. Before, an intervening edit meant a
+  retry deleted rows nobody had selected.
+- **Duplicating a location gives its items their own identities**, so editing
+  the copy no longer reaches back into the original.
+
+### Drafts survive a template edit
+
+A saved draft check is keyed to the template's **content revision**. If the
+template changes while somebody has a draft open, the draft is not replayed
+against a checklist that no longer matches it — the questions it answered are
+the questions it is scored against.
+
+### Still not here
+
+**Walking a check as a lap** remains built and unwired, unchanged by this
+rebuild. The builder is the *authoring* side; the live check screen still shows
+the flat compartment list. Do not teach it, screenshot it, or promise it.

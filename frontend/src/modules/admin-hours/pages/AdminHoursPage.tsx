@@ -32,16 +32,18 @@ import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
 import { formatDuration } from '../utils/formatDuration';
 import { QUARTER_HOUR, formatHours, formatHoursExact, roundHoursToQuarter } from '../../../utils/hoursFormatting';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reportingRange';
+import { addHours, syncEndToStart } from '../utils/entryTimes';
+import QuickDurationButtons from '../components/QuickDurationButtons';
 
 const PAGE_SIZE = 20;
 
 // `phrase` reads as a trailing clause ("No hours logged <phrase>"), which is
 // the only form that stays grammatical across a named window and all time.
 const PERIOD_OPTIONS = [
-  { value: 'all', label: 'All time', phrase: 'yet' },
   { value: 'month', label: 'This month', phrase: 'this month' },
   { value: '30-days', label: 'Last 30 days', phrase: 'in the last 30 days' },
   { value: 'year', label: 'This year', phrase: 'this year' },
+  { value: 'all', label: 'All time', phrase: 'yet' },
 ] as const;
 
 type ReportingPeriod = (typeof PERIOD_OPTIONS)[number]['value'];
@@ -116,7 +118,9 @@ const AdminHoursPage: React.FC = () => {
   });
 
   // Filters
-  const [period, setPeriod] = useState<ReportingPeriod>('all');
+  // The month people are currently reporting against is what they open this
+  // page to check; the selector widens it from there.
+  const [period, setPeriod] = useState<ReportingPeriod>('month');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [page, setPage] = useState(0);
@@ -216,11 +220,30 @@ const AdminHoursPage: React.FC = () => {
     try {
       await clockOut(activeSession.id);
       toast.success('Clocked out successfully');
+      // The store's clockOut refetches without params. Re-request the list the
+      // member is actually looking at, or a filtered view silently reverts to
+      // every entry they have ever logged.
+      void fetchMyEntries(entryQuery);
+      if (currentUserId) {
+        void fetchMySummary({ userId: currentUserId, ...dateBounds });
+      }
     } catch {
       // error handled by store
     } finally {
       setClockingOut(false);
     }
+  };
+
+  const handleManualStartChange = (value: string) => {
+    setManualData({
+      ...manualData,
+      clock_in_at: value,
+      clock_out_at: syncEndToStart(manualData.clock_in_at, value, manualData.clock_out_at ?? '', tz),
+    });
+  };
+
+  const handleManualDuration = (hours: number) => {
+    setManualData({ ...manualData, clock_out_at: addHours(manualData.clock_in_at, hours, tz) });
   };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
@@ -274,6 +297,15 @@ const AdminHoursPage: React.FC = () => {
     const end = new Date(localToUTC(manualData.clock_out_at, tz)).getTime();
     if (isNaN(start) || isNaN(end) || end <= start) return null;
     return Math.floor((end - start) / 60000);
+  }, [manualData.clock_in_at, manualData.clock_out_at, tz]);
+
+  // Its own flag rather than a branch inside the duration preview: that memo is
+  // null for exactly the case this warns about, so the message never rendered.
+  const manualEndBeforeStart = useMemo(() => {
+    if (!manualData.clock_in_at || !manualData.clock_out_at) return false;
+    const start = new Date(localToUTC(manualData.clock_in_at, tz)).getTime();
+    const end = new Date(localToUTC(manualData.clock_out_at, tz)).getTime();
+    return !isNaN(start) && !isNaN(end) && end <= start;
   }, [manualData.clock_in_at, manualData.clock_out_at, tz]);
 
   const manualFormValid = useMemo(() => {
@@ -641,34 +673,46 @@ const AdminHoursPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Time *</label>
+                <label htmlFor="manual-clock-in" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Start Time *
+                </label>
                 <DateTimeQuarterHour
+                  id="manual-clock-in"
                   value={manualData.clock_in_at}
-                  onChange={(val) => setManualData({ ...manualData, clock_in_at: val })}
+                  onChange={handleManualStartChange}
                   required
                   className="form-input"
+                  timezone={tz}
                 />
               </div>
               <div>
-                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Time *</label>
+                <label htmlFor="manual-clock-out" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  End Time *
+                </label>
                 <DateTimeQuarterHour
+                  id="manual-clock-out"
                   value={manualData.clock_out_at}
                   onChange={(val) => setManualData({ ...manualData, clock_out_at: val })}
                   required
                   className="form-input"
+                  timezone={tz}
                 />
               </div>
             </div>
+
+            <QuickDurationButtons onSelect={handleManualDuration} disabled={!manualData.clock_in_at} />
 
             {/* Duration preview */}
             {manualDurationMinutes !== null && (
               <div className="text-theme-text-secondary text-sm">
                 Duration:{' '}
                 <span className="text-theme-text-primary font-medium">{formatDuration(manualDurationMinutes)}</span>
-                {manualData.clock_out_at && manualData.clock_out_at <= manualData.clock_in_at && (
-                  <span className="ml-2 text-red-700 dark:text-red-400">End time must be after start time</span>
-                )}
               </div>
+            )}
+            {manualEndBeforeStart && (
+              <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+                End time must be after start time
+              </p>
             )}
 
             <div>

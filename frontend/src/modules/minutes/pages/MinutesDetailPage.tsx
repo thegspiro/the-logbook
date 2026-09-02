@@ -447,7 +447,12 @@ export const MinutesDetailPage: React.FC = () => {
   const handleUnlinkEvent = async () => {
     if (!minutesId) return;
     try {
-      const updated = await minutesService.updateMinutes(minutesId, { event_id: undefined });
+      // Send an explicit null, not undefined: the update body is
+      // JSON.stringify'd, which drops an undefined-valued key entirely, so
+      // the backend's exclude_unset=True read it as "field not touched" and
+      // silently kept the old event_id despite the success toast (Pitfall #1
+      // — update clears need an explicit null, never an omitted key).
+      const updated = await minutesService.updateMinutes(minutesId, { event_id: null });
       setMinutes(updated);
       setLinkedEvent(null);
       toast.success('Event unlinked');

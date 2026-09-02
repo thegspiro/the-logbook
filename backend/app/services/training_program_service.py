@@ -2947,6 +2947,7 @@ class TrainingProgramService:
         mark_completed: bool = False,
         acting_user_id: Optional[UUID] = None,
         can_manage: bool = False,
+        restate: bool = False,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """Idempotently apply source-backed progress to a requirement.
 
@@ -2961,6 +2962,13 @@ class TrainingProgramService:
         and the accrual is applied through ``update_requirement_progress`` (so
         percentage, auto-completion, enrollment rollup, and phase advancement all
         run exactly as for any other feed).
+
+        ``restate`` is for a caller whose source has *changed* rather than been
+        replayed — a reopened training session re-finalized with corrected
+        hours. It reverses the recorded credit and applies the new figure, so
+        the correction reaches the pipeline instead of being swallowed by the
+        idempotency above. Identical units are still a no-op. Leave it false for
+        ordinary feeds: replay safety is the default for a reason.
 
         ``progress_notes`` and ``mark_in_progress`` pass through to the updater so
         richer feeds (shift completion tracks call-type history and forces the
@@ -2993,10 +3001,34 @@ class TrainingProgramService:
                 RequirementProgressCredit.source_id == str(source_id),
             )
         )
-        if existing.scalar_one_or_none() is not None:
-            # Already credited from this source — the idempotent no-op that makes
-            # the feeds safe to replay.
-            return progress, None
+        existing_credit = existing.scalar_one_or_none()
+        if existing_credit is not None:
+            if not restate or float(existing_credit.units or 0) == float(units):
+                # Already credited from this source — the idempotent no-op that
+                # makes the feeds safe to replay.
+                return progress, None
+
+            # A restating caller is not replaying, it is correcting: the source
+            # still exists but now says a different number. Plain idempotency
+            # would drop the correction on the floor, which is how a reopened
+            # and re-finalized session left the member's training record showing
+            # the corrected hours while the pipeline kept the original figure.
+            # Reverse the old units through the normal reversal path — so the
+            # requirement percentage, enrollment rollup and phase state all
+            # unwind exactly as they accrued — then fall through and apply the
+            # new ones as a fresh credit.
+            _, revoke_error = await self.revoke_requirement_credit(
+                progress_id=progress_id,
+                organization_id=organization_id,
+                source_type=source_type,
+                source_id=source_id,
+                verified_by=verified_by,
+            )
+            if revoke_error:
+                return None, revoke_error
+            progress = await self._get_org_scoped_progress(progress_id, organization_id)
+            if progress is None:
+                return None, "Requirement progress not found"
 
         phase_before_id = None
         if mark_completed:
@@ -3150,6 +3182,75 @@ class TrainingProgramService:
                 enrollment.current_phase_id = phase_before_id
                 await self.db.commit()
         return result
+
+    async def reverse_credits_for_source_except(
+        self,
+        organization_id: UUID,
+        source_id: str,
+        keep_progress_ids: set,
+        source_type: Optional[ProgressCreditSource] = None,
+        verified_by: Optional[UUID] = None,
+    ) -> int:
+        """Reverse this source's credits everywhere it no longer feeds.
+
+        ``reverse_credits_for_source`` un-applies a source entirely, for a void
+        or a reversed approval. This is the reconciling variant: the source is
+        still valid but the set of requirements it feeds has *changed*, so
+        anything it credited outside the current set is stale and has to come
+        back off.
+
+        Two things reach this. A training session whose program, requirement or
+        category linkage was corrected during a reopen now feeds different
+        requirement rows, and the old ones carry a different ``progress_id`` —
+        so restating the new destinations would leave the old credit standing
+        and the member counted twice. And a member corrected down to zero hours
+        never reaches the crediting call at all (it is gated on positive
+        hours), so their previous credit would simply survive the correction.
+
+        Returns the number of credits reversed.
+        """
+        filters = [
+            RequirementProgressCredit.source_id == str(source_id),
+            TrainingProgram.organization_id == str(organization_id),
+        ]
+        if source_type is not None:
+            filters.append(RequirementProgressCredit.source_type == source_type)
+
+        result = await self.db.execute(
+            select(
+                RequirementProgressCredit.progress_id,
+                RequirementProgressCredit.source_type,
+            )
+            .join(
+                RequirementProgress,
+                RequirementProgressCredit.progress_id == RequirementProgress.id,
+            )
+            .join(
+                ProgramEnrollment,
+                RequirementProgress.enrollment_id == ProgramEnrollment.id,
+            )
+            .join(
+                TrainingProgram,
+                ProgramEnrollment.program_id == TrainingProgram.id,
+            )
+            .where(*filters)
+        )
+
+        keep = {str(pid) for pid in keep_progress_ids}
+        reversed_count = 0
+        for progress_id, row_source_type in result.all():
+            if str(progress_id) in keep:
+                continue
+            _, error = await self.revoke_requirement_credit(
+                progress_id=progress_id,
+                organization_id=organization_id,
+                source_type=row_source_type,
+                source_id=str(source_id),
+                verified_by=verified_by,
+            )
+            if error is None:
+                reversed_count += 1
+        return reversed_count
 
     async def reverse_credits_for_source(
         self,
@@ -5031,6 +5132,22 @@ class TrainingProgramService:
         if found:
             return found.id, False
 
+        # category_ids is a client-supplied FK array from an uploaded JSON
+        # file, same XC-1 shape _validate_required_courses already guards
+        # for required_courses: an out-of-org id would persist a dangling
+        # cross-tenant reference the compliance evaluator later matches
+        # records against.
+        try:
+            await assert_all_in_org(
+                self.db,
+                TrainingCategory,
+                req_data.get("category_ids"),
+                organization_id,
+                label="linked category",
+            )
+        except ValueError as exc:
+            raise ValueError(f"{exc} (in imported requirement '{name}')") from exc
+
         req = TrainingRequirement(
             organization_id=organization_id,
             name=name,
@@ -5078,10 +5195,15 @@ class TrainingProgramService:
         if not program:
             return [], ["Training program not found"]
 
-        # Batch-fetch user names for error messages (single query)
+        # Batch-fetch user names for error messages (single query). Org-scoped:
+        # a foreign user_id must not resolve to that org's member's real name
+        # in the returned error strings — it falls back to the raw id instead.
         user_id_strs = [str(uid) for uid in user_ids]
         users_result = await self.db.execute(
-            select(User).where(User.id.in_(user_id_strs))
+            select(User).where(
+                User.id.in_(user_id_strs),
+                User.organization_id == str(organization_id),
+            )
         )
         user_map = {str(u.id): u for u in users_result.scalars().all()}
 

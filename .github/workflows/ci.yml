@@ -52,6 +52,45 @@ jobs:
   # ──────────────────────────────────────────────
   # Backend
   # ──────────────────────────────────────────────
+  # Its own job, not a step inside Backend Lint, because of how this breaks.
+  # Two branches each add a migration from the same parent. Both are single-head
+  # against main individually, so both go green; merging the second one forks the
+  # chain and `alembic upgrade head` fails for everyone. That happened on
+  # 2026-08-27 with #1879 and #1890 (4f54af873e99 rejoined them).
+  #
+  # Detection was never the missing piece — this ran inside Backend Lint and did
+  # go red on main immediately. What was missing was noticing, so it gets a name
+  # that says what broke and finishes in seconds instead of being the last step
+  # of a 90-second lint job. The script is pure stdlib (it parses the migration
+  # files with ast), so there is nothing to install.
+  #
+  # NOTE this cannot *prevent* the fork. A pull request is checked against the
+  # main that existed when its run started, and GitHub does not re-run it when
+  # main moves, so a PR validated yesterday can still fork main when merged
+  # today. Only branch protection's "Require branches to be up to date before
+  # merging" closes that gap; this job is what catches it the moment it happens.
+  migration-chain:
+    name: Migration Chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # --strict because the one thing this script reports as a *warning* — a
+      # forked chain, two heads sharing a parent — is the thing that breaks
+      # `alembic upgrade head` for everyone after the merge. Multiple heads is
+      # currently the script's only warning class, so this promotes exactly
+      # that case and nothing else.
+      - name: Validate migration chain
+        run: python scripts/validate_migrations.py --strict
+
   backend-lint:
     name: Backend Lint
     runs-on: ubuntu-latest
@@ -79,7 +118,7 @@ jobs:
         # so CI went *red* on four files that black 26 — the version the
         # pre-commit hook and every developer runs — formats exactly as they
         # are. A pinned version is only a gate if both sides pin the same one.
-        run: pip install 'flake8==7.3.0' 'black==26.5.1' 'isort==8.0.1' 'flake8-pytest-style==2.2.0'
+        run: pip install 'flake8==7.3.0' 'black==26.5.1' 'isort==9.0.1' 'flake8-pytest-style==2.2.0'
 
       # tests/ is in scope alongside app/. It was left out originally, which
       # let 85 violations accumulate unseen: lint-staged only lints *staged*
@@ -115,10 +154,6 @@ jobs:
       # head revisions", after the merge, for everyone. It happened twice in a
       # single day on 2026-08-16. This is the check that sees it, and it needs
       # no database.
-      - name: Validate migration chain
-        if: "!cancelled()"
-        run: python scripts/validate_migrations.py
-
       # Repo-root Python (generate_registry.py, scripts/) is outside the
       # backend working-directory and was linted by nothing, which let five
       # unused imports and an empty f-string accumulate. flake8 only — these
@@ -247,7 +282,22 @@ jobs:
         # runner-image packages (pip/setuptools/wheel) don't fail the build.
         run: |
           pip install -r requirements.txt
-          pip-audit -r requirements.txt
+          # PyPI's advisory endpoint occasionally resets an otherwise healthy
+          # runner connection. Retry transport failures without weakening the
+          # gate: a real vulnerability still fails all three audit attempts.
+          #
+          # `pip-audit` has to stay the first token on its line.
+          # scripts/check_security_scan_policy.py anchors its match at the start
+          # of a line, which is what stops a comment or a quoted string from
+          # satisfying the policy — wrapping the call in `if ...; then` hides
+          # the invocation from that check and fails the gate.
+          for attempt in 1 2 3; do
+            pip-audit -r requirements.txt && exit 0
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
 
       - name: Upload Bandit report
         if: always()
@@ -802,7 +852,12 @@ jobs:
   frontend-test:
     name: Frontend Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Coverage instruments the entire 414-file source denominator and the
+    # current 5,447-test suite can take just over 25 minutes on a two-core
+    # runner. Keep a bounded timeout, but leave enough headroom for the test
+    # command to emit its JUnit and lcov reports instead of killing an otherwise
+    # passing run during coverage finalization.
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: frontend
@@ -1018,6 +1073,7 @@ jobs:
     needs:
       - backend-lint
       - backend-security
+      - migration-chain
       - backend-test
       - backend-test-integration
       - backend-test-contract

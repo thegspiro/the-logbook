@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
 from app.core.permissions import (
-    DEFAULT_ROLES,
+    default_positions_for,
     get_all_permissions,
     get_rank_default_permissions,
     permission_matches,
@@ -149,6 +149,9 @@ class RoleManagementService:
         description: Optional[str] = None,
         priority: int = 0,
         is_system: bool = False,
+        audit_username: Optional[str] = None,
+        audit_ip_address: Optional[str] = None,
+        audit_user_agent: Optional[str] = None,
     ) -> Role:
         """
         Create a new role.
@@ -200,23 +203,32 @@ class RoleManagementService:
         )
 
         db.add(role)
-        await db.commit()
+        try:
+            await db.flush()
+            audit = await log_audit_event(
+                db=db,
+                event_type="role_created",
+                event_category="roles",
+                severity="info",
+                event_data={
+                    "role_id": str(role.id),
+                    "role_name": name,
+                    "role_slug": slug,
+                    "permissions_count": len(permissions),
+                },
+                user_id=created_by,
+                username=audit_username,
+                ip_address=audit_ip_address,
+                user_agent=audit_user_agent,
+                organization_id=organization_id,
+            )
+            if audit is None:
+                raise RuntimeError("Failed to write role creation audit entry")
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
         await db.refresh(role)
-
-        # Audit log
-        await log_audit_event(
-            db=db,
-            event_type="role_created",
-            event_category="roles",
-            severity="info",
-            event_data={
-                "role_id": str(role.id),
-                "role_name": name,
-                "role_slug": slug,
-                "permissions_count": len(permissions),
-            },
-            user_id=created_by,
-        )
 
         logger.info(f"Role created: {name} ({slug}) by user {created_by}")
 
@@ -232,17 +244,23 @@ class RoleManagementService:
         description: Optional[str] = None,
         permissions: Optional[List[str]] = None,
         priority: Optional[int] = None,
+        audit_username: Optional[str] = None,
+        audit_ip_address: Optional[str] = None,
+        audit_user_agent: Optional[str] = None,
     ) -> Role:
         """
         Update a role.
 
-        System roles can only have their permissions and description updated.
+        System roles can only have their permissions and description updated,
+        except that the baseline ``member`` position's display name may also be
+        customized. Position slugs are never updated by this method.
 
         Args:
             role_id: Role ID to update
             organization_id: Organization ID
             updated_by: User ID making the update
-            name: New name (ignored for system roles)
+            name: New display name (only the ``member`` system position and
+                custom positions may be renamed)
             description: New description
             permissions: New permissions list
             priority: New priority (ignored for system roles)
@@ -259,8 +277,15 @@ class RoleManagementService:
 
         changes = {}
 
-        # System roles: only allow description and permissions updates
+        # System roles: only the member position's display label is customizable.
+        # Its stable slug remains the identifier used for baseline assignment and
+        # permission resolution.
         if role.is_system:
+            if name is not None:
+                if role.slug != "member":
+                    raise ValueError("Cannot rename this system position")
+                changes["name"] = {"old": role.name, "new": name}
+                role.name = name
             if description is not None:
                 changes["description"] = {"old": role.description, "new": description}
                 role.description = description
@@ -313,23 +338,32 @@ class RoleManagementService:
                 changes["priority"] = {"old": role.priority, "new": priority}
                 role.priority = priority
 
-        await db.commit()
-        await db.refresh(role)
-
-        # Audit log
         if changes:
-            await log_audit_event(
-                db=db,
-                event_type="role_updated",
-                event_category="roles",
-                severity="info",
-                event_data={
-                    "role_id": str(role.id),
-                    "role_name": role.name,
-                    "changes": changes,
-                },
-                user_id=updated_by,
-            )
+            try:
+                await db.flush()
+                audit = await log_audit_event(
+                    db=db,
+                    event_type="role_updated",
+                    event_category="roles",
+                    severity="info",
+                    event_data={
+                        "role_id": str(role.id),
+                        "role_name": role.name,
+                        "changes": changes,
+                    },
+                    user_id=updated_by,
+                    username=audit_username,
+                    ip_address=audit_ip_address,
+                    user_agent=audit_user_agent,
+                    organization_id=organization_id,
+                )
+                if audit is None:
+                    raise RuntimeError("Failed to write role update audit entry")
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
+            await db.refresh(role)
 
             logger.info(f"Role updated: {role.name} by user {updated_by}")
 
@@ -341,6 +375,9 @@ class RoleManagementService:
         role_id: str,
         organization_id: str,
         deleted_by: str,
+        audit_username: Optional[str] = None,
+        audit_ip_address: Optional[str] = None,
+        audit_user_agent: Optional[str] = None,
     ) -> bool:
         """
         Delete a role.
@@ -387,22 +424,31 @@ class RoleManagementService:
 
         # Delete role (cascade will remove user_roles entries)
         await db.delete(role)
-        await db.commit()
-
-        # Audit log
-        await log_audit_event(
-            db=db,
-            event_type="role_deleted",
-            event_category="roles",
-            severity="warning",
-            event_data={
-                "role_id": role_id,
-                "role_name": role_name,
-                "role_slug": role_slug,
-                "affected_users": affected_users,
-            },
-            user_id=deleted_by,
-        )
+        try:
+            await db.flush()
+            audit = await log_audit_event(
+                db=db,
+                event_type="role_deleted",
+                event_category="roles",
+                severity="warning",
+                event_data={
+                    "role_id": role_id,
+                    "role_name": role_name,
+                    "role_slug": role_slug,
+                    "affected_users": affected_users,
+                },
+                user_id=deleted_by,
+                username=audit_username,
+                ip_address=audit_ip_address,
+                user_agent=audit_user_agent,
+                organization_id=organization_id,
+            )
+            if audit is None:
+                raise RuntimeError("Failed to write role deletion audit entry")
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
         logger.info(
             f"Role deleted: {role_name} ({role_slug}) by user {deleted_by}, {affected_users} users affected"
@@ -521,25 +567,30 @@ class RoleManagementService:
                 assigned_by=assigned_by,
             )
         )
-        await db.commit()
-
         # Get role name for audit
         role = await db.execute(select(Role.name).where(Role.id == str(role_id)))
         role_name = role.scalar()
 
         # Audit log
-        await log_audit_event(
-            db=db,
-            event_type="role_assigned",
-            event_category="roles",
-            severity="info",
-            event_data={
-                "user_id": user_id,
-                "role_id": role_id,
-                "role_name": role_name,
-            },
-            user_id=assigned_by,
-        )
+        try:
+            audit = await log_audit_event(
+                db=db,
+                event_type="role_assigned",
+                event_category="roles",
+                severity="info",
+                event_data={
+                    "user_id": user_id,
+                    "role_id": role_id,
+                    "role_name": role_name,
+                },
+                user_id=assigned_by,
+            )
+            if audit is None:
+                raise RuntimeError("Failed to write role assignment audit entry")
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
         logger.info(f"Role '{role_name}' assigned to user {user_id} by {assigned_by}")
 
@@ -573,24 +624,29 @@ class RoleManagementService:
                 user_roles.c.user_id == user_id, user_roles.c.position_id == role_id
             )
         )
-        await db.commit()
-
         if result.rowcount == 0:
             return False  # Wasn't assigned
 
         # Audit log
-        await log_audit_event(
-            db=db,
-            event_type="role_removed",
-            event_category="roles",
-            severity="info",
-            event_data={
-                "user_id": user_id,
-                "role_id": role_id,
-                "role_name": role_name,
-            },
-            user_id=removed_by,
-        )
+        try:
+            audit = await log_audit_event(
+                db=db,
+                event_type="role_removed",
+                event_category="roles",
+                severity="info",
+                event_data={
+                    "user_id": user_id,
+                    "role_id": role_id,
+                    "role_name": role_name,
+                },
+                user_id=removed_by,
+            )
+            if audit is None:
+                raise RuntimeError("Failed to write role removal audit entry")
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
         logger.info(f"Role '{role_name}' removed from user {user_id} by {removed_by}")
 
@@ -654,29 +710,50 @@ class RoleManagementService:
                     action="remove administrator positions from",
                 )
 
-        # Remove old roles
-        for role_id in to_remove:
-            await self.remove_role_from_user(db, user_id, role_id, set_by)
-
-        # Add new roles
-        for role_id in to_add:
-            await self.assign_role_to_user(db, user_id, role_id, set_by)
+        # Apply the complete replacement directly. Calling the single-assignment
+        # methods here would create intermediate commits and duplicate audits.
+        if to_remove:
+            await db.execute(
+                delete(user_roles).where(
+                    user_roles.c.user_id == user_id,
+                    user_roles.c.position_id.in_(to_remove),
+                )
+            )
+        if to_add:
+            await db.execute(
+                insert(user_roles),
+                [
+                    {
+                        "user_id": user_id,
+                        "position_id": role_id,
+                        "assigned_by": set_by,
+                    }
+                    for role_id in to_add
+                ],
+            )
 
         # Audit log the bulk change
         if to_add or to_remove:
-            await log_audit_event(
-                db=db,
-                event_type="user_roles_replaced",
-                event_category="roles",
-                severity="warning",
-                event_data={
-                    "user_id": user_id,
-                    "roles_added": list(to_add),
-                    "roles_removed": list(to_remove),
-                    "new_role_ids": role_ids,
-                },
-                user_id=set_by,
-            )
+            try:
+                audit = await log_audit_event(
+                    db=db,
+                    event_type="user_roles_replaced",
+                    event_category="roles",
+                    severity="warning",
+                    event_data={
+                        "user_id": user_id,
+                        "roles_added": list(to_add),
+                        "roles_removed": list(to_remove),
+                        "new_role_ids": role_ids,
+                    },
+                    user_id=set_by,
+                )
+                if audit is None:
+                    raise RuntimeError("Failed to write role replacement audit entry")
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
 
         # Return updated roles
         return await self.get_user_roles(db, user_id)
@@ -734,22 +811,29 @@ class RoleManagementService:
         db: AsyncSession,
         organization_id: str,
         created_by: str,
+        organization_type: str,
     ) -> List[Role]:
         """
         Initialize default roles for an organization.
 
         Should be called when creating a new organization.
 
+        Nothing calls this today — ``OnboardingService._create_default_roles``
+        is the live path. It takes ``organization_type`` anyway, and requires
+        it, because an uncalled seeder that hands every agency a fire ladder is
+        how the bug this closes would come back the day somebody wires it up.
+
         Args:
             organization_id: Organization ID
             created_by: User ID creating the roles
+            organization_type: Agency type, deciding which positions apply
 
         Returns:
             List of created Role objects
         """
         created_roles = []
 
-        for slug, role_def in DEFAULT_ROLES.items():
+        for slug, role_def in default_positions_for(organization_type).items():
             # Check if role already exists
             existing = await self.get_role_by_slug(db, slug, organization_id)
             if existing:

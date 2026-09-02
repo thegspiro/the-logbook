@@ -106,23 +106,33 @@ role editor can express, so left for a product decision. **Status:** flagged.
 
 ### ONB-8 — MED/LOW (flagged) — Reset trust model + audit durability, `/status` leak
 
-- `/reset` is gated by the onboarding session + CSRF but not the existing owner's
-  re-authentication, so a leaked in-progress session can wipe the owner+org before
-  `/complete`; blocking reset once an owner exists conflicts with legitimately
-  restarting a botched setup, so it needs an owner decision.
+- **✅ Reset re-authentication FIXED (2026-08-27 correction — landed 2026-08-21,
+  commit `3d445eb2`, undocumented at the time).** `/reset` previously required
+  only the onboarding session + CSRF, not the existing owner's
+  re-authentication, so a leaked in-progress session could wipe the owner+org
+  before `/complete`. `api/v1/onboarding.py` now requires that once a System
+  Owner exists (via `find_system_owner`), the caller must be authenticated as
+  that exact owner or the reset 403s (409 if an inconsistent owner-less state
+  is detected). Verified against current code 2026-08-27 (security-review
+  feature 30).
 - The `reset_initiated` audit event is written in the same transaction as the
   deletes, so a failed reset rolls it back — it should be committed to a durable
-  sink first.
+  sink first. **Still flagged** — a transaction-boundary change, deferred for
+  care rather than a drive-by fix.
 - **✅ `GET /status` disclosure FIXED (app-review B25).** It returned the org name +
   setup progress to any unauthenticated caller even post-completion. The only
   consumer (`LoginPage`) reads just `needs_onboarding`, so once `is_completed` is
   True `/status` now returns the minimal `needs_onboarding=False` response with
   `organization_name=None` and empty progress; the in-progress branch (which the
   wizard resumes from) is unchanged. 2 tests added.
-- `template_service` create/update rely on the pydantic schema never exposing
-  `organization_id`/`is_system` (mass-assignment fragility). **Still flagged.**
-  **Status:** `/status` disclosure fixed; reset re-auth + audit durability + template
-  mass-assignment still flagged. See `docs/app-review/onboarding.md`.
+- **✅ Template mass-assignment fragility FIXED (2026-08-27, security-review
+  feature 30).** `template_service.create_template`/`update_template` now
+  strip `organization_id`/`created_by` defensively and route updates through
+  `apply_updates(..., skip={"organization_id", "id", "created_by"})` instead
+  of a blind `setattr` loop, so a future schema change can't let a client
+  override tenancy/ownership.
+  **Status:** `/status` disclosure, reset re-auth, and template mass-assignment
+  all fixed; only audit durability remains flagged. See `docs/app-review/onboarding.md`.
 
 ## Notes
 

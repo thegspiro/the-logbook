@@ -66,6 +66,7 @@ import {
   getStatusStyle,
   getConditionColor,
 } from '../types';
+import { onHandQuantity } from '../utils/onHand';
 import { asArray } from '../../../utils/asArray';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
@@ -89,7 +90,7 @@ function qtyLabel(item: InventoryItem): string {
   // is a separate ledger that lot bookkeeping never writes to, so showing it
   // here would report a stale number for every consumable the supply officer
   // manages — the same disagreement the reorder alert had to be taught about.
-  if (item.is_lot_stocked) return String(item.lot_stock ?? 0);
+  if (item.is_lot_stocked) return String(onHandQuantity(item));
   if (item.tracking_type !== 'pool') return '-';
   // `quantity` is already the on-hand count — issuing decrements it and a
   // return adds it back — so the department's total is on-hand *plus* what is
@@ -527,6 +528,29 @@ const InventoryItemsPage: React.FC = () => {
   /* ---- bulk ops ---- */
   const printLabels = () => void navigate(`/inventory/print-labels?ids=${Array.from(selIds).join(',')}`);
 
+  /**
+   * Run one request per selected item and report the split honestly.
+   *
+   * `Promise.all` rejects on the first failure, so everything after the await
+   * — the toast, the cleared selection, the two reloads — was skipped while
+   * the items that *had* succeeded stayed changed on the server and stale on
+   * screen. That became reachable when `status='available'` started being
+   * refused per item: a bulk change would half-apply, say only "Failed to
+   * update", and leave the list showing the old values.
+   */
+  const runForEach = async <T,>(
+    ids: string[],
+    request: (id: string) => Promise<T>
+  ): Promise<{ done: number; failed: number; firstError: unknown }> => {
+    const settled = await Promise.allSettled(ids.map(request));
+    const rejected = settled.filter((r) => r.status === 'rejected');
+    return {
+      done: settled.length - rejected.length,
+      failed: rejected.length,
+      firstError: rejected[0]?.reason,
+    };
+  };
+
   const bulkRetire = async () => {
     if (
       !(await confirm({
@@ -537,30 +561,37 @@ const InventoryItemsPage: React.FC = () => {
       }))
     )
       return;
-    try {
-      await Promise.all(Array.from(selIds).map((id) => inventoryService.retireItem(id)));
-      toast.success(`${selIds.size} item(s) retired`);
-      setSelIds(new Set());
-      void loadItems(true);
-      void loadSummary();
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to retire items'));
+    const { done, failed, firstError } = await runForEach(Array.from(selIds), (id) => inventoryService.retireItem(id));
+    if (done) toast.success(`${done} item(s) retired`);
+    if (failed) {
+      toast.error(`${failed} item(s) could not be retired: ${getErrorMessage(firstError, 'unknown error')}`);
     }
+    setSelIds(new Set());
+    void loadItems(true);
+    void loadSummary();
   };
 
   const bulkStatus = async () => {
     if (!bulkNewStatus) return;
     setBulkSaving(true);
     try {
-      await Promise.all(Array.from(selIds).map((id) => inventoryService.updateItem(id, { status: bulkNewStatus })));
-      toast.success(`Updated ${selIds.size} item(s)`);
+      const { done, failed, firstError } = await runForEach(Array.from(selIds), (id) =>
+        inventoryService.updateItem(id, { status: bulkNewStatus })
+      );
+      if (done) toast.success(`Updated ${done} item(s)`);
+      if (failed) {
+        // Named rather than swallowed: with the AVAILABLE-state rule, an item
+        // whose condition forbids the new status is refused individually, and
+        // "Failed to update" alone leaves the operator unable to tell which.
+        toast.error(`${failed} item(s) could not be updated: ${getErrorMessage(firstError, 'unknown error')}`);
+      }
       setSelIds(new Set());
       setBulkStatusOpen(false);
       setBulkNewStatus('');
+      // Always: the successful half is already changed on the server, and a
+      // list still showing their old status is the worse of the two lies.
       void loadItems(true);
       void loadSummary();
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update'));
     } finally {
       setBulkSaving(false);
     }
@@ -629,7 +660,7 @@ const InventoryItemsPage: React.FC = () => {
     if (canManage)
       a.push({
         id: 'assign',
-        label: 'Assign Items',
+        label: 'Distribute Items',
         icon: <UserPlus className="h-5 w-5" />,
         onClick: () => setMemberPickerOpen(true),
         color: 'bg-blue-600',
@@ -948,7 +979,12 @@ const InventoryItemsPage: React.FC = () => {
         }
       >
         <p className="text-theme-text-secondary mb-3 text-sm">Set status for {selIds.size} item(s):</p>
-        <select className="form-input" value={bulkNewStatus} onChange={(e) => setBulkNewStatus(e.target.value)}>
+        <select
+          className="form-input"
+          value={bulkNewStatus}
+          onChange={(e) => setBulkNewStatus(e.target.value)}
+          aria-label="New status"
+        >
           <option value="">-- Select Status --</option>
           {STATUS_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>
@@ -1093,7 +1129,7 @@ const InventoryItemsPage: React.FC = () => {
       <MemberPickerModal
         isOpen={memberPickerOpen}
         onClose={() => setMemberPickerOpen(false)}
-        title="Assign Items — Select a Member"
+        title="Distribute Items — Select a Member"
         onSelect={(member) => {
           setMemberPickerOpen(false);
           setAssignTarget(member);
@@ -1102,7 +1138,7 @@ const InventoryItemsPage: React.FC = () => {
       <InventoryScanModal
         isOpen={assignTarget !== null}
         onClose={() => setAssignTarget(null)}
-        mode="checkout"
+        mode="distribute"
         userId={assignTarget?.userId ?? ''}
         memberName={assignTarget?.memberName ?? ''}
         onComplete={() => {

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
+from app.utils.membership import is_administrative
 
 
 class MembershipTierService:
@@ -177,6 +178,23 @@ class MembershipTierService:
         """
         Scan every active/probationary member and promote them to the
         highest tier they qualify for.  Returns a summary of changes.
+
+        **A member is only advanced along a ladder they are already on.** A
+        ``membership_type`` that is not one of this organization's configured
+        tiers used to be treated as sort_order 0 — the bottom rung — so this
+        unattended nightly job promoted the four legacy types that are not
+        tiers in the shipped defaults (``administrative``, ``honorary``,
+        ``retired``, ``prospective``) into an operational tier. Setting
+        ``membership_type`` fires ``_reconcile_membership``, which rewrote
+        ``member_class`` to ``operational`` with it: an administrative member
+        became an operational one overnight, could self-sign up for shifts,
+        matched operational ballots, and slipped past the rank-clearing guard
+        below, which asks ``is_administrative`` of the *new* type.
+
+        Skipping is the conservative direction. An organization whose ladder
+        uses ids none of its members hold yet advances nobody until an admin
+        sets a starting tier, rather than sorting its whole roster onto rung
+        zero and climbing from there.
         """
         org_result = await self.db.execute(
             select(Organization).where(Organization.id == str(organization_id))
@@ -208,29 +226,83 @@ class MembershipTierService:
         members = result.scalars().all()
 
         advanced = []
+        # Members whose current membership_type is not one of this
+        # organization's tiers. Counted rather than silently dropped: an
+        # unattended job that quietly declines to touch part of the roster
+        # should say how much of it.
+        off_ladder = 0
         now = datetime.now(timezone.utc)
 
-        for member in members:
-            yos = self.years_of_service(member.hire_date)
+        for candidate in members:
+            yos = self.years_of_service(candidate.hire_date)
             target_tier = self.resolve_tier(tiers, yos)
             if not target_tier:
                 continue
 
-            current_type = member.membership_type or "active"
+            current_type = candidate.membership_type or "active"
             if current_type == target_tier["id"]:
                 continue
 
-            # Only advance (don't demote)
+            # Only advance (don't demote), and only along this ladder
             current_tier_def = self.get_tier_by_id(tiers, current_type)
-            current_order = (
-                current_tier_def.get("sort_order", 0) if current_tier_def else 0
+            if current_tier_def is None:
+                off_ladder += 1
+                continue
+            if target_tier.get("sort_order", 0) <= current_tier_def.get(
+                "sort_order", 0
+            ):
+                continue
+
+            # Lock this member's row before mutating it: this is another
+            # writer of the class/rank invariant update_user_profile and
+            # change_membership_type already serialize against via their own
+            # locks, and the batch SELECT above is unlocked -- without
+            # re-selecting under a lock here, a concurrent profile update
+            # racing this scan could land the same administrative-member-
+            # holding-a-rank contradiction those two close. populate_existing
+            # because this request's session may already hold the row (e.g.
+            # this scan running back-to-back with another write in the same
+            # transaction).
+            locked_result = await self.db.execute(
+                select(User)
+                .where(User.id == candidate.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
-            if target_tier.get("sort_order", 0) <= current_order:
+            member = locked_result.scalar_one_or_none()
+            if not member or member.deleted_at is not None:
+                continue
+            # Re-check eligibility under the lock: the batch read above may
+            # now be stale (another transaction already advanced or changed
+            # this member's type since).
+            current_type = member.membership_type or "active"
+            if current_type == target_tier["id"]:
+                continue
+            current_tier_def = self.get_tier_by_id(tiers, current_type)
+            if current_tier_def is None:
+                off_ladder += 1
+                continue
+            if target_tier.get("sort_order", 0) <= current_tier_def.get(
+                "sort_order", 0
+            ):
                 continue
 
             previous_type = current_type
             member.membership_type = target_tier["id"]
             member.membership_type_changed_at = now
+
+            # An administrative member holds no operational rank, and this is a
+            # writer of the membership class like any other — an unattended one,
+            # which is what makes it the dangerous one. Tier ids are
+            # organization-configurable, so a department that names a tier
+            # `administrative` moves ranked operational members into that class
+            # on a schedule, and without this they would keep every permission
+            # their rank confers while nobody is watching the change happen.
+            cleared_rank = member.rank
+            if cleared_rank and is_administrative(None, target_tier["id"]):
+                member.rank = None
+            else:
+                cleared_rank = None
 
             advanced.append(
                 {
@@ -239,6 +311,7 @@ class MembershipTierService:
                     "previous_tier": previous_type,
                     "new_tier": target_tier["id"],
                     "years_of_service": yos,
+                    "cleared_rank": cleared_rank,
                 }
             )
 
@@ -257,11 +330,13 @@ class MembershipTierService:
                 )
 
         logger.info(
-            f"Membership tier advance: {len(advanced)} members advanced in org {organization_id}"
+            f"Membership tier advance: {len(advanced)} members advanced, "
+            f"{off_ladder} not on the tier ladder, in org {organization_id}"
         )
 
         return {
             "organization_id": organization_id,
             "advanced": len(advanced),
             "members": advanced,
+            "off_ladder": off_ladder,
         }

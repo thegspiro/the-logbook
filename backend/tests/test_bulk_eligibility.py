@@ -1,8 +1,8 @@
 """
 Eligible positions for many shifts, computed once.
 
-The member-side half of the answer — membership type, rank, completed
-training, the org's open positions — does not vary by shift. Asking per shift
+The member-side half of the answer — membership type, rank, held positions,
+completed training, the org's open positions — does not vary by shift. Asking per shift
 re-ran all of it each time; a station running six apparatus paid six times for
 one answer.
 """
@@ -23,21 +23,50 @@ def _shift(shift_id, positions=None, open_to_all=False):
 
 
 class _Session:
-    def __init__(self, shifts):
+    """Answers the two statements the bulk path issues.
+
+    ``.scalars().all()`` is the shift load; a bare ``.all()`` is the member's
+    qualification windows, which the bulk path fetches once and then evaluates
+    per shift date in Python rather than querying per date.
+    """
+
+    def __init__(self, shifts, qual_windows=()):
         self._shifts = shifts
+        self._qual_windows = list(qual_windows)
 
     async def execute(self, _statement):
         return SimpleNamespace(
-            scalars=lambda: SimpleNamespace(all=lambda: list(self._shifts))
+            scalars=lambda: SimpleNamespace(all=lambda: list(self._shifts)),
+            all=lambda: list(self._qual_windows),
         )
 
 
-def _service(shifts, *, rank=(), training=(), open_positions=(), excluded=()):
-    service = ShiftEligibilityService(_Session(shifts))
+def _service(
+    shifts,
+    *,
+    rank=(),
+    held=(),
+    grants=None,
+    training=(),
+    qual_codes=(),
+    open_positions=(),
+    excluded=(),
+):
+    """``rank`` is what USER's rank code ("ff") grants; ``grants`` adds slugs.
+
+    ``qual_codes`` are qualification *codes* the member holds with no date
+    bounds — the shape ``get_member_code_windows`` returns.
+    """
+    service = ShiftEligibilityService(
+        _Session(shifts, [(code, None, None) for code in qual_codes])
+    )
     service._get_org = AsyncMock(return_value=SimpleNamespace(id=ORG, settings={}))
     service.get_excluded_membership_types = lambda _org: list(excluded)
     service.get_open_positions = lambda _org: list(open_positions)
-    service._get_rank_positions = AsyncMock(return_value=list(rank))
+    slug_map = {"ff": list(rank)}
+    slug_map.update(grants or {})
+    service._get_slug_eligibility_map = AsyncMock(return_value=slug_map)
+    service._get_held_position_slugs = AsyncMock(return_value=list(held))
     service._get_training_positions = AsyncMock(return_value=list(training))
     return service
 
@@ -60,8 +89,19 @@ class TestBulkEligibility:
             "s3": ["firefighter"],
         }
         # The expensive lookups run once, not once per shift.
-        assert service._get_rank_positions.await_count == 1
+        assert service._get_slug_eligibility_map.await_count == 1
+        assert service._get_held_position_slugs.await_count == 1
         assert service._get_training_positions.await_count == 1
+
+    async def test_a_held_position_does_not_count_as_a_rank(self):
+        # RBAC role assignment must not unlock an operational shift seat.
+        service = _service(
+            [_shift("s1", positions=[{"position": "ems"}])],
+            held=["emt"],
+            grants={"emt": ["ems", "firefighter"]},
+        )
+        answers = await service.get_eligible_positions_bulk(USER, ORG, ["s1"])
+        assert answers["s1"] == []
 
     async def test_narrows_to_each_shift_s_own_seats(self):
         shifts = [
@@ -80,11 +120,53 @@ class TestBulkEligibility:
         answers = await service.get_eligible_positions_bulk(USER, ORG, ["s1"])
         assert answers["s1"] == ["driver", "officer"]
 
-    async def test_open_to_all_bypasses_the_member_checks(self):
+    async def test_open_to_all_does_not_bypass_non_operational_class(self):
+        # The class has to be *established* for this to be the social case.
+        # "social" is not one of the seven legacy membership types, so on its
+        # own it resolves to no class at all — see the tier test below.
         shifts = [_shift("s1", positions=[{"position": "ems"}], open_to_all=True)]
-        service = _service(shifts, excluded=["social"])
-        blocked = SimpleNamespace(id=USER.id, rank="ff", membership_type="social")
+        service = _service(shifts)
+        blocked = SimpleNamespace(
+            id=USER.id,
+            rank="ff",
+            member_class="social",
+            membership_type="social",
+        )
         answers = await service.get_eligible_positions_bulk(blocked, ORG, ["s1"])
+        assert answers["s1"] == []
+
+    async def test_open_to_all_still_reaches_an_org_configured_tier(self):
+        """A tier id is not a class, and must not be read as "not operational".
+
+        ``run_membership_tier_scan`` writes the tier id into
+        ``membership_type`` and ``split_membership_type`` returns no class for
+        it, deliberately. Gating the bypass on ``== OPERATIONAL`` therefore
+        dropped every member the shipped ``senior`` tier had auto-advanced out
+        of the shift list entirely.
+        """
+        shifts = [_shift("s1", positions=[{"position": "ems"}], open_to_all=True)]
+        service = _service(shifts)
+        # The class is what answers this, and applying a tier no longer erases
+        # it (``_reconcile_membership``), so a senior firefighter is still
+        # recorded as operational.
+        senior = SimpleNamespace(
+            id=USER.id,
+            rank="ff",
+            membership_type="senior",
+            member_class="operational",
+        )
+
+        answers = await service.get_eligible_positions_bulk(senior, ORG, ["s1"])
+
+        assert answers["s1"] == ["ems"]
+
+    async def test_a_qualification_clears_a_seat_no_rank_grants(self):
+        service = _service(
+            [_shift("s1", positions=[{"position": "ems"}])], qual_codes=["emt"]
+        )
+
+        answers = await service.get_eligible_positions_bulk(USER, ORG, ["s1"])
+
         assert answers["s1"] == ["ems"]
 
     async def test_an_excluded_membership_type_gets_nothing(self):
@@ -92,6 +174,42 @@ class TestBulkEligibility:
         blocked = SimpleNamespace(id=USER.id, rank="ff", membership_type="social")
         answers = await service.get_eligible_positions_bulk(blocked, ORG, ["s1"])
         assert answers["s1"] == []
+
+    async def test_administrative_member_sees_only_explicit_positions(self):
+        service = _service(
+            [
+                _shift(
+                    "s1",
+                    positions=[
+                        {"position": "driver"},
+                        {
+                            "position": "support",
+                            "allow_administrative_members": True,
+                        },
+                    ],
+                    open_to_all=True,
+                ),
+                _shift("s2", positions=[{"position": "firefighter"}]),
+            ],
+            rank=["driver"],
+            training=["firefighter"],
+            qual_codes=["emt"],
+            excluded=["administrative"],
+        )
+        administrative = SimpleNamespace(
+            id=USER.id,
+            rank="ff",
+            member_class="administrative",
+            membership_type="administrative",
+        )
+
+        answers = await service.get_eligible_positions_bulk(
+            administrative, ORG, ["s1", "s2"]
+        )
+
+        assert answers == {"s1": ["support"], "s2": []}
+        service._get_slug_eligibility_map.assert_not_awaited()
+        service._get_training_positions.assert_not_awaited()
 
     async def test_an_unknown_shift_answers_empty_rather_than_absent(self):
         # A missing key would read as "not answered yet" and leave the claim

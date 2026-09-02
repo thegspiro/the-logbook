@@ -620,7 +620,9 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-theme-text-primary text-sm font-medium">{evt.summary}</span>
+              <span className="text-theme-text-primary text-sm font-medium">
+                {evt.type === 'checkout' ? evt.summary.replace(/^Checked out/i, 'Temporary loaned') : evt.summary}
+              </span>
               <span className="text-theme-text-muted text-xs whitespace-nowrap">{formatDate(evt.date, tz)}</span>
             </div>
             {formatHistoryDetails(evt.details, tz) && (

@@ -43,6 +43,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.membership import ADMINISTRATIVE_RANK_MESSAGE, is_administrative
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
@@ -50,6 +51,7 @@ from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,41 @@ _STATUS_BLOCK_REASON = {
     ProspectStatus.INACTIVE: "inactive",
     ProspectStatus.TRANSFERRED: "already a member",
 }
+
+
+# A closed application is one no further pipeline work will happen on:
+# rejected and withdrawn end it by decision, inactive by neglect, and
+# transferred because the applicant is a member now. It is a narrower set
+# than "not movable" on purpose — on hold is a pause the coordinator intends
+# to lift, and approved still owes a conversion, so both remain open
+# applications and stay on the board.
+#
+# Closed applications are dropped from the pipeline: off the kanban and the
+# applicant table, and refused for the work that only makes sense on an open
+# application (an election package, a place on a ballot, an interview).
+# Reactivating one puts it back at the stage it left from.
+CLOSED_PROSPECT_STATUSES = frozenset(
+    {
+        ProspectStatus.REJECTED,
+        ProspectStatus.WITHDRAWN,
+        ProspectStatus.INACTIVE,
+        ProspectStatus.TRANSFERRED,
+    }
+)
+
+
+# ProspectElectionPackage.status is a five-state contract, only two of whose
+# states a caller may set directly through the generic update endpoint:
+# "draft" (default, still being assembled) and "ready" (coordinator marks it
+# ready for a ballot). The other three are derived and system-only —
+# assign_package_to_election sets "added_to_ballot", and election_service
+# tallies the vote to set "elected"/"not_elected" — the same shape as
+# ProspectStatus.TRANSFERRED above: a status the system derives must not be
+# forgeable, or clearable, through the generic update.
+ELECTION_PACKAGE_CALLER_STATUSES = frozenset({"draft", "ready"})
+ELECTION_PACKAGE_SYSTEM_STATUSES = frozenset(
+    {"added_to_ballot", "elected", "not_elected"}
+)
 
 
 # The detailed duplicate-match message names the existing member and their
@@ -108,6 +145,31 @@ def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
     )
 
 
+def _assert_open(prospect: ProspectiveMember, action: str) -> None:
+    """Raise unless the application is still open.
+
+    Weaker than :func:`_assert_movable` on purpose: this gates work that is
+    legitimate on a paused application (an interview held while a candidate
+    sorts out a scheduling conflict) but not on a closed one. ``action`` is
+    the verb shown to the coordinator, as above.
+    """
+    status = prospect.status
+    if status not in CLOSED_PROSPECT_STATUSES:
+        return
+    reason = _STATUS_BLOCK_REASON.get(
+        status, str(getattr(status, "value", status) or "closed")
+    )
+    # A transferred applicant is a member now, so "reactivate the
+    # application" is not the way out of this one — it would be advice to
+    # re-run somebody through the pipeline they already completed.
+    remedy = (
+        ""
+        if status == ProspectStatus.TRANSFERRED
+        else " Reactivate the application first."
+    )
+    raise ValueError(f"This applicant is {reason} and cannot be {action}.{remedy}")
+
+
 class MembershipPipelineService:
     """Service for membership pipeline management"""
 
@@ -131,10 +193,7 @@ class MembershipPipelineService:
         query = (
             select(MembershipPipeline)
             .where(MembershipPipeline.organization_id == organization_id)
-            .options(
-                selectinload(MembershipPipeline.steps),
-                selectinload(MembershipPipeline.prospects),
-            )
+            .options(selectinload(MembershipPipeline.steps))
             .order_by(
                 MembershipPipeline.is_default.desc(), MembershipPipeline.created_at
             )
@@ -142,7 +201,29 @@ class MembershipPipelineService:
         if not include_templates:
             query = query.where(MembershipPipeline.is_template.is_(False))
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        pipelines = list(result.scalars().all())
+
+        # Count prospects per pipeline with one aggregate query instead of
+        # eager-loading the full `prospects` relationship — a years-old
+        # pipeline can carry thousands of historical applicants, and the
+        # endpoint only ever calls len() on the collection. Materializing
+        # every full ProspectiveMember row (all PII columns included) on
+        # every GET /pipelines was an unbounded read with no caller benefit.
+        # `prospect_count` is a non-mapped attribute, same pattern as
+        # `pipeline_name` on ProspectiveMember (see get_prospect above).
+        for p in pipelines:
+            p.prospect_count = 0
+        if pipelines:
+            counts_result = await self.db.execute(
+                select(ProspectiveMember.pipeline_id, func.count(ProspectiveMember.id))
+                .where(ProspectiveMember.pipeline_id.in_([p.id for p in pipelines]))
+                .group_by(ProspectiveMember.pipeline_id)
+            )
+            counts = dict(counts_result.all())
+            for p in pipelines:
+                p.prospect_count = counts.get(p.id, 0)
+
+        return pipelines
 
     async def get_pipeline(
         self, pipeline_id: str, organization_id: str
@@ -203,6 +284,7 @@ class MembershipPipelineService:
                 await self._assert_email_template_in_org(
                     step_data.get("email_template_id"), organization_id
                 )
+                await self._assert_form_in_org(step_data.get("config"), organization_id)
                 step = MembershipPipelineStep(
                     id=generate_uuid(),
                     pipeline_id=pipeline.id,
@@ -369,6 +451,22 @@ class MembershipPipelineService:
             label="email template",
         )
 
+    async def _assert_form_in_org(
+        self, config: Optional[Dict[str, Any]], organization_id: str
+    ) -> None:
+        # A step's config.form_id is a client-supplied FK to an org-scoped
+        # Form. This must reject the write *before* the step is persisted —
+        # _ensure_membership_form_integration (below) runs afterward, only
+        # best-effort stamps the form's integration_type, and logs-and-returns
+        # rather than raising when its own org-scoped lookup fails, so it
+        # cannot be relied on to gate a cross-tenant form_id out of storage.
+        from app.models.forms import Form
+
+        form_id = config.get("form_id") if isinstance(config, dict) else None
+        await assert_in_org(
+            self.db, Form, form_id, organization_id, allow_none=True, label="form"
+        )
+
     async def add_step(
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[MembershipPipelineStep]:
@@ -380,6 +478,7 @@ class MembershipPipelineService:
         await self._assert_email_template_in_org(
             data.get("email_template_id"), organization_id
         )
+        await self._assert_form_in_org(data.get("config"), organization_id)
 
         # Determine sort_order if not provided
         if "sort_order" not in data or data["sort_order"] is None:
@@ -445,6 +544,8 @@ class MembershipPipelineService:
             await self._assert_email_template_in_org(
                 data.get("email_template_id"), organization_id
             )
+        if "config" in data:
+            await self._assert_form_in_org(data.get("config"), organization_id)
 
         # Capture the old form_id before applying updates so we can clean up
         # the integration if the step is being reassigned to a different form.
@@ -691,21 +792,20 @@ class MembershipPipelineService:
         against each column individually never hits.
         """
 
-        def _escape(value: str) -> str:
-            return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
         terms = [t for t in search.split() if t]
         if not terms:
             terms = [search]
 
         clauses = []
         for term in terms:
-            pattern = f"%{_escape(term)}%"
+            pattern = like_pattern(term)
             clauses.append(
                 or_(
-                    ProspectiveMember.first_name.ilike(pattern),
-                    ProspectiveMember.last_name.ilike(pattern),
-                    ProspectiveMember.email.ilike(pattern),
+                    ProspectiveMember.first_name.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    ProspectiveMember.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    ProspectiveMember.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
             )
         return and_(*clauses)
@@ -720,6 +820,7 @@ class MembershipPipelineService:
         limit: int = 50,
         offset: int = 0,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
+        open_only: bool = False,
     ) -> tuple[List[ProspectiveMember], int]:
         """List prospects with filters.
 
@@ -729,6 +830,12 @@ class MembershipPipelineService:
         the event belongs to *organization_id*; the prospect scope below stops
         a foreign id leaking rows, but it would read as "no applicants" rather
         than as the wrong-org id it is.
+
+        ``open_only`` drops every closed application
+        (:data:`CLOSED_PROSPECT_STATUSES`), which is what the pipeline board
+        and applicant table want: a rejected applicant is out of the pipeline,
+        not a card in the stage they were rejected at. It defaults off so the
+        archive views can still ask for one closed status at a time.
         """
         query = (
             select(ProspectiveMember)
@@ -744,6 +851,10 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.pipeline_id == pipeline_id)
         if status:
             query = query.where(ProspectiveMember.status == status)
+        if open_only:
+            query = query.where(
+                ProspectiveMember.status.notin_(sorted(CLOSED_PROSPECT_STATUSES))
+            )
         if event_id:
             query = query.where(
                 or_(
@@ -1129,18 +1240,44 @@ class MembershipPipelineService:
                 label="referring member",
             )
 
+        # TRANSFERRED is derived, not chosen (see _apply_status_change) — the
+        # dedicated status endpoint refuses to set or clear it. This generic
+        # update reaches the same status column and must refuse it the same
+        # way, or it is a second, unguarded path to the exact bypass that
+        # guard exists to close.
+        if data.get("status") is not None:
+            target = self._parse_status(data["status"])
+            if (
+                target == ProspectStatus.TRANSFERRED
+                or prospect.status == ProspectStatus.TRANSFERRED
+            ):
+                raise ValueError(
+                    "Transferred is set by converting the applicant to a "
+                    "member and cannot be set or cleared through this update."
+                )
+
+        # Old values captured before the write, for the activity-log diff
+        # below. exclude_unset upstream means every key here was explicitly
+        # sent by the caller, so apply_updates must not drop an explicit
+        # null the way `if value is not None` used to (CLAUDE.md Pitfall #1):
+        # a client clearing e.g. referred_by got a 200 with the old value
+        # left in place.
+        updates = {
+            k: v for k, v in data.items() if k not in self._PROSPECT_PROTECTED_FIELDS
+        }
+        old_values = {k: getattr(prospect, k, None) for k in updates}
+
+        written = apply_updates(prospect, updates)
+
         changes = {}
-        for key, value in data.items():
-            if key in self._PROSPECT_PROTECTED_FIELDS:
-                continue
-            if value is not None and hasattr(prospect, key):
-                old_value = getattr(prospect, key)
-                if old_value != value:
-                    if key in self._SENSITIVE_ACTIVITY_FIELDS:
-                        changes[key] = {"changed": True}
-                    else:
-                        changes[key] = {"from": str(old_value), "to": str(value)}
-                    setattr(prospect, key, value)
+        for key in written:
+            new_value = getattr(prospect, key)
+            old_value = old_values.get(key)
+            if old_value != new_value:
+                if key in self._SENSITIVE_ACTIVITY_FIELDS:
+                    changes[key] = {"changed": True}
+                else:
+                    changes[key] = {"from": str(old_value), "to": str(new_value)}
 
         if changes:
             await self._log_activity(
@@ -2051,36 +2188,103 @@ class MembershipPipelineService:
         rejection silently destroyed whatever had been written about each
         applicant.
         """
-        try:
-            target = ProspectStatus(status)
-        except ValueError:
-            raise ValueError(f"Invalid status: {status}")
+        target = self._parse_status(status)
 
         async def _set_status(prospect: ProspectiveMember) -> None:
-            previous = (
-                prospect.status.value
-                if hasattr(prospect.status, "value")
-                else str(prospect.status)
-            )
-            if previous == target.value:
-                raise ValueError(f"Prospect is already {target.value}")
-            prospect.status = target
-            await self._log_activity(
-                prospect_id=str(prospect.id),
-                action="prospect_status_changed",
-                details={
-                    "from": previous,
-                    "to": target.value,
-                    "reason": reason,
-                    "bulk": True,
-                },
-                performed_by=changed_by,
+            await self._apply_status_change(
+                prospect, target, changed_by, reason, bulk=True
             )
             await self.db.commit()
 
         return await self._bulk_apply(
             prospect_ids, organization_id, _set_status, exclude_prospect_ids
         )
+
+    @staticmethod
+    def _parse_status(status: str) -> ProspectStatus:
+        try:
+            return ProspectStatus(status)
+        except ValueError:
+            raise ValueError(f"Invalid status: {status}")
+
+    async def _apply_status_change(
+        self,
+        prospect: ProspectiveMember,
+        target: ProspectStatus,
+        changed_by: Optional[str],
+        reason: Optional[str],
+        bulk: bool,
+    ) -> None:
+        """Move one prospect to ``target``, recording ``reason`` as activity.
+
+        The reason is deliberately kept out of ``prospect.notes``: it is the
+        coordinator's running record of the applicant, and writing a
+        rejection reason over it destroys whatever was there — which is
+        exactly what the pre-2026-08 bulk path did, and what the single-record
+        reject / hold / withdraw path kept doing through the update endpoint
+        afterwards. Both now come through here.
+        """
+        # TRANSFERRED is derived, not chosen: transfer_prospect sets it as it
+        # creates the User and stamps transferred_user_id / transferred_at.
+        # Setting it here would close the application, remove it from the
+        # pipeline and count it as a conversion in the stats with no member
+        # anywhere behind it; clearing it would put somebody who is already a
+        # member back on the board, under the active-email unique index.
+        # Neither direction is a status change, so neither is offered here.
+        if target == ProspectStatus.TRANSFERRED:
+            raise ValueError(
+                "Transferred is set by converting the applicant to a member. "
+                "Use the transfer endpoint rather than a status change."
+            )
+        if prospect.status == ProspectStatus.TRANSFERRED:
+            raise ValueError(
+                "This applicant is already a member, so their application "
+                "cannot be reopened from here."
+            )
+
+        previous = (
+            prospect.status.value
+            if hasattr(prospect.status, "value")
+            else str(prospect.status)
+        )
+        if previous == target.value:
+            raise ValueError(f"Prospect is already {target.value}")
+        prospect.status = target
+        await self._log_activity(
+            prospect_id=str(prospect.id),
+            action="prospect_status_changed",
+            details={
+                "from": previous,
+                "to": target.value,
+                "reason": reason,
+                "bulk": bulk,
+            },
+            performed_by=changed_by,
+        )
+
+    async def set_prospect_status(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        status: str,
+        changed_by: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> Optional[ProspectiveMember]:
+        """Set one prospect's status, logging ``reason`` to its activity log.
+
+        Returns None when the prospect is not in the caller's organization,
+        so the endpoint can answer 404 rather than leaking its existence.
+        """
+        target = self._parse_status(status)
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        await self._apply_status_change(
+            prospect, target, changed_by, reason, bulk=False
+        )
+        await self.db.commit()
+        return await self.get_prospect(prospect_id, organization_id)
 
     async def regress_prospect(
         self,
@@ -2243,7 +2447,14 @@ class MembershipPipelineService:
         membership_type: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Serialize on the prospect row: without the lock, two concurrent
+        # transfer requests can both observe ACTIVE before either commits and
+        # each create a User record for the same prospect, with the loser's
+        # write merely overwriting transferred_user_id (Codex review on this
+        # PR; same read-then-write shape as Pitfall #27's capacity checks).
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect:
             return None
 
@@ -2286,6 +2497,42 @@ class MembershipPipelineService:
         membership_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
+
+        # A rank that matches nothing the department has configured resolves to
+        # no eligible seats and no default permissions, so the new member is
+        # created unable to sign up for anything with nothing to explain why.
+        # Refused here rather than reported later, in the same words the user
+        # endpoints use.
+        if rank and str(rank).strip():
+            from app.services.operational_rank_service import (
+                OperationalRankService,
+                rank_not_configured_message,
+            )
+
+            rank_service = OperationalRankService(self.db)
+            canonical = await rank_service.resolve_rank_code(
+                str(prospect.organization_id), str(rank)
+            )
+            if canonical is None:
+                return {
+                    "success": False,
+                    "message": rank_not_configured_message(str(rank)),
+                }
+            # Store the canonical spelling, not the caller's. The conversion UI
+            # suggests display-cased values ("Firefighter"), which would match
+            # no dictionary key downstream and leave the new member with no
+            # permissions and no eligible seats.
+            rank = canonical
+
+            # An administrative member holds no operational rank — its default
+            # permissions would put somebody outside the chain of command into
+            # it. The conversion screen offers both in one step, so refuse the
+            # pair rather than silently drop the rank the operator typed.
+            if is_administrative(None, membership_type):
+                return {
+                    "success": False,
+                    "message": ADMINISTRATIVE_RANK_MESSAGE,
+                }
 
         # Check for existing users with the same email (prevents duplicates)
         existing_matches = await self.check_existing_members(
@@ -2555,7 +2802,9 @@ class MembershipPipelineService:
                     select(TrainingProgram)
                     .where(
                         TrainingProgram.organization_id == organization_id,
-                        TrainingProgram.name.ilike("%probationary%"),
+                        TrainingProgram.name.ilike(
+                            "%probationary%", escape=LIKE_ESCAPE_CHAR
+                        ),
                         TrainingProgram.active.is_(True),
                     )
                     .limit(1)
@@ -4265,30 +4514,36 @@ class MembershipPipelineService:
         if not doc:
             return False
 
+        # Remove the stored file from disk *before* dropping the DB row and
+        # committing. A missing file (already cleaned up, e.g. by a prior
+        # partial failure) is not an error — nothing to remove. A file that
+        # exists but can't be removed (permissions, transient FS error) must
+        # raise rather than be swallowed: the DB row is the only record that
+        # this PII-carrying file still needs cleaning up, so it must survive
+        # a failed removal for a retry instead of being deleted alongside it.
+        stored_path = doc.file_path
+        if stored_path:
+            import os
+
+            if os.path.exists(stored_path):
+                try:
+                    await asyncio.to_thread(os.remove, stored_path)
+                except OSError as exc:
+                    logger.error(
+                        f"Failed to remove prospect document file {stored_path}: {exc}"
+                    )
+                    raise ValueError(
+                        "Could not delete the document file; please try again"
+                    ) from exc
+
         await self._log_activity(
             prospect_id=prospect_id,
             action="document_deleted",
             details={"document_type": doc.document_type, "file_name": doc.file_name},
             performed_by=deleted_by,
         )
-
-        # Remove the stored file from disk before dropping the DB row so the
-        # two stay consistent. Best-effort: a missing file must not block the
-        # metadata deletion.
-        stored_path = doc.file_path
         await self.db.delete(doc)
         await self.db.commit()
-
-        if stored_path:
-            import os
-
-            try:
-                if os.path.exists(stored_path):
-                    await asyncio.to_thread(os.remove, stored_path)
-            except OSError as exc:
-                logger.warning(
-                    f"Failed to remove prospect document file {stored_path}: {exc}"
-                )
 
         return True
 
@@ -4297,9 +4552,20 @@ class MembershipPipelineService:
     # =========================================================================
 
     async def get_election_package(
-        self, prospect_id: str, organization_id: str
+        self,
+        prospect_id: str,
+        organization_id: str,
+        *,
+        lock_for_update: bool = False,
     ) -> Optional[ProspectElectionPackage]:
-        """Get the election package for a prospect"""
+        """Get the election package for a prospect.
+
+        ``lock_for_update`` makes this the locking read a status-changing
+        caller (assign_package_to_election) must use — see CLAUDE.md
+        Pitfall #27: the row has to be locked *and* the check that decides
+        whether to write has to be the locking read itself, not a plain
+        SELECT taken before the lock.
+        """
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
@@ -4310,6 +4576,8 @@ class MembershipPipelineService:
             .order_by(ProspectElectionPackage.created_at.desc())
             .limit(1)
         )
+        if lock_for_update:
+            query = query.with_for_update()
         result = await self.db.execute(query)
         return result.scalars().first()
 
@@ -4328,6 +4596,11 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
+        # A package is the material the membership votes on. Building one for
+        # an application that has already been closed puts a rejected or
+        # withdrawn applicant in front of the members for a vote.
+        _assert_open(prospect, "put forward for election")
+
         # MP-5: validate any client-supplied pipeline_id / step_id are in-org
         # and consistent, so the package can't persist a foreign/dangling FK.
         effective_pipeline = prospect.pipeline
@@ -4342,50 +4615,82 @@ class MembershipPipelineService:
             if not any(str(s.id) == str(step_id) for s in steps):
                 raise ValueError("Step does not belong to the selected pipeline")
 
-        # Eagerly load documents so the snapshot captures attached files
-        doc_query = (
-            select(ProspectDocument)
-            .where(ProspectDocument.prospect_id == prospect_id)
-            .order_by(ProspectDocument.created_at)
-        )
-        doc_result = await self.db.execute(doc_query)
-        documents = list(doc_result.scalars().all())
+        # The election-vote stage's config.package_fields (ElectionVoteConfig
+        # on the frontend) lets a coordinator opt specific PII out of the
+        # snapshot — but nothing on the backend ever read it, so every flag
+        # was silently ignored and the full set was captured regardless
+        # (CLAUDE.md Pitfall #19: a config switch shipped with no reader).
+        # A step whose config was never touched has no package_fields key at
+        # all, so `package_fields is None` here preserves the prior
+        # capture-everything behavior for every pipeline that hasn't
+        # configured this — this only takes effect where a coordinator has
+        # actually saved field choices.
+        package_fields: Optional[Dict[str, Any]] = None
+        if step_id:
+            step_obj = next(
+                (
+                    s
+                    for s in (effective_pipeline.steps if effective_pipeline else [])
+                    if str(s.id) == str(step_id)
+                ),
+                None,
+            )
+            if step_obj and isinstance(step_obj.config, dict):
+                candidate = step_obj.config.get("package_fields")
+                if isinstance(candidate, dict):
+                    package_fields = candidate
+
+        def _field_enabled(key: str, default: bool) -> bool:
+            if package_fields is None:
+                return True
+            value = package_fields.get(key, default)
+            return bool(value) if isinstance(value, bool) else default
+
+        include_documents = _field_enabled("include_documents", True)
+        include_stage_history = _field_enabled("include_stage_history", True)
+
+        # Eagerly load documents so the snapshot captures attached files —
+        # skipped entirely when the stage config excludes them.
+        documents: List[ProspectDocument] = []
+        if include_documents:
+            doc_query = (
+                select(ProspectDocument)
+                .where(ProspectDocument.prospect_id == prospect_id)
+                .order_by(ProspectDocument.created_at)
+            )
+            doc_result = await self.db.execute(doc_query)
+            documents = list(doc_result.scalars().all())
 
         # Build stage history from completed step progress, in pipeline order —
         # `step_progress` comes back in whatever order the database hands it
         # over, which put the stages of an election package's summary in an
         # arbitrary sequence for the members reading it before a vote.
         stage_history: List[Dict[str, Any]] = []
-        for sp in sorted(
-            prospect.step_progress or [],
-            key=lambda p: (p.step.sort_order if p.step else 0, p.created_at),
-        ):
-            if sp.status == StepProgressStatus.COMPLETED and sp.step:
-                stage_history.append(
-                    {
-                        "stage_name": sp.step.name,
-                        "completed_at": (
-                            str(sp.completed_at) if sp.completed_at else None
-                        ),
-                    }
-                )
+        if include_stage_history:
+            for sp in sorted(
+                prospect.step_progress or [],
+                key=lambda p: (p.step.sort_order if p.step else 0, p.created_at),
+            ):
+                if sp.status == StepProgressStatus.COMPLETED and sp.step:
+                    stage_history.append(
+                        {
+                            "stage_name": sp.step.name,
+                            "completed_at": (
+                                str(sp.completed_at) if sp.completed_at else None
+                            ),
+                        }
+                    )
 
-        # Build applicant snapshot — capture all relevant prospect data
-        # so the election package is self-contained even if the prospect
-        # record is later modified.
+        # Build applicant snapshot — capture all relevant prospect data so
+        # the election package is self-contained even if the prospect record
+        # is later modified. Fields with a package_fields toggle (email,
+        # phone, address, date of birth, documents, stage history) are
+        # included per that configuration; fields with no toggle on the
+        # stage-config UI (name, interest reason, notes, ...) are always
+        # captured, unaffected by this.
         snapshot: Dict[str, Any] = {
             "first_name": prospect.first_name,
             "last_name": prospect.last_name,
-            "email": prospect.email,
-            "phone": prospect.phone,
-            "mobile": prospect.mobile,
-            "date_of_birth": (
-                str(prospect.date_of_birth) if prospect.date_of_birth else None
-            ),
-            "address_street": prospect.address_street,
-            "address_city": prospect.address_city,
-            "address_state": prospect.address_state,
-            "address_zip": prospect.address_zip,
             "interest_reason": prospect.interest_reason,
             "referral_source": prospect.referral_source,
             "desired_membership_type": prospect.desired_membership_type,
@@ -4400,6 +4705,20 @@ class MembershipPipelineService:
             ],
             "stage_history": stage_history,
         }
+        if _field_enabled("include_email", True):
+            snapshot["email"] = prospect.email
+        if _field_enabled("include_phone", False):
+            snapshot["phone"] = prospect.phone
+            snapshot["mobile"] = prospect.mobile
+        if _field_enabled("include_address", False):
+            snapshot["address_street"] = prospect.address_street
+            snapshot["address_city"] = prospect.address_city
+            snapshot["address_state"] = prospect.address_state
+            snapshot["address_zip"] = prospect.address_zip
+        if _field_enabled("include_date_of_birth", False):
+            snapshot["date_of_birth"] = (
+                str(prospect.date_of_birth) if prospect.date_of_birth else None
+            )
 
         pkg = ProspectElectionPackage(
             id=generate_uuid(),
@@ -4456,6 +4775,27 @@ class MembershipPipelineService:
             return None
 
         applied = dict(updates)
+
+        # ELECTION_PACKAGE_SYSTEM_STATUSES are derived, not chosen (see the
+        # constant's docstring above) — this generic update must not become
+        # a second, unguarded path to set or clear them, the same class of
+        # bug MP-9 fixed for ProspectStatus.TRANSFERRED. Without this, a
+        # caller could reset an already-assigned package from
+        # "added_to_ballot" back to "ready" and call assign again, landing
+        # the same applicant on a second ballot with no race required.
+        if applied.get("status") is not None:
+            if (
+                applied["status"] not in ELECTION_PACKAGE_CALLER_STATUSES
+                or pkg.status in ELECTION_PACKAGE_SYSTEM_STATUSES
+            ):
+                raise ValueError(
+                    "Package status can only be set to 'draft' or 'ready' "
+                    "here. 'added_to_ballot', 'elected' and 'not_elected' "
+                    "are set automatically — by assigning the package to an "
+                    "election or tallying the vote — and cannot be set or "
+                    "reverted through this update."
+                )
+
         if isinstance(applied.get("package_config"), dict):
             # Merge into existing config to avoid wiping previously stored
             # keys (documents, stage_summary, etc.) — a partial config dict
@@ -4484,8 +4824,16 @@ class MembershipPipelineService:
         pipeline_id: Optional[str] = None,
         status_filter: Optional[str] = None,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
+        include_closed: bool = False,
     ) -> List[ProspectElectionPackage]:
-        """List election packages, optionally filtered by pipeline and status"""
+        """List election packages, optionally filtered by pipeline and status.
+
+        Packages belonging to closed applications are omitted unless
+        ``include_closed`` is set. This list is what an election officer picks
+        a ballot from, so a rejected applicant's still-"ready" package
+        appearing in it is an invitation to hold a vote on somebody the
+        department already declined.
+        """
         query = (
             select(ProspectElectionPackage)
             .join(
@@ -4494,6 +4842,10 @@ class MembershipPipelineService:
             )
             .where(ProspectiveMember.organization_id == organization_id)
         )
+        if not include_closed:
+            query = query.where(
+                ProspectiveMember.status.notin_(sorted(CLOSED_PROSPECT_STATUSES))
+            )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if pipeline_id:
             query = query.where(ProspectElectionPackage.pipeline_id == pipeline_id)
@@ -4519,21 +4871,49 @@ class MembershipPipelineService:
 
         Raises ValueError if the package is not ready or the election is
         not in DRAFT status.
+
+        Locking: two concurrent assignment calls for the same package (to
+        the same election or, worse, two different ones) would otherwise
+        both read status == "ready" before either commits, and both append
+        a ballot item — landing the applicant on two ballots with the
+        second write to pkg.election_id silently overwriting the first
+        (CLAUDE.md Pitfall #27). The package row is the one thing both
+        calls contend on, so it is locked here and the "ready" check below
+        runs against that locked read rather than a plain SELECT taken
+        before the lock.
         """
-        pkg = await self.get_election_package(prospect_id, organization_id)
+        pkg = await self.get_election_package(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not pkg:
             raise ValueError("Election package not found")
+
+        # The package's own status is not enough: it is a snapshot taken when
+        # the applicant reached the election stage, and it stays "ready" after
+        # the application is closed. Without this, a rejected applicant could
+        # still be added to a ballot and voted on.
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            raise ValueError("Prospect not found")
+        _assert_open(prospect, "added to a ballot")
+
         if pkg.status != "ready":
             raise ValueError(
                 f"Package must be in 'ready' status to assign "
                 f"(current: '{pkg.status}')"
             )
 
+        # Also lock the election row: two different packages assigned to the
+        # same election concurrently would otherwise race the same
+        # read-modify-write on ballot_items, and the loser's ballot item
+        # would be silently lost to the last commit rather than appended.
         election_result = await self.db.execute(
-            select(Election).where(
+            select(Election)
+            .where(
                 Election.id == election_id,
                 Election.organization_id == organization_id,
             )
+            .with_for_update()
         )
         election = election_result.scalars().first()
         if not election:
@@ -5053,6 +5433,8 @@ class MembershipPipelineService:
         if not prospect:
             raise ValueError("Prospect not found")
 
+        _assert_open(prospect, "interviewed")
+
         # MP-5: reject a client-supplied step_id that isn't in this prospect's
         # pipeline (integrity — prevents a dangling step FK on the interview).
         if step_id:
@@ -5291,19 +5673,32 @@ class MembershipPipelineService:
         result = await self.db.execute(query)
         links = list(result.scalars().all())
 
+        # Batch-fetch every referenced Event/User once instead of a query per
+        # link (was a 2N+1 shape — one Event and, when set, one User lookup
+        # per row).
+        event_ids = {link.event_id for link in links if link.event_id}
+        events_by_id: Dict[str, Event] = {}
+        if event_ids:
+            events_result = await self.db.execute(
+                select(Event).where(Event.id.in_(event_ids))
+            )
+            events_by_id = {e.id: e for e in events_result.scalars().all()}
+
+        linker_ids = {link.linked_by for link in links if link.linked_by}
+        linkers_by_id: Dict[str, User] = {}
+        if linker_ids:
+            linkers_result = await self.db.execute(
+                select(User).where(User.id.in_(linker_ids))
+            )
+            linkers_by_id = {u.id: u for u in linkers_result.scalars().all()}
+
         enriched: List[Dict[str, Any]] = []
         for link in links:
-            event_result = await self.db.execute(
-                select(Event).where(Event.id == link.event_id)
-            )
-            event = event_result.scalar_one_or_none()
+            event = events_by_id.get(link.event_id)
 
             linker_name = None
             if link.linked_by:
-                linker_result = await self.db.execute(
-                    select(User).where(User.id == link.linked_by)
-                )
-                linker = linker_result.scalar_one_or_none()
+                linker = linkers_by_id.get(link.linked_by)
                 if linker:
                     linker_name = f"{linker.first_name} {linker.last_name}".strip()
 

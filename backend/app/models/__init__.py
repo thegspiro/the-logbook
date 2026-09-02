@@ -276,7 +276,9 @@ from app.models.minute import (
 from app.models.nfc_tag import NfcCredentialType, NfcTag, NfcTagStatus
 from app.models.notification import (
     DepartmentMessage,
+    DepartmentMessageDelivery,
     DepartmentMessageRead,
+    DepartmentMessageRecipient,
     MessagePriority,
     MessageTargetType,
     NotificationCategory,
@@ -288,7 +290,7 @@ from app.models.notification import (
 )
 from app.models.onboarding import OnboardingStatus
 from app.models.operational_rank import OperationalRank
-from app.models.org_chart import OrgChartNode
+from app.models.org_chart import OrgChartNode, OrgChartNodeHolder
 from app.models.organization_officer import OrganizationOfficer
 from app.models.public_portal import (
     PublicPortalAccessLog,
@@ -296,6 +298,7 @@ from app.models.public_portal import (
     PublicPortalConfig,
     PublicPortalDataWhitelist,
 )
+from app.models.qualification import MemberQualification
 from app.models.scheduling_module_config import SchedulingModuleConfig
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
 from app.models.skills_testing import SkillTemplate, SkillTest
@@ -318,6 +321,12 @@ from app.models.storefront import (
     StoreSettings,
     StoreWindowProduct,
     StoreWindowStatus,
+)
+from app.models.testing_checklist import (
+    TestingAccessExpectation,
+    TestingChecklistEntry,
+    TestingCheckStatus,
+    TestingRun,
 )
 from app.models.training import (
     ExternalCategoryMapping,
@@ -428,7 +437,9 @@ __all__ = [
     "NotificationChannel",
     # Department message models
     "DepartmentMessage",
+    "DepartmentMessageDelivery",
     "DepartmentMessageRead",
+    "DepartmentMessageRecipient",
     "MessagePriority",
     "MessageTargetType",
     # Integration models
@@ -614,8 +625,10 @@ __all__ = [
     "IPExceptionApprovalStatus",
     # Operational rank models
     "OperationalRank",
+    "MemberQualification",
     # Department office holders
     "OrgChartNode",
+    "OrgChartNodeHolder",
     "OrganizationOfficer",
     # Finance models
     "FiscalYear",
@@ -718,4 +731,9 @@ __all__ = [
     "LegalDocumentRevision",
     "LegalDocumentType",
     "LegalRevisionStatus",
+    # Testing checklist models
+    "TestingAccessExpectation",
+    "TestingCheckStatus",
+    "TestingChecklistEntry",
+    "TestingRun",
 ]

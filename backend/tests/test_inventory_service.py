@@ -6,7 +6,7 @@ Tests for InventoryService business logic using mocked database sessions.
 Covers:
   - State-validation logic (_validate_item_state)
   - Category requirement enforcement (_validate_category_requirements)
-  - Create item validation paths (state, category, serial, pool quantity)
+  - Create item validation paths (state, category, serial, negative pool qty)
   - Create / update / rename categories
   - Serial number uniqueness checks
   - Update item validation paths (not found, invalid state, negative pool qty)
@@ -149,6 +149,88 @@ class TestValidateItemState:
 # ============================================
 
 
+class TestStateInvariantRepair:
+    """The pair rule arrived as a write-time validator after rows carrying the
+    forbidden combinations already existed, and several write paths kept
+    producing more. These cover the two halves that make it hold."""
+
+    def test_retired_condition_maps_to_retired_status(self):
+        """Omitting RETIRED from the mapping produced AVAILABLE + retired —
+        a pair _VALID_STATE_COMBOS itself rejects."""
+        assert (
+            InventoryService._status_from_condition(ItemCondition.RETIRED)
+            == ItemStatus.RETIRED
+        )
+
+    def test_unsafe_conditions_map_to_maintenance(self):
+        for cond in (
+            ItemCondition.POOR,
+            ItemCondition.DAMAGED,
+            ItemCondition.OUT_OF_SERVICE,
+        ):
+            assert (
+                InventoryService._status_from_condition(cond)
+                == ItemStatus.IN_MAINTENANCE
+            ), cond
+
+    def test_enforce_quarantines_an_unsafe_available_item(self):
+        item = _make_item(status=ItemStatus.AVAILABLE, condition=ItemCondition.DAMAGED)
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.IN_MAINTENANCE
+        assert item.condition == ItemCondition.DAMAGED
+
+    def test_enforce_leaves_a_legal_pair_alone(self):
+        item = _make_item(status=ItemStatus.AVAILABLE, condition=ItemCondition.GOOD)
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.AVAILABLE
+
+    def test_enforce_leaves_issued_gear_assigned(self):
+        """ASSIGNED is only invalid when nobody holds the item.
+
+        The helper defaults assigned_to_user_id to None, so passing the item's
+        status and condition alone made every assigned item fail the
+        "requires an assigned user" rule. Completing a maintenance record on
+        gear that is out with a member then rewrote its status to AVAILABLE
+        while the assignment stayed on the row — the turnout coat is listed as
+        ready to issue and is on somebody's back.
+        """
+        item = _make_item(
+            status=ItemStatus.ASSIGNED,
+            condition=ItemCondition.GOOD,
+            assigned_to_user_id=str(uuid4()),
+        )
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.ASSIGNED
+
+    def test_enforce_still_rescues_an_assigned_item_with_no_holder(self):
+        """The rule is not disabled, only given the assignee it asks about."""
+        item = _make_item(
+            status=ItemStatus.ASSIGNED,
+            condition=ItemCondition.GOOD,
+            assigned_to_user_id=None,
+        )
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.AVAILABLE
+
+    def test_combination_check_can_be_skipped_but_the_user_rule_cannot(self):
+        """check_combination=False is for an update that touches neither field.
+        The assigned-user rule is about the resulting state, so it still runs."""
+        assert (
+            InventoryService._validate_item_state(
+                ItemStatus.AVAILABLE,
+                ItemCondition.DAMAGED,
+                check_combination=False,
+            )
+            is None
+        )
+        assert InventoryService._validate_item_state(
+            ItemStatus.ASSIGNED,
+            ItemCondition.GOOD,
+            assigned_to_user_id=None,
+            check_combination=False,
+        )
+
+
 class TestValidateCategoryRequirements:
 
     @pytest.mark.asyncio
@@ -262,8 +344,15 @@ class TestCreateItem:
         mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_pool_item_requires_quantity(self, service, org_id, user_id):
-        """Pool items with quantity < 1 are rejected."""
+    async def test_create_pool_item_accepts_zero_quantity(
+        self, service, org_id, user_id
+    ):
+        """A pool item may be created with nothing on hand.
+
+        This is the shape the checklist builder posts when a crew adds a
+        catalog row from an equipment-check position: the row records that the
+        item exists, not that any of it is in the stock room.
+        """
         service._validate_category_requirements = AsyncMock(return_value=None)
 
         item, error = await service.create_item(
@@ -277,8 +366,29 @@ class TestCreateItem:
             },
             created_by=user_id,
         )
-        assert error is not None
-        assert "quantity" in error.lower()
+        assert error is None
+        assert item is not None
+
+    @pytest.mark.asyncio
+    async def test_create_pool_item_rejects_negative_quantity(
+        self, service, org_id, user_id
+    ):
+        """Zero is a real stock level; a negative one is incoherent."""
+        service._validate_category_requirements = AsyncMock(return_value=None)
+
+        item, error = await service.create_item(
+            organization_id=org_id,
+            item_data={
+                "name": "Gloves",
+                "tracking_type": "pool",
+                "quantity": -1,
+                "status": "available",
+                "condition": "good",
+            },
+            created_by=user_id,
+        )
+        assert item is None
+        assert "negative" in error.lower()
 
     @pytest.mark.asyncio
     async def test_create_item_duplicate_serial_rejected(
@@ -456,6 +566,28 @@ class TestUpdateCategory:
         assert error is None
         assert mock_category.name == "New Name"
 
+    @pytest.mark.asyncio
+    async def test_update_category_rejects_null_name(self, service, org_id):
+        """update_category now routes through apply_updates instead of a
+        blind setattr loop: an explicit null against name (NOT NULL) is
+        caught and returned as a clean error string, not an unhandled
+        IntegrityError at commit."""
+        from app.models.inventory import InventoryCategory
+
+        category = InventoryCategory(
+            id=str(uuid4()), organization_id=org_id, name="Airway", item_type="medical"
+        )
+        service.get_category_by_id = AsyncMock(return_value=category)
+
+        result, error = await service.update_category(
+            category_id=category.id,
+            organization_id=org_id,
+            update_data={"name": None},
+        )
+        assert result is None
+        assert error is not None
+        assert "cannot be cleared" in error.lower()
+
 
 # ============================================
 # Serial Number Uniqueness Tests
@@ -564,6 +696,48 @@ class TestUpdateItem:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_update_item_allows_an_unrelated_edit_on_a_legacy_pair(
+        self, service, mock_db
+    ):
+        """A row stored with a combination that predates the pair rule must stay
+        editable. Applying the rule to the resulting state of every partial
+        update made a storage-location change fail with "Invalid state" naming
+        two fields the edit never touched."""
+        item = _make_item(status=ItemStatus.AVAILABLE, condition=ItemCondition.DAMAGED)
+        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
+        service._assert_item_fks_in_org = AsyncMock()
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"name": "Relocated spare"},
+        )
+        assert err is None
+        assert result is item
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_item_still_rejects_moving_into_an_invalid_pair(
+        self, service, mock_db
+    ):
+        """Skipping the rule for an unchanged pair must not let a caller
+        deliberately write one."""
+        item = _make_item(status=ItemStatus.AVAILABLE, condition=ItemCondition.GOOD)
+        service.get_item_by_id = AsyncMock(return_value=item)
+        service._get_item_locked = AsyncMock(return_value=item)
+        service._assert_item_fks_in_org = AsyncMock()
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"condition": "damaged"},
+        )
+        assert result is None
+        assert "Invalid state" in err
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_update_pool_item_negative_quantity(self, service, mock_db):
         """update_item should reject negative quantity for pool items."""
         item = _make_item(tracking_type=TrackingType.POOL, quantity=10)
@@ -611,6 +785,92 @@ class TestUpdateItem:
         )
         assert result is None
         assert "already in use" in err.lower()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_item_rejects_null_name(self, service, org_id):
+        """update_item now routes through apply_updates instead of a blind
+        setattr loop: an explicit null against name (NOT NULL) is caught and
+        returned as a clean error string, not an unhandled IntegrityError at
+        commit."""
+        from app.models.inventory import InventoryItem
+
+        item = InventoryItem(id=str(uuid4()), organization_id=org_id, name="Gauze 4x4")
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"name": None},
+        )
+        assert result is None
+        assert "cannot be cleared" in err.lower()
+
+
+# ============================================
+# Update Lot Tests
+# ============================================
+
+
+class TestUpdateLot:
+    """update_lot now routes through apply_updates instead of a blind
+    setattr loop guarded only by hasattr — an explicit null against
+    quantity (NOT NULL) previously reached commit() unguarded (no
+    try/except anywhere in this method) and raised an unhandled
+    IntegrityError; it must now raise a clean ValueError instead."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_lot_rejects_null_quantity(self, service, org_id):
+        from app.models.inventory import InventoryLot
+
+        lot = InventoryLot(
+            id=str(uuid4()),
+            organization_id=org_id,
+            inventory_item_id=str(uuid4()),
+            quantity=10,
+        )
+        service._get_lot = AsyncMock(return_value=lot)
+
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_lot(
+                lot_id=lot.id,
+                organization_id=org_id,
+                data={"quantity": None},
+            )
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_lot_success(self, service, mock_db, org_id):
+        from app.models.inventory import InventoryLot
+
+        lot = InventoryLot(
+            id=str(uuid4()),
+            organization_id=org_id,
+            inventory_item_id=str(uuid4()),
+            quantity=10,
+        )
+        service._get_lot = AsyncMock(return_value=lot)
+
+        updated = await service.update_lot(
+            lot_id=lot.id,
+            organization_id=org_id,
+            data={"quantity": 25, "lot_number": "LOT-2"},
+        )
+        assert updated is lot
+        assert lot.quantity == 25
+        assert lot.lot_number == "LOT-2"
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_lot_missing_returns_none(self, service, org_id):
+        service._get_lot = AsyncMock(return_value=None)
+
+        result = await service.update_lot(
+            lot_id="nope", organization_id=org_id, data={"quantity": 5}
+        )
+        assert result is None
 
 
 # ============================================
@@ -1018,8 +1278,17 @@ class TestAssignItem:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_reassign_already_assigned_item(self, service, mock_db):
-        """Assigning an ALREADY_ASSIGNED item to a different user should trigger unassign first."""
+    async def test_reassign_already_assigned_item_is_refused(self, service, mock_db):
+        """An ALREADY_ASSIGNED item is refused, not silently re-homed.
+
+        This used to unassign the current holder and assign onward in one
+        step, which closed a custody record without anyone confirming the
+        item had actually come back. Reassignment is a chain-of-custody
+        transfer now: `transfer_item_holding` closes the old record and opens
+        its successor atomically, with a return condition recorded. So the
+        plain assign path refuses, and — the part worth asserting — it does
+        not reach `unassign_item` on the way.
+        """
         old_user = uuid4()
         new_user = uuid4()
         item = _make_item(
@@ -1030,7 +1299,6 @@ class TestAssignItem:
         mock_result.scalar_one_or_none.return_value = item
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        # Mock unassign_item to just pass
         service.unassign_item = AsyncMock(return_value=(True, None))
 
         with patch.object(
@@ -1042,8 +1310,11 @@ class TestAssignItem:
                 organization_id=UUID(item.organization_id),
                 assigned_by=uuid4(),
             )
-        assert err is None
-        service.unassign_item.assert_awaited_once()
+        assert assignment is None
+        assert err is not None
+        assert "not available" in err
+        service.unassign_item.assert_not_awaited()
+        assert item.assigned_to_user_id == str(old_user)
 
 
 # ============================================
@@ -1055,10 +1326,10 @@ class TestPoolIssuanceValidation:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_create_pool_item_zero_quantity_rejected(
+    async def test_create_pool_item_zero_quantity_allowed(
         self, service, mock_db, org_id, user_id
     ):
-        """Pool item with quantity=0 should be rejected."""
+        """Pool item with quantity=0 is an out-of-stock catalog row, not an error."""
         service._validate_category_requirements = AsyncMock(return_value=None)
 
         item, err = await service.create_item(
@@ -1072,8 +1343,8 @@ class TestPoolIssuanceValidation:
             },
             created_by=user_id,
         )
-        assert item is None
-        assert "quantity" in err.lower()
+        assert err is None
+        assert item is not None
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -1118,10 +1389,9 @@ class TestStatusTransitionMatrix:
                 assert err is not None, f"RETIRED + {cond} should be invalid"
 
     @pytest.mark.unit
-    def test_non_retired_statuses_accept_standard_conditions(self):
-        """Non-RETIRED statuses should accept any standard condition."""
-        non_retired = [
-            ItemStatus.AVAILABLE,
+    def test_non_retired_non_available_statuses_accept_standard_conditions(self):
+        """Statuses other than RETIRED/AVAILABLE should accept any standard condition."""
+        other_statuses = [
             ItemStatus.CHECKED_OUT,
             ItemStatus.IN_MAINTENANCE,
             ItemStatus.LOST,
@@ -1135,10 +1405,23 @@ class TestStatusTransitionMatrix:
             ItemCondition.DAMAGED,
             ItemCondition.OUT_OF_SERVICE,
         ]
-        for st in non_retired:
+        for st in other_statuses:
             for cond in standard:
                 err = InventoryService._validate_item_state(st, cond)
                 assert err is None, f"{st} + {cond} should be valid but got: {err}"
+
+    @pytest.mark.unit
+    def test_available_requires_safe_condition(self):
+        """AVAILABLE must reject POOR/DAMAGED/OUT_OF_SERVICE -- an unsafe item
+        must not become distributable (assign/checkout/issue all gate on
+        status == AVAILABLE)."""
+        safe = {ItemCondition.EXCELLENT, ItemCondition.GOOD, ItemCondition.FAIR}
+        for cond in ItemCondition:
+            err = InventoryService._validate_item_state(ItemStatus.AVAILABLE, cond)
+            if cond in safe:
+                assert err is None, f"AVAILABLE + {cond} should be valid but got: {err}"
+            else:
+                assert err is not None, f"AVAILABLE + {cond} should be invalid"
 
     @pytest.mark.unit
     def test_assigned_status_always_requires_user(self):

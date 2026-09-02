@@ -178,6 +178,29 @@ class TestCreateRecurringEventLocationValidation:
         assert error == "Location not found"
 
 
+class TestCreateRecurringEventTemplateValidation:
+    """Same XC-1 shape as location_id above: a client-supplied template_id
+    must belong to the caller's org before it's stored on every occurrence."""
+
+    async def test_foreign_template_rejected(self):
+        svc = EventService(MagicMock())
+        event_data = {
+            "recurrence_pattern": "weekly",
+            "start_datetime": datetime(2026, 6, 1, 19, 0),
+            "end_datetime": datetime(2026, 6, 1, 21, 0),
+            "template_id": "template-from-another-org",
+            "title": "Weekly Drill",
+        }
+        with patch.object(
+            svc, "get_template", new_callable=AsyncMock, return_value=None
+        ):
+            events, error = await svc.create_recurring_event(
+                event_data, organization_id="org-1", created_by="u1"
+            )
+        assert events == []
+        assert error == "Template not found"
+
+
 def test_all_patterns_have_a_test():
     # Guard: every RecurrencePattern value is exercised above (custom/weekday
     # variants included), so a new pattern won't silently go untested.

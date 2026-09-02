@@ -19,6 +19,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -34,15 +35,23 @@ from app.api.dependencies import (
     user_has_permission,
 )
 from app.api.prospect_privacy import (
+    block_self_interview_access,
     block_self_prospect_access,
     get_hidden_prospect_ids,
+)
+from app.api.v1.endpoints.users import (
+    _canonical_rank_or_400,
+    _enforce_rank_grant_ceiling,
+    _enforce_role_grant_ceiling,
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.event import Event
-from app.models.user import User
+from app.models.membership_pipeline import ProspectStatus
+from app.models.user import Role, User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
     AdvanceProspectRequest,
@@ -76,11 +85,13 @@ from app.schemas.membership_pipeline import (
     ProspectListResponse,
     ProspectResponse,
     ProspectSourceEventResponse,
+    ProspectStatusChangeRequest,
     ProspectUpdate,
     PurgeInactiveRequest,
     PurgeInactiveResponse,
     ReportStageGroupsUpdate,
     StepApprovalRequest,
+    StepApprovalResponse,
     StepReorderRequest,
     TransferProspectRequest,
     TransferProspectResponse,
@@ -192,9 +203,7 @@ async def list_pipelines(
                 is_active=p.is_active if hasattr(p, "is_active") else True,
                 auto_transfer_on_approval=p.auto_transfer_on_approval,
                 step_count=len(p.steps) if p.steps else 0,
-                prospect_count=(
-                    len(p.prospects) if hasattr(p, "prospects") and p.prospects else 0
-                ),
+                prospect_count=getattr(p, "prospect_count", 0),
                 created_at=p.created_at,
             )
         )
@@ -868,6 +877,13 @@ async def list_prospects(
     event_id: UUID | None = Query(
         None, description="Only prospects linked to this event"
     ),
+    open_only: bool = Query(
+        False,
+        description=(
+            "Only applications still open — excludes rejected, withdrawn, "
+            "inactive and transferred records"
+        ),
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -884,6 +900,11 @@ async def list_prospects(
 
     ``event_id`` narrows the list to the applicants a given event produced or
     was linked to — what an open house actually brought in.
+
+    ``open_only`` drops closed applications (rejected, withdrawn, inactive,
+    transferred), which is what the pipeline board and applicant table ask
+    for — a rejected applicant is out of the pipeline. The archive tabs fetch
+    one closed status at a time through ``status`` instead.
 
     The caller's own prospective-membership record, if they have one, is
     omitted from the results and from ``total``.
@@ -908,6 +929,7 @@ async def list_prospects(
         limit=limit,
         offset=offset,
         exclude_prospect_ids=hidden_prospect_ids,
+        open_only=open_only,
     )
 
     now = datetime.now(timezone.utc)
@@ -1133,7 +1155,9 @@ async def complete_step(
     return prospect
 
 
-@router.post("/prospects/{prospect_id}/approve-step", response_model=ProspectResponse)
+@router.post(
+    "/prospects/{prospect_id}/approve-step", response_model=StepApprovalResponse
+)
 async def approve_step(
     prospect_id: UUID,
     data: StepApprovalRequest,
@@ -1150,7 +1174,14 @@ async def approve_step(
     The service only accepts an approval for a role the caller currently
     holds, so no broader permission gate is needed; the step completes (and
     the prospect advances) only when the last required role has signed.
+
+    Returns a minimal result, not the full prospect record: the caller is
+    authorized by the role they hold, not by prospective_members.view, and
+    the full record carries PII (DOB, address, coordinator notes) that
+    holding an approval role does not entitle them to see.
     """
+    from app.models.membership_pipeline import StepProgressStatus
+
     service = MembershipPipelineService(db)
     try:
         prospect = await service.record_step_approval(
@@ -1167,7 +1198,20 @@ async def approve_step(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
-    return prospect
+    progress = next(
+        (
+            p
+            for p in (prospect.step_progress or [])
+            if str(p.step_id) == str(data.step_id)
+        ),
+        None,
+    )
+    step_completed = bool(progress and progress.status == StepProgressStatus.COMPLETED)
+    return StepApprovalResponse(
+        prospect_id=prospect_id,
+        step_id=data.step_id,
+        step_completed=step_completed,
+    )
 
 
 @router.post("/prospects/{prospect_id}/skip-step", response_model=ProspectResponse)
@@ -1297,6 +1341,54 @@ async def bulk_advance_prospects(
     return response
 
 
+@router.post("/prospects/{prospect_id}/status", response_model=ProspectResponse)
+async def set_prospect_status(
+    prospect_id: UUID,
+    data: ProspectStatusChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+):
+    """
+    Set one prospect's status (reject, place on hold, withdraw, reactivate).
+
+    ``reason`` is recorded in the prospect's activity log. Like the bulk
+    endpoint, it deliberately does not touch the coordinator notes field —
+    routing a rejection reason through the update endpoint as ``notes``
+    overwrote whatever had been written about the applicant.
+
+    **Requires permission: members.manage or prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        prospect = await service.set_prospect_status(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            status=data.status,
+            changed_by=current_user.id,
+            reason=data.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospect_status_changed",
+        event_category="membership",
+        severity="info",
+        event_data={"prospect_id": str(prospect_id), "status": data.status},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return prospect
+
+
 @router.post("/prospects/bulk-status", response_model=BulkActionResponse)
 async def bulk_set_prospect_status(
     data: BulkStatusRequest,
@@ -1402,6 +1494,7 @@ async def regress_prospect(
 async def transfer_prospect(
     prospect_id: UUID,
     data: TransferProspectRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
@@ -1413,13 +1506,65 @@ async def transfer_prospect(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
+
+    # Resolved before the ceiling check below, which reports a committed
+    # CRITICAL security alert on denial (see _enforce_rank_grant_ceiling).
+    # An id that doesn't exist, isn't in this org, or was already transferred
+    # can never be transferred regardless of the requested rank, so it must
+    # not generate that alert -- Codex review on PR #1931.
+    prospect = await service.get_prospect(
+        str(prospect_id), str(current_user.organization_id)
+    )
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
+    if prospect.status == ProspectStatus.TRANSFERRED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Prospect has already been transferred",
+        )
+
+    # A rank grants its default permissions (_collect_user_permissions unions
+    # them in), so minting a new member at a rank is the same escalation
+    # surface as granting one directly -- a bare members.manage/
+    # prospective_members.manage holder must not transfer a prospect in at a
+    # rank that outranks their own permissions. Same check, same helper,
+    # users.create_member enforces on the other path that creates a User row.
+    canonical_rank = await _canonical_rank_or_400(
+        data.rank, str(current_user.organization_id), db
+    )
+    await _enforce_rank_grant_ceiling(
+        current_user, canonical_rank, db, get_client_ip(request)
+    )
+
+    # Same escalation surface as create_member's role_ids handling: a bare
+    # members.manage/prospective_members.manage holder must not transfer a
+    # prospect in carrying a role whose permissions exceed their own
+    # (Codex review on this PR).
+    if data.role_ids:
+        role_result = await db.execute(
+            select(Role)
+            .where(Role.id.in_([str(rid) for rid in data.role_ids]))
+            .where(Role.organization_id == str(current_user.organization_id))
+        )
+        requested_roles = role_result.scalars().all()
+        if len(requested_roles) != len(data.role_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more role IDs are invalid",
+            )
+        await _enforce_role_grant_ceiling(
+            current_user, list(requested_roles), db, get_client_ip(request)
+        )
+
     result = await service.transfer_to_membership(
         prospect_id=str(prospect_id),
         organization_id=current_user.organization_id,
         transferred_by=current_user.id,
         username=data.username,
         membership_id=data.membership_id,
-        rank=data.rank,
+        rank=canonical_rank,
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
         send_welcome_email=data.send_welcome_email,
@@ -1728,12 +1873,18 @@ async def delete_prospect_document(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    deleted = await service.delete_prospect_document(
-        document_id=str(document_id),
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        deleted_by=current_user.id,
-    )
+    try:
+        deleted = await service.delete_prospect_document(
+            document_id=str(document_id),
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            deleted_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
@@ -1797,15 +1948,20 @@ async def create_election_package(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    pkg = await service.create_election_package(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        pipeline_id=str(data.pipeline_id) if data.pipeline_id else None,
-        step_id=str(data.step_id) if data.step_id else None,
-        coordinator_notes=data.coordinator_notes,
-        package_config=data.package_config,
-        created_by=current_user.id,
-    )
+    try:
+        pkg = await service.create_election_package(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            pipeline_id=str(data.pipeline_id) if data.pipeline_id else None,
+            step_id=str(data.step_id) if data.step_id else None,
+            coordinator_notes=data.coordinator_notes,
+            package_config=data.package_config,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not pkg:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
@@ -1830,12 +1986,17 @@ async def update_election_package(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    pkg = await service.update_election_package(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        updates=data.model_dump(exclude_unset=True),
-        updated_by=current_user.id,
-    )
+    try:
+        pkg = await service.update_election_package(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            updates=data.model_dump(exclude_unset=True),
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not pkg:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election package not found"
@@ -1848,6 +2009,13 @@ async def list_election_packages(
     pipeline_id: UUID | None = Query(None, description="Filter by pipeline"),
     status_filter: str | None = Query(
         None, alias="status", description="Filter by status"
+    ),
+    include_closed: bool = Query(
+        False,
+        description=(
+            "Include packages belonging to closed applications (rejected, "
+            "withdrawn, inactive, transferred)"
+        ),
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -1862,6 +2030,10 @@ async def list_election_packages(
     """
     List election packages across all prospects, optionally filtered.
 
+    Packages belonging to closed applications are omitted unless
+    ``include_closed`` is set: this is the list a ballot is assembled from,
+    and a rejected applicant's package stays "ready" after the rejection.
+
     The package built for the caller's own application is omitted — it
     bundles the interview and coordinator material the vote is based on.
 
@@ -1873,6 +2045,7 @@ async def list_election_packages(
         pipeline_id=str(pipeline_id) if pipeline_id else None,
         status_filter=status_filter,
         exclude_prospect_ids=hidden_prospect_ids,
+        include_closed=include_closed,
     )
     return packages
 
@@ -2036,6 +2209,7 @@ async def create_interview(
 @router.put(
     "/interviews/{interview_id}",
     response_model=InterviewResponse,
+    dependencies=[Depends(block_self_interview_access)],
 )
 async def update_interview(
     interview_id: UUID,
@@ -2070,6 +2244,7 @@ async def update_interview(
 @router.delete(
     "/interviews/{interview_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(block_self_interview_access)],
 )
 async def delete_interview(
     interview_id: UUID,

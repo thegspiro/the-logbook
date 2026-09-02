@@ -63,10 +63,30 @@ class QuorumService:
 
         Returns: (quorum_met, present_count, required_count, quorum_description)
         """
+        # Locked (Pitfall #27): two check-ins recalculating quorum for the
+        # same meeting at nearly the same instant would otherwise each read
+        # `attendees` before the other's commit landed and each write back a
+        # `quorum_met`/`quorum_count` that undercounts who was actually
+        # present — whichever write lands last overwrites the other's. A
+        # locking read serializes them and always sees the latest committed
+        # attendee list.
+        #
+        # populate_existing=True is required alongside the lock, not optional
+        # polish: set_meeting_quorum_config loads this same MeetingMinutes row
+        # (a plain, unlocked read) and commits it on the same session before
+        # calling here. With expire_on_commit=False that instance stays in the
+        # session's identity map, and by default a re-SELECT for a row already
+        # in the identity map returns the cached Python object without copying
+        # the new row's columns onto it -- the lock is acquired at the SQL
+        # level, but `minutes.attendees` would still read the value from
+        # before whatever a concurrent transaction just committed. Matches the
+        # same pattern in membership_pipeline_service.py/inventory_service.py.
         result = await self.db.execute(
             select(MeetingMinutes)
             .where(MeetingMinutes.id == minutes_id)
             .where(MeetingMinutes.organization_id == str(organization_id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         minutes = result.scalar_one_or_none()
         if not minutes:

@@ -6,24 +6,55 @@ import { MemoryRouter, Routes } from 'react-router';
 vi.mock('../../pages/RoomQRCodesPage', () => ({
   default: () => <div data-testid="room-qr-codes-page">Room QR codes</div>,
 }));
+vi.mock('./pages/FacilitiesSettingsPage', () => ({
+  default: () => <div>Facility Settings</div>,
+}));
 
 const capturedAnyPermissions: string[][] = [];
+const capturedPermissions: string[] = [];
+let grantedPermissions: string[] = [];
 vi.mock('../../components/ProtectedRoute', () => ({
   ProtectedRoute: ({
     children,
     requiredAnyPermission,
+    requiredPermission,
   }: {
     children: React.ReactNode;
     requiredAnyPermission?: string[];
+    requiredPermission?: string;
   }) => {
     if (requiredAnyPermission) capturedAnyPermissions.push(requiredAnyPermission);
+    if (requiredPermission) capturedPermissions.push(requiredPermission);
+    if (requiredPermission && !grantedPermissions.includes(requiredPermission)) return <div>Access Denied</div>;
     return <>{children}</>;
   },
 }));
 
-import { getFacilitiesRoutes } from './routes';
+import { FACILITY_ENTRY_PERMISSIONS, getFacilitiesRoutes } from './routes';
 
 describe('getFacilitiesRoutes', () => {
+  it('defines facility workspace access for authorized readers and managers', () => {
+    expect([...FACILITY_ENTRY_PERMISSIONS]).toEqual(['facilities.view', 'facilities.manage']);
+  });
+
+  it.each([
+    ['read-only leader', ['facilities.view'], false],
+    ['regular member', [], false],
+    ['facilities manager', ['facilities.manage'], true],
+    ['management-level leader', ['facilities.manage', 'settings.manage'], true],
+  ])('makes settings access appropriate for a %s', async (_profile, permissions, allowed) => {
+    grantedPermissions = permissions;
+    capturedPermissions.length = 0;
+    render(
+      <MemoryRouter initialEntries={['/facilities/settings']}>
+        <Routes>{getFacilitiesRoutes()}</Routes>
+      </MemoryRouter>
+    );
+    const expectedPage = allowed ? 'Facility Settings' : 'Access Denied';
+    expect(await screen.findByText(expectedPage)).toBeInTheDocument();
+    expect(capturedPermissions).toContain('facilities.manage');
+  });
+
   it('restricts the bulk QR code directory to managers and apparatus viewers', async () => {
     capturedAnyPermissions.length = 0;
     render(

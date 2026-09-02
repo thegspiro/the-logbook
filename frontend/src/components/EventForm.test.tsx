@@ -165,6 +165,60 @@ describe('EventForm', () => {
       });
     });
 
+    it('shows only room names when all facility rooms belong to one facility', async () => {
+      vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue([
+        {
+          id: 'room-1',
+          name: 'Quartermaster Storage — Volunteer Office — Station 1',
+          facility_id: 'facility-1',
+          facility_room_id: 'room-1',
+          building: 'Station 1',
+          address: '1 Main Street',
+          is_active: true,
+        },
+        {
+          id: 'room-2',
+          name: 'Conference Room — Station 1',
+          facility_id: 'facility-1',
+          facility_room_id: 'room-2',
+          is_active: true,
+        },
+      ] as unknown as Location[]);
+
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const locationSelect = await screen.findByLabelText(/location/i);
+      const labels = Array.from((locationSelect as HTMLSelectElement).options).map((option) => option.text);
+      expect(labels).toContain('Quartermaster Storage');
+      expect(labels).toContain('Conference Room');
+      expect(labels).not.toContain('Quartermaster Storage (Station 1) — 1 Main Street');
+    });
+
+    it('keeps room hierarchy when rooms span multiple facilities', async () => {
+      vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue([
+        {
+          id: 'room-1',
+          name: 'Storage — Office — Station 1',
+          facility_id: 'facility-1',
+          facility_room_id: 'room-1',
+          is_active: true,
+        },
+        {
+          id: 'room-2',
+          name: 'Storage — Office — Station 2',
+          facility_id: 'facility-2',
+          facility_room_id: 'room-2',
+          is_active: true,
+        },
+      ] as unknown as Location[]);
+
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const locationSelect = await screen.findByLabelText(/location/i);
+      expect(locationSelect).toHaveTextContent('Storage — Office — Station 1');
+      expect(locationSelect).toHaveTextContent('Storage — Office — Station 2');
+    });
+
     it('should toggle between select and manual location modes', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
@@ -193,14 +247,19 @@ describe('EventForm', () => {
   });
 
   describe('RSVP Settings', () => {
-    it('should hide RSVP options by default', () => {
+    it('hides only the deadline until a response is required', () => {
+      // Capacity, guests and roster visibility apply to an event that merely
+      // *accepts* RSVPs, so they stay available. Only a deadline is
+      // meaningless without an expectation to be late for.
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.queryByLabelText(/rsvp deadline/i)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/max attendees/i)).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/max attendees/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/allow guests/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/who can see who's going/i)).toBeInTheDocument();
     });
 
-    it('should show RSVP options when Require RSVP is checked', async () => {
+    it('should show the deadline when Require RSVP is checked', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
@@ -212,6 +271,22 @@ describe('EventForm', () => {
         expect(screen.getByLabelText(/max attendees/i)).toBeInTheDocument();
         expect(screen.getByLabelText(/allow guests/i)).toBeInTheDocument();
       });
+    });
+
+    it('keeps capacity and guests when Require RSVP is turned back off', async () => {
+      // The submit path used to wipe max_attendees and allow_guests whenever
+      // requires_rsvp was false, which silently uncapped a voluntary event and
+      // revoked its guests on every save.
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText(/max attendees/i), '10');
+      await user.click(screen.getByLabelText(/allow guests/i));
+      await user.click(screen.getByLabelText(/require rsvp/i));
+      await user.click(screen.getByLabelText(/require rsvp/i));
+
+      expect(screen.getByLabelText(/max attendees/i)).toHaveValue(10);
+      expect(screen.getByLabelText(/allow guests/i)).toBeChecked();
     });
 
     it('should show RSVP status options when RSVP is enabled', async () => {

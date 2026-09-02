@@ -1017,7 +1017,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       </aside>
 
       {/* ---------- Sticky action bar (phone) ---------- */}
-      <div className="bg-theme-surface border-theme-surface-border action-bar-safe fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t px-4 shadow-lg lg:hidden">
+      <div className="bg-theme-surface border-theme-surface-border action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 flex items-center gap-3 border-t px-4 shadow-lg lg:hidden">
         <div className="min-w-0">
           <p className="text-theme-text-primary font-mono text-xl font-bold">{formatDuration(durationMinutes)}</p>
           <p className="text-theme-text-muted text-xs">

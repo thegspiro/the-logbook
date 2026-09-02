@@ -1,0 +1,1887 @@
+# Security Review 00 — Cross-Cutting Baseline
+
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1), [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (pass 3, rounds 1–2, merged), [#2132](https://github.com/thegspiro/the-logbook/pull/2132) (pass 3, round 3 — separate PR per Pitfall #24, #2128 having already merged)
+
+---
+
+## Pass 3 (2026-09-01) — re-sweep, plus four sweep classes new to this file
+
+**Revised same-day after Codex review on PR #2128, round 1:** four P2
+findings against this pass's methodology — a too-narrow tracker sweep that
+missed a real gap, a too-narrow JSON shallow-copy sweep, a route-auth method
+description that dropped a scan root, and a completion-gate command that ran
+the wrong TypeScript compiler. All four verified against real code and
+corrected below (one produced an actual source fix,
+`app/services/security_monitoring.py`; the rest were methodology/doc
+corrections with the same zero-finding conclusion holding once properly
+re-checked). See each numbered sweep and the completion-gate section for what
+changed.
+
+**Revised again, same day, after Codex review round 2 — on the round-1
+source fix itself:** Codex reviewed commit `3b6b65e4` (round 1's fix) and
+found it was, itself, incomplete in two ways: the eviction it added ran
+unthrottled on a real hot path but evicted one key at a time (so a saturated
+tracker re-sorted itself on every single subsequent call), and a fifth
+tracker (`_external_endpoints`, a `set()`) that the same fix's own
+cap-enforcement helper never actually touched. This is the **second round**
+of Codex catching a real gap in the same tracker-cap sweep in the same PR —
+said plainly rather than undersold. Both fixed; see sweep 7's write-up below
+for the full account of both rounds.
+
+**Revised a third time after Codex review round 3 — on the code as it stood at
+commit `df7438e0` (round 2's fix, the version live on `main` at the time), and
+this round found an actual regression, not just an incomplete fix:**
+`self._enforce_key_caps()` ran, on `detect_session_hijack`, **before** the
+method read the current session's own prior IP history — so if that exact
+session happened to be among the least-recently-active entries the batch
+picked for eviction, its history was deleted a few lines before it was read,
+the method saw no prior IP, silently treated an ongoing hijack as a
+first-ever observation, and never raised the alert. That call-site
+placement — before the read — was introduced by **round 1**, commit
+`3b6b65e4`, not round 2; round 2 (`df7438e0`) changed only what
+`_enforce_key_caps()` does internally (batched eviction), which widened how
+many keys a single over-cap call could evict and so widened the odds of the
+current key being caught, but did not move the call or introduce the
+ordering bug. (This paragraph's own earlier revision — and `PROGRESS.md`'s —
+attributed the bug's introduction to round 2 alone; corrected on a later
+Codex pass, round 4 — see "Attribution correction" in the round-3 write-up
+below.) **PR #2128 had already been merged to `main` (commit `2b3231a3`) by
+the time this was caught**, so this regression was live and unfixed on
+`main` between the round-2 merge and the follow-up fix landing — see
+`docs/security-review/PROGRESS.md` for the timeline and the follow-up PR.
+Codex also flagged the count behind sweep 9's "132 distinct
+JSON/`MutableDict`-typed model attributes" as still wrong (a regex/line-based
+scan that missed multiline `Column(...)` declarations), and a process
+conflict in this file's own completion-gate write-up between CLAUDE.md's "fix
+every warning, in the same commit" rule and the "8 pre-existing, unrelated"
+framing used to wave 8 ESLint warnings through. All three verified against
+real code and fixed; see sweep 7's round-3 write-up, the corrected sweep 9
+write-up, and the completion-gate section below.
+
+**Revised a fourth time after Codex review round 4 — three more findings, on
+the round-3 fix itself and on this file's own historical record:** `_check_
+rate_limit` had the identical read-after-evict shape as the three methods
+round 3 fixed, missed there because it evicts through a different helper
+(`_evict_stale_tracking_keys()`, not a direct `_enforce_key_caps()` call) —
+the fourth time in this PR/its predecessor that this exact bug shape has been
+found unfixed after a "checked every method" pass. This file's attribution of
+the bug's introduction to round 2 was also wrong, per Codex — it was round 1.
+And the AST sweep script sweep 9 describes as "checked into
+`docs/security-review/`" did not actually exist in the repo. All three fixed;
+see sweep 7's round-4 write-up, the "Attribution correction" note in the
+round-3 write-up, and sweep 9's corrected script reference below.
+
+Re-verified pass 1/2's five standing sweeps against current code (backend grew
+to 399 Alembic revisions, 1536 routes across 80 `app/api/` files, from pass
+2's 381 revisions / 1526 routes), and added four sweep classes named in the
+rotation's own "typical categories" list that this file had not yet run as an
+explicit whole-codebase pass — each is a class CLAUDE.md documents as a
+recurring defect, and each is exactly the kind of thing a per-feature
+iteration can only ever show "not here" for. This pass does not re-derive pass
+1/2's conclusions; it re-checks them against current code and extends
+coverage, per the rotation's own rule (`docs/security-review/PROGRESS.md`
+line ~4220).
+
+### Re-verified standing sweeps
+
+| #   | Class swept                      | Method                                                               | Result                                                                                    |
+| --- | -------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports     | `grep` for `csv.writer(` / `csv.DictWriter(` outside `csv_export.py` | **clean** — 0 sites, unchanged                                                            |
+| 2   | `SET NULL` on `NOT NULL` columns | `test_set_null_fks_are_nullable` (guard test)                        | **clean** — passes                                                                        |
+| 3   | Proxy-IP attribution             | grep `request.client.host`                                           | **clean** — same 3 hits as pass 1/2 (2 comments, 1 deliberate use inside `get_client_ip`) |
+| 4   | Alembic chain integrity          | `backend/scripts/validate_migrations.py --strict`                    | **clean** — 399 revisions, single head `4e7e125cb00f`, no duplicate ids                   |
+| 5   | LIKE-wildcard handling           | `tests/test_like_escaping.py` (2 guard tests)                        | **clean** — both pass; no new call site reintroduced a raw copy or dropped `escape=`      |
+
+**Route auth coverage re-check (corrected on Codex review — see below):** an
+AST walk of every route decorator across **two scan roots**: the 68 files
+`api/v1/api.py` imports and registers (derived from its router registrations,
+not a directory glob — pass 2's Codex-caught correction), plus the 10 routers
+in `app/api/public/` that `backend/main.py` mounts **directly**
+(`app.include_router(public_portal_router, ...)` etc. — these are never
+imported by `api.py` at all, so a walk scoped to `api.py`'s registrations
+structurally cannot see them). `api/v1/api.py` itself is also walked, for the
+bare `GET /` root route it defines. This two-root method is what pass 1's
+original "whole `app/api/`" directory walk did implicitly; pass 2 preserved it
+by scanning `api/v1/endpoints/`, `api/v1/onboarding.py`, and `api/public/` as
+three explicit roots; this pass's own prose (before this correction) had
+narrowed the _stated_ method to "files registered in `api.py`" and dropped the
+explicit second root — the walk's actual output still matched pass 1/2's
+totals, but the method sentence no longer supported the conclusion,
+[per Codex review](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139059).
+
+Re-running with both roots stated explicitly finds **69 routes with no
+`Depends()`-recognized auth dependency**, unchanged from pass 1/2's count but
+with one raw hit reclassified and the `public/*` subtotal corrected:
+
+| Bucket                                               |  Count |
+| ---------------------------------------------------- | -----: |
+| `auth.py` (login, register, OAuth, password reset)   |     14 |
+| `elections.py` (token-scoped ballot routes)          |      4 |
+| `event_requests.py` (public outreach-request routes) |      4 |
+| `events.py` (`GET /events/public-calendar`)          |      1 |
+| `salesforce_sync.py` (OAuth callback)                |      1 |
+| `onboarding.py` (bootstrap routes)                   |     24 |
+| `app/api/public/*` (10 routers, main.py-mounted)     |     20 |
+| `api/v1/api.py` (`GET /` root)                       |      1 |
+| **Total**                                            | **69** |
+
+The `public/*` figure is **20, not the 22** pass 2/3 had been carrying
+forward — verified by direct AST count of every `@router.<verb>` in
+`app/api/public/*.py` today (10 files: `calendar`, `display`×3, `finance_
+approvals`×3, `forms`×2, `integrations_webhook`×2, `legal`, `paypal_webhook`,
+`portal`×5, `salesforce_webhook`, `security_txt` = 20), and it matches pass
+1's own original count on this same directory ("20 in `api/public/`" —
+see the Pass 1 section below). The "22" was never re-derived after pass 1; it
+was carried forward across pass 2 and pass 3 as prose. All 20 are
+intentionally public (rate-limited, token-addressed, webhook-signature- or
+CAPTCHA-verified) — no genuine gap, same conclusion as pass 1, just a
+corrected subtotal.
+
+**One raw AST hit is a false positive, not a finding:**
+`app/api/v1/endpoints/inventory.py`'s `@router.websocket("/ws")` (`inventory_
+websocket`) carries no `Depends()` in its signature, so a decorator-only scan
+flags it. It is not ungated: WebSocket handshakes can't rely on the same
+`Depends()`-before-response flow as HTTP routes (the socket must call
+`.accept()` first or the browser sees a bare HTTP 403 with no close code), so
+this route authenticates **in the function body** — through
+`AuthService.get_user_from_token()` against the same access-token-type,
+live-session, and expiry checks as every HTTP request, reading the token from
+the `access_token` cookie with a query-param fallback for non-browser
+clients. Manually confirmed correct; excluded from the 69. This is a
+documented blind spot of the AST method going forward: it recognizes auth
+expressed as a `Depends()` marker, not auth checked manually in a handler
+body, and WebSocket routes are the one place in this codebase that pattern
+appears.
+
+Every one of the 69 is confined to the same features pass 1 named: auth (14),
+`event_requests.py`'s 4 public routes, `elections.py`'s 4 token-scoped
+routes, `events.py`'s public calendar (1), `onboarding.py`'s 24 bootstrap
+routes, `salesforce_sync.py`'s OAuth callback, the API root, and the
+`public/*` surface (now correctly 20, not 22). **No new ungated route outside
+those features**, and the one route the wider method newly surfaced
+(`inventory_websocket`) is correctly gated, just not decorator-visible.
+
+### New sweep classes (first run in this file)
+
+| #   | Class swept                                               | Method                                                                                                                                                                               | Result                                                                                                    |
+| --- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)                   | `grep -rn "BaseHTTPMiddleware" app/`                                                                                                                                                 | **clean** — 0 imports/usages; the 7 hits are all comments in `security_middleware.py` documenting the ban |
+| 7   | Unbounded in-memory trackers (Pitfall #9)                 | broadened on Codex review (see below) — module-level _and_ `self.<name> = {}`/`= set()` instance trackers, whole `app/` tree                                                         | **3 gaps found and fixed across two Codex rounds** — see below                                            |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)           | `grep` for `window.confirm(`/`window.alert(`/`window.prompt(` in `frontend/src/`; confirmed `no-restricted-syntax`'s `noBlockingBrowserDialogs` is still wired in `eslint.config.js` | **clean** — 0 raw calls in source (tests excluded); the ESLint rule is present and active                 |
+| 9   | JSON-column shallow-copy-then-nested-mutate (Pitfall #12) | broadened on Codex review (see below) — every JSON/`MutableDict`-typed model attribute (132 names), whole `app/` tree                                                                | **clean** — see below for the corrected method and count                                                  |
+
+**Sweep 7 correction (Codex review):** the original method (`grep` for
+module-level `defaultdict(`/`= {}`) cannot find a tracker initialized on
+`self` inside `__init__`, and one exists:
+[`SecurityMonitoringService`](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139050)
+(`app/services/security_monitoring.py`) is a process-wide singleton
+(`security_monitor = SecurityMonitoringService()`) whose `__init__` sets
+`self._login_attempts`, `self._session_ips`, `self._data_transfers`, and
+`self._api_calls` — four `Dict[str, list]` trackers keyed on attacker-
+controlled IPs/user ids/session ids. Re-swept with `grep -rn "self\.\w+\s*=\s*
+({}\|set()\|defaultdict(\|\[\])"` across the whole `app/` tree (not just
+`app/core/`) for anything tracking request/security state; this is the only
+additional tracker class found (all other `self.<dict>` hits are per-request
+caches scoped to a single request/response cycle, not cross-request state).
+
+Read the file rather than trusting Codex's "happen to be bounded" claim.
+All four dicts share one cap (`_MAX_TRACKING_KEYS = 5_000`) enforced by
+`_enforce_key_caps()` (evicts the least-recently-active keys first once a
+dict exceeds the cap) plus a throttled (≤ once/60s) stale-entry sweep,
+`_evict_stale_tracking_keys()`, which calls `_enforce_key_caps()`
+unconditionally first. **But two of the four were not actually reached by
+either function on the hot path that grows them:** `detect_session_hijack`
+(writes `_session_ips` on every request through `security_middleware.py`) and
+`detect_data_exfiltration` (writes `_data_transfers`) called neither eviction
+function themselves. The only caller of `_enforce_key_caps` /
+`_evict_stale_tracking_keys` was `detect_brute_force` — invoked exclusively
+from the password `/auth/login` endpoint (`app/api/v1/endpoints/auth.py`) —
+and `analyze_request` (the method that wraps the full time-based sweep,
+`_check_rate_limit`) is never called anywhere in the app at all, dead code.
+For an organization running SSO/OAuth-only (`AZURE_AD_ENABLED` /
+`GOOGLE_OAUTH_ENABLED`, no password logins), `detect_brute_force` — and so
+every cap on every one of the four dicts — would never fire, and
+`_session_ips`/`_data_transfers` would grow without bound for the life of the
+process, one entry per authenticated request.
+
+**Fixed** (trivial, low-risk — one line each, mirroring the existing
+`detect_brute_force` self-cap pattern): `detect_session_hijack` and
+`detect_data_exfiltration` now call `self._enforce_key_caps()` on entry, so
+the hard cap on all four trackers is enforced from the same code path that
+grows the two previously-uncovered ones, independent of login volume or auth
+provider. `tests/test_security_monitoring.py` (10/10) still passes unchanged.
+
+**Round 2 (Codex review on the round-1 fix commit `3b6b65e4` itself):**
+Codex reviewed the fix above and found it was, itself, incomplete in two
+ways — the second time in this same PR that Codex caught a real gap in this
+sweep, worth saying plainly.
+
+1. [**The new hot-path call sorted the entire tracker on every request once
+   saturated, not just when the cap was first hit**](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900232886).
+   `detect_session_hijack` — now calling `_enforce_key_caps()` per the round-1
+   fix — runs on every authenticated response through
+   `SecurityMonitoringMiddleware.__call__`. The eviction logic computed
+   `overflow = len(tracker) - _MAX_TRACKING_KEYS`, sorted the whole tracker by
+   last-active timestamp, and evicted exactly `overflow` keys. Once a tracker
+   first reached the 5,000-key cap, `overflow` on every later call was 1 (the
+   caller's own new key pushed it there again after the previous call's
+   single-key eviction), so the full `O(n log n)` sort over ~5,000 entries ran
+   on **every** subsequent distinct session — turning a lightweight memory
+   safeguard into sustained request-time CPU overhead under exactly the
+   sustained distinct-session churn it existed to survive.
+
+   **Fixed:** eviction is now batched. A new class constant,
+   `_EVICTION_TARGET_RATIO = 0.9`, means that once a tracker exceeds its cap,
+   it is trimmed down to 90% of the cap in one pass (evicting `len - target`
+   keys, not just `len - cap`), buying 500 entries of headroom before the sort
+   needs to run again — the sort still runs, but roughly once per ~500
+   additions instead of once per addition. This is the smaller, safer diff
+   consistent with the existing sort-and-evict structure (an alternative —
+   `collections.OrderedDict` with `move_to_end`/`popitem(last=False)` for O(1)
+   eviction — was considered and rejected as a larger structural change than
+   this hot-path fix warrants; the existing dicts are plain `defaultdict`s
+   used throughout the file's other logic, and batching gets the same
+   amortized-cost outcome without touching that).
+
+2. [**`_external_endpoints` — a fifth tracker, entirely missed by round
+   1**](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900232889).
+   It is a `set()`, not a dict — grown by `detect_data_exfiltration` adding
+   every distinct external `destination` seen. Round 1's fix made
+   `detect_data_exfiltration` call `_enforce_key_caps()`, but that helper's
+   loop only ever iterated the four **dict** trackers
+   (`_api_calls`/`_login_attempts`/`_session_ips`/`_data_transfers`); it never
+   touched the set. A 200-entry cap for it (`_MAX_EXTERNAL_ENDPOINTS`) did
+   exist — in `_evict_stale_tracking_keys()` — but that method's own caller
+   (`_check_rate_limit`, reachable only through `analyze_request`) is **never
+   invoked anywhere in the running application** (confirmed by grep: the only
+   callers of `analyze_request`/`_check_rate_limit` outside the service itself
+   are in `tests/test_security_monitoring.py`) — dead code. So the fifth
+   tracker could grow unbounded on the exact call path
+   (`detect_data_exfiltration`) round 1 had just fixed, for the same
+   underlying reason: the broadened sweep pattern documented above
+   (`self.<name> = {}`/`= set()`) explicitly includes `set()`, but the fix
+   that followed from it was not checked all the way through to "does _this_
+   set specifically have an effective, reachable cap" — it has a cap
+   constant, which is not the same thing.
+
+   **Fixed:** `_enforce_key_caps()` now caps `_external_endpoints` too, in a
+   separate branch (a set has no per-entry activity timestamp to sort
+   eviction by, unlike the four dicts — trimmed arbitrarily instead, which is
+   sufficient for a coarse memory safeguard), called from the same
+   `detect_data_exfiltration()` entry point that already calls
+   `_enforce_key_caps()`. The now-redundant capping block inside
+   `_evict_stale_tracking_keys()` — dead in practice, per the paragraph above
+   — was removed rather than left as unreachable code sitting behind a real
+   one.
+
+**Verification, round 2:** every tracker in the file was re-checked against
+its actual growth path, not just the two Codex named — `_login_attempts`,
+`_session_ips`, `_data_transfers`, and `_api_calls` all resolved correctly to
+the batched `_enforce_key_caps()` on their respective hot paths;
+`_external_endpoints` was the only additional gap. 4 new tests added to
+`tests/test_security_monitoring.py` (`TestTrackerCaps`): batched eviction
+drops a saturated dict tracker to the 90% target in one pass (not left
+sitting at the cap); sustained one-key-per-call churn past the cap stays
+bounded and the sort call count is asserted amortized (not once per
+addition); `_external_endpoints` is capped directly via
+`_enforce_key_caps()`; and the same is proven end-to-end by calling
+`detect_data_exfiltration()` itself repeatedly with distinct destinations —
+its actual production growth path, not just the internal helper. All 4
+verified to **fail** against the pre-round-2 code (commit `3b6b65e4`,
+checked out standalone) and **pass** after the fix; full file 14/14.
+
+**Round 3 (Codex review on the round-2 fix commit `df7438e0` itself — a real
+regression, not a gap):** by the time Codex reviewed this, `df7438e0` had
+already merged to `main` (PR #2128, merge commit `2b3231a3`), so this was a
+live, unfixed bug on `main`, not just an open-PR finding — see
+`docs/security-review/PROGRESS.md` for the timeline.
+
+[**`_enforce_key_caps()` ran before the read it was meant to protect, in
+both `detect_session_hijack` and `detect_data_exfiltration`.**](https://github.com/thegspiro/the-logbook/pull/2128)
+**Round 1** (commit `3b6b65e4`) added the eviction call to the very top of
+each method, ahead of the code that reads that method's own tracker for the
+current key — round 2 (`df7438e0`) did not move that call; it only changed
+`_enforce_key_caps()`'s internal eviction strategy from one key at a time to
+a 90%-of-cap batch, which widened how many keys a single over-cap call could
+take and so widened the window in which the current key could be caught, but
+the ordering itself dates to round 1. (See "Attribution correction" below —
+an earlier revision of this section, and of `PROGRESS.md`, credited round 2
+with introducing the ordering bug; Codex caught that misattribution on a
+later review, round 4.) The eviction picks the least-recently-active keys in
+the _entire_ tracker once it is over cap — a decision that has nothing to do
+with whether the specific key this call is about to use is "cold" in
+absolute terms, only whether it ranks in the bottom slice relative to
+whatever else is in the tracker right now. Concretely, in
+`detect_session_hijack`, from `3b6b65e4` onward:
+
+```python
+# 3b6b65e4 (round 1) onward — WRONG order, unchanged by round 2's df7438e0
+self._enforce_key_caps()                       # can delete _session_ips[key]
+...
+session_data = self._session_ips.get(key, [])  # now reads [] — looks like
+                                                 # a brand-new session
+if session_data:                                # never enters this branch
+    ...                                          # the hijack alert lives here
+```
+
+If the victim session's tracker entry is picked in that eviction batch —
+plausible under exactly the sustained-churn traffic the cap exists to
+survive — the read that follows finds nothing, the method treats a genuine
+IP change mid-session as the session's first-ever observation, silently
+resets the baseline to the new IP, and **never raises the alert**. This is a
+false negative in the literal alerting sense: an attacker riding a hijacked
+session is indistinguishable, from this code's perspective, from a session
+that has simply never been seen before. `detect_data_exfiltration` had the
+same shape one step later — `_enforce_key_caps()` ran before the method built
+and summed the current 24-hour transfer window for `user_id`, so an evicted
+entry silently reset the running total, understating it and potentially
+missing the cumulative-transfer alert.
+
+**Also checked, per the review instruction not to assume only
+`detect_session_hijack` was affected: `detect_brute_force`.** It has called
+`self._enforce_key_caps()` at the top of the method since the cap was first
+introduced (predates round 2), in the same shape — the ip/user key it is
+about to append to and threshold-check is exactly the key the eviction batch
+can delete first. Fixed for the same reason, even though it was not part of
+round 2's diff: CLAUDE.md's "no acceptable pre-existing errors" rule applies
+to a bug discovered while editing this file, not only to bugs introduced in
+the commit under review.
+
+**Fixed in all three methods by reordering, not by skipping eviction:** each
+method now reads (and, for brute-force/exfiltration, appends to and filters)
+its own tracker entry for the current key **before** `_enforce_key_caps()`
+runs, capturing the result in a local variable so a later dict lookup can't
+be quietly answered by a fresh/evicted entry either. `_enforce_key_caps()`
+still runs unconditionally on every non-early-return call path — the fix is
+purely about ordering within the method, not about calling it less often, so
+the cap enforcement guarantee sweep 7 established in round 1 is unchanged.
+`detect_session_hijack`'s early-return-on-alert path still runs
+`_enforce_key_caps()` before that return (it was moved down to right after
+the read, not to the very end), so cap enforcement does not become
+conditional on whether this particular call happens to fire an alert.
+
+**Verification, round 3:** 3 new tests in a new `TestReadBeforeEvictOrdering`
+class, one per affected method, each reproducing the exact shape of the bug —
+fill the tracker above its cap with the victim key as the single oldest
+(least-recently-active) entry, drive the call through the real public method
+(not the eviction helper directly), and assert the alert that should fire
+still does:
+
+- `test_session_hijack_alert_survives_batch_eviction_of_the_victim_session` —
+  Codex's exact reproduction: victim session is the oldest of 21 entries in a
+  10-key-capped tracker, called with a changed IP; asserts a `session_hijack`
+  alert is raised with the correct `previous_ip`/`current_ip`.
+- `test_brute_force_threshold_survives_batch_eviction_of_the_attacker_ip` —
+  attacker IP already has 2 failed attempts recorded (the oldest entry in an
+  over-cap tracker); a 3rd call against a threshold of 3 must still alert.
+- `test_data_exfiltration_cumulative_alert_survives_batch_eviction` — victim
+  user already has 45MB transferred in the last 24h (the oldest entry in an
+  over-cap tracker); a 10MB transfer that alone is under the single-transfer
+  threshold but pushes the 24h cumulative total over its threshold must still
+  alert, with the correct `total_24h_mb`.
+
+All 3 verified to **fail** against the pre-round-3 code (commit `df7438e0` —
+the version that was live on `main` at the time — checked out standalone,
+`alert is None` in every case) and **pass** after the reordering fix; full
+file **17/17**.
+
+**Attribution correction (round 4, Codex review):** this write-up, and
+`PROGRESS.md`'s log entry for round 3, originally credited **round 2**
+(commit `df7438e0`) with introducing the read-after-evict ordering bug. Codex
+checked the actual commits and that is wrong. Verified directly with `git show
+3b6b65e4 -- app/services/security_monitoring.py` and `git show df7438e0 --
+app/services/security_monitoring.py`:
+
+- `3b6b65e4` (**round 1**) is the commit that first added
+  `self._enforce_key_caps()` to the top of `detect_session_hijack` and
+  `detect_data_exfiltration`, ahead of each method's own tracker read — the
+  diff adds exactly four lines (the call plus its comment) immediately after
+  each method's docstring, before the `now = datetime.now(...)` line that
+  starts the read. The ordering bug exists from this commit forward.
+- `df7438e0` (**round 2**) touches only `_enforce_key_caps()` itself (adds
+  `_EVICTION_TARGET_RATIO` and switches its four-tracker loop from
+  evict-one-key-at-a-time to evict-down-to-90%-of-cap) and folds
+  `_external_endpoints` capping into the same helper. It does not add, move,
+  or otherwise touch the call sites inside `detect_session_hijack` /
+  `detect_data_exfiltration` at all — those two methods' diffs in `df7438e0`
+  are empty.
+
+So the accurate framing is: **introduced in round 1's commit `3b6b65e4`,
+widened in round 2's `df7438e0`** (a larger batch means more keys evicted per
+over-cap call, which raises the odds any given current key is among them —
+under round 1's one-at-a-time eviction the bug could only bite when the
+current key was _exactly_ the single least-recently-active entry at the
+moment the tracker first crossed 5,001; round 2's batch widened that to any
+of up to ~500 keys per eviction), **fixed in round 3**. Every other place in
+this file that referred to the bug's origin has been corrected to this
+framing (see the Pass 3 summary above and the round-3 write-up immediately
+above this note); `PROGRESS.md`'s round-3 entry is corrected the same way.
+Historical PR bodies on #2128/#2132 are left as the record of what was
+believed at the time rather than rewritten — this doc-level correction is the
+authoritative account going forward.
+
+**Round 4 (Codex review): `_check_rate_limit` had the identical
+read-after-evict shape, missed by round 3's "checked every method" pass.**
+Counting methods rather than rounds: round 3 found this shape in three
+methods at once (`detect_session_hijack`/`detect_data_exfiltration`/
+`detect_brute_force`) despite round 1/2 having already touched two of them;
+`_check_rate_limit` is the **fourth method** in this file found to carry the
+same shape, and round 4 is the **third separate round** in which a Codex
+review disproved a prior round's own "checked every method"/"fixed"
+completeness claim on this exact bug (round 2 disproved round 1's fix as
+incomplete in a different way; round 3 disproved round 1's ordering as
+buggy from the start; round 4 disproves round 3's "checked every method"
+claim) — worth stating plainly rather than as routine follow-up.
+
+`_check_rate_limit` calls `self._evict_stale_tracking_keys()` (which calls
+`self._enforce_key_caps()` internally) as its first statement, before reading
+or appending to `self._api_calls[ip]`:
+
+```python
+# pre-round-4 — WRONG order, same shape as the three round-3 fixes
+self._evict_stale_tracking_keys()  # -> _enforce_key_caps() can delete
+                                    #    self._api_calls[ip]
+...
+self._api_calls[ip] = [ts for ts in self._api_calls[ip] if ts > minute_ago]
+self._api_calls[ip].append(now)    # defaultdict silently starts a fresh
+                                    # list — the evicted history is gone
+if len(self._api_calls[ip]) > threshold:  # now undercounted by however
+    ...                                    # many calls were evicted
+```
+
+Round 3's own write-up ("Also checked, per the review instruction not to
+assume only `detect_session_hijack` was affected") explicitly checked
+`detect_brute_force` for this shape and missed `_check_rate_limit`, likely
+because `_check_rate_limit` evicts via `_evict_stale_tracking_keys()` — a
+wrapper that also runs the throttled time-based sweep — rather than calling
+`_enforce_key_caps()` directly the way the other three methods do; a review
+grepping for direct `_enforce_key_caps()` calls would not have surfaced it.
+Codex reproduced this with a 10-key cap, the victim IP holding 2 prior calls
+(the oldest entry in the tracker) toward a 3-call threshold, and 20 newer
+filler IPs pushing the tracker over its cap — the buggy order evicted the
+victim IP's key before the append, so the request was undercounted as call #1
+and no alert fired. This file's regression test reproduces the same shape
+(10-key cap, victim IP as the oldest entry, 20 filler IPs) against a
+threshold of 2 rather than 3, so the 3rd call (2 prior + this one) exceeds the
+threshold under `_check_rate_limit`'s strict `>` comparison: the buggy order
+still evicted the victim IP's 2 prior calls before the append, undercounting
+the request as call #1 and skipping the `rate_limit_exceeded` alert.
+
+**Fixed the same way as round 3's three fixes:** `_check_rate_limit` now
+appends the current call and captures the filtered 1-minute window into a
+local variable (`calls`) **before** `_evict_stale_tracking_keys()` runs, and
+every subsequent read (the alert's `description`/`calls_per_minute` details,
+the threshold check) uses that local variable rather than re-reading
+`self._api_calls[ip]`.
+
+**Final exhaustive audit, round 4:** re-read the full file and listed every
+method that (a) reads any of the five trackers (`_api_calls`,
+`_login_attempts`, `_session_ips`, `_data_transfers`, `_external_endpoints`)
+for a specific key, and (b) has an eviction call (`_enforce_key_caps()` or
+`_evict_stale_tracking_keys()`) anywhere in its own body — direct or via a
+helper it calls. Every call site of either eviction function in the file
+(there are 6: one inside `_evict_stale_tracking_keys()` itself, and one each
+in `_check_rate_limit`, the success branch of `detect_brute_force`, the
+failure branch of `detect_brute_force`, `detect_session_hijack`, and
+`detect_data_exfiltration`) was checked against the read(s) in the same
+method:
+
+| Method                                | Reads tracker for this call's key                       | Evicts                         | Order                                                      |
+| ------------------------------------- | ------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `_check_rate_limit`                   | `self._api_calls[ip]`                                   | `_evict_stale_tracking_keys()` | **fixed this round** — read/append captured before evict   |
+| `detect_brute_force` (success branch) | none — only overwrites `self._login_attempts[...] = []` | `_enforce_key_caps()`          | order irrelevant — no read to protect (documented in-line) |
+| `detect_brute_force` (failure branch) | `self._login_attempts[ip]` / `[f"user:{user_id}"]`      | `_enforce_key_caps()`          | correct since round 3 — read/append before evict           |
+| `detect_session_hijack`               | `self._session_ips[key]`                                | `_enforce_key_caps()`          | correct since round 3 — read before evict                  |
+| `detect_data_exfiltration`            | `self._data_transfers[user_id]`                         | `_enforce_key_caps()`          | correct since round 3 — read/append before evict           |
+
+Five methods have the read+evict shape; all five are now correctly ordered.
+`_external_endpoints` (the fifth tracker) has no per-key read to protect — it
+is a `set()` grown by `.add()`, not a dict keyed by request identity, and the
+only place it is read is `len()` in `get_security_status` (a count, not a
+lookup by key) — so no method reading it "for a specific key" exists; its
+eviction (covered in sweep 7's round-2 write-up above) has no ordering hazard
+to have. No other method in the file calls either eviction function.
+
+**Verification, round 4:** 1 new test,
+`test_rate_limit_alert_survives_batch_eviction_of_the_victim_ip` in
+`TestReadBeforeEvictOrdering`, reproducing the same shape as round 3's three
+tests. Verified to **fail** against the pre-round-4 code (`alert is None`)
+and **pass** after the reordering fix; full file **18/18**.
+
+**Round 5 (Codex review): the round-4 fix protected the read, but nothing
+wrote the current call's contribution back into the tracker after eviction
+ran — so a key that was evicted while its own call correctly fired an alert
+had no baseline left for the very next call.** Round 3/4's fix pattern —
+read the current key's tracker entry into a local variable _before_ calling
+`_enforce_key_caps()` — correctly stops eviction from corrupting the read a
+given call uses to make its own alert decision. It does not stop
+`_enforce_key_caps()` from deleting that key's entry from the tracker as
+part of its batch. Nothing in the round-3/4 fix re-inserted the entry
+afterward, so the round-3/4 fix only ever guaranteed **this call's own
+decision** was correct — it said nothing about what the _next_ call from the
+same key would find.
+
+Codex reproduced this concretely in `detect_session_hijack`: call 1, with the
+session's key as the batch-eviction target, correctly detects the IP change
+and fires the `session_hijack` alert (round 4 already guarantees this much).
+Call 2, immediately after, from the same session: `None` — no alert. The
+method's shape explains exactly why. Its read (the prior IP/timestamp) and
+its write (this call's new IP/timestamp) are two separate steps with
+`_enforce_key_caps()` running in between, and the write was gated behind "no
+alert fired this call" via an early `return alert` on the hijack-detected
+path:
+
+```python
+# 95db016b (round 4) — detect_session_hijack
+session_data = self._session_ips.get(key, [])   # read, before evict (round 3/4 fix)
+self._enforce_key_caps()                        # can still delete _session_ips[key]
+if session_data:
+    ...
+    if time_diff < 300:
+        ...
+        await self._add_alert(db, alert)
+        return alert                             # <- returns WITHOUT writing this
+                                                   #    call's own (current_ip, now)
+self._session_ips[key].append((current_ip, now)) # only reached when no alert fired
+```
+
+When the alert fires, the method returns before this call's own IP is ever
+recorded — so if `key` was also the eviction target a few lines above, the
+tracker ends the call holding **no entry at all** for this session. The next
+request from the same hijacked session reads `session_data = []`, is scored
+as a first-ever observation, and the alert stream for an ongoing hijack goes
+silent immediately after its first (correctly fired) alert — a false
+negative on every call after the first, precisely because the first call was
+a true positive.
+
+**Checked individually, per the review instruction not to assume the same
+reproduction applies everywhere the round-3/4 fix pattern was applied, for
+whether `_check_rate_limit`, `detect_brute_force`, and
+`detect_data_exfiltration` share this exact gap.** They do not, and the
+reason is structural, not incidental: in all three, the read and the write
+are the _same_ statement block, executed unconditionally, and that block
+runs entirely **before** `_enforce_key_caps()` is called — e.g.
+`detect_brute_force`:
+
+```python
+self._login_attempts[ip].append(now)                              # write
+ip_attempts = [ts for ts in self._login_attempts[ip] if ts > hour_ago]  # read
+...
+self._enforce_key_caps()                                          # evict runs after
+```
+
+Because the write happens first, this call's own key always carries the
+freshest timestamp in the tracker by the time `_enforce_key_caps()` runs —
+`_enforce_key_caps()` evicts the _oldest_ `N` keys by last-activity
+timestamp, and a key that was just written to, this call, cannot be among
+them (barring a same-microsecond tie with another key written in the same
+call, which does not happen — each call writes at most two keys, `ip` and
+optionally `user:{id}`). So the current key can never be evicted by its own
+call's eviction pass in these three methods; the round-4 fix's read-before-
+write ordering was never actually necessary for them in the way it is for
+`detect_session_hijack`, and there is no "call 1 alerts, call 2 finds no
+baseline" sequence to reproduce. Verified empirically, not just reasoned
+about: `git stash`-ing the round-5 source fix and running the new regression
+tests (below) for all three against commit `95db016b` — they **pass
+unmodified**; only the `detect_session_hijack` test fails.
+
+**Fix applied to all five (write-after-evict), even though only one was
+empirically exploitable — write-after-evict chosen over excluding the
+current key from eviction, and here is why:** two ways to close the gap.
+(A) After `_enforce_key_caps()` runs, always write this call's own
+contribution into the tracker — restoring the entry if eviction removed it,
+extending it otherwise — so the tracker provably ends every call holding a
+live entry for the calling key regardless of what eviction just did. (B)
+Exclude the current call's key from the eviction candidate set entirely, so
+it can never be picked no matter how stale it looked going in.
+
+(B) was considered and rejected for this tracker shape specifically, not
+picked-against by default. The caution against it is for a tracker where one
+attacker can cheaply mint many _distinct_ keys and hammer through them to
+starve out the cap (a bloat/DoS angle) — excluding "whichever key is active
+right now" from eviction would still let that attacker's flood evict
+everyone else's legitimate entries while contributing nothing evictable
+itself. That does not describe these five trackers: every key here already
+is one attacker-controlled identity (an IP, a session id, a user id) — there
+is no cheaper "distinct sub-value" underneath a key for an attacker to
+churn — so excluding _the one key this call is actively using_ from this
+call's own eviction pass costs nothing: it is exactly the key CLAUDE.md
+pitfall #9's cap exists to eventually evict once it truly goes idle, and one
+call's temporary exclusion does not stop that from happening on a later,
+quieter call once other keys have taken its place among the oldest.
+Excluding it would have worked, and would have been fewer lines.
+
+Write-after-evict (A) was chosen anyway, for two reasons specific to this
+file's actual history rather than as a generic default: first, it is the
+same shape already applied to `_check_rate_limit` / `detect_brute_force` /
+`detect_data_exfiltration` (write happens, then evict) — restructuring
+`detect_session_hijack` to write-after-evict makes all five methods follow
+one uniform read/evict/write ordering, rather than four methods doing
+write-then-evict and a fifth doing evict-then-write-with-exclusion, which is
+exactly the kind of asymmetry that let this bug hide in one method while the
+others were "checked" in three prior rounds. Second, and the more direct
+reason: this file has now needed the _same_ tracker-cap logic corrected
+across five consecutive review rounds (see the closing note below) — adding
+a second distinct mechanism (exclusion) alongside the first (read-before-
+write) for the _same_ underlying invariant is one more shape for the next
+review to have to hold in its head and re-verify empirically per method,
+which is exactly what round 5 had to do here to find that only one of five
+methods actually needed it. One mechanism, applied uniformly and provably,
+was judged worth the few extra lines in the three methods that did not
+strictly need it.
+
+`detect_session_hijack` no longer returns early on the alert path; it always
+rebuilds `self._session_ips[key]` from the pre-eviction `session_data` plus
+this call's own `(current_ip, now)`, trimmed to the last 10 entries, and
+returns the alert (or `None`) at the end. This closes one of the bugs the
+early return combined: the tracker losing the entry to eviction. **The second
+half of this paragraph's original framing — that leaving a hijacked session's
+"last known IP" at its pre-hijack value was itself "a real correctness gap,"
+and that the fix should compare against "the attacker's actual most recent
+IP" instead — is superseded by round 6 and round 7 below, and was wrong.**
+Preserving the pre-hijack IP as the comparison baseline is the _correct_
+behavior for the alert-firing path; round 5's own fix, by writing
+`current_ip` (the attacker's IP) back unconditionally, is precisely what
+round 6 found and reverted (an alerting attacker IP got silently promoted to
+"trusted," so a repeat attack from the same IP stopped alerting after its
+first hit). See the round-6 write-up below for the corrected mechanism, and
+round 7 (further below) for a related timestamp-only bug in that same
+corrected code. This note corrects the account in place rather than deleting
+it, per this rotation's own established practice (see the round-4
+"Attribution correction" note above) — the sentence above is left as the
+record of what round 5 believed at the time; it was not shipped as-is
+(round 6 caught and reverted the actual code before this branch merged), but
+the write-up's reasoning was wrong and must not be read as current guidance.
+
+**Verification, round 5:** 4 new tests in a new `TestWriteAfterEvictOrdering`
+class — one per affected method, each driving **two** calls in a row (call 1
+puts the key up for batch eviction and correctly fires its alert; call 2
+immediately after asserts the tracker still has a live baseline and detects
+the continuing activity, not a fresh first observation), plus a **third**
+call in the `detect_session_hijack` test specifically (three IP changes in a
+row) to confirm the fix generalizes past the exact two-call shape Codex
+reproduced rather than special-casing it. `test_session_hijack_detects_a_
+second_and_third_ip_change_in_a_row` fails against commit `95db016b` (call 2
+returns `None`) and passes after the fix; the other three
+(`_check_rate_limit`, `detect_brute_force`, `detect_data_exfiltration`) pass
+against `95db016b` unmodified, as the empirical check above found, and
+continue to pass after the fix — they stand as regression guards against a
+_future_ refactor reintroducing the same early-return-before-write shape
+that broke `detect_session_hijack`, not as reproductions of a bug that was
+ever live in those three. Full file **22/22**.
+
+**Five review rounds on the same tracker-cap logic, in one PR/its
+predecessor — worth stating plainly rather than folding into routine
+follow-up, because it is information about how much to trust the next "0
+gaps found" claim on this exact code:** round 1 added eviction but only
+one-key-at-a-time and missed `_external_endpoints`; round 2 fixed both of
+those but introduced the read-after-evict ordering bug across two methods;
+round 3 fixed that ordering in three methods (missing a fourth,
+`_check_rate_limit`, because it evicts through a different wrapper); round 4
+found and fixed the fourth method, and explicitly re-audited all five
+eviction call sites against all five tracker reads — the audit table in that
+round's write-up above lists all five as "correctly ordered" — and still
+missed that read-before-write does not imply write-after-evict; round 5
+fixed that. Every prior round's "checked every method, all fixed" framing
+turned out to be narrower than it read, in a different way each time. That
+pattern, not any single round's fix, is the fact worth a future reviewer
+weighting: a review of this file's tracker-cap code that reaches a clean
+result is worth substantially less evidentiary weight here than the same
+result on code with no such history, and is exactly the place to look
+hardest for one more angle rather than accept "audited all five, all
+correct" at face value — round 4 wrote almost that exact sentence and was
+still short one fix.
+
+**Round 6 (Codex review): round 5's write-after-evict fix wrote the
+_attacker's_ IP back as the trusted baseline on the alert path itself,
+silencing every repeat of the same attack after its first (correctly fired)
+alert.** This is a distinct bug from the eviction-ordering class fixed in
+rounds 3–5 above — it is not about a key being evicted at the wrong moment,
+it fires on every call regardless of eviction — but it lives in the exact
+same few lines round 5 just rewrote, so it belongs in this file's ongoing
+account of that code rather than as an unrelated footnote.
+
+**Origin, verified against git history rather than assumed: this is new in
+round 5, not a pre-existing gap the eviction-fix rounds' scrutiny happened to
+surface.** Every version of `detect_session_hijack` before commit `90e373cc`
+— the original pre-PR-#2128 implementation, and every round-1-through-4
+revision — `return`s immediately inside the "IP changed within 5 minutes"
+branch, before the method ever reaches the line that writes `current_ip` into
+the tracker:
+
+```python
+# every version before 90e373cc (round 5)
+if time_diff < 300:
+    alert = SecurityAlert(...)
+    await self._add_alert(db, alert)
+    return alert                              # <- exits BEFORE the write below
+self._session_ips[key].append((current_ip, now))
+```
+
+So on every call that fired an alert, in every version of this method before
+round 5, the attacker's IP was never written back at all — the tracker kept
+whatever pre-hijack entry it already had, which is why a genuine attack
+already alerted correctly on repeat use _before_ round 5 touched this code
+(confirmed by reading `95db016b`, the round-4 revision, directly: same early
+return, same effect). Round 5's fix (documented above) removed that early
+return specifically to close the write-after-evict gap — the tracker must
+always end a call holding a live entry, alert or not, so a key evicted at the
+exact moment its alert fires does not lose its baseline. That part of the fix
+was correct and necessary. But the replacement write used `current_ip`
+unconditionally:
+
+```python
+# 90e373cc (round 5) — detect_session_hijack, unconditional write
+self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]
+```
+
+which on the alert path writes the _attacker's_ IP as the newest (and, since
+the comparison only ever looked at `session_data[-1]`, the _only_ IP that
+matters for the next comparison) entry. The next request from that same
+attacker IP then compared its own IP against itself, found no change, and
+returned `None` — an ongoing hijack detected exactly once, then silent, for
+as long as the attacker kept reusing the one IP. Round 5's own regression
+test (`test_session_hijack_detects_a_second_and_third_ip_change_in_a_row`)
+did not catch this because it drives three _distinct_ attacker IPs
+(`9.9.9.9` → `8.8.8.8` → `7.7.7.7`), each different from the one before, so
+every comparison still finds a mismatch regardless of the promotion bug — the
+repeat-IP case Codex's review flagged was simply never exercised.
+
+**Fix: split "the full observed-IP log" from "the IP a hijack decision is
+compared against."** A new tracker, `_session_trusted_ip` (declared beside
+`_session_ips` in `__init__`, capped and swept the same way, read before
+`_enforce_key_caps()` and written after it for the same reason as every other
+tracker in this file), holds only the single IP/timestamp pair the next call's
+comparison is made against. `_session_ips` keeps its existing role unchanged
+— a full per-call audit log, including attacker IPs, retained for forensics —
+but is no longer what the hijack decision reads. The trusted tracker is
+advanced to `current_ip` whenever this call does _not_ fire an alert (first-
+ever observation, a matching IP refreshing its timestamp, or an IP change
+slow enough — ≥ 5 minutes — to not be flagged as suspicious, which was already
+this method's own definition of "not suspicious"); when an alert _does_ fire,
+the trusted tracker is deliberately left at its pre-alert value instead, so
+the alerting IP is never promoted. This is the minimal fix that satisfies
+Codex's framing directly: distinguish the trusted baseline from the most
+recently observed IP, without inventing a new "confirmed hijack" state
+machine — the existing 5-minute suspicion window already does the work of
+deciding when a changed IP is legitimate enough to become the new normal;
+the only change is that an alert-firing IP no longer qualifies by default.
+
+**Verified by hand-tracing the full method, not just the reported
+repro, for all four steps of a realistic sequence** (trusted IP `A`, attacker
+IP `B` fires an alert, `B` repeats, then legitimate `A` returns):
+step 1 (`A`, first-ever observation) sets the trusted baseline to `A`, no
+alert; step 2 (`B`, within 5 minutes) compares against `A`, mismatches, fires
+the alert, and leaves the trusted baseline at `A` (not promoted to `B`); step
+3 (`B` again) compares against the still-unchanged `A`, mismatches again, and
+fires a **second** alert for the same repeat attacker IP — the exact
+behavior Codex's review asked for; step 4 (`A` again) compares against the
+still-unchanged `A`, matches, and does **not** alert — `A`'s return is not
+mistaken for a hijack just because `B` was observed in between, since `B`
+was never written into the comparison baseline at any point in the sequence.
+
+**Verification, round 6:** `TestSessionHijackTrustedBaseline`, 2 new tests —
+`test_repeated_attacker_ip_keeps_alerting` (the exact 3-call sequence from
+Codex's review comment: trusted IP, attacker IP alerts, same attacker IP
+alerts again) and `test_legitimate_ip_returning_after_attacker_ip_does_not_
+alert` (the 4-step trace above, asserting the legitimate IP's return does not
+false-positive). Both verified to **fail** against commit `90e373cc` (the
+third/fourth call returns `None` where an alert/no-alert was expected) and
+**pass** after the fix. The existing round-5 regression test
+(`test_session_hijack_detects_a_second_and_third_ip_change_in_a_row`) had its
+assertions updated: it drives three _distinct_ IPs, none of which are ever
+promoted under the fix, so every one of the three alerts now correctly
+reports `previous_ip` as the original pre-hijack IP (`"1.1.1.1"`) rather than
+the immediately preceding call's IP as it did against `90e373cc` — the old
+assertions encoded exactly the promotion behavior this round removes, so
+updating them (not merely re-running them) was necessary; both the two
+`TestReadBeforeEvictOrdering`/`TestWriteAfterEvictOrdering` session-hijack
+tests were also updated to seed the new `_session_trusted_ip` tracker
+alongside `_session_ips`, since that tracker — not the tail of `_session_ips`
+— is what the comparison now reads. Full file **24/24**. The session-hijack
+coverage in `test_security_middleware.py` is unaffected — it mocks
+`detect_session_hijack` at the service boundary, not the tracker internals.
+
+**Round 7 (Codex review): round 6's fix kept the trusted IP pinned correctly
+on the alert path, but left the trusted entry's TIMESTAMP unrefreshed — which
+the method's own 5-minute leniency check reads, and that gap is a time-based
+bypass of round 6's fix.** `_session_trusted_ip[key]` stores a
+`(ip, timestamp)` pair; round 6 (correctly) stops the alert path from
+advancing the `ip` half to the attacker's IP, but left the `timestamp` half
+as `last_time` — the timestamp of whenever the trusted IP was last
+_confirmed_-good — unchanged on that same path:
+
+```python
+# 56620c9e (round 6) — detect_session_hijack, alert path
+new_trusted_ip = last_ip
+new_trusted_time = last_time          # <- not refreshed; this is the bug
+```
+
+That stored timestamp is exactly what the next call's leniency check reads:
+
+```python
+if last_ip != current_ip:
+    time_diff = (now - last_time).total_seconds()
+    if time_diff < 300:               # suspicious -> alert
+        ...
+    # time_diff >= 300 -> falls through to the DEFAULT path, which
+    # promotes current_ip (the attacker's) as the new trusted baseline
+```
+
+Under continuous attacker traffic, `last_time` stays pinned to the pre-hijack
+confirmation while real wall-clock time keeps advancing on every subsequent
+attacker call. `time_diff` is computed against that same stale, unrefreshed
+timestamp on every call, so it grows monotonically with real elapsed time —
+and once it crosses 300s (which it eventually will, purely because time has
+passed, regardless of how many attacker requests occurred in between), the
+`time_diff < 300` branch stops matching. Control falls through to the
+_default_ path at the top of the method (`new_trusted_ip = current_ip`),
+which silently promotes the attacker's now-longstanding IP to trusted, with
+no alert — the exact "IP changed but it's been a while, probably roaming"
+leniency that exists for a session that genuinely went idle, wrongly
+triggered by a session that has been under continuous, uninterrupted attack
+the entire time. This is a distinct bug from round 6's: round 6 was about the
+`ip` half of the stored pair being wrongly advanced; round 7 is about the
+`timestamp` half being wrongly held still, and it fully bypasses round 6's
+fix given enough elapsed wall-clock time — the trusted `ip` never gets
+directly overwritten by the attacker's, but the leniency's own arithmetic
+gets there indirectly.
+
+**Fix: refresh the trusted entry's timestamp to `now` on every call, alert or
+not — while still leaving the trusted `ip` unchanged on the alert path (round
+6's fix, unmodified).**
+
+```python
+new_trusted_ip = last_ip
+new_trusted_time = now                # refreshed; ip still pinned to last_ip
+```
+
+This makes the stored timestamp mean "the last time this session was
+evaluated, by any IP" rather than "the last time the trusted IP was
+confirmed-good." The next call's `time_diff` therefore measures the gap since
+_this_ call, not since the session's last idle period ended (if it had one).
+A session under continuous attack never accumulates elapsed time toward the
+leniency window, because every attacker call resets the clock the very same
+call it fails to earn promotion on. A genuinely idle session — no calls at
+all, from anyone, for 5+ minutes — still earns the leniency exactly as
+before, because nothing refreshes the timestamp during a gap with no calls to
+refresh it.
+
+**Three scenarios hand-traced end-to-end, not just the reported repro:**
+
+1. **Attacker persists (the bypass this round fixes):** trusted IP `A`
+   confirmed at `t=0`. Attacker IP `B` alerts at `t=0` (compares against `A`,
+   `time_diff` small, alerts; trusted stays `(A, t=0)` under round 6, refreshes
+   to `(A, t=0)`→`(A, now)` under this fix). `B` continues once a minute
+   through `t=10min`: under the pre-round-7 code, `time_diff` is measured
+   against the _original_ `t=0` and crosses 300s at `t=5min`, silently
+   promoting `B` from that point on — every call from `t=5min` onward goes
+   unflagged. Under the fix, `time_diff` is measured against the _previous
+   call's_ timestamp (refreshed every time), stays at ~60s on every call, and
+   every single one of the ten calls alerts. Legitimate `A` returns at
+   `t=11min`: matches the still-preserved trusted `A`, no alert.
+2. **Legitimate idle-then-return (the leniency's original purpose,
+   confirmed not broken by this fix):** trusted `A` confirmed at `t=0`, then
+   _nothing at all_ touches the session — no attacker, no legitimate
+   activity — for 10 minutes. At `t=10min`, the same user returns from a new
+   IP (a genuine network change). `time_diff` against the unrefreshed `t=0`
+   timestamp is 600s, `>= 300`, leniency applies, no alert, and the new IP is
+   promoted to trusted. This path is untouched by the fix — nothing refreshes
+   the timestamp during a gap with no calls, by construction — so the
+   original "probably just roaming" case still works.
+3. **Round 6's original 4-step trace (re-confirmed still correct under this
+   fix):** trusted `A` → attacker `B` alerts (`A` stays trusted, timestamp
+   refreshes) → `B` again, still within a short gap (alerts again, `A` stays
+   trusted, timestamp refreshes again) → legitimate `A` returns (matches the
+   still-preserved `A`, no alert). Identical outcome to round 6's trace; the
+   only change is that the _timestamp_ half of the stored pair moves on every
+   step now, which is invisible to this trace because every gap here is
+   already well under 300s regardless.
+
+**Verification, round 7:** new `TestSessionHijackLeniencyWindow` class, 2
+tests, in `backend/tests/test_security_monitoring.py`:
+`test_continuous_attacker_traffic_never_earns_the_leniency_window` drives one
+legitimate call followed by ten attacker calls spaced one (simulated) minute
+apart, asserting every one of the ten still alerts, that the trusted baseline
+is still the legitimate IP afterward, and that the legitimate IP's return at
+`t=+11min` does not alert; `test_genuinely_idle_session_still_gets_the_leniency_on_return`
+asserts the original idle-then-roam case (a 10-minute gap with _no_ calls at
+all) still does not alert. Simulated time is driven by a small `_FrozenClock`
+helper plus a `datetime` subclass monkeypatched over
+`app.services.security_monitoring.datetime` (this project has no `freezegun`
+dependency; the existing session-hijack tests instead seed tracker dicts
+directly with past timestamps, which does not fit this scenario's need to
+control several successive calls' `now` independently). Verified directly:
+`git stash`-ing this round's one-line source fix (`new_trusted_time =
+last_time` restored) and running the new leniency-window test against commit
+`56620c9e` — it **fails** at the `t=+5min` call specifically (`alert is
+None`), matching the hand-traced mechanism above exactly (300s = 5 × 60s);
+**passes** after the fix. Full `test_security_monitoring.py` **26/26**, up
+from 24.
+
+**Seven review rounds on this file's session-hijack tracking now, across two
+PRs — the seventh straight round to find something in this exact method, each
+a genuinely different shape** (missing eviction, one-key-at-a-time eviction,
+read-after-evict, a fourth method with the same read-after-evict shape,
+write-after-evict, a semantic bug in what write-after-evict wrote, and now a
+time-based path around that same semantic fix). The caution stated in rounds
+4, 5, and 6 — that a clean result on this exact code is worth less
+evidentiary weight than elsewhere, and is exactly where to look hardest for
+one more angle — is carried forward again rather than treated as satisfied by
+this round's fix.
+
+**Sweep 9 correction, round 3 / round 8 overall (Codex review): the AST
+walk matched only the literal identifier `JSON`, missing a custom-named
+type that wraps it — on the one JSON-shaped column holding PHI.** Codex
+reviewed commit `dc152491` (round 7's write-up-only follow-up) and found
+that `backend/scripts/json_column_ast_sweep.py`'s `_call_references_json`
+checked a `Column(...)` call's argument subtree for a `Name`/`Attribute`
+node literally spelled `JSON` — which finds `Column(JSON, ...)` and
+`Column(MutableDict.as_mutable(JSON), ...)` (any depth of wrapping, per the
+round-4 write-up above) but not a _different_ type name whose underlying
+storage is JSON. `app/models/medical_screening.py`'s
+`MedicalScreening.result_data = Column(EncryptedJSON, ...)` is exactly
+that case: `EncryptedJSON` (`app/core/encrypted_types.py`) never spells
+`JSON` anywhere in the `Column(...)` call, so the sweep's `--list` output
+silently excluded `result_data` and the **179 distinct names, 230
+declarations, 43 files** figure everywhere in this doc and in
+`backend/scripts/README.md` was not actually complete — one JSON-shaped
+column, and specifically the medical-screening PHI one, had never been
+covered by sweep 9's bug-detection pass at all.
+
+**Investigated `EncryptedJSON` before extending the sweep, rather than
+hard-coding the name in:** it is a `TypeDecorator` (`impl = Text`) in
+`app/core/encrypted_types.py`, alongside `EncryptedText` (the only other
+custom `Column(...)` type anywhere in `app/models/*.py` — confirmed by an
+AST pass over every `Column(...)` call's first-argument identifiers across
+all 43 model files, not just a grep for the two known names). Its
+`process_bind_param` does `encrypt_data(json.dumps(value))` on write and
+`process_result_value` does `json.loads(decrypt_data(value))` on read (with
+an `InvalidToken` fallback for legacy plaintext rows, matching
+`EncryptedText`'s backward-compatibility contract) — so the mapped Python
+attribute is a genuine JSON-able object (dict/list), identical in shape to
+what a bare `Column(JSON)` attribute holds. Critically, `EncryptedJSON` is
+**not** wrapped in `MutableDict.as_mutable(...)` anywhere it's used — a
+`TypeDecorator`'s bind/result processing is invisible to the ORM's
+attribute-level dirty-tracking layer, which instruments the _mapped
+attribute_, not the column type, so wrapping `Text` instead of `JSON` at
+the type level changes nothing about how SQLAlchemy tracks changes to the
+Python value. That makes `result_data`'s mutation semantics exactly the
+**bare** `Column(JSON)` case pitfall #12 opens with (no in-place-mutation
+tracking at all — a plain `MutableDict.as_mutable(JSON)` column at least
+auto-detects top-level key reassignment, and `result_data` gets none of
+that either), and therefore exactly as exposed to the
+shallow-copy-then-reassign bug as any other name on this sweep's list.
+`EncryptedText` is deliberately _not_ added to the sweep's type-name set:
+it wraps `Text` and stores a scalar string, not a JSON value, so it carries
+no shallow-copy risk to check for.
+
+**Fix — extended, not hard-coded:** `json_column_ast_sweep.py` now matches
+against a `JSON_LIKE_TYPE_NAMES` frozenset (`{"JSON", "EncryptedJSON"}`,
+each entry commented with why it's included) instead of the literal string
+`JSON`, so a future third JSON-wrapping type is one name added to a
+documented set rather than a second special case. The AST walk's structure
+is otherwise unchanged (still walks the full argument subtree, so
+`Column(MutableDict.as_mutable(JSON), ...)`-style nesting of a future
+custom name would also still be found).
+
+**Corrected count, re-run against current `app/models/*.py`: 180 distinct
+attribute names, across 231 `Column(...)` declarations, across the same 43
+files** (up from 179/230 — the single new name is `result_data`,
+`medical_screening.py:183`; the file count is unchanged because
+`medical_screening.py` was already counted, for `EncryptedText` and its own
+`JSON`-typed attributes). Re-ran `--list` before and after the fix and
+diffed: the only change is `result_data`'s addition, confirming the fix
+didn't also pick up an unrelated false positive from the broadened name
+set.
+
+**Re-ran the shallow-copy-then-reassign bug-detection pass (b) against
+`result_data` specifically**, whole `app/` tree: grepped for
+`dict(...)`/`{**...}`/`.copy()`/`.setdefault(...)` idioms referencing
+`result_data` (zero hits) and traced every direct `.result_data =`
+reassignment by hand (two sites, both in
+`app/services/medical_screening_service.py`): `create_record` passes
+`result_data=data.result_data` straight into the `ScreeningRecord(...)`
+constructor on a row that is about to be `db.add()`-ed (a new insert — no
+prior committed value to alias against, and the value is the freshly
+deserialized Pydantic payload, never derived from `self`'s own column);
+`update_record` routes through `apply_updates(record,
+data.model_dump(exclude_unset=True))`, which does a plain `setattr` of a
+value taken directly from the incoming payload dict — never `dict(record.
+result_data)`-then-mutate, so there is no shared nested reference between
+the old committed value and the new one being written. (The bulk
+`update(ScreeningRecord).values(result_data=None, ...)` calls in
+`member_anonymization_service.py` are SQL-level `UPDATE` statements, not
+ORM-instance mutation, and set the column to a scalar `None` — outside
+this bug's shape entirely.) A third file
+(`training_enhancement_service.py`) has a local variable also named
+`result_data` (an xAPI statement's `"result"` object, parsed from a
+webhook payload) that is unrelated to this column — confirmed by reading
+the function: it is never assigned to a `ScreeningRecord` and the file
+does not import that model. **Clean — 0 bugs found in `result_data`**;
+no other name was newly added by this round's fix, so no further sites to
+check. `EncryptedJSON`'s absence of any mutation-tracking (not even
+`MutableDict`'s top-level auto-detection) makes a future direct
+`record.result_data["key"] = value` in-place mutation with no reassignment
+at all a live risk if one is ever written — worth naming for the next
+reviewer, since nothing in the type stops it, but not a finding against
+code that exists today.
+
+**Sweep 9 correction, round 2 (Codex review):** Codex re-checked round 2's
+own correction to this sweep (immediately below) and found the "132 distinct
+JSON/`MutableDict`-typed model attributes" figure was itself produced by a
+regex/line-based scan (`name = Column(JSON, ...)` matched per source line),
+which cannot see a multiline declaration such as
+
+```python
+report_email_recipients = Column(
+    JSON, ...
+)
+```
+
+— the assignment target and the `JSON` reference land on different lines, so
+a line-anchored regex never associates them. This is the same "the method was
+narrower than the write-up claimed" shape as sweep 9's round-1 correction
+below (two directories instead of the whole tree that time; single-line
+declarations only, this time) — worth naming plainly, since it is the
+**third** time this exact sweep's method has needed correcting in this PR.
+
+Re-swept with a structural method instead:
+[`backend/scripts/json_column_ast_sweep.py`](../../backend/scripts/json_column_ast_sweep.py)
+parses every `backend/app/models/*.py` file with the `ast` module and walks,
+for every `ast.ClassDef`, that class's direct-body `ast.Assign`/`ast.AnnAssign`
+statements whose value is a `Call` named `Column` — checking whether `JSON`
+appears anywhere in that call's argument subtree via a recursive `ast.walk`,
+which is what makes `Column(MutableDict.as_mutable(JSON), ...)` match
+identically to a bare `Column(JSON, ...)` regardless of how deep the wrapping
+nests, not a substring match on one line. Because this walks the parsed
+syntax tree rather than source lines, a multiline declaration is included
+exactly like a single-line one; nothing about the walk depends on how the
+declaration happens to be formatted.
+
+**Round 4 correction (Codex review):** an earlier version of this section
+claimed this script was "checked into `docs/security-review/`" — it was not;
+no such file existed anywhere in the repo (confirmed via `git ls-tree` /
+`rg --files` / `find` at the time, and by this file's own prior text never
+actually linking to one). The script now exists at
+`backend/scripts/json_column_ast_sweep.py` — alongside the project's other
+verification scripts (`backend/scripts/validate_migrations.py`,
+`verify_database_enums.py`, etc.) rather than under `docs/`, matching where
+every other runnable sweep tool in this codebase lives — and is documented in
+`backend/scripts/README.md`. Run it with:
+
+```bash
+cd backend
+python3 scripts/json_column_ast_sweep.py            # prints the summary line
+python3 scripts/json_column_ast_sweep.py --list      # every name + location
+python3 scripts/json_column_ast_sweep.py --by-file   # grouped by model file
+```
+
+which reproduces the **179 distinct names, 230 declarations** figure below
+exactly, on demand, rather than requiring a future reviewer to re-derive the
+AST-walking method from this prose. **Superseded by the round-8 entry
+above: the script's own type-name matching was itself incomplete (matched
+only the literal `JSON` identifier, missing the custom `EncryptedJSON`
+type on the medical-screening PHI column), so re-running it today prints
+180/231, not 179/230.**
+
+**Corrected count (at the time of this round): 179 distinct attribute
+names, across 230 `Column(...)` declarations that reference `JSON`** (some
+names — e.g. templated columns
+repeated across a handful of models — account for more than one
+declaration) — up from the 132 previously claimed, an increase of 47. A
+naive single-line regex re-run for comparison (`^\s*(\w+)\s*=\s*Column\(.*
+JSON`) found 137 names on the current tree, missing 42 of the AST method's
+179 — the exact multiline shape above, spread across 26 files (`compliance_
+config.py`'s `report_email_recipients`, `training_programs.py`'s `co_
+instructors`/`prerequisite_program_ids`, `event_requests.py`'s `assigned_
+members`/`required_positions`/`recurrence_exceptions`, and 39 more). The
+132-vs-137 gap between the previously-claimed figure and this regex baseline
+is not reconciled here — likely a slightly different ad hoc pattern used the
+first time — but is moot: the AST walk is now the authoritative, structural
+method, checked into `backend/scripts/json_column_ast_sweep.py` (see the
+round-4 correction above) rather than re-derived by hand each round.
+
+Re-ran the actual bug-detection sweep — nested bracket mutation (a) and
+shallow-copy-then-reassign (b) — against the **full corrected 179-name
+list**, whole `app/` tree. (a) is field-name-agnostic by construction, so its
+12 hits are unchanged from the round-1 write-up below (already checked and
+cleared). (b) was re-run specifically against the 42 newly-discovered names:
+grepped the whole tree for `dict(...)`/`{**...}`/`.copy()`/`.setdefault(...)`
+idioms referencing any of the 42, found **zero** such shallow-copy sites, then
+separately traced every direct `.<name> =` reassignment of one of the 42
+outside `app/models/` (7 sites, in `scheduled_tasks.py`, `shift_completion_
+service.py` ×3, and `compliance_config_service.py` ×3) by hand: one
+(`report.review_history = history`, `scheduled_tasks.py:3232`) reassigns a
+`list(...)`-copied _list_ with only a top-level `.append()` — safe, since
+appending to the copy never mutates a shared nested object the old committed
+value could still reference; one (`shift_completion_service.py:1533`) already
+uses `copy.deepcopy()`; the remaining five (`requirements_progressed`×2,
+`report_data`, `summary`, `emailed_to`) assign a value built fresh from a
+helper call or request payload, never derived by copying-then-mutating the
+object's own prior column value, and three of those five are on a row that
+was `db.add()`-ed a few lines earlier in the same function (a new insert, not
+an update — no prior committed value to alias against). **Clean — 0 bugs
+found among the 42 newly-discovered names**, consistent with the round-1
+conclusion for the original 132.
+
+**Sweep 9 correction, round 1 (Codex review):** the original method
+([flagged here](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139055))
+grepped only `.settings =` / `.positions =` / `.config =` across two
+directories (`app/services/`, `app/api/v1/endpoints/`) — Codex's specific
+example, `app/api/v1/onboarding.py:815`, sits one directory level up
+(`app/api/v1/`, not `.../endpoints/`) and so was structurally invisible to
+that grep, and the field-name list ignored the rest of the schema (`notification_
+preferences`, `filters`, `custom_fields`, and more).
+
+Re-swept properly: enumerated all **132 distinct JSON/`MutableDict`-typed
+model attribute names** by parsing every `Column(JSON...)` /
+`MutableDict.as_mutable(JSON)` in `app/models/*.py`, then checked the whole
+`app/` tree (excluding tests) for the two idioms that actually produce this
+bug regardless of which of the 132 names is involved: (a) a two-level nested
+bracket mutation on any variable (`x[a][b] = ...`) — field-name-agnostic, so
+complete by construction — and (b) a shallow-copy idiom (`dict(...)`,
+`.setdefault(...)[...] =`, `{**x, ...}`) feeding one of the 132 field names.
+(a) found 12 hits app-wide; all are either local report/response dicts
+unconnected to any persisted JSON column, or mutate a dict created fresh in
+the same scope (never aliased to committed ORM state). (b) found the
+`onboarding.py:815` site Codex named (`org_settings = copy.deepcopy(
+organization.settings or {})` at line 676, correctly deep-copied — just
+outside the original two-directory scope, not a bug) plus ~30 more sites
+across 26 files, spanning `notification_preferences`, `custom_fields`,
+`filters`, `progress_notes`, `action_result`, `package_config`,
+`applicant_snapshot`, `inactivity_config`, `steps_completed`, and
+`ballot_items` in addition to the original three names. Every reassignment
+found is one of: `copy.deepcopy()` before a nested mutation, a fresh dict via
+`{**old, "key": new}` / `dict(old); d[k] = new` that only ever sets a
+_top-level_ key (safe even with a shallow copy, per pitfall #12's own
+explanation), a wholesale replace from a validated Pydantic payload (no
+aliasing possible), or not a persisted SQLAlchemy attribute at all (e.g.
+`training_programs.py:117`'s `notes = dict(response.progress_notes or {})`
+mutates a Pydantic response model for redaction, never written back to the
+DB). Every single-level bracket mutation on a bare column reference
+(`session.data["key"] = ...`, 11 sites, all in `onboarding.py`) targets
+`OnboardingSession.data`, the one column wrapped in `MutableDict.as_mutable
+(JSON)` specifically so `__setitem__` is auto-tracked without a copy —
+correct by design, not a gap. **Clean** — 0 bugs found, ~40+ sites checked
+across the whole tree and all 132 attribute names claimed at the time, up
+from 16 sites / 3 names / 2 directories. (That 132-name figure was itself
+corrected to 179 on round-2 review — see "Sweep 9 correction, round 2"
+above; the bug-detection conclusion did not change.)
+
+Eight findings across this pass's four Codex review rounds, all in
+`SecurityMonitoringService` or this file's own write-up of it (sweep 7's
+tracker-cap fix across rounds 1–4 — the fourth round found the _same bug
+shape_, a fourth time, in a method the round-3 "checked every method" pass
+missed; sweep 9's JSON-attribute count and missing sweep script across
+rounds 1–2 and 4; the completion-gate warning-count policy conflict, round 3;
+this file's own misattribution of the round-1/round-2 regression, corrected
+round 4) — see each sweep's write-up above for the full account of what
+changed and why, including round 3 catching an actual regression (not just an
+incomplete fix) in round 1's ordering, only fully corrected in round 4. All
+nine invariants otherwise hold — five re-verified
+against 399 revisions / 1536 routes, four checked for the first time as an
+explicit whole-codebase sweep in this file (two of the four — sweeps 6 and 8
+— were already correct; sweep 7 needed four rounds of fixes — round 1 fixed a
+real gap, round 2 fixed two gaps in round 1's own fix, round 3 fixed a
+read-after-evict regression that dated to round 1, and round 4 found the
+identical regression, still unfixed, in a fourth method round 3's own
+"checked every method" pass missed — and sweep 9 needed its method broadened
+twice — first in scope, then in structural completeness — before it could be
+trusted, plus a round-4 correction once its claimed script turned out not to
+exist in the repo).
+
+**Completion-gate policy correction (Codex review, round 3):** every prior
+revision of this section reported the 8 ESLint warnings below as "pre-
+existing, unrelated to this pass — well under `max-warnings 10`" and treated
+that as gate-passed. Codex pointed out this is a direct conflict with
+CLAUDE.md's "Fix All Errors — Non-Negotiable" section, which names warnings
+explicitly alongside errors ("compilation errors, type errors, lint
+violations, warnings, or failing tests") and says plainly: "If you discover
+it, you own it... by default in the same commit" and "acknowledging an error
+and moving on is a violation." `max-warnings 10` is a CI gate threshold, not
+license under CLAUDE.md's own rule to leave a warning unfixed merely because
+the count sits under it — the two are answering different questions
+(would CI block the PR / does CLAUDE.md consider this task done), and
+conflating them is exactly what "pre-existing, unrelated" was doing silently.
+
+Per CLAUDE.md's Hard Stop clause, the correct question is not "does this fail
+CI" but "would fixing it exceed this task's scope" — and 8 warnings across 3
+files is not "hundreds of strict-mode violations across unrelated files," the
+Hard Stop's own example of a genuine escalation. All 8 were attempted, and
+**all 8 were fixed** — none needed escalating:
+
+- **`StorageAreasPage.test.tsx` (3× `testing-library/no-node-access`,
+  lines 24/25/27):** a helper snapshotted tree structure via
+  `tree.querySelector`/`querySelectorAll`/`row.querySelector`. Replaced with
+  scoped testing-library queries — `within(tree).queryByRole('button', {
+name: /^Back from/ })` for the back button (stronger than the old
+  `:scope > button` selector, which matched _any_ direct-child button and
+  merely assumed it was the back one), and `data-testid` added to the row and
+  path-label elements in `StorageAreasPage.tsx` (`storage-area-row` /
+  `storage-area-row-path`, the same `data-testid={`prefix-${id}`}` convention
+  already used in `CheckSweepStop.tsx` in the same module) so rows/labels are
+  found via `within(...).getAllByTestId(...)`/`getByTestId(...)` instead of
+  raw DOM traversal. `.getAttribute()`, `.dataset`, `.style`, `.classList` on
+  the _results_ of those queries are unaffected — the ESLint rule's banned
+  list (`PROPERTIES_RETURNING_NODES`/`METHODS_RETURNING_NODES` in
+  `eslint-plugin-testing-library`) covers node-traversal only
+  (`querySelector`, `closest`, `.children`, `.parentElement`, …), not
+  attribute/style reads. Verified: same 17/17 tests pass, snapshot file
+  (`__snapshots__/StorageAreasPage.test.tsx.snap`) unchanged byte-for-byte —
+  the fix changed how elements are found, not what the test asserts.
+- **`DocumentsPage.test.tsx` (2× the same rule, lines 109/113, each
+  double-reported):** `screen.getByText(name).closest('div.stat-card')` to
+  scope a card before checking for a Download button. `.closest()` has no
+  testing-library replacement (there's no "find the ancestor" query), so the
+  card itself needed a stable handle: added
+  `data-testid={`document-card-${doc.id}`}` to the grid-card `<div>` in
+  `DocumentsPage.tsx` (same convention as above), and the test now does
+  `screen.getByTestId('document-card-d-generated')` directly — simpler than
+  the original, not just compliant, since it targets the exact card by id
+  instead of trusting `.closest()` to have walked to the right ancestor.
+  Verified: same tests pass.
+- **`RoleSetup.tsx` (1× `react-refresh/only-export-components`, line 161):**
+  the file exported both the `RoleSetup`/`PositionSetup` component and a
+  plain function, `buildPositionTemplates` — Fast Refresh can only hot-reload
+  a module whose exports are all components, so every edit to this ~1300-line
+  wizard while iterating on it forced a full page reload instead of a hot
+  patch. Root cause, per the ESLint rule's own suggested fix ("Use a new file
+  to share constants or functions between components"): split
+  `buildPositionTemplates` (and the two helpers only it uses,
+  `buildAllPositionTemplates` and `generateRolePermissions` — traced by hand,
+  neither is called anywhere else in the file) into a new file,
+  `positionTemplates.ts`. Pure data/logic, no JSX, no hooks — a `.ts` module,
+  not `.tsx`. `RoleSetup.tsx` now imports `buildPositionTemplates` from it;
+  `applyAgencyVocabulary` and the `OrganizationType` type import, used only
+  inside the moved code, were dropped from `RoleSetup.tsx`'s own imports
+  (would otherwise have become unused-import errors, not warnings). Two test
+  files referenced the old location and needed the same update, not as an
+  afterthought but because they'd otherwise start failing: `RoleSetup.test.
+tsx` imports `buildPositionTemplates` from the new file now, and
+  `RoleSetup.membership.test.ts` — which walks `RoleSetup.tsx`'s raw source
+  text as a guard against re-adding retired membership-standing positions —
+  had two assertions (`id: '${slug}'` absence, `id: 'member'` presence) that
+  were checking text that moved; those now read `positionTemplates.ts`'s
+  source instead, while the assertions about `RoleSetup.tsx`'s own restore-
+  from-localStorage logic (`RETIRED_STANDING_SLUGS.has(posId)`, still genuinely
+  in that file) stayed put. Verified: all 42 tests across the 4 touched test
+  files pass, plus the full onboarding module suite (317 tests) as a check
+  against collateral breakage from the split.
+
+**Result: 0 errors, 0 warnings** (`eslint --max-warnings 10` on a clean tree
+now reports nothing at all, not "under the cap") — the framing this section
+should have used from pass 3 round 1 onward, and the one to keep using: a
+warning discovered while this rotation's own gate is being reported gets
+fixed in the same commit, or the specific reason it doesn't (a genuine Hard
+Stop) gets written down here rather than folded into "pre-existing,
+unrelated."
+
+**Completion gate (pass 3, round 3 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean across `app/ tests/ alembic/`;
+`validate_migrations.py --strict` passed (399 revisions, single head
+`4e7e125cb00f` — unchanged, no migration touched this round);
+`test_like_escaping.py` (2/2), `test_database_schema.py::test_set_null_fks_
+are_nullable` (1/1), `test_capacity_locking.py` (17/17), `test_migration_
+create_all_tables.py` (clean), and `test_security_monitoring.py` (**17/17**,
+up from 14 — the 3 new `TestReadBeforeEvictOrdering` tests proving the
+round-3 fix, each verified to fail against the pre-round-3 commit `df7438e0`
+and pass after) all pass; `cd frontend && npm run typecheck` (the aliased
+7.0.2 compiler, not bare `tsc` — see the round-1 correction below) **0
+errors**; `cd frontend && npm run lint` **0 errors, 0 warnings** (see the
+policy correction above). Files changed this round:
+`app/services/security_monitoring.py` (the read-before-evict reordering,
+sweep 7 above) and its test file; `StorageAreasPage.tsx`/`.test.tsx`,
+`DocumentsPage.tsx`/`.test.tsx`, `RoleSetup.tsx`/`.test.tsx`/`.membership.
+test.ts`, and the new `positionTemplates.ts` (the 8-warning fix above);
+everything else is documentation.
+
+**Completion gate (pass 3, round 4 — full re-run):** `flake8`/`black
+--check`/`isort --check-only` clean across `app/ tests/ alembic/` (including
+the new `backend/scripts/json_column_ast_sweep.py` — also fixed two
+unrelated pre-existing `black`/`isort` violations discovered by this same
+gate run, in `scripts/verify_database_enums.py` and
+`scripts/seed_test_users.py`, neither touched by this round's own change, per
+CLAUDE.md's "no acceptable pre-existing errors" rule); `validate_migrations.py
+--strict` passed (399 revisions, single head `4e7e125cb00f` — unchanged, no
+migration touched this round); the full backend unit-test suite matching
+CI's `Backend Unit Tests` job exactly (`pytest tests/ -m "not integration and
+not slow and not docker" --cov=app --cov-fail-under=51`): **8097 passed, 2
+skipped, 58.65% coverage** (well over the 51% floor), including
+`test_security_monitoring.py` (**18/18**, up from 17 — the 1 new
+`test_rate_limit_alert_survives_batch_eviction_of_the_victim_ip` test proving
+the round-4 fix, verified to fail against the pre-round-4 code and pass
+after); `cd frontend && npm run typecheck` (the aliased 7.0.2 compiler) **0
+errors**; `cd frontend && npm run lint` **0 errors, 0 warnings**. Files
+changed this round: `app/services/security_monitoring.py` (the
+`_check_rate_limit` read-before-evict reordering) and its test file;
+`backend/scripts/json_column_ast_sweep.py` (new) and `backend/scripts/
+README.md`; `scripts/verify_database_enums.py` and `scripts/
+seed_test_users.py` (pre-existing black/isort fixes, unrelated to this
+round's finding); `CHANGELOG.md`; everything else is documentation
+(this file and `PROGRESS.md`).
+
+**Completion-gate command correction (Codex review, round 1):** this section
+originally reported `tsc --noEmit`
+([flagged here](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139067)).
+Per CLAUDE.md's "Two TypeScript installs" section, bare `tsc`/`npx tsc`
+resolves through whichever bin `npm` happened to link into `node_modules/
+.bin` — the 5.9.3 `typescript` install kept for typescript-eslint's peer
+range, not the 7.0.2 `typescript-native` install this repo's build and
+typecheck actually run on. `npm run typecheck` is the command that goes
+through `frontend/scripts/tsc-native.mjs` to force the aliased 7.0.2
+compiler; re-run as `cd frontend && npm run typecheck` for this pass — 0
+errors, confirming the tree was clean under the compiler that actually
+matters, not just under the lint-compatibility one. Every completion-gate
+section in this file (and, where they quote it, PR bodies for this rotation)
+should read `npm run typecheck`, not `tsc --noEmit`.
+
+### Round 9 (Codex review on round-8 commit `c417d659`): a real async interleaving race in `detect_session_hijack`, plus a stale attribution comment
+
+Two findings, handled separately per this rotation's own rule that a
+doc-accuracy nit and a genuine concurrency finding call for different levels
+of scrutiny.
+
+**Doc fix.** The comment at `security_monitoring.py:634` (inside
+`detect_session_hijack`, explaining why `session_data` is read before
+`_enforce_key_caps()` runs) still read "a regression introduced by the
+round-2 fix that added the call below." Per the "Attribution correction" note
+above (round 4), the accurate framing is: **introduced in round 1's
+`3b6b65e4`, widened in round 2's `df7438e0`.** Reworded to match. No
+behavior change.
+
+**Concurrency finding.** Codex's claim: `detect_session_hijack` is `async
+def`; on its alert-firing path it `await`s `log_audit_event()` and
+`self._add_alert()` — both real DB-I/O yield points — **before** writing its
+decision back to `_session_trusted_ip` / `_session_ips`; `security_monitor`
+is a module-level singleton shared by every request via the ASGI middleware;
+so a second concurrent call for the same `session_id` can write to those
+trackers while the first call is suspended mid-await, and the first call's
+resumption then overwrites the second call's write with a stale snapshot —
+losing a forensic-log entry and potentially moving the trusted-IP timestamp
+backward.
+
+**Verification, in the order the task required — claim, then singleton,
+then reproduction, then impact — nothing taken on reasoning alone:**
+
+1. **Are these real `await` points?** Yes, traced to the actual I/O.
+   `log_audit_event()` (`app/core/audit.py:814`) delegates to
+   `AuditLogger.create_log_entry()` (`audit.py:163`), which opens `async with
+db.begin_nested()` and does two `await db.execute(...)` calls inside it —
+   a nested transaction and two real round-trips to the (mocked-in-tests,
+   real-in-production) async DB driver. `_add_alert()`
+   (`security_monitoring.py:290`) does `await db.execute(...)` (the
+   alert's owning-org lookup) and `await db.flush()`. Neither is a
+   synchronous function merely declared `async`; both are genuine
+   cooperative-yield points under `asyncio`.
+2. **Is `security_monitor` actually a shared singleton on the request
+   path, not a fresh instance per call?** Yes.
+   `security_monitoring.py`'s last line is `security_monitor =
+SecurityMonitoringService()` at module scope — constructed once, at
+   import time. `security_middleware.py:1403` and `:1406` import that exact
+   name and call `security_monitor.detect_session_hijack(...)` directly, for
+   **every** authenticated request that carries `user_id`/`session_id`
+   /`client_ip` (`security_middleware.py:1400`) — not behind a
+   per-request factory or DI scope. This is also the method's own
+   documented hot-path assumption (`_enforce_key_caps`'s docstring: "a
+   genuine hot path (`detect_session_hijack` fires on every authenticated
+   response)").
+3. **Same bug shape checked against the other three tracker methods in this
+   file** (`_check_rate_limit`, `detect_brute_force`,
+   `detect_data_exfiltration`), per the task's explicit instruction not to
+   stop at the one method named. All three already write their tracker
+   state (the `self._api_calls[ip] = calls` / `self._login_attempts[ip] =
+ip_attempts` / `self._data_transfers[user_id] = transfers` lines) **before**
+   building any `SecurityAlert` or awaiting `log_audit_event`/`_add_alert` —
+   each one's own round-5 comment already says so explicitly ("Write the
+   filtered window back AFTER eviction... Check threshold [below]"). Only
+   `detect_session_hijack` interleaves an `await` between its read and its
+   write, because its alert-dispatch calls sit _inside_ the same `if
+trusted_data:` block that computes the new tracker values, ahead of the
+   writes at the bottom of the method. This is a genuinely different shape
+   from the read-after-evict/write-after-evict family rounds 3–5 fixed
+   (and round 4 found a fourth instance of) — which is exactly why eight
+   rounds of "checked every method" passes on that bug class never surfaced
+   it.
+4. **Reproduced, not just reasoned about.** New test
+   `TestSessionHijackConcurrentInterleaving` in
+   `backend/tests/test_security_monitoring.py`. Two coroutines share one
+   `SecurityMonitoringService` instance and call `detect_session_hijack` for
+   the same `session_id`. Call A presents an IP change inside the 5-minute
+   window (fires the hijack alert) and is stalled inside a monkeypatched
+   `app.services.security_monitoring.log_audit_event` — an `asyncio.Event`
+   under the test's control stands in for the real DB-I/O suspension. While
+   A is parked there, call B — a legitimate IP change the test arranges to
+   land outside the 5-minute window, so it takes the no-alert branch and
+   never awaits at all — runs to completion, writing its own entries to both
+   trackers. Only then is A released to resume and finish.
+
+   ```python
+   # backend/tests/test_security_monitoring.py
+   # A stalls inside log_audit_event; B runs to completion in the gap;
+   # A is released and resumes last.
+   alert_a, alert_b = await asyncio.gather(call_a(), call_b())
+   assert alert_a is not None
+   assert alert_b is None
+   final_ip, _ = svc._session_trusted_ip[key][-1]
+   assert final_ip == "10.0.0.3"       # B's IP, not A's stale "10.0.0.1"
+   assert "10.0.0.3" in [ip for ip, _ in svc._session_ips[key]]
+   ```
+
+   **Run against the pre-round-9 source (commit `c417d659`, saved aside and
+   swapped in for the run, then restored): fails**, exactly as predicted —
+   `final_ip` comes back `"10.0.0.1"` (call A's pre-hijack trusted IP,
+   written by A's stale resume) instead of B's `"10.0.0.3"`, and
+   `"10.0.0.3"` is absent from `_session_ips` (B's forensic entry, silently
+   erased by A rebuilding the list from its own pre-B `session_data`
+   snapshot). **Run against the fix (below): passes.** This is a genuine
+   reproduction of both halves of Codex's claim — the stale-overwrite on
+   `_session_trusted_ip` and the erased entry in `_session_ips` — not an
+   assertion accepted on the strength of the reasoning alone.
+
+5. **Impact, assessed honestly rather than inflated or minimized for the
+   sake of a clean decision.** This detection runs on every authenticated
+   request, and this app is a React SPA that fires multiple concurrent API
+   calls under one session cookie as a matter of routine (parallel widget
+   fetches on page load, prefetching) — so two concurrent calls for the same
+   `session_id` are ordinary traffic here, not solely an attacker replaying
+   a stolen cookie. The race window is narrower than "every call," though:
+   it only opens on the alert-firing branch (an IP change observed within 5
+   minutes of the last), which correlates with either a genuine hijack in
+   progress or a legitimate client presenting multiple egress IPs (mobile
+   carrier-grade NAT, corporate proxies round-robining outbound addresses) —
+   already a known source of the false-positive alerts this method's
+   leniency window exists to soften, and a plausible source of concurrent
+   requests specifically during that same short window. What's actually at
+   risk is bounded: each call's own alert-or-not decision and the audit-log
+   row it writes are computed and persisted independently, unaffected by the
+   race — what the race corrupts is the _tracker state a later call reads_,
+   i.e. the session's stored forensic IP history and the trusted-baseline
+   timestamp used to evaluate the _next_ request. Real, and worth fixing on
+   its own terms; not a reason to distrust an alert that has already fired,
+   and not the kind of finding whose severity needed rounding up or down to
+   make the fix-vs-flag call easier.
+
+**Fix — reorder, not redesign.** Moved both tracker writes
+(`self._session_trusted_ip[key] = [(new_trusted_ip, new_trusted_time)]` and
+`self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]`) to run
+immediately after the synchronous decision logic that computes
+`new_trusted_ip` / `new_trusted_time` and builds the `SecurityAlert` object
+(if any), and moved the `await log_audit_event(...)` / `await
+self._add_alert(db, alert)` pair to run afterward, gated on `if alert is not
+None:`. This is not a new pattern invented for this fix — it is exactly the
+compute-then-write-then-await-for-dispatch shape `_check_rate_limit`,
+`detect_brute_force`, and `detect_data_exfiltration` already use, so
+`detect_session_hijack` now matches the other three instead of being the one
+outlier. None of the values written (`new_trusted_ip`, `new_trusted_time`,
+`session_data`, `current_ip`, `now`) are produced or altered by the two
+awaited calls, so the reorder changes _when_ the write happens, never _what_
+gets written — confirmed by re-running the full pre-existing
+`TestSessionHijackTrustedBaseline` (round 6's regression tests) and
+`TestSessionHijackLeniencyWindow` (round 7's) suites unmodified after the
+reorder: both still pass, showing the reorder does not reopen either prior
+bug. With the write now sitting ahead of both awaits, there is no `await`
+left between this method's read and its write for a concurrent call to land
+inside — closing the race outright rather than narrowing it.
+
+**Why this was fixed rather than flagged.** The task's own criterion is
+whether the fix is "small... doesn't require a broader redesign... and
+doesn't lose any needed ordering guarantee elsewhere." This qualifies on all
+three: it is a pure statement reorder inside one method, touching no other
+method, model, or migration; it requires no `asyncio.Lock`, no change to how
+alerts are dispatched, and no merge-vs-overwrite semantics decision (the
+"last write wins" contract this dict was always written with is preserved —
+what changes is which call's write happens to run last, which is now
+determined by request completion order rather than an arbitrary await
+suspension); and every ordering guarantee the file's prior seven rounds
+established (read-before-evict, write-after-evict, trusted-IP-not-promoted-
+on-alert, timestamp-refreshed-on-alert) is unaffected, verified by the
+unmodified regression suites for rounds 6 and 7 above. An `asyncio.Lock` per
+session key was considered explicitly and rejected as unnecessary
+complexity: it would serialize concurrent calls for the same session rather
+than removing the interleaving opportunity, adds a new failure mode (lock
+contention, potential deadlock interaction with the DB session), and buys
+nothing the reorder doesn't already deliver, since the reorder leaves the
+method's tracker-mutating section synchronous start-to-finish.
+
+**Verification:** `TestSessionHijackConcurrentInterleaving` (1 new test) —
+verified to **fail** against the pre-round-9 commit `c417d659` and **pass**
+after the fix, per the reproduction steps above. Full
+`test_security_monitoring.py`: **27/27**, up from 26.
+
+**Completion gate (round 9 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head
+`4e7e125cb00f`, no migration touched this round); full backend unit suite
+matching CI's `Backend Unit Tests` job exactly (`pytest tests/ -m "not
+integration and not slow and not docker" --cov=app --cov-fail-under=51`):
+**8106 passed, 2 skipped, 58.66% coverage** (well over the 51% floor); `cd
+frontend && npm run typecheck` (aliased 7.0.2 compiler) **0 errors**; `cd
+frontend && npm run lint` **0 errors, 0 warnings** (no frontend files touched
+this round — this round's whole diff is backend + docs). Files changed:
+`app/services/security_monitoring.py` (the comment fix and the
+write-before-await reorder in `detect_session_hijack`) and its test file
+(new `TestSessionHijackConcurrentInterleaving`); `CHANGELOG.md`; this file
+and `PROGRESS.md`.
+
+---
+
+## Pass 2 (2026-08-27) — re-sweep after rotation pass 1
+
+Pass 1 completed the full 35-feature rotation (#1799–#1918) and closed SEC-1
+through SEC-4 with two of the five sweeps converted into standing guard tests
+(`test_like_escaping.py`, `test_database_schema.py::TestColumnConstraints::
+test_set_null_fks_are_nullable`). This pass re-runs the same five sweeps
+against everything that landed during pass 1 and since (the endpoint count grew
+by one file — `app/api/prospect_privacy.py`, a `Depends()` helper module with
+no routes of its own, not a new router — and the Alembic chain grew from 355 to
+381 revisions). It does not re-derive pass 1's conclusions; it re-verifies them
+against current code, per the rotation's own rule.
+
+| #   | Class swept                      | Method                                                                                                                              | Result                                                                                                                                   |
+| --- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports     | `grep` for `csv.writer(` / `csv.DictWriter(` outside `csv_export.py`                                                                | **clean** — 0 sites, unchanged                                                                                                           |
+| 2   | `SET NULL` on `NOT NULL` columns | `test_set_null_fks_are_nullable` (guard test added pass 1)                                                                          | **clean** — passes                                                                                                                       |
+| 3   | Proxy-IP attribution             | grep `request.client.host`                                                                                                          | **clean** — same 3 hits as pass 1 (2 comments, 1 deliberate use inside `get_client_ip`)                                                  |
+| 4   | Alembic chain integrity          | `backend/scripts/validate_migrations.py --strict`                                                                                   | **clean** — 381 revisions, single head `8fb3757b80ec`, no duplicate ids                                                                  |
+| 5   | LIKE-wildcard handling           | `test_every_like_call_declares_the_escape_character` + `test_wildcard_escaping_lives_only_in_sql_search` (guard tests added pass 1) | **clean** — both pass; no new `.like()`/`.ilike()` call site has reintroduced a raw copy of the transform or dropped the `escape=` kwarg |
+
+**Route auth coverage re-check:** an AST walk of every `@router.<verb>`
+decorator in `api/v1/endpoints/`, `api/v1/onboarding.py`, and `api/public/`
+found 68 routes with no recognized auth dependency (pass 1: 69 — the
+one-route difference is a rename/refactor within the same already-accounted
+surface, not a new gap). Every route is still confined to the same five
+features pass 1 named: auth (14), event_requests.py's 4 public routes,
+elections.py's 4 token-scoped routes, onboarding.py's 24 bootstrap routes, and
+the public/* surface (22, including `salesforce_sync.py`'s OAuth callback).
+**No new ungated route outside those five features.**
+
+**Correction (Codex review on PR #1924):** the walk above was scoped by
+directory glob (`endpoints/*.py`), which is narrower than pass 1's actual
+"whole `app/api/`" scope and silently excluded
+`app/api/v1/public_portal_admin.py` — a router mounted directly in
+`api.py` (`from app.api.v1 import onboarding, public_portal_admin`, not
+`from app.api.v1.endpoints import ...`) with 13 real route decorators. Derived
+the file list from `api.py`'s router registrations instead of a directory
+glob and re-ran: 80 files, 1526 routes (up from 1513 — the 13 newly-included
+routes), same 68 ungated routes as above. All 13 `public_portal_admin.py`
+routes carry `Depends(get_current_user)`; the corrected scan changes the
+denominator, not the finding. **No new ungated route.**
+
+No findings this pass. All five pass-1 invariants hold; two are now enforced
+by tests rather than by review, exactly as pass 1 intended.
+
+**Completion gate (pass 2):** `flake8`/`black --check`/`isort --check-only`
+clean across `app/ tests/ alembic/`; `validate_migrations.py --strict` passed;
+`test_like_escaping.py` (2/2) and the `SET NULL` guard test pass; `tsc
+--noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, same set as
+feature 34's gate). No code changes this pass — documentation only.
+
+---
+
+## Pass 1 (2026-08-25)
+
+**Scope:** whole codebase — `backend/app/` (66 v1 endpoint files, 11 public
+endpoint files, 108 services, 42 model modules, 355 Alembic revisions).
+
+The rotation opens with the sweeps that only make sense run against everything
+at once. A per-feature iteration cannot establish "this class does not exist
+anywhere"; it can only establish "not here". Running them first also means the
+34 feature iterations that follow inherit the invariants instead of re-checking
+them by hand.
+
+---
+
+## Scope
+
+**Read in full:** `app/utils/sql_search.py`, `app/utils/csv_export.py`,
+`app/utils/org_scoping.py`, and every call site the five sweeps returned.
+
+**Swept mechanically** (AST or grep over all of `backend/app/`): LIKE/ILIKE
+escaping, CSV writer selection, `request.client.host` usage, `SET NULL`
+nullability, route auth coverage, and model-vs-migration table/column drift.
+
+**Not read:** the feature internals themselves. This iteration establishes
+class-level absence or presence, not per-feature verdicts — those are
+iterations 01–34. A clean sweep here does **not** mean a feature is clean.
+
+---
+
+## Sweep results
+
+| #   | Class swept                      | Method                                                                              | Result                                                                                                                                                                   |
+| --- | -------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Formula injection in exports     | `grep` for `csv.writer(` / `csv.DictWriter(` outside `csv_export.py`                | **clean** — 0 sites; every exporter uses `SafeCsvWriter`                                                                                                                 |
+| 2   | `SET NULL` on `NOT NULL` columns | grep every `ondelete="SET NULL"`, check the 3 lines that follow for `nullable=True` | **clean** — 0 sites; also guarded by `tests/test_database_schema.py::test_set_null_fks_are_nullable`                                                                     |
+| 3   | Proxy-IP attribution             | grep `request.client.host`                                                          | **clean** — 3 hits, all non-runtime: 2 explanatory comments and 1 deliberate `direct_ip` inside `get_client_ip` itself. AXC-1 closed this class and it has stayed closed |
+| 4   | Alembic chain integrity          | `backend/scripts/validate_migrations.py`                                            | **clean** — 355 revisions, single head `f2a91c7d6b04`, no duplicate ids, no orphans                                                                                      |
+| 5   | LIKE-wildcard handling           | AST walk of every `.like()` / `.ilike()` call                                       | **3 findings — SEC-1/2/3, all fixed below**                                                                                                                              |
+
+A sixth sweep (model↔migration drift) is written up under
+[Schema & migration notes](#schema--migration-notes) — it found no defect, but
+what it found instead is load-bearing enough to record.
+
+---
+
+## Route auth coverage
+
+An AST walk of every route decorator in `app/api/` found **69 routes with no
+auth dependency in the signature**, split as:
+
+- **20 in `api/public/`** — the intentionally public surface (portal, calendar,
+  display, `security.txt`, legal, four inbound webhooks, three finance
+  approval-token routes, two public form routes).
+- **49 in `api/v1/`** — 24 onboarding bootstrap routes, 15 auth routes (login,
+  register, OAuth initiate/callback, password reset), 4 token-scoped ballot
+  routes, 4 public event-request routes, the public calendar, the Salesforce
+  OAuth callback, and `GET /` on the API root.
+
+Every one of these is public **by design**. That is not the same as verified:
+each needs its compensating control checked (rate limit before the expensive
+work, signed/consumed token, webhook signature). That check is the substance of
+iterations **01 auth**, **03 public surface**, **06 elections**, **16 events**
+and **30 onboarding**, and the inventory above is recorded here so those
+iterations start from a list rather than re-deriving one.
+
+**No route outside those five features was found ungated.**
+
+---
+
+## Verified good ✅
+
+- **Every CSV that leaves the system is formula-safe.** Zero uses of raw
+  `csv.writer` remain in `app/`; `SafeCsvWriter` prefixes any cell opening with
+  `= + - @ \t \r`. Mechanism: sweep 1, plus the class was closed repo-wide by
+  the 2026-07 audit and has not regressed.
+- **No `ondelete="SET NULL"` column is `NOT NULL`.** Mechanism: sweep 2, backed
+  by an existing metadata test, so this is guarded rather than merely observed.
+- **Client IP attribution is uniform.** Every runtime site resolves through
+  `get_client_ip(request)`, which honours `TRUSTED_PROXY_IPS` and falls back to
+  the peer address. Mechanism: sweep 3.
+- **The migration chain is single-headed and consistent.** Mechanism: sweep 4,
+  which the CI gate also runs.
+- **All 76 `like`/`ilike` calls declare `escape=LIKE_ESCAPE_CHAR`**, and the
+  wildcard-escaping transform has exactly one implementation. Mechanism:
+  `tests/test_like_escaping.py`, added this iteration — this is now an
+  invariant, not a snapshot.
+
+---
+
+## Findings
+
+### SEC-1 — MED — Raw user input interpolated into a LIKE pattern — ✅ FIXED
+
+**What:** two search paths built their pattern by direct interpolation, with no
+wildcard escaping at all.
+
+**Where:**
+
+- `backend/app/services/messaging_service.py:124` — `pattern = f"%{search.strip()}%"`
+- `backend/app/api/v1/endpoints/message_history.py:80` — `pattern = f"%{search}%"`
+
+**Failure scenario:** a user with `settings.manage` types `%` into the
+department-message search box. The pattern becomes `%%%`, which matches every
+row, so the "search" silently returns the org's entire message table — and the
+paginated list's count query scans all of it. `_` behaves the same way at
+single-character granularity: searching `a_c` also returns `abc`, so a member
+looking for one record gets a set they did not ask for and has no way to tell
+the filter was ignored.
+
+**Impact:** both queries are correctly org-scoped, so this is **not** a
+cross-tenant leak. What it is: a filter that can be made to not filter, on two
+list endpoints, with an unbounded scan behind it. The wrong-results half is the
+part a user would never notice.
+
+**Fix:** both now build the pattern with `like_pattern()` and pass
+`escape=LIKE_ESCAPE_CHAR`.
+
+### SEC-2 — MED — Wildcard escaping present but never declared to the database — ✅ FIXED
+
+**What:** 47 call sites escaped the search term correctly and then emitted
+`LIKE`/`ILIKE` **without an `ESCAPE` clause**.
+
+**Where:** 12 files, chiefly `inventory_service.py` (19 sites),
+`forms_service.py` (7), `apparatus_service.py` (4),
+`membership_pipeline_service.py` (3), `documents_service.py` (3),
+`facilities_service.py` (3).
+
+**Failure scenario:** MySQL's default LIKE escape character depends on
+`sql_mode`. Under `NO_BACKSLASH_ESCAPES` — a mode a DBA can enable for
+standards compliance, and which some managed MySQL offerings set — the
+backslashes the escaping inserted are treated as literal characters rather than
+escapes. Every wildcard the transform was written to neutralize comes back, and
+the codebase reverts to SEC-1 behaviour across all 47 sites at once. The
+project already knew this: `app/utils/sql_search.py`'s own docstring says
+"MySQL's default varies by mode and cannot be relied on implicitly" and "the
+result must be passed with `escape=LIKE_ESCAPE_CHAR`; without it the escaping
+is inert".
+
+**Impact:** latent rather than live — on the default `sql_mode` these queries
+behave correctly today. It is recorded as MED rather than LOW because the
+failure is configuration-triggered, silent, simultaneous across the whole
+application, and invisible in code review: the escaping _looks_ present.
+
+**Fix:** every `like`/`ilike` call in `app/` now passes
+`escape=LIKE_ESCAPE_CHAR` — 76 of 76, no exceptions. That includes the 21 sites
+that had been passing a raw `"\\"` literal (now the shared constant) and the
+four whose pattern is system-generated (`"ORD-2026-%"`,
+`"reminder_sent:%"`, `"%probationary%"`, `"{prefix}-{year}-%"`). Declaring the
+escape character on those four is **inert**, not wrong — their `%` is not
+preceded by a backslash, so it stays a wildcard — and covering them is what
+makes the invariant exception-free, so the guard test needs no allowlist to
+grow stale.
+
+### SEC-3 — LOW — The escaping transform was copy-pasted into 15 files — ✅ FIXED
+
+**What:** `app/utils/sql_search.py` exists specifically to own this transform.
+Its docstring names the seven modules it was copy-pasted into and says "it lives
+here so a fix or a subtlety lands in one place rather than seven". Exactly one
+call site — `storefront_service.py` — actually imported it. Fifteen other files
+carried their own copy, including one nested inside a function
+(`membership_pipeline_service.py`'s local `_escape`).
+
+**Where:** `apparatus`, `grant`, `notifications`, `inventory`, `minute`,
+`equipment_check`, `meetings`, `documents`, `forms`, `facilities`,
+`membership_pipeline`, `fundraising` services, plus `audit_logs.py`,
+`skills_testing.py` and `message_history.py`.
+
+**Failure scenario:** this is the mechanism behind SEC-2. Each copy of the
+transform obliged its author to remember the `escape=` kwarg independently, and
+47 of them did not. A single owner makes the two halves inseparable.
+
+**Impact:** the duplication is why the defect class existed at all, and why it
+would have come back.
+
+**Fix:** all 15 now call `like_pattern()`. The transform exists once, in
+`sql_search.py`. `finance_service.py`'s local variable named `like_pattern` was
+renamed `number_prefix` so it cannot shadow the helper.
+
+### SEC-4 — MED — Inventory barcode search attributes the wrong matched field — ✅ FIXED
+
+**What:** `search_items_by_code` runs its DB query against the LIKE-escaped
+pattern (correct), then re-scans the returned rows **in Python** to decide which
+field matched — and compared against the _escaped_ string rather than the raw
+input.
+
+**Where:** `backend/app/services/inventory_service.py:3392` (was
+`safe_lower = safe_code.lower()`).
+
+**Failure scenario:** a member scans or types an asset tag containing `%`, `_`
+or `\` — e.g. `50%`. The escape transform turns it into `50\%`. The database
+correctly returns the item whose `asset_tag` is `50%`, but the Python loop then
+tests `"50\%" in "50%"`, which is false for every field, so the match falls
+through to the `matched_field = "name"` default. The UI reports the item was
+found by _name_ when it was found by _asset tag_, and `matched_value` shows the
+item's name instead of the code that was scanned.
+
+**Impact:** wrong attribution in a scanning workflow, silently — the item is
+still returned, so nothing looks broken. Pre-existing; not introduced by this
+change. It surfaced because collapsing the duplicated transform removed the
+`safe_code` variable, and `flake8` then reported `F821 undefined name
+'safe_code'` at the line that had been misusing it. The lint rule found a
+correctness bug the tests did not.
+
+**Fix:** compare against `code.lower()` — the raw input — with a comment stating
+why the escaped form is the wrong comparand.
+
+---
+
+## Schema & migration notes
+
+The model-vs-migration sweep compared every `__tablename__` and `Column` in
+`app/models/` against every `create_table` / `add_column` / raw `ALTER TABLE` in
+the 355 Alembic revisions. It reports:
+
+- **37 model tables that no migration ever creates** — `positions`,
+  `integrations`, `error_logs`, `event_requests`, `prospects`, `budgets`,
+  `approval_step_records`, and 30 more.
+- **49 model columns that no migration ever adds**, across 17 tables.
+- **0 migration-created tables with no model.**
+
+**This is not a finding.** It is the documented, deliberate shape of this
+deployment: application startup runs `Base.metadata.create_all(checkfirst=True)`
+followed by `_add_missing_model_columns` (`backend/main.py:274–350`), and that
+is how model-only tables and later-added model columns actually materialize.
+`backend/scripts/repair_schema.py` exists so CI reproduces the same state, and
+its docstring names the exact count — "37 tables exist in the models with no
+migration that creates them" — along with the seven contract-test failures that
+resulted when CI skipped the step.
+
+Recording it here for two reasons. First, so a later iteration does not
+rediscover it and file it as a critical drift bug. Second, because it is a
+standing risk worth stating plainly even though it is working as designed:
+`create_all` does not carry the `ondelete` behaviour, index set, or column
+ordering that a hand-written migration does, so a table born from `create_all`
+and a table born from a migration are not guaranteed identical. Checklist
+dimension 7 asks each feature iteration which path its tables took.
+
+Chain integrity itself is clean: 355 revisions, one head, no duplicates.
+
+---
+
+## Guard tests added
+
+`backend/tests/test_like_escaping.py` — two tests, both source-walking:
+
+1. `test_every_like_call_declares_the_escape_character` — every `.like()` /
+   `.ilike()` in `app/` passes `escape=LIKE_ESCAPE_CHAR`. Asserts SEC-2's
+   invariant with no allowlist.
+2. `test_wildcard_escaping_lives_only_in_sql_search` — the transform
+   `.replace("%", "\\%")` appears in exactly one file. Asserts SEC-3's.
+
+Verified to fail on reintroduction: removing the `escape=` kwarg from one call
+in `documents_service.py` fails test 1 and names the file and line; restoring it
+passes.
+
+---
+
+## Completion gate
+
+| Check                                                 | Result                                              |
+| ----------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/`                  | ✅ 1216 files unchanged                             |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean — see the note below                       |
+| `python3 -m pytest tests/ -k "<19 touched services>"` | ✅ **1715 passed, 1 skipped, 0 failed**, 325 errors |
+| `backend/scripts/validate_migrations.py`              | ✅ 355 revisions, single head                       |
+| `tsc --noEmit` / `eslint .`                           | n/a — no frontend file changed this iteration       |
+
+The 325 errors are the sandbox's missing MySQL (`OperationalError(2003, "Can't
+connect to MySQL server on 'localhost'")` at fixture setup), the same limitation
+recorded in `docs/app-review/PROGRESS.md`'s baseline.
+
+The same selection was run against unmodified `HEAD` in a separate git
+worktree, which is what makes the result evidence rather than an assertion:
+
+| Run                 |   Passed | Skipped |  Errors |
+| ------------------- | -------: | ------: | ------: |
+| `HEAD` (unmodified) |     1713 |       1 |     325 |
+| this branch         | **1715** |       1 | **325** |
+
+The error count is identical, so nothing moved from passing to erroring. The
+`+2` is exactly the two tests added in `test_like_escaping.py`. That is the
+standard AXC-1 set for a mechanical sweep, and it is the claim being made here:
+behaviour-neutral to the suite, not merely still green.
+
+### The gate that was reported clean and was not
+
+`isort` was not installed in this sandbox and the first push went out without
+it, on the reasoning that `black` and `flake8` both passed and CI would run the
+real thing. CI did, and it failed: `storefront_service.py` had its
+`sql_search` import placed after `storefront_payments` instead of before it.
+
+The cause is specific and worth recording, because it is the one file where the
+import was not newly added — it already existed at line 58, my sweep stripped it
+along with the misplaced ones, and the AST pass that put it back inserts after
+the _last_ top-level import rather than in sorted position. Every other file got
+a new import that happened to sort correctly; this one did not.
+
+`isort==8.0.1` (CI's pin) was then installed and run over `app/ tests/
+alembic/`. One line moved. `black`, `flake8` and the guard test were re-run
+after it and all still pass.
+
+**The lesson is in the command file now** (Step 6): run all three linters
+against `alembic/` too, and install a missing one at CI's pinned version rather
+than noting it as unavailable. An import inserted programmatically is precisely
+the change `isort` exists to catch, so "the other two linters passed" was never
+evidence about this one.

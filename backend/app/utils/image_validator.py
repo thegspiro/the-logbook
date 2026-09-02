@@ -16,7 +16,10 @@ from typing import Optional, Tuple
 
 import magic
 from fastapi import HTTPException
+from loguru import logger
 from PIL import Image
+
+from app.core.utils import safe_error_detail
 
 
 class ImageValidationError(Exception):
@@ -134,7 +137,8 @@ class ImageValidator:
             return image_bytes
 
         except Exception as e:
-            raise ImageValidationError(f"Invalid base64 encoding: {str(e)}")
+            logger.warning("Onboarding logo upload: base64 decode failed: {}", e)
+            raise ImageValidationError("Invalid base64 encoding")
 
     def _validate_file_size(self, image_bytes: bytes) -> None:
         """Validate file size to prevent storage exhaustion."""
@@ -172,7 +176,8 @@ class ImageValidator:
             # generic detection failure.
             raise
         except Exception as e:
-            raise ImageValidationError(f"Failed to detect file type: {str(e)}")
+            logger.warning("Onboarding logo upload: MIME detection failed: {}", e)
+            raise ImageValidationError("Failed to detect file type")
 
     def _open_and_validate_image(self, image_bytes: bytes) -> Image.Image:
         """
@@ -219,7 +224,8 @@ class ImageValidator:
             # rather than relabeling it as a corrupted-image error.
             raise
         except Exception as e:
-            raise ImageValidationError(f"Invalid or corrupted image: {str(e)}")
+            logger.warning("Onboarding logo upload: Pillow open/load failed: {}", e)
+            raise ImageValidationError("Invalid or corrupted image")
 
     def _validate_dimensions(self, image: Image.Image, enforce_square: bool) -> None:
         """Validate image dimensions."""
@@ -295,7 +301,8 @@ class ImageValidator:
             return clean_bytes, format_name
 
         except Exception as e:
-            raise ImageValidationError(f"Failed to sanitize image: {str(e)}")
+            logger.warning("Onboarding logo upload: Pillow re-encode failed: {}", e)
+            raise ImageValidationError("Failed to sanitize image")
 
     def _encode_to_base64(self, image_bytes: bytes, format_name: str) -> str:
         """Encode sanitized image back to base64 with data URI."""
@@ -353,6 +360,4 @@ def validate_logo_image(base64_data: Optional[str]) -> Optional[str]:
     except ImageValidationError as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Image processing failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))

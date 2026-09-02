@@ -96,6 +96,8 @@ ORGANIZATION_FIELDS_WITHOUT_VARIABLES: Dict[str, str] = {
     "physical_state": "composed into organization_physical_address",
     "physical_zip": "composed into organization_physical_address",
     "physical_country": "composed into organization_physical_address",
+    "reorder_vendor_required": "purchasing policy switch, not letterhead content",
+    "reorder_po_required": "purchasing policy switch, not letterhead content",
 }
 
 _ORGANIZATION_TYPE_LABELS: Dict[str, str] = {
@@ -2954,7 +2956,7 @@ class EmailTemplateService:
             "html": DEFAULT_SERIES_END_REMINDER_HTML,
             "text": DEFAULT_SERIES_END_REMINDER_TEXT,
             "description": (
-                "Sent to event managers 6 months before a recurring event "
+                "Sent to event officers 6 months before a recurring event "
                 "series is scheduled to end. Includes series details and "
                 "remaining occurrences."
             ),

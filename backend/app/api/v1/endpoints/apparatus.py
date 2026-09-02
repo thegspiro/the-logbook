@@ -2678,6 +2678,7 @@ async def get_apparatus_folders(
     sub_folders = await docs_service.get_apparatus_sub_folders(
         organization_id=current_user.organization_id,
         apparatus_id=apparatus_id,
+        current_user=current_user,
     )
 
     return {

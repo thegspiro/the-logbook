@@ -41,6 +41,20 @@ class RSVPStatus(str, Enum):
     WAITLISTED = "waitlisted"
 
 
+class AttendeeVisibility(str, Enum):
+    """Who may see an event's attendee list.
+
+    ``MANAGERS`` is the historical behavior: the roster was reachable only
+    through ``GET /events/{id}/rsvps``, which requires ``events.manage``.
+    ``MEMBERS`` additionally exposes a deliberately narrower going-only list
+    (names and status, no contact details or accommodation notes) to anyone
+    holding ``events.view``.
+    """
+
+    MANAGERS = "managers"
+    MEMBERS = "members"
+
+
 class CheckInWindowType(str, Enum):
     """Check-in window type enumeration"""
 
@@ -146,6 +160,14 @@ class Event(Base):
     allowed_rsvp_statuses = Column(
         JSON, nullable=True
     )  # List of allowed RSVP statuses, defaults to ["going", "not_going"]
+
+    # Who may see the attendee list. NULL means "inherit the organization's
+    # events.defaults.attendee_visibility setting" — a real third state, not a
+    # missing value, so an organizer can hand the decision back to the org
+    # default after overriding it. Stored as a String rather than a SQL ENUM:
+    # MySQL stores an ENUM as the member's ordinal, so adding a visibility
+    # level later would rewrite the type of every event row already stored.
+    attendee_visibility = Column(String(20), nullable=True)
 
     # Attendance settings
     is_mandatory = Column(Boolean, nullable=False, default=False, server_default="0")
@@ -432,6 +454,8 @@ class EventTemplate(Base):
     max_attendees = Column(Integer, nullable=True)
     is_mandatory = Column(Boolean, nullable=False, default=False, server_default="0")
     allow_guests = Column(Boolean, nullable=False, default=False, server_default="0")
+    # NULL means "inherit the org default" — see Event.attendee_visibility.
+    attendee_visibility = Column(String(20), nullable=True)
 
     # Check-in defaults
     check_in_window_type = Column(

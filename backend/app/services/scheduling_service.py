@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
+from app.models.apparatus import EquipmentCheckTemplate
 from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
 from app.models.training import (
@@ -39,6 +40,7 @@ from app.models.training import (
     ShiftStatus,
     ShiftSwapRequest,
     ShiftTemplate,
+    ShiftTemplateEquipmentCheck,
     ShiftTimeOff,
     SwapRequestStatus,
     TimeOffStatus,
@@ -61,8 +63,9 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_ref,
 )
 from app.utils.hours import hours_from_minutes
+from app.utils.membership import is_administrative
 from app.utils.org_timezone import resolve_scheduling_timezone
-from app.utils.positions import normalize_stored_positions
+from app.utils.positions import normalize_stored_positions, position_label
 
 
 def _position_label(position) -> str:
@@ -75,9 +78,23 @@ def _position_label(position) -> str:
     "ShiftPosition.FIREFIGHTER position". Reading `.value` off whatever arrives
     is indifferent to which class it came from, and also covers the ORM
     attribute, whose `str()` is the same repr.
+
+    The value is then the seat *token*, which is not always what the department
+    calls the seat: the EMT seat is stored as "ems", so a body built from the
+    token told a member they were assigned to the "ems position" for a seat
+    every screen calls EMT.
     """
     value = getattr(position, "value", position)
-    return str(value) if value else "unspecified"
+    if not value:
+        return "unspecified"
+    return position_label(value)
+
+
+# The widest span a member-facing shift listing will scan. Matches
+# MAX_OPEN_SHIFTS_DAYS on /shifts/open, which bounds the same kind of read for
+# the same reason: eligibility is not expressible in SQL, so the rows have to
+# be fetched before they can be filtered.
+MEMBER_SHIFT_WINDOW_DAYS = 366
 
 
 class SchedulingService:
@@ -340,6 +357,10 @@ class SchedulingService:
                         {
                             "position": p["position"],
                             "required": p.get("required", True),
+                            "allow_administrative_members": p.get(
+                                "allow_administrative_members"
+                            )
+                            is True,
                         }
                     )
                 # Skip unrecognised entries silently
@@ -348,7 +369,12 @@ class SchedulingService:
         if isinstance(positions, dict):
             flat = positions.get("flat_positions")
             if isinstance(flat, list) and flat:
-                return [{"position": p, "required": True} for p in flat]
+                # The templates form writes seat objects here, not bare
+                # strings; binding an entry straight in as the seat *name*
+                # produced {"position": {"position": "officer", ...}} — a seat
+                # nobody can be assigned to, which then failed ShiftResponse.
+                # The list branch above already settles both shapes.
+                return SchedulingService.normalize_positions(flat)
             resources = positions.get("resources")
             if isinstance(resources, list):
                 result: List[Dict[str, Any]] = []
@@ -356,8 +382,26 @@ class SchedulingService:
                     qty = r.get("quantity", 1) if isinstance(r, dict) else 1
                     pos_list = r.get("positions", []) if isinstance(r, dict) else []
                     for _ in range(qty):
-                        for name in pos_list:
-                            result.append({"position": name, "required": True})
+                        for entry in pos_list:
+                            if isinstance(entry, dict):
+                                result.append(
+                                    {
+                                        "position": entry.get("position", ""),
+                                        "required": entry.get("required") is not False,
+                                        "allow_administrative_members": entry.get(
+                                            "allow_administrative_members"
+                                        )
+                                        is True,
+                                    }
+                                )
+                            else:
+                                result.append(
+                                    {
+                                        "position": entry,
+                                        "required": True,
+                                        "allow_administrative_members": False,
+                                    }
+                                )
                 return result
         return []
 
@@ -736,6 +780,22 @@ class SchedulingService:
                 shift_data["positions"] = normalize_stored_positions(
                     shift_data["positions"]
                 )
+
+            # A client-supplied FK, so it is org-checked before it is stored
+            # (pitfall #14c). This one decides which equipment checklists the
+            # shift carries, so a foreign id would not merely dangle — it would
+            # point the crew at another department's checklists.
+            template_id = shift_data.get("template_id")
+            if template_id:
+                owned = await self.db.execute(
+                    select(ShiftTemplate.id).where(
+                        ShiftTemplate.id == template_id,
+                        ShiftTemplate.organization_id == organization_id,
+                    )
+                )
+                if owned.scalar_one_or_none() is None:
+                    return None, "Shift template not found"
+
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -850,6 +910,74 @@ class SchedulingService:
         shifts = result.scalars().all()
 
         return shifts, total
+
+    @staticmethod
+    def _bound_shift_window(
+        start_date: Optional[date],
+        end_date: Optional[date],
+    ) -> Tuple[date, date]:
+        """Close an open-ended range to a bounded window.
+
+        Anchored on whichever end the caller gave, so "everything from today"
+        looks forward and "everything up to the audit date" looks back — the
+        two ways an open end is actually used.
+        """
+        span = timedelta(days=MEMBER_SHIFT_WINDOW_DAYS)
+        if start_date is None and end_date is None:
+            start_date = date.today()
+            end_date = start_date + span
+        elif start_date is None:
+            start_date = end_date - span
+        elif end_date is None:
+            end_date = start_date + span
+        elif end_date - start_date > span:
+            end_date = start_date + span
+        return start_date, end_date
+
+    async def get_member_visible_shifts(
+        self,
+        user: User,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[Shift], int]:
+        """Filter by signup eligibility before counting and paginating.
+
+        Eligibility depends on the member's rank, held positions, training and
+        qualifications, none of which the shift row carries, so it cannot be a
+        WHERE clause — every candidate has to be fetched and filtered in
+        Python. That makes the date window the only bound available, and an
+        unbounded one is a full read of the organization's shift table for a
+        single page. Open ends are therefore closed to
+        ``MEMBER_SHIFT_WINDOW_DAYS``, the same span ``/shifts/open`` enforces,
+        and an explicit range wider than that is clamped rather than rejected:
+        the officer path on this same endpoint accepts any range, and a member
+        should not get a 400 where an officer gets a page.
+        """
+        start_date, end_date = self._bound_shift_window(start_date, end_date)
+        query = select(Shift).where(
+            Shift.organization_id == str(organization_id),
+            Shift.shift_date >= start_date,
+            Shift.shift_date <= end_date,
+        )
+        query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+        candidates = list((await self.db.execute(query)).scalars().all())
+        if not candidates:
+            return [], 0
+
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        eligibility = await ShiftEligibilityService(
+            self.db
+        ).get_eligible_positions_bulk(
+            user,
+            str(organization_id),
+            [str(shift.id) for shift in candidates],
+        )
+        visible = [shift for shift in candidates if eligibility.get(str(shift.id), [])]
+        return visible[skip : skip + limit], len(visible)
 
     async def filter_shifts_with_open_positions(
         self,
@@ -1002,14 +1130,25 @@ class SchedulingService:
         )
 
     async def get_shift_by_id(
-        self, shift_id: UUID, organization_id: UUID
+        self, shift_id: UUID, organization_id: UUID, for_update: bool = False
     ) -> Optional[Shift]:
-        """Get a shift by ID"""
-        result = await self.db.execute(
+        """Get a shift by ID.
+
+        ``for_update`` locks the row for the caller's transaction. Seat
+        capacity is a read-then-write — count the occupants, then insert — so
+        two members claiming the last seat at the same moment both read the
+        same count and both get in. Locking the shift serializes them on one
+        row, the way ``event_service`` already locks the event row before
+        counting "going" RSVPs against ``max_attendees``.
+        """
+        query = (
             select(Shift)
             .where(Shift.id == str(shift_id))
             .where(Shift.organization_id == str(organization_id))
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     # ============================================
@@ -1168,6 +1307,27 @@ class SchedulingService:
             .where(User.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none() is not None
+
+    async def _all_users_in_org(
+        self, user_ids: List[Any], organization_id: UUID
+    ) -> bool:
+        """Batched form of ``_user_in_org`` for a list of ids.
+
+        One ``IN`` query rather than one per id — a caller-supplied list can
+        run to 100 entries (e.g. ``ShiftCall.responding_members``), and a
+        per-id loop would cost up to 100 serial round trips on one request.
+        """
+        ids = {str(uid) for uid in user_ids if uid}
+        if not ids:
+            return True
+        result = await self.db.execute(
+            select(User.id).where(
+                User.id.in_(ids),
+                User.organization_id == str(organization_id),
+            )
+        )
+        found = {row for row in result.scalars().all()}
+        return ids <= found
 
     async def _program_in_org(self, program_id: str, organization_id: UUID) -> bool:
         """Return True if training_program_id belongs to the given org."""
@@ -2038,6 +2198,22 @@ class SchedulingService:
             if tracking.get("mode") != CallTrackingMode.DETAILED:
                 return None, "Detailed call records are disabled for this organization"
 
+            # responding_members is a client-supplied list of user ids stored
+            # straight into JSON — validate in-org before persisting, same
+            # discipline as manual_hours/attendance user ids elsewhere in this
+            # file. This is a within-org referential-integrity check, not a
+            # cross-tenant one: every reader of this column (compute_member_
+            # call_counts, ShiftCompletionService's trainee lookup) is scoped
+            # to one already-org-validated shift/trainee first, so a foreign
+            # id here can never attribute a count to another org's member. It
+            # would otherwise let this org's own data reference a nonexistent
+            # or foreign id for no reason. One batched query rather than one
+            # per id — up to 100 entries per payload.
+            if not await self._all_users_in_org(
+                call_data.get("responding_members") or [], organization_id
+            ):
+                return None, "One or more members are not in your organization"
+
             call = ShiftCall(
                 shift_id=shift_id, organization_id=organization_id, **call_data
             )
@@ -2085,6 +2261,12 @@ class SchedulingService:
             call = await self.get_shift_call_by_id(call_id, organization_id)
             if not call:
                 return None, "Shift call not found"
+
+            if "responding_members" in update_data:
+                if not await self._all_users_in_org(
+                    update_data["responding_members"] or [], organization_id
+                ):
+                    return None, "One or more members are not in your organization"
 
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
@@ -2134,9 +2316,117 @@ class SchedulingService:
             template_data["positions"] = normalize_stored_positions(
                 template_data["positions"]
             )
-        return await self._crud_create(
+        # Not a column — popped before the model is constructed, then written
+        # as link rows once the template has an id.
+        check_ids = template_data.pop("equipment_check_template_ids", None)
+
+        # Validated BEFORE the template is created, because _crud_create
+        # commits. Validating after it meant a bad checklist id returned
+        # "Equipment checklist not found" with the template already committed:
+        # the officer saw a failure, retried, and left a duplicate row behind
+        # on every attempt.
+        validated_ids: Optional[List[str]] = None
+        if check_ids is not None:
+            validated_ids, id_error = await self._validated_check_ids(
+                check_ids, organization_id
+            )
+            if id_error:
+                return None, id_error
+
+        template, error = await self._crud_create(
             ShiftTemplate, template_data, organization_id, created_by
         )
+        if error or template is None:
+            return template, error
+        if validated_ids is not None:
+            await self._replace_equipment_check_links(
+                template, organization_id, validated_ids
+            )
+            await self.db.commit()
+            await self.db.refresh(template)
+        return template, None
+
+    async def _validated_check_ids(
+        self,
+        check_template_ids: List[str],
+        organization_id: UUID,
+    ) -> Tuple[List[str], Optional[str]]:
+        """Dedupe *check_template_ids* and verify every one is in the org.
+
+        Returns ``(ids, None)`` in the officer's order, or ``([], message)``.
+
+        Separate from the write below so a caller can check the ids *before*
+        it creates anything — the create path commits the template first, so
+        validating inside the writer left an orphan row behind whenever an id
+        turned out to be bad.
+
+        Every id is a client-supplied foreign key (pitfall #14c). This one is
+        not merely a dangling-reference risk: the link decides which checklists
+        a crew is shown, so a foreign id would point them at another
+        department's.
+        """
+        wanted: List[str] = []
+        for raw in check_template_ids:
+            value = str(raw)
+            if value not in wanted:
+                wanted.append(value)
+
+        if wanted:
+            owned = await self.db.execute(
+                select(EquipmentCheckTemplate.id).where(
+                    EquipmentCheckTemplate.id.in_(wanted),
+                    EquipmentCheckTemplate.organization_id == str(organization_id),
+                )
+            )
+            found = {str(row) for row in owned.scalars().all()}
+            if any(value not in found for value in wanted):
+                return [], "Equipment checklist not found"
+
+        return wanted, None
+
+    async def _replace_equipment_check_links(
+        self,
+        template: ShiftTemplate,
+        organization_id: UUID,
+        wanted: List[str],
+    ) -> None:
+        """Make the template's checklist links exactly *wanted*.
+
+        *wanted* must already have been through ``_validated_check_ids`` — this
+        writes the rows and does not re-check them.
+
+        The set is replaced rather than merged. An empty list means the officer
+        cleared them, which restores apparatus-based resolution — that is a
+        real choice, not a no-op.
+        """
+        existing = await self.db.execute(
+            select(ShiftTemplateEquipmentCheck).where(
+                ShiftTemplateEquipmentCheck.shift_template_id == str(template.id),
+                ShiftTemplateEquipmentCheck.organization_id == str(organization_id),
+            )
+        )
+        by_check_id = {
+            str(row.equipment_check_template_id): row
+            for row in existing.scalars().all()
+        }
+
+        for order, check_id in enumerate(wanted):
+            row = by_check_id.pop(check_id, None)
+            if row is None:
+                self.db.add(
+                    ShiftTemplateEquipmentCheck(
+                        organization_id=str(organization_id),
+                        shift_template_id=str(template.id),
+                        equipment_check_template_id=check_id,
+                        sort_order=order,
+                    )
+                )
+            elif row.sort_order != order:
+                row.sort_order = order
+
+        # Whatever is left was unticked.
+        for row in by_check_id.values():
+            await self.db.delete(row)
 
     async def get_templates(
         self, organization_id: UUID, active_only: bool = True
@@ -2178,6 +2468,19 @@ class SchedulingService:
         if "positions" in update_data:
             update_data["positions"] = normalize_stored_positions(
                 update_data["positions"]
+            )
+        # An omitted key means "leave the links alone"; [] means the officer
+        # cleared them (CLAUDE.md pitfall #1). Popped either way, because it is
+        # not a column and _crud_update is a bare setattr loop.
+        check_ids = update_data.pop("equipment_check_template_ids", None)
+        if check_ids is not None:
+            validated_ids, id_error = await self._validated_check_ids(
+                check_ids, organization_id
+            )
+            if id_error:
+                return None, id_error
+            await self._replace_equipment_check_links(
+                template, organization_id, validated_ids
             )
         return await self._crud_update(template, update_data)
 
@@ -2579,14 +2882,21 @@ class SchedulingService:
                     start_time=shift_start,
                     end_time=shift_end,
                     apparatus_id=getattr(template, "apparatus_id", None),
+                    # Recorded, not just copied from: the equipment checklists
+                    # this shift carries are resolved through its template.
+                    template_id=getattr(template, "id", None),
                     platoon=shift_platoon,
                     color=shift_color,
                     # Structured slots, not bare strings: this writer is how
                     # a recurring pattern fills the calendar, so stripping the
                     # required flag here would re-seed the legacy shape after
                     # the migration and quietly promote every optional seat.
-                    positions=self.normalize_positions(
-                        getattr(template, "positions", None)
+                    # The display normalizer flattens an event template's
+                    # metadata into seats, which is what a generated shift
+                    # wants; the stored-form pass then settles the seat names
+                    # so this write path matches every other one.
+                    positions=normalize_stored_positions(
+                        self.normalize_positions(getattr(template, "positions", None))
                     )
                     or None,
                     min_staffing=getattr(template, "min_staffing", None),
@@ -2863,6 +3173,15 @@ class SchedulingService:
 
         position_value = getattr(position, "value", position)
         slots = self.normalize_positions(shift.positions)
+        candidate = None
+        if enforce_position_eligibility:
+            user_result = await self.db.execute(
+                select(User).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+            candidate = user_result.scalar_one_or_none()
 
         # Headcount cap for a shift with no named seats. Without this a member
         # can keep claiming a shift the calendar already shows as full: the UI
@@ -2879,6 +3198,14 @@ class SchedulingService:
             )
             if excluded:
                 filled_query = filled_query.where(ShiftAssignment.id.notin_(excluded))
+            # FOR UPDATE, not for the locks but for the *read*: under InnoDB's
+            # default REPEATABLE READ a plain SELECT answers from the snapshot
+            # taken at the transaction's first read, which the endpoint already
+            # established before it got here. Holding the shift row lock does
+            # not refresh that snapshot, so a plain count still returns the
+            # tally from before the member who beat us to the seat committed.
+            # A locking read always sees the latest committed version.
+            filled_query = filled_query.with_for_update()
             filled = (await self.db.execute(filled_query)).scalar() or 0
             if filled >= shift.min_staffing:
                 return f"The last seat on this {context} was just claimed"
@@ -2906,24 +3233,56 @@ class SchedulingService:
                 occupied_query = occupied_query.where(
                     ShiftAssignment.id.notin_(excluded)
                 )
+            # Locking read — see the note on filled_query above.
+            occupied_query = occupied_query.with_for_update()
             occupied = (await self.db.execute(occupied_query)).scalar() or 0
             if occupied >= len(matching_slots):
                 return "Position was filled after this request was submitted"
+
+            if candidate and is_administrative(
+                getattr(candidate, "member_class", None),
+                getattr(candidate, "membership_type", None),
+            ):
+                administrative_capacity = sum(
+                    slot.get("allow_administrative_members") is True
+                    for slot in matching_slots
+                )
+                administrative_occupied_query = (
+                    select(func.count())
+                    .select_from(ShiftAssignment)
+                    .join(User, User.id == ShiftAssignment.user_id)
+                    .where(
+                        ShiftAssignment.shift_id == str(shift.id),
+                        ShiftAssignment.organization_id == str(organization_id),
+                        ShiftAssignment.position == position_value,
+                        active,
+                        or_(
+                            User.member_class == "administrative",
+                            and_(
+                                User.member_class.is_(None),
+                                User.membership_type == "administrative",
+                            ),
+                        ),
+                    )
+                    .with_for_update()
+                )
+                if excluded:
+                    administrative_occupied_query = administrative_occupied_query.where(
+                        ShiftAssignment.id.notin_(excluded)
+                    )
+                administrative_occupied = (
+                    await self.db.execute(administrative_occupied_query)
+                ).scalar() or 0
+                if administrative_occupied >= administrative_capacity:
+                    return "Administrative access seats were already filled"
 
         if enforce_position_eligibility:
             from app.services.shift_eligibility_service import (
                 ShiftEligibilityService,
             )
 
-            user_result = await self.db.execute(
-                select(User).where(
-                    User.id == str(user_id),
-                    User.organization_id == str(organization_id),
-                )
-            )
-            user = user_result.scalar_one_or_none()
             eligible = await ShiftEligibilityService(self.db).get_eligible_positions(
-                user, str(organization_id), str(shift.id)
+                candidate, str(organization_id), str(shift.id)
             )
             if not eligible:
                 return "Member is no longer eligible for this shift"
@@ -2959,8 +3318,16 @@ class SchedulingService:
         flexibility to assign to cancelled/finalized/past shifts for records.
         """
         try:
-            # Verify shift belongs to org
-            shift = await self.get_shift_by_id(shift_id, organization_id)
+            # Verify shift belongs to org, and lock the row on every path.
+            # The headcount cap (min_staffing) is waived for officer-made
+            # assignments, but the named-seat cap is not — a seat on a crew is
+            # one seat whoever fills it — so every caller reaches a capacity
+            # check and every caller needs the serialization. Locking only
+            # self-signup left two officers, or an officer racing a member,
+            # both counting the last Driver seat as free.
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
             if not shift:
                 return None, "Shift not found"
 
@@ -3534,12 +3901,19 @@ class SchedulingService:
                 )
 
             checklist_names: list[str] = []
-            if shift.apparatus_id:
+            # A shift whose template names checklists has them whether or not
+            # an apparatus is assigned, so the guard admits either.
+            if shift.apparatus_id or getattr(shift, "template_id", None):
                 templates = await resolve_check_templates(
                     self.db,
                     str(organization_id),
-                    str(shift.apparatus_id),
+                    str(shift.apparatus_id) if shift.apparatus_id else None,
                     "start_of_shift",
+                    shift_template_id=(
+                        str(shift.template_id)
+                        if getattr(shift, "template_id", None)
+                        else None
+                    ),
                 )
                 checklist_names = [t.name for t in templates]
 
@@ -4001,7 +4375,7 @@ class SchedulingService:
                 swap_request.target_user_id
             ):
                 return await reject(
-                    "Target participants cannot manager-review swap requests"
+                    "Target participants cannot officer-review swap requests"
                 )
 
             if status == SwapRequestStatus.APPROVED:
@@ -6057,8 +6431,13 @@ class SchedulingService:
 
                 if req.requirement_type == RequirementType.SHIFTS.value:
                     completed_value = att["shift_count"]
+                    compliance_value = completed_value
                 else:
                     completed_value = att["total_hours"]
+                    # Keep the quarter-hour figure for presentation, but grade
+                    # against the attendance actually stored.  Rounding here
+                    # can otherwise erase a shortfall of nearly 7.5 minutes.
+                    compliance_value = float(att["total_minutes"]) / 60.0
 
                 # Adjust required value for rolling-period requirements
                 # by excluding months the member was on leave.
@@ -6078,7 +6457,7 @@ class SchedulingService:
                     ),
                     1,
                 )
-                is_compliant = completed_value >= member_required
+                is_compliant = compliance_value >= member_required
 
                 if is_compliant:
                     compliant_count += 1

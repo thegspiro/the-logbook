@@ -23,6 +23,11 @@ from app.services.messaging_service import MessagingService
 router = APIRouter()
 
 
+def _raise_message_error(error: str) -> None:
+    """Expose service validation failures as clear client errors."""
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+
 # ============================================
 # Pydantic Schemas
 # ============================================
@@ -120,6 +125,13 @@ class AckReportRecipient(BaseModel):
     read_at: str | None = None
     is_acknowledged: bool
     acknowledged_at: str | None = None
+    # Declared, not incidental: the report lists a member whose audience
+    # membership was withdrawn after they had already read or acknowledged,
+    # because that receipt is the only record they saw the notice — but the
+    # totals exclude them. Without this field Pydantic drops the distinction
+    # on the way out and the row reads as current audience, leaving the list
+    # longer than its own denominator with nothing to explain the gap.
+    removed_from_audience: bool = False
 
 
 class AckReportResponse(BaseModel):
@@ -223,7 +235,7 @@ async def create_message(
         scheduled_at=data.scheduled_at,
     )
     if error:
-        raise HTTPException(status_code=400, detail=error)
+        _raise_message_error(error)
     await log_audit_event(
         db=db,
         event_type="message_created",
@@ -291,6 +303,29 @@ async def get_unread_count(
     return {"unread_count": count}
 
 
+@router.get("/inbox/{message_id}", response_model=InboxMessage)
+async def get_inbox_message(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get one message from the current user's inbox (member view).
+
+    Declared after /inbox/unread-count so that literal path still wins, and
+    kept separate from the admin GET /{message_id} because this one is
+    targeting-scoped rather than permission-scoped.
+    """
+    service = MessagingService(db)
+    return ensure_found(
+        await service.get_inbox_message(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            message_id=message_id,
+        ),
+        "Message",
+    )
+
+
 @router.get("/{message_id}", response_model=MessageResponse)
 async def get_message(
     message_id: str,
@@ -310,6 +345,7 @@ async def get_message(
 async def update_message(
     message_id: str,
     data: MessageUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.manage")),
 ):
@@ -320,7 +356,25 @@ async def update_message(
         message_id, current_user.organization_id, updates
     )
     if error:
-        raise HTTPException(status_code=400, detail=error)
+        _raise_message_error(error)
+    if getattr(message, "_published_by_update", False):
+        background_tasks.add_task(
+            deliver_department_message, message.id, current_user.organization_id
+        )
+    else:
+        # An already-published message whose audience just widened: tell the
+        # members who were added, and only them. Without this they were given
+        # a recipient row and nothing else — counted as owing an
+        # acknowledgment for a notice that never reached them by email, the
+        # channel of record.
+        newly_targeted = getattr(message, "_newly_targeted", None)
+        if newly_targeted:
+            background_tasks.add_task(
+                deliver_department_message,
+                message.id,
+                current_user.organization_id,
+                set(newly_targeted),
+            )
     await log_audit_event(
         db=db,
         event_type="message_updated",

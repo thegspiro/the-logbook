@@ -96,10 +96,10 @@ Recommended crontab (add to host or container cron):
 import copy
 import html as _html
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.call_tracking import CallTrackingMode
@@ -113,6 +113,8 @@ from app.services.call_tracking_service import CallTrackingService
 from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.hours import hours_from_minutes
+from app.utils.positions import position_label
+from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 
 def _resolve_event_reminder_target(event: Any) -> str:
@@ -322,6 +324,12 @@ SCHEDULE = {
         "frequency": "every 15 minutes",
         "recommended_time": "*/15",
         "cron": "*/15 * * * *",
+    },
+    "recover_stranded_message_deliveries": {
+        "description": "Re-deliver department messages whose per-recipient claims were left pending by an interrupted worker",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30",
+        "cron": "*/30 * * * *",
     },
     "series_end_reminders": {
         "description": "Send email reminders 6 months before recurring event series end dates",
@@ -547,16 +555,65 @@ async def _for_each_org(
 async def resolve_check_templates(
     db: AsyncSession,
     organization_id: str,
-    apparatus_id: str,
+    apparatus_id: Optional[str],
     check_timing: str,
+    shift_template_id: Optional[str] = None,
 ) -> list:
-    """Resolve equipment check templates for an apparatus with type fallback.
+    """Resolve equipment check templates for a shift, with apparatus fallback.
 
-    First looks for templates assigned directly to the apparatus. If none
-    are found, falls back to templates matching the apparatus's type code
-    that have no specific apparatus assigned.
+    The batch counterpart of ``EquipmentCheckService._resolve_templates`` and
+    it must agree with it, or a reminder names a different set of checklists
+    than the crew is actually shown.
+
+    If the shift came from a ``ShiftTemplate`` that names checklists, those are
+    the checklists — the explicit link replaces apparatus resolution rather
+    than adding to it. Otherwise fall back to templates assigned directly to
+    the apparatus, and then to ones matching its type code.
+
+    ``check_timing`` still filters an explicitly linked set: the link carries
+    no timing, ``EquipmentCheckTemplate`` does, so an end-of-shift reminder
+    names only the linked checklists that are end-of-shift ones.
     """
     from app.models.apparatus import Apparatus, ApparatusType, EquipmentCheckTemplate
+    from app.models.training import ShiftTemplateEquipmentCheck
+
+    if shift_template_id:
+        linked_result = await db.execute(
+            select(EquipmentCheckTemplate)
+            .join(
+                ShiftTemplateEquipmentCheck,
+                ShiftTemplateEquipmentCheck.equipment_check_template_id
+                == EquipmentCheckTemplate.id,
+            )
+            .where(
+                ShiftTemplateEquipmentCheck.shift_template_id == str(shift_template_id),
+                ShiftTemplateEquipmentCheck.organization_id == str(organization_id),
+                EquipmentCheckTemplate.organization_id == str(organization_id),
+                EquipmentCheckTemplate.check_timing == check_timing,
+                EquipmentCheckTemplate.is_active == True,  # noqa: E712
+            )
+            .order_by(ShiftTemplateEquipmentCheck.sort_order)
+        )
+        linked = list(linked_result.scalars().all())
+        if linked:
+            return linked
+        # An explicit link set that yields nothing for *this timing* is not a
+        # reason to fall back: the officer named the checklists, and the
+        # apparatus default is not a substitute for them. Only a template with
+        # no links at all falls through.
+        has_any = await db.execute(
+            select(ShiftTemplateEquipmentCheck.id)
+            .where(
+                ShiftTemplateEquipmentCheck.shift_template_id == str(shift_template_id),
+                ShiftTemplateEquipmentCheck.organization_id == str(organization_id),
+            )
+            .limit(1)
+        )
+        if has_any.scalar_one_or_none() is not None:
+            return []
+
+    if not apparatus_id:
+        return []
 
     tmpl_result = await db.execute(
         select(EquipmentCheckTemplate)
@@ -761,6 +818,8 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     from datetime import date, timedelta
     from datetime import timezone as _tz_reminders
 
+    from sqlalchemy.orm import selectinload
+
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
     from app.models.minute import MinutesActionItemStatus
@@ -808,8 +867,18 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     logger.error(f"Failed to create action item notification: {e}")
 
     # ── Minutes action items ──
+    # organization_id below is only reachable via item.minutes (this table
+    # carries no organization_id column of its own), so the relationship
+    # must be eager-loaded here — an unguarded lazy access on an AsyncSession
+    # raises MissingGreenlet outside the greenlet bridge, verified against a
+    # real async_session_factory() session. Without this every
+    # minutes-action-item reminder silently failed (logged, never sent,
+    # never retried once past its window) since the per-item try/except
+    # swallows the exception.
     minutes_items = await db.execute(
-        select(MinutesActionItem).where(
+        select(MinutesActionItem)
+        .options(selectinload(MinutesActionItem.minutes))
+        .where(
             MinutesActionItem.status.in_(
                 [
                     MinutesActionItemStatus.PENDING.value,
@@ -1410,6 +1479,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
         ShiftAttendance,
         ShiftCompletionReport,
         ShiftEquipmentCheck,
+        ShiftStatus,
     )
     from app.models.user import User
     from app.services.email_service import EmailService
@@ -1450,6 +1520,12 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 .where(Shift.end_time <= now)
                 .where(Shift.end_time >= lookback)
                 .where(Shift.shift_officer_id.isnot(None))
+                # A cancelled shift never happened — a cancellation leaves
+                # is_finalized False forever, so without this filter every
+                # cancelled shift whose original end_time falls in the
+                # lookback window generates a bogus "validate attendance"
+                # notification/email (CRON2-31-3).
+                .where(Shift.status != ShiftStatus.CANCELLED)
                 # A shift finalized after it ended but before this task runs
                 # has already been validated — never prompt for it.
                 .where(Shift.is_finalized.is_(False))
@@ -1519,7 +1595,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
             # Many shifts share an apparatus; resolve end-of-shift templates
             # once per apparatus rather than once per shift.
-            eos_template_cache: dict[str, list] = {}
+            eos_template_cache: dict[tuple[str, str], list] = {}
 
             for shift in shifts:
                 activities = shift.activities or {}
@@ -1539,16 +1615,28 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
                 # Check for outstanding end-of-shift checklists
                 pending_checklists: list[str] = []
-                if shift.apparatus_id:
-                    aid = str(shift.apparatus_id)
-                    if aid not in eos_template_cache:
-                        eos_template_cache[aid] = await resolve_check_templates(
+                if shift.apparatus_id or getattr(shift, "template_id", None):
+                    aid = str(shift.apparatus_id) if shift.apparatus_id else ""
+                    stid = (
+                        str(shift.template_id)
+                        if getattr(shift, "template_id", None)
+                        else ""
+                    )
+                    # Keyed on (apparatus, shift template), not apparatus alone:
+                    # resolution now depends on which template the shift came from,
+                    # so two shifts on the same rig from different templates have
+                    # different checklists. An apparatus-only key would serve the
+                    # first one's answer to the second.
+                    key = (aid, stid)
+                    if key not in eos_template_cache:
+                        eos_template_cache[key] = await resolve_check_templates(
                             db,
                             str(org.id),
-                            aid,
+                            aid or None,
                             "end_of_shift",
+                            shift_template_id=stid or None,
                         )
-                    eos_templates = eos_template_cache[aid]
+                    eos_templates = eos_template_cache[key]
 
                     if eos_templates:
                         done_ids = checks_done_map.get(str(shift.id), set())
@@ -1859,7 +1947,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
             # Shifts frequently share an apparatus; resolve each apparatus's
             # start-of-shift templates once instead of once per shift.
-            sos_template_cache: dict[str, list] = {}
+            sos_template_cache: dict[tuple[str, str], list] = {}
 
             for shift in shifts:
                 activities = shift.activities or {}
@@ -1878,10 +1966,11 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 )
                 assignments = list(assign_result.scalars().all())
                 if not assignments:
-                    shift.activities = {
-                        **activities,
-                        "start_reminder_sent": True,
-                    }
+                    # Don't stamp the dedup flag — no reminder was actually
+                    # sent, only skipped because no one is assigned yet. If
+                    # this stamped "sent" here, a crew assigned later in the
+                    # same reminder window would never receive the reminder
+                    # at all (CRON2-31-4): re-check on the next run instead.
                     continue
 
                 # Resolve apparatus name
@@ -1920,22 +2009,44 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             "first_name": user.first_name,
                             "email": user.email,
                             "position": pos_value,
-                            "position_label": pos_value.replace("_", " ").title(),
+                            "position_label": position_label(pos_value),
                         }
                     )
 
+                if not roster:
+                    # Every assigned user was filtered out by the is_active
+                    # check above — no reminder was actually sent, so don't
+                    # stamp the dedup flag. Otherwise a member added or
+                    # reactivated later in the same window would never
+                    # receive the reminder (same shape as
+                    # run_end_of_shift_checklist_reminders's member_ids
+                    # guard, CRON2-31-3/4 — missed here on the sibling
+                    # function that shares the exact pattern).
+                    continue
+
                 # Fetch equipment check templates for the apparatus
                 checklist_names: list[str] = []
-                if shift.apparatus_id and start_checklists_enabled:
-                    aid = str(shift.apparatus_id)
-                    if aid not in sos_template_cache:
-                        sos_template_cache[aid] = await resolve_check_templates(
+                if (
+                    shift.apparatus_id or getattr(shift, "template_id", None)
+                ) and start_checklists_enabled:
+                    aid = str(shift.apparatus_id) if shift.apparatus_id else ""
+                    stid = (
+                        str(shift.template_id)
+                        if getattr(shift, "template_id", None)
+                        else ""
+                    )
+                    # Keyed on (apparatus, shift template) — see the
+                    # end-of-shift cache for why apparatus alone is not enough.
+                    key = (aid, stid)
+                    if key not in sos_template_cache:
+                        sos_template_cache[key] = await resolve_check_templates(
                             db,
                             str(org.id),
-                            aid,
+                            aid or None,
                             "start_of_shift",
+                            shift_template_id=stid or None,
                         )
-                    checklist_names = [t.name for t in sos_template_cache[aid]]
+                    checklist_names = [t.name for t in sos_template_cache[key]]
 
                 shift_date_str = (
                     shift.shift_date.strftime("%b %d, %Y")
@@ -2270,14 +2381,19 @@ async def run_end_of_shift_checklist_reminders(
                 checks_done_map.setdefault(str(sid), set()).add(tid)
             asres = await db_session.execute(
                 select(ShiftAssignment.shift_id, ShiftAssignment.user_id)
+                .join(User, User.id == ShiftAssignment.user_id)
                 .where(ShiftAssignment.shift_id.in_(shift_ids))
                 .where(
                     ShiftAssignment.assignment_status.notin_(["declined", "cancelled"])
                 )
+                # Exclude inactive users — matches run_shift_reminders (a
+                # member assigned before being deactivated should not
+                # receive reminders); previously missing here (CRON2-31-5).
+                .where(User.is_active.is_(True))
             )
             for sid, uid in asres.all():
                 assigned_map.setdefault(str(sid), []).append(str(uid))
-        eos_template_cache: dict[str, list] = {}
+        eos_template_cache: dict[tuple[str, str], list] = {}
 
         org_notifications = 0
 
@@ -2286,28 +2402,34 @@ async def run_end_of_shift_checklist_reminders(
             if activities.get("eos_checklist_reminder_sent"):
                 continue
 
-            if not shift.apparatus_id:
-                shift.activities = {
-                    **activities,
-                    "eos_checklist_reminder_sent": True,
-                }
+            if not shift.apparatus_id and not getattr(shift, "template_id", None):
+                # Don't stamp the dedup flag — no reminder was sent, only
+                # skipped because no apparatus is assigned yet. Stamping here
+                # would permanently silence the reminder even if an apparatus
+                # is assigned later in the same window (CRON2-31-4).
+                #
+                # A shift whose template names checklists needs no apparatus to
+                # have them, so the guard admits that case too.
                 continue
 
-            aid = str(shift.apparatus_id)
-            if aid not in eos_template_cache:
-                eos_template_cache[aid] = await resolve_check_templates(
+            aid = str(shift.apparatus_id) if shift.apparatus_id else ""
+            stid = str(shift.template_id) if getattr(shift, "template_id", None) else ""
+            # Keyed on (apparatus, shift template) — see the reminder cache
+            # above for why apparatus alone is not enough.
+            key = (aid, stid)
+            if key not in eos_template_cache:
+                eos_template_cache[key] = await resolve_check_templates(
                     db_session,
                     str(org.id),
-                    aid,
+                    aid or None,
                     "end_of_shift",
+                    shift_template_id=stid or None,
                 )
-            eos_templates = eos_template_cache[aid]
+            eos_templates = eos_template_cache[key]
 
             if not eos_templates:
-                shift.activities = {
-                    **activities,
-                    "eos_checklist_reminder_sent": True,
-                }
+                # Same reasoning: no templates resolved yet is not "reminder
+                # sent" — don't silence a future run where templates exist.
                 continue
 
             done_ids = checks_done_map.get(str(shift.id), set())
@@ -2342,8 +2464,18 @@ async def run_end_of_shift_checklist_reminders(
             )
 
             member_ids = assigned_map.get(str(shift.id), [])
+            if not member_ids:
+                # Every assigned user was filtered out by the is_active
+                # check above (or the shift has no assignments yet) — no
+                # reminder was actually sent, so don't stamp the dedup flag.
+                # Otherwise a member added/reactivated later in the window
+                # would never receive the reminder (Codex, PR #1915).
+                continue
 
-            shift_action_url = f"/scheduling?shift={shift.id}&tab=equipment-checks"
+            # Checklists live in Inventory now. Notification rows already in
+            # the database keep the old path and will not resolve — they
+            # are end-of-shift reminders that age out within days.
+            shift_action_url = f"/inventory/checklists/my?shift={shift.id}"
             shift_metadata = {
                 "shift_id": str(shift.id),
                 "reminder_type": "end_of_shift_checklist",
@@ -2929,9 +3061,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                 select(ShiftCompletionReport)
                 .where(ShiftCompletionReport.organization_id == str(org.id))
                 .where(ShiftCompletionReport.review_status == "approved")
-                .where(
-                    ShiftCompletionReport.trainee_acknowledged == False
-                )  # noqa: E712
+                .where(ShiftCompletionReport.trainee_acknowledged.is_(False))
                 .where(ShiftCompletionReport.created_at <= cutoff)
             )
             reports = list(rep_result.scalars().all())
@@ -3322,6 +3452,15 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Audit log archival failed: {e}")
         results["errors"].append(str(e))
+        # A flush/execute-level failure leaves the session in a failed
+        # transaction state; without this, get_session()'s own commit on a
+        # graceful 200 return would itself raise, turning this into an
+        # unhandled 500 despite the try/except being designed to avoid
+        # exactly that (CRON2-31-9).
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
     return results
 
@@ -3383,9 +3522,24 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
 
     sent = 0
     failed = 0
+    needs_refresh = False
     for item in pending:
         try:
-            org = item.organization
+            if needs_refresh:
+                # A prior item's rollback (below) expired every persistent
+                # object in the session, including this pre-fetched item
+                # and its selectin-loaded `organization` relationship.
+                # Refresh the item's own columns and re-fetch its org
+                # explicitly rather than touching the expired relationship
+                # attribute directly, which would trigger an implicit lazy
+                # load outside the async greenlet bridge and raise
+                # MissingGreenlet (Codex, PR #1915).
+                await db.refresh(item)
+                org = await db.get(
+                    Organization, item.organization_id, populate_existing=True
+                )
+            else:
+                org = item.organization
             if not org:
                 logger.warning(
                     "Scheduled email {} skipped: org {} not found",
@@ -3395,6 +3549,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 item.status = ScheduledEmailStatus.FAILED
                 item.error_message = "Organization no longer exists"
                 failed += 1
+                await db.commit()
                 continue
             email_svc = EmailService(org)
             template_svc = EmailTemplateService(db)
@@ -3435,6 +3590,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                     f"No template found for type {item.template_type.value}"
                 )
                 failed += 1
+                await db.commit()
                 continue
 
             subject, html_body, text_body = template_svc.render(
@@ -3466,6 +3622,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                     "configure organization email settings."
                 )
                 failed += 1
+                await db.commit()
                 continue
 
             success_count, _ = await email_svc.send_email(
@@ -3490,14 +3647,33 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 item.error_message = "Email delivery failed for all recipients"
                 failed += 1
 
+            # Commit this item before moving to the next. Up to 100 pending
+            # emails spanning many orgs share this session; a single
+            # trailing commit meant one bad item's failed flush left the
+            # session poisoned for every later item (misreported as its own
+            # failure), and the eventual commit/rollback at the outer layer
+            # could discard every earlier item's already-sent status,
+            # causing a re-send on the next run (CRON2-31-6).
+            await db.commit()
+
         except Exception as e:
             logger.error("Failed to send scheduled email {}: {}", item.id, e)
-            item.status = ScheduledEmailStatus.FAILED
-            item.error_message = str(e)[:500]
-            failed += 1
-
-    if pending:
-        await db.commit()
+            try:
+                item.status = ScheduledEmailStatus.FAILED
+                item.error_message = str(e)[:500]
+                failed += 1
+                await db.commit()
+            except Exception:
+                # The session itself may be the thing that's broken (a
+                # flush-level failure, not a plain Python error) — recording
+                # the failure would just raise again. Roll back so the next
+                # item in the loop isn't poisoned by this one; this item
+                # stays PENDING and is retried on the next scheduled run.
+                try:
+                    await db.rollback()
+                    needs_refresh = True
+                except Exception:
+                    pass
 
     logger.info(
         "Scheduled emails processed: {} sent, {} failed, {} total",
@@ -3557,34 +3733,316 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     scheduled_at is cleared *before* delivery so a delivery failure leaves the
     message live-but-unescalated (members still see it in their inbox) rather
     than risking a duplicate escalation on the next run.
+
+    A message whose expires_at has already passed when it comes due is
+    deactivated and counted as expired instead of being delivered.
     """
     from datetime import timezone
 
     from app.models.notification import DepartmentMessage
     from app.services.message_delivery_service import MessageDeliveryService
+    from app.services.messaging_service import MessagingService
 
     now = datetime.now(timezone.utc)
+    # Lock and claim in one transaction. PostgreSQL and MySQL 8 skip rows
+    # already held by another publisher; SQLAlchemy harmlessly degrades this
+    # on engines (notably SQLite in tests) that do not implement row locks.
     result = await db.execute(
-        select(DepartmentMessage).where(
+        select(DepartmentMessage)
+        .where(
             DepartmentMessage.scheduled_at.isnot(None),
             DepartmentMessage.scheduled_at <= now,
             DepartmentMessage.is_active.is_(True),
             DepartmentMessage.deleted_at.is_(None),
         )
+        .with_for_update(skip_locked=True)
     )
     due = list(result.scalars().all())
+    for message in due:
+        # Clearing the due marker is the durable claim. Commit all claims while
+        # locks are held and only then perform potentially slow network I/O.
+        message.scheduled_at = None
+    await db.commit()
 
     delivery = MessageDeliveryService(db)
+    messaging = MessagingService(db)
     published = 0
+    expired = 0
+    failed = 0
+    needs_refresh = False
     for message in due:
-        message.scheduled_at = None
-        await db.commit()
-        await delivery.deliver(message)
-        published += 1
+        # Fallback in case even the refresh/id-read below fails; never
+        # touches the ORM object, so it is always safe to log.
+        msg_id = "?"
+        try:
+            if needs_refresh:
+                # A prior message's rollback expires every persistent
+                # object in the session, including this pre-fetched
+                # message — reading an attribute without refreshing
+                # first would trigger an implicit lazy load outside the
+                # async greenlet bridge and raise MissingGreenlet (same
+                # shape as CRON2-31-1/5/6).
+                await db.refresh(message)
+            # Captured as a plain string, immediately after any needed
+            # refresh above but still inside the try: a failed
+            # commit/flush further down leaves the session needing an
+            # explicit rollback, and *any* attribute read on *any*
+            # loaded object — not just an expired one — raises
+            # PendingRollbackError until that rollback runs (verified
+            # against a real connection; this is stronger than mere
+            # attribute-expiry). Reading message.id from inside the
+            # except block below would therefore itself raise, aborting
+            # this exception handler before it reaches its own
+            # db.rollback() and crashing the whole batch — exactly what
+            # CRON-31-1 exists to prevent.
+            msg_id = getattr(message, "id", "?")
+            # A message that expired before its send time came due goes live for
+            # nobody and must not be escalated. The claim above already cleared
+            # scheduled_at for the whole batch, so deactivation is all that is left
+            # to persist here — main set it per message because it claimed per
+            # message; that assignment would be a no-op now.
+            expires_at = getattr(message, "expires_at", None)
+            if expires_at is not None:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                else:
+                    expires_at = expires_at.astimezone(timezone.utc)
+            if expires_at is not None and expires_at <= now:
+                message.is_active = False
+                await db.commit()
+                expired += 1
+                continue
+            await messaging.materialize_recipients(message)
+            await db.commit()
+            await delivery.deliver(message)
+            published += 1
+        except Exception as e:
+            # The claim step above already cleared scheduled_at for every
+            # message in this batch, which is the only condition the "due"
+            # query selects on — so one message's failure here (a bad
+            # targeting rule, a transient DB error) must not be allowed to
+            # propagate and orphan every message still left in `due`: they
+            # would never be picked up again. Log and move on instead.
+            logger.error(
+                "Failed to publish scheduled message {}: {}",
+                msg_id,
+                e,
+            )
+            failed += 1
+            try:
+                await db.rollback()
+                needs_refresh = True
+            except Exception:
+                pass
 
     if published:
         logger.info(f"Published {published} scheduled department message(s)")
-    return {"task": "publish_scheduled_messages", "published": published}
+    if failed:
+        logger.warning(f"{failed} scheduled department message(s) failed to publish")
+    return {
+        "task": "publish_scheduled_messages",
+        "published": published,
+        "expired": expired,
+        "failed": failed,
+    }
+
+
+# A claim older than this is treated as abandoned by the worker that wrote it.
+# Kept a little above MessageDeliveryService's own reclaim window so the sweep
+# never hands the service a row it will refuse.
+_STRANDED_CLAIM_AFTER_MINUTES = 35
+
+# One pass re-delivers at most this many stranded claims. A department message
+# fan-out is network work per recipient; a runaway backlog is better worked
+# down across several ticks than in one pass that outlives its own worker.
+_STRANDED_CLAIM_SCAN_LIMIT = 500
+
+
+async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str, Any]:
+    """Re-deliver department messages whose claims were never resolved.
+
+    ``MessageDeliveryService._claim_delivery`` writes one ``pending`` row per
+    recipient and commits it *before* the send, which is what makes a delivery
+    auditable and stops two workers emailing the same member twice. The cost
+    is a window: a worker that dies between claiming and recording the result
+    leaves rows nothing revisits, and the unique idempotency key then makes
+    every later attempt skip those members. Nobody is emailed, the audit row
+    says an attempt is still in flight, and the message is suppressed
+    permanently — on the channel of record (CLAUDE.md pitfall #18).
+
+    Sending the batch through one connection widened that window from a single
+    member to a whole department, which is what makes a sweep necessary rather
+    than merely tidy.
+
+    Re-delivery is safe to repeat: the in-app write is guarded by its unique
+    (message, recipient, channel) key, and the delivery claim is reclaimed
+    rather than duplicated. A member may receive a second copy if the original
+    worker was merely slow past the cutoff; that is the deliberate direction to
+    err, since the alternative is a notice they never get.
+    """
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
+    from app.models.notification import DepartmentMessage, DepartmentMessageDelivery
+    from app.services.message_delivery_service import MessageDeliveryService
+    from app.services.messaging_service import MessagingService
+
+    cutoff = datetime.now(dt_timezone.utc) - timedelta(
+        minutes=_STRANDED_CLAIM_AFTER_MINUTES
+    )
+
+    # Claims on a message that can no longer go out are retired rather than
+    # skipped. Skipping left them `pending` forever, and because the scan below
+    # is oldest-first and bounded, one deactivated message with enough stranded
+    # claims would fill the window on every sweep and starve the recoverable
+    # ones behind it — a fix for one suppressed message suppressing others.
+    # They are recorded as failed with the reason, which is also more honest
+    # than an audit row that says an attempt is still in flight.
+    undeliverable = (
+        (
+            await db.execute(
+                select(DepartmentMessageDelivery.id)
+                .join(
+                    DepartmentMessage,
+                    DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+                )
+                .where(
+                    DepartmentMessageDelivery.status == "pending",
+                    DepartmentMessageDelivery.attempted_at < cutoff,
+                    or_(
+                        DepartmentMessage.is_active.is_(False),
+                        DepartmentMessage.deleted_at.isnot(None),
+                    ),
+                )
+                .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    retired = list(undeliverable)
+    if retired:
+        await db.execute(
+            update(DepartmentMessageDelivery)
+            .where(DepartmentMessageDelivery.id.in_(retired))
+            .values(
+                status="failed",
+                error="Message is no longer active; delivery abandoned",
+            )
+        )
+        await db.commit()
+
+    result = await db.execute(
+        select(
+            DepartmentMessageDelivery.message_id,
+            DepartmentMessageDelivery.recipient_id,
+        )
+        .join(
+            DepartmentMessage,
+            DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+        )
+        .where(
+            DepartmentMessageDelivery.status == "pending",
+            DepartmentMessageDelivery.attempted_at < cutoff,
+            # Filtered here, not just at the per-message load below, so the
+            # bounded window is only ever spent on claims that can be recovered.
+            DepartmentMessage.is_active.is_(True),
+            DepartmentMessage.deleted_at.is_(None),
+        )
+        .order_by(DepartmentMessageDelivery.attempted_at.asc())
+        .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+    )
+    stranded: Dict[str, Set[str]] = {}
+    for message_id, recipient_id in result.all():
+        stranded.setdefault(str(message_id), set()).add(str(recipient_id))
+
+    if not stranded:
+        return {
+            "task": "recover_stranded_message_deliveries",
+            "messages": 0,
+            "retired": len(retired),
+        }
+
+    delivery = MessageDeliveryService(db)
+    recovered = 0
+    failed = 0
+    for message_id, user_ids in stranded.items():
+        try:
+            message = (
+                await db.execute(
+                    select(DepartmentMessage).where(
+                        DepartmentMessage.id == message_id,
+                        # Both, matching deliver_department_message: a message
+                        # leadership deactivated is gone from the live inbox,
+                        # and recovering a claim is no reason to mail out a
+                        # notice they took down.
+                        DepartmentMessage.is_active.is_(True),
+                        DepartmentMessage.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            if message is None:
+                continue
+
+            # deliver() re-resolves the audience and silently drops anybody no
+            # longer in it, which is right — but their claim stays `pending`,
+            # so the sweep would re-select the same rows on every pass, report
+            # the message recovered without changing anything, and eventually
+            # fill the bounded window with claims that can never resolve.
+            # Resolved here rather than by retiring whatever is still pending
+            # afterwards: deliver() also returns early when the email
+            # escalation is throttled, and those claims must stay pending for
+            # the next sweep rather than being written off as un-targeted.
+            targeted = await MessagingService(db)._targeted_users(
+                message, str(message.organization_id)
+            )
+            still_targeted = {
+                str(u.id) for u in targeted if str(u.id) != str(message.posted_by)
+            }
+            dropped = sorted(user_ids - still_targeted)
+            if dropped:
+                await db.execute(
+                    update(DepartmentMessageDelivery)
+                    .where(
+                        DepartmentMessageDelivery.message_id == message_id,
+                        DepartmentMessageDelivery.recipient_id.in_(dropped),
+                        DepartmentMessageDelivery.status == "pending",
+                    )
+                    .values(
+                        status="failed",
+                        error="Recipient is no longer in the message audience",
+                    )
+                )
+                await db.commit()
+                retired.extend(dropped)
+
+            deliverable = user_ids & still_targeted
+            if not deliverable:
+                continue
+            await delivery.deliver(message, only_user_ids=deliverable)
+            recovered += 1
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(
+                "Failed to recover stranded deliveries for message {}: {}",
+                message_id,
+                e,
+            )
+            failed += 1
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    if recovered:
+        logger.info(
+            "Re-delivered {} department message(s) with abandoned claims", recovered
+        )
+    return {
+        "task": "recover_stranded_message_deliveries",
+        "messages": recovered,
+        "retired": len(retired),
+        "failed": failed,
+    }
 
 
 async def run_storefront_window_lifecycle(db: AsyncSession) -> Dict[str, Any]:
@@ -4129,7 +4587,15 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     total_generated = 0
 
     configs = await db.execute(
-        select(ComplianceConfig).where(ComplianceConfig.auto_report_frequency != "none")
+        select(ComplianceConfig)
+        .join(Organization, Organization.id == ComplianceConfig.organization_id)
+        .where(ComplianceConfig.auto_report_frequency != "none")
+        # Same rationale as every Organization-iterating query in this file
+        # (CRON-2): a decommissioned department must not keep generating and
+        # emailing compliance reports. This loop is keyed on ComplianceConfig,
+        # not Organization, so it fell outside the original CRON-2 fix
+        # (CRON2-31-13).
+        .where(Organization.active.isnot(False))
     )
     all_configs = list(configs.scalars().all())
 
@@ -4475,19 +4941,39 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     child occurrence. If the horizon is less than 12 months away, generate
     new occurrences to fill the gap.
     """
+    from datetime import timezone as dt_timezone
+
     from app.models.event import Event, RecurrencePattern
     from app.services.event_service import EventService
 
-    now = datetime.now()
+    # Naive-but-UTC, not naive-local-time: `latest_start`/`latest_end` below
+    # come from DateTime(timezone=True) columns, which aiomysql returns
+    # naive-but-conceptually-UTC on this stack (verified against two other
+    # sites in this file, scheduled_tasks.py ~1018 and ~5052, that convert
+    # the same way before comparing). `datetime.now()` returns naive LOCAL
+    # server time — comparable without a TypeError, but only correct by
+    # accident of the server's TZ being UTC. This keeps the comparison
+    # naive (so no aware/naive TypeError) while actually being UTC
+    # (CRON2-31-14, flagged-not-fixed by the prior review pending exactly
+    # this verification).
+    now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
     twelve_months = now.replace(year=now.year + 1)
 
-    # Find all rolling parent events (not cancelled)
+    # Find all rolling parent events (not cancelled). Joined to Organization
+    # and filtered the same way every other org-scoped loop in this file is
+    # (isnot(False), not == True, so a row whose flag was never populated
+    # still counts as active) — this loop is keyed on Event.organization_id
+    # rather than a direct `select(Organization)`, the same shape
+    # CRON2-31-11 found skipping the filter in three other runners.
     result = await db.execute(
-        select(Event).where(
+        select(Event)
+        .join(Organization, Organization.id == Event.organization_id)
+        .where(
             Event.rolling_recurrence.is_(True),
             Event.is_recurring.is_(True),
             Event.recurrence_parent_id.is_(None),
             Event.is_cancelled.is_(False),
+            Organization.active.isnot(False),
         )
     )
     parents = list(result.scalars().all())
@@ -4495,11 +4981,36 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     total_created = 0
     series_extended = 0
     errors = []
+    needs_refresh = False
 
     service = EventService(db)
 
     for parent in parents:
+        # Fallback in case even the refresh/id-read below fails; never
+        # touches the ORM object, so it is always safe to log.
+        parent_id = "?"
         try:
+            if needs_refresh:
+                # A prior parent's rollback (below) expires every
+                # persistent object in the session, including every
+                # other pre-fetched parent still left in this list —
+                # not just the one that failed. Reading an attribute
+                # without refreshing first would trigger an implicit
+                # lazy load outside the async greenlet bridge and raise
+                # MissingGreenlet (Codex-caught, same shape as
+                # run_publish_scheduled_messages' own needs_refresh
+                # handling).
+                await db.refresh(parent)
+            # Captured as a plain string before any further DB operation
+            # below: a failed commit/flush later in this block leaves the
+            # session needing an explicit rollback, and *any* attribute
+            # read on *any* loaded object — not just an expired one —
+            # raises PendingRollbackError until that rollback runs
+            # (verified against a real connection). Reading parent.id
+            # from inside the except block would therefore itself raise,
+            # aborting this exception handler before it reaches its own
+            # db.rollback() and crashing the whole batch.
+            parent_id = getattr(parent, "id", "?")
             # Find the latest occurrence in this series
             latest_result = await db.execute(
                 select(Event.start_datetime, Event.end_datetime)
@@ -4601,19 +5112,38 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                     **child_fields,
                 )
                 db.add(child)
-                total_created += 1
 
             # Update the parent's recurrence_end_date to the new horizon
             parent.recurrence_end_date = twelve_months
 
+            # Commit per parent rather than deferring to a single trailing
+            # commit — the same deferred-tail-commit shape CRON2-31-1 found
+            # to be the "worst" case in run_shift_auto_checkout: a later
+            # parent's failure would otherwise discard every earlier
+            # parent's already-built occurrences and recurrence_end_date
+            # update on the next rollback.
+            await db.commit()
+
+            # Counted only after the commit actually succeeds (Codex-caught):
+            # incrementing before commit() double-counted a parent whose
+            # flush then failed — the except below rolls back the insert and
+            # the recurrence_end_date update, but nothing restored these
+            # totals, so the task reported occurrences that were never
+            # persisted alongside a logged error for the same parent.
+            total_created += len(new_occurrences)
             series_extended += 1
 
         except Exception as e:
-            logger.error(f"Failed to extend rolling series {parent.id}: {e}")
-            errors.append({"event_id": parent.id, "error": str(e)})
-
-    if total_created > 0:
-        await db.commit()
+            logger.error(f"Failed to extend rolling series {parent_id}: {e}")
+            errors.append({"event_id": parent_id, "error": str(e)})
+            # Without this, a failed flush leaves the session in a failed
+            # transaction state and every later parent's own `select()` call
+            # raises PendingRollbackError.
+            try:
+                await db.rollback()
+                needs_refresh = True
+            except Exception:
+                pass
 
     logger.info(
         f"Rolling recurrence extend: {series_extended} series extended, "
@@ -4829,7 +5359,12 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
 
     now = datetime.now(dt_timezone.utc)
     result = await db.execute(
-        select(ExternalTrainingProvider).where(
+        select(ExternalTrainingProvider)
+        .join(
+            Organization,
+            Organization.id == ExternalTrainingProvider.organization_id,
+        )
+        .where(
             ExternalTrainingProvider.auto_sync_enabled.is_(True),
             ExternalTrainingProvider.active.is_(True),
             ExternalTrainingProvider.connection_verified.is_(True),
@@ -4837,13 +5372,38 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
                 ExternalTrainingProvider.next_sync_at.is_(None),
                 ExternalTrainingProvider.next_sync_at <= now,
             ),
+            # Same rationale as every Organization-iterating query in this
+            # file (CRON-2); this loop is keyed on ExternalTrainingProvider,
+            # so it fell outside the original fix (CRON2-31-13).
+            Organization.active.isnot(False),
         )
     )
     providers = result.scalars().all()
 
     synced = 0
     failed = 0
+    needs_refresh = False
     for provider in providers:
+        if needs_refresh:
+            # A prior provider's rollback (below) expires every
+            # persistent object in the session, including every other
+            # pre-fetched provider still left in this list — not just
+            # the one that failed. Reading an attribute without
+            # refreshing first would trigger an implicit lazy load
+            # outside the async greenlet bridge and raise MissingGreenlet
+            # (Codex-caught; same shape as run_publish_scheduled_messages'
+            # and run_rolling_recurrence_extend's needs_refresh handling).
+            await db.refresh(provider)
+        # Captured as plain strings before sync_training_records runs: if
+        # it fails on a DB-level error, the session needs an explicit
+        # rollback and *any* attribute read on *any* loaded object — not
+        # just an expired one — raises PendingRollbackError until that
+        # rollback runs (verified against a real connection). Reading
+        # provider.name/provider.id in the except block below would
+        # therefore itself raise, aborting this exception handler before
+        # it reaches its own db.rollback() and crashing the whole batch.
+        provider_id = getattr(provider, "id", "?")
+        provider_name = getattr(provider, "name", "?")
         sync_service = ExternalTrainingSyncService(db)
         try:
             await sync_service.sync_training_records(provider, sync_type="incremental")
@@ -4851,10 +5411,24 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
         except Exception:
             logger.opt(exception=True).warning(
                 "Auto-sync failed for provider {} ({})",
-                provider.name,
-                provider.id,
+                provider_name,
+                provider_id,
             )
             failed += 1
+            # sync_training_records commits its own outcome internally
+            # (success or a caught, logged FAILED sync_log) — an exception
+            # here means something failed *before* that internal try/except
+            # even started (its own sync_log insert + flush), which leaves
+            # the session in a failed transaction state. Providers share
+            # this session, so without a rollback every later provider's
+            # own sync_log insert raises PendingRollbackError too (same
+            # class as CRON-1/CRON2-31-13, missed here since this loop is
+            # keyed on ExternalTrainingProvider, not a direct org select).
+            try:
+                await db.rollback()
+                needs_refresh = True
+            except Exception:
+                pass
         finally:
             await sync_service.close()
 
@@ -5056,7 +5630,9 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                         await db.execute(
                             select(EventRequestActivity.action).where(
                                 EventRequestActivity.request_id == event_request.id,
-                                EventRequestActivity.action.like("reminder_sent:%"),
+                                EventRequestActivity.action.like(
+                                    "reminder_sent:%", escape=LIKE_ESCAPE_CHAR
+                                ),
                             )
                         )
                     )
@@ -5180,7 +5756,12 @@ async def run_officer_directory_sync(db: AsyncSession) -> Dict[str, Any]:
     """
     from app.services.officer_service import OfficerService
 
-    org_result = await db.execute(select(Organization.id).where(Organization.active))
+    # isnot(False), not a bare truthy filter — a row whose flag was never
+    # populated (NULL) must still count as active, matching every other
+    # org-active filter in this file (CRON2-31-10).
+    org_result = await db.execute(
+        select(Organization.id).where(Organization.active.isnot(False))
+    )
     org_ids = [str(row) for row in org_result.scalars().all()]
 
     service = OfficerService(db)
@@ -5255,10 +5836,16 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
     )
 
     result = await db.execute(
-        select(Integration).where(
+        select(Integration)
+        .join(Organization, Organization.id == Integration.organization_id)
+        .where(
             Integration.integration_type == "salesforce",
             Integration.enabled.is_(True),
             Integration.status == "connected",
+            # Same rationale as every Organization-iterating query in this
+            # file (CRON-2); this loop is keyed on Integration, so it fell
+            # outside the original fix (CRON2-31-13).
+            Organization.active.isnot(False),
         )
     )
     integrations = list(result.scalars().all())
@@ -5357,6 +5944,7 @@ TASK_RUNNERS = {
     "compliance_auto_reports": run_compliance_auto_reports,
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
+    "recover_stranded_message_deliveries": run_recover_stranded_message_deliveries,
     "series_end_reminders": run_series_end_reminders,
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
@@ -5398,6 +5986,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "end_of_shift_checklist_reminders": 1800,
     "end_of_shift_summary": 1800,
     "external_training_auto_sync": 1800,
+    "recover_stranded_message_deliveries": 1800,
     "salesforce_auto_sync": 1800,
     # Daily (checked each loop tick; runs at most once per interval)
     "cert_expiration_alerts": 86400,

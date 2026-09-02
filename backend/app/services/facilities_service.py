@@ -80,6 +80,7 @@ from app.schemas.facilities import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many levels of room nesting are allowed (a top-level room is level 1).
 # Rooms within rooms are for real spatial containment — a storage cage inside
@@ -150,8 +151,7 @@ class FacilitiesService:
 
     async def _apply_updates(self, instance, update_schema) -> None:
         update_data = update_schema.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(instance, field, value)
+        apply_updates(instance, update_data)
         await self.db.commit()
         await self.db.refresh(instance)
 
@@ -303,7 +303,40 @@ class FacilitiesService:
         )
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return await self._attach_usage_counts(
+            list(result.scalars().all()),
+            Facility.facility_type_id,
+            Facility.organization_id,
+            organization_id,
+        )
+
+    async def _attach_usage_counts(
+        self, rows: list, fk_column, org_column, organization_id: str
+    ) -> list:
+        """Stamp ``usage_count`` on each lookup row, in one grouped query.
+
+        The settings screen shows this figure and disables Delete on a non-zero
+        count. No endpoint returned it, so every row read 0 and the button was
+        offered for lookups the server then refused with a 400 — the guard the
+        column exists to drive never fired.
+
+        Scoped to the caller's organization, matching the delete check. The
+        lookup tables hold system rows shared by every department (org_id
+        NULL), so an unscoped count would report — and leak — how many other
+        departments' facilities use one.
+        """
+        if not rows:
+            return rows
+        ids = [str(getattr(row, "id")) for row in rows]
+        result = await self.db.execute(
+            select(fk_column, func.count())
+            .where(fk_column.in_(ids), org_column == str(organization_id))
+            .group_by(fk_column)
+        )
+        counts = {str(key): int(total) for key, total in result.all()}
+        for row in rows:
+            row.usage_count = counts.get(str(row.id), 0)
+        return rows
 
     async def get_facility_type(
         self, type_id: str, organization_id: str
@@ -450,7 +483,12 @@ class FacilitiesService:
         )
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return await self._attach_usage_counts(
+            list(result.scalars().all()),
+            Facility.status_id,
+            Facility.organization_id,
+            organization_id,
+        )
 
     async def get_facility_status(
         self, status_id: str, organization_id: str
@@ -590,15 +628,14 @@ class FacilitiesService:
         if is_archived is not None:
             conditions.append(Facility.is_archived == is_archived)
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             conditions.append(
                 or_(
-                    Facility.name.ilike(search_term),
-                    Facility.facility_number.ilike(search_term),
-                    Facility.city.ilike(search_term),
+                    Facility.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    Facility.facility_number.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    Facility.city.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 
@@ -921,8 +958,7 @@ class FacilitiesService:
             raise ValueError("Invalid facility status")
 
         update_data = facility_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(facility, field, value)
+        apply_updates(facility, update_data)
 
         await self.db.commit()
         await self.db.refresh(facility)
@@ -1078,8 +1114,7 @@ class FacilitiesService:
                 other_photo.is_primary = False
             await self.db.flush()
 
-        for field, value in update_data.items():
-            setattr(photo, field, value)
+        apply_updates(photo, update_data)
 
         await self.db.commit()
         await self.db.refresh(photo)
@@ -1230,7 +1265,12 @@ class FacilitiesService:
         )
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        return await self._attach_usage_counts(
+            list(result.scalars().all()),
+            FacilityMaintenance.maintenance_type_id,
+            FacilityMaintenance.organization_id,
+            organization_id,
+        )
 
     async def get_maintenance_type(
         self, type_id: str, organization_id: str
@@ -1513,8 +1553,7 @@ class FacilitiesService:
                 maintenance.completed_date = date.today()
             maintenance.is_overdue = False
 
-        for field, value in update_data.items():
-            setattr(maintenance, field, value)
+        apply_updates(maintenance, update_data)
 
         # Recheck overdue status
         if (
@@ -1744,8 +1783,7 @@ class FacilitiesService:
 
         update_data = inspection_data.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            setattr(inspection, field, value)
+        apply_updates(inspection, update_data)
 
         await self.db.commit()
         await self.db.refresh(inspection)
@@ -2863,8 +2901,7 @@ class FacilitiesService:
 
         update_data = project_data.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            setattr(project, field, value)
+        apply_updates(project, update_data)
 
         await self.db.commit()
         await self.db.refresh(project)
@@ -2972,8 +3009,7 @@ class FacilitiesService:
 
         update_data = policy_data.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            setattr(policy, field, value)
+        apply_updates(policy, update_data)
 
         await self.db.commit()
         await self.db.refresh(policy)

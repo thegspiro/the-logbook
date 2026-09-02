@@ -38,6 +38,9 @@ import {
   Key,
   Store,
   Stethoscope,
+  ClipboardCheck,
+  HeartPulse,
+  Wallet,
   Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -302,11 +305,30 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
     icon: <Store className="h-5 w-5" />,
   },
   {
+    key: 'finance',
+    name: 'Finance',
+    description: 'Budgets, member dues, expenses, purchase requests, and check requests',
+    icon: <Wallet className="h-5 w-5" />,
+  },
+  {
+    key: 'medical_screening',
+    name: 'Medical Screening',
+    description: 'Member physicals, clearances, and expiration tracking',
+    icon: <HeartPulse className="h-5 w-5" />,
+  },
+  {
     key: 'medical_supplies',
     name: 'Medical Supplies',
     description:
       'EMS stock with lot numbers and expiration dates, tracked separately from gear so it can have its own supply officer',
     icon: <Stethoscope className="h-5 w-5" />,
+  },
+  {
+    key: 'testing',
+    name: 'Testing Checklist',
+    description:
+      "A tester's index of every page in the app, with each page's permission gate — for walking a new installation before it goes live",
+    icon: <ClipboardCheck className="h-5 w-5" />,
   },
 ];
 
@@ -1009,7 +1031,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => logoInputRef.current?.click()}
-                  className="text-theme-accent-blue inline-flex items-center gap-1.5 text-sm hover:opacity-80"
+                  className="text-theme-accent-blue inline-flex items-center gap-1.5 text-sm hover:opacity-80 max-md:min-h-[44px]"
                 >
                   <Upload className="h-3.5 w-3.5" />
                   Upload logo

@@ -10,6 +10,7 @@ import { useSearchParams, useNavigate } from 'react-router';
 import { LogIn, LogOut, Loader2, CheckCircle2, Clock, AlertCircle, ClipboardCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
@@ -67,7 +68,7 @@ const ShiftCheckInPage: React.FC = () => {
         ]);
         setShift(shiftData);
         setAttendance(attendanceData);
-        const checklists = await schedulingService.getShiftChecklists(sid).catch(() => []);
+        const checklists = await equipmentCheckService.getShiftChecklists(sid).catch(() => []);
         setHasStartChecklist(checklists.some((c) => c.checkTiming === 'start_of_shift' && !c.isCompleted));
       } catch {
         toast.error('Unable to load shift');
@@ -266,7 +267,7 @@ const ShiftCheckInPage: React.FC = () => {
                 that closes the shift out, hours later, from this same screen. */}
             {hasStartChecklist && (
               <button
-                onClick={() => void navigate(`/scheduling?tab=equipment-checks&shift=${resolvedShiftId}`)}
+                onClick={() => void navigate(`/inventory/checklists/my?shift=${resolvedShiftId}`)}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-violet-500/40 px-6 py-3 text-base font-semibold text-violet-700 transition-colors hover:bg-violet-500/10 dark:text-violet-300"
               >
                 <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
@@ -284,7 +285,7 @@ const ShiftCheckInPage: React.FC = () => {
               Check Out
             </button>
             <button
-              onClick={() => void navigate(`/scheduling?tab=equipment-checks&shift=${resolvedShiftId}`)}
+              onClick={() => void navigate(`/inventory/checklists/my?shift=${resolvedShiftId}`)}
               className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center justify-center rounded-xl border px-4 py-3 text-sm font-medium transition-colors"
             >
               Open today&apos;s checklists

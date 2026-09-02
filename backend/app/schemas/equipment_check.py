@@ -38,7 +38,7 @@ from app.utils.check_types import (
 # vocabulary. `app/utils/check_types` is the authority; see the notes there for
 # why nine values collapsed to four.
 #
-# Keep in step with CHECK_TYPES in frontend/src/pages/scheduling/
+# Keep in step with CHECK_TYPES in frontend/src/modules/inventory/
 # equipmentCheckPresets.ts, which is what the template builder offers.
 CHECK_TYPES = frozenset(
     set(CANONICAL_CHECK_TYPES) | set(STRUCTURAL_TYPES) | set(LEGACY_CHECK_TYPES)
@@ -112,6 +112,22 @@ class CheckTemplateItemBulkResponse(BaseModel):
 
     items: List["CheckTemplateItemResponse"]
     created_count: int
+    replayed: bool = False
+
+
+class CheckTemplateItemBulkDelete(BaseModel):
+    """Delete several items atomically, with retry protection."""
+
+    item_ids: List[str] = Field(..., min_length=1, max_length=250)
+    idempotency_key: str = Field(..., min_length=8, max_length=200)
+
+
+class CheckTemplateItemBulkDeleteResponse(BaseModel):
+    """Stable result returned both for an initial delete and a retry."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    deleted_item_ids: List[str]
     replayed: bool = False
 
 
@@ -205,6 +221,22 @@ class CheckTemplateCompartmentCreate(BaseModel):
     items: Optional[List[CheckTemplateItemCreate]] = None
 
 
+class CompartmentReplaceRequest(BaseModel):
+    """Replace a template's whole compartment tree.
+
+    The builder's bulk-replacement paths promise to discard everything on the
+    template and load a preset or an import in its place. Both halves travel
+    together because they are one decision: a discard sent on its own commits
+    an empty template while the replacement exists only in the browser.
+
+    An empty list is a valid request — it clears the template.
+    """
+
+    compartments: List[CheckTemplateCompartmentCreate] = Field(
+        default_factory=list, max_length=250
+    )
+
+
 class CheckTemplateCompartmentUpdate(BaseModel):
     """Schema for updating a compartment."""
 
@@ -216,6 +248,12 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     container_type: Optional[str] = Field(None, max_length=50)
     is_sealed: Optional[bool] = None
     parent_compartment_id: Optional[str] = None
+
+
+class CheckTemplateCompartmentClone(BaseModel):
+    """Position at which to insert a cloned saved compartment."""
+
+    sort_order: int = Field(..., ge=0)
 
 
 class CheckTemplateCompartmentResponse(UTCResponseBase):
@@ -281,7 +319,8 @@ class EquipmentCheckTemplateCreate(BaseModel):
     check_timing: CheckTiming
     template_type: str = Field(default="equipment", max_length=30)
     assigned_positions: Optional[List[str]] = None
-    is_active: bool = True
+    # Creation is a draft operation unless the caller explicitly publishes.
+    is_active: bool = False
     sort_order: int = 0
     compartments: Optional[List[CheckTemplateCompartmentCreate]] = None
 
@@ -320,6 +359,7 @@ class EquipmentCheckTemplateResponse(UTCResponseBase):
     assigned_positions: Optional[List[str]] = None
     is_active: bool
     sort_order: int
+    content_revision: int
     compartments: List[CheckTemplateCompartmentResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -349,10 +389,10 @@ class CheckItemResultSubmit(BaseModel):
     status: str = Field(
         ..., pattern=r"^(pass|fail|not_applicable|out_of_service|not_checked)$"
     )
-    quantity_found: Optional[int] = None
+    quantity_found: Optional[int] = Field(None, ge=0)
     required_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
-    level_reading: Optional[float] = None
+    level_reading: Optional[float] = Field(None, allow_inf_nan=False)
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)

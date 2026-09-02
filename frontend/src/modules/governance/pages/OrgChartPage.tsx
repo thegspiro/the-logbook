@@ -1,183 +1,40 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ChevronDown,
-  ChevronUp,
-  EyeOff,
-  Mail,
-  Network,
-  Pencil,
-  Phone,
-  Plus,
-  Search,
-  Trash2,
-  UserPlus,
-} from 'lucide-react';
+import { LayoutGrid, List, Network, Plus, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { SkeletonPage } from '../../../components/ux/Skeleton';
 import { useConfirm } from '../../../contexts/ConfirmContext';
-import { blankToNull } from '../../../utils/formValues';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
+import { OrgChartDiagram } from '../components/OrgChartDiagram';
 import { OrgChartNodeModal, type OrgChartNodeDraft } from '../components/OrgChartNodeModal';
+import { OrgChartOutline } from '../components/OrgChartOutline';
 import { useOrgChartStore } from '../store/orgChartStore';
-import type { OrgChartNode } from '../types/orgChart';
+import { parseLinkValue, type OrgChartNode } from '../types/orgChart';
 
 /**
  * Governance -> Organizational Chart.
  *
- * Answers "who is in charge of this?" for the general membership. The chart is
- * curated by leadership rather than generated from positions or permissions:
- * the IT manager holds the wildcard grant and reports to the Chief in real
- * life, so a chart derived from application roles would be one nobody in the
- * department recognises.
+ * Answers "who is in charge of this?" for the general membership. The *shape*
+ * of the chart is curated by leadership rather than generated from positions or
+ * permissions: the IT manager holds the wildcard grant and reports to the Chief
+ * in real life, so a chart whose reporting lines came from application roles
+ * would be one nobody in the department recognises. A seat may be *linked* to a
+ * role, which keeps the names in the box current without deciding anything else
+ * about it — the application supports the chart, it does not define it.
  *
- * Rendered as an indented outline rather than the boxes-and-lines diagram an
- * org chart usually is. A department's chain of command is wide near the top,
- * and a centred diagram either scrolls sideways on a phone or shrinks the
- * names past reading — an outline degrades to a single readable column.
+ * Two layouts, because one does not serve both readers. The diagram is the
+ * conventional boxes-and-connectors chart and is what a desktop opens on. A
+ * phone opens on the indented outline: a centred diagram narrowed to 390px
+ * either shrinks the names past reading or scrolls in two directions at once.
+ * Either can be chosen explicitly, and the choice sticks for the session.
  */
 
-/** Indent per level, capped so a deep branch still fits a phone. */
-const INDENT_REM = [0, 1.25, 2.5, 3.75, 5, 5, 5, 5, 5];
-
-const indentFor = (depth: number): string => `${INDENT_REM[Math.min(depth, INDENT_REM.length - 1)] ?? 5}rem`;
-
-interface NodeRowProps {
-  node: OrgChartNode;
-  canManage: boolean;
-  isSaving: boolean;
-  /** False for the first/last of its siblings, which disables the nudge. */
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  onAddReport: (node: OrgChartNode) => void;
-  onEdit: (node: OrgChartNode) => void;
-  onDelete: (node: OrgChartNode) => void;
-  onNudge: (node: OrgChartNode, direction: -1 | 1) => void;
-}
-
-const NodeRow: React.FC<NodeRowProps> = ({
-  node,
-  canManage,
-  isSaving,
-  canMoveUp,
-  canMoveDown,
-  onAddReport,
-  onEdit,
-  onDelete,
-  onNudge,
-}) => (
-  <li style={{ marginInlineStart: indentFor(node.depth) }}>
-    <div
-      className={`card space-y-2 p-4 ${node.depth > 0 ? 'border-theme-surface-border border-l-4' : ''} ${
-        node.isPublished ? '' : 'opacity-75'
-      }`}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-theme-text-primary text-base font-semibold">{node.title}</h3>
-            {node.isPublished ? null : (
-              <span
-                className="badge border-theme-surface-border text-theme-text-muted flex items-center gap-1 border"
-                title="Only people who can manage the chart see this position"
-              >
-                <EyeOff className="h-3 w-3" aria-hidden="true" /> Hidden
-              </span>
-            )}
-          </div>
-          <p className="text-theme-text-primary mt-1 text-sm">
-            {node.holderName || <span className="text-theme-text-muted italic">Vacant</span>}
-          </p>
-        </div>
-
-        {canManage ? (
-          <div className="flex flex-wrap gap-1">
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => onNudge(node, -1)}
-              disabled={isSaving || !canMoveUp}
-              aria-label={`Move ${node.title} up`}
-              title="Move up"
-            >
-              <ChevronUp className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => onNudge(node, 1)}
-              disabled={isSaving || !canMoveDown}
-              aria-label={`Move ${node.title} down`}
-              title="Move down"
-            >
-              <ChevronDown className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => onAddReport(node)}
-              disabled={isSaving}
-              aria-label={`Add a position reporting to ${node.title}`}
-              title="Add a position reporting to this one"
-            >
-              <UserPlus className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => onEdit(node)}
-              disabled={isSaving}
-              aria-label={`Edit ${node.title}`}
-              title="Edit"
-            >
-              <Pencil className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="btn-icon"
-              onClick={() => onDelete(node)}
-              disabled={isSaving}
-              aria-label={`Remove ${node.title}`}
-              title="Remove"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      {node.responsibility ? (
-        <p className="text-theme-text-secondary text-sm leading-6">{node.responsibility}</p>
-      ) : null}
-
-      {node.contactEmail || node.contactPhone ? (
-        // `mobile-touch-target`, not a bare inline link: a phone number on this
-        // screen exists to be tapped from a phone, and a text-sm anchor is
-        // about 20px tall — half the 44px minimum.
-        <div className="flex flex-wrap gap-x-4 text-sm">
-          {node.contactEmail ? (
-            <a
-              className="text-theme-accent-red mobile-touch-target justify-start gap-1.5"
-              href={`mailto:${node.contactEmail}`}
-            >
-              <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="break-all">{node.contactEmail}</span>
-            </a>
-          ) : null}
-          {node.contactPhone ? (
-            <a
-              className="text-theme-accent-red mobile-touch-target justify-start gap-1.5"
-              href={`tel:${node.contactPhone}`}
-            >
-              <Phone className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {node.contactPhone}
-            </a>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  </li>
-);
+const ViewMode = {
+  DIAGRAM: 'diagram',
+  OUTLINE: 'outline',
+} as const;
+type ViewMode = (typeof ViewMode)[keyof typeof ViewMode];
 
 interface EditorTarget {
   node?: OrgChartNode | undefined;
@@ -191,6 +48,12 @@ const OrgChartPage: React.FC = () => {
     useOrgChartStore();
   const [search, setSearch] = useState('');
   const [editor, setEditor] = useState<EditorTarget | null>(null);
+  // Null until the reader picks one, so the breakpoint keeps deciding while
+  // they have not — a phone rotated to landscape gets the diagram, and a
+  // deliberate choice is never overridden by a resize.
+  const [chosenView, setChosenView] = useState<ViewMode | null>(null);
+  const isWide = useMediaQuery('(min-width: 768px)');
+  const view = chosenView ?? (isWide ? ViewMode.DIAGRAM : ViewMode.OUTLINE);
 
   useEffect(() => {
     void fetchChart();
@@ -213,7 +76,14 @@ const OrgChartPage: React.FC = () => {
     const byId = new Map(nodes.map((node) => [node.id, node]));
     const keep = new Set<string>();
     for (const node of nodes) {
-      const haystack = [node.title, node.holderName ?? '', node.responsibility ?? ''].join(' ').toLowerCase();
+      const haystack = [
+        node.title,
+        node.responsibility ?? '',
+        node.linkLabel ?? '',
+        ...node.holders.map((holder) => holder.name),
+      ]
+        .join(' ')
+        .toLowerCase();
       if (!haystack.includes(term)) continue;
       let current: OrgChartNode | undefined = node;
       // Bounded by the tree's depth; the server caps nesting, and `keep`
@@ -244,20 +114,31 @@ const OrgChartPage: React.FC = () => {
 
   const handleSave = async (draft: OrgChartNodeDraft) => {
     const existing = editor?.node;
+    const link = parseLinkValue(draft.linkValue);
+    const holders = draft.holders.map((holder) => ({
+      userId: holder.userId || undefined,
+      displayName: holder.displayName || undefined,
+    }));
     try {
       if (existing) {
         // Update: every field the form owns travels on every save, and an
         // emptied box goes as an explicit null. Omitting the key would mean
-        // "leave it alone" on the backend, so a cleared holder would survive
-        // behind a success toast (pitfall #1, update direction).
+        // "leave it alone" on the backend, so a cleared value would survive
+        // behind a success toast (pitfall #1, update direction). `holders` is
+        // the exception the backend documents: it is a whole-collection
+        // replace, so an empty array is how a seat is emptied.
         await updateNode(existing.id, {
           title: draft.title,
-          userId: blankToNull(draft.userId),
-          displayName: blankToNull(draft.displayName),
-          responsibility: blankToNull(draft.responsibility),
-          contactEmail: blankToNull(draft.contactEmail),
-          contactPhone: blankToNull(draft.contactPhone),
+          responsibility: draft.responsibility || null,
+          contactEmail: draft.contactEmail || null,
+          contactPhone: draft.contactPhone || null,
           isPublished: draft.isPublished,
+          // Both link fields on every save, so unlinking travels as an
+          // explicit null rather than as an omitted key the backend would
+          // read as "leave it alone".
+          positionId: link.positionId ?? null,
+          rankCode: link.rankCode ?? null,
+          holders,
         });
         // A changed reporting line is a second call: /move renumbers the
         // siblings the seat lands among, which a field update has no business
@@ -276,12 +157,13 @@ const OrgChartPage: React.FC = () => {
         await createNode({
           title: draft.title,
           parentId: draft.parentId || undefined,
-          userId: draft.userId || undefined,
-          displayName: draft.displayName || undefined,
           responsibility: draft.responsibility || undefined,
           contactEmail: draft.contactEmail || undefined,
           contactPhone: draft.contactPhone || undefined,
           isPublished: draft.isPublished,
+          positionId: link.positionId,
+          rankCode: link.rankCode,
+          holders,
         });
         toast.success('Position added');
       }
@@ -327,8 +209,21 @@ const OrgChartPage: React.FC = () => {
 
   if (isLoading && !chart) return <SkeletonPage />;
 
+  const viewProps = {
+    nodes: visibleNodes,
+    canManage,
+    isSaving,
+    siblingIndex,
+    onAddReport: (parent: OrgChartNode) => setEditor({ parentId: parent.id }),
+    onEdit: (target: OrgChartNode) => setEditor({ node: target }),
+    onDelete: (target: OrgChartNode) => void handleDelete(target),
+    onNudge: (target: OrgChartNode, direction: -1 | 1) => void handleNudge(target, direction),
+  };
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
+    // Wider than the old max-w-4xl: a chain of command is wide before it is
+    // deep, and the diagram spends the extra width on boxes rather than margin.
+    <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       <header className="space-y-2">
         <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
           <Network className="h-6 w-6" aria-hidden="true" /> Organizational Chart
@@ -360,6 +255,38 @@ const OrgChartPage: React.FC = () => {
               aria-label="Search the organizational chart"
             />
           </div>
+
+          <div className="segmented-group flex gap-1" role="group" aria-label="Chart layout">
+            <button
+              type="button"
+              className={`btn-icon px-3 ${
+                view === ViewMode.DIAGRAM
+                  ? 'bg-red-800 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
+              }`}
+              onClick={() => setChosenView(ViewMode.DIAGRAM)}
+              aria-pressed={view === ViewMode.DIAGRAM}
+              aria-label="Show the chart as a diagram"
+              title="Diagram"
+            >
+              <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={`btn-icon px-3 ${
+                view === ViewMode.OUTLINE
+                  ? 'bg-red-800 text-white'
+                  : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
+              }`}
+              onClick={() => setChosenView(ViewMode.OUTLINE)}
+              aria-pressed={view === ViewMode.OUTLINE}
+              aria-label="Show the chart as a list"
+              title="List"
+            >
+              <List className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+
           {canManage ? (
             <button type="button" className="btn-primary flex items-center gap-2" onClick={() => setEditor({})}>
               <Plus className="h-4 w-4" aria-hidden="true" /> Add position
@@ -387,26 +314,10 @@ const OrgChartPage: React.FC = () => {
           title="Nothing matches that search"
           description="Try a position title, a member's name, or a word from the area they cover."
         />
+      ) : view === ViewMode.DIAGRAM ? (
+        <OrgChartDiagram {...viewProps} />
       ) : (
-        <ul className="space-y-3">
-          {visibleNodes.map((node) => {
-            const position = siblingIndex.get(node.id);
-            return (
-              <NodeRow
-                key={node.id}
-                node={node}
-                canManage={canManage}
-                isSaving={isSaving}
-                canMoveUp={(position?.index ?? 0) > 0}
-                canMoveDown={!!position && position.index < position.total - 1}
-                onAddReport={(parent) => setEditor({ parentId: parent.id })}
-                onEdit={(target) => setEditor({ node: target })}
-                onDelete={(target) => void handleDelete(target)}
-                onNudge={(target, direction) => void handleNudge(target, direction)}
-              />
-            );
-          })}
-        </ul>
+        <OrgChartOutline {...viewProps} />
       )}
 
       <OrgChartNodeModal
@@ -415,6 +326,8 @@ const OrgChartPage: React.FC = () => {
         defaultParentId={editor?.parentId}
         nodes={nodes}
         members={chart?.members ?? []}
+        roles={chart?.roles ?? []}
+        ranks={chart?.ranks ?? []}
         isSaving={isSaving}
         onCancel={() => setEditor(null)}
         onSave={handleSave}

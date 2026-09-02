@@ -46,11 +46,16 @@ class TestGetPreset:
 
     async def test_returns_the_modules_preset(self):
         position = SimpleNamespace(
-            settings={"label_presets": {"inventory": {"preset": "rollo_4x6"}}}
+            settings={
+                "label_presets": {
+                    "inventory": {"preset": "rollo_4x6", "printer_id": "printer-2"}
+                }
+            }
         )
         svc, _ = _service("pos-1", position)
         r = await svc.get_preset(uuid4(), uuid4(), "inventory")
         assert r["preset"] == "rollo_4x6"
+        assert r["printer_id"] == "printer-2"
         assert r["module"] == "inventory"
 
     async def test_modules_are_isolated(self):
@@ -80,6 +85,17 @@ class TestSetPreset:
         assert r["module"] == "apparatus"
         db.flush.assert_awaited()
 
+    async def test_persists_printer_destination_with_the_module(self):
+        position = SimpleNamespace(settings=None)
+        svc, _ = _service("p", position)
+        r = await svc.set_preset(
+            uuid4(), uuid4(), "apparatus", "dymo_30334", printer_id="printer-2"
+        )
+        assert position.settings["label_presets"]["apparatus"]["printer_id"] == (
+            "printer-2"
+        )
+        assert r["printer_id"] == "printer-2"
+
     async def test_preserves_other_modules(self):
         position = SimpleNamespace(
             settings={"label_presets": {"apparatus": {"preset": "dymo_30334"}}}
@@ -88,6 +104,56 @@ class TestSetPreset:
         await svc.set_preset(uuid4(), uuid4(), "inventory", "rollo_2x1")
         assert position.settings["label_presets"]["apparatus"]["preset"] == "dymo_30334"
         assert position.settings["label_presets"]["inventory"]["preset"] == "rollo_2x1"
+
+    async def test_a_save_that_omits_the_printer_keeps_the_stored_one(self):
+        """Absent means "leave it alone", per the update contract.
+
+        The entry was rewritten wholesale, so any save that carried no printer
+        erased one: the inventory size preset never sends a printer at all,
+        and the print page sends none while its printer list is still in
+        flight. Opening the page on a slow link was enough to lose the
+        position's destination, with nobody touching a control.
+        """
+        position = SimpleNamespace(
+            settings={
+                "label_presets": {
+                    "inventory": {"preset": "rollo_2x1", "printer_id": "printer-2"}
+                }
+            }
+        )
+        svc, _ = _service("p", position)
+
+        r = await svc.set_preset(uuid4(), uuid4(), "inventory", "dymo_30334")
+
+        stored = position.settings["label_presets"]["inventory"]
+        assert stored["printer_id"] == "printer-2"
+        assert stored["preset"] == "dymo_30334"
+        assert r["printer_id"] == "printer-2"
+
+    async def test_an_explicit_none_still_clears_the_printer(self):
+        position = SimpleNamespace(
+            settings={
+                "label_presets": {
+                    "inventory": {"preset": "rollo_2x1", "printer_id": "printer-2"}
+                }
+            }
+        )
+        svc, _ = _service("p", position)
+
+        r = await svc.set_preset(
+            uuid4(), uuid4(), "inventory", "rollo_2x1", printer_id=None
+        )
+
+        assert position.settings["label_presets"]["inventory"]["printer_id"] is None
+        assert r["printer_id"] is None
+
+    async def test_a_first_save_with_no_printer_stores_none(self):
+        position = SimpleNamespace(settings=None)
+        svc, _ = _service("p", position)
+
+        await svc.set_preset(uuid4(), uuid4(), "inventory", "rollo_2x1")
+
+        assert position.settings["label_presets"]["inventory"]["printer_id"] is None
 
     async def test_rejects_unknown_preset(self):
         position = SimpleNamespace(settings={})
@@ -221,9 +287,28 @@ class TestGenerate:
 
         monkeypatch.setitem(ls.MODULE_LABELS, "fake", ("inventory.view", fake_builder))
         svc = LabelService(MagicMock())
-        pdf, auto = await svc.generate(uuid4(), "fake", ["1"], "letter")
+        pdf, auto, count = await svc.generate(uuid4(), "fake", ["1"], "letter")
         assert pdf.getvalue()[:4] == b"%PDF"
         assert auto == 2
+        assert count == 1
+
+    async def test_returns_count_of_specs_actually_rendered(self, monkeypatch):
+        """The audit trail (labels.py) uses this count, not len(ids), so it
+        must reflect what was actually rendered, not what was requested."""
+
+        async def two_of_three_builder(db, org_id, ids, extra_lines):
+            # Simulates one requested id being filtered/nonexistent.
+            return [
+                LabelSpec(name="A", barcode_value="A1"),
+                LabelSpec(name="B", barcode_value="B1"),
+            ], 0
+
+        monkeypatch.setitem(
+            ls.MODULE_LABELS, "partial", ("inventory.view", two_of_three_builder)
+        )
+        svc = LabelService(MagicMock())
+        _, _, count = await svc.generate(uuid4(), "partial", ["1", "2", "3"], "letter")
+        assert count == 2
 
     async def test_empty_result_raises(self, monkeypatch):
         async def empty_builder(db, org_id, ids, extra_lines):

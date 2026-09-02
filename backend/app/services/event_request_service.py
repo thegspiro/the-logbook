@@ -976,6 +976,11 @@ async def resolve_outreach_signup_role(
                     [AssignmentStatus.CANCELLED, AssignmentStatus.DECLINED]
                 ),
             )
+            # Locking read. The request row lock above serializes the decision
+            # but leaves this transaction's REPEATABLE READ snapshot in place,
+            # so a plain count would still report the seats as they stood
+            # before the volunteer who beat us to one committed.
+            .with_for_update()
         )
     ).scalar() or 0
     if taken >= wanted[requested_role]:

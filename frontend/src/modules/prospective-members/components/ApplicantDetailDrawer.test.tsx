@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import { ApplicantDetailDrawer } from './ApplicantDetailDrawer';
 import type { Applicant, StageHistoryEntry } from '../types';
@@ -126,5 +127,65 @@ describe('ApplicantDetailDrawer stage progress', () => {
     await screen.findByText('Stage History');
 
     expect(screen.getByText(/1 of 4 stages completed/)).toBeInTheDocument();
+  });
+});
+
+describe('ApplicantDetailDrawer activity log', () => {
+  // The reason for a rejection, hold or withdrawal is recorded in the activity
+  // entry rather than written over the coordinator's notes, which is where it
+  // used to land. The activity log is therefore the only place it can be read,
+  // and it rendered nothing but the action name and timestamp.
+  it('shows the reason recorded with a status change', async () => {
+    mocks.getActivity.mockResolvedValue([
+      {
+        id: 'act-1',
+        prospect_id: 'app-1',
+        action: 'prospect_status_changed',
+        details: { from: 'active', to: 'rejected', reason: 'Failed the agility test', bulk: false },
+        performed_by: 'u-1',
+        performer_name: 'Dana Cole',
+        created_at: '2026-08-20T14:00:00Z',
+      },
+    ]);
+    renderDrawer();
+    await screen.findByText('Stage History');
+
+    await userEvent.click(screen.getByText('Activity Log'));
+
+    expect(await screen.findByText(/Failed the agility test/)).toBeInTheDocument();
+    expect(screen.getByText(/active → rejected/)).toBeInTheDocument();
+    expect(screen.getByText(/by Dana Cole/)).toBeInTheDocument();
+  });
+
+  it('renders an entry whose details are missing or malformed', async () => {
+    // `details` is unvalidated JSON: a bad value must degrade to "no detail to
+    // show" rather than taking the drawer down.
+    mocks.getActivity.mockResolvedValue([
+      {
+        id: 'act-2',
+        prospect_id: 'app-1',
+        action: 'prospect_advanced',
+        details: null,
+        performed_by: 'u-1',
+        performer_name: 'Dana Cole',
+        created_at: '2026-08-20T14:00:00Z',
+      },
+      {
+        id: 'act-3',
+        prospect_id: 'app-1',
+        action: 'prospect_status_changed',
+        details: { reason: 42, from: [], to: null },
+        performed_by: 'u-1',
+        performer_name: '',
+        created_at: '2026-08-21T14:00:00Z',
+      },
+    ]);
+    renderDrawer();
+    await screen.findByText('Stage History');
+
+    await userEvent.click(screen.getByText('Activity Log'));
+
+    expect(await screen.findByText(/prospect advanced/)).toBeInTheDocument();
+    expect(screen.getByText(/prospect status changed/)).toBeInTheDocument();
   });
 });

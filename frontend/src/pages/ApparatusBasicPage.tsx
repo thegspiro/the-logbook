@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../modules/scheduling/services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
+import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 interface BasicApparatus {
   id: string;
   organization_id?: string;
@@ -47,11 +48,22 @@ const APPARATUS_TYPES = [
   { value: 'other', label: 'Other', icon: '🚗' },
 ];
 
+// Seat *values*, not labels. These must stay in the vocabulary the signup API
+// speaks (ShiftPosition) and that ranks grant (operational_ranks.
+// eligible_positions) — an apparatus seat outside it cannot be signed up for by
+// anyone, because the API has no way to name it. This list previously carried
+// 'EMT' where the rest of the system says 'ems', which made every EMT seat on
+// every ambulance unfillable. Labels come from positionLabel().
 const POSITION_OPTIONS = [
   'officer',
   'driver',
   'firefighter',
-  'EMT',
+  'ems',
+  // A medic seat is a different seat from an EMT one -- an ALS unit that
+  // must be staffed by a paramedic cannot say so with 'ems' alone. Values
+  // here must stay within CANONICAL_POSITIONS; test_position_slots.py parses
+  // this list to enforce it.
+  'paramedic',
   'captain',
   'lieutenant',
   'probationary',
@@ -61,7 +73,7 @@ const POSITION_OPTIONS = [
 const DEFAULT_POSITIONS_BY_TYPE: Record<string, string[]> = {
   engine: ['officer', 'driver', 'firefighter', 'firefighter'],
   ladder: ['officer', 'driver', 'firefighter', 'firefighter'],
-  ambulance: ['driver', 'EMT'],
+  ambulance: ['driver', 'ems'],
   rescue: ['officer', 'driver', 'firefighter', 'firefighter'],
   tanker: ['driver', 'firefighter'],
   brush: ['driver', 'firefighter'],
@@ -456,7 +468,7 @@ export default function ApparatusBasicPage() {
                       >
                         {POSITION_OPTIONS.map((o) => (
                           <option key={o} value={o}>
-                            {o.charAt(0).toUpperCase() + o.slice(1)}
+                            {positionLabel(o)}
                           </option>
                         ))}
                       </select>

@@ -15,6 +15,10 @@ const MessagesAdminPage = lazyWithRetry(() => import('./pages/MessagesAdminPage'
 
 const MessagesInboxPage = lazyWithRetry(() => import('./pages/MessagesInboxPage'));
 
+const MessageDetailPage = lazyWithRetry(() => import('./pages/MessageDetailPage'));
+
+const PhotoUseConsentPage = lazyWithRetry(() => import('./pages/PhotoUseConsentPage'));
+
 export const getCommunicationsRoutes = () => {
   return (
     <React.Fragment>
@@ -39,11 +43,36 @@ export const getCommunicationsRoutes = () => {
         }
       />
       <Route
+        path="/communications/photo-use-consent"
+        element={
+          <ProtectedRoute
+            requiredAnyPermission={['users.view_consents', 'notifications.manage', 'members.manage', 'users.edit']}
+          >
+            <Suspense fallback={null}>
+              <PhotoUseConsentPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/messages"
         element={
           <ProtectedRoute>
             <Suspense fallback={null}>
               <MessagesInboxPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* Sits under /messages so the breadcrumb path back to the inbox is the
+          URL's own parent — no permission beyond sign-in, because the backend
+          only serves a message the caller was actually targeted with. */}
+      <Route
+        path="/messages/:messageId"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={null}>
+              <MessageDetailPage />
             </Suspense>
           </ProtectedRoute>
         }

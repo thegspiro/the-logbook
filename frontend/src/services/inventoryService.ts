@@ -14,6 +14,7 @@ import type {
   StorageAreaResponse,
   StorageAreaCreate,
   EquipmentRequestItem,
+  RequestPriorityLiteral,
   WriteOffRequestItem,
   InventoryItemCreate,
   InventoryItemBulkEntry,
@@ -27,8 +28,9 @@ import type {
   CategoryPresetApplyResponse,
   InventoryCategoryCreate,
   ScanLookupResponse,
-  BatchCheckoutRequest,
-  BatchCheckoutResponse,
+  DistributeItemsRequest,
+  DistributeItemsResponse,
+  InventoryTransferRequest,
   BatchReturnRequest,
   BatchReturnResponse,
   LabelFormat,
@@ -212,6 +214,22 @@ export const inventoryService = {
     return response.data;
   },
 
+  /**
+   * Create a catalog item, or get back the one already carrying the name.
+   *
+   * One call rather than a check followed by a create: `getItems` cannot prove
+   * absence (it excludes medical types and returns one page), and a check made
+   * here leaves seconds before the write in which somebody else can file the
+   * same name. `created` says which happened.
+   */
+  async createItemIfAbsent(data: InventoryItemCreate): Promise<{ item: InventoryItem; created: boolean }> {
+    const response = await api.post<{ item: InventoryItem; created: boolean }>(
+      '/inventory/items/create-if-absent',
+      data
+    );
+    return response.data;
+  },
+
   async createItem(data: InventoryItemCreate): Promise<InventoryItem> {
     const response = await api.post<InventoryItem>('/inventory/items', data);
     return response.data;
@@ -269,6 +287,17 @@ export const inventoryService = {
     return response.data;
   },
 
+  /** Create a dated temporary loan. The legacy wire route remains stable. */
+  async createTemporaryLoan(data: {
+    item_id: string;
+    user_id: string;
+    expected_return_at?: string;
+    checkout_reason?: string;
+  }): Promise<{ id: string }> {
+    const response = await api.post<{ id: string }>('/inventory/checkout', data);
+    return response.data;
+  },
+
   async checkInItem(checkoutId: string, returnCondition: string, damageNotes?: string): Promise<void> {
     await api.post(`/inventory/checkout/${checkoutId}/checkin`, {
       return_condition: returnCondition,
@@ -295,6 +324,59 @@ export const inventoryService = {
   async getOverdueCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
     const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
     return response.data;
+  },
+
+  async checkInTemporaryLoan(loanId: string, returnCondition: string, damageNotes?: string): Promise<void> {
+    await api.post(`/inventory/checkout/${loanId}/checkin`, {
+      return_condition: returnCondition,
+      damage_notes: damageNotes,
+    });
+  },
+
+  async extendTemporaryLoan(
+    loanId: string,
+    expectedReturnAt: string
+  ): Promise<{ message: string; expected_return_at: string }> {
+    const response = await api.patch<{ message: string; expected_return_at: string }>(
+      `/inventory/checkout/${loanId}/extend`,
+      { expected_return_at: expectedReturnAt }
+    );
+    return response.data;
+  },
+
+  async getActiveTemporaryLoans(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/active');
+    return response.data;
+  },
+
+  async getOverdueTemporaryLoans(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
+    return response.data;
+  },
+
+  async getDepartureClearances(params?: { status?: string }): Promise<{
+    clearances: Array<{
+      id: string;
+      user_id: string;
+      status: string;
+      items_outstanding: number;
+      initiated_at: string;
+      return_deadline?: string;
+    }>;
+    total: number;
+  }> {
+    const response = await api.get('/inventory/clearances', { params });
+    return response.data as {
+      clearances: Array<{
+        id: string;
+        user_id: string;
+        status: string;
+        items_outstanding: number;
+        initiated_at: string;
+        return_deadline?: string;
+      }>;
+      total: number;
+    };
   },
 
   async getLowStockItems(): Promise<LowStockAlert[]> {
@@ -460,9 +542,13 @@ export const inventoryService = {
     return response.data;
   },
 
-  async batchCheckout(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
-    const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
+  async distributeItems(data: DistributeItemsRequest): Promise<DistributeItemsResponse> {
+    const response = await api.post<DistributeItemsResponse>('/inventory/distribute-items', data);
     return response.data;
+  },
+
+  async transferItem(data: InventoryTransferRequest): Promise<void> {
+    await api.post('/inventory/transfer', data);
   },
 
   async batchReturn(data: BatchReturnRequest): Promise<BatchReturnResponse> {
@@ -564,8 +650,8 @@ export const inventoryService = {
     item_id?: string | undefined;
     category_id?: string | undefined;
     quantity?: number;
-    request_type?: string;
-    priority?: string;
+    requested_duration: 'temporary' | 'ongoing';
+    priority?: RequestPriorityLiteral;
     reason?: string | undefined;
   }): Promise<{ id: string; item_name: string; status: string; message: string }> {
     const response = await api.post<{ id: string; item_name: string; status: string; message: string }>(
@@ -603,11 +689,13 @@ export const inventoryService = {
 
   async fulfillEquipmentRequest(
     requestId: string,
-    data?: {
+    data: {
+      fulfillment_type: 'checkout' | 'assignment' | 'issuance';
       item_id?: string | undefined;
       quantity?: number | undefined;
       expected_return_at?: string | undefined;
       override_allowance?: boolean;
+      substitution_override_reason?: string | undefined;
     }
   ): Promise<{
     id: string;
@@ -622,7 +710,7 @@ export const inventoryService = {
       fulfillment_type: string | null;
       fulfillment_reference_id: string | null;
       message: string;
-    }>(`/inventory/requests/${requestId}/fulfill`, data ?? {});
+    }>(`/inventory/requests/${requestId}/fulfill`, data);
     return response.data;
   },
 
@@ -643,7 +731,13 @@ export const inventoryService = {
 
   async reviewWriteOff(
     writeOffId: string,
-    data: { status: string; review_notes?: string | undefined }
+    data: {
+      status: string;
+      review_notes: string;
+      acknowledgement?: boolean;
+      expected_item_status?: string | undefined;
+      expected_holder_signature?: string | undefined;
+    }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/write-offs/${writeOffId}/review`,
@@ -732,7 +826,14 @@ export const inventoryService = {
 
   async reviewReturnRequest(
     requestId: string,
-    data: { status: string; review_notes?: string | undefined; override_condition?: string | undefined }
+    data: {
+      status: 'received' | 'denied';
+      review_notes?: string | undefined;
+      observed_condition?: string | undefined;
+      verified_identifier?: string | undefined;
+      received_quantity?: number | undefined;
+      follow_up?: 'auto' | 'none' | 'maintenance' | 'charge_review' | 'write_off' | undefined;
+    }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/return-requests/${requestId}/review`,
@@ -769,6 +870,19 @@ export const inventoryService = {
 
   async updateReorderRequest(id: string, data: ReorderRequestUpdate): Promise<ReorderRequest> {
     const response = await api.patch<ReorderRequest>(`/inventory/reorder-requests/${id}`, data);
+    return response.data;
+  },
+
+  async transitionReorderRequest(
+    id: string,
+    data: import('./eventServices').ReorderTransition
+  ): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>(`/inventory/reorder-requests/${id}/transition`, data);
+    return response.data;
+  },
+
+  async receiveReorderStock(id: string, data: import('./eventServices').ReorderReceiptCreate): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>(`/inventory/reorder-requests/${id}/receipts`, data);
     return response.data;
   },
 

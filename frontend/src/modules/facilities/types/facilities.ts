@@ -14,6 +14,8 @@ export interface FacilityType {
   category?: string;
   isSystem?: boolean;
   isActive?: boolean;
+  sortOrder?: number;
+  usageCount?: number;
 }
 
 export interface FacilityStatus {
@@ -24,6 +26,8 @@ export interface FacilityStatus {
   isOperational?: boolean;
   isSystem?: boolean;
   isActive?: boolean;
+  sortOrder?: number;
+  usageCount?: number;
 }
 
 export interface Facility {
@@ -81,6 +85,8 @@ export interface MaintenanceType {
   defaultIntervalUnit?: string;
   isSystem?: boolean;
   isActive?: boolean;
+  sortOrder?: number;
+  usageCount?: number;
 }
 
 export interface MaintenanceRecord {

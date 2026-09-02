@@ -27,9 +27,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.constants import (
+    CHIEF_POSITION_SLUGS,
     DEFAULT_COMPLIANCE_OFFICER_ROLES,
     DEFAULT_TRAINING_OFFICER_ROLES,
-    ROLE_CHIEF,
 )
 from app.models.notification import NotificationCategory, NotificationChannel
 from app.models.training import TrainingRecord, TrainingStatus
@@ -240,7 +240,9 @@ class CertAlertService:
         compliance_roles = config.get(
             "compliance_officer_roles", DEFAULT_COMPLIANCE_OFFICER_ROLES
         )
-        escalation_roles = config.get("escalation_roles", training_roles + [ROLE_CHIEF])
+        escalation_roles = config.get(
+            "escalation_roles", training_roles + CHIEF_POSITION_SLUGS
+        )
 
         alerts_sent = 0
         escalations_sent = 0
@@ -440,17 +442,26 @@ class CertAlertService:
                         action_url=f"/members/{member.id}/training",
                     )
 
-                # Email escalation
-                cc_emails = await self._get_officer_emails(
-                    organization_id, training_roles
+                # Email escalation. Three lookups over overlapping groups, so
+                # dedupe: one member may be the training officer and the chief,
+                # and the CC list is split into to/cc by index below.
+                escalation_cc = list(
+                    await self._get_officer_emails(organization_id, training_roles)
                 )
-                cc_emails.extend(
+                escalation_cc.extend(
                     await self._get_officer_emails(organization_id, compliance_roles)
                 )
                 if config.get("cc_chief_on_escalation"):
-                    cc_emails.extend(
-                        await self._get_officer_emails(organization_id, [ROLE_CHIEF])
+                    # Both spellings: an admin who turns this on gets the chief
+                    # whether the department holds the seeded `fire_chief` or a
+                    # hand-made `chief`. It resolved to neither until
+                    # 2026-08-26, so the toggle did nothing at all.
+                    escalation_cc.extend(
+                        await self._get_officer_emails(
+                            organization_id, CHIEF_POSITION_SLUGS
+                        )
                     )
+                cc_emails = list(dict.fromkeys(escalation_cc))
 
                 to_emails = []
                 if self._member_has_email_enabled(member) and member.email:

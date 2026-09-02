@@ -113,7 +113,7 @@ describe('ItemDetailPage', () => {
     });
     renderPage();
     await waitFor(() => expect(mockGetItemHistory).toHaveBeenCalledWith('it-1'));
-    expect(await screen.findByText('Checked out to Engine 1')).toBeInTheDocument();
+    expect(await screen.findByText('Temporary loaned to Engine 1')).toBeInTheDocument();
   });
 
   it('opens the edit modal', async () => {

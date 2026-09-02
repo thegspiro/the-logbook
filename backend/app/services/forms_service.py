@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.security_middleware import InputSanitizer, daily_cap_exceeded
-from app.core.utils import safe_error_detail
+from app.core.utils import safe_error_detail, sanitize_error_message
 from app.models.forms import (
     FieldType,
     Form,
@@ -31,6 +31,8 @@ from app.models.forms import (
     IntegrationType,
 )
 from app.models.user import Organization, User, UserStatus
+from app.utils.model_updates import apply_updates
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 if TYPE_CHECKING:
     from app.models.membership_pipeline import ProspectiveMember
@@ -535,14 +537,11 @@ class FormsService:
             )
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
                 or_(
-                    Form.name.ilike(search_term),
-                    Form.description.ilike(search_term),
+                    Form.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    Form.description.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 
@@ -621,8 +620,9 @@ class FormsService:
                 ):
                     update_data["published_at"] = datetime.now(timezone.utc)
 
-            for key, value in update_data.items():
-                setattr(form, key, value)
+            apply_updates(
+                form, update_data, skip={"id", "organization_id", "created_by"}
+            )
 
             await self.db.commit()
             await self.db.refresh(form)
@@ -814,8 +814,7 @@ class FormsService:
             if not field:
                 return None, "Field not found"
 
-            for key, value in update_data.items():
-                setattr(field, key, value)
+            apply_updates(field, update_data, skip={"id", "form_id"})
 
             await self.db.flush()
 
@@ -1251,8 +1250,11 @@ class FormsService:
                     if mapping_error:
                         return None, mapping_error
 
-            for key, value in update_data.items():
-                setattr(integration, key, value)
+            apply_updates(
+                integration,
+                update_data,
+                skip={"id", "form_id", "organization_id"},
+            )
 
             await self.db.commit()
             await self.db.refresh(integration)
@@ -1383,9 +1385,15 @@ class FormsService:
                         )
                         results["event_request"] = result
                 except Exception as e:
+                    # This dict is persisted to submission.integration_result and
+                    # serialized back to the client on submit_form/get_submission/
+                    # list_submissions/reprocess (FormSubmissionResponse carries the
+                    # column) — raw exception text here is the same leak class FORM-7
+                    # fixed on the (result, error) tuple path, reached through a
+                    # different field.
                     results[int_type] = {
                         "success": False,
-                        "error": str(e),
+                        "error": safe_error_detail(e),
                     }
             handled_types.add(int_type)
 
@@ -1423,7 +1431,7 @@ class FormsService:
             except Exception as e:
                 results[it] = {
                     "success": False,
-                    "error": str(e),
+                    "error": safe_error_detail(e),
                 }
 
         if results:
@@ -1849,7 +1857,7 @@ class FormsService:
                 "success": False,
                 "mapped_data": mapped_data,
                 "prospect_id": None,
-                "message": f"Prospect creation failed: {e}",
+                "message": f"Prospect creation failed: {safe_error_detail(e)}",
             }
 
     async def _resolve_pipeline_for_form(
@@ -2169,7 +2177,7 @@ class FormsService:
             )
 
             if error:
-                return {"success": False, "error": error}
+                return {"success": False, "error": sanitize_error_message(error)}
 
             return {
                 "success": True,
@@ -2182,7 +2190,7 @@ class FormsService:
                 "error": "Inventory service not available",
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": safe_error_detail(e)}
 
     async def _process_event_registration(
         self,
@@ -2296,7 +2304,7 @@ class FormsService:
                     "message": "Member RSVP created via form registration",
                 }
             except Exception as e:
-                return {"success": False, "error": str(e)}
+                return {"success": False, "error": safe_error_detail(e)}
         else:
             # Public/anonymous submission — store for admin review
             return {
@@ -2480,7 +2488,7 @@ class FormsService:
                 "message": "Event request created for coordinator review",
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": safe_error_detail(e)}
 
     # ============================================
     # Member Lookup
@@ -2490,20 +2498,19 @@ class FormsService:
         self, organization_id: UUID, query: str, limit: int = 20
     ) -> List[Dict[str, Any]]:
         """Search members by name, membership number, or email for member_lookup fields"""
-        safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        search_term = f"%{safe_query}%"
+        search_term = like_pattern(query)
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
             .where(
                 or_(
-                    User.first_name.ilike(search_term),
-                    User.last_name.ilike(search_term),
-                    User.email.ilike(search_term),
-                    User.membership_number.ilike(search_term),
+                    User.first_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    User.last_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    User.email.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    User.membership_number.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                     func.concat(User.first_name, " ", User.last_name).ilike(
-                        search_term
+                        search_term, escape=LIKE_ESCAPE_CHAR
                     ),
                 )
             )

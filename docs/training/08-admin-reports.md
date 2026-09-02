@@ -1265,7 +1265,7 @@ compliance figure.
 | Dark mode backgrounds bleeding through                | Fixed 2026-03-18 — overlays, dropdowns, drawer panels, and sticky elements now use opaque backgrounds in dark mode. Pull latest frontend.                                                                    |
 | High-contrast mode missing styles                     | Fixed 2026-03-18 — high-contrast variants added across 25+ files. Pull latest frontend.                                                                                                                      |
 | API datetime fields missing timezone                  | Fixed 2026-03-16 — all API response schemas now inherit from `UTCResponseBase` which stamps naive datetimes with `+00:00`. Pull latest backend.                                                              |
-| Equipment check reports not showing                   | Navigate to `/scheduling/equipment-check-reports`. Requires `equipment_check.manage` permission. At least one check must be submitted. _(added 2026-03-19)_                                                  |
+| Equipment check reports not showing                   | Navigate to `/inventory/admin/checklists/reports`. Requires `inventory.check_manage` permission. At least one check must be submitted. _(added 2026-03-19)_                                                  |
 | Operational ranks eligible positions not saving       | Ensure you are on the latest migration. The `eligible_positions` JSON column was added 2026-03-19. Run `alembic upgrade head`.                                                                               |
 | Scheduling admin pages return 404                     | Admin tabs were extracted into dedicated routes (`/scheduling/templates`, `/scheduling/patterns`, etc.) in 2026-03-19. Pull latest frontend.                                                                 |
 
@@ -2186,6 +2186,21 @@ and links only — never facility codes, accounts, budgets or leases.
 
 ![The dashboard's Department pulse as an administrator holding finance.manage: dues, cash flow, budget and grant cards among the operational ones](./images/08-75-org-dashboard-with-finance.png)
 
+![The same dashboard as a member holding none of finance.manage, fundraising.view or events.manage: Department pulse is not rendered at all, rather than shown with empty money cards](./images/08-76-org-dashboard-without-finance.png)
+
+_The pair is the point. The member's dashboard does not carry an empty
+Department pulse — the section is absent. An empty card would tell a member the
+department holds finance data they are not trusted with, which is the inference
+the omission prevents._
+
+**Read the second capture as all three permissions withheld, not one.** Each of
+the three blocks is gated independently — on its own permission and on its own
+module being enabled — and the section disappears only when **all three** come
+back empty. A member who lacks `finance.manage` but holds `fundraising.view` or
+`events.manage` still sees Department pulse; what is missing from it is the
+money cards. The member pictured here holds none of the three, which is why the
+whole heading is gone.
+
 ---
 
 ## Every Administration Page Opens the Same Way _(2026-08-23)_
@@ -2298,3 +2313,175 @@ one now:
 
 **No setting moved and no setting changed meaning.** If a member of staff says
 a screen "looks different", that is the whole of it.
+
+---
+
+## Governance → Organizational Chart _(new 2026-08-24)_
+
+**Page:** `/governance/org-chart` · **Reading:** any signed-in member ·
+**Editing:** `orgchart.manage` or `settings.manage`
+
+Your department's chain of command, drawn as a tree you can read as an
+**outline** or as a **diagram** — the same chart, two ways of looking at it.
+
+### Why reading needs no permission
+
+The chart exists so an ordinary member can work out who is in charge of an area
+without asking three people first. Gating it behind a permission would leave
+the general membership — the audience it was built for — outside the one screen
+built for them.
+
+Editing is gated on the server. Without `orgchart.manage` or `settings.manage`
+the page simply opens read-only, showing no edit controls.
+
+### A seat holds more than one person
+
+A box on the chart is a **seat**, and a seat holds however many people fill it.
+A department with two deputy chiefs puts both in one box rather than inventing
+two boxes that mean the same thing.
+
+### A holder does not have to be a member
+
+A seat can name somebody who has no account here — your town attorney, a
+mutual-aid liaison, the county fire marshal. Type the name and it appears.
+Nothing else about that person is stored, and they get no access.
+
+### Linking a seat to a position saves typing, and nothing else
+
+Linking a seat to a position you already maintain **fills its holders in from
+that position's current assignees**, so you do not retype a roster you already
+keep.
+
+**Unlinking keeps the people you typed, and drops the ones the link supplied.**
+That distinction matters before you press it: holders that arrived _from_ the
+position or rank are filtered out of the seat when the link is removed, because
+they were never stored on the seat — they were resolved through the link every
+time the chart was drawn. Only hand-entered holders are rows of their own and
+survive. **A seat whose holders all came from its link becomes vacant when you
+unlink it**, so type the names in first if you want to keep them.
+
+The link is an _assist_, not the box's identity — most departments' org charts
+and permission structures do not match, and the chart has to be able to say
+what is actually true rather than what the permissions imply.
+
+### It starts empty
+
+Nothing is inferred from your positions, ranks or member list. A permission
+structure is not an org chart, and a guessed diagram is one nobody recognises —
+correcting it would take longer than drawing it. Start with your top seat and
+work down.
+
+> **[SCREENSHOT NEEDED — the org chart, outline view.** _Demo data:_ a chart
+> four levels deep — Chief, two Deputy Chiefs sharing one seat, three Captains
+> under one of them, one seat with a non-member holder. Expand the branch
+> containing the shared seat so both names are visible.**]**
+
+> **[SCREENSHOT NEEDED — the org chart, diagram view.** _Demo data:_ the same
+> chart. The two views are not interchangeable; one capture cannot stand in for
+> the other.**]**
+
+> **[SCREENSHOT NEEDED — the org chart node modal.** _Demo data:_ a seat with
+> two member holders and one non-member holder, responsibility text filled in,
+> and the position link visible.**]**
+
+---
+
+## The Testing Checklist Is a Module Now, and It Ships Off _(2026-08-27)_
+
+**Pages:** `/testing`, `/testing/report/print` · **Module:** Testing Checklist
+(**off by default**)
+
+### Where `/testing` went
+
+The Testing Home — the page listing every screen in the application so you can
+walk them before going live — is now a **module of its own**, and the upgrade
+leaves it **switched off**.
+
+**Settings → Modules → Testing Checklist** brings it back.
+
+**Marks held on the server are not lost.** They stay in the database and
+reappear the moment the module is on.
+
+> **⚠️ One exception.** The checklist used to keep marks in the **browser**,
+> under `logbook.testing-checklist.v1`. When it moved to the server there was
+> no import path, and there still isn't. If you are part-way through a
+> walkthrough on a build from before that move, **export your run before you
+> upgrade** — re-enabling the module afterwards gives you an empty server run.
+> While it is off, the navigation entry,
+> the page and the data behind it all refuse — the same way every other
+> switched-off module behaves.
+
+**It is not offered during first-time setup**, deliberately: it is a tool for
+checking an installation, not a decision a department needs to make while
+making every other one.
+
+> **[SCREENSHOT NEEDED — Settings → Modules with Testing Checklist off.**
+> _Demo data:_ the module list on a fresh install. This is the answer to "where
+> did /testing go".**]**
+
+### Runs
+
+A **run** is one named pass over the application — "Pre-launch, build 1.4".
+
+- **Starting a new run archives the one before it.** The old marks stay
+  readable and exportable from the run picker, so you can show what the second
+  pass fixed.
+- **The first mark opens a run on its own**, so nobody has to remember to start
+  one.
+- **Marks record the build they were made against.** After a deployment, the
+  ones made on an earlier build are flagged, and **Needs re-test** filters to
+  exactly those.
+
+### Every mark is checked against what the app expected
+
+Each page knows what _should_ happen for the account doing the testing:
+
+- **A refusal that happened as predicted counts as a gate verified** — positive
+  evidence, not a hole in coverage.
+- **A page that opened for an account that should have been refused is
+  flagged** where you marked it, counted in the header, and listed in the
+  printed report as a **permissions defect**.
+
+That distinction is what makes this more than a list of tickboxes: it separates
+"this screen is broken" from "this screen is visible to the wrong people".
+
+### Getting it out
+
+- **CSV** of every mark
+- **Permission matrix** — page by tester, for whoever signs off
+- **Printable report** at `/testing/report/print` — coverage, failures with
+  their notes, gate mismatches, coverage by area. Save as PDF
+- **Markdown**, unchanged
+
+### Keyboard marking
+
+`j` / `k` move between boxes, `p` / `f` / `b` mark the focused one, `n` jumps
+to the next page with no mark.
+
+> **[SCREENSHOT NEEDED — Testing Home with a named run and the run picker
+> open.** _Demo data:_ a current run, one archived predecessor, a mix of pass /
+> fail / blocked marks, and at least one gate mismatch flagged.**]**
+
+> **[SCREENSHOT NEEDED — the printable testing report.** _Demo data:_ the same
+> run, with a failure carrying a note and a gate mismatch, so both sections
+> have content.**]**
+
+---
+
+## Permission Movements in the August 24–31 Upgrade
+
+**Six upgrade steps move grants on seeded positions — four take a grant away,
+two add a new permission — and nothing restores what the four remove.** Your department's own customized positions are untouched —
+only seeded (`is_system`) ones move.
+
+| Permission            | Movement                                                         | What it means for you                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compliance.view`     | **Revoked** from the Member position                             | It was an accepted alternative on two officer-grade checks, including contributed hours                                                                                                                                                                                                                                                                                      |
+| `notifications.view`  | **Revoked** from the baseline member and junior-rank positions   | It gates three admin tabs, one of which is the Send Log                                                                                                                                                                                                                                                                                                                      |
+| `facilities.view`     | **Revoked** from regular members, then from operational officers | Line officers lose the Facilities workspace unless you re-grant it                                                                                                                                                                                                                                                                                                           |
+| `training.configure`  | **New**, granted to the positions that configure training        | Splits the training **member-visibility panel only** away from `training.manage`, which also lets its holder edit anybody's training records. Every other training setting — shift reports, the report form, apparatus mapping, the rating scale, the review workflow — still needs `training.manage`, so a position given only `training.configure` will get a 403 on those |
+| `users.view_consents` | **New**, granted to the Historian and PIO                        | Opens the photo-use consent roster                                                                                                                                                                                                                                                                                                                                           |
+
+**Also:** `User.rank` is **cleared on every administrative member**, and does
+not come back on downgrade. See
+[Membership Management](./01-membership.md#member-class-and-member-status-changed-2026-08-26).

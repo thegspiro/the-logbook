@@ -63,11 +63,6 @@ class SchedulingModuleConfig(Base):
     # {"first_aid_station": {"positions": [...], "label": "First Aid Station"}}
     resource_type_defaults = Column(JSON, nullable=True)
 
-    # -- Equipment-check rules --
-    # {"enabled": bool, "requireSignature": bool,
-    #  "defaultExpirationWarningDays": int, "blockShiftStartOnFail": bool}
-    equipment_check_settings = Column(JSON, nullable=True)
-
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

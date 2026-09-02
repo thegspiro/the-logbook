@@ -40,6 +40,19 @@ const VendorsPage = lazyWithRetry(() => import('./pages/VendorsPage'));
 const ImpactPlannerPage = lazyWithRetry(() => import('./pages/ImpactPlannerPage'));
 const InventorySetupPage = lazyWithRetry(() => import('./pages/InventorySetupPage'));
 
+// Equipment checklists — the whole feature, authoring through performing.
+// Scheduling links in from a shift; it hosts none of this.
+const EquipmentCheckTemplateBuilder = lazyWithRetry(() => import('./pages/EquipmentCheckTemplateBuilder'));
+const EquipmentCheckReportsPage = lazyWithRetry(() => import('./pages/EquipmentCheckReportsPage'));
+const SupplyExpiringPage = lazyWithRetry(() => import('./pages/SupplyExpiringPage'));
+const FleetBoardPage = lazyWithRetry(() => import('./pages/FleetBoardPage'));
+const CheckLogPage = lazyWithRetry(() => import('./pages/CheckLogPage'));
+const ApparatusDetailPage = lazyWithRetry(() => import('./pages/ApparatusDetailPage'));
+const ApparatusInventoryPage = lazyWithRetry(() => import('./pages/ApparatusInventoryPage'));
+const MyChecklistsPage = lazyWithRetry(() => import('./pages/MyChecklistsPage'));
+const ChecklistsAdminPage = lazyWithRetry(() => import('./pages/ChecklistsAdminPage'));
+const ChecklistSettingsPage = lazyWithRetry(() => import('./pages/ChecklistSettingsPage'));
+
 export const getInventoryRoutes = () => {
   return (
     <React.Fragment>
@@ -57,7 +70,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryItemsPage />
             </Suspense>
@@ -69,9 +82,11 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/my-equipment"
         element={
-          <Suspense fallback={null}>
-            <MyEquipmentPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory">
+            <Suspense fallback={null}>
+              <MyEquipmentPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 
@@ -79,7 +94,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryAdminHub />
             </Suspense>
@@ -91,7 +106,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/setup"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventorySetupPage />
             </Suspense>
@@ -103,7 +118,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/items"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryItemsPage />
             </Suspense>
@@ -114,7 +129,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/pool"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <PoolItemsPage />
             </Suspense>
@@ -125,7 +140,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/categories"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryCategoriesPage />
             </Suspense>
@@ -136,7 +151,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/maintenance"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryMaintenancePage />
             </Suspense>
@@ -147,7 +162,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/members"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryMembersPage />
             </Suspense>
@@ -158,7 +173,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/charges"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <ChargesPage />
             </Suspense>
@@ -169,7 +184,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/returns"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <ReturnRequestsPage />
             </Suspense>
@@ -180,7 +195,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/requests"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <EquipmentRequestsPage />
             </Suspense>
@@ -191,7 +206,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/write-offs"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <WriteOffsPage />
             </Suspense>
@@ -202,7 +217,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/reorder"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <ReorderRequestsPage />
             </Suspense>
@@ -213,7 +228,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/kits"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <EquipmentKitsPage />
             </Suspense>
@@ -224,7 +239,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/variant-groups"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <VariantGroupsPage />
             </Suspense>
@@ -235,7 +250,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/allowances"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <AllowancesPage />
             </Suspense>
@@ -246,7 +261,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/vendors"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <VendorsPage />
             </Suspense>
@@ -257,7 +272,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin/impact-planner"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <ImpactPlannerPage />
             </Suspense>
@@ -269,7 +284,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/checkouts"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryCheckoutsPage />
             </Suspense>
@@ -281,7 +296,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/storage-areas"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <StorageAreasPage />
             </Suspense>
@@ -293,7 +308,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/import"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <ImportInventoryPage />
             </Suspense>
@@ -307,7 +322,7 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/items"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryItemsPage />
             </Suspense>
@@ -319,9 +334,11 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/items/:id"
         element={
-          <Suspense fallback={null}>
-            <ItemDetailPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory">
+            <Suspense fallback={null}>
+              <ItemDetailPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
 
@@ -335,9 +352,193 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/print-labels"
         element={
-          <ProtectedRoute requiredPermission="inventory.manage">
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryBarcodePrintPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ==============================================================
+          Equipment checklists
+
+          A checklist is a list of inventory items, so the whole feature
+          lives here — authoring it, performing it, and reporting on it.
+          Scheduling links in from a shift and hosts none of it.
+
+          Admin-gated screens sit under /inventory/admin/checklists, matching
+          the module's existing convention; the crew-facing board, log, own
+          checklists and apparatus views sit under /inventory/checklists.
+
+          Route gates are the API's gates, not the Scheduling page's: the
+          builder and reports asked for `scheduling.manage` while their
+          endpoints require the check-manage grant, so an officer with one and
+          not the other met either a page they could not use or a page they
+          were refused for no stated reason.
+          ============================================================== */}
+      <Route
+        path="/inventory/admin/checklists"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredPermission="inventory.check_manage"
+          >
+            <Suspense fallback={null}>
+              <ChecklistsAdminPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* The gate is the ENDPOINT's, not the feature's. These four values are
+          stored in org.settings, so they are written through
+          PATCH /organizations/settings, which requires settings.manage or
+          organization.update_settings. Gating this page on
+          inventory.check_manage instead would read as "the quartermaster owns
+          checklist settings" and deliver a page that 403s on every toggle —
+          the same mismatch the builder and reports routes above were fixed for. */}
+      <Route
+        path="/inventory/admin/checklists/settings"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['settings.manage', 'organization.update_settings']}
+          >
+            <Suspense fallback={null}>
+              <ChecklistSettingsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/admin/checklists/templates/new"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredPermission="inventory.check_manage"
+          >
+            <Suspense fallback={null}>
+              <EquipmentCheckTemplateBuilder />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/admin/checklists/templates/:templateId"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredPermission="inventory.check_manage"
+          >
+            <Suspense fallback={null}>
+              <EquipmentCheckTemplateBuilder />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/admin/checklists/reports"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.check_view">
+            <Suspense fallback={null}>
+              <EquipmentCheckReportsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/admin/checklists/supply"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['scheduling.manage', 'inventory.check_view', 'inventory.manage']}
+          >
+            <Suspense fallback={null}>
+              <SupplyExpiringPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Fleet board and its sub-pages. `/log` and `/apparatus-inventory` are
+          declared before the dynamic apparatus route so a literal segment
+          cannot be swallowed as an apparatus id. */}
+      <Route
+        path="/inventory/checklists"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.check_view', 'scheduling.manage']}
+          >
+            <Suspense fallback={null}>
+              <FleetBoardPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/checklists/log"
+        element={
+          /* Crew-level: the server narrows a member without
+             inventory.check_view to their own checks rather than 403ing, so
+             the route opens for anyone who can submit one. */
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.check_submit', 'inventory.check_view', 'scheduling.manage']}
+          >
+            <Suspense fallback={null}>
+              <CheckLogPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/checklists/my"
+        element={
+          /* No permission gate. Performing your own check is the one thing
+             every member does, the API narrows /my-checklists to the caller,
+             and this is now their only route to it — the Scheduling tab that
+             used to carry them here is gone. */
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory">
+            <Suspense fallback={null}>
+              <MyChecklistsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/checklists/apparatus-inventory"
+        element={
+          /* Crew-level, not officer-level: recording what you just used is
+             the whole point, so the default member permission opens it. */
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.check_submit', 'inventory.check_view', 'inventory.view']}
+          >
+            <Suspense fallback={null}>
+              <ApparatusInventoryPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/checklists/apparatus/:apparatusId"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.check_view', 'scheduling.manage']}
+          >
+            <Suspense fallback={null}>
+              <ApparatusDetailPage />
             </Suspense>
           </ProtectedRoute>
         }

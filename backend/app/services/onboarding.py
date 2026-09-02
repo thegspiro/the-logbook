@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_IT_MANAGER, ROLE_MEMBER
-from app.core.permissions import DEFAULT_ROLES
+from app.core.permissions import default_positions_for
 from app.core.seed_admin_hours import seed_admin_hours_data
 from app.core.utils import generate_display_code, generate_uuid
 from app.models.facilities import Facility, FacilityStatus, FacilityType
@@ -70,10 +70,13 @@ ONBOARDING_OFFERED_MODULES = [
 # where it belongs fails rather than quietly landing off-by-default.
 ONBOARDING_SETTINGS_ONLY_MODULES = [
     "communications",
+    "finance",
     "grants",
     "hr_payroll",
     "incidents",
+    "medical_screening",
     "public_info",
+    "testing",
 ]
 
 # Accepted from older saved sessions but not presented by the wizard. These are
@@ -83,7 +86,6 @@ ONBOARDING_LEGACY_MODULES = [
     "compliance",
     "meetings",
     "fundraising",
-    "incidents",
     "equipment",
     "vehicles",
     "budget",
@@ -596,8 +598,8 @@ class OnboardingService:
         await self.db.flush()
         await self.db.refresh(org)  # Refresh to load all attributes properly
 
-        # Create default roles for organization
-        await self._create_default_roles(org.id)
+        # Create default roles for organization, narrowed to this agency type
+        await self._create_default_roles(org.id, org_type_enum.value)
 
         # Create headquarters facility from station address
         await self._create_headquarters_facility(org)
@@ -606,7 +608,11 @@ class OnboardingService:
         status = await self.get_onboarding_status()
         if status:
             status.organization_name = name
-            status.organization_type = organization_type
+            # The coerced value, not the raw argument: the enum column above
+            # silently falls back to fire_department for anything it does not
+            # recognise, and a status record that disagrees with the
+            # organization row is a second answer to the same question.
+            status.organization_type = org_type_enum.value
             await self._mark_step_completed(status, 1, "organization")  # Now Step 1
 
         return org
@@ -814,23 +820,40 @@ class OnboardingService:
                 return code
         raise ValueError("Unable to generate a unique display code.")
 
-    async def _create_default_roles(self, organization_id: str):
+    async def _create_default_roles(self, organization_id: str, organization_type: str):
         """Create default positions for an organization.
 
-        Uses DEFAULT_POSITIONS from permissions.py as the single source of truth.
+        Uses DEFAULT_POSITIONS from permissions.py as the single source of
+        truth, narrowed to what this kind of agency actually has: an EMS-only
+        service is given no Firefighter position, and its chief is a Chief. The
+        agency type is taken as an argument rather than re-read, because the
+        only caller has just written the organization row and holds it — see
+        ``OperationalRankService._seed_set`` for the case that goes the other
+        way. It is required rather than defaulted so a second caller has to
+        decide what kind of agency it is seeding instead of inheriting a fire
+        department by omission.
+
         The it_manager position (priority 100, all permissions) serves as
         the System Owner position for the person who sets up the platform.
         The user may later customize which positions to keep during the PositionSetup
         onboarding step.
+
+        This runs exactly once per install — ``create_organization`` rejects a
+        second organization — and has no idempotency guard of its own. The
+        unique index on ``(organization_id, slug)`` is what would catch a
+        second pass.
         """
-        # Create all positions from the central DEFAULT_POSITIONS registry
-        for slug, role_data in DEFAULT_ROLES.items():
+        for slug, role_data in default_positions_for(organization_type).items():
             role = Role(
                 organization_id=organization_id,
                 name=role_data["name"],
                 slug=slug,
                 description=role_data["description"],
-                permissions=role_data["permissions"],
+                # Copy: the seven rank-mirroring entries hold the *same* list
+                # object as the rank registry (pitfall #23), so persisting the
+                # reference would let an in-place edit of one row rewrite a
+                # module constant — and with it every other org's seed.
+                permissions=list(role_data["permissions"]),
                 is_system=role_data.get("is_system", True),
                 priority=role_data["priority"],
             )
@@ -1235,7 +1258,18 @@ class OnboardingService:
         configurable_keys = list(ModuleSettings.model_fields.keys())
         # Normalize hyphenated IDs (e.g. "hr-payroll") to snake_case
         normalized = {mid.replace("-", "_") for mid in final_modules}
-        modules_dict = {k: k in normalized for k in configurable_keys}
+        # Setup only decides the modules it actually put in front of somebody.
+        # Writing False for the rest turns "the wizard never asked" into "the
+        # department said no" — which is how public_info came to be stored off
+        # on every fresh install despite defaulting on, and would do the same
+        # to Finance and Medical Screening. Settings-only modules keep their
+        # declared default and are changed from Settings → Modules.
+        asked_about = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
+        defaults = ModuleSettings()
+        modules_dict = {
+            key: (key in normalized) if key in asked_about else getattr(defaults, key)
+            for key in configurable_keys
+        }
 
         result = await self.db.execute(
             select(Organization).order_by(Organization.created_at.asc()).limit(1)

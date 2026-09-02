@@ -49,6 +49,11 @@ def _service(**overrides):
     svc.item_in_domain = AsyncMock(
         side_effect=lambda iid, org, types: str(iid) == MEDICAL_ITEM
     )
+    svc.items_in_domain = AsyncMock(
+        side_effect=lambda ids, org, types: {
+            str(i) for i in ids if str(i) == MEDICAL_ITEM
+        }
+    )
     svc.lot_in_domain = AsyncMock(return_value=True)
     for name, value in overrides.items():
         setattr(svc, name, value)
@@ -139,6 +144,56 @@ class TestCategoryDomainPinning:
         )
 
         assert "item_type" not in svc.update_category.await_args.kwargs["update_data"]
+
+    async def test_update_logs_an_audit_event(self, svc):
+        """Creating a medical category audits; updating one silently didn't.
+
+        `inventory.py`'s general `update_category` route audits every update
+        — this router's medical-scoped equivalent is the higher-sensitivity
+        path, not a lower one, so it should not be the one route that leaves
+        no trail.
+        """
+        svc.update_category = AsyncMock(return_value=(MagicMock(), None))
+
+        await ms.update_medical_category(
+            MEDICAL_CAT,
+            InventoryCategoryUpdate(name="Renamed"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        ms.log_audit_event.assert_awaited_once()
+        assert (
+            ms.log_audit_event.await_args.kwargs["event_type"]
+            == "medical_category_updated"
+        )
+
+    async def test_update_audit_reports_metadata_not_the_db_column_name(self, svc):
+        """`InventoryService.update_category` renames "metadata" to the DB
+        column name "extra_data" in the *same* dict passed to it, in place.
+        The audit event must still report what the caller actually changed
+        ("metadata"), not the internal column name that rename leaves behind.
+        """
+
+        async def _rename_metadata_in_place(category_id, organization_id, update_data):
+            if "metadata" in update_data:
+                update_data["extra_data"] = update_data.pop("metadata")
+            return MagicMock(), None
+
+        svc.update_category = AsyncMock(side_effect=_rename_metadata_in_place)
+
+        await ms.update_medical_category(
+            MEDICAL_CAT,
+            InventoryCategoryUpdate(metadata={"note": "restocked"}),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        fields_updated = ms.log_audit_event.await_args.kwargs["event_data"][
+            "fields_updated"
+        ]
+        assert "metadata" in fields_updated
+        assert "extra_data" not in fields_updated
 
 
 class TestItemDomainPinning:
@@ -238,51 +293,70 @@ class TestItemDomainPinning:
 
         assert "category_id" not in svc.update_item.await_args.kwargs["update_data"]
 
+    async def test_update_logs_an_audit_event(self, svc):
+        """Same gap as the category route: create audits, update didn't."""
+        svc.update_item = AsyncMock(return_value=(MagicMock(), None))
+
+        await ms.update_medical_item(
+            MEDICAL_ITEM,
+            InventoryItemUpdate(name="Renamed"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        ms.log_audit_event.assert_awaited_once()
+        assert (
+            ms.log_audit_event.await_args.kwargs["event_type"] == "medical_item_updated"
+        )
+
 
 class TestSummaryCounts:
-    """The tiles must agree with the table underneath them."""
+    """The tiles must agree with the table underneath them.
 
-    def _item(self, **kw):
-        item = MagicMock()
-        item.reorder_point = kw.get("reorder_point")
-        item.quantity = kw.get("quantity", 0)
-        item.is_lot_stocked = kw.get("is_lot_stocked", False)
-        item.lot_stock = kw.get("lot_stock")
-        return item
+    The on-hand-vs-reorder-point logic itself (lots vs. plain `quantity`) is
+    exercised at the service level in `test_inventory_lot_stock_levels.py`;
+    these tests only pin that the router delegates to that scan, scoped to
+    the medical domain, rather than re-deriving it from a possibly-capped
+    item list.
+    """
 
-    async def _low_stock_count(self, svc, items):
-        svc.get_items = AsyncMock(return_value=(items, len(items)))
+    async def test_low_stock_comes_from_the_uncapped_domain_scoped_scan(self, svc):
+        """`low_stock` must equal the alert scan's count, not a page of items.
+
+        `medical_supply_summary` used to compute `low_stock` by walking a
+        `get_items` page capped well below what a large department could
+        have on file, silently undercounting past the cap. Delegating to
+        `get_low_stock_items_for_alerts` (which filters on `reorder_point IS
+        NOT NULL` before loading any rows) has no page to be capped at.
+        """
+        svc.get_items = AsyncMock(return_value=([], 0))
         svc.get_expiring_lots = AsyncMock(return_value=[])
+        svc.get_low_stock_items_for_alerts = AsyncMock(
+            return_value=[(MagicMock(), 0, True) for _ in range(3)]
+        )
+
         result = await ms.medical_supply_summary(
             expiring_within_days=30, db=AsyncMock(), current_user=_user()
         )
-        return result["low_stock"]
 
-    async def test_a_replenished_lot_item_is_not_low(self, svc):
-        """Receiving a lot never touches `quantity`.
-
-        Counting the column alone reported a shelf full of in-date stock as
-        still below its reorder point.
-        """
-        item = self._item(
-            reorder_point=10, quantity=0, is_lot_stocked=True, lot_stock=48
+        assert result["low_stock"] == 3
+        assert (
+            svc.get_low_stock_items_for_alerts.await_args.kwargs["item_types"]
+            == MEDICAL_ITEM_TYPES
         )
-        assert await self._low_stock_count(svc, [item]) == 0
 
-    async def test_a_depleted_lot_item_is_low(self, svc):
-        item = self._item(
-            reorder_point=10, quantity=99, is_lot_stocked=True, lot_stock=2
+    async def test_total_items_does_not_depend_on_the_low_stock_scan(self, svc):
+        """The two counts come from independent queries, not one shared page."""
+        svc.get_items = AsyncMock(return_value=([], 42))
+        svc.get_expiring_lots = AsyncMock(return_value=[])
+        svc.get_low_stock_items_for_alerts = AsyncMock(return_value=[])
+
+        result = await ms.medical_supply_summary(
+            expiring_within_days=30, db=AsyncMock(), current_user=_user()
         )
-        assert await self._low_stock_count(svc, [item]) == 1
 
-    async def test_a_plain_counted_item_still_uses_quantity(self, svc):
-        item = self._item(reorder_point=10, quantity=3)
-        assert await self._low_stock_count(svc, [item]) == 1
-
-    async def test_an_item_with_no_reorder_point_is_never_low(self, svc):
-        """No floor set means the department has not said what low means."""
-        item = self._item(quantity=0)
-        assert await self._low_stock_count(svc, [item]) == 0
+        assert result["total_items"] == 42
+        assert result["low_stock"] == 0
 
 
 class TestLotDomainPinning:
@@ -315,6 +389,7 @@ class TestLotDomainPinning:
 
         assert err.value.status_code == 404
         svc.add_lots_bulk.assert_not_awaited()
+        svc.items_in_domain.assert_awaited_once()
 
     async def test_an_all_medical_delivery_is_written(self, svc):
         svc.add_lots_bulk = AsyncMock(return_value=[])
@@ -328,6 +403,28 @@ class TestLotDomainPinning:
         )
 
         svc.add_lots_bulk.assert_awaited_once()
+
+    async def test_a_delivery_checks_domain_in_one_query_not_one_per_line(self, svc):
+        """A 200-line delivery must cost one query, not two hundred.
+
+        `items_in_domain` replaced a per-entry `item_in_domain` loop for
+        exactly this reason — pin the call shape so it can't regress.
+        """
+        svc.add_lots_bulk = AsyncMock(return_value=[])
+
+        await ms.receive_medical_delivery(
+            InventoryLotBulkCreate(
+                entries=[
+                    {"inventory_item_id": MEDICAL_ITEM, "quantity": 5},
+                    {"inventory_item_id": MEDICAL_ITEM, "quantity": 3},
+                ]
+            ),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        svc.items_in_domain.assert_awaited_once()
+        svc.item_in_domain.assert_not_awaited()
 
     async def test_expiring_lots_are_scoped_to_the_domain(self, svc):
         svc.get_expiring_lots = AsyncMock(return_value=[])
@@ -349,3 +446,24 @@ class TestLotDomainPinning:
 
         assert err.value.status_code == 404
         svc.delete_lot.assert_not_awaited()
+
+    async def test_clearing_lot_quantity_is_a_clean_400(self, svc):
+        """update_lot now raises ValueError against a null NOT NULL field
+        (see test_inventory_service.py::TestUpdateLot); this router must
+        convert that to a 400, not let it fall through to an unhandled
+        500."""
+        from app.schemas.inventory import InventoryLotUpdate
+
+        svc.update_lot = AsyncMock(
+            side_effect=ValueError("Field 'quantity' cannot be cleared")
+        )
+
+        with pytest.raises(HTTPException) as err:
+            await ms.update_medical_lot(
+                "lot-1",
+                InventoryLotUpdate(quantity=None),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        assert err.value.status_code == 400

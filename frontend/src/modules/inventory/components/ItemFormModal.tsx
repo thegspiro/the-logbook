@@ -87,6 +87,21 @@ export interface ItemFormDefaults {
   tracking_type?: string | undefined;
 }
 
+/**
+ * Status an unsafe condition forces, mirroring
+ * ``InventoryService._status_from_condition``. Returns nothing when the pair
+ * is already legal, so the field stays absent from the payload and the backend
+ * leaves the stored status alone.
+ */
+function statusForUnsafeCondition(currentStatus: string, condition: string): { status: string } | undefined {
+  if (currentStatus !== 'available') return undefined;
+  if (condition === 'poor' || condition === 'damaged' || condition === 'out_of_service') {
+    return { status: 'in_maintenance' };
+  }
+  if (condition === 'retired') return { status: 'retired' };
+  return undefined;
+}
+
 export interface ItemFormModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -334,6 +349,18 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         tracking_type: f.tracking_type || undefined,
         quantity: f.quantity ? Number(f.quantity) : undefined,
         condition: f.condition || undefined,
+        // This form has no Status control, but the backend requires an
+        // AVAILABLE item to be in excellent/good/fair condition — so the last
+        // four options of the Condition dropdown above produced a 400 naming a
+        // field that does not exist anywhere on the screen, with no way to
+        // satisfy it. Derive the status the same way the service's
+        // _status_from_condition does.
+        //
+        // Only when the item would otherwise be AVAILABLE: an ASSIGNED item
+        // recorded as damaged is a legal pair, and overriding it here would
+        // quietly pull a member's issued gear out of service on an unrelated
+        // edit.
+        ...(statusForUnsafeCondition(editItem?.status ?? 'available', f.condition) ?? {}),
       };
       if (editItem) {
         await inventoryService.updateItem(editItem.id, p);

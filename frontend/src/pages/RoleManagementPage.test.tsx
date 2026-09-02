@@ -28,6 +28,24 @@ const role = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
+const memberRole = {
+  ...role,
+  id: 'member-role',
+  name: 'Member',
+  slug: 'member',
+  is_system: true,
+  priority: 10,
+};
+
+const fixedSystemRole = {
+  ...role,
+  id: 'chief-role',
+  name: 'Chief',
+  slug: 'chief',
+  is_system: true,
+  priority: 90,
+};
+
 describe('RoleManagementPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,5 +82,39 @@ describe('RoleManagementPage', () => {
     await waitFor(() => expect(screen.getByLabelText('Role Name')).toHaveFocus());
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(editButton).toHaveFocus();
+  });
+
+  it('edits the regular-member display name without submitting its slug', async () => {
+    const user = userEvent.setup();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole]);
+    vi.mocked(roleService.updateRole).mockResolvedValue({ ...memberRole, name: 'Volunteer' });
+    renderWithRouter(<RoleManagementPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    const name = screen.getByLabelText('Role Name');
+    expect(name).toBeEnabled();
+    expect(screen.getByText(/display name may be customized/i)).toHaveTextContent(
+      'internal “member” slug remains unchanged'
+    );
+
+    await user.clear(name);
+    await user.type(name, 'Volunteer');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() =>
+      expect(roleService.updateRole).toHaveBeenCalledWith('member-role', expect.objectContaining({ name: 'Volunteer' }))
+    );
+    expect(vi.mocked(roleService.updateRole).mock.calls[0]?.[1]).not.toHaveProperty('slug');
+  });
+
+  it('keeps other system-position names fixed', async () => {
+    const user = userEvent.setup();
+    vi.mocked(roleService.getRoles).mockResolvedValue([fixedSystemRole]);
+    renderWithRouter(<RoleManagementPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByLabelText('Role Name')).toBeDisabled();
+    expect(screen.getByText(/only the description and permissions/i)).toBeInTheDocument();
   });
 });

@@ -21,6 +21,7 @@ import {
   Activity,
   Calendar,
   Search,
+  Settings,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
@@ -37,7 +38,7 @@ const FACILITIES_PAGE_SIZE = 24;
 export default function FacilitiesDashboard() {
   const navigate = useNavigate();
   const tz = useTimezone();
-  const { canCreate } = useFacilitiesAccess();
+  const { canCreate, canManage } = useFacilitiesAccess();
   const {
     facilities,
     facilitiesTotal,
@@ -124,6 +125,14 @@ export default function FacilitiesDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canManage && (
+            <button
+              onClick={() => void navigate('/facilities/settings')}
+              className="btn-secondary flex items-center gap-2 text-sm"
+            >
+              <Settings className="h-4 w-4" /> Facility Settings
+            </button>
+          )}
           {displayedFacilities.length > 0 && (
             <button
               onClick={() =>
@@ -206,7 +215,7 @@ export default function FacilitiesDashboard() {
                 </button>
               </div>
               <div className="p-4">
-                {!stats?.overdueMaintenanceRecords.length ? (
+                {!stats?.overdueMaintenanceRecords?.length ? (
                   <div className="py-8 text-center">
                     <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500" />
                     <p className="text-theme-text-muted text-sm">No overdue maintenance items</p>
@@ -255,7 +264,7 @@ export default function FacilitiesDashboard() {
                 </button>
               </div>
               <div className="p-4">
-                {!stats?.upcomingInspections.length ? (
+                {!stats?.upcomingInspections?.length ? (
                   <div className="py-8 text-center">
                     <ClipboardCheck className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
                     <p className="text-theme-text-muted text-sm">No inspections in the next 30 days</p>

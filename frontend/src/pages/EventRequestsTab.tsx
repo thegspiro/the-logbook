@@ -53,6 +53,7 @@ import type {
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, localToUTC } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
+import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 
 const STATUS_CONFIG: Record<EventRequestStatus, { label: string; color: string; icon: React.ElementType }> = {
   submitted: {
@@ -1279,7 +1280,7 @@ const EventRequestsTab: React.FC = () => {
                                           <UserCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                           <span className="text-theme-text-primary font-medium">{v.member_name}</span>
                                           <span className="text-theme-text-muted text-xs">
-                                            {v.outreach_role_label || v.position.replace(/_/g, ' ')}
+                                            {v.outreach_role_label || positionLabel(v.position)}
                                           </span>
                                         </li>
                                       ))}

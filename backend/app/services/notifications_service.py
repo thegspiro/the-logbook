@@ -20,6 +20,8 @@ from app.models.notification import (
     NotificationLog,
     NotificationRule,
 )
+from app.utils.model_updates import apply_updates
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 logger = logging.getLogger(__name__)
 
@@ -73,14 +75,13 @@ class NotificationsService:
             query = query.where(NotificationRule.enabled == enabled)
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
                 or_(
-                    NotificationRule.name.ilike(search_term),
-                    NotificationRule.description.ilike(search_term),
+                    NotificationRule.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    NotificationRule.description.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
                 )
             )
 
@@ -108,8 +109,7 @@ class NotificationsService:
             if not rule:
                 return None, "Notification rule not found"
 
-            for key, value in update_data.items():
-                setattr(rule, key, value)
+            apply_updates(rule, update_data, skip={"id", "organization_id"})
 
             await self.db.commit()
             await self.db.refresh(rule)

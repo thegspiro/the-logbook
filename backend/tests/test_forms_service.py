@@ -7,11 +7,18 @@ merely by the key being present.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.models.forms import IntegrationType
+from app.models.forms import (
+    FieldType,
+    Form,
+    FormField,
+    FormIntegration,
+    IntegrationTarget,
+    IntegrationType,
+)
 from app.services.forms_service import FormsService
 
 
@@ -158,3 +165,232 @@ async def test_invalid_public_form_does_not_consume_daily_cap(monkeypatch):
     assert error == "Required field 'Required' is missing"
     cap.assert_not_awaited()
     db.add.assert_not_called()
+
+
+def _db_returning(row):
+    db = MagicMock()
+    db.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=row))
+    )
+    db.commit = AsyncMock()
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock()
+    db.rollback = AsyncMock()
+    return db
+
+
+class TestUpdateForm:
+    """update_form must route through apply_updates so an explicit null
+    actually clears a nullable field, and rejects one against a NOT NULL
+    column with a clean error instead of a blind setattr."""
+
+    async def test_clears_a_nullable_field(self):
+        form = Form(
+            id="f1",
+            organization_id="org-1",
+            name="Outreach",
+            description="old description",
+        )
+        db = _db_returning(form)
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(return_value=form)
+
+        result, error = await service.update_form("f1", "org-1", {"description": None})
+
+        assert error is None
+        assert result.description is None
+
+    async def test_rejects_null_against_not_null_name(self):
+        form = Form(id="f1", organization_id="org-1", name="Outreach")
+        db = _db_returning(form)
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(return_value=form)
+
+        result, error = await service.update_form("f1", "org-1", {"name": None})
+
+        assert result is None
+        assert error is not None
+        db.rollback.assert_awaited_once()
+
+
+class TestUpdateField:
+    async def test_clears_a_nullable_field(self):
+        field = FormField(
+            id="fld1",
+            form_id="f1",
+            label="Notes",
+            field_type=FieldType.TEXT,
+            help_text="old help text",
+        )
+        db = _db_returning(field)
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(
+            return_value=Form(id="f1", organization_id="org-1", name="Outreach")
+        )
+
+        result, error = await service.update_field(
+            "fld1", "f1", "org-1", {"help_text": None}
+        )
+
+        assert error is None
+        assert result.help_text is None
+
+    async def test_rejects_null_against_not_null_label(self):
+        field = FormField(
+            id="fld1", form_id="f1", label="Notes", field_type=FieldType.TEXT
+        )
+        db = _db_returning(field)
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(
+            return_value=Form(id="f1", organization_id="org-1", name="Outreach")
+        )
+
+        result, error = await service.update_field(
+            "fld1", "f1", "org-1", {"label": None}
+        )
+
+        assert result is None
+        assert error is not None
+        db.rollback.assert_awaited_once()
+
+
+class TestUpdateIntegration:
+    async def test_rejects_null_against_not_null_target_module(self):
+        integration = FormIntegration(
+            id="int1",
+            form_id="f1",
+            organization_id="org-1",
+            target_module=IntegrationTarget.INVENTORY,
+            integration_type=IntegrationType.EQUIPMENT_ASSIGNMENT,
+        )
+        db = _db_returning(integration)
+        service = FormsService(db)
+
+        result, error = await service.update_integration(
+            "int1", "f1", "org-1", {"target_module": None}
+        )
+
+        assert result is None
+        assert error is not None
+        db.rollback.assert_awaited_once()
+
+
+class TestIntegrationProcessorsSanitizeErrors:
+    """An integration-processor exception is stored on
+    submission.integration_result, and FormSubmissionResponse serializes
+    that column straight back to the caller of submit_form (any
+    authenticated member — submit_form carries no elevated permission
+    requirement) and to forms.manage admins via get_submission/
+    list_submissions/reprocess_submission_integrations. Raw ``str(e)`` here
+    is the same leak class FORM-7 fixed on the (result, error) tuple path,
+    just reached through a different field — every processor must route the
+    exception through safe_error_detail() instead of interpolating it
+    directly."""
+
+    async def test_equipment_assignment_processor_sanitizes_db_error(self):
+        submission = SimpleNamespace(
+            data={"f-member": "user-1", "f-item": "item-1"},
+            organization_id="org-1",
+            submitted_by="user-1",
+        )
+        form = SimpleNamespace(fields=[])
+        integration = SimpleNamespace(
+            field_mappings={"f-member": "member_id", "f-item": "item_id"}
+        )
+        # _entity_in_org: any by-id lookup resolves to a row in-org.
+        db = _db_returning("found")
+        service = FormsService(db)
+
+        sensitive = "Unknown column 'assigned_by_fk' in 'field list'"
+        with patch("app.services.inventory_service.InventoryService") as mock_inv:
+            mock_inv.return_value.assign_item_to_user = AsyncMock(
+                side_effect=RuntimeError(sensitive)
+            )
+            result = await service._process_equipment_assignment(
+                submission, integration=integration, form=form
+            )
+
+        assert result["success"] is False
+        assert sensitive not in result["error"]
+        assert "field list" not in result["error"]
+
+    async def test_equipment_assignment_processor_sanitizes_returned_error(self):
+        """InventoryService.assign_item_to_user() doesn't raise on failure —
+        it returns (None, str(e)) (inventory_service.py). That bypasses the
+        except-block sanitizer entirely, so the (result, error) tuple branch
+        needs its own sanitize_error_message() call, not just the except."""
+        submission = SimpleNamespace(
+            data={"f-member": "user-1", "f-item": "item-1"},
+            organization_id="org-1",
+            submitted_by="user-1",
+        )
+        form = SimpleNamespace(fields=[])
+        integration = SimpleNamespace(
+            field_mappings={"f-member": "member_id", "f-item": "item_id"}
+        )
+        db = _db_returning("found")
+        service = FormsService(db)
+
+        sensitive = "(pymysql.err.IntegrityError) (1452, 'Cannot add or update')"
+        with patch("app.services.inventory_service.InventoryService") as mock_inv:
+            mock_inv.return_value.assign_item_to_user = AsyncMock(
+                return_value=(None, sensitive)
+            )
+            result = await service._process_equipment_assignment(
+                submission, integration=integration, form=form
+            )
+
+        assert result["success"] is False
+        assert sensitive not in result["error"]
+        assert "pymysql" not in result["error"]
+
+    async def test_process_integrations_direct_path_sanitizes_error(self):
+        """The aggregator's own except (form.integration_type set, no
+        FormIntegration row) must not leak a processor's raw exception."""
+        submission = SimpleNamespace(
+            id="sub-1",
+            integration_processed=False,
+            integration_result=None,
+        )
+        form = SimpleNamespace(integration_type="equipment_assignment", integrations=[])
+        db = AsyncMock()
+        service = FormsService(db)
+
+        sensitive = 'OperationalError: (2003, "Can\'t connect to MySQL server")'
+        service._process_equipment_assignment = AsyncMock(
+            side_effect=RuntimeError(sensitive)
+        )
+        service._auto_advance_pipeline_step = AsyncMock()
+
+        await service._process_integrations(submission, form)
+
+        error_text = submission.integration_result["equipment_assignment"]["error"]
+        assert sensitive not in error_text
+        assert "MySQL" not in error_text
+
+    async def test_process_integrations_legacy_path_sanitizes_error(self):
+        """Same aggregator except, taken via the legacy FormIntegration-row
+        path (form.integration_type unset)."""
+        submission = SimpleNamespace(
+            id="sub-2",
+            integration_processed=False,
+            integration_result=None,
+        )
+        legacy_integration = SimpleNamespace(
+            integration_type=IntegrationType.EVENT_REGISTRATION, is_active=True
+        )
+        form = SimpleNamespace(integration_type=None, integrations=[legacy_integration])
+        db = AsyncMock()
+        service = FormsService(db)
+
+        sensitive = "IntegrityError: duplicate entry for key 'events.pk'"
+        service._process_event_registration = AsyncMock(
+            side_effect=RuntimeError(sensitive)
+        )
+        service._auto_advance_pipeline_step = AsyncMock()
+
+        await service._process_integrations(submission, form)
+
+        error_text = submission.integration_result["event_registration"]["error"]
+        assert sensitive not in error_text
+        assert "IntegrityError" not in error_text

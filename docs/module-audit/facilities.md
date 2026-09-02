@@ -79,6 +79,11 @@ query param — the search branch is unreachable from the API. Not a bug; a
 wired-but-unexposed feature. **Status:** flagged (adding the query param is a
 small API addition, left for deliberate feature work rather than auto-applied).
 
+**✅ Closed (security-review 12, 2026-08-26):** `GET /facilities` and
+`GET /facilities/page` both now accept and forward `search`, and
+`FacilitiesDashboard.tsx` calls it. See
+`docs/security-review/FAC-12-facilities.md`.
+
 ### FAC-5 — HIGH access control — sensitive facility data readable with baseline `facilities.view` — ✅ FIXED (2026-08-13)
 
 The default **member** position holds `facilities.view`, and once FAC-P1
@@ -175,6 +180,23 @@ room-owned rather than bidirectional, which is a sound design but narrower than
   capital planning.
 
 ## Active gaps and improvement opportunities
+
+### FAC-P11 — HIGH access boundary — Facilities was seeded as a member workspace — ✅ FIXED (2026-08-26)
+
+The backend routes were permission-gated, but both rank-and-file operational
+ranks and the default Member position were seeded with `facilities.view`.
+Consequently the nominal permission boundary still admitted every regular
+member to facility records. The baseline grant has been removed from Member,
+Firefighter, EMT, and Engineer defaults and a migration revokes it from their
+existing system positions. Leadership continues to inherit
+`facilities.view`; the Facilities Manager retains `facilities.manage` and the
+full workflow.
+
+The side navigation, top navigation, and command palette now apply the same
+view-or-manage entry check as the protected routes. This avoids advertising a
+page that will reject the user, reduces unnecessary route prefetch/API work,
+and keeps authorization enforcement on the backend rather than relying on
+hidden UI alone.
 
 ### FAC-P2 — MEDIUM correctness/scale — Counts and dashboard rows have different scopes
 

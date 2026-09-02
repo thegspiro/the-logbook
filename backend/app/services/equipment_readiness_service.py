@@ -59,6 +59,7 @@ from app.models.training import (
     Shift,
     ShiftEquipmentCheck,
     ShiftStatus,
+    ShiftTemplateEquipmentCheck,
 )
 from app.models.user import User
 
@@ -173,7 +174,7 @@ class EquipmentReadinessService:
         """Expected-vs-actual checks over the most recent ``dates`` duty days.
 
         ``only_user_id`` narrows the log to checks that member performed —
-        the shape a member without ``equipment_check.view`` gets. It filters
+        the shape a member without ``inventory.check_view`` gets. It filters
         the *log entries*; the grid is suppressed for that scope because a
         matrix of one member's checks would read as fleet coverage.
         """
@@ -325,15 +326,22 @@ class EquipmentReadinessService:
             for row in basic_result.scalars().all()
         }
 
-    async def _load_templates(
-        self, organization_id: str
-    ) -> Tuple[Dict[str, List[EquipmentCheckTemplate]], Dict[str, List[Any]]]:
-        """Active templates grouped by apparatus id and by apparatus type.
+    async def _load_templates(self, organization_id: str) -> Tuple[
+        Dict[str, List[EquipmentCheckTemplate]],
+        Dict[str, List[Any]],
+        Dict[str, EquipmentCheckTemplate],
+    ]:
+        """Active templates grouped by apparatus id, by apparatus type, and by id.
 
         The batched counterpart of ``EquipmentCheckService._resolve_templates``,
         which issues two queries per shift. A fortnight of a five-rig fleet is
         seventy-odd shifts, so resolving per shift is the difference between
         two queries and a hundred and forty.
+
+        The by-id map is what a shift template's explicit links resolve
+        through. It holds only *active* templates, which is why a link to a
+        deactivated checklist contributes no expected check rather than a
+        permanently missed one.
         """
         result = await self.db.execute(
             select(EquipmentCheckTemplate).where(
@@ -343,12 +351,37 @@ class EquipmentReadinessService:
         )
         by_apparatus: Dict[str, List[EquipmentCheckTemplate]] = {}
         by_type: Dict[str, List[EquipmentCheckTemplate]] = {}
+        by_id: Dict[str, EquipmentCheckTemplate] = {}
         for tmpl in result.scalars().all():
+            by_id[str(tmpl.id)] = tmpl
             if tmpl.apparatus_id:
                 by_apparatus.setdefault(str(tmpl.apparatus_id), []).append(tmpl)
             elif tmpl.apparatus_type:
                 by_type.setdefault(tmpl.apparatus_type.lower(), []).append(tmpl)
-        return by_apparatus, by_type
+        return by_apparatus, by_type, by_id
+
+    async def _load_shift_template_links(
+        self, organization_id: str
+    ) -> Dict[str, List[str]]:
+        """Checklist ids each shift template names, keyed by shift template.
+
+        A shift template absent from this map named none, and its shifts fall
+        back to apparatus resolution. One present maps to exactly what its
+        officer chose — including, after inactive checklists are dropped, to
+        nothing.
+        """
+        result = await self.db.execute(
+            select(
+                ShiftTemplateEquipmentCheck.shift_template_id,
+                ShiftTemplateEquipmentCheck.equipment_check_template_id,
+            )
+            .where(ShiftTemplateEquipmentCheck.organization_id == organization_id)
+            .order_by(ShiftTemplateEquipmentCheck.sort_order)
+        )
+        links: Dict[str, List[str]] = {}
+        for shift_template_id, check_template_id in result.all():
+            links.setdefault(str(shift_template_id), []).append(str(check_template_id))
+        return links
 
     @staticmethod
     def _templates_for(
@@ -387,7 +420,8 @@ class EquipmentReadinessService:
         department that runs shifts three days a week gets ``dates`` columns
         of real duty days rather than a fortnight mostly made of blanks.
         """
-        by_apparatus, by_type = await self._load_templates(organization_id)
+        by_apparatus, by_type, by_id = await self._load_templates(organization_id)
+        links = await self._load_shift_template_links(organization_id)
 
         # Look back generously to find `dates` distinct duty days, then trim.
         # Four times the window covers a department running shifts twice a
@@ -413,7 +447,17 @@ class EquipmentReadinessService:
             unit = fleet.get(str(shift.apparatus_id or ""))
             if unit is None:
                 continue
-            for tmpl in self._templates_for(unit, by_apparatus, by_type):
+            # A shift template that names checklists replaces apparatus
+            # resolution, matching _resolve_templates. Disagreeing here would
+            # report a rig compliant or missed against a checklist set the crew
+            # was never shown.
+            linked = links.get(str(getattr(shift, "template_id", None) or ""))
+            templates = (
+                [by_id[tid] for tid in linked if tid in by_id]
+                if linked is not None
+                else self._templates_for(unit, by_apparatus, by_type)
+            )
+            for tmpl in templates:
                 expected.append((shift, tmpl))
 
         if not expected:

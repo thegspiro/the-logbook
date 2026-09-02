@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
+import { DialogPortal } from '../../../components/DialogPortal';
 import { useNavigate } from 'react-router';
 import {
   ArrowLeft,
@@ -981,288 +982,296 @@ export const PipelineSettingsPage: React.FC = () => {
 
       {/* Clone Pipeline Modal */}
       {showCloneModal && (
-        <div
-          className="modal-overlay z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="clone-pipeline-title"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowCloneModal(false);
-          }}
-        >
-          <div ref={dialogRef1} className="modal-panel modal-panel-scroll w-full max-w-md">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2
-                id="clone-pipeline-title"
-                className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
-              >
-                <Copy className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
-                Clone Pipeline
-              </h2>
-              <button
-                onClick={() => setShowCloneModal(false)}
-                className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                aria-label="Close dialog"
-              >
-                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="p-6">
-              <p className="text-theme-text-muted mb-4 text-sm">
-                Create a copy of &quot;{currentPipeline?.name}&quot; with all its stages.
-              </p>
-              <label htmlFor="clone-pipeline-name" className="text-theme-text-muted mb-1 block text-sm">
-                New Pipeline Name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="clone-pipeline-name"
-                type="text"
-                value={cloneName}
-                onChange={(e) => setCloneName(e.target.value)}
-                placeholder="e.g., New Member Onboarding (Copy)"
-                required
-                aria-required="true"
-                className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
-              />
-            </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowCloneModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleClonePipeline();
-                }}
-                disabled={isCloning || !cloneName.trim()}
-                className="btn-primary flex items-center gap-2 px-6"
-              >
-                {isCloning && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                Clone
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Save as Template Modal */}
-      {showSaveTemplateModal && (
-        <div
-          className="modal-overlay z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="save-template-title"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowSaveTemplateModal(false);
-          }}
-        >
-          <div ref={dialogRef2} className="modal-panel modal-panel-scroll w-full max-w-md">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2
-                id="save-template-title"
-                className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
-              >
-                <BookTemplate className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
-                Save as Template
-              </h2>
-              <button
-                onClick={() => setShowSaveTemplateModal(false)}
-                className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                aria-label="Close dialog"
-              >
-                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="p-6">
-              <p className="text-theme-text-muted mb-4 text-sm">
-                Save &quot;{currentPipeline?.name}&quot; as a reusable template for future pipelines.
-              </p>
-              <label htmlFor="template-name" className="text-theme-text-muted mb-1 block text-sm">
-                Template Name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="template-name"
-                type="text"
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                placeholder="e.g., Standard Onboarding Template"
-                required
-                aria-required="true"
-                className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
-              />
-            </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowSaveTemplateModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleSaveAsTemplate();
-                }}
-                disabled={isSavingTemplate || !templateName.trim()}
-                className="btn-primary flex items-center gap-2 px-6"
-              >
-                {isSavingTemplate && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                Save Template
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Template Gallery Modal */}
-      {showTemplateGallery && (
-        <div
-          className="modal-overlay z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="template-gallery-title"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowTemplateGallery(false);
-          }}
-        >
-          <div ref={dialogRef3} className="modal-panel flex max-h-[80dvh] w-full max-w-lg flex-col">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2
-                id="template-gallery-title"
-                className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
-              >
-                <BookTemplate className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
-                Template Gallery
-              </h2>
-              <button
-                onClick={() => setShowTemplateGallery(false)}
-                className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                aria-label="Close dialog"
-              >
-                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              {isLoadingTemplates ? (
-                <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
-                  <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" aria-hidden="true" />
-                </div>
-              ) : templates.length === 0 ? (
-                <div className="py-8 text-center">
-                  <BookTemplate className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
-                  <p className="text-theme-text-muted mb-1 text-sm">No templates available</p>
-                  <p className="text-theme-text-muted text-xs">Save a pipeline as a template to see it here.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {templates.map((tpl) => (
-                    <div
-                      key={tpl.id}
-                      className="border-theme-surface-border rounded-lg border p-4 transition-colors hover:border-red-500/30"
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <h3 className="text-theme-text-primary text-sm font-medium">{tpl.name}</h3>
-                        <span className="text-theme-text-muted text-xs">{tpl.stage_count} stages</span>
-                      </div>
-                      {tpl.description && <p className="text-theme-text-muted mb-3 text-xs">{tpl.description}</p>}
-                      <button
-                        onClick={() => {
-                          void handleUseTemplate(tpl.id, `${tpl.name} Pipeline`);
-                        }}
-                        disabled={isCreatingFromTemplate}
-                        className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
-                      >
-                        {isCreatingFromTemplate ? (
-                          <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Plus className="h-3 w-3" aria-hidden="true" />
-                        )}
-                        Use Template
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Pipeline Modal */}
-      {showCreateModal && (
-        <div
-          className="modal-overlay z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="create-pipeline-title"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowCreateModal(false);
-          }}
-        >
-          <div ref={dialogRef4} className="modal-panel modal-panel-scroll w-full max-w-md">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 id="create-pipeline-title" className="text-theme-text-primary text-lg font-bold">
-                Create Pipeline
-              </h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                aria-label="Close dialog"
-              >
-                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="space-y-4 p-6">
-              <div>
-                <label htmlFor="create-pipeline-name" className="text-theme-text-muted mb-1 block text-sm">
-                  Pipeline Name <span aria-hidden="true">*</span>
+        <DialogPortal>
+          <div
+            className="modal-overlay z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clone-pipeline-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowCloneModal(false);
+            }}
+          >
+            <div ref={dialogRef1} className="modal-panel modal-panel-scroll w-full max-w-md">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                <h2
+                  id="clone-pipeline-title"
+                  className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
+                >
+                  <Copy className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
+                  Clone Pipeline
+                </h2>
+                <button
+                  onClick={() => setShowCloneModal(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  aria-label="Close dialog"
+                >
+                  <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="p-6">
+                <p className="text-theme-text-muted mb-4 text-sm">
+                  Create a copy of &quot;{currentPipeline?.name}&quot; with all its stages.
+                </p>
+                <label htmlFor="clone-pipeline-name" className="text-theme-text-muted mb-1 block text-sm">
+                  New Pipeline Name <span aria-hidden="true">*</span>
                 </label>
                 <input
-                  id="create-pipeline-name"
+                  id="clone-pipeline-name"
                   type="text"
-                  value={pipelineName}
-                  onChange={(e) => setPipelineName(e.target.value)}
-                  placeholder="e.g., New Member Onboarding"
+                  value={cloneName}
+                  onChange={(e) => setCloneName(e.target.value)}
+                  placeholder="e.g., New Member Onboarding (Copy)"
                   required
                   aria-required="true"
                   className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
               </div>
-              <div>
-                <label htmlFor="create-pipeline-description" className="text-theme-text-muted mb-1 block text-sm">
-                  Description
-                </label>
-                <textarea
-                  id="create-pipeline-description"
-                  value={pipelineDescription}
-                  onChange={(e) => setPipelineDescription(e.target.value)}
-                  placeholder="Describe this pipeline's purpose..."
-                  rows={3}
-                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
-                />
+              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                <button
+                  onClick={() => setShowCloneModal(false)}
+                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    void handleClonePipeline();
+                  }}
+                  disabled={isCloning || !cloneName.trim()}
+                  className="btn-primary flex items-center gap-2 px-6"
+                >
+                  {isCloning && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  Clone
+                </button>
               </div>
             </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleCreatePipeline();
-                }}
-                disabled={isCreating}
-                className="btn-primary flex items-center gap-2 px-6"
-              >
-                {isCreating && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-                Create Pipeline
-              </button>
+          </div>
+        </DialogPortal>
+      )}
+
+      {/* Save as Template Modal */}
+      {showSaveTemplateModal && (
+        <DialogPortal>
+          <div
+            className="modal-overlay z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="save-template-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowSaveTemplateModal(false);
+            }}
+          >
+            <div ref={dialogRef2} className="modal-panel modal-panel-scroll w-full max-w-md">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                <h2
+                  id="save-template-title"
+                  className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
+                >
+                  <BookTemplate className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
+                  Save as Template
+                </h2>
+                <button
+                  onClick={() => setShowSaveTemplateModal(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  aria-label="Close dialog"
+                >
+                  <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="p-6">
+                <p className="text-theme-text-muted mb-4 text-sm">
+                  Save &quot;{currentPipeline?.name}&quot; as a reusable template for future pipelines.
+                </p>
+                <label htmlFor="template-name" className="text-theme-text-muted mb-1 block text-sm">
+                  Template Name <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="template-name"
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="e.g., Standard Onboarding Template"
+                  required
+                  aria-required="true"
+                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                />
+              </div>
+              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                <button
+                  onClick={() => setShowSaveTemplateModal(false)}
+                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    void handleSaveAsTemplate();
+                  }}
+                  disabled={isSavingTemplate || !templateName.trim()}
+                  className="btn-primary flex items-center gap-2 px-6"
+                >
+                  {isSavingTemplate && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  Save Template
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </DialogPortal>
+      )}
+
+      {/* Template Gallery Modal */}
+      {showTemplateGallery && (
+        <DialogPortal>
+          <div
+            className="modal-overlay z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="template-gallery-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowTemplateGallery(false);
+            }}
+          >
+            <div ref={dialogRef3} className="modal-panel flex max-h-[80dvh] w-full max-w-lg flex-col">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                <h2
+                  id="template-gallery-title"
+                  className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
+                >
+                  <BookTemplate className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
+                  Template Gallery
+                </h2>
+                <button
+                  onClick={() => setShowTemplateGallery(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  aria-label="Close dialog"
+                >
+                  <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                {isLoadingTemplates ? (
+                  <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
+                    <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" aria-hidden="true" />
+                  </div>
+                ) : templates.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <BookTemplate className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
+                    <p className="text-theme-text-muted mb-1 text-sm">No templates available</p>
+                    <p className="text-theme-text-muted text-xs">Save a pipeline as a template to see it here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {templates.map((tpl) => (
+                      <div
+                        key={tpl.id}
+                        className="border-theme-surface-border rounded-lg border p-4 transition-colors hover:border-red-500/30"
+                      >
+                        <div className="mb-2 flex items-center justify-between">
+                          <h3 className="text-theme-text-primary text-sm font-medium">{tpl.name}</h3>
+                          <span className="text-theme-text-muted text-xs">{tpl.stage_count} stages</span>
+                        </div>
+                        {tpl.description && <p className="text-theme-text-muted mb-3 text-xs">{tpl.description}</p>}
+                        <button
+                          onClick={() => {
+                            void handleUseTemplate(tpl.id, `${tpl.name} Pipeline`);
+                          }}
+                          disabled={isCreatingFromTemplate}
+                          className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
+                        >
+                          {isCreatingFromTemplate ? (
+                            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Plus className="h-3 w-3" aria-hidden="true" />
+                          )}
+                          Use Template
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogPortal>
+      )}
+
+      {/* Create Pipeline Modal */}
+      {showCreateModal && (
+        <DialogPortal>
+          <div
+            className="modal-overlay z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-pipeline-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowCreateModal(false);
+            }}
+          >
+            <div ref={dialogRef4} className="modal-panel modal-panel-scroll w-full max-w-md">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                <h2 id="create-pipeline-title" className="text-theme-text-primary text-lg font-bold">
+                  Create Pipeline
+                </h2>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  aria-label="Close dialog"
+                >
+                  <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="space-y-4 p-6">
+                <div>
+                  <label htmlFor="create-pipeline-name" className="text-theme-text-muted mb-1 block text-sm">
+                    Pipeline Name <span aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="create-pipeline-name"
+                    type="text"
+                    value={pipelineName}
+                    onChange={(e) => setPipelineName(e.target.value)}
+                    placeholder="e.g., New Member Onboarding"
+                    required
+                    aria-required="true"
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="create-pipeline-description" className="text-theme-text-muted mb-1 block text-sm">
+                    Description
+                  </label>
+                  <textarea
+                    id="create-pipeline-description"
+                    value={pipelineDescription}
+                    onChange={(e) => setPipelineDescription(e.target.value)}
+                    placeholder="Describe this pipeline's purpose..."
+                    rows={3}
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    void handleCreatePipeline();
+                  }}
+                  disabled={isCreating}
+                  className="btn-primary flex items-center gap-2 px-6"
+                >
+                  {isCreating && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                  Create Pipeline
+                </button>
+              </div>
+            </div>
+          </div>
+        </DialogPortal>
       )}
     </div>
   );

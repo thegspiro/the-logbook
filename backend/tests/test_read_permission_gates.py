@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from app.api.dependencies import PaginationParams
 from app.api.v1.endpoints import reports as reports_ep
 from app.api.v1.endpoints import users as users_ep
 from app.services.finance_service import FinanceService
@@ -48,6 +49,60 @@ class TestReportPiiGate:
         # Even if the user has no extra permission, an aggregate report passes.
         with patch.object(reports_ep, "user_has_permission", return_value=False):
             reports_ep._enforce_report_pii_permission(user, "call_volume")
+
+
+class TestReportPiiGateTrainingAndAdminHours:
+    """RPT-29 addendum: training_summary/training_progress/annual_training/
+    certification_expiration/compliance_status all return per-member name +
+    training/compliance detail sourced from TrainingRecord/TrainingRequirement,
+    whose org-wide access is gated behind training.manage at its source
+    (training.py's /records, /compliance-matrix). admin_hours returns
+    per-member name + hours + status from AdminHoursEntry, gated behind
+    admin_hours.manage at its source. A plain reports.view holder must not
+    reach any of the six through the reports API."""
+
+    _TRAINING_REPORT_TYPES = (
+        "training_summary",
+        "training_progress",
+        "annual_training",
+        "certification_expiration",
+        "compliance_status",
+    )
+
+    def test_pii_map_covers_training_reports_and_admin_hours(self):
+        for report_type in self._TRAINING_REPORT_TYPES:
+            assert (
+                reports_ep.PII_REPORT_PERMISSIONS[report_type] == "training.manage"
+            ), report_type
+        assert reports_ep.PII_REPORT_PERMISSIONS["admin_hours"] == "admin_hours.manage"
+
+    def test_blocks_training_reports_without_training_manage(self):
+        user = SimpleNamespace()
+        for report_type in self._TRAINING_REPORT_TYPES:
+            with patch.object(reports_ep, "user_has_permission", return_value=False):
+                with pytest.raises(HTTPException) as exc:
+                    reports_ep._enforce_report_pii_permission(user, report_type)
+            assert exc.value.status_code == 403
+            assert "training.manage" in exc.value.detail
+
+    def test_allows_training_reports_with_training_manage(self):
+        user = SimpleNamespace()
+        for report_type in self._TRAINING_REPORT_TYPES:
+            with patch.object(reports_ep, "user_has_permission", return_value=True):
+                reports_ep._enforce_report_pii_permission(user, report_type)
+
+    def test_blocks_admin_hours_without_admin_hours_manage(self):
+        user = SimpleNamespace()
+        with patch.object(reports_ep, "user_has_permission", return_value=False):
+            with pytest.raises(HTTPException) as exc:
+                reports_ep._enforce_report_pii_permission(user, "admin_hours")
+        assert exc.value.status_code == 403
+        assert "admin_hours.manage" in exc.value.detail
+
+    def test_allows_admin_hours_with_admin_hours_manage(self):
+        user = SimpleNamespace()
+        with patch.object(reports_ep, "user_has_permission", return_value=True):
+            reports_ep._enforce_report_pii_permission(user, "admin_hours")
 
 
 class TestMemberDirectoryGate:
@@ -84,12 +139,23 @@ class TestExpenseReportScoping:
 
     async def test_list_scopes_to_user_when_restricted(self):
         svc, captured = self._capture_service()
-        await svc.list_expense_reports("org1", None, restrict_to_user="u1")
-        assert "submitted_by" in str(captured["stmt"].whereclause)
+        await svc.list_expense_reports(
+            "org1", PaginationParams(skip=7, limit=13), None, restrict_to_user="u1"
+        )
+        statement = captured["stmt"]
+        where_sql = str(statement.whereclause)
+        assert "organization_id" in where_sql
+        assert "submitted_by" in where_sql
+        assert statement._offset_clause.value == 7
+        assert statement._limit_clause.value == 13
+        assert "created_at DESC" in str(statement)
+        assert "expense_reports.id" in str(statement)
 
     async def test_list_unscoped_for_managers(self):
         svc, captured = self._capture_service()
-        await svc.list_expense_reports("org1", None, restrict_to_user=None)
+        await svc.list_expense_reports(
+            "org1", PaginationParams(skip=0, limit=10), None, restrict_to_user=None
+        )
         assert "submitted_by" not in str(captured["stmt"].whereclause)
 
     async def test_get_scopes_to_user_when_restricted(self):

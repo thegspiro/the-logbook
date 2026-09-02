@@ -338,6 +338,9 @@ export interface StoreProduct {
   personalizationLabel?: string | null;
   personalizationMaxLength: number;
   personalizationPrice: string;
+  personalizationThreadColor: EmbroideryThreadColor;
+  personalizationThreadColorHex: string;
+  personalizationMethod: PersonalizationMethod;
   sortOrder: number;
   internalNotes?: string | null;
   hasImage: boolean;
@@ -365,6 +368,8 @@ export interface StoreProductInput {
   personalizationLabel?: string | null;
   personalizationMaxLength: number;
   personalizationPrice: number;
+  personalizationThreadColor: EmbroideryThreadColor;
+  personalizationMethod: PersonalizationMethod;
   sortOrder: number;
   internalNotes?: string | null;
   variants: StoreProductVariantInput[];
@@ -446,6 +451,10 @@ export interface StorefrontProductOffer {
   personalizationLabel?: string | null;
   personalizationMaxLength: number;
   personalizationPrice: string;
+  personalizationThreadColor: EmbroideryThreadColor;
+  /** Resolved server-side so the member's preview and the vendor sheet agree. */
+  personalizationThreadColorHex: string;
+  personalizationMethod: PersonalizationMethod;
   availableQuantity?: number | null;
   isAvailable: boolean;
   variants: StorefrontVariantOption[];
@@ -508,6 +517,10 @@ export interface StoreOrderItem {
   variantLabel?: string | null;
   sku?: string | null;
   personalizationText?: string | null;
+  /** Frozen at order time — the product may be switched to another thread later. */
+  personalizationThreadColor?: EmbroideryThreadColor | null;
+  personalizationThreadColorHex?: string | null;
+  personalizationMethod?: PersonalizationMethod | null;
   unitPrice: string;
   quantity: number;
   lineTotal: string;
@@ -602,6 +615,8 @@ export interface StoreWindowProductTally {
   variantLabel?: string | null;
   sku?: string | null;
   personalizationText?: string | null;
+  personalizationThreadColor?: EmbroideryThreadColor | null;
+  personalizationMethod?: PersonalizationMethod | null;
   quantity: number;
   unitPrice: string;
   lineTotal: string;
@@ -682,6 +697,98 @@ export interface StorePermissions {
   can_order: boolean;
   can_manage: boolean;
 }
+
+/** How a product's personalization is applied to the goods.
+ *
+ *  Mirrors `PersonalizationMethod` in `backend/app/utils/embroidery.py`.
+ *  Cloth is stitched and carries a thread colour; metal is cut and carries
+ *  none — so this decides whether the thread colour means anything at all.
+ */
+export const PersonalizationMethod = {
+  EMBROIDERY: 'embroidery',
+  ENGRAVING: 'engraving',
+} as const;
+export type PersonalizationMethod = (typeof PersonalizationMethod)[keyof typeof PersonalizationMethod];
+
+/** Label, material hint and default member prompt per method, in offer order. */
+export const PERSONALIZATION_METHODS: ReadonlyArray<{
+  value: PersonalizationMethod;
+  label: string;
+  hint: string;
+  prompt: string;
+}> = [
+  {
+    value: PersonalizationMethod.EMBROIDERY,
+    label: 'Embroidered',
+    hint: 'Stitched into cloth — shirts, polos, caps',
+    prompt: 'Add name embroidery',
+  },
+  {
+    value: PersonalizationMethod.ENGRAVING,
+    label: 'Engraved',
+    hint: 'Cut into metal — coins, badges, plaques',
+    prompt: 'Add name engraving',
+  },
+];
+
+/** What a product that never chose a method is treated as. */
+export const DEFAULT_PERSONALIZATION_METHOD: PersonalizationMethod = PersonalizationMethod.EMBROIDERY;
+
+/** True when the method involves thread — the one place that decides. */
+export const usesThreadColor = (method: PersonalizationMethod | null | undefined): boolean =>
+  (method ?? DEFAULT_PERSONALIZATION_METHOD) === PersonalizationMethod.EMBROIDERY;
+
+/** The member-facing prompt for a method, when the product names none. */
+export const personalizationPrompt = (method: PersonalizationMethod | null | undefined): string =>
+  PERSONALIZATION_METHODS.find((m) => m.value === (method ?? DEFAULT_PERSONALIZATION_METHOD))?.prompt ??
+  'Add name embroidery';
+
+/** Thread colors a personalized store product can be embroidered in.
+ *
+ *  Mirrors `EmbroideryThreadColor` in `backend/app/utils/embroidery.py`, which
+ *  validates the value and is the authority on the list. The hexes here drive
+ *  the admin swatch picker only — everything a member sees renders from the
+ *  `personalizationThreadColorHex` the API resolves server-side, so a preview
+ *  can never disagree with what the vendor is told to stitch.
+ */
+export const EmbroideryThreadColor = {
+  GOLD: 'gold',
+  WHITE: 'white',
+  BLACK: 'black',
+  SILVER: 'silver',
+  NAVY: 'navy',
+  ROYAL_BLUE: 'royal_blue',
+  RED: 'red',
+  MAROON: 'maroon',
+  FOREST_GREEN: 'forest_green',
+  ORANGE: 'orange',
+} as const;
+export type EmbroideryThreadColor = (typeof EmbroideryThreadColor)[keyof typeof EmbroideryThreadColor];
+
+/** Display name and swatch hex per thread color, in the order they are offered. */
+export const EMBROIDERY_THREAD_COLORS: ReadonlyArray<{
+  value: EmbroideryThreadColor;
+  label: string;
+  hex: string;
+}> = [
+  { value: EmbroideryThreadColor.GOLD, label: 'Gold', hex: '#c8a02c' },
+  { value: EmbroideryThreadColor.WHITE, label: 'White', hex: '#f5f5f4' },
+  { value: EmbroideryThreadColor.BLACK, label: 'Black', hex: '#1c1917' },
+  { value: EmbroideryThreadColor.SILVER, label: 'Silver', hex: '#c0c4c8' },
+  { value: EmbroideryThreadColor.NAVY, label: 'Navy', hex: '#1e3a5f' },
+  { value: EmbroideryThreadColor.ROYAL_BLUE, label: 'Royal Blue', hex: '#2456a6' },
+  { value: EmbroideryThreadColor.RED, label: 'Red', hex: '#b02020' },
+  { value: EmbroideryThreadColor.MAROON, label: 'Maroon', hex: '#6d1f2c' },
+  { value: EmbroideryThreadColor.FOREST_GREEN, label: 'Forest Green', hex: '#1f4d2e' },
+  { value: EmbroideryThreadColor.ORANGE, label: 'Orange', hex: '#c2570f' },
+];
+
+/** The color a product that never chose one is embroidered in. */
+export const DEFAULT_EMBROIDERY_THREAD_COLOR: EmbroideryThreadColor = EmbroideryThreadColor.GOLD;
+
+/** Swatch hex for the default thread, for rendering before the API answers. */
+export const DEFAULT_EMBROIDERY_THREAD_COLOR_HEX =
+  EMBROIDERY_THREAD_COLORS.find((c) => c.value === DEFAULT_EMBROIDERY_THREAD_COLOR)?.hex ?? '#c8a02c';
 
 /** A line in the member's local (unsubmitted) cart. */
 export interface CartLine {

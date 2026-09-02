@@ -38,9 +38,10 @@ export const documentsService = {
 
   async getDocuments(params?: {
     folder_id?: string;
-    search?: string;
     skip?: number;
     limit?: number;
+    search?: string;
+    status?: string;
   }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
     const response = await api.get<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }>(
       '/documents',
@@ -58,6 +59,13 @@ export const documentsService = {
 
   async getDocument(documentId: string): Promise<DocumentRecord> {
     const response = await api.get<DocumentRecord>(`/documents/${documentId}`);
+    return response.data;
+  },
+
+  async downloadDocument(documentId: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/documents/${documentId}/download`, {
+      responseType: 'blob',
+    });
     return response.data;
   },
 

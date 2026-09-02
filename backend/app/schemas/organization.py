@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.schemas.base import UTCResponseBase
@@ -349,7 +349,7 @@ class SchedulingNotificationSettings(BaseModel):
         default=False,
         description="Send email in addition to in-app notifications",
     )
-    cc_emails: List[str] = Field(
+    cc_emails: List[EmailStr] = Field(
         default_factory=list,
         description="Additional email addresses to CC on decline emails",
     )
@@ -436,9 +436,13 @@ class MemberDropNotificationSettings(BaseModel):
 
     cc_roles: List[str] = Field(
         default_factory=lambda: list(ADMIN_NOTIFY_ROLE_SLUGS),
-        description="Role names whose holders are automatically CC'd on drop notifications",
+        description=(
+            "Position *slugs* whose holders are automatically CC'd on drop "
+            "notifications. The consumer matches Position.slug, so a display "
+            "name will not match."
+        ),
     )
-    cc_emails: List[str] = Field(
+    cc_emails: List[EmailStr] = Field(
         default_factory=list,
         description="Additional static email addresses always CC'd on drop notifications",
     )
@@ -776,14 +780,50 @@ class ModuleSettings(BaseModel):
         "expiration tracking) — separate from gear and uniforms so a "
         "department can appoint its own supply officer",
     )
+    # Opt-in, and deliberately not "preserve what the deployment does today".
+    # Both shipped with no ModuleSettings field, so the resolver's
+    # absent-key-means-default rule decides what an upgrade sees, and for
+    # these two "default" has to mean off: a department that never enabled
+    # Finance was still shown its dues, cash-flow and budget cards, which are
+    # the only link into /finance anywhere in the UI. Defaulting them on would
+    # have left that exact complaint unanswered on every installation that had
+    # not asked for the module. Medical Screening is the clearer case still —
+    # SideNavigation has always gated its entry on a field that did not exist,
+    # so the entry was hidden for every configured organization, and off is
+    # what restores that rather than what changes it.
+    #
+    # This is the documented exception to CLAUDE.md pitfall 19, not an
+    # oversight of it: the rule protects a module a department is *using*, and
+    # neither of these could be reached from the navigation. A department that
+    # does keep its books here turns Finance back on under Settings > Modules,
+    # where both now appear alongside the other opt-in modules.
+    finance: bool = Field(
+        default=False,
+        description="Finance module (budgets, dues, expenses, purchase requests)",
+    )
+    medical_screening: bool = Field(
+        default=False,
+        description="Medical Screening module (physicals, clearances, expirations)",
+    )
+    # Off by default, and deliberately so: the testing checklist is a tool for
+    # walking a new installation before it goes live, not a screen a department
+    # runs day to day. A department that wants it turns it on under
+    # Settings > Modules; it is not offered during onboarding, where the
+    # question would be noise.
+    testing: bool = Field(
+        default=False,
+        description="Testing Checklist module (page-by-page QA of the app)",
+    )
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
         # Essential modules are always enabled
         enabled = ["members", "events", "documents", "roles", "settings"]
 
-        # Add configurable modules that are enabled
-        for field_name in self.model_fields:
+        # Add configurable modules that are enabled. Read off the class:
+        # instance access to model_fields is deprecated in Pydantic 2.11 and
+        # removed in 3.
+        for field_name in type(self).model_fields:
             if getattr(self, field_name):
                 enabled.append(field_name)
 
@@ -817,6 +857,9 @@ class ModuleSettingsUpdate(BaseModel):
     medical_supplies: Optional[bool] = None
     prospective_members: Optional[bool] = None
     public_info: Optional[bool] = None
+    finance: Optional[bool] = None
+    medical_screening: Optional[bool] = None
+    testing: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):
@@ -1038,6 +1081,17 @@ class EnabledModulesResponse(BaseModel):
     module_settings: ModuleSettings = Field(
         default_factory=ModuleSettings,
         description="Detailed module enablement settings",
+    )
+    configured: bool = Field(
+        default=False,
+        description=(
+            "True when the organization has actually chosen its modules. "
+            "False means these values are declared defaults, not a decision. "
+            "The navigation needs the difference: it shows everything for an "
+            "organization that has not configured its modules, and must not "
+            "read a department that deliberately switched them all off as "
+            "that same case."
+        ),
     )
 
     def is_module_enabled(self, module_id: str) -> bool:

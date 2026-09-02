@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -341,169 +342,174 @@ async def _members_screening_current(ctx: MetricContext) -> tuple[str, str]:
 async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     items: list[AdminAttentionItem] = []
 
-    # One row per member and screening type, not per historical record.
-    # A screening is renewed by adding a record, never by editing the old one,
-    # so counting expired rows outright reports a member who renewed last week
-    # as lapsed — while the Screenings-current metric, which asks whether any
-    # valid record exists, calls the same member covered. Two numbers on one
-    # page disagreeing about one person is worse than either being absent.
-    #
-    # "Expired" therefore means: this member has no unexpired record of this
-    # type. A record with no expiry never lapses, and a waiver excuses the
-    # requirement, so both count as cover.
-    current_cover = (
-        select(ScreeningRecord.id)
-        .where(
-            ScreeningRecord.organization_id == ctx.organization_id,
-            ScreeningRecord.user_id == _EXPIRED_ALIAS.user_id,
-            ScreeningRecord.screening_type == _EXPIRED_ALIAS.screening_type,
-            ScreeningRecord.status.in_(
-                [
-                    ScreeningStatus.PASSED,
-                    ScreeningStatus.COMPLETED,
-                    ScreeningStatus.WAIVED,
-                ]
-            ),
-            or_(
-                ScreeningRecord.expiration_date.is_(None),
-                ScreeningRecord.expiration_date >= ctx.today,
-            ),
-        )
-        .exists()
-    )
-    lapsed = (
-        select(
-            _EXPIRED_ALIAS.user_id,
-            _EXPIRED_ALIAS.screening_type,
-            func.min(_EXPIRED_ALIAS.expiration_date).label("lapsed_on"),
-        )
-        .join(User, _EXPIRED_ALIAS.user_id == User.id)
-        .where(
-            _EXPIRED_ALIAS.organization_id == ctx.organization_id,
-            _EXPIRED_ALIAS.expiration_date.isnot(None),
-            _EXPIRED_ALIAS.expiration_date < ctx.today,
-            _EXPIRED_ALIAS.status != ScreeningStatus.WAIVED,
-            # A lapsed screening for someone off the roster is history, not work.
-            User.organization_id == ctx.organization_id,
-            *_active_member_criteria(),
-            ~current_cover,
-        )
-        .group_by(_EXPIRED_ALIAS.user_id, _EXPIRED_ALIAS.screening_type)
-        .subquery()
-    )
-    expired_row = (
-        await ctx.db.execute(
-            select(func.count(), func.min(lapsed.c.lapsed_on)).select_from(lapsed)
-        )
-    ).one()
-    expired_count, oldest_expiry = int(expired_row[0] or 0), expired_row[1]
-    if expired_count:
-        age = _age_days(oldest_expiry, ctx.today)
-        items.append(
-            AdminAttentionItem(
-                key="expired_screenings",
-                title=(
-                    f"{expired_count} medical "
-                    f"{_plural(expired_count, 'screening')} expired"
+    # Screening work is only work if the department runs the module. The
+    # medical_screening flag was added after this resolver; before it,
+    # medical_screening.view alone put lapsed-physical counts on the members
+    # admin page for departments that track physicals somewhere else.
+    if "medical_screening" in ctx.enabled_modules:
+        # One row per member and screening type, not per historical record.
+        # A screening is renewed by adding a record, never by editing the old one,
+        # so counting expired rows outright reports a member who renewed last week
+        # as lapsed — while the Screenings-current metric, which asks whether any
+        # valid record exists, calls the same member covered. Two numbers on one
+        # page disagreeing about one person is worse than either being absent.
+        #
+        # "Expired" therefore means: this member has no unexpired record of this
+        # type. A record with no expiry never lapses, and a waiver excuses the
+        # requirement, so both count as cover.
+        current_cover = (
+            select(ScreeningRecord.id)
+            .where(
+                ScreeningRecord.organization_id == ctx.organization_id,
+                ScreeningRecord.user_id == _EXPIRED_ALIAS.user_id,
+                ScreeningRecord.screening_type == _EXPIRED_ALIAS.screening_type,
+                ScreeningRecord.status.in_(
+                    [
+                        ScreeningStatus.PASSED,
+                        ScreeningStatus.COMPLETED,
+                        ScreeningStatus.WAIVED,
+                    ]
                 ),
-                detail=" · ".join(
-                    part
-                    for part in (
-                        (
-                            f"oldest lapsed {age} {_plural(age or 0, 'day')} ago"
-                            if age is not None
-                            else ""
-                        ),
-                        "blocks duty assignment",
-                    )
-                    if part
+                or_(
+                    ScreeningRecord.expiration_date.is_(None),
+                    ScreeningRecord.expiration_date >= ctx.today,
                 ),
-                action_label="Open records",
-                href="/medical-screening",
-                severity="critical",
-                count=expired_count,
-                oldest_age_days=age,
             )
+            .exists()
         )
+        lapsed = (
+            select(
+                _EXPIRED_ALIAS.user_id,
+                _EXPIRED_ALIAS.screening_type,
+                func.min(_EXPIRED_ALIAS.expiration_date).label("lapsed_on"),
+            )
+            .join(User, _EXPIRED_ALIAS.user_id == User.id)
+            .where(
+                _EXPIRED_ALIAS.organization_id == ctx.organization_id,
+                _EXPIRED_ALIAS.expiration_date.isnot(None),
+                _EXPIRED_ALIAS.expiration_date < ctx.today,
+                _EXPIRED_ALIAS.status != ScreeningStatus.WAIVED,
+                # A lapsed screening for someone off the roster is history, not work.
+                User.organization_id == ctx.organization_id,
+                *_active_member_criteria(),
+                ~current_cover,
+            )
+            .group_by(_EXPIRED_ALIAS.user_id, _EXPIRED_ALIAS.screening_type)
+            .subquery()
+        )
+        expired_row = (
+            await ctx.db.execute(
+                select(func.count(), func.min(lapsed.c.lapsed_on)).select_from(lapsed)
+            )
+        ).one()
+        expired_count, oldest_expiry = int(expired_row[0] or 0), expired_row[1]
+        if expired_count:
+            age = _age_days(oldest_expiry, ctx.today)
+            items.append(
+                AdminAttentionItem(
+                    key="expired_screenings",
+                    title=(
+                        f"{expired_count} medical "
+                        f"{_plural(expired_count, 'screening')} expired"
+                    ),
+                    detail=" · ".join(
+                        part
+                        for part in (
+                            (
+                                f"oldest lapsed {age} {_plural(age or 0, 'day')} ago"
+                                if age is not None
+                                else ""
+                            ),
+                            "blocks duty assignment",
+                        )
+                        if part
+                    ),
+                    action_label="Open records",
+                    href="/medical-screening",
+                    severity="critical",
+                    count=expired_count,
+                    oldest_age_days=age,
+                )
+            )
 
-    # Same shape as the expired lookup above, and for the same reason: a missed
-    # appointment is never edited, it is answered by a *new* record. Counting
-    # stale SCHEDULED rows outright therefore reports the member who rebooked
-    # and passed as one who "never completed" it, and keeps reporting them
-    # forever — the row that says they missed a Tuesday in March is permanent.
-    #
-    # An appointment is answered by any of three things: the member attended
-    # (a settled record dated on or after the one they missed), the
-    # requirement was waived, or they hold a later booking that has not come
-    # round yet. A settled record with no completed_date is not evidence of
-    # *when* they attended, so it answers nothing — over-reporting a
-    # "reschedule this" is the safer direction than hiding a member who never
-    # had their physical.
-    answered = (
-        select(ScreeningRecord.id)
-        .where(
-            ScreeningRecord.organization_id == ctx.organization_id,
-            ScreeningRecord.user_id == _OVERDUE_ALIAS.user_id,
-            ScreeningRecord.screening_type == _OVERDUE_ALIAS.screening_type,
-            ScreeningRecord.id != _OVERDUE_ALIAS.id,
-            or_(
-                ScreeningRecord.status == ScreeningStatus.WAIVED,
-                and_(
-                    ScreeningRecord.status.in_(_ATTENDED_STATUSES),
-                    ScreeningRecord.completed_date.isnot(None),
-                    ScreeningRecord.completed_date >= _OVERDUE_ALIAS.scheduled_date,
+        # Same shape as the expired lookup above, and for the same reason: a missed
+        # appointment is never edited, it is answered by a *new* record. Counting
+        # stale SCHEDULED rows outright therefore reports the member who rebooked
+        # and passed as one who "never completed" it, and keeps reporting them
+        # forever — the row that says they missed a Tuesday in March is permanent.
+        #
+        # An appointment is answered by any of three things: the member attended
+        # (a settled record dated on or after the one they missed), the
+        # requirement was waived, or they hold a later booking that has not come
+        # round yet. A settled record with no completed_date is not evidence of
+        # *when* they attended, so it answers nothing — over-reporting a
+        # "reschedule this" is the safer direction than hiding a member who never
+        # had their physical.
+        answered = (
+            select(ScreeningRecord.id)
+            .where(
+                ScreeningRecord.organization_id == ctx.organization_id,
+                ScreeningRecord.user_id == _OVERDUE_ALIAS.user_id,
+                ScreeningRecord.screening_type == _OVERDUE_ALIAS.screening_type,
+                ScreeningRecord.id != _OVERDUE_ALIAS.id,
+                or_(
+                    ScreeningRecord.status == ScreeningStatus.WAIVED,
+                    and_(
+                        ScreeningRecord.status.in_(_ATTENDED_STATUSES),
+                        ScreeningRecord.completed_date.isnot(None),
+                        ScreeningRecord.completed_date >= _OVERDUE_ALIAS.scheduled_date,
+                    ),
+                    and_(
+                        ScreeningRecord.status == ScreeningStatus.SCHEDULED,
+                        ScreeningRecord.scheduled_date.isnot(None),
+                        ScreeningRecord.scheduled_date >= ctx.today,
+                    ),
                 ),
-                and_(
-                    ScreeningRecord.status == ScreeningStatus.SCHEDULED,
-                    ScreeningRecord.scheduled_date.isnot(None),
-                    ScreeningRecord.scheduled_date >= ctx.today,
-                ),
-            ),
-        )
-        .exists()
-    )
-    missed = (
-        select(
-            _OVERDUE_ALIAS.user_id,
-            _OVERDUE_ALIAS.screening_type,
-            func.min(_OVERDUE_ALIAS.scheduled_date).label("missed_on"),
-        )
-        .join(User, _OVERDUE_ALIAS.user_id == User.id)
-        .where(
-            _OVERDUE_ALIAS.organization_id == ctx.organization_id,
-            _OVERDUE_ALIAS.status == ScreeningStatus.SCHEDULED,
-            _OVERDUE_ALIAS.scheduled_date.isnot(None),
-            _OVERDUE_ALIAS.scheduled_date < ctx.today,
-            # An appointment somebody off the roster missed is history, not work.
-            User.organization_id == ctx.organization_id,
-            *_active_member_criteria(),
-            ~answered,
-        )
-        .group_by(_OVERDUE_ALIAS.user_id, _OVERDUE_ALIAS.screening_type)
-        .subquery()
-    )
-    overdue_row = (
-        await ctx.db.execute(
-            select(func.count(), func.min(missed.c.missed_on)).select_from(missed)
-        )
-    ).one()
-    overdue_count, oldest_due = int(overdue_row[0] or 0), overdue_row[1]
-    if overdue_count:
-        age = _age_days(oldest_due, ctx.today)
-        items.append(
-            AdminAttentionItem(
-                key="overdue_screenings",
-                title=(
-                    f"{overdue_count} medical "
-                    f"{_plural(overdue_count, 'screening')} never completed"
-                ),
-                detail=_waiting_phrase(age) or "scheduled date has passed",
-                action_label="Reschedule",
-                href="/medical-screening",
-                count=overdue_count,
-                oldest_age_days=age,
             )
+            .exists()
         )
+        missed = (
+            select(
+                _OVERDUE_ALIAS.user_id,
+                _OVERDUE_ALIAS.screening_type,
+                func.min(_OVERDUE_ALIAS.scheduled_date).label("missed_on"),
+            )
+            .join(User, _OVERDUE_ALIAS.user_id == User.id)
+            .where(
+                _OVERDUE_ALIAS.organization_id == ctx.organization_id,
+                _OVERDUE_ALIAS.status == ScreeningStatus.SCHEDULED,
+                _OVERDUE_ALIAS.scheduled_date.isnot(None),
+                _OVERDUE_ALIAS.scheduled_date < ctx.today,
+                # An appointment somebody off the roster missed is history, not work.
+                User.organization_id == ctx.organization_id,
+                *_active_member_criteria(),
+                ~answered,
+            )
+            .group_by(_OVERDUE_ALIAS.user_id, _OVERDUE_ALIAS.screening_type)
+            .subquery()
+        )
+        overdue_row = (
+            await ctx.db.execute(
+                select(func.count(), func.min(missed.c.missed_on)).select_from(missed)
+            )
+        ).one()
+        overdue_count, oldest_due = int(overdue_row[0] or 0), overdue_row[1]
+        if overdue_count:
+            age = _age_days(oldest_due, ctx.today)
+            items.append(
+                AdminAttentionItem(
+                    key="overdue_screenings",
+                    title=(
+                        f"{overdue_count} medical "
+                        f"{_plural(overdue_count, 'screening')} never completed"
+                    ),
+                    detail=_waiting_phrase(age) or "scheduled date has passed",
+                    action_label="Reschedule",
+                    href="/medical-screening",
+                    count=overdue_count,
+                    oldest_age_days=age,
+                )
+            )
 
     if "prospective_members" in ctx.enabled_modules:
         cutoff = ctx.local_midnight - timedelta(days=PROSPECT_SLA_DAYS)
@@ -1052,6 +1058,10 @@ async def _events_check_ins(ctx: MetricContext) -> tuple[str, str]:
 
 async def _events_attendance_rate(ctx: MetricContext) -> tuple[str, str]:
     since = ctx.local_midnight - timedelta(days=90)
+    now = datetime.now(timezone.utc)
+    # Event is filtered on organization_id independently of the RSVP filter
+    # above it, rather than relying on the invariant that a joined RSVP's org
+    # always matches its parent Event's org (defense in depth, LOC2-32-1).
     going = await _scalar(
         ctx.db,
         select(func.count(EventRSVP.id))
@@ -1059,8 +1069,9 @@ async def _events_attendance_rate(ctx: MetricContext) -> tuple[str, str]:
         .where(
             EventRSVP.organization_id == ctx.organization_id,
             EventRSVP.status == RSVPStatus.GOING,
+            Event.organization_id == ctx.organization_id,
             Event.start_datetime >= since,
-            Event.end_datetime < datetime.now(timezone.utc),
+            Event.end_datetime < now,
         ),
     )
     if going == 0:
@@ -1073,8 +1084,9 @@ async def _events_attendance_rate(ctx: MetricContext) -> tuple[str, str]:
             EventRSVP.organization_id == ctx.organization_id,
             EventRSVP.status == RSVPStatus.GOING,
             EventRSVP.checked_in.is_(True),
+            Event.organization_id == ctx.organization_id,
             Event.start_datetime >= since,
-            Event.end_datetime < datetime.now(timezone.utc),
+            Event.end_datetime < now,
         ),
     )
     return f"{round(attended * 100 / going)}%", f"{attended} of {going}, last 90 days"
@@ -1277,6 +1289,8 @@ MODULE_REGISTRY: dict[str, ModuleSpec] = {
                 ),
                 resolve=_members_screening_current,
                 permission="medical_screening.view",
+                requires_module="medical_screening",
+                module_off_reason="Needs the Medical Screening module",
             ),
             MetricSpec(
                 key="prospective_members",
@@ -1582,29 +1596,42 @@ class AdminHubService:
         never render. The slot falls back to the module default rather than
         going blank.
         """
-        by_key = {m.key: m for m in spec.metrics}
-        resolved: list[str] = []
-        for key in keys:
-            metric = by_key.get(key)
-            if metric is None or key in resolved:
-                continue
+
+        def _permitted(metric: MetricSpec) -> bool:
             if metric.permission and not user_has_permission(
                 ctx.user, metric.permission
             ):
-                continue
+                return False
             if (
                 metric.requires_module
                 and metric.requires_module not in ctx.enabled_modules
             ):
+                return False
+            return True
+
+        by_key = {m.key: m for m in spec.metrics}
+        resolved: list[str] = []
+        for key in keys:
+            metric = by_key.get(key)
+            if metric is None or key in resolved or not _permitted(metric):
                 continue
             resolved.append(key)
             if len(resolved) == OPEN_SLOTS:
                 break
+        # The padding loop must apply the same permission/module gate as the
+        # primary loop above — otherwise a permission-gated metric's label
+        # (still shown by _render_metric's redacted-value branch) can be
+        # padded straight into a stored selection for an admin who lacks that
+        # specific permission (LOC2-32-2).
         for key in spec.default_metrics:
             if len(resolved) >= OPEN_SLOTS:
                 break
-            if key and key not in resolved and key in by_key:
-                resolved.append(key)
+            if not key or key in resolved:
+                continue
+            metric = by_key.get(key)
+            if metric is None or not _permitted(metric):
+                continue
+            resolved.append(key)
         return resolved[:OPEN_SLOTS]
 
     async def _resolve_selection(
@@ -1733,39 +1760,63 @@ class AdminHubService:
         if len(set(payload.metric_keys)) != len(payload.metric_keys):
             raise ValueError("A metric can only occupy one slot")
 
-        department, personal = await self._load_preferences(module_key, ctx)
+        # Two concurrent first-time saves for the same (org, module, scope)
+        # can both observe department/personal as None and both insert; the
+        # unique constraint then rejects the second commit. Retry once as an
+        # update against the row the other request just created, instead of
+        # surfacing a 500 that silently drops this save (LOC2-32-3).
+        for attempt in range(2):
+            department, personal = await self._load_preferences(module_key, ctx)
 
-        # The department row always carries the toggle, so turning personal
-        # choice back off has somewhere to be recorded even when the admin
-        # never edited the department's own four.
-        if department is None:
-            department = AdminHubMetricPreference(
-                organization_id=ctx.organization_id,
-                module_key=module_key,
-                user_id=None,
-                scope_key=DEPARTMENT_SCOPE,
-                metric_keys=list(spec.default_metrics),
-                applies_to_everyone=payload.applies_to_everyone,
-            )
-            self.db.add(department)
-        department.applies_to_everyone = payload.applies_to_everyone
-
-        if payload.applies_to_everyone:
-            department.metric_keys = list(payload.metric_keys)
-        else:
-            if personal is None:
-                personal = AdminHubMetricPreference(
+            # The department row always carries the toggle, so turning
+            # personal choice back off has somewhere to be recorded even when
+            # the admin never edited the department's own four.
+            if department is None:
+                department = AdminHubMetricPreference(
                     organization_id=ctx.organization_id,
                     module_key=module_key,
-                    user_id=ctx.user.id,
-                    scope_key=ctx.user.id,
-                    metric_keys=list(payload.metric_keys),
+                    user_id=None,
+                    scope_key=DEPARTMENT_SCOPE,
+                    metric_keys=list(spec.default_metrics),
+                    applies_to_everyone=payload.applies_to_everyone,
                 )
-                self.db.add(personal)
-            else:
-                personal.metric_keys = list(payload.metric_keys)
+                self.db.add(department)
+            department.applies_to_everyone = payload.applies_to_everyone
 
-        await self.db.commit()
+            if payload.applies_to_everyone:
+                department.metric_keys = list(payload.metric_keys)
+            else:
+                if personal is None:
+                    personal = AdminHubMetricPreference(
+                        organization_id=ctx.organization_id,
+                        module_key=module_key,
+                        user_id=ctx.user.id,
+                        scope_key=ctx.user.id,
+                        metric_keys=list(payload.metric_keys),
+                    )
+                    self.db.add(personal)
+                else:
+                    personal.metric_keys = list(payload.metric_keys)
+
+            try:
+                await self.db.commit()
+                break
+            except IntegrityError:
+                await self.db.rollback()
+                # rollback() expires every persistent object in the session,
+                # including ctx.user — the same object this method's caller
+                # (and the endpoint, for its audit-log call) keeps using
+                # afterward — not just the row(s) this attempt tried to
+                # insert. Refresh it explicitly so the retry's permission
+                # check (user_has_permission reads user.positions) or a
+                # later attribute read doesn't attempt an implicit async
+                # reload outside the greenlet bridge and raise
+                # MissingGreenlet (Codex, PR #1916).
+                await self.db.refresh(ctx.user)
+                await self.db.refresh(ctx.user, attribute_names=["positions"])
+                if attempt == 1:
+                    raise
+
         return await self.get_settings(module_key, user)
 
     # -- access -------------------------------------------------------------

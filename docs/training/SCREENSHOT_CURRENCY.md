@@ -1,5 +1,208 @@
 # Screenshot currency
 
+## Captured 2026-09-01 — the dashboard timeline at thirty days, and the manifest that pointed at the old heading
+
+Two shots re-taken against the running application:
+`03-60-dashboard-my-shifts.png` and `03-62-dashboard-signup-positions.png`.
+Both now show the **Next 30 Days** heading and the **All Shifts** control; the
+first also shows the footer's "42 more through Sep 30", which the seven-day
+card could not have produced.
+
+**The manifest had to be fixed before either could be shot.** Both entries
+locate the panel by its heading text — `section.card:has(h3:has-text('Next 7
+Days'))` — in a `prepare` locator and again in a `selector`, four live
+references that the rename left pointing at nothing. A stale selector here does
+not capture the wrong element, it times out at 20s, so the re-capture this
+entry was opened for could not have run until the manifest was corrected. The
+`alt` mattered too: `apply_placeholders.py` writes each guide's alt from the
+manifest, so leaving it stale would have quietly reverted `03-scheduling.md` to
+"Next 7 Days" on the next run.
+
+**Budget an hour, and turn the limiter off.** The blocker was not the
+environment — database, cache, both servers and a pre-installed Chromium were
+all reachable — it was `Throttle`. `seed_demo_data.py` paces itself at ~119s a
+batch to stay under the admin password-reset ceiling, because tripping it costs
+a 15-minute lockout per account, and a 22-member roster then sleeps through
+most of a session. The seeder documents the way out and it works: start the
+backend with `RATE_LIMIT_ENABLED=false` and run the seeder with
+`SEED_ADMIN_RESET_WINDOW_SECONDS=0`.
+
+Also worth knowing for the next run: read progress from row counts, not the
+seeder's log. Python block-buffers to a redirected file, so the log sat at
+"count-only calls" long after the run had moved on.
+
+### Still not shot
+
+| Image area | Why |
+| --- | --- |
+| `03-60-report-used-sheet` | Blocked upstream: "no crewed past shift to file against" — the seeder's platoon-roster and scheduling-request steps report no platoon has members |
+| `03-62-flagged-queue` | Same run, `locator.click` timeout — the queue it pictures has nothing in it for the same reason |
+
+Neither is caused by the timeline change; both matched the `--only 03-60,03-62`
+prefix filter by coincidence of id.
+
+## Eight unreferenced images, triaged rather than swept (2026-08-31)
+
+Eight PNGs in `images/` were reachable from no guide. "Unreferenced" turned out
+to mean five different things, and only a per-file check told them apart — a
+markdown-only grep found six of them and called all six orphans, and four of
+those were not. Widening the sweep to `manifest.mjs` found the other two.
+
+**Five deleted, three applied.** After this pass every PNG under `images/` is
+referenced by a guide, a manifest entry, or both.
+
+| Image | Why it was unreferenced | Done |
+| ----- | ----------------------- | ---- |
+| `03-94-debug-shift-panel.png` | Taken while diagnosing the crew board; never had a marker. Also predates the 2026-08-23 palette uplift — its Sign Up buttons are still violet | Deleted |
+| `10-13-mobile-top-bar.png` | Superseded by `10-13-mobile-header-menu.png`, which is applied at guide 10's phone-header marker. Same subject, and the numbering collision is what hid it | Deleted |
+| `08-35-notifications-show-read.png` | Same screen and same state as `08-63-inbox-show-read.png`, which fills the marker this one was written for. Its `holdBack` (the pre-fix `ShiftPosition.FIREFIGHTER` bodies) had cleared on the re-shoot, so it is redundant rather than blocked | Deleted |
+| `19-02-minutes-card-counts.png` | Written to replace a guide-04 capture that pictured the zero-count defect. `04-14-meeting-minutes.png` was itself re-shot on 2026-08-17 and already reads "4 attendees / 8 attendees, 2 action items", so the replacement has nothing left to replace | Deleted |
+| `08-76-org-dashboard-without-finance.png` | **Half of an applied pair.** The marker asked for the administrator's dashboard *beside* the member's, and the applier consumed that one marker with `08-75` alone — the comparison the marker was about was never in the guide | Applied beside `08-75` in guide 08 |
+| `19-01-platoons-permission-error.png` | Applied to guide 19 by `1558c10e8`, then dropped — image and marker both — by the merge in `18bade651` on 2026-08-18. The topic now lives in guide 03's "Who Can See the Platoon Roster", which had no picture of the refusal | Applied in guide 03 |
+| `15-06-applicant-drawer.png` | Superseded by `15-14-applicant-drawer-overview.png`, the same drawer over an unfiltered board. `15-06` was shot with "Rivera" typed into the search box, so a column behind it reads "No applicants" | Deleted |
+| `02-67-competency-matrix.png` | Held back against a placeholder describing a member-by-competency heat-map. That screen does not exist, the guide was rewritten to say so, and the marker went with it — leaving a correct capture of what the Competency tab actually is, with nothing pointing at it | Applied in guide 02, holdBack dropped |
+
+**The three that were applied are the finding, not the five deletions.** Each was
+a verified capture of something a guide claims in prose and could not show, and
+each had been *lost* rather than never taken — one to a half-consumed pair
+marker, one to a merge resolution, one to a holdBack that outlived the
+placeholder it was written against. A sweep that deleted them on the strength of
+a `*.md` grep would have thrown away the evidence for three documented
+behaviours and left the gaps invisible, because none of those guides carries a
+marker any more.
+
+Manifest entries for the deleted shots that had them (`08-35`, `19-02`, `15-06`)
+were removed with the files; an entry whose anchor no longer exists can never
+apply, so leaving it would have re-shot an orphan on the next capture run. The
+three surviving entries now record where their image actually landed — `19-01`'s
+`doc` moved to `03-scheduling.md`, `02-67`'s anchor moved to the paragraph it now
+sits above, and `08-76` carries a note that it was placed by hand.
+
+**`08-76`'s caption was wrong on first placement, and review caught it.** It
+read "a member without `finance.manage`", which is false for a member who lacks
+that and holds `fundraising.view` or `events.manage`: `get_main_dashboard_widgets`
+gates the finance, fundraising and community blocks independently, and
+`DashboardOrganizationWidgets` drops the section only when all three come back
+empty. A member holding one of the other two still sees Department pulse, minus
+the money cards. The caption and the manifest `alt` now say all three are
+withheld — which is what the pictured member actually has.
+
+**Check the whole tree, not just `*.md`.** Six of the eight were referenced from
+`scripts/screenshots/manifest.mjs`, which is where a shot's route, auth and
+`prepare` steps live. The manifest is the reason a capture is reproducible, so
+it is part of "referenced" — and two of the eight were reachable *only* from it,
+so a markdown-only sweep does not even find them to ask the question.
+
+---
+
+## Disposition for the 2026-08-24 → 08-31 window (recorded 2026-08-31)
+
+Reason and data-path context in
+[`../CHANGE_AUDIT_2026-08-24_TO_31.md`](../CHANGE_AUDIT_2026-08-24_TO_31.md#documentation-and-media-disposition).
+
+**This is a disposition, not a capture pass.** It records what the week's
+changes did to the existing library and what new markers were written into the
+guides. Nothing below has been shot yet. `status_report.py` counted **530
+placeholders, 505 filled, 25 remaining** at the time (533 / 508 / 25 after the
+2026-08-31 triage above applied three images already on disk) — the twenty-five are the **sixteen
+new markers** written this window plus the nine that were already outstanding.
+The library was 514 placeholders before it.
+
+**Two of the sixteen were added late** (`/messages/:id` and
+`/communications/photo-use-consent`). Review caught that the audit listed both
+as NEW captures while **no guide covered either page**, so no marker existed and
+`status_report.py` did not count them — a producer working the queue would have
+silently skipped both new surfaces. The release lesson now has a Communications
+section, and the markers are real.
+
+### Two changes invalidate captures in bulk rather than one at a time
+
+**1. The equipment check template builder.** Every existing capture of that
+screen shows a **metadata sidebar, a three-step progress strip, a "Template
+readiness" card and a Quick Add / Bulk Add toggle — none of which exist**. This
+is the distinction that matters for scheduling the re-shoot: it is not a
+restyle, so a viewer working from an old capture cannot locate the control they
+are being told to press. Treat these as **wrong**, ahead of the merely dated.
+
+Two captures are needed, not one. The docked preview and the side-by-side row
+controls are a **laptop and tablet** layout; the phone keeps compact rows, the
+full-height item editor and a modal preview. A single laptop shot leaves the
+phone experience undocumented, and a single phone shot makes the rebuild look
+like it did not happen.
+
+**2. ~~Anything showing a member's membership type.~~ — WITHDRAWN 2026-08-31,
+before any capture was taken.**
+
+This was written on the assumption that the class/status split surfaced in the
+UI. **It does not.** No screen renders `member_class` or `member_status`:
+`MemberProfilePage` shows roles and account status, `MembersAdminPage` has
+Member / Member # / Roles columns, and both Add Member and Member Admin Edit
+still render **a single Membership Type selector** — the pair is derived from
+its value. The elections eligibility roster's refusal reason is unchanged too;
+it still reads "membership type not eligible … (requires: …; member has: …)".
+
+**Every existing capture of those screens is current.** Had this been actioned
+it would have discarded valid images and sent a producer to photograph fields
+and columns that do not exist — the more expensive of the two failure
+directions, because the shots would have come back looking wrong with nothing
+to compare against.
+
+Recorded rather than deleted because the reasoning that produced it is worth
+not repeating: a data-model change was assumed to have a UI surface. **The
+class/status split is visible to a user in exactly one place — a ballot
+recipient list — and nowhere on a member screen.**
+
+### Replace
+
+| Image area | Why |
+| --- | --- |
+| Equipment check **template builder** — laptop | Rebuilt as one canvas; sidebar, progress strip, readiness card and mode toggle all gone |
+| Equipment check **template builder** — phone (390×844) | Compact rows, full-height item editor, blockers in a bottom bar |
+| **Compliance requirements configuration** | The non-compliance notification panel now carries a "not yet active" label |
+| **Grants** dashboard, campaigns, donors, application detail | Action buttons are hidden for view-only members — **caption the capturing account's grants**, or the shot is unreproducible |
+| **Inventory** item detail, return-request review, transfer | "Checkout batch" is Item Distribution; the "Transfer is immediate" checkbox is gone |
+| **Store** item detail and sizing request | Embroidery and engraving are separate; the thread swatch appears only on embroidery; sizes sort in garment order |
+| **Facility detail → Files** | Folder structure, and a much smaller audience |
+| Any **navigation** capture showing Facilities to a regular member | `facilities.view` was revoked from the regular-member and operational-officer positions |
+
+### New markers written into the guides
+
+| Marker | Guide | Note |
+| --- | --- | --- |
+| Org chart — **outline** view | 08, 19 | Four levels, a shared seat, a non-member holder |
+| Org chart — **diagram** view | 08, 19 | **Not interchangeable with the outline.** One capture cannot stand in for both |
+| Org chart — **node modal** | 08, 19 | Multi-holder seat + non-member holder + position link. The two things reviewers ask about |
+| **`/facilities/settings`** | 06, 19 | Two lookup categories populated so it is not empty |
+| Settings → **Modules**, Testing Checklist **off** | 08, 19 | The single most useful capture in this window — it is the answer to "where did /testing go" |
+| **Testing Home** with a named run and the run picker | 08, 19 | Current run, one archived predecessor, mixed marks, **one gate mismatch flagged** |
+| **Printable testing report** | 08, 19 | A failure carrying a note *and* a gate mismatch, so both report sections have content |
+
+| **`/messages/:id`** | 19 | A message long enough to show the page is not a modal, sender and date visible, breadcrumb in frame |
+| **`/communications/photo-use-consent`** | 19 | One consented member, one refused, one with nothing recorded; caption which of the four accepted permissions the capturing account holds |
+
+### Do not capture
+
+| Area | Why |
+| --- | --- |
+| **Member qualifications entry** | **There is no direct entry screen** — a qualification is written only as a side effect of recording a training record against a course whose **Certifies** field is set. Capture the course's Certifies selector if you need to show the workflow; do not photograph or mock a qualifications panel on the member profile, because none exists |
+| Live equipment **check screen** as "new" | The lap is still built and unwired, unchanged by this window. The template builder rebuild is the *authoring* side; the check screen still renders the flat compartment list |
+
+### One capture that cannot be taken honestly, and what to do instead
+
+The **Modules screen with Testing Checklist off** is the exception worth
+planning around: it is only true on a **fresh install or an install that has
+just upgraded and not yet re-enabled the module**. The seeded demo environment
+turns modules on so the rest of the library can be captured.
+
+Do not toggle the module off, shoot, and toggle it back on in a live demo
+database — the marks recorded against it are what make the Testing Home
+captures possible, and a half-completed toggle leaves the environment in a
+state the next capture pass will not recognise. **Shoot it during a
+bootstrap**, before demo seeding runs, or on a throwaway instance.
+
+This is the same class of constraint as the label-printer status line recorded
+below: a shot that is trivial to fake and worth nothing faked.
+
 ## Repaired 2026-09-01 — 27 of the 35 stale shots, and what actually broke them
 
 The full re-capture left 35 shots unable to reach their screen, all keeping
@@ -4269,8 +4472,8 @@ already current.
 | Image                                     | Screen                        | What changed                                                                                                                                                                                                                                                       |
 | ----------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `03-15-scheduling-settings.png`           | `/scheduling/settings`        | Rebuilt onto the shared settings layout: section sidebar on desktop, tab strip on phones, single header replacing two stacked titles                                                                                                                               |
-| `03-32-settings-general-closeout.png`     | `?tab=general`                | Same, plus the Save/Reset footer now appears only on General, Apparatus and Equipment                                                                                                                                                                              |
-| `03-34-settings-checklist-timing.png`     | `?tab=shift-reports`          | Same layout change; Shift Reports no longer shows the page-level Save footer                                                                                                                                                                                       |
+| `03-32-settings-general-closeout.png`     | `?tab=general`                | Same, plus the Save/Reset footer now appears only on General and Apparatus — Equipment dropped off the list on 2026-08-31 when its four settings were deleted                                                                                                      |
+| `03-34-settings-checklist-timing.png`     | _retired_                     | The Checklist Timing section moved out of Scheduling to `/inventory/admin/checklists/settings` (2026-08-31) and no longer exists on this screen. The guide no longer references this image; re-capture the new page instead                                          |
 | `03-35-settings-form-sections.png`        | `?tab=shift-reports`          | Same                                                                                                                                                                                                                                                               |
 | `03-36-settings-apparatus-skills.png`     | `?tab=shift-reports`          | Same                                                                                                                                                                                                                                                               |
 | `03-37-settings-rating-scale.png`         | `?tab=shift-reports`          | Same                                                                                                                                                                                                                                                               |
@@ -4380,7 +4583,7 @@ seventeenth is the reason this section exists.
 
 **`03-22-equipment-check-builder` was photographing the wrong page, and had
 been for as long as it existed.** Its route was
-`/scheduling/equipment-check-templates/**new**` — the blank create form — and it
+`/inventory/admin/checklists/templates/**new**` — the blank create form — and it
 carried `allowEmptyState: true` with a note calling that correct, "the shot is
 of the builder layout". But the guide text this image sits under is about
 compartments, item check types and drag-to-reorder, and the page in the image

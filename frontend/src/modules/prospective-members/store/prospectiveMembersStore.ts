@@ -19,6 +19,7 @@ import type {
   Interview,
   InterviewCreate,
   InterviewUpdate,
+  PaginatedApplicantList,
 } from '../types';
 import { pipelineService, applicantService, interviewService } from '../services/api';
 import { handleStoreError } from '../../../utils/storeHelpers';
@@ -26,7 +27,7 @@ import { toAppError } from '../../../utils/errorHandling';
 import { StageType } from '../../../constants/enums';
 import { KANBAN_PAGE_SIZE } from '../constants';
 
-export type PipelineTab = 'active' | 'inactive' | 'withdrawn';
+export type PipelineTab = 'active' | 'inactive' | 'withdrawn' | 'rejected' | 'converted';
 
 const VIEW_MODE_STORAGE_KEY = 'prospective-members:view-mode';
 const PIPELINE_STORAGE_KEY = 'prospective-members:pipeline-id';
@@ -88,6 +89,18 @@ interface ProspectiveMembersState {
   withdrawnCurrentPage: number;
   withdrawnTotalPages: number;
 
+  // Rejected applicant data
+  rejectedApplicants: ApplicantListItem[];
+  rejectedTotalApplicants: number;
+  rejectedCurrentPage: number;
+  rejectedTotalPages: number;
+
+  // Converted applicant data — applications that produced a member
+  convertedApplicants: ApplicantListItem[];
+  convertedTotalApplicants: number;
+  convertedCurrentPage: number;
+  convertedTotalPages: number;
+
   // Election package for current applicant
   currentElectionPackage: ElectionPackage | null;
   isLoadingElectionPackage: boolean;
@@ -104,6 +117,8 @@ interface ProspectiveMembersState {
   isLoadingStats: boolean;
   isLoadingInactive: boolean;
   isLoadingWithdrawn: boolean;
+  isLoadingRejected: boolean;
+  isLoadingConverted: boolean;
   isAdvancing: boolean;
   isRegressing: boolean;
   isRejecting: boolean;
@@ -140,6 +155,8 @@ interface ProspectiveMembersState {
   reactivateApplicant: (id: string, notes?: string) => Promise<void>;
   fetchInactiveApplicants: (page?: number) => Promise<void>;
   fetchWithdrawnApplicants: (page?: number) => Promise<void>;
+  fetchRejectedApplicants: (page?: number) => Promise<void>;
+  fetchConvertedApplicants: (page?: number) => Promise<void>;
   purgeInactiveApplicants: (applicantIds?: string[]) => Promise<void>;
   updateInactivitySettings: (config: InactivityConfig) => Promise<void>;
 
@@ -167,6 +184,33 @@ interface ProspectiveMembersState {
 }
 
 const defaultFilters: ApplicantListFilters = {};
+
+/**
+ * True when the page just fetched has fallen off the end of a shrinking list.
+ *
+ * Reactivating the only rejected applicant on page 2 leaves 25 records and one
+ * page, but the refresh asks for page 2 again: an empty response stored as
+ * "page 2 of 1", which renders the empty state with no pagination controls to
+ * get back to page 1. Every list here pages the same way and had the same
+ * dead end.
+ */
+const isPastLastPage = (requested: number, response: PaginatedApplicantList): boolean =>
+  response.items.length === 0 && response.total > 0 && requested > response.total_pages;
+
+/**
+ * Refresh whichever archive list is on screen after a status change.
+ *
+ * Reactivating from the Withdrawn tab used to refresh the *inactive* list, so
+ * the row the coordinator had just reactivated stayed where it was until they
+ * reloaded the page.
+ */
+const refreshActiveArchiveList = async (get: () => ProspectiveMembersState): Promise<void> => {
+  const { activeTab } = get();
+  if (activeTab === 'inactive') await get().fetchInactiveApplicants();
+  else if (activeTab === 'withdrawn') await get().fetchWithdrawnApplicants();
+  else if (activeTab === 'rejected') await get().fetchRejectedApplicants();
+  else if (activeTab === 'converted') await get().fetchConvertedApplicants();
+};
 
 export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, get) => ({
   // Initial state
@@ -199,6 +243,16 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   withdrawnCurrentPage: 1,
   withdrawnTotalPages: 0,
 
+  rejectedApplicants: [],
+  rejectedTotalApplicants: 0,
+  rejectedCurrentPage: 1,
+  rejectedTotalPages: 0,
+
+  convertedApplicants: [],
+  convertedTotalApplicants: 0,
+  convertedCurrentPage: 1,
+  convertedTotalPages: 0,
+
   currentElectionPackage: null,
   isLoadingElectionPackage: false,
 
@@ -212,6 +266,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
   isLoadingStats: false,
   isLoadingInactive: false,
   isLoadingWithdrawn: false,
+  isLoadingRejected: false,
+  isLoadingConverted: false,
   isAdvancing: false,
   isRegressing: false,
   isRejecting: false,
@@ -327,7 +383,16 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         filters: state.filters,
         page: pageToFetch,
         pageSize,
+        // The board and the table show applications still in the pipeline.
+        // A rejected, withdrawn, inactive or converted applicant is out of it
+        // and lives in its own tab, not as a card in the stage it stopped at.
+        openOnly: true,
       });
+
+      if (isPastLastPage(pageToFetch, response)) {
+        await get().fetchApplicants(response.total_pages);
+        return;
+      }
 
       set({
         applicants: response.items,
@@ -460,6 +525,11 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     try {
       await applicantService.rejectApplicant(id, reason);
       await get().fetchApplicants();
+      await get().fetchRejectedApplicants();
+      const state = get();
+      if (state.currentPipeline) {
+        await get().fetchPipelineStats(state.currentPipeline.id);
+      }
       const currentApplicant = get().currentApplicant;
       if (currentApplicant?.id === id) {
         await get().fetchApplicant(id);
@@ -541,9 +611,8 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
     set({ isReactivating: true, error: null });
     try {
       await applicantService.reactivateApplicant(id, notes ? { notes } : undefined);
-      // Refresh both active and inactive lists
       await get().fetchApplicants();
-      await get().fetchInactiveApplicants();
+      await refreshActiveArchiveList(get);
       const state = get();
       if (state.currentPipeline) {
         await get().fetchPipelineStats(state.currentPipeline.id);
@@ -575,6 +644,11 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         pageSize: state.pageSize,
       });
 
+      if (isPastLastPage(pageToFetch, response)) {
+        await get().fetchInactiveApplicants(response.total_pages);
+        return;
+      }
+
       set({
         inactiveApplicants: response.items,
         inactiveTotalApplicants: response.total,
@@ -603,6 +677,11 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
         pageSize: state.pageSize,
       });
 
+      if (isPastLastPage(pageToFetch, response)) {
+        await get().fetchWithdrawnApplicants(response.total_pages);
+        return;
+      }
+
       set({
         withdrawnApplicants: response.items,
         withdrawnTotalApplicants: response.total,
@@ -614,6 +693,72 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       set({
         error: handleStoreError(error, 'Failed to fetch withdrawn applicants'),
         isLoadingWithdrawn: false,
+      });
+    }
+  },
+
+  fetchRejectedApplicants: async (page?: number) => {
+    const state = get();
+    const pageToFetch = page ?? state.rejectedCurrentPage;
+
+    set({ isLoadingRejected: true, error: null });
+    try {
+      const response = await applicantService.getRejectedApplicants({
+        pipeline_id: state.filters.pipeline_id,
+        search: state.filters.search,
+        page: pageToFetch,
+        pageSize: state.pageSize,
+      });
+
+      if (isPastLastPage(pageToFetch, response)) {
+        await get().fetchRejectedApplicants(response.total_pages);
+        return;
+      }
+
+      set({
+        rejectedApplicants: response.items,
+        rejectedTotalApplicants: response.total,
+        rejectedCurrentPage: response.page,
+        rejectedTotalPages: response.total_pages,
+        isLoadingRejected: false,
+      });
+    } catch (error) {
+      set({
+        error: handleStoreError(error, 'Failed to fetch rejected applicants'),
+        isLoadingRejected: false,
+      });
+    }
+  },
+
+  fetchConvertedApplicants: async (page?: number) => {
+    const state = get();
+    const pageToFetch = page ?? state.convertedCurrentPage;
+
+    set({ isLoadingConverted: true, error: null });
+    try {
+      const response = await applicantService.getConvertedApplicants({
+        pipeline_id: state.filters.pipeline_id,
+        search: state.filters.search,
+        page: pageToFetch,
+        pageSize: state.pageSize,
+      });
+
+      if (isPastLastPage(pageToFetch, response)) {
+        await get().fetchConvertedApplicants(response.total_pages);
+        return;
+      }
+
+      set({
+        convertedApplicants: response.items,
+        convertedTotalApplicants: response.total,
+        convertedCurrentPage: response.page,
+        convertedTotalPages: response.total_pages,
+        isLoadingConverted: false,
+      });
+    } catch (error) {
+      set({
+        error: handleStoreError(error, 'Failed to fetch converted applicants'),
+        isLoadingConverted: false,
       });
     }
   },
@@ -790,6 +935,10 @@ export const useProspectiveMembersStore = create<ProspectiveMembersState>((set, 
       void get().fetchInactiveApplicants(1);
     } else if (tab === 'withdrawn') {
       void get().fetchWithdrawnApplicants(1);
+    } else if (tab === 'rejected') {
+      void get().fetchRejectedApplicants(1);
+    } else if (tab === 'converted') {
+      void get().fetchConvertedApplicants(1);
     } else {
       void get().fetchApplicants(1);
     }

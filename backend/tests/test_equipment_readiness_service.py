@@ -15,6 +15,7 @@ Mocked sessions — no DB — so it runs in the sandbox, matching
 test_equipment_check_service.py.
 """
 
+from contextlib import ExitStack
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -256,7 +257,15 @@ class TestBuildOccasions:
     """Rule 3 — a check that did not happen has to become a row."""
 
     @staticmethod
-    def _patched(service, shifts, templates_by_type, checks=None, unavailable=None):
+    def _patched(
+        service,
+        shifts,
+        templates_by_type,
+        checks=None,
+        unavailable=None,
+        links=None,
+        templates_by_id=None,
+    ):
         mock_result = SimpleNamespace(
             scalars=lambda: SimpleNamespace(all=lambda: shifts)
         )
@@ -266,7 +275,16 @@ class TestBuildOccasions:
                 service,
                 "_load_templates",
                 new_callable=AsyncMock,
-                return_value=({}, templates_by_type),
+                return_value=({}, templates_by_type, templates_by_id or {}),
+            ),
+            # A shift template that names checklists replaces apparatus
+            # resolution; an empty map means no template named any, which is
+            # the fallback every case below exercises.
+            patch.object(
+                service,
+                "_load_shift_template_links",
+                new_callable=AsyncMock,
+                return_value=links or {},
             ),
             patch.object(
                 service,
@@ -283,20 +301,95 @@ class TestBuildOccasions:
         )
 
     @staticmethod
-    def _shift(day, apparatus="e1"):
+    def _shift(day, apparatus="e1", template_id=None):
         return SimpleNamespace(
-            id=f"shift-{apparatus}-{day}", shift_date=day, apparatus_id=apparatus
+            id=f"shift-{apparatus}-{day}",
+            shift_date=day,
+            apparatus_id=apparatus,
+            template_id=template_id,
         )
 
     @staticmethod
     def _template(tid="t1", name="Engine Daily Check", timing="start_of_shift"):
         return SimpleNamespace(id=tid, name=name, check_timing=timing)
 
+    async def test_an_explicit_link_replaces_the_apparatus_template(self, service):
+        """The officer named the checklists; the type default is not a second opinion."""
+        linked = self._template(tid="linked", name="Ladder Weekly")
+        shifts = [self._shift(date(2026, 8, 15), template_id="st-1")]
+        fleet = {"e1": make_unit()}
+        patches = self._patched(
+            service,
+            shifts,
+            {"engine": [self._template()]},
+            links={"st-1": ["linked"]},
+            templates_by_id={"linked": linked},
+        )
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            occasions, _ = await service._build_occasions("org-1", fleet, 7, TODAY)
+
+        assert [o.template_id for o in occasions] == ["linked"]
+
+    async def test_a_template_with_no_links_falls_back_to_the_apparatus(self, service):
+        shifts = [self._shift(date(2026, 8, 15), template_id="st-2")]
+        fleet = {"e1": make_unit()}
+        patches = self._patched(
+            service,
+            shifts,
+            {"engine": [self._template()]},
+            links={"st-1": ["linked"]},  # a different template's links
+        )
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            occasions, _ = await service._build_occasions("org-1", fleet, 7, TODAY)
+
+        assert [o.template_id for o in occasions] == ["t1"]
+
+    async def test_a_shift_with_no_template_falls_back_to_the_apparatus(self, service):
+        """Every shift that existed before shifts.template_id is this case."""
+        shifts = [self._shift(date(2026, 8, 15))]
+        fleet = {"e1": make_unit()}
+        patches = self._patched(service, shifts, {"engine": [self._template()]})
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            occasions, _ = await service._build_occasions("org-1", fleet, 7, TODAY)
+
+        assert [o.template_id for o in occasions] == ["t1"]
+
+    async def test_links_to_inactive_checklists_expect_nothing(self, service):
+        """Not a fallback: the officer said which checklists, and none are live.
+
+        _load_templates only returns active templates, so a link to a
+        deactivated one resolves to nothing. Substituting the apparatus default
+        here would report the crew as missing a check nobody asked them for.
+        """
+        shifts = [self._shift(date(2026, 8, 15), template_id="st-1")]
+        fleet = {"e1": make_unit()}
+        patches = self._patched(
+            service,
+            shifts,
+            {"engine": [self._template()]},
+            links={"st-1": ["retired"]},
+            templates_by_id={},
+        )
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            occasions, _ = await service._build_occasions("org-1", fleet, 7, TODAY)
+
+        assert occasions == []
+
     async def test_unsubmitted_past_check_becomes_a_missed_occasion(self, service):
         shifts = [self._shift(date(2026, 8, 14)), self._shift(date(2026, 8, 15))]
         fleet = {"e1": make_unit()}
         patches = self._patched(service, shifts, {"engine": [self._template()]})
-        with patches[0], patches[1], patches[2]:
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
             occasions, columns = await service._build_occasions(
                 "org-1", fleet, 7, TODAY
             )
@@ -309,7 +402,9 @@ class TestBuildOccasions:
         shifts = [self._shift(TODAY)]
         fleet = {"e1": make_unit()}
         patches = self._patched(service, shifts, {"engine": [self._template()]})
-        with patches[0], patches[1], patches[2]:
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
             occasions, _ = await service._build_occasions("org-1", fleet, 7, TODAY)
         assert occasions[0].status == STATUS_DUE
 
@@ -322,7 +417,9 @@ class TestBuildOccasions:
             {"engine": [self._template()]},
             unavailable={"e1": {date(2026, 8, 12)}},
         )
-        with patches[0], patches[1], patches[2]:
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
             occasions, _ = await service._build_occasions("org-1", fleet, 7, TODAY)
         assert occasions[0].status == STATUS_OUT_OF_SERVICE
 
@@ -339,7 +436,9 @@ class TestBuildOccasions:
             {"engine": [self._template()]},
             checks={(f"shift-e1-{day}", "t1"): check},
         )
-        with patches[0], patches[1], patches[2]:
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
             occasions, _ = await service._build_occasions("org-1", fleet, 7, TODAY)
 
         assert occasions[0].status == STATUS_FAILED
@@ -350,7 +449,9 @@ class TestBuildOccasions:
         shifts = [self._shift(TODAY - timedelta(days=n)) for n in range(10)]
         fleet = {"e1": make_unit()}
         patches = self._patched(service, shifts, {"engine": [self._template()]})
-        with patches[0], patches[1], patches[2]:
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
             _, columns = await service._build_occasions("org-1", fleet, 3, TODAY)
 
         assert columns == [
@@ -365,7 +466,9 @@ class TestBuildOccasions:
         shifts = [self._shift(date(2026, 8, 15))]
         fleet = {"e1": make_unit()}
         patches = self._patched(service, shifts, {})
-        with patches[0], patches[1], patches[2]:
+        with ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
             occasions, columns = await service._build_occasions(
                 "org-1", fleet, 7, TODAY
             )

@@ -31,13 +31,13 @@ export const ERROR_MAPPINGS: Record<string, ErrorMapping> = {
       'Check-in opens 1 hour before the event starts',
       'Check-in closes when the event ends',
       'Verify the current time matches the event schedule',
-      'Ask an event manager if the event was ended early',
+      'Ask an event officer if the event was ended early',
     ],
   },
   ALREADY_CHECKED_IN: {
     userMessage: 'You have already checked in to this event.',
     troubleshootingSteps: [
-      'If you believe this is an error, contact an event manager',
+      'If you believe this is an error, contact an event officer',
       'Your attendance has been recorded',
     ],
   },
@@ -84,7 +84,7 @@ export const ERROR_MAPPINGS: Record<string, ErrorMapping> = {
   QR_CODE_INVALID: {
     userMessage: 'This QR code is not valid or has expired.',
     troubleshootingSteps: [
-      'Ask an event manager for a fresh QR code',
+      'Ask an event officer for a fresh QR code',
       "Verify you're scanning the correct code for this event",
       'Check if the event has been rescheduled',
     ],

@@ -56,6 +56,7 @@ describe('applicant paging by view mode', () => {
       filters: {},
       page: 1,
       pageSize: KANBAN_PAGE_SIZE,
+      openOnly: true,
     });
   });
 
@@ -68,6 +69,7 @@ describe('applicant paging by view mode', () => {
       filters: {},
       page: 2,
       pageSize: 25,
+      openOnly: true,
     });
   });
 
@@ -81,6 +83,7 @@ describe('applicant paging by view mode', () => {
       filters: {},
       page: 1,
       pageSize: KANBAN_PAGE_SIZE,
+      openOnly: true,
     });
   });
 

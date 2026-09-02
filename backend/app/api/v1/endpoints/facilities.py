@@ -5,10 +5,18 @@ Endpoints for facility/building management including CRUD operations,
 maintenance tracking, building systems, inspections, photos, and documents.
 
 Read-permission tiers: operational data (facilities, rooms, systems,
-maintenance, inspections, contacts, shutoffs, compliance, photos, documents)
-is readable with ``facilities.view`` — the baseline member grant. Sensitive
-data (access keys/codes, utility accounts and readings, capital projects,
-insurance policies, occupants) requires ``facilities.view_sensitive``,
+maintenance, inspections, contacts, shutoffs, compliance, photos) is readable
+with ``facilities.view``. As of the 2026-08-26/27 revocations this is no
+longer a baseline member grant — regular members and station-scoped ranks
+(captain, lieutenant, and below) do not hold it; only administrative/
+leadership positions (president, vice president, secretary, treasurer,
+quartermaster, safety officer, training officer, facilities manager) and
+chiefs (via ``facilities.manage``) can reach this module at all — this list
+mirrors ``DEFAULT_POSITIONS`` in ``core/permissions.py`` and is not
+necessarily exhaustive against a department's own customized positions.
+Facility documents and
+other sensitive data (access keys/codes, utility accounts and readings,
+capital projects, insurance policies, occupants) require ``facilities.view_sensitive``,
 ``facilities.edit``, or ``facilities.manage``: door/alarm codes, account
 numbers, budgets, and lease terms must not be exposed to every member just
 because the module is visible to them. ``facilities.view_sensitive`` exists
@@ -19,6 +27,7 @@ revoked). Keep new endpoints on the correct side of this line.
 """
 
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,6 +130,64 @@ _SENSITIVE_READ_PERMISSIONS = (
     "facilities.edit",
     "facilities.manage",
 )
+
+
+async def _validate_shared_document_reference(
+    db: AsyncSession,
+    file_path: str,
+    current_user: User,
+    facility_id: str,
+) -> None:
+    """Reject forged/cross-organization references, and file the document.
+
+    Validating the reference is only half the job. The upload that produces it
+    stores a folderless document, and a folderless document is organization
+    level — ``DocumentsService.get_documents`` returns it to anyone holding
+    ``documents.view``. So a facility record gated on
+    ``facilities.view_sensitive`` pointed at a file the whole department could
+    list and download through the Documents module, which is the contract this
+    endpoint family exists to enforce, defeated one layer down.
+
+    Filing the document into the facility's own folder is what closes it: that
+    tree carries ``required_permissions`` naming the same three grants, so the
+    bytes are gated exactly as the record is. Done here, at the point the
+    document becomes facility data, rather than at the upload — the uploader
+    does not yet know which facility it belongs to, and an unclassified upload
+    that is never referenced stays an ordinary personal upload.
+
+    Only an unfiled document is moved. A caller that deliberately filed it
+    somewhere else keeps that placement; re-parenting another module's document
+    because a facility happens to reference it would be the more surprising
+    behaviour, and the reference is still validated either way.
+    """
+    if not file_path.startswith("document:"):
+        raise HTTPException(
+            status_code=400, detail="Files must use shared document storage"
+        )
+    try:
+        document_id = UUID(file_path.removeprefix("document:"))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail="Invalid shared document reference"
+        ) from exc
+    organization_id = UUID(str(current_user.organization_id))
+    documents = DocumentsService(db)
+    document = await documents.get_document_by_id(document_id, organization_id)
+    if document is None:
+        # Deliberately indistinguishable from a missing same-org document.
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if document.folder_id is None:
+        facility = await FacilitiesService(db).get_facility(
+            facility_id, str(organization_id), include_relations=False
+        )
+        if facility is None:
+            raise HTTPException(status_code=404, detail="Facility not found")
+        folder = await documents.ensure_facility_folder(
+            organization_id, str(facility.id), facility.name
+        )
+        document.folder_id = folder.id
+        await db.commit()
 
 
 def _facility_response_for(facility, current_user: User) -> FacilityResponse:
@@ -278,13 +345,15 @@ async def update_facility_type(
 async def delete_facility_type(
     type_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility type
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
 
     **Note:** Cannot delete types that are in use by facilities.
     """
@@ -415,13 +484,15 @@ async def update_facility_status(
 async def delete_facility_status(
     status_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility status
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
 
     **Note:** Cannot delete statuses that are in use by facilities.
     """
@@ -601,13 +672,15 @@ async def create_facility(
 async def archive_facility(
     facility_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Archive a facility
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -722,6 +795,9 @@ async def create_facility_photo(
     service = FacilitiesService(db)
 
     try:
+        await _validate_shared_document_reference(
+            db, photo_data.file_path, current_user, str(photo_data.facility_id)
+        )
         photo = await service.create_photo(
             photo_data=photo_data,
             organization_id=current_user.organization_id,
@@ -786,13 +862,15 @@ async def update_facility_photo(
 async def delete_facility_photo(
     photo_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility photo
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -822,15 +900,13 @@ async def list_facility_documents(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
-    ),
+    current_user: User = Depends(require_permission(*_SENSITIVE_READ_PERMISSIONS)),
 ):
     """
     List facility documents
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     documents = await service.list_documents(
@@ -867,6 +943,9 @@ async def create_facility_document(
     service = FacilitiesService(db)
 
     try:
+        await _validate_shared_document_reference(
+            db, document_data.file_path, current_user, str(document_data.facility_id)
+        )
         document = await service.create_document(
             document_data=document_data,
             organization_id=current_user.organization_id,
@@ -933,13 +1012,15 @@ async def update_facility_document(
 async def delete_facility_document(
     document_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility document
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -966,6 +1047,15 @@ async def delete_facility_document(
 )
 async def list_facility_maintenance_types(
     is_active: bool | None = Query(True, description="Filter by active status"),
+    include_inactive: bool = Query(
+        False,
+        description=(
+            "Return both active and inactive types. The settings screen needs "
+            "this: is_active defaults to True, and a bool query parameter "
+            "cannot express 'no filter', so a deactivated type disappeared "
+            "from the only screen that can edit or reactivate it."
+        ),
+    ),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -981,7 +1071,7 @@ async def list_facility_maintenance_types(
     service = FacilitiesService(db)
     types = await service.list_maintenance_types(
         organization_id=current_user.organization_id,
-        is_active=is_active,
+        is_active=None if include_inactive else is_active,
         include_system=include_system,
     )
     return types
@@ -1065,13 +1155,15 @@ async def update_facility_maintenance_type(
 async def delete_facility_maintenance_type(
     type_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility maintenance type definition
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1282,13 +1374,15 @@ async def update_facility_maintenance_record(
 async def delete_facility_maintenance_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility maintenance record
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1455,13 +1549,15 @@ async def update_facility_system(
 async def delete_facility_system(
     system_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Archive a building system (soft-delete)
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1631,13 +1727,15 @@ async def update_facility_inspection(
 async def delete_facility_inspection(
     inspection_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility inspection record
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1812,13 +1910,15 @@ async def update_facility_utility_account(
 async def delete_facility_utility_account(
     account_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility utility account
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1970,13 +2070,15 @@ async def update_facility_utility_reading(
 async def delete_facility_utility_reading(
     reading_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a utility reading
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2153,13 +2255,15 @@ async def update_facility_access_key(
 async def delete_facility_access_key(
     key_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility access key
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2343,13 +2447,15 @@ async def update_facility_room(
 async def delete_facility_room(
     room_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility room
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2520,13 +2626,15 @@ async def update_facility_emergency_contact(
 async def delete_facility_emergency_contact(
     contact_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility emergency contact
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2695,13 +2803,15 @@ async def update_facility_shutoff_location(
 async def delete_facility_shutoff_location(
     location_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility shutoff location
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2878,13 +2988,15 @@ async def update_facility_capital_project(
 async def delete_facility_capital_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility capital project
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3059,13 +3171,15 @@ async def update_facility_insurance_policy(
 async def delete_facility_insurance_policy(
     policy_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility insurance policy
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3236,13 +3350,15 @@ async def update_facility_occupant(
 async def delete_facility_occupant(
     occupant_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility occupant
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3415,13 +3531,15 @@ async def update_facility_compliance_checklist(
 async def delete_facility_compliance_checklist(
     checklist_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility compliance checklist
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3557,13 +3675,15 @@ async def update_facility_compliance_item(
 async def delete_facility_compliance_item(
     item_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a compliance item
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3630,13 +3750,25 @@ async def get_facility_folders(
     sub_folders = await docs_service.get_facility_sub_folders(
         organization_id=current_user.organization_id,
         facility_id=facility_id,
+        current_user=current_user,
     )
+
+    # Every generic folder/document/summary read in the Documents module
+    # requires documents.view; a document_count here is the same aggregate
+    # disclosure DOC-4 already flags for that module's own summary endpoint.
+    # A facilities.view-only caller sees the folders (they're a fixed part
+    # of the facility record) but not how many documents are inside them.
+    can_see_counts = user_has_permission(
+        current_user, "documents.view"
+    ) or user_has_permission(current_user, "documents.manage")
 
     return {
         "folders": [
             {
                 **{c.key: getattr(f, c.key) for c in f.__table__.columns},
-                "document_count": getattr(f, "document_count", 0),
+                "document_count": (
+                    getattr(f, "document_count", 0) if can_see_counts else None
+                ),
             }
             for f in sub_folders
         ],

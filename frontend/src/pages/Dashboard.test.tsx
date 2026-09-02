@@ -35,6 +35,7 @@ const {
   mockAcknowledge,
   mockGetMyTraining,
   mockGetEvents,
+  mockCreateOrUpdateRSVP,
   mockCheckPermission,
   mockGetAdminSummary,
   mockGetSetupChecklist,
@@ -42,6 +43,9 @@ const {
   mockGetInventorySummary,
   mockGetEligiblePositions,
   mockGetMyCompliance,
+  mockGetSchedulingSummary,
+  mockGetAdminHoursSummary,
+  mockGetEnabledModules,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -52,6 +56,7 @@ const {
   mockAcknowledge: vi.fn(),
   mockGetMyTraining: vi.fn(),
   mockGetEvents: vi.fn(),
+  mockCreateOrUpdateRSVP: vi.fn(),
   mockCheckPermission: vi.fn(),
   mockGetAdminSummary: vi.fn(),
   mockGetSetupChecklist: vi.fn(),
@@ -59,15 +64,16 @@ const {
   mockGetInventorySummary: vi.fn(),
   mockGetEligiblePositions: vi.fn(),
   mockGetMyCompliance: vi.fn(),
+  mockGetSchedulingSummary: vi.fn(),
+  mockGetAdminHoursSummary: vi.fn(),
+  mockGetEnabledModules: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getMyShifts: mockGetMyShifts,
     getOpenShifts: mockGetOpenShifts,
-    getSummary: vi
-      .fn()
-      .mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
+    getSummary: mockGetSchedulingSummary,
     signupForShift: mockSignupForShift,
     getEligiblePositions: mockGetEligiblePositions,
   },
@@ -96,7 +102,7 @@ vi.mock('../services/api', () => ({
     getSetupChecklist: mockGetSetupChecklist,
     // Reached via DashboardOrientation -> useEnabledModules, which decides
     // which learning lessons count toward the orientation prompt.
-    getEnabledModules: vi.fn().mockResolvedValue({ enabled_modules: [] }),
+    getEnabledModules: mockGetEnabledModules,
   },
   inventoryService: {
     getUserInventory: mockGetUserInventory,
@@ -105,6 +111,7 @@ vi.mock('../services/api', () => ({
   },
   eventService: {
     getEvents: mockGetEvents,
+    createOrUpdateRSVP: mockCreateOrUpdateRSVP,
   },
   medicalScreeningService: {
     getMyCompliance: mockGetMyCompliance,
@@ -120,7 +127,7 @@ vi.mock('../services/api', () => ({
 
 vi.mock('../modules/admin-hours/services/api', () => ({
   adminHoursEntryService: {
-    getSummary: vi.fn().mockResolvedValue({ totalHours: 0 }),
+    getSummary: mockGetAdminHoursSummary,
   },
 }));
 
@@ -129,15 +136,24 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 // every caller the whole state object, so a consumer selecting one primitive
 // (`state.user?.id`) gets a fresh object each render and spins any effect keyed
 // on it — which is exactly what DashboardOrientation does.
-vi.mock('../stores/authStore', () => ({
-  useAuthStore: (selector?: (state: Record<string, unknown>) => unknown) => {
-    const state = {
-      checkPermission: mockCheckPermission,
-      user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
-    };
-    return selector ? selector(state) : state;
-  },
-}));
+vi.mock('../stores/authStore', () => {
+  const state = () => ({
+    checkPermission: mockCheckPermission,
+    user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
+  });
+  // The real store is callable *and* carries getState. A hook-only double
+  // breaks every consumer that reads the store outside React — the scheduling
+  // settings cache keys its org-scoped entries that way.
+  return {
+    useAuthStore: Object.assign(
+      (selector?: (s: Record<string, unknown>) => unknown) => {
+        const s = state();
+        return selector ? selector(s) : s;
+      },
+      { getState: state }
+    ),
+  };
+});
 
 // Mock timezone hook
 vi.mock('../hooks/useTimezone', () => ({
@@ -154,10 +170,15 @@ vi.mock('../hooks/useRelativeTime', () => ({
   formatRelativeTime: (date: string) => date,
 }));
 
-/** Inside the seven-day window the timeline covers, whatever day the suite runs. */
+/** Inside the thirty-day window the timeline covers, whatever day the suite runs. */
 const inWindow = (offsetDays: number) => addCalendarDays(getTodayLocalDate('America/New_York'), offsetDays);
-/** Past the window, so it only counts toward the "more open shifts" footer. */
-const pastWindow = addCalendarDays(getTodayLocalDate('America/New_York'), 20);
+/**
+ * Past the display window but inside the open-shift fetch's lookahead, so it
+ * counts only toward the "more open shifts" footer. It has to sit between the
+ * two: inside thirty days it becomes an ordinary row, past sixty days the
+ * fetch never returns it and the footer has nothing to count.
+ */
+const pastWindow = addCalendarDays(getTodayLocalDate('America/New_York'), 40);
 
 const makeShift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 'shift-1',
@@ -196,7 +217,15 @@ describe('Dashboard', () => {
       is_fully_compliant: true,
       days_until_next_expiration: null,
     });
-    mockCheckPermission.mockReturnValue(false);
+    mockCheckPermission.mockImplementation((permission: string) =>
+      ['scheduling.view', 'training.view', 'admin_hours.view'].includes(permission)
+    );
+    mockGetEnabledModules.mockResolvedValue({
+      configured: true,
+      enabled_modules: ['inventory', 'medical_screening', 'notifications', 'scheduling', 'training'],
+    });
+    mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 0 });
+    mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 0 });
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
     mockGetUserInventory.mockResolvedValue({ permanent_assignments: [], active_checkouts: [], issued_items: [] });
@@ -209,7 +238,56 @@ describe('Dashboard', () => {
     });
   });
 
-  describe('Next 7 Days', () => {
+  describe('hours summary gates', () => {
+    it('does not call summary endpoints owned by disabled modules', async () => {
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: [] });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(mockGetAdminHoursSummary).toHaveBeenCalledTimes(1);
+      });
+      expect(mockGetSchedulingSummary).not.toHaveBeenCalled();
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(within(card).getAllByText('Unavailable')).toHaveLength(2);
+      expect(within(card).getAllByText('0')).toHaveLength(2);
+    });
+
+    it('loads authorized sources independently when another source fails', async () => {
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyTraining.mockRejectedValue(new Error('training unavailable'));
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(within(card).getByText('5')).toBeInTheDocument();
+      });
+      expect(within(card).getByText('3')).toBeInTheDocument();
+      expect(within(card).getByText('2')).toBeInTheDocument();
+      expect(within(card).getByText('Unavailable')).toBeInTheDocument();
+    });
+
+    it('does not call enabled sources without their view permissions', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'scheduling.view');
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 4 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(within(card).getAllByText('4')).toHaveLength(2);
+      });
+      expect(mockGetSchedulingSummary).toHaveBeenCalledTimes(1);
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(mockGetAdminHoursSummary).not.toHaveBeenCalled();
+      expect(mockCheckPermission).toHaveBeenCalledWith('admin_hours.view');
+    });
+  });
+
+  describe('Next 30 Days', () => {
     it('merges my shifts, open shifts and events into one list', async () => {
       mockGetMyShifts.mockResolvedValue({
         shifts: [makeShift({ id: 'my-1', shift_date: inWindow(1), apparatus_name: 'Engine 1' })],
@@ -233,10 +311,100 @@ describe('Dashboard', () => {
 
       renderWithRouter(<Dashboard />);
 
-      expect(await screen.findByRole('heading', { name: 'Next 7 Days' })).toBeInTheDocument();
-      expect(screen.getByText('Shift · Engine 1')).toBeInTheDocument();
-      expect(screen.getByText('Open Shift')).toBeInTheDocument();
-      expect(screen.getByText('Ladder Ops Drill')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Next 30 Days' })).toBeInTheDocument();
+      // The heading renders above the timeline's own skeleton, so it is no
+      // evidence the three sources have merged yet.
+      expect(await screen.findByText('Shift · Engine 1')).toBeInTheDocument();
+      expect(await screen.findByText('Open Shift')).toBeInTheDocument();
+      expect(await screen.findByText('Ladder Ops Drill')).toBeInTheDocument();
+    });
+
+    // The window used to be seven days, and the fetches behind it were capped
+    // at five records applied *before* the window filter. Widening the window
+    // without lifting those caps would have made the card worse, not better:
+    // it would promise thirty days and keep showing a handful.
+    describe('the reach of the window', () => {
+      beforeEach(() => {
+        mockGetEvents.mockReset();
+        mockGetEvents.mockResolvedValue([]);
+        mockGetMyShifts.mockReset();
+        mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
+      });
+
+      it('keeps a drill three weeks out, which the seven-day window hid', async () => {
+        mockGetEvents.mockResolvedValue([
+          {
+            id: 'evt-far',
+            title: 'Ladder Ops Drill',
+            event_type: 'training',
+            start_datetime: `${inWindow(20)}T14:00:00Z`,
+            end_datetime: `${inWindow(20)}T17:00:00Z`,
+            requires_rsvp: true,
+            is_mandatory: false,
+            is_cancelled: false,
+          },
+        ]);
+
+        renderWithRouter(<Dashboard />);
+
+        expect(await screen.findByText('Ladder Ops Drill')).toBeInTheDocument();
+      });
+
+      // The sixty-day reach is the footer's alone. Letting it into the
+      // "Take a Shift" count would quote the member a number matching nothing
+      // the card shows, and send them to a schedule not displaying those
+      // shifts either.
+      it('keeps lookahead shifts out of the quick action, but counts them in the footer', async () => {
+        mockGetOpenShifts.mockResolvedValue([
+          makeShift({ id: 'open-near', shift_date: inWindow(2), min_staffing: 4, attendee_count: 1 }),
+          makeShift({ id: 'open-far', shift_date: pastWindow, min_staffing: 4, attendee_count: 1 }),
+        ]);
+
+        renderWithRouter(<Dashboard />);
+
+        const takeAShift = await screen.findByRole('button', { name: /take a shift/i });
+        // One open shift inside the window, not the two the fetch returned.
+        await waitFor(() => expect(takeAShift).toHaveTextContent('1 open'));
+        expect(takeAShift).not.toHaveTextContent('2 open');
+        // The far one is still disclosed, as the reach exists to allow.
+        expect(await screen.findByRole('button', { name: /1 more open shift/ })).toBeInTheDocument();
+      });
+
+      it('asks for the whole window rather than the five soonest events', async () => {
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => expect(mockGetEvents).toHaveBeenCalled());
+        const params = mockGetEvents.mock.calls[0]?.[0] as {
+          start_before?: string;
+          limit?: number;
+        };
+        // Asserted as a floor rather than an exact instant: the bound is
+        // computed from Date.now() and deliberately overshoots the window, so
+        // pinning it exactly would fail on the arithmetic rather than on the
+        // behaviour. What matters is that it reaches at least the whole window.
+        const reach = new Date(params.start_before ?? 0).getTime() - Date.now();
+        expect(reach).toBeGreaterThanOrEqual(30 * 24 * 60 * 60 * 1000);
+        expect(params.limit).toBe(500);
+      });
+
+      it('asks for more than five of the member’s own shifts', async () => {
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => expect(mockGetMyShifts).toHaveBeenCalled());
+        const params = mockGetMyShifts.mock.calls[0]?.[0] as { end_date?: string; limit?: number };
+        expect(params.end_date).toBe(inWindow(30));
+        expect(params.limit).toBe(200);
+      });
+
+      // The footer can only count open shifts the fetch actually returned, so
+      // its reach has to exceed the window the list renders.
+      it('reaches past the window for the open shifts the footer counts', async () => {
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => expect(mockGetOpenShifts).toHaveBeenCalled());
+        const params = mockGetOpenShifts.mock.calls[0]?.[0] as { end_date?: string };
+        expect(params.end_date).toBe(inWindow(60));
+      });
     });
 
     it('marks the member’s own shifts as theirs', async () => {
@@ -395,7 +563,7 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: /confirm/i }));
 
       await waitFor(() => {
-        expect(mockGetMyShifts).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+        expect(mockGetMyShifts).toHaveBeenCalledWith(expect.objectContaining({ limit: 200 }));
         expect(mockGetOpenShifts).toHaveBeenCalledWith(
           expect.objectContaining({
             start_date: expect.any(String) as string,
@@ -412,6 +580,123 @@ describe('Dashboard', () => {
         expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
         expect(mockGetOpenShifts).toHaveBeenCalledTimes(1);
       });
+    });
+  });
+
+  describe('Inline event RSVP', () => {
+    // Pitfall #28: this block states the mocks it depends on rather than
+    // inheriting whatever the block above configured.
+    beforeEach(() => {
+      mockCreateOrUpdateRSVP.mockReset();
+      mockCreateOrUpdateRSVP.mockResolvedValue({ status: 'going' });
+      mockGetEvents.mockReset();
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'evt-1',
+          title: 'Ladder Ops Drill',
+          event_type: 'training',
+          start_datetime: `${inWindow(3)}T14:00:00Z`,
+          end_datetime: `${inWindow(3)}T17:00:00Z`,
+          requires_rsvp: false,
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+    });
+
+    it('responds from the timeline without leaving the page', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /going/i }));
+
+      expect(mockCreateOrUpdateRSVP).toHaveBeenCalledWith('evt-1', {
+        status: 'going',
+        guest_count: 0,
+      });
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('offers the controls even when the event requires no RSVP', async () => {
+      // The whole point: requires_rsvp is false on the fixture above, and the
+      // row previously offered only an "Open" link that navigated away.
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: /going/i })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /can.t/i })).toBeInTheDocument();
+    });
+
+    it('falls back to a link once the RSVP deadline has passed', async () => {
+      // The API rejects these outright, and a prominent dashboard button that
+      // can never succeed is worse than a link to the event.
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'evt-1',
+          title: 'Ladder Ops Drill',
+          event_type: 'training',
+          start_datetime: `${inWindow(3)}T14:00:00Z`,
+          end_datetime: `${inWindow(3)}T17:00:00Z`,
+          requires_rsvp: true,
+          rsvp_deadline: '2020-01-01T00:00:00Z',
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: /^open$/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+    });
+
+    it('falls back to a link when the event does not accept "going"', async () => {
+      // The row only submits `going`; on a maybe-only event the API rejects it
+      // deterministically, so the member is better served by the link.
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'evt-1',
+          title: 'Ladder Ops Drill',
+          event_type: 'training',
+          start_datetime: `${inWindow(3)}T14:00:00Z`,
+          end_datetime: `${inWindow(3)}T17:00:00Z`,
+          requires_rsvp: true,
+          allowed_rsvp_statuses: ['maybe'],
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: /^open$/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+    });
+
+    it("shows the server's status, not the one that was asked for", async () => {
+      // A full event answers a "going" request with "waitlisted". Echoing the
+      // request back would tell the member they have a seat they did not get.
+      const user = userEvent.setup();
+      mockCreateOrUpdateRSVP.mockResolvedValue({ status: 'waitlisted' });
+
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /going/i }));
+
+      expect(await screen.findByText(/waitlisted/i)).toBeInTheDocument();
+    });
+
+    it('leaves the row alone when the response is refused', async () => {
+      const user = userEvent.setup();
+      mockCreateOrUpdateRSVP.mockRejectedValue(new Error('nope'));
+
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /going/i }));
+
+      await waitFor(() => {
+        expect(mockCreateOrUpdateRSVP).toHaveBeenCalled();
+      });
+      expect(await screen.findByRole('button', { name: /going/i })).toBeInTheDocument();
     });
   });
 
@@ -743,9 +1028,13 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       const feed = await screen.findByRole('region', { name: 'My Updates' });
-      expect(within(feed).getByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
-      expect(within(feed).getByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
-      expect(within(feed).getByText('Persistent')).toBeInTheDocument();
+      // findByText, not getByText: the region renders as soon as the card
+      // mounts, with a skeleton inside it, so its presence is no evidence the
+      // feed has loaded. The panel waits on both the message and the
+      // notification fetch, and those do not settle in a fixed order.
+      expect(await within(feed).findByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
+      expect(await within(feed).findByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
+      expect(await within(feed).findByText('Persistent')).toBeInTheDocument();
     });
 
     // The inbox arrives ordered pinned -> persistent -> newest, and the feed
@@ -823,7 +1112,7 @@ describe('Dashboard', () => {
     // Message bodies are linkified; an <a> inside a <button> is invalid HTML
     // and the parser splits the row apart, so message rows render as
     // div[role=button]. Following a link must not also fire the row's
-    // navigation to /messages and yank the current tab away.
+    // navigation to the message and yank the current tab away.
     it('lets a body link be followed without triggering the row navigation', async () => {
       mockGetInbox.mockResolvedValue([
         makeMessage({
@@ -839,16 +1128,17 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       const feed = await screen.findByRole('region', { name: 'My Updates' });
-      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      const link = await within(feed).findByRole('link', { name: 'https://example.com/form' });
       // jsdom can't navigate; keep the click from hitting the default handler.
       link.addEventListener('click', (e) => e.preventDefault());
       await user.click(link);
 
-      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages/msg-link');
 
-      // Clicking the row outside the link still opens the messages page.
+      // Clicking the row outside the link still opens that message, whose
+      // breadcrumb leads on to the full inbox.
       await user.click(within(feed).getByText('Fill the duty survey'));
-      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+      expect(mockNavigate).toHaveBeenCalledWith('/messages/msg-link');
     });
 
     // Enter on a focused body link bubbles to the row's keydown handler; the
@@ -869,19 +1159,19 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       const feed = await screen.findByRole('region', { name: 'My Updates' });
-      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      const link = await within(feed).findByRole('link', { name: 'https://example.com/form' });
       link.addEventListener('click', (e) => e.preventDefault());
 
       link.focus();
       await user.keyboard('{Enter}');
 
-      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages/msg-link-kbd');
 
       // The row itself still responds to keyboard activation.
       const row = within(feed).getByRole('button', { name: /Fill the duty survey/ });
       row.focus();
       await user.keyboard('{Enter}');
-      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+      expect(mockNavigate).toHaveBeenCalledWith('/messages/msg-link-kbd');
     });
   });
 
@@ -929,6 +1219,24 @@ describe('Dashboard', () => {
       expect(within(equipment).queryByText('51')).not.toBeInTheDocument();
     });
 
+    // Every permission here is granted to DEFAULT_POSITIONS["member"], so gating
+    // the tab on any of them put department-wide reporting in front of every
+    // firefighter in the department.
+    it.each(['inventory.view', 'apparatus.view', 'facilities.view', 'scheduling.view'])(
+      'stays hidden from a member holding only the baseline grant %s',
+      async (grant) => {
+        mockCheckPermission.mockImplementation((permission: string) => permission === grant);
+
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => {
+          expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
+        });
+        expect(screen.queryByRole('tab', { name: 'My Department' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Scheduling Operations')).not.toBeInTheDocument();
+      }
+    );
+
     it('is hidden from members without settings.manage', async () => {
       renderWithRouter(<Dashboard />);
 
@@ -952,7 +1260,7 @@ describe('Dashboard', () => {
       const personalTab = await screen.findByRole('tab', { name: 'Personal' });
       const departmentTab = screen.getByRole('tab', { name: 'My Department' });
       expect(personalTab).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByText('Next 7 Days')).toBeInTheDocument();
+      expect(screen.getByText('Next 30 Days')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
       expect(mockGetAdminSummary).not.toHaveBeenCalled();
       expect(mockGetSetupChecklist).not.toHaveBeenCalled();
@@ -964,7 +1272,7 @@ describe('Dashboard', () => {
       expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^Admin Hours:/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'My Updates' })).not.toBeInTheDocument();
-      expect(screen.queryByText('Next 7 Days')).not.toBeInTheDocument();
+      expect(screen.queryByText('Next 30 Days')).not.toBeInTheDocument();
       expect(window.location.search).toBe('?tab=department');
       await waitFor(() => {
         expect(mockGetAdminSummary).toHaveBeenCalledTimes(1);

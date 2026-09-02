@@ -46,7 +46,10 @@ const COOKIE_SETTLE_POLL_MS = 25;
  */
 function getCsrfCookie(): string | null {
   const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
-  return match?.[1] ?? null;
+  // Match apiClient.ts's cookie reader exactly (FE-7) — decodeURIComponent
+  // is idempotent on already-plain values, so this changes nothing for the
+  // current token alphabet and only closes the gap for a future one.
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 /**
@@ -104,6 +107,83 @@ function saveLockoutState(loginAttempts: number, lockedUntil: number | null): vo
     // sessionStorage unavailable (e.g. private browsing quota exceeded) — ignore
   }
 }
+
+/**
+ * The member whose offline work is currently sitting on this device.
+ *
+ * Drafts and the offline queues live in the browser profile, not in the
+ * account, and logout is the only thing that clears them. A station computer
+ * whose session ended without one — a crash, a closed lid, a battery — keeps
+ * the previous member's shift-report drafts and queued equipment checks, and
+ * hands them to whoever signs in next, who then syncs them under their own
+ * name. Recording the owner turns the sign-in itself into the boundary.
+ */
+const DEVICE_MEMBER_KEY = 'device_member_id';
+
+const readDeviceMember = (): string | null => {
+  try {
+    return localStorage.getItem(DEVICE_MEMBER_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const writeDeviceMember = (userId: string): void => {
+  try {
+    localStorage.setItem(DEVICE_MEMBER_KEY, userId);
+  } catch {
+    // Storage unavailable (private browsing quota). The purge below still
+    // runs on every sign-in in that case, which is the safe direction.
+  }
+};
+
+/**
+ * Set for the duration of a sign-in — login, MFA completion, registration —
+ * so the claim below can tell one from a page reload of a live session. Both
+ * end at the same `set({ isAuthenticated: true })`, and some of them get
+ * there via loadUser, so the intent has to be carried rather than passed.
+ */
+let signInPending = false;
+
+/**
+ * Claim this device for `userId`, discarding whatever the previous holder
+ * left behind.
+ *
+ * A sign-in purges unless this device was already recorded as the same
+ * member's; a reload purges only when the recorded owner actually changed.
+ * The distinction matters exactly once, on the upgrade to this code: an
+ * already-signed-in member's data is their own and must survive a refresh,
+ * while a device with no recorded owner and someone newly signing in has
+ * data of unknown provenance that cannot be handed to them. Nothing is
+ * surfaced to the member here — the discarded work belongs to the person who
+ * left, not to the one reading the screen.
+ */
+/**
+ * Declare that the session about to be loaded is a sign-in, not a reload.
+ *
+ * The OAuth callback cannot set the flag the way the password paths do: the
+ * provider redirect is a full page load, so this module is re-initialised and
+ * anything set before leaving is gone. Landing on the callback route with a
+ * provider's response *is* the sign-in, so that page says so here before
+ * calling loadUser. Without it the claim below reads a fresh OAuth sign-in as
+ * a page refresh, and on a device with no recorded owner — every device, the
+ * first time this ships — it hands the previous member's drafts and queued
+ * submissions to whoever signs in next.
+ */
+export const markSignInPending = (): void => {
+  signInPending = true;
+};
+
+const claimDeviceForMember = async (userId: string | undefined): Promise<void> => {
+  if (!userId) return;
+  const fresh = signInPending;
+  signInPending = false;
+  const previous = readDeviceMember();
+  if (previous !== userId && (fresh || previous !== null)) {
+    await purgeLocalMemberData();
+  }
+  writeDeviceMember(userId);
+};
 
 interface AuthState {
   user: CurrentUser | null;
@@ -191,6 +271,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       // Only persist a lightweight session flag — never the actual tokens.
       localStorage.setItem('has_session', '1');
+      signInPending = true;
       // SEC: Start the new session with a clean cache in case a prior user's
       // session ended without a clean logout (crash/tab-close on a shared tab).
       clearCache();
@@ -220,6 +301,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           membership_type: loginResponse.user.membership_type ?? 'member',
           must_change_password: loginResponse.user.must_change_password ?? false,
         };
+        // Before the dashboard mounts and starts writing: a sign-in is the
+        // account boundary, so the previous holder's offline work goes now.
+        await claimDeviceForMember(normalizedUser.id);
         set({ user: normalizedUser, isAuthenticated: true });
       } else {
         await get().loadUser();
@@ -279,6 +363,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ...(recoveryCode ? { recovery_code: recoveryCode } : {}),
       });
       localStorage.setItem('has_session', '1');
+      signInPending = true;
       clearCache(); // SEC: fresh session starts with a clean cache
       clearInFlight();
       invalidateRanksCache();
@@ -292,6 +377,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           membership_type: resp.user.membership_type ?? 'member',
           must_change_password: resp.user.must_change_password ?? false,
         };
+        await claimDeviceForMember(normalizedUser.id);
         set({ user: normalizedUser, isAuthenticated: true });
       } else {
         await get().loadUser();
@@ -314,6 +400,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       localStorage.setItem('has_session', '1');
+      signInPending = true;
       clearCache(); // SEC: fresh session starts with a clean cache
       clearInFlight();
       invalidateRanksCache();
@@ -404,28 +491,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         membership_type: user.membership_type ?? 'member',
         must_change_password: user.must_change_password ?? false,
       };
+      // Reached by a page reload and by the sign-in paths that resolve the
+      // member through /auth/me; signInPending tells the two apart.
+      await claimDeviceForMember(normalizedUser.id);
       set({
         user: normalizedUser,
         isAuthenticated: true,
         isLoading: false,
       });
     } catch (err: unknown) {
+      // 401/403 are expected when the session has expired or user is not
+      // authenticated. Any other error (offline browser, timeout, backend
+      // 5xx) is unexpected and does NOT mean the session is actually
+      // invalid — purging local member data (offline drafts, equipment-check
+      // queues) on a transient failure would silently destroy queued work
+      // the member never got a chance to sync, with no loss notice shown.
+      const appError = toAppError(err);
+      const isConfirmedAuthFailure = appError.status === 401 || appError.status === 403;
+
       // Clear session state regardless of error type
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
-      await purgeLocalMemberData();
+      if (isConfirmedAuthFailure) {
+        await purgeLocalMemberData();
+      }
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
       });
 
-      // 401/403 are expected when the session has expired or user is not
-      // authenticated — silently handle them. Any other error is unexpected
-      // and should be logged so it surfaces in dev tools.
-      const appError = toAppError(err);
-      if (appError.status !== 401 && appError.status !== 403) {
+      if (!isConfirmedAuthFailure) {
         console.error('loadUser failed with unexpected error:', appError.message);
       }
     }

@@ -11,6 +11,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
+from app.utils.membership import MemberClass, MemberStatus
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -46,7 +47,66 @@ class UserCreate(UserBase):
     mobile: Optional[str] = Field(None, max_length=20)
 
 
-class AdminUserCreate(BaseModel):
+class MembershipClassificationFields(BaseModel):
+    """The two independent facts ``membership_type`` used to fuse.
+
+    Mixed into both the create and update schemas rather than repeated,
+    because the validators have to agree: a value one endpoint accepts and the
+    other rejects would be worse than neither accepting it.
+
+    Accepting these at all is what makes the motivating cases reachable — an
+    administrative probationer, an operational life member — since the
+    reconciliation listener on ``User`` can only preserve a pair some caller is
+    able to set. Omit both and the listener derives them from
+    ``membership_type`` exactly as before, so existing clients are unaffected.
+    """
+
+    member_class: Optional[str] = Field(
+        None, description="operational | administrative | social"
+    )
+    member_status: Optional[str] = Field(
+        None,
+        description=(
+            "prospective | probationary | regular | life | retired | "
+            "honorary | junior"
+        ),
+    )
+
+    @field_validator("member_class")
+    @classmethod
+    def _known_member_class(cls, value: Optional[str]) -> Optional[str]:
+        """Reject an unknown class rather than storing it.
+
+        Unlike ``membership_type`` — which doubles as a free-form membership
+        *tier* id and so cannot be constrained — these two are a closed
+        vocabulary. A typo would put a member in no class at all, which reads
+        as "not operational" and quietly removes them from ballots.
+        """
+        if value is None:
+            return None
+        normalised = value.strip().lower()
+        if normalised not in MemberClass.ALL:
+            raise ValueError(
+                f"Unknown member_class '{value}'. "
+                f"Expected one of: {', '.join(MemberClass.ALL)}."
+            )
+        return normalised
+
+    @field_validator("member_status")
+    @classmethod
+    def _known_member_status(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalised = value.strip().lower()
+        if normalised not in MemberStatus.ALL:
+            raise ValueError(
+                f"Unknown member_status '{value}'. "
+                f"Expected one of: {', '.join(MemberStatus.ALL)}."
+            )
+        return normalised
+
+
+class AdminUserCreate(MembershipClassificationFields):
     """Schema for admin/secretary creating a new member"""
 
     username: str = Field(..., min_length=3, max_length=100)
@@ -54,6 +114,7 @@ class AdminUserCreate(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=100)
     middle_name: Optional[str] = Field(None, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
+
     membership_number: Optional[str] = Field(
         None,
         max_length=50,
@@ -63,6 +124,14 @@ class AdminUserCreate(BaseModel):
     mobile: Optional[str] = Field(None, max_length=20)
     date_of_birth: Optional[date] = None
     hire_date: Optional[date] = None
+
+    member_status: Optional[str] = Field(
+        None,
+        description=(
+            "prospective | probationary | regular | life | retired | "
+            "honorary | junior"
+        ),
+    )
 
     # Department info
     rank: Optional[str] = Field(None, max_length=100)
@@ -93,8 +162,25 @@ class AdminUserCreate(BaseModel):
     )
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(MembershipClassificationFields):
     """Schema for updating a user"""
+
+    # Member class and status are the two independent facts `membership_type`
+    # used to fuse. Accepting them here is what makes an administrative
+    # probationer expressible at all — the reconciliation listener on `User`
+    # can only preserve a pair some caller is able to set. Omit both and the
+    # listener derives them from `membership_type` as before, so existing
+    # clients are unaffected.
+    member_class: Optional[str] = Field(
+        None, description="operational | administrative | social"
+    )
+    member_status: Optional[str] = Field(
+        None,
+        description=(
+            "prospective | probationary | regular | life | retired | "
+            "honorary | junior"
+        ),
+    )
 
     first_name: Optional[str] = Field(None, max_length=100)
     middle_name: Optional[str] = Field(None, max_length=100)
@@ -136,6 +222,8 @@ class UserResponse(UserBase, UTCResponseBase):
     personal_email: Optional[str] = None
     status: str
     membership_type: Optional[str] = None
+    member_class: Optional[str] = None
+    member_status: Optional[str] = None
     compliance_exempt: bool = False
     # Optional so profile redaction can withhold them from directory-only
     # callers (see `_clear_directory_only_profile_metadata` in the users
@@ -197,6 +285,8 @@ class UserListResponse(BaseModel):
     photo_url: Optional[str] = None
     status: str
     membership_type: Optional[str] = None
+    member_class: Optional[str] = None
+    member_status: Optional[str] = None
     compliance_exempt: bool = False
     hire_date: Optional[date] = None
 

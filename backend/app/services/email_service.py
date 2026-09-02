@@ -319,6 +319,7 @@ def wrap_email_body(
         accent=accent,
         chip=chip,
         subtitle=subtitle,
+        cache=False,
     )
     # build_shell writes the shell as a template and this path never goes
     # through variable substitution, so every token it emits is filled in
@@ -337,6 +338,30 @@ def wrap_email_body(
     )
     body = body.replace("{{footer_html}}", footer_block)
     return build_email_document(title, body)
+
+
+def _summarize_recipients(to_emails: List[str]) -> str:
+    """Fit a batch's addresses into MessageHistory.to_email (VARCHAR(320)).
+
+    A joined list overflows that column as soon as a send has more than a
+    handful of recipients, and a department message goes to the whole roster in
+    one batch. Under strict MySQL the insert is rejected, which is a 1406 on
+    the shared session — see the savepoint below. ``recipient_count`` carries
+    the true number, so the addresses are a legible sample, not the record.
+    """
+    joined = ", ".join(to_emails)
+    if len(joined) <= 320:
+        return joined
+    kept: List[str] = []
+    used = 0
+    for address in to_emails:
+        # 40 characters of headroom for the "… (+N more)" suffix.
+        if used + len(address) + 2 > 280:
+            break
+        kept.append(address)
+        used += len(address) + 2
+    suffix = f"… (+{len(to_emails) - len(kept)} more)"
+    return (", ".join(kept) + suffix)[:320]
 
 
 class EmailService:
@@ -710,6 +735,15 @@ class EmailService:
     # base64 attachments) at 5 MiB; leave headroom for the HTML body.
     _CLOUDFLARE_ATTACHMENT_BUDGET = int(4.5 * 1024 * 1024)
 
+    # The SMTP path has no per-provider cap enforcing this, but without one
+    # a large attachment (e.g. a generated election package PDF) times the
+    # recipient count in send_email's per-recipient batch is held fully in
+    # memory at once (attachment bytes are read once but re-serialized via
+    # msg.as_string() into every recipient's own batch entry) — unbounded
+    # memory growth with ordinary usage, not just abuse. 18 MiB raw keeps
+    # the base64-inflated message under most relays' ~25 MiB accept limit.
+    _SMTP_ATTACHMENT_BUDGET = int(18 * 1024 * 1024)
+
     @classmethod
     def _build_cloudflare_attachments(
         cls,
@@ -900,23 +934,24 @@ class EmailService:
 
         safe_from_name = _sanitize_header(self._smtp_config["from_name"])
         safe_subject = _sanitize_header(subject)
+        safe_to = _sanitize_header(to_email)
 
         msg["From"] = f"{safe_from_name} <{self._smtp_config['from_email']}>"
-        msg["To"] = to_email
+        msg["To"] = safe_to
         msg["Subject"] = safe_subject
         msg["Date"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
         msg["Message-ID"] = self._make_message_id()
         msg["MIME-Version"] = "1.0"
         msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
         if reply_to:
-            msg["Reply-To"] = reply_to
+            msg["Reply-To"] = _sanitize_header(reply_to)
         if list_unsubscribe:
-            msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+            msg["List-Unsubscribe"] = f"<{_sanitize_header(list_unsubscribe)}>"
             msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
         all_recipients = [to_email]
         if cc_emails:
-            msg["Cc"] = ", ".join(cc_emails)
+            msg["Cc"] = ", ".join(_sanitize_header(addr) for addr in cc_emails)
             all_recipients.extend(cc_emails)
         if bcc_emails:
             all_recipients.extend(bcc_emails)
@@ -969,6 +1004,7 @@ class EmailService:
         sent_by: Optional[str] = None,
         reply_to: Optional[str] = None,
         list_unsubscribe: Optional[str] = None,
+        results_out: Optional[List[bool]] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -1012,17 +1048,21 @@ class EmailService:
 
         # --- Cloudflare Email Service path (REST API, no SMTP) ---
         if self._use_cloudflare:
-            cf_attachments = self._build_cloudflare_attachments(attachment_paths)
-            results = await self._cloudflare_send(
-                to_emails=to_emails,
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
-                cc_emails=cc_emails,
-                bcc_emails=bcc_emails,
-                reply_to=reply_to,
-                attachments=cf_attachments,
-            )
+            try:
+                cf_attachments = self._build_cloudflare_attachments(attachment_paths)
+                results = await self._cloudflare_send(
+                    to_emails=to_emails,
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                    cc_emails=cc_emails,
+                    bcc_emails=bcc_emails,
+                    reply_to=reply_to,
+                    attachments=cf_attachments,
+                )
+            except Exception as e:
+                logger.error("Cloudflare email send failed: {}", e)
+                results = [False] * len(to_emails)
         else:
             # --- SMTP path ---
             safe_from_name = _sanitize_header(self._smtp_config["from_name"])
@@ -1030,11 +1070,20 @@ class EmailService:
 
             # Pre-read attachment payloads once (avoids re-reading per recipient)
             attachment_parts: List[MIMEBase] = []
+            attachment_bytes_used = 0
             for filepath in attachment_paths or []:
                 resolved = os.path.realpath(filepath)
                 if not os.path.isfile(resolved):
                     logger.warning("Attachment not found, skipping")
                     continue
+                file_size = os.path.getsize(resolved)
+                if attachment_bytes_used + file_size > self._SMTP_ATTACHMENT_BUDGET:
+                    logger.warning(
+                        "Attachment exceeds per-message size budget, skipping: {}",
+                        os.path.basename(resolved),
+                    )
+                    continue
+                attachment_bytes_used += file_size
                 with open(resolved, "rb") as f:
                     part = MIMEBase("application", "octet-stream")
                     part.set_payload(f.read())
@@ -1045,7 +1094,16 @@ class EmailService:
 
             # Build one MIME message per recipient
             batch: List[Tuple[List[str], str]] = []
-            for to_email in to_emails:
+            # Which address each batch entry was built for. A message that
+            # fails to build is dropped from the batch, and the send answers
+            # per batch entry — so without this the answers close up over the
+            # gap. results_out promises one entry per address in order and the
+            # delivery service indexes it against the recipients it claimed, so
+            # a shifted list files the failed address under its neighbour's
+            # outcome (marking it delivered) and leaves the last member with no
+            # answer at all.
+            built_for: List[int] = []
+            for position, to_email in enumerate(to_emails):
                 try:
                     if attachment_parts:
                         msg = MIMEMultipart("mixed")
@@ -1065,7 +1123,7 @@ class EmailService:
                     msg["From"] = (
                         f"{safe_from_name} <{self._smtp_config['from_email']}>"
                     )
-                    msg["To"] = to_email
+                    msg["To"] = _sanitize_header(to_email)
                     msg["Subject"] = safe_subject
                     msg["Date"] = datetime.now(timezone.utc).strftime(
                         "%a, %d %b %Y %H:%M:%S +0000"
@@ -1074,19 +1132,24 @@ class EmailService:
                     msg["MIME-Version"] = "1.0"
                     msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
                     if reply_to:
-                        msg["Reply-To"] = reply_to
+                        msg["Reply-To"] = _sanitize_header(reply_to)
                     if list_unsubscribe:
-                        msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+                        msg["List-Unsubscribe"] = (
+                            f"<{_sanitize_header(list_unsubscribe)}>"
+                        )
                         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
                     all_recipients = [to_email]
                     if cc_emails:
-                        msg["Cc"] = ", ".join(cc_emails)
+                        msg["Cc"] = ", ".join(
+                            _sanitize_header(addr) for addr in cc_emails
+                        )
                         all_recipients.extend(cc_emails)
                     if bcc_emails:
                         all_recipients.extend(bcc_emails)
 
                     batch.append((all_recipients, msg.as_string()))
+                    built_for.append(position)
                 except Exception as e:
                     logger.error(
                         f"Failed to build email for {_redact_email(to_email)}: {e}"
@@ -1105,9 +1168,30 @@ class EmailService:
                     )
                     results = [False]
             elif batch:
-                results = await asyncio.to_thread(self._smtp_send_batch, batch)
+                try:
+                    results = await asyncio.to_thread(self._smtp_send_batch, batch)
+                except Exception as e:
+                    logger.error("Batch SMTP send failed: {}", e)
+                    results = [False] * len(batch)
             else:
                 results = []
+
+            # Back onto the address list. A message that never built has no
+            # answer of its own and is not sent.
+            aligned = [False] * len(to_emails)
+            for position, sent in zip(built_for, results):
+                aligned[position] = sent
+            results = aligned
+
+        # One entry per address in `to_emails`, in order. A caller that tracks
+        # delivery per recipient needs this: the (sent, failed) counts alone
+        # cannot say *which* member was not reached, which is what pushed the
+        # department-message fan-out into one send_email call per person — and
+        # that takes the single-message SMTP path, opening and closing a
+        # connection per member with no pacing and no reconnect-retry.
+        if results_out is not None:
+            results_out.clear()
+            results_out.extend(results)
 
         success_count = sum(1 for r in results if r)
         failure_count = len(to_emails) - success_count
@@ -1162,7 +1246,7 @@ class EmailService:
         history = MessageHistory(
             id=generate_uuid(),
             organization_id=org_id,
-            to_email=", ".join(to_emails),
+            to_email=_summarize_recipients(to_emails),
             cc_emails=cc_emails,
             bcc_emails=bcc_emails,
             subject=subject,
@@ -1175,8 +1259,20 @@ class EmailService:
             history.error_message = (
                 f"Failed to deliver to all {failure_count} recipient(s)"
             )
-        db.add(history)
-        await db.flush()
+        # The add goes INSIDE the savepoint, not before it. Entering
+        # begin_nested() flushes whatever is already pending, so an add placed
+        # above it has its INSERT rejected before the savepoint exists — which
+        # is the whole failure this is here to contain.
+        #
+        # And it has to be contained: this is a log write on a session the
+        # caller owns, and an exception at flush leaves that session needing an
+        # explicit rollback — every later statement raises
+        # PendingRollbackError until one runs. send_email catches and warns, so
+        # without this the send reports success while the delivery-status
+        # writes and the urgent-SMS escalation that follow it silently abort.
+        async with db.begin_nested():
+            db.add(history)
+            await db.flush()
         self.last_message_history_id = history.id
 
     async def render_ballot_notification(

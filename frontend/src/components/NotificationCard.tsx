@@ -149,7 +149,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
       actions.push({
         label: 'Start Checklist',
         icon: <ClipboardCheck className="h-3.5 w-3.5" />,
-        url: '/scheduling?tab=equipment-checks',
+        url: '/inventory/checklists/my',
       });
     }
     return actions;
@@ -166,7 +166,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
       actions.push({
         label: 'Start Checklist',
         icon: <ClipboardCheck className="h-3.5 w-3.5" />,
-        url: '/scheduling?tab=equipment-checks',
+        url: '/inventory/checklists/my',
       });
     }
     const shiftId = typeof metadata?.shift_id === 'string' ? metadata.shift_id : '';
@@ -197,6 +197,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
   else if (actionUrl.startsWith('/training')) label = 'View Training';
   else if (actionUrl.startsWith('/maintenance') || actionUrl.startsWith('/apparatus')) label = 'View Details';
   else if (actionUrl.startsWith('/members') || actionUrl.startsWith('/users')) label = 'View Member';
+  else if (actionUrl.startsWith('/messages')) label = 'Read Message';
   else if (category === 'scheduling') label = 'View Shift';
   else if (category === 'events') label = 'View Event';
   else if (category === 'training') label = 'View Training';
@@ -212,7 +213,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
 
 interface NotificationCardProps {
   notification: NotificationLogRecord;
-  onMarkRead: (id: string) => void;
+  onMarkRead: (id: string) => void | Promise<void>;
   onTogglePin: (id: string, pinned: boolean) => void;
 }
 
@@ -255,11 +256,15 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
     // Mark as read when the user collapses after their first open
     if (!willExpand && !hasBeenOpened && !notification.read) {
       setHasBeenOpened(true);
-      onMarkRead(notification.id);
+      void onMarkRead(notification.id);
     }
   };
 
-  const handleNavigate = (url: string) => {
+  const handleNavigate = async (url: string) => {
+    if (!notification.read && !hasBeenOpened) {
+      setHasBeenOpened(true);
+      await onMarkRead(notification.id);
+    }
     if (url.startsWith('/')) {
       void navigate(url);
     }
@@ -344,7 +349,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
             {ctaActions.map((action, idx) => (
               <button
                 key={action.label}
-                onClick={() => handleNavigate(action.url)}
+                onClick={() => void handleNavigate(action.url)}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                   idx === 0
                     ? 'bg-orange-600 text-white hover:bg-orange-700'

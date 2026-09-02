@@ -9,6 +9,11 @@ const mockGetReturnRequests = vi.fn();
 const mockGetEquipmentRequests = vi.fn();
 const mockGetMembersSummary = vi.fn();
 const mockGetSetupStatus = vi.fn();
+const mockGetOverdueCheckouts = vi.fn();
+const mockGetMaintenanceDueItems = vi.fn();
+const mockGetWriteOffRequests = vi.fn();
+const mockGetReorderRequests = vi.fn();
+const mockGetDepartureClearances = vi.fn();
 const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/api', () => ({
@@ -19,6 +24,11 @@ vi.mock('../../../services/api', () => ({
     getEquipmentRequests: (...args: unknown[]) => mockGetEquipmentRequests(...args) as unknown,
     getMembersSummary: (...args: unknown[]) => mockGetMembersSummary(...args) as unknown,
     getSetupStatus: (...args: unknown[]) => mockGetSetupStatus(...args) as unknown,
+    getOverdueCheckouts: (...args: unknown[]) => mockGetOverdueCheckouts(...args) as unknown,
+    getMaintenanceDueItems: (...args: unknown[]) => mockGetMaintenanceDueItems(...args) as unknown,
+    getWriteOffRequests: (...args: unknown[]) => mockGetWriteOffRequests(...args) as unknown,
+    getReorderRequests: (...args: unknown[]) => mockGetReorderRequests(...args) as unknown,
+    getDepartureClearances: (...args: unknown[]) => mockGetDepartureClearances(...args) as unknown,
   },
 }));
 
@@ -74,6 +84,11 @@ describe('InventoryAdminHub', () => {
       items: 150,
       is_complete: true,
     });
+    mockGetOverdueCheckouts.mockResolvedValue({ checkouts: [], total: 0 });
+    mockGetMaintenanceDueItems.mockResolvedValue([]);
+    mockGetWriteOffRequests.mockResolvedValue([]);
+    mockGetReorderRequests.mockResolvedValue([]);
+    mockGetDepartureClearances.mockResolvedValue({ clearances: [], total: 0 });
     mockCheckPermission.mockReturnValue(true);
     mockIsModuleOn.mockReturnValue(true);
     mockGetAdminHubSummary.mockResolvedValue({
@@ -131,10 +146,12 @@ describe('InventoryAdminHub', () => {
     expect(screen.queryByText('checked out')).not.toBeInTheDocument();
   });
 
-  it('carries low stock as one queue row with an action that ends it', async () => {
+  it('carries low stock as actionable record-level queue rows', async () => {
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByText('2 items below par level');
-    expect(screen.getByRole('link', { name: 'Build order' })).toHaveAttribute('href', '/inventory/admin/reorder');
+    expect(await screen.findAllByText('Low-stock item')).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: 'Open item' }).map((link) => link.getAttribute('href'))).toContain(
+      '/inventory/admin/reorder?category=cat-1'
+    );
     expect(screen.queryByText(/Low Stock Alerts/)).not.toBeInTheDocument();
   });
 
@@ -143,7 +160,7 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => {
       expect(screen.getByText('Reorder Requests')).toBeInTheDocument();
     });
-    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Reorder Requests/ })).getByText('2')).toBeInTheDocument();
   });
 
   it('renders all navigation cards', async () => {
@@ -157,7 +174,7 @@ describe('InventoryAdminHub', () => {
       'Categories',
       'Members',
       'Maintenance',
-      'Checkouts',
+      'Temporary Loans',
       'Charges',
       'Return Requests',
       'Storage Areas',
@@ -299,5 +316,59 @@ describe('InventoryAdminHub', () => {
       expect(screen.getByText('Items')).toBeInTheDocument();
     });
     expect(screen.queryByText('Finish inventory setup')).not.toBeInTheDocument();
+  });
+
+  it('orders safety and overdue work first and provides direct actions', async () => {
+    mockGetMaintenanceDueItems.mockResolvedValue([
+      { id: 'maint-1', name: 'SCBA 12', next_inspection_due: '2020-01-01' },
+    ]);
+    mockGetOverdueCheckouts.mockResolvedValue({
+      checkouts: [
+        {
+          checkout_id: 'loan-1',
+          item_id: 'i1',
+          item_name: 'Radio',
+          user_name: 'Alex',
+          checked_out_at: '2020-01-01',
+          expected_return_at: '2020-01-02',
+          is_overdue: true,
+        },
+      ],
+      total: 1,
+    });
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [
+        { id: 'req-1', requester_name: 'Sam', item_name: 'Gloves', priority: 'normal', created_at: '2026-08-20' },
+      ],
+      total: 1,
+    });
+    renderWithRouter(<InventoryAdminHub />);
+    const queue = await screen.findByRole('region', { name: 'Needs attention' });
+    const rows = within(queue).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Maintenance due or overdue');
+    expect(rows[1]).toHaveTextContent('Overdue temporary loan');
+    expect(within(queue).getByRole('link', { name: 'Check in' })).toHaveAttribute(
+      'href',
+      '/inventory/checkouts?checkout=loan-1'
+    );
+    expect(within(queue).getByRole('link', { name: 'Review' })).toHaveAttribute(
+      'href',
+      '/inventory/admin/requests?request=req-1'
+    );
+  });
+
+  it('warns and retries when one attention endpoint fails instead of showing zero', async () => {
+    mockGetWriteOffRequests.mockRejectedValueOnce(new Error('offline')).mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryAdminHub />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('write-offs');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(mockGetWriteOffRequests).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows an explicit empty state when every attention source succeeds', async () => {
+    mockGetLowStockItems.mockResolvedValue([]);
+    renderWithRouter(<InventoryAdminHub />);
+    expect(await screen.findByText('Nothing needs attention. All inventory work is up to date.')).toBeInTheDocument();
   });
 });

@@ -792,3 +792,32 @@ Full context:
 the cart, checkout and My Orders all changed. _Demo data:_ a cart holding two
 different products, at least one with a size or variant selected, so the cart
 lines and the order stepper are both populated.**]**
+
+---
+
+## Embroidery and Engraving Are Different Jobs _(2026-08-26)_
+
+They used to share one "customization" field. So an **engraved brass plate
+asked the member for a thread colour**, which means nothing, and there was no
+way to specify what an engraving should say separately from what an embroidery
+should.
+
+They are separate now, and **the thread swatch appears only where thread is
+actually used**. An engraved item asks the questions engraving needs and no
+others.
+
+### Variant sizes sort in garment order
+
+`XL` no longer files between `L` and `XS`. Sizes on a variant group are ordered
+the way a quartermaster reads them, not the way a computer sorts strings.
+
+> **[SCREENSHOT — REPLACE the store item detail and sizing request captures.**
+> Capture an embroidered item **and** an engraved one — the difference between
+> them is the point of the change, and a single capture cannot show it.**]**
+
+### Also in this window
+
+- A **storefront manager could settle their own order's payment.** Closed — the
+  person who placed an order is no longer the person who can mark it paid.
+- Store access grants were backfilled onto the member and corporate positions
+  that were meant to have them.

@@ -1537,6 +1537,8 @@ A competency matrix is a per-position definition: a name, the position it applie
 - **Proficient**
 - **Expert**
 
+![The Competency tab: the Dreyfus legend above one card per matrix, each naming its position and how many skills it requires, with Add Matrix beside the heading](./images/02-67-competency-matrix.png)
+
 **Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen.
 
 ### Edge Cases
@@ -2384,7 +2386,7 @@ Lt. Santos navigates to **Inventory > Check Out** to reserve training equipment:
 > assignment types in the table above are real — an assignment is `permanent` or
 > `temporary`, and the member's equipment list groups them accordingly — but
 > nothing in the interface lets you pick one. Assigning from an item's detail
-> page and the bulk batch-checkout both create **permanent** assignments with no
+> page and the bulk distribute-items both create **permanent** assignments with no
 > choice offered. The one way to produce a loan today is to fulfil an equipment
 > request with an expected-return date. Pool issuance (the hose lengths above)
 > is a separate flow and does honour a return date. See

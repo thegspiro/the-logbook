@@ -15,7 +15,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, toLocalDateString, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
-import { POSITION_LABELS } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 
 interface OpenShiftsTabProps {
@@ -118,7 +118,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         position: signupPosition,
         ...(isOutreachSignup ? { outreach_role: signupRole } : {}),
       });
-      toast.success('Signed up for shift — a manager will confirm your assignment');
+      toast.success('Signed up for shift — an officer will confirm your assignment');
       surfaceWarnings(res);
       closeSignupModal();
       void loadShifts();
@@ -131,7 +131,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
             position: signupPosition,
             outreach_role: isOutreachSignup ? signupRole : undefined,
           });
-          toast.success('Signed up for shift — a manager will confirm your assignment');
+          toast.success('Signed up for shift — an officer will confirm your assignment');
           surfaceWarnings(res);
           closeSignupModal();
           void loadShifts();
@@ -190,7 +190,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
         <UserPlus className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
         <div className="text-theme-text-secondary text-sm">
           <p>
-            Browse available shifts and sign up for open positions. A scheduling manager will review and confirm your
+            Browse available shifts and sign up for open positions. A scheduling officer will review and confirm your
             signup.
           </p>
         </div>
@@ -367,7 +367,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                       >
                         {eligiblePositions.map((pos) => (
                           <option key={pos} value={pos}>
-                            {POSITION_LABELS[pos] ?? pos}
+                            {positionLabel(pos)}
                           </option>
                         ))}
                       </select>

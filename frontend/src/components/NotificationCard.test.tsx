@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import { useLocation } from 'react-router';
 import NotificationCard from './NotificationCard';
 import type { NotificationLogRecord } from '../services/adminServices';
 
@@ -28,6 +29,7 @@ async function expand(user: ReturnType<typeof userEvent.setup>) {
 describe('NotificationCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.pushState({}, '', '/notifications');
   });
 
   describe('category label', () => {
@@ -105,9 +107,58 @@ describe('NotificationCard', () => {
       expect(screen.queryByRole('button', { name: /View/ })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Pin/ })).toBeInTheDocument();
     });
+
+    it('navigates a department communication to its message detail route', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <NotificationCard
+          notification={makeNotification({ category: 'department_message', action_url: '/messages/msg-1' })}
+          onMarkRead={vi.fn()}
+          onTogglePin={vi.fn()}
+        />
+      );
+
+      await expand(user);
+
+      await user.click(screen.getByRole('button', { name: /Read Message/ }));
+
+      expect(window.location.pathname).toBe('/messages/msg-1');
+    });
   });
 
   describe('read state', () => {
+    it('marks an unread notification read before following its CTA', async () => {
+      const user = userEvent.setup();
+      const calls: string[] = [];
+      const Location = () => {
+        const location = useLocation();
+        return <span data-testid="location">{location.pathname}</span>;
+      };
+      renderWithRouter(
+        <>
+          <NotificationCard
+            notification={makeNotification({ action_url: '/messages/msg-1' })}
+            onMarkRead={async (id) => {
+              calls.push(id);
+            }}
+            onTogglePin={vi.fn()}
+          />
+          <Location />
+        </>
+      );
+
+      await expand(user);
+      await user.click(screen.getByRole('button', { name: /Read Message/ }));
+
+      expect(calls).toEqual(['notif-1']);
+      // waitFor, because the navigation is on the far side of an await:
+      // handleNavigate awaits onMarkRead and only then navigates, so the
+      // router state settles in a microtask after the click's act() has
+      // returned. A bare getBy passed on an idle machine and failed in a full
+      // suite run, which is the one way it is always run.
+      await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/messages/msg-1'));
+    });
+
     it('marks read on collapse, not on expand', async () => {
       const user = userEvent.setup();
       const onMarkRead = vi.fn();

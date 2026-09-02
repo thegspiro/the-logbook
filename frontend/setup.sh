@@ -56,7 +56,6 @@ if [ ! -f .env ]; then
         echo ""
         echo "⚠️  IMPORTANT: Please review and update the .env file with your configuration:"
         echo "   - VITE_API_URL (default: http://localhost:3001)"
-        echo "   - VITE_SESSION_KEY (MUST be changed for production!)"
         echo ""
     else
         echo "⚠️  Warning: No .env.example file found"
@@ -66,9 +65,6 @@ if [ ! -f .env ]; then
 VITE_API_URL=http://localhost:3001
 
 # Environment
-
-# Security - Session Encryption Key (CHANGE THIS IN PRODUCTION!)
-VITE_SESSION_KEY=change-this-to-a-random-32-character-string-in-production
 
 # Feature Flags
 EOF
@@ -127,7 +123,6 @@ echo ""
 echo "📋 Next Steps:"
 echo ""
 echo "1. Review and update .env file with your configuration"
-echo "   Especially: VITE_SESSION_KEY for production!"
 echo ""
 echo "2. Start development server:"
 echo "   npm run dev"

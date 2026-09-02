@@ -1216,7 +1216,6 @@ To test the complete onboarding flow:
 
 Before deploying to production:
 
-- [ ] Update `VITE_SESSION_KEY` to random 32-character string
 - [ ] Update `SECRET_KEY` in backend .env
 - [ ] Update `ENCRYPTION_KEY` in backend .env
 - [ ] Configure production database credentials

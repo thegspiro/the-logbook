@@ -6,6 +6,8 @@ Combines all API route modules into a single router.
 
 from fastapi import APIRouter, Depends
 
+from app.api.dependencies import require_module
+
 # Import route modules
 from app.api.v1 import onboarding, public_portal_admin
 from app.api.v1.endpoints import (
@@ -66,6 +68,7 @@ from app.api.v1.endpoints import (
     skills_testing,
     station_documents,
     storefront,
+    testing_checklist,
     training,
     training_enhancements,
     training_module_config,
@@ -76,6 +79,53 @@ from app.api.v1.endpoints import (
     users,
 )
 from app.core.security_middleware import verify_csrf_token
+
+
+def module_gate(module: str, label: str | None = None) -> list:
+    """``dependencies=`` for a router owned by one configurable module.
+
+    Gating here rather than per-endpoint is the point: a route added to an
+    already-gated module inherits the gate, so the invariant cannot be lost
+    by somebody forgetting a decorator on a new handler.
+
+    A router is gated only when the module owns its data outright. Three
+    kinds of router are deliberately left ungated, and each has a reason
+    that is not "we did not get to it":
+
+    * **Essential modules** — members, events, documents, roles, settings.
+      ``ModuleSettings`` has no field for them and ``get_enabled_modules``
+      always reports them, so a gate would be a permanent no-op.
+    * **Cross-module infrastructure** — ``locations`` (the simplified stand-in
+      the app serves when Facilities is off, so gating it on Facilities would
+      remove the fallback along with the feature), ``forms`` (see below),
+      ``labels`` and ``nfc_tags`` (printing
+      and tag scanning for apparatus, facilities, prospects and members
+      alike), ``email_templates`` (the templates behind mail the app sends
+      regardless of which screens exist), and ``analytics`` and ``compliance``
+      (which read across several modules at once).
+    * **Platform and session surfaces** — auth, onboarding, audit, errors,
+      security, platform analytics, scheduled tasks, and the dashboard and
+      admin hub, which gate their own contents block by block because they
+      deliberately span modules.
+
+    ``forms`` is the one module gated in the UI and deliberately not here,
+    and the asymmetry is the decision rather than an omission: the flag
+    governs whether a department builds its own forms, not whether the form
+    engine runs. Prospective Members' stage configuration lists published
+    forms and ``FieldRenderer`` calls ``/forms/member-lookup`` from inside
+    prospect applications and event requests, so gating this router would
+    break screens belonging to modules that are still switched on. The
+    builder screen carries the module gate instead, matching the navigation.
+    ``UI_ONLY_GATES`` in tests/test_module_api_gating.py holds the same
+    reasoning where the parity test can enforce it.
+
+    ``admin_hours`` is ungated for a different reason: it is a real module
+    with a frontend, a nav entry and its own permissions, but no
+    ``ModuleSettings`` field, so there is nothing to gate on yet. Giving it a
+    flag is a separate change.
+    """
+    return [Depends(require_module(module, label))]
+
 
 api_router = APIRouter(dependencies=[Depends(verify_csrf_token)])
 
@@ -90,8 +140,18 @@ api_router.include_router(nfc_tags.router, prefix="/nfc-tags", tags=["nfc-tags"]
 api_router.include_router(
     organizations.router, prefix="/organization", tags=["organization"]
 )
-api_router.include_router(apparatus.router, prefix="/apparatus", tags=["apparatus"])
-api_router.include_router(facilities.router, prefix="/facilities", tags=["facilities"])
+api_router.include_router(
+    apparatus.router,
+    prefix="/apparatus",
+    tags=["apparatus"],
+    dependencies=module_gate("apparatus", "Apparatus"),
+)
+api_router.include_router(
+    facilities.router,
+    prefix="/facilities",
+    tags=["facilities"],
+    dependencies=module_gate("facilities", "Facilities"),
+)
 api_router.include_router(
     security_monitoring.router, prefix="/security", tags=["security"]
 )
@@ -101,30 +161,69 @@ api_router.include_router(
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(admin_hub.router, prefix="/admin-hub", tags=["admin-hub"])
-api_router.include_router(training.router, prefix="/training", tags=["training"])
 api_router.include_router(
-    training_programs.router, prefix="/training/programs", tags=["training-programs"]
+    training.router,
+    prefix="/training",
+    tags=["training"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
-    training_sessions.router, prefix="/training/sessions", tags=["training-sessions"]
+    training_programs.router,
+    prefix="/training/programs",
+    tags=["training-programs"],
+    dependencies=module_gate("training", "Training"),
+)
+api_router.include_router(
+    training_sessions.router,
+    prefix="/training/sessions",
+    tags=["training-sessions"],
+    dependencies=module_gate("training", "Training"),
 )
 # Syllabus routes hang off the existing course paths
 # (/training/courses/{id}/classes), so they are mounted on the same prefix as
 # the course CRUD in training.py rather than getting a prefix of their own.
 api_router.include_router(
-    course_syllabus.router, prefix="/training/courses", tags=["course-syllabus"]
+    course_syllabus.router,
+    prefix="/training/courses",
+    tags=["course-syllabus"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
-    course_cohorts.router, prefix="/training/cohorts", tags=["course-cohorts"]
+    course_cohorts.router,
+    prefix="/training/cohorts",
+    tags=["course-cohorts"],
+    dependencies=module_gate("training", "Training"),
 )
-api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
-api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+# The prospect pipeline reaches in here: an ``election_vote`` stage renders
+# ElectionPackageSection, which lists draft elections. Elections defaults off
+# while Prospective Members defaults on, so a department that built an
+# election stage without switching Elections on now gets the module error
+# rather than a silent empty list — which is the honest answer, and names the
+# switch that fixes it.
+api_router.include_router(
+    elections.router,
+    prefix="/elections",
+    tags=["elections"],
+    dependencies=module_gate("elections", "Elections"),
+)
+api_router.include_router(
+    inventory.router,
+    prefix="/inventory",
+    tags=["inventory"],
+    dependencies=module_gate("inventory", "Inventory"),
+)
 api_router.include_router(
     medical_supplies.router,
     prefix="/medical-supplies",
     tags=["medical-supplies"],
+    dependencies=module_gate("medical_supplies", "Medical Supplies"),
 )
-api_router.include_router(storefront.router, prefix="/store", tags=["storefront"])
+api_router.include_router(
+    storefront.router,
+    prefix="/store",
+    tags=["storefront"],
+    dependencies=module_gate("storefront", "The Department Store"),
+)
 api_router.include_router(labels.router, tags=["labels"])
 api_router.include_router(station_documents.router, tags=["station-documents"])
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
@@ -132,17 +231,25 @@ api_router.include_router(
     training_submissions.router,
     prefix="/training/submissions",
     tags=["training-submissions"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
-    shift_completion.router, prefix="/training/shift-reports", tags=["shift-completion"]
+    shift_completion.router,
+    prefix="/training/shift-reports",
+    tags=["shift-completion"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
-    external_training.router, prefix="/training/external", tags=["external-training"]
+    external_training.router,
+    prefix="/training/external",
+    tags=["external-training"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
     training_module_config.router,
     prefix="/training/module-config",
     tags=["training-module-config"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
     email_templates.router, prefix="/email-templates", tags=["email-templates"]
@@ -160,30 +267,68 @@ api_router.include_router(
     membership_pipeline.router,
     prefix="/prospective-members",
     tags=["prospective-members"],
+    dependencies=module_gate("prospective_members", "Prospective Members"),
 )
 api_router.include_router(
     medical_screening.router,
     prefix="/medical-screening",
     tags=["medical-screening"],
+    dependencies=module_gate("medical_screening", "Medical Screening"),
 )
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
-api_router.include_router(meetings.router, prefix="/meetings", tags=["meetings"])
-api_router.include_router(minutes.router, prefix="/minutes-records", tags=["minutes"])
-api_router.include_router(scheduling.router, prefix="/scheduling", tags=["scheduling"])
+api_router.include_router(
+    meetings.router,
+    prefix="/meetings",
+    tags=["meetings"],
+    dependencies=module_gate("minutes", "Meeting Minutes"),
+)
+api_router.include_router(
+    minutes.router,
+    prefix="/minutes-records",
+    tags=["minutes"],
+    dependencies=module_gate("minutes", "Meeting Minutes"),
+)
+api_router.include_router(
+    scheduling.router,
+    prefix="/scheduling",
+    tags=["scheduling"],
+    dependencies=module_gate("scheduling", "Scheduling"),
+)
 api_router.include_router(
     scheduling_module_config.router,
     prefix="/scheduling/shift-settings",
     tags=["scheduling-module-config"],
+    dependencies=module_gate("scheduling", "Scheduling"),
 )
 api_router.include_router(
     equipment_check.router,
     prefix="/equipment-checks",
     tags=["equipment-checks"],
+    # Inventory, not Scheduling: a checklist is a list of inventory items, and
+    # the templates carry FKs into inventory_items / inventory_lots. The crew
+    # still perform checks from the shift screen, but the data is Inventory's.
+    # Migration 7e2f11397849 switches Inventory back on for any department
+    # that had it off and is using checks, so nothing goes dark on upgrade.
+    dependencies=module_gate("inventory", "Inventory"),
 )
-api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(
-    notifications.router, prefix="/notifications", tags=["notifications"]
+    reports.router,
+    prefix="/reports",
+    tags=["reports"],
+    dependencies=module_gate("reports", "Reports"),
 )
+api_router.include_router(
+    notifications.router,
+    prefix="/notifications",
+    tags=["notifications"],
+    dependencies=module_gate("notifications", "Notifications"),
+)
+# Deliberately ungated. Department messages surface in every member's
+# dashboard feed, and the communications flag defaults to False — gating this
+# on it would delete a live feature from every existing installation on
+# upgrade, which is the trap CLAUDE.md pitfall 19 describes. The same goes for
+# message_history above, which is email-delivery diagnostics rather than a
+# module screen.
 api_router.include_router(messages.router, prefix="/messages", tags=["messages"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(
@@ -191,27 +336,49 @@ api_router.include_router(
 )
 api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
 api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])
+# The in-app testing home's shared run. Writing is open to any signed-in
+# member by design — proving a gate refuses the right people means testing
+# from those accounts — while reading everyone's marks needs settings.manage.
+# The module gate is the department's own switch: a department that has
+# finished setting up turns the whole checklist off.
 api_router.include_router(
-    integrations.router, prefix="/integrations", tags=["integrations"]
+    testing_checklist.router,
+    prefix="/testing-checklist",
+    tags=["testing-checklist"],
+    dependencies=module_gate("testing", "The Testing Checklist"),
+)
+api_router.include_router(
+    integrations.router,
+    prefix="/integrations",
+    tags=["integrations"],
+    dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(
     salesforce_sync.router,
     prefix="/integrations/salesforce",
     tags=["salesforce-sync"],
+    dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(
     calcom_sync.router,
     prefix="/integrations/calcom",
     tags=["calcom"],
+    dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(
     scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"]
 )
 api_router.include_router(
-    training_waivers.router, prefix="/training/waivers", tags=["training-waivers"]
+    training_waivers.router,
+    prefix="/training/waivers",
+    tags=["training-waivers"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
-    skills_testing.router, prefix="/training/skills-testing", tags=["skills-testing"]
+    skills_testing.router,
+    prefix="/training/skills-testing",
+    tags=["skills-testing"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(member_leaves.router, prefix="/users", tags=["member-leaves"])
 api_router.include_router(
@@ -220,12 +387,23 @@ api_router.include_router(
 api_router.include_router(
     admin_hours.router, prefix="/admin-hours", tags=["admin-hours"]
 )
-api_router.include_router(grants.router, prefix="/grants", tags=["grants"])
-api_router.include_router(finance.router, prefix="/finance", tags=["finance"])
+api_router.include_router(
+    grants.router,
+    prefix="/grants",
+    tags=["grants"],
+    dependencies=module_gate("grants", "Grants & Fundraising"),
+)
+api_router.include_router(
+    finance.router,
+    prefix="/finance",
+    tags=["finance"],
+    dependencies=module_gate("finance", "Finance"),
+)
 api_router.include_router(
     training_enhancements.router,
     prefix="/training",
     tags=["training-enhancements"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
     compliance_officer.router,
@@ -237,7 +415,10 @@ api_router.include_router(
     prefix="/compliance",
     tags=["compliance-config"],
 )
-api_router.include_router(public_portal_admin.router)
+api_router.include_router(
+    public_portal_admin.router,
+    dependencies=module_gate("public_info", "Public Information"),
+)
 
 
 # Placeholder routes

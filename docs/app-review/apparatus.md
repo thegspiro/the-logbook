@@ -11,9 +11,12 @@ Pass 3 closed every open code item on this module (AP2-2 FK validation on both
 paths, the full E712 sweep, the latent-500 lens). Pass 4 re-verified the landed
 state holds and found nothing to change:
 
-- **FK validation intact** — `assert_in_org` is wired at **17** sites across
+- **FK validation intact** — `assert_in_org` is wired at **16** sites across
   `apparatus_service.py` (create + update for apparatus type/status/station, EVOC
-  level, maintenance component/service-provider, component-note provider). The
+  level, maintenance component/service-provider, component-note provider) —
+  corrected from "17" by security-review AP-13 pass 2 (2026-08-28), which
+  recounted via `grep -c` on the file; the coverage claim was always
+  correct, only the count was off. The
   create-path (AP-1) and update-path (AP2-1/AP2-2) FK classes remain closed.
 - **E712-free** — 0 `# noqa: E712` in `apparatus_service.py`.
 - **Latent-500 lens clean** — `fuel_type` is `Optional[FuelTypeEnum]` on both

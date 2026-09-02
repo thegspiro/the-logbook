@@ -32,6 +32,7 @@ class PositionSlot(BaseModel):
 
     position: str
     required: bool = True
+    allow_administrative_members: bool = False
 
 
 # ============================================
@@ -49,10 +50,15 @@ class ShiftCreate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
+    # The template this shift was built from, when the caller built it from
+    # one. Recorded rather than only copied: the equipment checklists a shift
+    # carries are resolved through its template. Validated in-org before it is
+    # stored.
+    template_id: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_shift_times(self) -> "ShiftCreate":
@@ -71,7 +77,7 @@ class ShiftUpdate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
@@ -140,9 +146,12 @@ class ShiftResponse(UTCResponseBase):
     # "+ Add" appended a blank task row on an engine and a ladder alike.
     apparatus_type: Optional[str] = None
     platoon: Optional[str] = None
-    positions: Optional[List[Any]] = None
-    apparatus_positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
+    apparatus_positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
+    # The template this shift came from, when it came from one. NULL on ad-hoc
+    # shifts and on every shift created before the column existed.
+    template_id: Optional[UUID] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
     shift_officer_name: Optional[str] = None
@@ -627,6 +636,10 @@ class ShiftPosition(str, PyEnum):
     DRIVER = "driver"
     FIREFIGHTER = "firefighter"
     EMS = "ems"
+    # A distinct seat from EMS, not a synonym: a department that staffs an ALS
+    # unit needs to say a medic is required, and "was a paramedic, still an
+    # EMT" is a state one shared bucket cannot express.
+    PARAMEDIC = "paramedic"
     CAPTAIN = "captain"
     LIEUTENANT = "lieutenant"
     PROBATIONARY = "probationary"
@@ -693,6 +706,10 @@ class ShiftTemplateCreate(BaseModel):
     apparatus_id: Optional[str] = None
     is_default: bool = False
     open_to_all_members: bool = False
+    # The equipment checklists shifts from this template carry. Naming any
+    # replaces apparatus-based resolution; leaving it empty or omitted keeps
+    # it. Every id is verified to be in the caller's org before it is stored.
+    equipment_check_template_ids: Optional[List[str]] = None
 
 
 class ShiftTemplateUpdate(BaseModel):
@@ -711,6 +728,11 @@ class ShiftTemplateUpdate(BaseModel):
     apparatus_id: Optional[str] = None
     is_default: Optional[bool] = None
     open_to_all_members: Optional[bool] = None
+    # Omitting the key leaves the links alone; sending [] clears them. The
+    # form owns this field, so it sends it on every save — an omitted key on
+    # an update means "leave this alone" (CLAUDE.md pitfall #1), which would
+    # silently keep checklists the officer had just unticked.
+    equipment_check_template_ids: Optional[List[str]] = None
 
 
 class ShiftTemplateResponse(UTCResponseBase):
@@ -732,6 +754,9 @@ class ShiftTemplateResponse(UTCResponseBase):
     is_default: bool = False
     is_active: bool = True
     open_to_all_members: bool = False
+    # Read off the ShiftTemplate.equipment_check_template_ids property, in the
+    # order an officer arranged them.
+    equipment_check_template_ids: List[str] = []
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
@@ -1167,13 +1192,24 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
 class PositionEligibilitySource(BaseModel):
     """One reason a member holds a position.
 
-    ``type`` is ``rank``, ``training``, or ``open``; ``label`` names the
-    specific rank or completed program so an officer can see *why* without
-    cross-referencing the settings screens.
+    ``type`` is ``rank``, ``position``, ``qualification``, ``training`` or
+    ``open``; ``label`` names the specific rank, held position, qualification
+    or completed program so an officer can see *why* without cross-referencing
+    the settings screens. Every type here needs a matching entry in the roster
+    page's ``SOURCE_STYLES`` — an unmapped one falls back to the rank badge's
+    icon and colour and reads as a duplicate rank rather than as a distinct
+    source, which is how three different source types came to render
+    identically.
+
+    ``expires_on`` is set only for ``qualification``, and only when that card
+    actually expires. It is the one source that lapses without anyone editing a
+    record, so the date is the difference between "cleared" and "cleared until
+    March" on a screen used to staff future shifts.
     """
 
     type: str
     label: str
+    expires_on: Optional[date] = None
 
 
 class RosterApparatusClearance(BaseModel):
@@ -1253,11 +1289,7 @@ class ApparatusOption(BaseModel):
     unit_number: Optional[str] = None
     apparatus_type: str
     source: str  # "apparatus", "basic", or "default"
-    # Seat lists are stored as {"position", "required"} slots (see
-    # app/utils/positions.py). Declared List[Any] like every other positions
-    # field in this module: a List[str] here rejected the canonical shape and
-    # 500'd the endpoint for any org whose apparatus had seats.
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
 
 
@@ -1275,7 +1307,7 @@ class BasicApparatusCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     apparatus_type: str = Field(default="engine", max_length=50)
     min_staffing: Optional[int] = Field(default=1, ge=1, le=50)
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
 
 
 class BasicApparatusUpdate(BaseModel):
@@ -1285,7 +1317,7 @@ class BasicApparatusUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     apparatus_type: Optional[str] = Field(None, max_length=50)
     min_staffing: Optional[int] = Field(None, ge=1, le=50)
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
 
 
 class BasicApparatusResponse(UTCResponseBase):
@@ -1297,7 +1329,7 @@ class BasicApparatusResponse(UTCResponseBase):
     name: str
     apparatus_type: str
     min_staffing: Optional[int] = None
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
     is_active: bool = True
     created_at: datetime
     updated_at: datetime

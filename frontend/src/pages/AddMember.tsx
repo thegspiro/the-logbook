@@ -10,6 +10,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, memberClassAndStatusFor } from '../utils/membership';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
@@ -95,8 +96,18 @@ const AddMember: React.FC = () => {
       });
   }, []);
 
+  // An administrative member holds no operational rank — the server refuses the
+  // pair outright, since a rank carries its own default permissions.
+  const isAdministrative = isAdministrativeMember(undefined, formData.membershipType);
+
   const handleInputChange = (field: keyof MemberFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'membershipType' && isAdministrativeMember(undefined, value)) {
+        next.rank = '';
+      }
+      return next;
+    });
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => {
@@ -132,6 +143,27 @@ const AddMember: React.FC = () => {
     if (!formData.emergencyName1.trim()) newErrors.emergencyName1 = 'Emergency contact name is required';
     if (!formData.emergencyRelationship1.trim()) newErrors.emergencyRelationship1 = 'Relationship is required';
     if (!formData.emergencyPhone1.trim()) newErrors.emergencyPhone1 = 'Emergency phone is required';
+
+    // Emergency Contact 2 is optional as a whole, but not field by field:
+    // EmergencyContact requires name, relationship and phone. Filling only the
+    // name posted an empty relationship, and the 422 that came back named a
+    // field on a card the form labels "(Optional)" — so the whole member
+    // creation failed for a contact nobody had to enter.
+    // The email counts as "filled" too. Left out, an entry consisting only of
+    // a second contact's email address passed validation silently and was then
+    // dropped by the payload builder, which keys the whole contact off the
+    // name — the address was typed, accepted, and never stored.
+    const secondaryFilled = [
+      formData.emergencyName2,
+      formData.emergencyRelationship2,
+      formData.emergencyPhone2,
+      formData.emergencyEmail2,
+    ].some((value) => value.trim());
+    if (secondaryFilled) {
+      if (!formData.emergencyName2.trim()) newErrors.emergencyName2 = 'Name is required';
+      if (!formData.emergencyRelationship2.trim()) newErrors.emergencyRelationship2 = 'Relationship is required';
+      if (!formData.emergencyPhone2.trim()) newErrors.emergencyPhone2 = 'Phone is required';
+    }
 
     // Password (if custom password is set)
     if (useCustomPassword) {
@@ -212,6 +244,12 @@ const AddMember: React.FC = () => {
         ...(formData.secondaryPhone ? { mobile: formData.secondaryPhone } : {}),
         ...(formData.dateOfBirth ? { date_of_birth: formData.dateOfBirth } : {}),
         ...(formData.joinDate ? { hire_date: formData.joinDate } : {}),
+        // The pair, not the fused legacy string: `membershipType` spells the
+        // regular case 'regular', which is a member *status* and not a legal
+        // `membership_type` — and until this was sent at all, every member
+        // added here landed as a plain operational regular whatever the
+        // required-marked dropdown said.
+        ...memberClassAndStatusFor(formData.membershipType),
         ...(formData.rank ? { rank: formData.rank } : {}),
         ...(formData.station ? { station: formData.station } : {}),
         ...(formData.platoon ? { platoon: formData.platoon } : {}),
@@ -663,10 +701,11 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-membership-type" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Membership Type <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <select
+                  id="add-membership-type"
                   value={formData.membershipType}
                   onChange={(e) => handleInputChange('membershipType', e.target.value)}
                   className="form-input"
@@ -679,11 +718,15 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Rank</label>
+                <label htmlFor="add-rank" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Rank
+                </label>
                 <select
+                  id="add-rank"
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
                   className="form-input"
+                  disabled={isAdministrative}
                 >
                   <option value="">Select Rank</option>
                   {rankOptions.map((r) => (
@@ -692,6 +735,7 @@ const AddMember: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {isAdministrative && <p className="text-theme-text-muted mt-1 text-xs">{ADMINISTRATIVE_RANK_HINT}</p>}
               </div>
 
               <div>
@@ -825,9 +869,12 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className={`form-input placeholder-theme-text-muted ${errors.emergencyName2 ? 'border-red-500' : ''}`}
                   placeholder="Bob Doe"
                 />
+                {errors.emergencyName2 && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyName2}</p>
+                )}
               </div>
 
               <div>
@@ -836,9 +883,12 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className={`form-input placeholder-theme-text-muted ${errors.emergencyRelationship2 ? 'border-red-500' : ''}`}
                   placeholder="Parent"
                 />
+                {errors.emergencyRelationship2 && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyRelationship2}</p>
+                )}
               </div>
 
               <div>
@@ -847,9 +897,12 @@ const AddMember: React.FC = () => {
                   type="tel"
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className={`form-input placeholder-theme-text-muted ${errors.emergencyPhone2 ? 'border-red-500' : ''}`}
                   placeholder="(555) 987-6543"
                 />
+                {errors.emergencyPhone2 && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyPhone2}</p>
+                )}
               </div>
 
               <div>

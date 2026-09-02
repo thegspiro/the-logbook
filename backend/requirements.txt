@@ -10,7 +10,7 @@ fastapi==0.141.1
 # the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
 starlette==1.6.0
 uvicorn[standard]==0.52.4
-pydantic==2.13.4
+pydantic==2.13.5
 pydantic-settings==2.15.0
 slowapi==0.1.10
 
@@ -22,7 +22,7 @@ alembic==1.19.1
 pymysql==1.2.0
 aiomysql==0.3.2
 greenlet==3.5.5  # Required by SQLAlchemy for async operations
-cryptography==50.0.0  # Required by PyMySQL for secure connections; includes CVE-2026-69247 fix
+cryptography==50.0.1  # Required by PyMySQL for secure connections; includes CVE-2026-69247 fix
 
 # ============================================
 # Redis & Caching
@@ -67,8 +67,8 @@ pywebpush==2.4.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.77  # AWS S3
-azure-storage-blob==12.30.0
+boto3==1.43.82  # AWS S3
+azure-storage-blob==12.30.1
 google-cloud-storage==3.13.1
 python-magic==0.4.27
 
@@ -78,7 +78,7 @@ python-magic==0.4.27
 python-docx==1.2.0
 openpyxl==3.1.5
 reportlab==5.0.1
-pypdf==6.16.1  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
+pypdf==6.16.2  # 6.14.2 is vulnerable: CVE-2026-71852, CVE-2026-71870
 Pillow==12.3.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 
@@ -88,7 +88,7 @@ defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 httpx==0.28.1
 requests==2.34.2  # For health checks (CVE-2024-35195 & CVE-2024-47081 fixes)
 aiofiles==25.1.0
-websockets==17.0.1
+websockets==17.1
 
 # ============================================
 # Data Validation & Parsing
@@ -100,13 +100,13 @@ tzdata>=2026.3  # Timezone data for zoneinfo (Python 3.9+ built-in)
 # ============================================
 # Payments
 # ============================================
-stripe==15.5.1
+stripe==15.6.0
 
 # ============================================
 # Monitoring & Logging
 # ============================================
 loguru==0.7.3
-sentry-sdk==2.68.0
+sentry-sdk==2.68.1
 psutil==7.2.2  # System monitoring for health checks
 
 # ============================================
@@ -123,10 +123,10 @@ celery==5.6.3
 # ============================================
 # Microsoft & Google Integrations
 # ============================================
-msal==1.37.0
+msal==1.38.0
 msgraph-core==1.5.1
-google-auth==2.56.3
-google-auth-oauthlib==1.4.0
+google-auth==2.57.0
+google-auth-oauthlib==1.4.1
 google-api-python-client==2.199.0
 
 # ============================================
@@ -138,7 +138,7 @@ pytest-cov==7.1.0
 pytest-randomly==4.1.0
 pytest-timeout==2.4.0
 hypothesis==6.165.10  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.25.0
+schemathesis==4.25.2
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
@@ -146,21 +146,29 @@ schemathesis==4.25.0
 # 4.25.0 no longer calls it, so 0.50 is safe with the schemathesis above and
 # the two were raised together. Keep raising them together: a jsonschema-rs
 # bump on its own is what broke it last time.
-jsonschema-rs==0.50.0
-faker==40.36.0
+#
+# schemathesis now declares the bound rather than leaving it transitive —
+# 4.25.2 requires jsonschema-rs>=0.51.0,<0.52.0 — so this pin is no longer a
+# free choice: 0.52.0 and the 0.50.0 that preceded it both make the file
+# unresolvable against the schemathesis above. Read that range off the
+# schemathesis release being pinned before changing this line.
+jsonschema-rs==0.51.0
+faker==40.37.0
 
 # Code Quality
 black==26.5.1
 flake8==7.3.0
 flake8-pytest-style==2.2.0
 mypy==2.3.1
-isort==8.0.1
-# pylint 3.x caps isort at <7, which makes this file unresolvable against the
-# isort pin above. 4.x widens the cap to <9.
-pylint==4.0.7
+isort==9.0.1
+# pylint declares a hard upper bound on isort, so the two only move together:
+# an isort bump on its own makes this file unresolvable. 3.x capped it at <7,
+# 4.0.7 at <9, and 4.0.8 widens it to <10. Raise pylint past the cap in the
+# same commit that raises isort.
+pylint==4.0.8
 
 # ============================================
 # Utilities
 # ============================================
 python-dotenv==1.2.3
-click==8.4.2
+click==8.5.0

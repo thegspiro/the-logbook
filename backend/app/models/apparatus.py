@@ -2160,8 +2160,9 @@ class EquipmentCheckTemplate(Base):
         String(30), nullable=False, default="equipment", server_default="equipment"
     )  # equipment, vehicle, combined
     assigned_positions = Column(JSON, nullable=True)  # e.g. ["officer","driver"]
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
     sort_order = Column(Integer, default=0, nullable=False)
+    content_revision = Column(Integer, default=1, server_default="1", nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -2384,13 +2385,43 @@ class EquipmentCheckBulkRequest(Base):
     )
 
 
+class EquipmentCheckBulkDeleteRequest(Base):
+    """Durable result ledger for retry-safe atomic template-item deletion."""
+
+    __tablename__ = "equipment_check_bulk_delete_requests"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    compartment_id = Column(
+        String(36),
+        ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    idempotency_key = Column(String(200), nullable=False)
+    payload_hash = Column(String(64), nullable=False)
+    item_ids = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index(
+            "uq_equipment_check_bulk_delete_request",
+            "organization_id",
+            "compartment_id",
+            "idempotency_key",
+            unique=True,
+        ),
+    )
+
+
 class TemplateChangeLog(Base):
     """
     Granular audit trail for equipment check template edits.
 
     Records every add/update/delete action on templates, compartments,
     and items so leadership can review who changed what and when.
-    Visible only to users with equipment_check.manage permission.
+    Visible only to users with inventory.check_manage permission.
     """
 
     __tablename__ = "template_change_logs"

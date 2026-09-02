@@ -677,6 +677,13 @@
   /* One section pill. Colour, hover and focus come from settings-nav-item;
      this contributes only the box, so the two levels cannot drift apart. */
   @apply settings-nav-item inline-flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap duration-150 ease-out;
+
+  /* Touch minimum, as on settings-subnav-item below. py-2 renders 36px, which
+     is the size a finger misses — and every settings screen in the product
+     navigates through this pill, so the shortfall was on all seven at once. */
+  @media (max-width: 767px) {
+    min-height: 44px;
+  }
 }
 
 @utility settings-subnav-item {
@@ -1045,6 +1052,24 @@
   @apply border-theme-surface-border my-4 border-t;
 }
 
+@utility numeric-compact {
+  /* A narrow numeric field for an inline row control.
+
+     `type="number"` reserves room for the stepper arrows even while they are
+     hidden, which is invisible until the box is small: at 48px it ate the
+     placeholder and rendered "min" as "mir". These rows are typed into, not
+     stepped, and the label they lost to save width is exactly that
+     placeholder — so the reservation has to go. */
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
 @utility mobile-touch-target {
   /* #21 Guaranteed mobile touch target size */
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center;
@@ -1082,6 +1107,129 @@
   @apply text-sm;
   @media (min-width: 640px) {
     @apply text-base;
+  }
+}
+
+@utility org-tree {
+  /* #26a Boxes-and-connectors organizational chart.
+
+     A department's chain of command is the one hierarchy members expect to see
+     drawn the conventional way — a box per seat, children centred beneath their
+     parent, elbow connectors between them. An indented outline reads as a list
+     of positions; a diagram reads as a chain of command, which is the question
+     the screen exists to answer.
+
+     Markup is a nested `ul`/`li` tree: this class on the outermost `ul`,
+     `org-tree-branch` on each nested one, `org-tree-node` on every `li`. The
+     connectors are pseudo-elements, so nothing has to be measured or positioned
+     in JavaScript and the whole thing survives a re-render, a zoom, and a print.
+
+     **The marker classes are load-bearing, not decoration.** Selecting on bare
+     `ul`/`li` also catches the lists *inside* a box — a seat held by three
+     trustees is a `<ul>` of three names — and lays those out sideways with
+     connectors drawn between them, inside the card. Every rule below is
+     therefore scoped to a class the tree puts on its own elements.
+
+     The parent is responsible for scrolling: a wide department overflows any
+     viewport, so wrap this in a container with `overflow-x: auto`. Below the
+     `md` breakpoint the page renders the outline instead — a diagram narrowed
+     to a phone either shrinks the names past reading or scrolls in two
+     directions at once. */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  & .org-tree-branch {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    margin: 0;
+    padding: 1.5rem 0 0;
+    position: relative;
+    list-style: none;
+  }
+
+  & .org-tree-node {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 0.5rem 0;
+    list-style: none;
+  }
+
+  /* The two halves of the horizontal bar that joins a row of siblings. Each
+     child draws its own half, so the bar spans exactly the siblings present
+     without anything counting them. */
+  & .org-tree-node::before,
+  & .org-tree-node::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 50%;
+    width: 50%;
+    height: 1.5rem;
+    border-top: 2px solid var(--surface-border);
+  }
+
+  & .org-tree-node::after {
+    right: auto;
+    left: 50%;
+    border-left: 2px solid var(--surface-border);
+  }
+
+  /* The outermost row has no parent above it to connect to. */
+  & > .org-tree-node::before,
+  & > .org-tree-node::after {
+    display: none;
+  }
+
+  & > .org-tree-node {
+    padding-top: 0;
+  }
+
+  /* An only child needs the vertical drop but no horizontal bar — there is
+     nobody to be joined to. */
+  & .org-tree-node:only-child::before,
+  & .org-tree-node:only-child::after {
+    display: none;
+  }
+
+  & .org-tree-node:only-child {
+    padding-top: 0;
+  }
+
+  /* The bar must not overhang the row: the first child owns nothing to its
+     left, the last nothing to its right. The last child's ::before then has to
+     carry both the corner and the vertical drop that its suppressed ::after
+     would otherwise have drawn. */
+  & .org-tree-node:first-child::before,
+  & .org-tree-node:last-child::after {
+    border: 0 none;
+  }
+
+  & .org-tree-node:last-child::before {
+    border-right: 2px solid var(--surface-border);
+    border-radius: 0 0.375rem 0 0;
+  }
+
+  & .org-tree-node:first-child::after {
+    border-radius: 0.375rem 0 0 0;
+  }
+
+  /* The drop from a parent box down to its children's bar. */
+  & .org-tree-branch::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 0;
+    height: 1.5rem;
+    border-left: 2px solid var(--surface-border);
   }
 }
 
@@ -1145,6 +1293,23 @@
 @media (min-width: 768px) {
   .has-bottom-nav {
     --bottom-nav-height: 0px;
+  }
+}
+
+/* Set on the AppLayout root in the LEFT-navigation layout only, so a page-level
+ * fixed element can start where the content column starts instead of spanning
+ * the side navigation. That layout offsets its content with a matching
+ * `md:ml-64` while the nav is `fixed left-0 z-40`, so a viewport-anchored bar
+ * at the same z-index paints over the nav's bottom. The top-navigation layout
+ * renders content full width and never sets this, so the same element stays
+ * edge to edge there. Must stay in step with SideNavigation's own `w-64` and
+ * AppLayout's `md:ml-64`. */
+.has-side-nav {
+  --side-nav-width: 0px;
+}
+@media (min-width: 768px) {
+  .has-side-nav {
+    --side-nav-width: 16rem;
   }
 }
 

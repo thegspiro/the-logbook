@@ -32,7 +32,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
-from app.models.membership_pipeline import ProspectiveMember
+from app.models.membership_pipeline import ProspectInterview, ProspectiveMember
 from app.models.user import User
 
 
@@ -139,4 +139,41 @@ async def block_self_prospect_access(
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Prospect not found",
+    )
+
+
+async def block_self_interview_access(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Deny an interview route acting on the caller's own application.
+
+    ``/interviews/{interview_id}`` routes carry no ``{prospect_id}`` path
+    parameter, so the router-level :func:`block_self_prospect_access` guard —
+    keyed on that parameter — never fires for them. A caller who holds
+    ``prospective_members.manage`` (a coordinator role a former applicant can
+    hold once transferred to membership) could otherwise update or delete an
+    interview record filed against their own application by its id alone.
+    Resolve ``interview_id`` to its owning prospect and apply the same check.
+    """
+    raw_id: Optional[object] = request.path_params.get("interview_id")
+    if raw_id is None or not current_user.organization_id:
+        return
+
+    match = await db.scalar(
+        select(ProspectInterview.id)
+        .join(ProspectiveMember, ProspectiveMember.id == ProspectInterview.prospect_id)
+        .where(
+            ProspectInterview.id == normalize_prospect_id(raw_id),
+            ProspectiveMember.organization_id == current_user.organization_id,
+            self_prospect_predicate(current_user),
+        )
+    )
+    if match is None:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Interview not found",
     )

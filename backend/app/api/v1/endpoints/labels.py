@@ -17,11 +17,12 @@ printers). The renderer, the stock sizes on offer, and the status query all
 branch on it.
 """
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field
+from loguru import logger
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -36,11 +37,28 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.services.label_printer_service import LANGUAGE_ZPL, LabelPrinterService
-from app.services.label_service import LabelService, required_permissions_for_module
+from app.services.label_service import (
+    UNSET,
+    LabelService,
+    required_permissions_for_module,
+)
 from app.utils.label_renderer import SYMBOLOGY_CODE128
 from app.utils.printer_transport import PrinterUnreachableError
 
 router = APIRouter()
+
+# Each entry is a field key ("location", "category", "condition") or a
+# "custom:<text>" annotation the caller supplies verbatim — bound the text
+# half too, or `custom:` lets a caller join up to 20 unbounded strings per
+# label spec across up to 2000 ids (LBL-29-3).
+ExtraLine = Annotated[str, StringConstraints(max_length=100)]
+
+# Modules whose labels carry PII/credential-adjacent data worth an audit
+# trail: a prospect label embeds the applicant's public status-check token
+# (label_service.py) and a membership label embeds membership_number.
+# Printer *configuration* changes are already audited below; this covers
+# actually generating/printing the labels themselves.
+_AUDITED_LABEL_MODULES = frozenset({"prospective_members", "membership"})
 
 
 def _authorize_module(current_user: User, module: str) -> None:
@@ -58,6 +76,7 @@ def _authorize_module(current_user: User, module: str) -> None:
 
 class LabelPresetBody(BaseModel):
     preset: str = Field(min_length=1, max_length=50)
+    printer_id: Optional[str] = Field(None, min_length=1, max_length=36)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
@@ -70,7 +89,7 @@ class LabelGenerateBody(BaseModel):
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     auto_rotate: Optional[bool] = None
-    extra_lines: Optional[List[str]] = None
+    extra_lines: Optional[List[ExtraLine]] = Field(None, max_length=20)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
@@ -128,11 +147,24 @@ async def set_label_preset(
     """Save the label-printer preset for the caller's position in *module*."""
     _authorize_module(current_user, module)
     try:
+        if data.printer_id is not None:
+            # A remembered destination is a client-supplied foreign key. Check
+            # it against the caller's organization before putting it in the
+            # position JSON, just as the eventual print path does.
+            await LabelPrinterService(db).get_printer(
+                data.printer_id, current_user.organization_id
+            )
         result = await LabelService(db).set_preset(
             user_id=UUID(current_user.id),
             organization_id=current_user.organization_id,
             module=module,
             preset=data.preset,
+            # Absent means "leave the remembered destination alone"; an
+            # explicit null clears it. Passing data.printer_id unconditionally
+            # made a save that never mentioned a printer erase one.
+            printer_id=(
+                data.printer_id if "printer_id" in data.model_fields_set else UNSET
+            ),
             custom_width=data.custom_width,
             custom_height=data.custom_height,
             symbology=data.symbology,
@@ -159,7 +191,7 @@ async def generate_labels(
     """
     _authorize_module(current_user, data.module)
     try:
-        pdf, auto_populated = await LabelService(db).generate(
+        pdf, auto_populated, label_count = await LabelService(db).generate(
             organization_id=current_user.organization_id,
             module=data.module,
             ids=data.ids,
@@ -173,6 +205,18 @@ async def generate_labels(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if data.module in _AUDITED_LABEL_MODULES:
+        # label_count is the specs actually rendered — filtered/nonexistent
+        # ids in data.ids produce no label and must not inflate this count.
+        await log_audit_event(
+            db=db,
+            event_type="labels_generated",
+            event_category="data_access",
+            severity="info",
+            event_data={"module": data.module, "count": label_count},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
     await db.commit()
     return Response(
         content=pdf.getvalue(),
@@ -237,7 +281,7 @@ class LabelPrintBody(BaseModel):
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     copies: int = Field(1, ge=1, le=50)
-    extra_lines: Optional[List[str]] = None
+    extra_lines: Optional[List[ExtraLine]] = Field(None, max_length=20)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
@@ -481,7 +525,34 @@ async def print_labels(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except PrinterUnreachableError as e:
         # 502, not 500: the application worked and a downstream device did not,
-        # which is the difference between "try again" and "call support".
-        raise HTTPException(status_code=502, detail=str(e))
+        # which is the difference between "try again" and "call support". But
+        # unlike the settings.manage-gated test/status/probe routes above,
+        # this endpoint is reachable by anyone holding the module's own
+        # .view permission — the transport's message embeds the printer's
+        # configured host/IP/port, which those callers have no business
+        # learning (the station-document print path fixed the identical
+        # leak the same way). Log the real error, return a generic one.
+        logger.error(f"Label print failed for module {data.module}: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="The printer could not be reached. Contact whoever manages "
+            "the label printer.",
+        )
+    if data.module in _AUDITED_LABEL_MODULES:
+        # result["labels_sent"] is the authoritative count (specs actually
+        # rendered * copies) — len(data.ids) over/under-counts whenever a
+        # requested id is filtered/missing, or copies != 1.
+        await log_audit_event(
+            db=db,
+            event_type="labels_printed",
+            event_category="data_access",
+            severity="info",
+            event_data={
+                "module": data.module,
+                "count": result.get("labels_sent", len(data.ids)),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
     await db.commit()
     return result

@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
+    AttendeeVisibility,
     CheckInWindowType,
     Event,
     EventRSVP,
@@ -44,10 +45,55 @@ from app.schemas.event import (
 from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
+from app.utils.event_attachments import validate_attachments_for_org
 
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
 BULK_ADD_MAX_SIZE = 200
+
+# Ceiling on how many waitlisted parties one seat release may promote. Freeing
+# N seats can legitimately admit N members, so this is generous rather than
+# tight — it exists only so a regression in promote_from_waitlist's "no longer
+# fits" condition cannot turn one RSVP into an unbounded loop.
+MAX_WAITLIST_PROMOTIONS_PER_RELEASE = 50
+
+
+def resolve_attendee_visibility(
+    event: Any, org_settings: Optional[Dict[str, Any]]
+) -> AttendeeVisibility:
+    """Decide who may see ``event``'s attendee list.
+
+    The per-event column wins when set; NULL hands the decision to the
+    organization's ``events.defaults.attendee_visibility`` setting; an
+    organization that never configured one falls back to MANAGERS, which is the
+    behavior every installation had before member-visible rosters existed.
+
+    An unrecognized stored value resolves to MANAGERS rather than raising:
+    ``settings`` is unvalidated JSON, and a typo an administrator saved through
+    some other path must not be able to publish a roster that was meant to stay
+    restricted. Failing closed is the only safe direction for a visibility
+    gate.
+    """
+    candidates = (
+        getattr(event, "attendee_visibility", None),
+        ((org_settings or {}).get("events") or {})
+        .get("defaults", {})
+        .get("attendee_visibility"),
+    )
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            return AttendeeVisibility(str(candidate).lower())
+        except ValueError:
+            logger.warning(
+                "Unrecognized attendee_visibility {!r}; failing closed to "
+                "managers-only",
+                candidate,
+            )
+            return AttendeeVisibility.MANAGERS
+    return AttendeeVisibility.MANAGERS
+
 
 # Sentinel error prefix for the soft training-pipeline phase gate: a
 # program-linked session is ahead of the member's current phase. The endpoint
@@ -124,6 +170,13 @@ class EventService:
         if event_data.requires_rsvp and event_data.rsvp_deadline:
             if event_data.rsvp_deadline >= event_data.start_datetime:
                 raise ValueError("RSVP deadline must be before event start")
+
+        # EV-17 / XC-1: `attachments` is a free-form JSON column that this
+        # generic payload can write, and its `file_path` is the exact string
+        # the download endpoint later serves. An unvalidated one lets a caller
+        # graft another organization's uploaded file onto an event in their
+        # own org and read it there.
+        validate_attachments_for_org(event_data.attachments, organization_id)
 
         # Check for location double-booking
         if event_data.location_id:
@@ -248,7 +301,55 @@ class EventService:
             .label("going_count")
         )
 
-        columns = [Event, rsvp_count_sq, going_count_sq]
+        # How many members are waiting, for the "N waiting" line on a
+        # waitlisted card. A third correlated subquery on a query that already
+        # runs two — still one round trip, no N+1. The member's *position* is
+        # deliberately not here: ranking per row needs a window function, and
+        # the card already knows the member is waitlisted from
+        # user_rsvp_status. Position belongs on the detail page.
+        #
+        # The seat filter is the same one promote_from_waitlist and the detail
+        # endpoint apply: a party bigger than the whole event is passed over by
+        # promotion, so counting it here would make the card disagree with the
+        # detail page the member opens next ("5 waiting", then "#1 of 4"). An
+        # absent or zero cap means no cap, matching `if event.max_attendees:`
+        # on the other two paths.
+        waitlist_count_sq = (
+            select(func.count(EventRSVP.id))
+            .where(EventRSVP.event_id == Event.id)
+            .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .where(
+                or_(
+                    func.coalesce(Event.max_attendees, 0) == 0,
+                    1 + EventRSVP.guest_count <= Event.max_attendees,
+                )
+            )
+            .correlate(Event)
+            .scalar_subquery()
+            .label("waitlist_count")
+        )
+
+        # Seats occupied, as opposed to members going: a member with two guests
+        # fills three places. The cap is enforced in seats, so any UI that talks
+        # about capacity ("N of M slots filled", roster-full) has to use this,
+        # or it will promise room the RSVP path then refuses. going_count stays
+        # the member count, which is what "N going" means.
+        occupied_seats_sq = (
+            select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+            .where(EventRSVP.event_id == Event.id)
+            .where(EventRSVP.status == RSVPStatus.GOING)
+            .correlate(Event)
+            .scalar_subquery()
+            .label("occupied_seats")
+        )
+
+        columns = [
+            Event,
+            rsvp_count_sq,
+            going_count_sq,
+            waitlist_count_sq,
+            occupied_seats_sq,
+        ]
 
         # Optionally include current user's RSVP status and attendance
         if user_id:
@@ -333,20 +434,25 @@ class EventService:
         items: List[Dict[str, Any]] = []
         for row in rows:
             event = row[0]
+            # Positional, matching the `columns` list built above. The
+            # user-scoped columns are appended only when user_id is set, so
+            # their indices follow the three unconditional aggregates.
             item: Dict[str, Any] = {
                 "event": event,
                 "rsvp_count": row[1] or 0,
                 "going_count": row[2] or 0,
+                "waitlist_count": row[3] or 0,
+                "occupied_seats": row[4] or 0,
                 "user_rsvp_status": None,
                 "user_attended": False,
             }
             if user_id:
-                raw_status = row[3]
+                raw_status = row[5]
                 if raw_status is not None:
                     item["user_rsvp_status"] = (
                         raw_status.value if hasattr(raw_status, "value") else raw_status
                     )
-                item["user_attended"] = bool(row[4])
+                item["user_attended"] = bool(row[6])
             items.append(item)
 
         await self._annotate_list_items(items, organization_id)
@@ -552,6 +658,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
 
@@ -564,6 +671,13 @@ class EventService:
 
         # Update fields
         update_data = event_data.model_dump(exclude_unset=True)
+
+        # EV-17 / XC-1: same guard as create_event — a client-supplied
+        # attachment file_path must name a file under this org's own upload
+        # subtree before it is persisted. Checked against `update_data` so an
+        # unset field stays untouched and an explicit `[]` still clears.
+        if "attachments" in update_data:
+            validate_attachments_for_org(update_data["attachments"], organization_id)
 
         # A closed event still accepts descriptive edits — fixing a typo in the
         # title of last month's drill is housekeeping. What it refuses is a
@@ -693,7 +807,8 @@ class EventService:
 
         # Query all events in the series with start_datetime >= anchor's start
         result = await self.db.execute(
-            select(Event).where(
+            select(Event)
+            .where(
                 Event.organization_id == str(organization_id),
                 Event.is_cancelled.is_(False),
                 or_(
@@ -702,10 +817,16 @@ class EventService:
                 ),
                 Event.start_datetime >= anchor.start_datetime,
             )
+            .with_for_update()
         )
         future_events = result.scalars().all()
 
         update_data = event_data.model_dump(exclude_unset=True)
+
+        # EV-17 / XC-1: this path writes the same client-supplied attachment
+        # dictionaries as update_event, across every future occurrence.
+        if "attachments" in update_data:
+            validate_attachments_for_org(update_data["attachments"], organization_id)
 
         # A series-wide edit reaches finalized occurrences too. Descriptive
         # fields stay allowed here exactly as they do on the single-event path;
@@ -763,6 +884,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj), selectinload(Event.rsvps))
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
 
@@ -779,7 +901,7 @@ class EventService:
 
         # Same reasoning as delete_event: a reopened event that is cancelled
         # rather than re-finalized would leave its credited hours standing.
-        await self._revoke_event_attendance_credit(event_id)
+        await self._revoke_event_attendance_credit(event_id, organization_id)
 
         event.is_cancelled = True
         event.cancellation_reason = reason
@@ -836,7 +958,9 @@ class EventService:
             )
         )
 
-        result = await self.db.execute(select(Event).where(*conditions))
+        result = await self.db.execute(
+            select(Event).where(*conditions).with_for_update()
+        )
         events = result.scalars().all()
 
         # Same door as delete_event_series: cancelling a closed occurrence
@@ -911,6 +1035,9 @@ class EventService:
             is_mandatory=source_event.is_mandatory,
             mandatory_membership_types=source_event.mandatory_membership_types,
             allow_guests=source_event.allow_guests,
+            # Carried, not defaulted: a duplicate of an event whose roster the
+            # organizer published must not quietly revert to managers-only.
+            attendee_visibility=source_event.attendee_visibility,
             send_reminders=source_event.send_reminders,
             reminder_schedule=copy.deepcopy(source_event.reminder_schedule),
             reminder_target=source_event.reminder_target,
@@ -948,6 +1075,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
 
@@ -963,7 +1091,7 @@ class EventService:
         # Reachable on a reopened event, where entries from the earlier
         # finalize are still on the ledger waiting to be resynced by a
         # re-finalize that is now never going to happen.
-        await self._revoke_event_attendance_credit(event_id)
+        await self._revoke_event_attendance_credit(event_id, organization_id)
 
         await self.db.delete(event)
         try:
@@ -998,7 +1126,9 @@ class EventService:
         if delete_future_only:
             conditions.append(Event.start_datetime >= datetime.now(dt_timezone.utc))
 
-        result = await self.db.execute(select(Event).where(*conditions))
+        result = await self.db.execute(
+            select(Event).where(*conditions).with_for_update()
+        )
         events = result.scalars().all()
 
         if not events:
@@ -1140,8 +1270,12 @@ class EventService:
         if event.is_draft:
             return None, "Cannot RSVP to an unpublished event"
 
-        if not event.requires_rsvp:
-            return None, "Event does not require RSVP"
+        # No requires_rsvp gate here, deliberately. That flag means "a response
+        # is expected of every member" — it drives the Required badge, the
+        # deadline, and the non-respondent reminder audience. It does not mean
+        # "responses are permitted": a member who wants to tell the department
+        # they are coming to an optional drill may always do so, and blocking
+        # that left most events with no member-facing action at all.
 
         # EV-6: an event that has already ended is not RSVP-able. The rsvp_deadline
         # check below only fires when a deadline is set; without one, a past event
@@ -1168,6 +1302,48 @@ class EventService:
                 f"Allowed statuses: {', '.join(allowed_statuses)}",
             )
 
+        # allow_guests has existed on the model since the beginning and was read
+        # nowhere: guest_count was accepted on every event regardless, and then
+        # left out of the capacity count below, so an event that forbade guests
+        # could be filled with them and a capped event could be oversubscribed.
+        # Scoped to a going response, for two reasons. A member declining is not
+        # asking to bring anybody, and existing installations can hold rows with
+        # guests on an allow_guests=false event because the old code never
+        # enforced the flag — the modal prefills that historical count, so an
+        # unconditional guard rejected their decline outright and left them
+        # holding seats they had tried to give back.
+        requested_guests = rsvp_data.guest_count or 0
+        if rsvp_data.status == RSVPStatus.GOING.value:
+            if requested_guests and not event.allow_guests:
+                return None, "This event does not allow guests"
+        else:
+            # A party that is not attending occupies no seats. Normalizing here
+            # rather than leaving the stale count is what lets a legacy guest
+            # party actually release its capacity by declining.
+            requested_guests = 0
+            rsvp_data = rsvp_data.model_copy(update={"guest_count": 0})
+
+        # Refused here, with the other guards, rather than down at the capacity
+        # check — and the position matters as much as the rule. Every return
+        # below this point happens *after* the RSVP row has been added to or
+        # mutated in the session, so a late rejection leaves dirty state the
+        # next commit would persist. That is not hypothetical: rsvp_to_series
+        # calls this in a loop and commits per occurrence, so one refused
+        # occurrence would be written by the next one's commit while being
+        # excluded from the reported count.
+        #
+        # A party that does not fit even an empty event has no queue position
+        # to wait for, and since promote_from_waitlist refuses to skip the head
+        # of the queue, admitting one would block everybody behind it.
+        if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
+            party_size = 1 + (rsvp_data.guest_count or 0)
+            if party_size > event.max_attendees:
+                return (
+                    None,
+                    f"This event holds {event.max_attendees} people, so a party "
+                    f"of {party_size} cannot be accommodated.",
+                )
+
         # Soft pipeline phase gate — warn (overridable) when RSVPing to a session
         # ahead of the member's current phase. Only when actually attending.
         if not override and rsvp_data.status == "going":
@@ -1182,6 +1358,15 @@ class EventService:
             .where(EventRSVP.user_id == str(user_id))
         )
         existing_rsvp = existing_result.scalar_one_or_none()
+
+        # Seats this member held before the write, for the promotion decision
+        # below. Reducing a guest count while staying "going" frees capacity
+        # just as surely as declining does.
+        previous_seats = (
+            1 + (existing_rsvp.guest_count or 0)
+            if existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
+            else 0
+        )
 
         old_status = None
         if existing_rsvp:
@@ -1204,30 +1389,47 @@ class EventService:
             )
             self.db.add(rsvp)
 
-        # Check capacity if user is going (event row is locked, so this
-        # count is consistent — no other transaction can commit a new
-        # "going" RSVP for this event until we release the lock)
-        old_status_was_going = (
-            existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
-        )
+        # Check capacity if user is going. The event row lock serializes the
+        # decision, but it does NOT make a plain count current: under InnoDB's
+        # default REPEATABLE READ a non-locking SELECT answers from the
+        # snapshot taken at this transaction's first read, so it can still
+        # report the tally from before the RSVP that beat us committed. The
+        # count below is a locking read for that reason.
+        # (previous_seats above already records what this member held, which is
+        # what the promotion decision after the commit compares against.)
         if rsvp_data.status == RSVPStatus.GOING.value and event.max_attendees:
+            # Seats, not rows: a member bringing two guests occupies three
+            # places. func.sum over (1 + guest_count) rather than func.count for
+            # exactly that reason — counting rows is what let a capped event be
+            # oversubscribed by however many guests attendees brought.
+            # coalesce is required: SUM over zero rows is NULL, and comparing
+            # NULL against max_attendees would skip waitlisting entirely.
             capacity_query = (
-                select(func.count(EventRSVP.id))
+                select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
                 .where(EventRSVP.event_id == str(event_id))
                 .where(EventRSVP.status == RSVPStatus.GOING)
             )
             if existing_rsvp:
                 capacity_query = capacity_query.where(EventRSVP.id != existing_rsvp.id)
+            capacity_query = capacity_query.with_for_update()
 
             # no_autoflush: the new RSVP was just add()ed as "going", and a
-            # Query-invoked autoflush would insert it before the count runs —
-            # the row would count itself, waitlisting the Nth attendee
-            # instead of the (N+1)th.
+            # Query-invoked autoflush would insert it before the sum runs — the
+            # row would count its own seats, waitlisting the party that exactly
+            # fills the roster instead of the next one. The stakes are higher
+            # than they were under a row count: a self-counted row now costs
+            # 1 + its own guest_count seats rather than one.
             with self.db.no_autoflush:
-                going_count_result = await self.db.execute(capacity_query)
-            going_count = going_count_result.scalar() or 0
+                occupied_result = await self.db.execute(capacity_query)
+            occupied_seats = occupied_result.scalar() or 0
 
-            if going_count >= event.max_attendees:
+            # ">" against the party size, not ">=" against the tally: the old
+            # row count only had to ask "is the roster already full", but a
+            # party of three does not fit a one-seat gap. (A party too big for
+            # the event at all was already refused above, before this function
+            # touched the session.)
+            requested_seats = 1 + (rsvp_data.guest_count or 0)
+            if occupied_seats + requested_seats > event.max_attendees:
                 # Auto-waitlist instead of rejecting
                 rsvp.status = RSVPStatus.WAITLISTED
 
@@ -1252,13 +1454,30 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(rsvp)
 
-        # Auto-promote from waitlist if someone changed from going to not_going
-        if (
-            old_status_was_going
-            and rsvp_data.status != RSVPStatus.GOING.value
-            and event.max_attendees
-        ):
-            await self.promote_from_waitlist(event_id, organization_id)
+        # Promote whenever this write *released* seats — not merely when the
+        # status moved away from going. Three paths free capacity and only the
+        # first used to be covered: declining, lowering a guest count while
+        # staying going, and being waitlisted after asking for a larger party
+        # than fits. Missing the latter two stranded waitlisted members behind
+        # seats that were already empty, until some unrelated action happened
+        # to trigger promotion.
+        final_status = (
+            rsvp.status.value if hasattr(rsvp.status, "value") else rsvp.status
+        )
+        current_seats = (
+            1 + (rsvp.guest_count or 0) if final_status == RSVPStatus.GOING.value else 0
+        )
+        if event.max_attendees and current_seats < previous_seats:
+            # Looped, because one release can admit several parties: a party of
+            # four declining frees four seats, and promoting a single solo
+            # member would leave three idle until some unrelated write happened
+            # to trigger promotion again. promote_from_waitlist returns None as
+            # soon as the head of the queue no longer fits, so this terminates
+            # on its own; the bound is only so a bug in that condition cannot
+            # spin the request.
+            for _ in range(MAX_WAITLIST_PROMOTIONS_PER_RELEASE):
+                if not await self.promote_from_waitlist(event_id, organization_id):
+                    break
 
         return rsvp, None
 
@@ -1355,23 +1574,28 @@ class EventService:
         if attendance_is_finalized(event):
             return None
 
-        # Verify there is actually capacity before promoting
-        going_count_result = await self.db.execute(
-            select(func.count(EventRSVP.id))
-            .where(EventRSVP.event_id == str(event_id))
-            .where(EventRSVP.status == RSVPStatus.GOING)
-        )
-        going_count = going_count_result.scalar() or 0
-
-        if going_count >= event.max_attendees:
-            return None
-
-        # Lock and fetch the earliest waitlisted RSVP
+        # Lock and fetch the earliest waitlisted RSVP. This now happens *before*
+        # the capacity read because capacity is measured in seats: how much room
+        # is needed depends on how many guests this particular party brings.
+        #
+        # Ordering by responded_at is not a preference — create_or_update_rsvp's
+        # waitlist position is computed on the same column, and if the two ever
+        # disagree the app tells a member they are next and then promotes
+        # somebody else.
+        #
+        # The seat filter excludes parties that can *never* fit — bigger than
+        # the whole event. create_or_update_rsvp now rejects those outright,
+        # but rows predating that check exist, and an organizer who lowers
+        # max_attendees after somebody queued creates one at any time. Filtering
+        # here rather than checking after the fetch is what actually lets the
+        # queue move: the head of the line becomes the earliest *promotable*
+        # party, instead of an impossible one that blocks everyone behind it.
         result = await self.db.execute(
             select(EventRSVP)
             .where(EventRSVP.event_id == str(event_id))
             .where(EventRSVP.organization_id == str(organization_id))
             .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .where(1 + EventRSVP.guest_count <= event.max_attendees)
             .order_by(EventRSVP.responded_at.asc())
             .limit(1)
             .with_for_update()
@@ -1379,6 +1603,30 @@ class EventService:
         waitlisted_rsvp = result.scalar_one_or_none()
 
         if not waitlisted_rsvp:
+            return None
+
+        # Verify there is actually capacity before promoting. Locking read:
+        # the event row lock does not refresh this transaction's REPEATABLE
+        # READ snapshot, so a plain read can miss an RSVP committed since.
+        # Seats, not rows — must match create_or_update_rsvp's arithmetic, or a
+        # party of three gets promoted into a one-seat gap the RSVP path
+        # correctly refused.
+        occupied_result = await self.db.execute(
+            select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.status == RSVPStatus.GOING)
+            .with_for_update()
+        )
+        occupied_seats = occupied_result.scalar() or 0
+
+        # Whoever is first in line stays first in line. Skipping past a party
+        # that does not fit *yet* to promote a smaller one behind them would
+        # silently reorder the queue and contradict the position the member was
+        # shown. (A party that can never fit was already excluded by the query
+        # above — that is a different case, and the only one worth passing
+        # over.)
+        needed_seats = 1 + (waitlisted_rsvp.guest_count or 0)
+        if occupied_seats + needed_seats > event.max_attendees:
             return None
 
         waitlisted_rsvp.status = RSVPStatus.GOING
@@ -1428,7 +1676,21 @@ class EventService:
         """
         RSVP to all future, non-cancelled events in a recurring series.
 
-        Returns the count of RSVPs created/updated.
+        Each occurrence goes through :meth:`create_or_update_rsvp` rather than
+        being written here directly. This used to hand-roll the insert, which
+        meant the series path had no capacity tally, no event-row lock, and no
+        allow_guests, deadline or draft guard — a member applying to a series
+        was saved as "going" on a full occurrence, and a guest party overbooked
+        it by several seats. Delegating restores all of those at once, along
+        with RSVP history and waitlist promotion, and leaves exactly one write
+        path to keep correct.
+
+        The cost is one locked transaction per occurrence instead of a single
+        bulk commit. That is the deliberate trade: duplicating the capacity and
+        locking logic in a second place is how these two drifted far enough
+        apart for the gap to go unnoticed.
+
+        Returns the count of occurrences the response was actually applied to.
         """
         now = datetime.now(dt_timezone.utc)
 
@@ -1446,42 +1708,44 @@ class EventService:
             )
         )
         series_events = result.scalars().all()
+        event_ids = [event.id for event in series_events]
 
         rsvp_count = 0
-        for event in series_events:
-            if not event.requires_rsvp:
-                continue
-
-            # A finalized occurrence is skipped rather than failing the batch —
-            # the member is answering for the rest of the series, not asking to
-            # reopen one closed date.
-            if attendance_is_finalized(event):
-                continue
-
-            # Check for existing RSVP
-            existing_result = await self.db.execute(
-                select(EventRSVP)
-                .where(EventRSVP.event_id == event.id)
-                .where(EventRSVP.user_id == str(user_id))
+        for event_id in event_ids:
+            # An occurrence that refuses the response — finalized, full past
+            # what this party needs, guests not allowed, deadline gone — is
+            # skipped rather than failing the batch. The member is answering
+            # for the rest of the series, not asking to force one date.
+            #
+            # override=True: the member confirmed the training phase-gate
+            # warning once for the series, and there is no way to prompt them
+            # again per occurrence.
+            rsvp, error = await self.create_or_update_rsvp(
+                # Passed through as stored. create_or_update_rsvp stringifies
+                # whatever it is given, so coercing to UUID here would only add
+                # a way for a non-canonical id to raise.
+                event_id=event_id,
+                user_id=user_id,
+                rsvp_data=rsvp_data,
+                organization_id=organization_id,
+                override=True,
             )
-            existing_rsvp = existing_result.scalar_one_or_none()
-
-            if existing_rsvp:
-                for field, value in rsvp_data.model_dump().items():
-                    setattr(existing_rsvp, field, value)
-                existing_rsvp.updated_at = now
-            else:
-                new_rsvp = EventRSVP(
-                    organization_id=organization_id,
-                    event_id=event.id,
-                    user_id=user_id,
-                    **rsvp_data.model_dump(),
+            if error or rsvp is None:
+                # Roll back before moving on. create_or_update_rsvp commits its
+                # own successful writes, so this discards only what a refusal
+                # left uncommitted — and without it, any error path that ever
+                # returns after the row is added would be persisted by the
+                # *next* occurrence's commit rather than dropped.
+                await self.db.rollback()
+                logger.info(
+                    "Series RSVP skipped event {}: {}",
+                    event_id,
+                    error or "no RSVP returned",
                 )
-                self.db.add(new_rsvp)
+                continue
 
             rsvp_count += 1
 
-        await self.db.commit()
         return rsvp_count
 
     async def list_event_rsvps(
@@ -1518,6 +1782,47 @@ class EventService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def list_event_attendees_for_member(
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[Optional[Event], List[EventRSVP]]:
+        """Return the going-only roster an ordinary member is allowed to see.
+
+        Deliberately narrower than :meth:`list_event_rsvps`: only ``going``
+        RSVPs, ordered oldest-first so the list reads as a sign-up sheet rather
+        than a leaderboard. Returns the org-scoped event alongside the rows so
+        the caller can resolve visibility without a second fetch — and so a
+        missing event is distinguishable from an event with an empty roster.
+
+        This method does NOT decide who may call it. Visibility is resolved by
+        the endpoint, which has the organization's settings in hand.
+        """
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+        )
+        event = event_result.scalar_one_or_none()
+
+        if not event:
+            return None, []
+
+        query = (
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.status == RSVPStatus.GOING)
+            .options(selectinload(EventRSVP.user))
+            .order_by(EventRSVP.responded_at.asc())
+            .offset(skip)
+            .limit(limit)
+        )
+
+        result = await self.db.execute(query)
+        return event, list(result.scalars().all())
+
     async def manager_add_attendee(
         self,
         event_id: UUID,
@@ -1539,6 +1844,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -1633,6 +1939,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -1708,6 +2015,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -1734,7 +2042,9 @@ class EventService:
         # an ondelete="SET NULL" FK, so without this the entry survives the
         # delete pointing at nothing and the member keeps credit for an event
         # they are no longer recorded at.
-        await AdminHoursService(self.db).delete_event_attendance_entries(str(rsvp.id))
+        await AdminHoursService(self.db).delete_event_attendance_entries(
+            str(rsvp.id), str(organization_id)
+        )
 
         await self.db.delete(rsvp)
         await self.db.commit()
@@ -1760,6 +2070,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -1875,10 +2186,14 @@ class EventService:
 
         total_rsvps = going_count + not_going_count + maybe_count
 
-        # Calculate capacity percentage
+        # Calculate capacity percentage. Measured in seats, matching what
+        # max_attendees now caps: a roster of 8 members who brought 2 guests
+        # fills a 10-seat event, and reporting that as 80% would have an
+        # organizer expecting room that the RSVP path will refuse.
         capacity_percentage = None
         if event.max_attendees and event.max_attendees > 0:
-            capacity_percentage = round((going_count / event.max_attendees) * 100, 2)
+            occupied_seats = going_count + total_guests
+            capacity_percentage = round((occupied_seats / event.max_attendees) * 100, 2)
 
         return EventStats(
             event_id=event.id,
@@ -1910,6 +2225,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -2007,6 +2323,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -2105,7 +2422,22 @@ class EventService:
                 if training_record is not None:
                     training_record.hours_completed = round(duration_minutes / 60.0, 2)
 
-        await self.db.commit()
+        # Close the event and credit the hours in the SAME transaction that
+        # holds its row lock. Every attendance writer takes that lock too, so
+        # one arriving mid-finalize blocks and then finds the event closed —
+        # rather than committing a check-in between the roster snapshot above
+        # and the close, which left an attendee checked in, uncredited, and
+        # behind a lock nobody could see a reason for.
+        #
+        # Crediting is inside the lock rather than after it, which is a
+        # correction to the first cut of this: committing the close first
+        # released the lock while the credit loop was still running off a
+        # captured roster, so a reopen could land mid-loop and the stale writes
+        # would then overwrite a correction — or recreate credit on an event
+        # that had since been cancelled. Per-RSVP failures are already caught
+        # and logged below, and a hard failure now rolls the whole finalize
+        # back and leaves the event open, which is the honest outcome.
+        self._stamp_attendance_finalized(event, finalized_by)
 
         # Auto-credit event hours to admin hours categories via mappings
         admin_hours_service = AdminHoursService(self.db)
@@ -2136,13 +2468,17 @@ class EventService:
                 )
             except Exception:
                 logger.exception("Failed to credit admin hours for RSVP {}", rsvp.id)
-        await self.db.commit()
 
+        # One commit closes the event and lands every credit together, then
+        # releases the row lock. _record_attendance_finalized re-stamps (a
+        # no-op), commits, and archives the validation prompt.
         await self._record_attendance_finalized(event, organization_id, finalized_by)
 
         return updated_count, None
 
-    async def _revoke_event_attendance_credit(self, event_id: UUID) -> None:
+    async def _revoke_event_attendance_credit(
+        self, event_id: UUID, organization_id: UUID
+    ) -> None:
         """Drop the admin-hours entries derived from this event's attendance.
 
         Reopening leaves the entries in place on the assumption that
@@ -2153,11 +2489,46 @@ class EventService:
         keeps hours with no attendance behind them. Called from both paths.
         """
         rsvp_result = await self.db.execute(
-            select(EventRSVP.id).where(EventRSVP.event_id == str(event_id))
+            select(EventRSVP.id)
+            .join(Event, Event.id == EventRSVP.event_id)
+            .where(
+                EventRSVP.event_id == str(event_id),
+                Event.organization_id == str(organization_id),
+            )
         )
         admin_hours = AdminHoursService(self.db)
         for rsvp_id in rsvp_result.scalars().all():
-            await admin_hours.delete_event_attendance_entries(str(rsvp_id))
+            await admin_hours.delete_event_attendance_entries(
+                str(rsvp_id), str(organization_id)
+            )
+
+    @staticmethod
+    def _stamp_attendance_finalized(
+        event: Event,
+        finalized_by: Optional[UUID] = None,
+    ) -> None:
+        """Mark the event closed, in memory only.
+
+        Deliberately does not commit: the caller decides the transaction
+        boundary, and for finalize that boundary matters. The close has to land
+        in the same transaction that holds the event's row lock, or the lock is
+        released before the state it was protecting is written and a concurrent
+        check-in slips into the gap.
+        """
+        # Deep copy before reassigning: a shallow copy of a JSON column shares
+        # nested references with SQLAlchemy's committed state, which can make
+        # the reassignment a silent no-op (see CLAUDE.md pitfall #12).
+        custom = copy.deepcopy(event.custom_fields or {})
+        if not custom.get("attendance_finalized"):
+            custom["attendance_finalized"] = True
+            event.custom_fields = custom
+        if event.attendance_finalized_at is None:
+            event.attendance_finalized_at = datetime.now(dt_timezone.utc)
+        # A finalize path with no acting user (the auto-finalize inside
+        # record_actual_times, when it is reached without one) leaves the actor
+        # NULL rather than attributing the close to nobody in particular.
+        if finalized_by is not None and event.attendance_finalized_by is None:
+            event.attendance_finalized_by = str(finalized_by)
 
     async def _record_attendance_finalized(
         self,
@@ -2177,23 +2548,8 @@ class EventService:
         # Deep copy before reassigning: a shallow copy of a JSON column shares
         # nested references with SQLAlchemy's committed state, which can make
         # the reassignment a silent no-op (see CLAUDE.md pitfall #12).
-        custom = copy.deepcopy(event.custom_fields or {})
-        dirty = False
-        if not custom.get("attendance_finalized"):
-            custom["attendance_finalized"] = True
-            event.custom_fields = custom
-            dirty = True
-        if event.attendance_finalized_at is None:
-            event.attendance_finalized_at = datetime.now(dt_timezone.utc)
-            dirty = True
-        # A finalize path with no acting user (the auto-finalize inside
-        # record_actual_times, when it is reached without one) leaves the actor
-        # NULL rather than attributing the close to nobody in particular.
-        if finalized_by is not None and event.attendance_finalized_by is None:
-            event.attendance_finalized_by = str(finalized_by)
-            dirty = True
-        if dirty:
-            await self.db.commit()
+        self._stamp_attendance_finalized(event, finalized_by)
+        await self.db.commit()
 
         await NotificationsService(self.db).archive_related_notifications(
             organization_id,
@@ -2234,6 +2590,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
 
@@ -2268,7 +2625,25 @@ class EventService:
         event.updated_at = datetime.now(dt_timezone.utc)
 
         await self.db.commit()
-        await self.db.refresh(event)
+
+        # Re-read rather than refresh(): the endpoint serializes what this
+        # returns through _build_event_response, which reads location_obj, and
+        # the fetch above carries no eager loads on purpose — the row lock is
+        # for the event row alone. Left lazy, that read is IO outside the
+        # greenlet context and raises MissingGreenlet, which surfaced as a 500
+        # on reopening any event that has a location; events with no
+        # location_id short-circuit on the NULL FK and appeared to work.
+        reloaded = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj))
+        )
+        event = reloaded.scalar_one_or_none()
+        if not event:
+            # Deleted between the commit and this read. The reopen stands;
+            # there is simply nothing left to serialize.
+            return None, "Event not found"
 
         return event, None
 
@@ -2292,6 +2667,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -2646,6 +3022,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -3258,6 +3635,14 @@ class EventService:
         recurrence_month = event_data.pop("recurrence_month", None)
         recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
 
+        # EV-17 / XC-1: RecurringEventCreate carries `attachments` too, and it
+        # is copied onto every generated occurrence — so an unvalidated foreign
+        # file_path would be planted across the whole series at once.
+        try:
+            validate_attachments_for_org(event_data.get("attachments"), organization_id)
+        except ValueError as exc:
+            return [], str(exc)
+
         # Rolling recurrence: auto-set end date to 12 months from start
         if rolling_recurrence and not recurrence_end_date:
             start = event_data["start_datetime"]
@@ -3273,6 +3658,14 @@ class EventService:
                 event_data["location_id"], str(organization_id)
             ):
                 return [], "Location not found"
+
+        # Same XC-1 shape as location_id above: a client-supplied template_id
+        # must belong to the caller's org before it's stored on every
+        # occurrence. (EventCreate, the plain single-event schema, has no
+        # template_id field at all, so only this recurring path can set it.)
+        if event_data.get("template_id"):
+            if not await self.get_template(event_data["template_id"], organization_id):
+                return [], "Template not found"
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(

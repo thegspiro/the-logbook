@@ -67,15 +67,27 @@ oracle. **Fix:** scoped the anchor fetch to `current_user.organization_id`.
 `upload_event_attachment` instantiated `EventService(db)` and never used it.
 Removed.
 
-### EV-5 — MEDIUM (flagged) — Public request intake: no per-org opt-in + weaker anti-spam
+### EV-5 — MEDIUM — Public request intake: no per-org opt-in + weaker anti-spam — ✅ RESOLVED (2026-08-17)
 
 Any `active` org's request pipeline can be filled by anyone who supplies its
 `organization_id` (freely discoverable via the public calendar/labels/form). The
 only gate is per-IP rate-limit 10 — no per-org "accept public requests" toggle,
 and (unlike the forms module) no honeypot or per-org daily cap. Each submission
 writes rows and triggers assignee/requester emails (notification amplification).
-**Status:** flagged — needs a per-org opt-in setting + honeypot/daily-cap parity
-with forms (feature + config), not a one-line fix.
+
+**Resolved 2026-08-17** (`KNOWN_LIMITATIONS.md`), verified against the
+current code by security-review EV-16 pass 2 (2026-08-28):
+`submit_public_event_request` now checks, in order, a per-IP rate limit, a
+per-org opt-in (`events.request_pipeline.accept_public_requests`, default
+`false`, answering identically to "org not found" so the gate is not an
+oracle), a honeypot field (returns the success shape, writes nothing), and
+a per-org daily cap (`public_daily_limit`, counted only after authorization
+and the honeypot). **Correction to this entry:** `KNOWN_LIMITATIONS.md`
+already recorded this fix (2026-08-17), but this doc and
+`docs/app-review/events.md` were never updated to match — both still read
+"flagged"/"still flagged" after the fix landed. `docs/security-review/EV-16-events-requests.md`
+has the full mechanism trace, independently re-verified against the
+current code.
 
 ### EV-6 — LOW — Members can RSVP to draft / past events — ✅ FIXED (app-review B17)
 

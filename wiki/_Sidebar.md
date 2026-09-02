@@ -2,7 +2,8 @@
 
 **[🏠 Home](Home)**
 
-**[Recent changes (Aug 23–24, 2026)](Recent-Changes-2026-08-23-to-24)**
+**[Recent changes (Aug 24–31, 2026)](Recent-Changes-2026-08-24-to-31)**
+[· Aug 23–24 detail](Recent-Changes-2026-08-23-to-24)
 [· Aug 19–23 detail](Recent-Changes-2026-08-19-to-23)
 [· Aug 17–19 detail](Recent-Changes-2026-08-17-to-19)
 [· Aug 10–16 rollup](Recent-Changes-2026-08-10-to-16)
@@ -61,6 +62,8 @@
 - [Compliance](Module-Compliance)
 - [Compliance Config](../docs/COMPLIANCE_CONFIG.md)
 - [Governance — Legal Documents](Module-Governance-Legal)
+- [Governance — Organizational Chart](Module-Governance-Org-Chart)
+- [Testing Checklist](Module-Testing-Checklist)
 - [Salesforce Integration](Integration-Salesforce)
 - [Documenso Integration](Integration-Documenso)
 - [Cal.com Integration](Integration-Calcom)

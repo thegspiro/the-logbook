@@ -436,6 +436,12 @@ describe('apiCache', () => {
     it('returns false for /users/ endpoints', () => {
       expect(isCacheable('/users/123')).toBe(false);
       expect(isCacheable('/users/me')).toBe(false);
+      // The photo-use consent roster is a member list (names, emails,
+      // membership numbers) and rides on the prefix rather than an entry of
+      // its own. Narrowing the prefix to '/users/' would still cover it, but
+      // it is asserted here so a future tidy-up of that entry cannot make a
+      // roster of the whole department cacheable in passing.
+      expect(isCacheable('/users/consents/photo-use')).toBe(false);
     });
 
     it('returns false for /security/ endpoints', () => {
@@ -471,6 +477,21 @@ describe('apiCache', () => {
     it('returns false for /training/waivers endpoints', () => {
       expect(isCacheable('/training/waivers')).toBe(false);
       expect(isCacheable('/training/waivers/123')).toBe(false);
+    });
+
+    it('returns false for the org-wide per-member training heat maps and dashboard', () => {
+      expect(isCacheable('/training/competency-matrix')).toBe(false);
+      expect(isCacheable('/training/compliance-matrix')).toBe(false);
+      expect(isCacheable('/training/dashboard-summary')).toBe(false);
+    });
+
+    it('returns false for the training-session approval roster', () => {
+      expect(isCacheable('/training/sessions/approve/some-token')).toBe(false);
+    });
+
+    it('returns false for /training/effectiveness/evaluations (per-member evaluation PII)', () => {
+      expect(isCacheable('/training/effectiveness/evaluations')).toBe(false);
+      expect(isCacheable('/training/effectiveness/evaluations?course_id=c1')).toBe(false);
     });
 
     it('returns false for /messages/ endpoints', () => {
@@ -548,6 +569,11 @@ describe('apiCache', () => {
       expect(isCacheable('/inventory/charges')).toBe(false);
     });
 
+    it('returns false for /dashboard/action-items (assignee names + free text)', () => {
+      expect(isCacheable('/dashboard/action-items')).toBe(false);
+      expect(isCacheable('/dashboard/action-items?status=open')).toBe(false);
+    });
+
     it('returns false for checkout possession endpoints (singular path)', () => {
       // Guards against a prior plural-prefix typo that matched nothing
       expect(isCacheable('/inventory/checkout/active')).toBe(false);
@@ -585,12 +611,27 @@ describe('apiCache', () => {
       expect(isCacheable('/facilities/access-keys')).toBe(false);
     });
 
+    it('returns false for equipment-check reporter/restock PII (EC-14)', () => {
+      // ApparatusInventoryResponse and the check-log carry a reporter's full
+      // name and a free-text restock note; a caller whose equipment-check
+      // permission is later revoked must not keep reading them from cache.
+      expect(isCacheable('/equipment-checks/apparatus/123/inventory')).toBe(false);
+      expect(isCacheable('/equipment-checks/log')).toBe(false);
+      expect(isCacheable('/equipment-checks/items/1/deployed-lots')).toBe(false);
+      expect(isCacheable('/equipment-checks/supply/expiring-items')).toBe(false);
+    });
+
     it('excludes event roster sub-resources but still caches event list/detail', () => {
       // Parent paths remain cacheable...
       expect(isCacheable('/events')).toBe(true);
       expect(isCacheable('/events/123')).toBe(true);
       // ...but PII sub-resources (id mid-path) are not.
       expect(isCacheable('/events/123/rsvps')).toBe(false);
+      // The member-facing half of the same roster. It serves going-only member
+      // names under a different noun, so '/rsvps' does not cover it, and a
+      // cached copy would stay readable for 90s after an organizer restricts
+      // the event's attendee visibility.
+      expect(isCacheable('/events/123/attendees')).toBe(false);
       expect(isCacheable('/events/123/eligible-members')).toBe(false);
       expect(isCacheable('/events/123/external-attendees')).toBe(false);
       expect(isCacheable('/events/123/check-in-monitoring')).toBe(false);
@@ -607,12 +648,37 @@ describe('apiCache', () => {
       expect(isCacheable('/notifications/my')).toBe(false); // user notifications
       expect(isCacheable('/meetings')).toBe(false); // attendee PII + minutes
       expect(isCacheable('/event-requests')).toBe(false); // external contact PII
+      expect(isCacheable('/forms')).toBe(false); // form defs: admin notification emails (Codex-round precedent)
+      expect(isCacheable('/grants')).toBe(false); // grant/donor PII
       // Sub-paths stay excluded too...
       expect(isCacheable('/users/123')).toBe(false);
       expect(isCacheable('/meetings/123')).toBe(false);
+      expect(isCacheable('/forms/submissions')).toBe(false);
+      expect(isCacheable('/grants/donors')).toBe(false);
       // ...and a similarly-named non-PII path is not accidentally caught.
       expect(isCacheable('/message-history')).toBe(false); // (its own exclusion)
       expect(isCacheable('/events')).toBe(true); // event list stays cacheable
+    });
+
+    it('returns false for training cohort/program/provider member-roster sub-paths (FE2-34)', () => {
+      // Cohort detail resolves a roster (name + email); the bare list is
+      // roster-free and stays cacheable.
+      expect(isCacheable('/training/cohorts/abc123')).toBe(false);
+      expect(isCacheable('/training/cohorts/mine')).toBe(false);
+      expect(isCacheable('/training/cohorts')).toBe(true);
+      // Per-program eligibility carries the full member roster + a reason;
+      // the program catalog list itself carries no member data.
+      expect(isCacheable('/training/programs/programs/p1/eligibility')).toBe(false);
+      expect(isCacheable('/training/programs/programs')).toBe(true);
+      // Provider user-mappings carry internal member name + email; the
+      // provider config list itself does not.
+      expect(isCacheable('/training/external/providers/p1/user-mappings')).toBe(false);
+      expect(isCacheable('/training/external/providers')).toBe(true);
+    });
+
+    it('returns false for raw per-user analytics export (FE2-34)', () => {
+      expect(isCacheable('/analytics/export')).toBe(false);
+      expect(isCacheable('/analytics/metrics')).toBe(true); // aggregate, not per-user
     });
   });
 

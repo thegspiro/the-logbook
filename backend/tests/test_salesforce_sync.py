@@ -305,6 +305,28 @@ async def test_token_response_rejects_untrusted_instance_url(monkeypatch):
         await sf._refresh_access_token()
 
 
+def test_api_url_rejects_untrusted_instance_url_on_the_cached_token_path():
+    """CRON2-31-12: _refresh_access_token validates instance_url, but
+    _ensure_access_token skips it entirely whenever an access_token is
+    already cached. _api_url is the one call site every outbound request
+    goes through regardless of token state, so it must validate too — an
+    org-admin-editable instance_url pointing at an internal address, with a
+    cached token attached, would otherwise become an unvalidated SSRF
+    target hit every 30 minutes by the unattended sync task."""
+    sf = SalesforceService(
+        {"instance_url": "https://internal.example", "access_token": "cached-token"}
+    )
+    with pytest.raises(Exception, match="invalid"):
+        sf._api_url("/query")
+
+
+def test_api_url_accepts_a_valid_instance_url():
+    sf = SalesforceService(
+        {"instance_url": "https://acme.my.salesforce.com", "access_token": "t"}
+    )
+    assert sf._api_url("/query").startswith("https://acme.my.salesforce.com/")
+
+
 async def test_query_fails_instead_of_returning_partial_pages(monkeypatch):
     sf = SalesforceService(
         {"instance_url": "https://acme.my.salesforce.com", "access_token": "token"}
@@ -565,6 +587,65 @@ async def test_check_readiness_reports_disconnected():
     assert report["connected"] is False
     assert report["ready"] is False
     assert "error" in report
+
+
+async def test_check_readiness_sanitizes_connection_error(monkeypatch):
+    """test_connection() raises hand-authored messages on its expected paths,
+    but doesn't wrap every outbound call — an unhandled infra-level exception
+    (DNS, TLS, a raw driver error) must not reach the client verbatim (INT-6)."""
+    sensitive = 'OperationalError: (2003, "Can\'t connect to MySQL server")'
+    sf = AsyncMock()
+    sf.test_connection.side_effect = Exception(sensitive)
+    service, _ = make_sync_service(config={}, sf=sf)
+
+    report = await service.check_readiness()
+    assert sensitive not in report["error"]
+    assert report["error"] == "An unexpected error occurred. Please try again."
+
+
+async def test_check_readiness_sanitizes_field_lookup_error():
+    """Same class, the per-sObject describe call: get_field_names() can raise
+    an unwrapped infra exception too, and it lands in a different report key."""
+    sensitive = (
+        'File "/app/services/integration_services/salesforce_service.py", line 240'
+    )
+    sf = AsyncMock()
+    sf.test_connection.return_value = "ok"
+    sf.get_field_names.side_effect = Exception(sensitive)
+    service, _ = make_sync_service(config={}, sf=sf)
+
+    report = await service.check_readiness()
+    for entry in report["objects"].values():
+        assert sensitive not in (entry["error"] or "")
+
+
+async def test_check_readiness_sanitizes_infra_exception_with_no_blacklist_match():
+    """INT-6 follow-up: sanitize_error_message()'s pattern blacklist doesn't
+    cover generic DNS/TLS/timeout text, so a raw httpx transport error (not
+    bare Exception, and not caught by the blacklist) must still be replaced
+    by the generic fallback rather than passed through unchanged."""
+    dns_failure = "[Errno -2] Name or service not known"
+    sf = AsyncMock()
+    sf.test_connection.side_effect = httpx.ConnectError(dns_failure)
+    service, _ = make_sync_service(config={}, sf=sf)
+
+    report = await service.check_readiness()
+    assert dns_failure not in report["error"]
+    assert report["error"] == "An unexpected error occurred. Please try again."
+
+
+async def test_check_readiness_field_lookup_sanitizes_infra_exception():
+    """Same follow-up, the per-sObject describe call."""
+    dns_failure = "[Errno -2] Name or service not known"
+    sf = AsyncMock()
+    sf.test_connection.return_value = "ok"
+    sf.get_field_names.side_effect = httpx.ConnectError(dns_failure)
+    service, _ = make_sync_service(config={}, sf=sf)
+
+    report = await service.check_readiness()
+    for entry in report["objects"].values():
+        assert dns_failure not in (entry["error"] or "")
+        assert entry["error"] == "An unexpected error occurred. Please try again."
 
 
 async def test_preview_counts_create_update_adopt_skip():

@@ -162,7 +162,13 @@ export default function ComplianceRequirementsConfigPage() {
         setReportEmailRecipients(data.reportEmailRecipients?.join(', ') ?? '');
         setReportDayOfMonth(data.reportDayOfMonth ?? 1);
         setNotifyNonCompliant(data.notifyNonCompliantMembers);
-        setNotifyDaysBefore(data.notifyDaysBeforeDeadline?.join(', ') ?? '30, 14, 7');
+        // '30, 14, 7' is only the *pre-save* placeholder (the initial useState
+        // above, for a config that has never been saved at all). Once a saved
+        // config exists, an explicitly cleared (null) list must render as
+        // empty — falling back to the suggested default here would put the
+        // old-looking text right back in the box after every reload, even
+        // though the database correctly holds no reminder schedule (CMP2-4).
+        setNotifyDaysBefore(data.notifyDaysBeforeDeadline?.join(', ') ?? '');
       }
     } catch {
       toast.error('Failed to load compliance configuration');
@@ -228,10 +234,14 @@ export default function ComplianceRequirementsConfigPage() {
         grace_period_days: gracePeriodDays,
         include_current_month: includeCurrentMonth,
         auto_report_frequency: autoReportFrequency,
-        report_email_recipients: recipientsList.length > 0 ? recipientsList : undefined,
+        // null (not undefined) when the officer clears the field: this same
+        // payload also drives PUT /config, whose partial-update semantics
+        // treat an omitted key as "leave untouched" — an emptied box would
+        // silently keep mailing the old recipient list. See CMP2-2.
+        report_email_recipients: recipientsList.length > 0 ? recipientsList : null,
         report_day_of_month: reportDayOfMonth,
         notify_non_compliant_members: notifyNonCompliant,
-        notify_days_before_deadline: daysList.length > 0 ? daysList : undefined,
+        notify_days_before_deadline: daysList.length > 0 ? daysList : null,
       };
 
       if (config) {
@@ -302,12 +312,22 @@ export default function ComplianceRequirementsConfigPage() {
     try {
       const profileData: ComplianceProfileCreate = {
         name: profileName.trim(),
-        description: profileDescription.trim() || undefined,
-        membership_types: profileMembershipTypes.length > 0 ? profileMembershipTypes : undefined,
-        required_requirement_ids: profileRequiredReqs.length > 0 ? profileRequiredReqs : undefined,
-        optional_requirement_ids: profileOptionalReqs.length > 0 ? profileOptionalReqs : undefined,
-        compliant_threshold_override: profileCompliantOverride ? parseFloat(profileCompliantOverride) : undefined,
-        at_risk_threshold_override: profileAtRiskOverride ? parseFloat(profileAtRiskOverride) : undefined,
+        // This payload also drives the *update* path below (PUT, a partial
+        // update per the backend's `exclude_unset`), where an omitted key
+        // means "leave alone" — so a cleared box must send an explicit null,
+        // not undefined, or the stale value survives behind a success toast
+        // (CLAUDE.md Pitfall #1). null and undefined are equivalent on the
+        // create path (both leave the schema's own None default), so using
+        // null unconditionally is correct for both branches. See CMP2-2.
+        description: profileDescription.trim() || null,
+        // Always sent (even empty) — like admin_hours_requirements below —
+        // so unchecking every entry actually clears the stored list on
+        // update instead of leaving the old selection behind.
+        membership_types: profileMembershipTypes,
+        required_requirement_ids: profileRequiredReqs,
+        optional_requirement_ids: profileOptionalReqs,
+        compliant_threshold_override: profileCompliantOverride ? parseFloat(profileCompliantOverride) : null,
+        at_risk_threshold_override: profileAtRiskOverride ? parseFloat(profileAtRiskOverride) : null,
         // Always sent (even empty) so removing the last requirement actually
         // clears the stored list on update rather than leaving it behind.
         admin_hours_requirements: profileHoursReqs,
@@ -551,18 +571,34 @@ export default function ComplianceRequirementsConfigPage() {
               </>
             )}
 
+            {/* Stored but not yet consulted. `compliance_configs.grace_period_days`
+                has no reader anywhere in the backend — its siblings on this
+                screen (`at_risk_threshold`, `include_current_month`) are read
+                by the compliance calculation and this one is not. Labelled
+                rather than removed or silently wired: an officer who sets it
+                and is told nothing believes late work is being forgiven, which
+                is the failure CLAUDE.md pitfall #19 describes. Delete this
+                notice in the change that makes the calculation read it. */}
             <div>
-              <label className={labelClass}>Grace Period (days)</label>
+              <label className={labelClass} htmlFor="grace-period-days">
+                Grace Period (days)
+              </label>
               <input
+                id="grace-period-days"
                 type="number"
                 className={inputClass}
                 min={0}
                 max={365}
                 value={gracePeriodDays}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setGracePeriodDays(Number(e.target.value))}
+                aria-describedby="grace-period-days-help"
               />
-              <p className="text-theme-text-secondary mt-1 text-xs">
-                Days after a requirement deadline before marking non-compliant
+              <p id="grace-period-days-help" className="text-theme-text-secondary mt-1 text-xs">
+                Days after a requirement deadline before marking non-compliant.
+              </p>
+              <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-500">
+                Not in effect yet — this value is saved but no compliance calculation reads it, so a deadline is not
+                extended by it.
               </p>
             </div>
 
@@ -618,6 +654,14 @@ export default function ComplianceRequirementsConfigPage() {
           {/* Notification settings */}
           <div className="border-theme-surface-border border-t pt-4">
             <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">Notifications</h3>
+            {/* Stored, not yet wired: no scheduled task or sender reads either
+                setting below (CLAUDE.md Pitfall #19 — see CMP2-1). Flagged
+                honestly here rather than implying an alert goes out, until a
+                reminder sender is built to consume them. */}
+            <p className="alert-warning mb-3 text-xs">
+              Not yet active: these settings are saved, but no reminder is sent yet. Members are not notified when they
+              become non-compliant.
+            </p>
             <div className="space-y-3">
               <label className="flex items-center gap-2">
                 <input

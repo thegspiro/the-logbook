@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
     CompetencyMatrix,
+    ExternalTrainingProvider,
     InstructorQualification,
     MemberCompetency,
     MultiAgencyTraining,
@@ -36,6 +37,7 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 
 
 def _stringify_uuids(data: dict) -> dict:
@@ -81,11 +83,57 @@ class RecertificationService:
         )
         return result.scalar_one_or_none()
 
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure every client-supplied pathway FK belongs to the current tenant."""
+        await assert_in_org(
+            self.db,
+            TrainingRequirement,
+            data.get("source_requirement_id"),
+            organization_id,
+            allow_none=True,
+            label="source requirement",
+        )
+        await assert_in_org(
+            self.db,
+            TrainingCourse,
+            data.get("assessment_course_id"),
+            organization_id,
+            allow_none=True,
+            label="assessment course",
+        )
+        await assert_all_in_org(
+            self.db,
+            TrainingCourse,
+            data.get("required_courses"),
+            organization_id,
+            label="required course",
+        )
+        await assert_all_in_org(
+            self.db,
+            RecertificationPathway,
+            data.get("prerequisite_pathway_ids"),
+            organization_id,
+            label="prerequisite pathway",
+        )
+        category_ids = [
+            entry.get("category_id")
+            for entry in (data.get("category_hour_requirements") or [])
+            if isinstance(entry, dict)
+        ]
+        await assert_all_in_org(
+            self.db,
+            TrainingCategory,
+            category_ids,
+            organization_id,
+            label="category",
+        )
+
     async def create_pathway(
         self, organization_id: str, data: dict, created_by: str
     ) -> RecertificationPathway:
         """Create a new recertification pathway"""
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         pathway = RecertificationPathway(
             organization_id=organization_id,
             created_by=created_by,
@@ -107,7 +155,9 @@ class RecertificationService:
         pathway = await self.get_pathway(pathway_id, organization_id)
         if not pathway:
             raise ValueError("Pathway not found")
-        apply_updates(pathway, _stringify_uuids(data))
+        data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
+        apply_updates(pathway, data)
         await self.db.flush()
         # `updated_at` is server-side (onupdate=func.now()), so the flush leaves
         # it expired rather than fetching the new value back. The endpoint
@@ -491,6 +541,7 @@ class TrainingEffectivenessService:
         course_id: Optional[str] = None,
         session_id: Optional[str] = None,
         level: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> list:
         """Get effectiveness evaluations with filters"""
         query = select(TrainingEffectivenessEvaluation).where(
@@ -506,6 +557,8 @@ class TrainingEffectivenessService:
             query = query.where(
                 TrainingEffectivenessEvaluation.evaluation_level == level
             )
+        if user_id:
+            query = query.where(TrainingEffectivenessEvaluation.user_id == user_id)
         result = await self.db.execute(
             query.order_by(TrainingEffectivenessEvaluation.created_at.desc())
         )
@@ -587,11 +640,31 @@ class MultiAgencyService:
         )
         return result.scalars().all()
 
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure client-supplied exercise FKs belong to the current tenant."""
+        await assert_in_org(
+            self.db,
+            TrainingSession,
+            data.get("training_session_id"),
+            organization_id,
+            allow_none=True,
+            label="training session",
+        )
+        await assert_in_org(
+            self.db,
+            TrainingRecord,
+            data.get("training_record_id"),
+            organization_id,
+            allow_none=True,
+            label="training record",
+        )
+
     async def create_exercise(
         self, organization_id: str, data: dict, created_by: str
     ) -> MultiAgencyTraining:
         """Create a multi-agency training record"""
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         # Convert participating_organizations to serializable format
         if "participating_organizations" in data:
             orgs = data["participating_organizations"]
@@ -626,6 +699,7 @@ class MultiAgencyService:
             raise ValueError("Exercise not found")
 
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         if "participating_organizations" in data:
             orgs = data["participating_organizations"]
             if orgs and hasattr(orgs[0], "model_dump"):
@@ -650,8 +724,23 @@ class XAPIService:
         organization_id: str,
         raw_statement: dict,
         source_provider_id: Optional[str] = None,
+        _provider_validated: bool = False,
     ) -> XAPIStatement:
-        """Ingest a single xAPI statement"""
+        """Ingest a single xAPI statement.
+
+        ``_provider_validated`` lets ``ingest_batch`` validate the shared
+        ``source_provider_id`` once before its loop instead of re-running the
+        same indexed query for every one of up to 1,000 statements.
+        """
+        if not _provider_validated:
+            await assert_in_org(
+                self.db,
+                ExternalTrainingProvider,
+                source_provider_id,
+                organization_id,
+                allow_none=True,
+                label="source provider",
+            )
         actor = raw_statement.get("actor", {})
         verb = raw_statement.get("verb", {})
         obj = raw_statement.get("object", {})
@@ -739,13 +828,27 @@ class XAPIService:
         source_provider_id: Optional[str] = None,
     ) -> dict:
         """Ingest a batch of xAPI statements"""
+        await assert_in_org(
+            self.db,
+            ExternalTrainingProvider,
+            source_provider_id,
+            organization_id,
+            allow_none=True,
+            label="source provider",
+        )
+
         accepted = 0
         rejected = 0
         errors = []
 
         for i, raw in enumerate(statements):
             try:
-                await self.ingest_statement(organization_id, raw, source_provider_id)
+                await self.ingest_statement(
+                    organization_id,
+                    raw,
+                    source_provider_id,
+                    _provider_validated=True,
+                )
                 accepted += 1
             except Exception as e:
                 rejected += 1
@@ -909,10 +1012,16 @@ class ReportExportService:
         organization_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        include_certifications: bool = True,
     ) -> str:
         """Generate an individual training history CSV.
 
         A missing ``start_date`` means no lower bound (lifetime export).
+
+        ``include_certifications=False`` drops the certification columns, for
+        the member-facing export of a department that has switched
+        ``show_certification_status`` off. It defaults to True so an officer
+        pulling somebody's record gets the full sheet.
         """
         if not end_date:
             end_date = date.today()
@@ -931,6 +1040,7 @@ class ReportExportService:
         records_result = await self.db.execute(query)
         records = records_result.scalars().all()
 
+        cert_headers = ["Certification #", "Issuing Agency", "Expiration Date"]
         output = io.StringIO()
         writer = SafeCsvWriter(output)
         writer.writerow(
@@ -941,9 +1051,7 @@ class ReportExportService:
                 "Completion Date",
                 "Hours",
                 "Credit Hours",
-                "Certification #",
-                "Issuing Agency",
-                "Expiration Date",
+                *(cert_headers if include_certifications else []),
                 "Score",
                 "Instructor",
                 "Location",
@@ -956,6 +1064,11 @@ class ReportExportService:
                 if hasattr(r.training_type, "value")
                 else str(r.training_type)
             )
+            cert_cells = [
+                r.certification_number or "",
+                r.issuing_agency or "",
+                str(r.expiration_date) if r.expiration_date else "",
+            ]
             writer.writerow(
                 [
                     r.course_name,
@@ -964,9 +1077,7 @@ class ReportExportService:
                     str(r.completion_date) if r.completion_date else "",
                     f"{r.hours_completed:.1f}" if r.hours_completed else "0",
                     f"{r.credit_hours:.1f}" if r.credit_hours else "",
-                    r.certification_number or "",
-                    r.issuing_agency or "",
-                    str(r.expiration_date) if r.expiration_date else "",
+                    *(cert_cells if include_certifications else []),
                     f"{r.score:.1f}" if r.score else "",
                     r.instructor or "",
                     r.location or "",
@@ -1201,10 +1312,15 @@ class ReportExportService:
         organization_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        include_certifications: bool = True,
     ) -> io.BytesIO:
         """Generate an individual training history PDF.
 
         A missing ``start_date`` means no lower bound (lifetime export).
+
+        ``include_certifications=False`` drops the Cert # and Expires columns,
+        for the member-facing export of a department that has switched
+        ``show_certification_status`` off.
         """
         from reportlab.lib.pagesizes import letter
         from reportlab.lib.units import inch
@@ -1275,9 +1391,9 @@ class ReportExportService:
             "Type",
             "Completed",
             "Hours",
-            "Cert #",
-            "Expires",
         ]
+        if include_certifications:
+            headers += ["Cert #", "Expires"]
         c.setFont("Helvetica-Bold", 8)
         for i, h in enumerate(headers):
             c.drawString(col_x[i], y, h)
@@ -1311,12 +1427,13 @@ class ReportExportService:
                 y,
                 f"{r.hours_completed:.1f}" if r.hours_completed else "0",
             )
-            c.drawString(col_x[4], y, (r.certification_number or "")[:15])
-            c.drawString(
-                col_x[5],
-                y,
-                str(r.expiration_date) if r.expiration_date else "",
-            )
+            if include_certifications:
+                c.drawString(col_x[4], y, (r.certification_number or "")[:15])
+                c.drawString(
+                    col_x[5],
+                    y,
+                    str(r.expiration_date) if r.expiration_date else "",
+                )
             y -= 14
 
         c.save()

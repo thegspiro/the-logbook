@@ -53,8 +53,17 @@ from app.services.notifications_service import NotificationsService
 from app.services.separation_of_duties import assert_different_person
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
+from app.utils.embroidery import (
+    normalize_personalization_method,
+    normalize_thread_color,
+    personalization_verb,
+    thread_color_hex,
+    thread_color_label,
+    uses_thread_color,
+)
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.size_order import size_sort_key, sort_by_size
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.storefront_payments import (
     build_payment_option,
@@ -172,6 +181,29 @@ def _payment_gate_error(
         f"{owed} This store requires payment before pickup, so it cannot be "
         f"handed over. {fix}"
     )
+
+
+def _sorted_by_product_and_size(
+    rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Order tally rows by product, then size smallest-to-largest.
+
+    The grouping query orders by ``variant_label`` because that is all SQL can
+    do with free text, and on sizes that reads L, M, S, XL — the quartermaster
+    counts a purchase order against it, so the sequence has to match a size
+    chart. Ties (and non-size labels) keep the query's alphabetical order.
+    """
+    return [
+        row
+        for _, row in sorted(
+            enumerate(rows),
+            key=lambda pair: (
+                pair[1].get("product_name") or "",
+                size_sort_key(pair[1].get("variant_label"), pair[0]),
+                pair[1].get("personalization_text") or "",
+            ),
+        )
+    ]
 
 
 def _settled_clause(settled: bool):
@@ -379,7 +411,7 @@ class StorefrontService:
         self.db.add(product)
         await self.db.flush()
 
-        for index, variant in enumerate(variants):
+        for index, variant in enumerate(self._ordered_variants(variants)):
             self.db.add(self._build_variant(product, variant, default_sort=index))
 
         try:
@@ -440,8 +472,30 @@ class StorefrontService:
             price_delta=_money(data.get("price_delta")),
             stock_quantity=data.get("stock_quantity"),
             is_active=data.get("is_active", True),
-            sort_order=data.get("sort_order") or default_sort,
+            # Server-owned, like the update path: ``_ordered_variants`` has
+            # already put the list in size order, so ``default_sort`` is the
+            # canonical index. Honouring a client ``sort_order`` here undid
+            # that — the form always submits its own row indices, so creating
+            # [S, M, L, XS] stored XS last and duplicated an index.
+            sort_order=default_sort,
         )
+
+    @staticmethod
+    def _ordered_variants(
+        variants: Sequence[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Put an incoming variant list in smallest-to-largest size order.
+
+        Ordering is settled here, on the write, so ``sort_order`` in the
+        database is canonical and every reader — the member's size chips, the
+        admin form, the vendor purchase order — gets the same sequence without
+        re-deriving it. The client's own row order is deliberately ignored:
+        sizes are added to a product over time, and appending 2XL after XL
+        happens to work while appending XS does not.
+
+        Labels that are not sizes (colors, fits) keep their entered order.
+        """
+        return sort_by_size(list(variants), lambda payload: payload.get("label"))
 
     async def _replace_variants(
         self, product: StoreProduct, variants: Sequence[Dict[str, Any]]
@@ -454,7 +508,7 @@ class StorefrontService:
         existing = {variant.id: variant for variant in product.variants}
         seen: set = set()
 
-        for index, payload in enumerate(variants):
+        for index, payload in enumerate(self._ordered_variants(variants)):
             variant_id = payload.get("id")
             current = existing.get(variant_id) if variant_id else None
             if current is not None:
@@ -463,7 +517,9 @@ class StorefrontService:
                 current.price_delta = _money(payload.get("price_delta"))
                 current.stock_quantity = payload.get("stock_quantity")
                 current.is_active = payload.get("is_active", True)
-                current.sort_order = payload.get("sort_order") or index
+                # Server-owned: ``_ordered_variants`` has already put the list
+                # in size order, so the client's row index is not consulted.
+                current.sort_order = index
                 seen.add(current.id)
             else:
                 new_variant = self._build_variant(product, payload, default_sort=index)
@@ -1074,6 +1130,15 @@ class StorefrontService:
                         product.personalization_max_length or 30
                     ),
                     "personalization_price": _money(product.personalization_price),
+                    "personalization_thread_color": normalize_thread_color(
+                        product.personalization_thread_color
+                    ),
+                    "personalization_thread_color_hex": thread_color_hex(
+                        product.personalization_thread_color
+                    ),
+                    "personalization_method": normalize_personalization_method(
+                        product.personalization_method
+                    ),
                     "available_quantity": available,
                     "is_available": available is None or available > 0,
                     "variants": variants,
@@ -1174,7 +1239,7 @@ class StorefrontService:
         result = await self.db.execute(
             select(StoreOrder.order_number).where(
                 StoreOrder.organization_id == str(organization_id),
-                StoreOrder.order_number.like(f"{prefix}%"),
+                StoreOrder.order_number.like(f"{prefix}%", escape=LIKE_ESCAPE_CHAR),
             )
         )
         highest = 0
@@ -1329,6 +1394,8 @@ class StorefrontService:
                     variant_label=line["variant_label"],
                     sku=line["sku"],
                     personalization_text=line["personalization_text"],
+                    personalization_thread_color=line["personalization_thread_color"],
+                    personalization_method=line["personalization_method"],
                     unit_price=line["unit_price"],
                     quantity=line["quantity"],
                     line_total=line["line_total"],
@@ -1551,6 +1618,26 @@ class StorefrontService:
                     "variant_label": variant.label if variant else None,
                     "sku": (variant.sku if variant and variant.sku else product.sku),
                     "personalization_text": personalization_text,
+                    # Frozen with the line: the quartermaster may switch this
+                    # product to a different thread next season, and the vendor
+                    # sheet for an order placed today must not change with it.
+                    "personalization_thread_color": (
+                        normalize_thread_color(
+                            product.personalization_thread_color
+                        ).value
+                        # Engraving has no thread. Carrying one anyway is what
+                        # put "Gold" on the vendor sheet for a challenge coin.
+                        if personalization_text
+                        and uses_thread_color(product.personalization_method)
+                        else None
+                    ),
+                    "personalization_method": (
+                        normalize_personalization_method(
+                            product.personalization_method
+                        ).value
+                        if personalization_text
+                        else None
+                    ),
                     "unit_price": unit_price,
                     "quantity": quantity,
                     "line_total": _money(unit_price * quantity),
@@ -1732,6 +1819,15 @@ class StorefrontService:
             raise ValueError("A cancelled order cannot take a payment")
         if order.payment_status == StorePaymentStatus.WAIVED:
             raise ValueError("A waived order cannot take a payment")
+        # SoD (same control as mark_order_paid/waive_order_payment/refund_order):
+        # this is the shared engine those three delegate to, and it is also
+        # reachable directly via POST /orders/{order_id}/payments, so the
+        # check belongs here rather than only on the mark-paid wrapper --
+        # calling this method directly must not be a way around it. No-ops
+        # for the reconciliation path, which passes actor_id=None.
+        assert_different_person(
+            actor_id, order.user_id, action="record a payment on", record="order"
+        )
 
         applied = _money(amount)
         if applied <= 0:
@@ -2672,7 +2768,7 @@ class StorefrontService:
             )
             .order_by(StoreOrderItem.product_name, StoreOrderItem.variant_label)
         )
-        return [
+        rows = [
             {
                 "product_id": product_id,
                 "product_name": product_name,
@@ -2690,6 +2786,10 @@ class StorefrontService:
                 line_total,
             ) in result.all()
         ]
+        # SQL can only order the labels alphabetically, which on sizes reads
+        # L, M, S, XL. Re-order in Python so the sheet the quartermaster
+        # counts against runs smallest-to-largest.
+        return _sorted_by_product_and_size(rows)
 
     async def _window_tallies(
         self,
@@ -2709,6 +2809,8 @@ class StorefrontService:
                 StoreOrderItem.variant_label,
                 StoreOrderItem.sku,
                 StoreOrderItem.personalization_text,
+                StoreOrderItem.personalization_thread_color,
+                StoreOrderItem.personalization_method,
                 func.sum(StoreOrderItem.quantity),
                 func.max(StoreOrderItem.unit_price),
                 func.coalesce(func.sum(StoreOrderItem.line_total), Decimal("0")),
@@ -2726,6 +2828,8 @@ class StorefrontService:
                 StoreOrderItem.variant_label,
                 StoreOrderItem.sku,
                 StoreOrderItem.personalization_text,
+                StoreOrderItem.personalization_thread_color,
+                StoreOrderItem.personalization_method,
             )
             .order_by(
                 StoreOrderItem.product_name,
@@ -2733,13 +2837,25 @@ class StorefrontService:
                 StoreOrderItem.personalization_text,
             )
         )
-        return [
+        rows = [
             {
                 "product_id": product_id,
                 "product_name": product_name,
                 "variant_label": variant_label,
                 "sku": sku,
                 "personalization_text": personalization_text,
+                "personalization_thread_color": (
+                    normalize_thread_color(thread_color)
+                    # An engraved line has no thread to name, and naming one
+                    # sends the vendor an instruction they cannot follow.
+                    if personalization_text and uses_thread_color(method)
+                    else None
+                ),
+                "personalization_method": (
+                    normalize_personalization_method(method)
+                    if personalization_text
+                    else None
+                ),
                 "quantity": int(quantity or 0),
                 "unit_price": _money(unit_price),
                 "line_total": _money(line_total),
@@ -2750,11 +2866,14 @@ class StorefrontService:
                 variant_label,
                 sku,
                 personalization_text,
+                thread_color,
+                method,
                 quantity,
                 unit_price,
                 line_total,
             ) in result.all()
         ]
+        return _sorted_by_product_and_size(rows)
 
     async def get_window_summary(
         self, window_id: str, organization_id: str
@@ -2961,6 +3080,8 @@ class StorefrontService:
                 "Item",
                 "Option",
                 "Personalization",
+                "Method",
+                "Thread Color",
                 "SKU",
                 "Quantity",
                 "Unit Price",
@@ -2992,6 +3113,17 @@ class StorefrontService:
                         item.product_name,
                         item.variant_label or "",
                         item.personalization_text or "",
+                        (
+                            personalization_verb(item.personalization_method)
+                            if item.personalization_text
+                            else ""
+                        ),
+                        (
+                            thread_color_label(item.personalization_thread_color)
+                            if item.personalization_text
+                            and uses_thread_color(item.personalization_method)
+                            else ""
+                        ),
                         item.sku or "",
                         item.quantity,
                         f"{_money(item.unit_price)}",

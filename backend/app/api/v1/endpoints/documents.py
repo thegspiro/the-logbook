@@ -8,10 +8,12 @@ document CRUD, and file uploads.
 import asyncio
 import os
 import uuid as uuid_lib
+from typing import Optional
 from uuid import UUID
 
 import magic
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,6 +40,34 @@ from app.services.documents_service import DocumentsService
 router = APIRouter()
 
 UPLOAD_DIR = "/app/uploads/documents"
+
+
+def _parse_uuid_or_400(value: str, field: str) -> UUID:
+    """Parse a client-supplied UUID string, or raise a clean 400.
+
+    ``UUID(value)`` raises ``ValueError`` on anything malformed, and letting
+    that escape unhandled becomes an unhandled 500 instead of a 4xx — hit in
+    practice by the upload form's own placeholder value ("general") sent as
+    ``folder_id`` when an organization has no folders yet.
+    """
+    try:
+        return UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+
+
+def _resolve_document_name(name: Optional[str], filename: Optional[str]) -> str:
+    """The document's display name: the caller's, or derived from the file.
+
+    The upload form advertises the name field as "Optional - defaults to file
+    name" and omits it entirely when left blank, so a required ``Form(...)``
+    here 422'd on that exact, normal path.
+    """
+    stripped = (name or "").strip()
+    if stripped:
+        return stripped
+    return filename or "Untitled document"
+
 
 # Allowed MIME types for document uploads (validated via magic bytes, not HTTP headers)
 ALLOWED_DOCUMENT_MIME_TYPES = {
@@ -75,7 +105,7 @@ async def list_folders(
 ):
     """List document folders the current user can access"""
     service = DocumentsService(db)
-    parent_uuid = UUID(parent_id) if parent_id else None
+    parent_uuid = _parse_uuid_or_400(parent_id, "parent_id") if parent_id else None
     folders = await service.get_folders(
         current_user.organization_id, parent_uuid, current_user=current_user
     )
@@ -121,9 +151,14 @@ async def update_folder(
 ):
     """Update a document folder"""
     service = DocumentsService(db)
-    update_data = folder.model_dump(exclude_none=True)
+    # exclude_unset, not exclude_none: this is an update payload, so an
+    # explicit null (clearing parent_id/owner_user_id) must survive to the
+    # service as "clear this field", not be dropped as if never sent
+    # (CLAUDE.md pitfall #1's update-path mirror image).
+    update_data = folder.model_dump(exclude_unset=True)
     # Wrapped so a service-layer ValueError (an out-of-org parent/owner id,
-    # DOC-6) returns 400 rather than 500, matching create_folder.
+    # DOC-6, or a cyclic parent) returns 400 rather than 500, matching
+    # create_folder.
     async with handle_service_errors("Unable to update folder"):
         updated = await service.update_folder(
             folder_id, current_user.organization_id, update_data
@@ -160,7 +195,7 @@ async def list_documents(
 ):
     """List documents with optional filtering and folder access control"""
     service = DocumentsService(db)
-    folder_uuid = UUID(folder_id) if folder_id else None
+    folder_uuid = _parse_uuid_or_400(folder_id, "folder_id") if folder_id else None
 
     # Enforce folder-level access when listing by folder
     if folder_uuid:
@@ -168,15 +203,16 @@ async def list_documents(
             await service.get_folder_by_id(folder_uuid, current_user.organization_id),
             "Folder",
         )
-        if not service.can_access_folder(folder, current_user):
+        if not await service.can_access_folder(
+            folder, current_user.organization_id, current_user
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this folder",
             )
 
-    # Restrict the listing to folders the caller may access (None = leadership,
-    # no restriction) so a folder-less listing can't surface documents from
-    # restricted/owner-only folders.
+    # Restrict the listing to folders whose full ancestry admits the caller so
+    # a folder-less listing can't surface documents from restricted trees.
     accessible = await service.accessible_folder_ids(
         current_user.organization_id, current_user
     )
@@ -205,20 +241,27 @@ async def list_documents(
 )
 async def upload_document(
     file: UploadFile = File(...),
-    name: str = Form(...),
+    name: str = Form(None),
     description: str = Form(None),
     folder_id: str = Form(None),
     tags: str = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.manage")),
 ):
-    """Upload a new document (with folder access control)"""
+    """Upload a new document (with folder access control).
+
+    ``name`` is optional — the upload form itself advertises "Optional -
+    defaults to file name" and omits the field entirely when left blank, so
+    a required ``Form(...)`` here 422'd on that exact, normal path. Falls back
+    to the uploaded filename, matching what the UI promises.
+    """
     service = DocumentsService(db)
+    name = _resolve_document_name(name, file.filename)
 
     # Enforce folder access if uploading into a specific folder
     if folder_id:
         folder = await service.get_folder_by_id(
-            UUID(folder_id), current_user.organization_id
+            _parse_uuid_or_400(folder_id, "folder_id"), current_user.organization_id
         )
         # Fail closed: a nonexistent or out-of-org folder must be rejected, not
         # silently accepted (which previously stored an unvalidated folder_id).
@@ -226,7 +269,9 @@ async def upload_document(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
             )
-        if not service.can_access_folder(folder, current_user):
+        if not await service.can_access_folder(
+            folder, current_user.organization_id, current_user
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to upload to this folder",
@@ -404,6 +449,73 @@ async def get_document(
     return document
 
 
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.view")),
+):
+    """Download a document's stored file.
+
+    ``DocumentResponse`` intentionally excludes ``file_path``, and until this
+    endpoint existed there was no way to retrieve an uploaded file's bytes at
+    all — a caller could upload and delete a document but never open it
+    (DOC-18, P1). Same ACL as ``GET /{document_id}``.
+    """
+    service = DocumentsService(db)
+    document = ensure_found(
+        await service.get_document_by_id(document_id, current_user.organization_id),
+        "Document",
+    )
+    if not await service.can_access_document(
+        document, current_user.organization_id, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # A generated document (published minutes, a property return) carries
+    # content_html and no file_path at all -- there is nothing to download,
+    # ever, for this row. Distinct 404 message from "file missing from disk"
+    # below purely for operator log clarity; both are 404 to the client.
+    if not document.file_path:
+        raise HTTPException(status_code=404, detail="Document has no downloadable file")
+
+    # Defence-in-depth: confine the resolved path to *this org's own* upload
+    # subdirectory, not the shared UPLOAD_DIR root. Every org's files live
+    # under UPLOAD_DIR, so a root-level containment check would still pass a
+    # tampered/corrupted file_path that points at another org's subdirectory
+    # and leak that org's document (DOC-24, P1). Mirrors upload_document's
+    # own save-path convention (UPLOAD_DIR/<organization_id>).
+    org_dir = os.path.realpath(
+        os.path.join(UPLOAD_DIR, str(current_user.organization_id))
+    )
+    resolved_path = os.path.realpath(document.file_path)
+    if resolved_path != org_dir and not resolved_path.startswith(org_dir + os.sep):
+        logger.warning(
+            f"Path traversal attempt blocked for document {document_id}: "
+            f"{document.file_path} resolved to {resolved_path}, outside {org_dir}"
+        )
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not await asyncio.to_thread(os.path.exists, resolved_path):
+        raise HTTPException(status_code=404, detail="Document file not found on disk")
+
+    await log_audit_event(
+        db=db,
+        event_type="document_downloaded",
+        event_category="documents",
+        severity="info",
+        event_data={"document_id": str(document_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return FileResponse(
+        path=resolved_path,
+        filename=document.file_name or document.name or "download",
+        media_type=document.file_type or "application/octet-stream",
+    )
+
+
 @router.patch("/{document_id}", response_model=DocumentResponse)
 async def update_document(
     document_id: UUID,
@@ -413,7 +525,10 @@ async def update_document(
 ):
     """Update a document's metadata"""
     service = DocumentsService(db)
-    update_data = doc.model_dump(exclude_none=True)
+    # exclude_unset, not exclude_none: an explicit null (clearing folder_id to
+    # move a document to org level) must reach the service as a clear, not be
+    # silently dropped (CLAUDE.md pitfall #1's update-path mirror image).
+    update_data = doc.model_dump(exclude_unset=True)
     # Wrapped so a service-layer ValueError (an out-of-org folder_id, DOC-6)
     # returns 400 rather than 500.
     async with handle_service_errors("Unable to update document"):

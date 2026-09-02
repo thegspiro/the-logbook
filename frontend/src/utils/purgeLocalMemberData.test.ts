@@ -4,6 +4,7 @@ const mockClearAllDrafts = vi.fn();
 const mockClearAllQueuedChecks = vi.fn();
 const mockClearAllQueuedReports = vi.fn();
 const mockClearAllGenericQueued = vi.fn();
+const mockClearAllEquipmentCheckDrafts = vi.fn();
 
 vi.mock('./shiftReportDrafts', () => ({
   clearAllDrafts: () => mockClearAllDrafts() as number,
@@ -17,6 +18,9 @@ vi.mock('./shiftReportOfflineQueue', () => ({
 vi.mock('./genericOfflineQueue', () => ({
   clearAllGenericQueued: () => mockClearAllGenericQueued() as Promise<number>,
 }));
+vi.mock('./equipmentCheckDrafts', () => ({
+  clearAllEquipmentCheckDrafts: () => mockClearAllEquipmentCheckDrafts() as Promise<number>,
+}));
 
 import { purgeLocalMemberData } from './purgeLocalMemberData';
 
@@ -27,6 +31,7 @@ describe('purgeLocalMemberData', () => {
     mockClearAllQueuedChecks.mockResolvedValue(0);
     mockClearAllQueuedReports.mockResolvedValue(0);
     mockClearAllGenericQueued.mockResolvedValue(0);
+    mockClearAllEquipmentCheckDrafts.mockResolvedValue(0);
   });
 
   it('clears every device-local store that can hold member PII', async () => {
@@ -40,6 +45,7 @@ describe('purgeLocalMemberData', () => {
     expect(mockClearAllQueuedChecks).toHaveBeenCalledWith();
     expect(mockClearAllQueuedReports).toHaveBeenCalledWith();
     expect(mockClearAllGenericQueued).toHaveBeenCalledWith();
+    expect(mockClearAllEquipmentCheckDrafts).toHaveBeenCalledWith();
   });
 
   it('reports how much unsent work was discarded', async () => {
@@ -47,10 +53,11 @@ describe('purgeLocalMemberData', () => {
     mockClearAllQueuedChecks.mockResolvedValue(2);
     mockClearAllQueuedReports.mockResolvedValue(5);
     mockClearAllGenericQueued.mockResolvedValue(1);
+    mockClearAllEquipmentCheckDrafts.mockResolvedValue(4);
 
     const result = await purgeLocalMemberData();
 
-    expect(result.drafts).toBe(3);
+    expect(result.drafts).toBe(7);
     expect(result.queuedChecks).toBe(2);
     expect(result.queuedReports).toBe(5);
     expect(result.queuedGeneric).toBe(1);

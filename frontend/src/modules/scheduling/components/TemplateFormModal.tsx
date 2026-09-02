@@ -3,8 +3,11 @@ import { useDialog } from '../../../hooks/useDialog';
 import toast from 'react-hot-toast';
 import { enumLabel } from '../../../utils/displayValue';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { X, Truck, Users, Plus, Minus, Copy, PartyPopper, Check } from 'lucide-react';
+import { X, Truck, Users, Plus, Minus, Copy, PartyPopper, Check, ClipboardCheck } from 'lucide-react';
 import type { ApparatusOption } from '../services/api';
+import { useEnabledModules } from '../../../hooks/useEnabledModules';
+import { equipmentCheckService } from '../../inventory/services/equipmentCheckApi';
+import type { EquipmentCheckTemplate } from '../../inventory/types/equipmentCheck';
 import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
 import { formatTimeOfDay, hoursBetweenTimesOfDay } from '../../../utils/dateFormatting';
 import type { TemplateFormData, PositionEntry, ResourceUnit, EventType } from './shiftTemplateTypes';
@@ -16,6 +19,7 @@ import {
   EVENT_TEMPLATE_STARTERS,
   getPositionOptions,
   emptyTemplateForm,
+  resourcePositionName,
 } from './shiftTemplateTypes';
 import { getCachedShiftSettings } from '../services/shiftSettingsApi';
 
@@ -83,6 +87,57 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
   const effectiveDuration = runsMultipleDays ? parseFloat(formData.duration_hours) : (spanHours ?? NaN);
 
+  /**
+   * Equipment checklists this template can name. Inventory owns them, so the
+   * picker is hidden when that module is off — a switched-off module is not a
+   * permission refusal, and a disabled control would read as one.
+   *
+   * `isModuleOn` answers true for an organization that has never configured
+   * its modules, so the fetch can still 403 with ORG_MODULE_DISABLED. That
+   * lands in `checklistsUnavailable`, which keeps the *count* on screen
+   * instead of blanking the field: the stored ids are still sent on save
+   * either way, so a save made while the list cannot be read does not silently
+   * delete the links.
+   */
+  const { isModuleOn } = useEnabledModules();
+  const inventoryOn = isModuleOn('inventory');
+  const [checkTemplates, setCheckTemplates] = useState<EquipmentCheckTemplate[]>([]);
+  const [checklistsUnavailable, setChecklistsUnavailable] = useState(false);
+
+  useEffect(() => {
+    // Two of these modals are mounted side by side on the templates page, so
+    // the fetch waits for the one actually open.
+    if (!isOpen || !inventoryOn) return;
+    let cancelled = false;
+    setChecklistsUnavailable(false);
+    void equipmentCheckService
+      .getEquipmentCheckTemplates()
+      .then((templates) => {
+        if (!cancelled) setCheckTemplates(templates);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCheckTemplates([]);
+          setChecklistsUnavailable(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, inventoryOn]);
+
+  const toggleChecklist = (templateId: string) => {
+    setFormData((prev) => {
+      const selected = prev.equipment_check_template_ids;
+      return {
+        ...prev,
+        equipment_check_template_ids: selected.includes(templateId)
+          ? selected.filter((id) => id !== templateId)
+          : [...selected, templateId],
+      };
+    });
+  };
+
   const loadApparatusTypeDefaults = (type: string) => {
     if (!type) return;
     // Department settings are backend-backed; the cache is warmed by the
@@ -92,7 +147,11 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     if (defaults) {
       setFormData((prev) => ({
         ...prev,
-        positions: defaults.positions.map((p) => ({ position: p, required: true })),
+        positions: defaults.positions.map((p) => ({
+          position: p,
+          required: true,
+          allow_administrative_members: false,
+        })),
         min_staffing: String(defaults.minStaffing),
       }));
     }
@@ -154,7 +213,7 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     });
   };
 
-  const updateResourcePositions = (index: number, positions: string[]) => {
+  const updateResourcePositions = (index: number, positions: ResourceUnit['positions']) => {
     setFormData((prev) => {
       const updated = [...prev.resources];
       updated[index] = { ...updated[index], positions } as ResourceUnit;
@@ -173,7 +232,13 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
       const effectivePositions: PositionEntry[] =
         formData.category === 'event' && formData.resources.length > 0
           ? formData.resources.flatMap((r) =>
-              Array.from({ length: r.quantity }, () => r.positions.map((p) => ({ position: p, required: true }))).flat()
+              Array.from({ length: r.quantity }, () =>
+                r.positions.map((p) => ({
+                  position: resourcePositionName(p),
+                  required: typeof p === 'string' ? true : p.required,
+                  allow_administrative_members: typeof p === 'string' ? false : p.allow_administrative_members === true,
+                }))
+              ).flat()
             )
           : formData.positions;
       const payload: Record<string, unknown> = {
@@ -194,11 +259,20 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
       if (formData.color) payload.color = formData.color;
       if (formData.apparatus_type) payload.apparatus_type = formData.apparatus_type;
       if (formData.apparatus_id) payload.apparatus_id = formData.apparatus_id;
+      // Sent unconditionally, including when empty. This is an update payload
+      // read with exclude_unset, so omitting the key means "leave the links
+      // alone" — an officer who unticked every checklist would get a success
+      // toast and keep them (CLAUDE.md pitfall #1). An empty array is the
+      // instruction to clear them, which restores apparatus-based resolution.
+      //
+      // Sent even when the picker is hidden because Inventory is off, so
+      // editing a template in that state does not silently delete its links.
+      payload.equipment_check_template_ids = formData.equipment_check_template_ids;
       if (formData.category === 'event') {
         const eventMeta = {
           event_type: formData.event_type || 'other',
           resources: formData.resources,
-          flat_positions: effectivePositions.length > 0 ? effectivePositions.map((p) => p.position) : [],
+          flat_positions: effectivePositions,
         };
         payload.positions = eventMeta;
       }
@@ -373,6 +447,61 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               </div>
             )}
 
+            {/* Equipment checklists.
+                Duty templates only — an event template seats volunteers at a
+                parade, it does not put a rig in service. */}
+            {(formData.category === 'standard' || formData.category === 'specialty') && inventoryOn && (
+              <div>
+                <label className="form-label mb-1.5 flex items-center gap-1.5">
+                  <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+                  Equipment checklists
+                </label>
+                {checklistsUnavailable ? (
+                  <p className="text-theme-text-muted text-xs">
+                    {formData.equipment_check_template_ids.length > 0
+                      ? `${formData.equipment_check_template_ids.length} checklist(s) configured. The list cannot be loaded right now, but saving will keep them.`
+                      : 'Checklists cannot be loaded right now.'}
+                  </p>
+                ) : checkTemplates.length === 0 ? (
+                  <p className="text-theme-text-muted text-xs">
+                    No equipment checklists have been built yet. Shifts from this template will use whatever checklists
+                    their vehicle carries.
+                  </p>
+                ) : (
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                    {checkTemplates.map((template) => {
+                      const id = String(template.id);
+                      const isSelected = formData.equipment_check_template_ids.includes(id);
+                      return (
+                        <label
+                          key={id}
+                          className="hover:bg-theme-surface-hover flex cursor-pointer items-center gap-2 rounded-md px-2 py-2"
+                        >
+                          <input
+                            type="checkbox"
+                            className="form-checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleChecklist(id)}
+                          />
+                          <span className="text-theme-text-primary min-w-0 flex-1 truncate text-sm">
+                            {template.name}
+                          </span>
+                          <span className="text-theme-text-muted shrink-0 text-xs">
+                            {template.checkTiming === 'end_of_shift' ? 'End of shift' : 'Start of shift'}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Naming checklists here replaces the ones this shift&apos;s vehicle would otherwise carry. Leave them
+                  all unticked to keep using the vehicle&apos;s own. When each is due, and who is expected to do it,
+                  stay on the checklist itself.
+                </p>
+              </div>
+            )}
+
             {/* Event-specific fields */}
             {formData.category === 'event' && (
               <>
@@ -510,7 +639,25 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                                   key={pi}
                                   className="inline-flex items-center gap-0.5 rounded-sm bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-700 capitalize dark:text-purple-300"
                                 >
-                                  {positionOptions.find((o) => o.value === pos)?.label || pos}
+                                  {positionOptions.find((o) => o.value === resourcePositionName(pos))?.label ||
+                                    resourcePositionName(pos)}
+                                  <label className="ml-1 inline-flex items-center gap-0.5 normal-case">
+                                    <input
+                                      type="checkbox"
+                                      aria-label={`Allow administrative members for ${resourcePositionName(pos)}`}
+                                      checked={typeof pos !== 'string' && pos.allow_administrative_members === true}
+                                      onChange={(event) => {
+                                        const updated = [...res.positions];
+                                        updated[pi] = {
+                                          position: resourcePositionName(pos),
+                                          required: typeof pos === 'string' ? true : pos.required,
+                                          allow_administrative_members: event.target.checked,
+                                        };
+                                        updateResourcePositions(ri, updated);
+                                      }}
+                                    />
+                                    Admin
+                                  </label>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -526,7 +673,16 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                               <select
                                 value=""
                                 onChange={(e) => {
-                                  if (e.target.value) updateResourcePositions(ri, [...res.positions, e.target.value]);
+                                  if (e.target.value) {
+                                    updateResourcePositions(ri, [
+                                      ...res.positions,
+                                      {
+                                        position: e.target.value,
+                                        required: true,
+                                        allow_administrative_members: false,
+                                      },
+                                    ]);
+                                  }
                                   e.target.value = '';
                                 }}
                                 className="bg-theme-input-bg border-theme-input-border text-theme-text-muted rounded-sm border px-1.5 py-0.5 text-[10px]"
@@ -763,6 +919,19 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                         >
                           {entry.required ? 'Required' : 'Optional'}
                         </button>
+                        <label className="text-theme-text-secondary flex items-center gap-1.5 text-xs whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={entry.allow_administrative_members === true}
+                            onChange={(e) => {
+                              const updated = [...formData.positions];
+                              updated[i] = { ...entry, allow_administrative_members: e.target.checked };
+                              setFormData((prev) => ({ ...prev, positions: updated }));
+                            }}
+                            className="border-theme-input-border rounded-sm"
+                          />
+                          Administrative access
+                        </label>
                         <button
                           type="button"
                           onClick={() => {
@@ -783,7 +952,10 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                   onClick={() =>
                     setFormData((prev) => ({
                       ...prev,
-                      positions: [...prev.positions, { position: 'firefighter', required: true }],
+                      positions: [
+                        ...prev.positions,
+                        { position: 'firefighter', required: true, allow_administrative_members: false },
+                      ],
                     }))
                   }
                   className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
@@ -810,8 +982,11 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                 onChange={(e) => setFormData((prev) => ({ ...prev, open_to_all_members: e.target.checked }))}
                 className="border-theme-input-border rounded-sm"
               />
-              Open to all members (allow non-operational members to sign up)
+              Open to all operational members regardless of rank or training
             </label>
+            <p className="text-theme-text-muted -mt-2 ml-6 text-xs">
+              Administrative members can only use positions individually marked Administrative access above.
+            </p>
           </div>
 
           <div className="border-theme-surface-border flex shrink-0 justify-end gap-3 border-t p-6 pt-4">

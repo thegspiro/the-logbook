@@ -31,6 +31,7 @@ const PATH_LABELS: Record<string, string> = {
   elections: 'Elections',
   minutes: 'Minutes',
   notifications: 'Notifications',
+  messages: 'Messages',
   documents: 'Documents',
   settings: 'Settings',
   reports: 'Reports',
@@ -93,8 +94,13 @@ const PATH_LABELS: Record<string, string> = {
 
   // Scheduling module
   patterns: 'Patterns',
-  'equipment-check-templates': 'Equipment Check Templates',
-  'equipment-check-reports': 'Equipment Check Reports',
+
+  // Equipment checklists (Inventory). The segments are shared with the rest of
+  // Inventory, so these are deliberately generic: /inventory/checklists,
+  // /inventory/admin/checklists/templates/:id, .../reports, .../supply.
+  checklists: 'Equipment Checklists',
+  'apparatus-inventory': 'Apparatus Inventory',
+  supply: 'Supply',
 
   // Other modules
   'action-items': 'Action Items',
@@ -163,7 +169,14 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
   const location = useLocation();
   const crumbs = items || generateBreadcrumbs(location.pathname);
 
-  if (crumbs.length <= 1) return null;
+  if (crumbs.length === 0) return null;
+  // A single AUTO-generated crumb is suppressed: on a top-level route like
+  // /members the trail would restate the page's own <h1> and nothing else.
+  // Explicit items are always rendered, single or not — a caller that passes
+  // items has decided this page needs a visible path back up, and dropping it
+  // silently is what left the member inbox with no route home but the
+  // dashboard.
+  if (!items && crumbs.length === 1) return null;
 
   // Crumb links grow to the 44px touch minimum below md — a bare text link is
   // ~20px tall and the Home icon 16px square, both under it. Grown with

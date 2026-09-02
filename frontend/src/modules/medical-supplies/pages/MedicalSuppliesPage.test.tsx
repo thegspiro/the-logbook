@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -60,6 +60,20 @@ const expiringLot = (overrides: Record<string, unknown> = {}) => ({
   updated_at: '2026-08-01T00:00:00Z',
   ...overrides,
 });
+
+const item = (overrides: Record<string, unknown> = {}) => ({
+  id: 'item-1',
+  name: '4x4 Gauze',
+  quantity: 1,
+  reorder_point: 5,
+  ...overrides,
+});
+
+function assertOrganizationLowStockCount(count: number): void {
+  expect(screen.getByText('Below reorder point')).toBeInTheDocument();
+  expect(screen.getByText(String(count))).toBeInTheDocument();
+  expect(screen.queryByText(/item\(s\) at or below their reorder point/i)).not.toBeInTheDocument();
+}
 
 describe('MedicalSuppliesPage', () => {
   beforeEach(() => {
@@ -257,5 +271,64 @@ describe('MedicalSuppliesPage', () => {
     await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledWith(30));
 
     expect(await screen.findByText(/Expiring within 30d/i)).toBeInTheDocument();
+  });
+
+  it('presents the organization-wide low-stock summary for an unfiltered catalog', async () => {
+    mockGetSummary.mockResolvedValue({ ...summary, low_stock: 7 });
+    mockGetItems.mockResolvedValue({ items: [item()], total: 1, skip: 0, limit: 200 });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+    await screen.findByText('4x4 Gauze');
+    assertOrganizationLowStockCount(7);
+    expect(mockGetSummary).toHaveBeenCalledWith(30);
+  });
+
+  it('does not replace the organization-wide count with low-stock search results', async () => {
+    mockGetSummary.mockResolvedValue({ ...summary, low_stock: 7 });
+    mockGetItems.mockImplementation((filters: { search?: string }) =>
+      Promise.resolve({ items: filters.search ? [item()] : [], total: filters.search ? 1 : 0, skip: 0, limit: 200 })
+    );
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+      target: { value: 'gauze' },
+    });
+
+    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze' })));
+    assertOrganizationLowStockCount(7);
+  });
+
+  it('does not replace the organization-wide count with a category-filtered count', async () => {
+    mockGetSummary.mockResolvedValue({ ...summary, low_stock: 7 });
+    mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Airway' }]);
+    mockGetItems.mockResolvedValue({ items: [item({ category_id: 'cat-1' })], total: 1, skip: 0, limit: 200 });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Filter by category/i }), 'cat-1');
+
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ category_id: 'cat-1' }))
+    );
+    assertOrganizationLowStockCount(7);
+  });
+
+  it('does not derive the organization-wide count from one page of a multi-page catalog', async () => {
+    mockGetSummary.mockResolvedValue({ ...summary, total_items: 450, low_stock: 23 });
+    mockGetItems.mockResolvedValue({
+      items: [item({ is_lot_stocked: true, lot_stock: 3, quantity: 99 })],
+      total: 450,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+    expect(await screen.findByRole('cell', { name: '3' })).toBeInTheDocument();
+    assertOrganizationLowStockCount(23);
   });
 });

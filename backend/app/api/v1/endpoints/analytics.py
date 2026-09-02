@@ -35,6 +35,19 @@ class AnalyticsEventCreate(BaseModel):
     metadata: Optional[dict] = Field(default_factory=dict)
 
 
+def _device_type_from_metadata(metadata: Optional[dict]) -> Optional[str]:
+    """Extract a metadata.deviceType fit for the device_type column (20 chars).
+
+    *metadata* is an unconstrained client-supplied dict; a non-string or
+    overlong value would otherwise reach `db.commit()` and raise an uncaught
+    DataError under MySQL strict mode instead of just being dropped.
+    """
+    value = (metadata or {}).get("deviceType")
+    if not isinstance(value, str) or not value or len(value) > 20:
+        return None
+    return value
+
+
 @router.post("/track")
 async def track_event(
     data: AnalyticsEventCreate,
@@ -47,7 +60,7 @@ async def track_event(
         event_type=data.event_type,
         event_id=data.event_id,
         user_id=str(current_user.id),
-        device_type=(data.metadata or {}).get("deviceType"),
+        device_type=_device_type_from_metadata(data.metadata),
         event_metadata=data.metadata or {},
     )
     db.add(event)
@@ -133,6 +146,12 @@ async def get_metrics(
 
         scan = aliased(AnalyticsEvent)
         checkin = aliased(AnalyticsEvent)
+        avg_where = [scan.organization_id == str(current_user.organization_id)]
+        if event_id:
+            # Every other figure in this response is event-scoped via
+            # base_filter when event_id is supplied — this one must match,
+            # or it silently reports the org-wide average instead.
+            avg_where.append(scan.event_id == event_id)
         avg_result = await db.execute(
             select(
                 func.avg(
@@ -153,7 +172,7 @@ async def get_metrics(
                     checkin.created_at > scan.created_at,
                 ),
             )
-            .where(scan.organization_id == str(current_user.organization_id))
+            .where(*avg_where)
         )
         avg_seconds = avg_result.scalar()
         if avg_seconds is not None:

@@ -9,6 +9,7 @@ import React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { formatTimeOfDay } from '../../../utils/dateFormatting';
 import { resolveTemplatePositions } from '../services/api';
+import { positionLabel } from '../utils/positionLabels';
 import type { ShiftTemplateRecord } from '../services/api';
 
 interface TemplatesOverviewCardProps {
@@ -63,8 +64,9 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
                           key={i}
                           className={`rounded-sm px-1.5 py-0.5 text-[10px] capitalize ${slot.required ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-theme-surface-hover text-theme-text-muted'}`}
                         >
-                          {slot.position}
+                          {positionLabel(slot.position)}
                           {!slot.required && ' (opt)'}
+                          {slot.allow_administrative_members && ' (administrative)'}
                         </span>
                       ))}
                     </div>

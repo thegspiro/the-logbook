@@ -13,6 +13,10 @@ reads these ordinals today, but a dump/restore or a raw ordinal comparison
 across the two shapes would silently mismatch. Reordering converts by value,
 so stored rows keep their meaning.
 
+Historical ``assignment`` request intents are normalized to ``issuance`` before
+the request type column is narrowed. Assignment remains a possible
+quartermaster fulfillment outcome, rather than a member request type.
+
 **Out-of-range data aborts this revision before anything changes.** Narrowing a
 VARCHAR to an ENUM discards any value not in the new set — MySQL raises error
 1265 under strict ``sql_mode`` and, with strict mode off, would replace the
@@ -315,8 +319,16 @@ def _assert_convertible(bind, pending) -> None:
     """Fail before any ALTER if a column holds a value the ENUM cannot store."""
     problems = []
     for table, column, values, _nullable in pending:
-        placeholders = ", ".join(f":v{i}" for i in range(len(values)))
-        params = {f"v{i}": v for i, v in enumerate(values)}
+        # The member request form once emitted ``assignment``. It is the
+        # historical spelling of an issuance request and is normalized after
+        # every column passes this preflight check.
+        accepted_values = values + (
+            ["assignment"]
+            if table == "equipment_requests" and column == "request_type"
+            else []
+        )
+        placeholders = ", ".join(f":v{i}" for i in range(len(accepted_values)))
+        params = {f"v{i}": v for i, v in enumerate(accepted_values)}
         rows = bind.execute(
             sa.text(
                 f"SELECT DISTINCT `{column}` AS value, COUNT(*) AS n "
@@ -346,6 +358,17 @@ def upgrade() -> None:
     pending = _pending(sa.inspect(bind))
 
     _assert_convertible(bind, pending)
+
+    if any(
+        table == "equipment_requests" and column == "request_type"
+        for table, column, _values, _nullable in pending
+    ):
+        bind.execute(
+            sa.text(
+                "UPDATE `equipment_requests` SET `request_type` = 'issuance' "
+                "WHERE `request_type` = 'assignment'"
+            )
+        )
 
     for table, column, values, nullable in pending:
         op.alter_column(

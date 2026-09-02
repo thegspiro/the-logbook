@@ -5,6 +5,39 @@ import { renderWithRouter } from '../../../test/utils';
 import StorageAreasPage from './StorageAreasPage';
 import type { StorageAreaResponse, Location } from '../types';
 
+const setViewportWidth = (width: number) => {
+  vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+    matches: query === '(min-width: 768px)' ? width >= 768 : false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+};
+
+const hierarchySnapshot = () => {
+  const tree = screen.getByTestId('storage-area-tree');
+  // Scoped testing-library queries, not raw DOM traversal: the "Back" button
+  // is matched by its accessible name, rows/path text by data-testid (row
+  // order/nesting is siblings-in-tree, so `within(row)` never picks up a
+  // different row's path span).
+  const backButton = within(tree).queryByRole('button', { name: /^Back from/ });
+  return {
+    backLabel: backButton?.getAttribute('aria-label') ?? null,
+    rows: within(tree)
+      .getAllByTestId('storage-area-row')
+      .map((row) => ({
+        id: row.dataset.storageAreaRow,
+        path: within(row).getByTestId('storage-area-row-path').getAttribute('title'),
+        paddingLeft: row.style.paddingLeft,
+        hasMobileIndicator: row.classList.contains('border-l-2'),
+      })),
+  };
+};
+
 const mockGetLocations = vi.fn();
 const mockGetFacilities = vi.fn();
 const mockGetStorageAreas = vi.fn();
@@ -74,6 +107,44 @@ describe('StorageAreasPage', () => {
     mockCreateStorageArea.mockResolvedValue({});
     mockUpdateStorageArea.mockResolvedValue({});
     mockDeleteStorageArea.mockResolvedValue({});
+    setViewportWidth(1024);
+  });
+
+  it.each([320, 375])('matches the mobile three-level hierarchy snapshot at %ipx', async (width) => {
+    setViewportWidth(width);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'cab', name: 'Cab', item_count: 4 }),
+      makeArea({ id: 'medical', name: 'Medical bag', parent_id: 'cab', item_count: 12 }),
+      makeArea({ id: 'airway', name: 'Airway pouch', parent_id: 'medical', item_count: 3 }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Cab');
+
+    await user.click(screen.getByRole('button', { name: 'Open Cab' }));
+    await user.click(screen.getByRole('button', { name: 'Open Medical bag' }));
+    expect(screen.getByLabelText('Cab › Medical bag › Airway pouch')).toBeInTheDocument();
+    expect(screen.queryByText('Cab', { selector: '[aria-hidden="true"]' })).not.toBeInTheDocument();
+
+    expect(hierarchySnapshot()).toMatchSnapshot();
+  });
+
+  it.each([768, 1024])('matches the desktop three-level hierarchy snapshot at %ipx', async (width) => {
+    setViewportWidth(width);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'cab', name: 'Cab', item_count: 4 }),
+      makeArea({ id: 'medical', name: 'Medical bag', parent_id: 'cab', item_count: 12 }),
+      makeArea({ id: 'airway', name: 'Airway pouch', parent_id: 'medical', item_count: 3 }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Cab');
+
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    await user.click(screen.getAllByRole('button', { name: 'Expand' })[0] as HTMLElement);
+    expect(screen.getByLabelText('Cab › Medical bag › Airway pouch')).toBeInTheDocument();
+
+    expect(hierarchySnapshot()).toMatchSnapshot();
   });
 
   it('shows every storage area when no facility or room is selected', async () => {
@@ -88,6 +159,40 @@ describe('StorageAreasPage', () => {
     expect(screen.getByText('Cabinet B')).toBeInTheDocument();
     expect(screen.getByText('Homeless Bin')).toBeInTheDocument();
     expect(mockGetStorageAreas).toHaveBeenCalledWith({ flat: true });
+  });
+
+  it('makes the whole name the drill-in target on a phone', async () => {
+    // The chevron is 24px and sits at the row's left edge; a fingertip aimed
+    // at the name — which is what looks tappable — did nothing, and a
+    // near-miss to the right hit the item-count button instead.
+    setViewportWidth(375);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'cab', name: 'Cab', item_count: 4 }),
+      makeArea({ id: 'medical', name: 'Medical bag', parent_id: 'cab', item_count: 12 }),
+    ]);
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Cab');
+
+    const opener = screen.getByRole('button', { name: 'Open Cab' });
+
+    // One control per row, not two with the same name, and it carries the
+    // name rather than sitting beside it.
+    expect(screen.getAllByRole('button', { name: 'Open Cab' })).toHaveLength(1);
+    expect(opener).toHaveTextContent('Cab');
+    expect(opener.className).toContain('min-h-11');
+  });
+
+  it('leaves the chevron as the control on a laptop, where rows expand', async () => {
+    setViewportWidth(1024);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'cab', name: 'Cab', item_count: 4 }),
+      makeArea({ id: 'medical', name: 'Medical bag', parent_id: 'cab', item_count: 12 }),
+    ]);
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Cab');
+
+    expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Cab' })).not.toBeInTheDocument();
   });
 
   it('says so plainly when the organization has no storage areas at all', async () => {

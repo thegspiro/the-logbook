@@ -33,7 +33,7 @@ import {
 import toast from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { PrinterLanguage, labelPrinterService, labelService, Symbology } from '../../services/labelService';
-import type { LabelPrinterConfig } from '../../services/labelService';
+import type { LabelPrinterConfig, PrintLabelsResult } from '../../services/labelService';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
 import { prefersPdfOverBrowserPrint } from '../../utils/printEnvironment';
@@ -64,8 +64,14 @@ interface LabelPrintPageProps {
 
 // The symbology is part of the key so switching Code 128 <-> QR is a change
 // worth persisting, not one the comparison swallows.
-const presetKey = (preset: string, w: string, h: string, symbology: string) =>
-  `${preset === CUSTOM_PRESET_ID ? `custom:${w}x${h}` : preset}:${symbology}`;
+// The printer segment while the member has not chosen one. Not '' — an empty
+// string is also what `selectedPrinterId` holds before the printer list lands,
+// so the two would compare equal and a resolved printer would look like no
+// change at all. A sentinel keeps "not my decision" distinct from any id.
+const SAME_PRINTER = '\u0000same';
+
+const presetKey = (preset: string, w: string, h: string, symbology: string, printerId: string) =>
+  `${preset === CUSTOM_PRESET_ID ? `custom:${w}x${h}` : preset}:${symbology}:${printerId}`;
 
 const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset; symbology: Symbology }> = ({
   item,
@@ -151,7 +157,12 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
   const [customHeight, setCustomHeight] = useState('1');
   const [printers, setPrinters] = useState<LabelPrinterConfig[]>([]);
   const [selectedPrinterId, setSelectedPrinterId] = useState('');
+  // Whether the member has chosen a printer on this visit, as opposed to the
+  // page resolving one for them. Only the former is worth remembering.
+  const printerTouchedRef = useRef(false);
+  const [preferredPrinterId, setPreferredPrinterId] = useState<string | null | undefined>(undefined);
   const [sendingToPrinter, setSendingToPrinter] = useState(false);
+  const [printResult, setPrintResult] = useState<PrintLabelsResult | null>(null);
   const [symbology, setSymbology] = useState<Symbology>(Symbology.CODE128);
 
   const lastSavedKeyRef = useRef<string | null>(null);
@@ -212,6 +223,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
       try {
         const pref = await labelService.getPreset(module);
         if (cancelled) return;
+        setPreferredPrinterId(pref.printer_id ?? null);
         let w = customWidth;
         let h = customHeight;
         if (pref?.symbology === Symbology.QR || pref?.symbology === Symbology.CODE128) {
@@ -229,12 +241,13 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
               setCustomHeight(h);
             }
           }
-          lastSavedKeyRef.current = presetKey(pref.preset, w, h, pref.symbology ?? symbology);
+          lastSavedKeyRef.current = presetKey(pref.preset, w, h, pref.symbology ?? symbology, SAME_PRINTER);
         } else {
-          lastSavedKeyRef.current = presetKey(presetId, w, h, symbology);
+          lastSavedKeyRef.current = presetKey(presetId, w, h, symbology, SAME_PRINTER);
         }
       } catch {
-        lastSavedKeyRef.current = presetKey(presetId, customWidth, customHeight, symbology);
+        setPreferredPrinterId(null);
+        lastSavedKeyRef.current = presetKey(presetId, customWidth, customHeight, symbology, SAME_PRINTER);
       }
     })();
     return () => {
@@ -252,8 +265,6 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         const list = await labelPrinterService.list();
         if (cancelled) return;
         setPrinters(list);
-        const preferred = list.find((p) => p.is_default) ?? list[0];
-        if (preferred) setSelectedPrinterId(preferred.id);
       } catch {
         /* printing to a network printer is optional; the PDF paths still work */
       }
@@ -263,17 +274,37 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
     };
   }, []);
 
+  // A role's remembered destination wins over the organization default. A
+  // deleted or disabled destination falls back safely to an active printer.
+  useEffect(() => {
+    if (preferredPrinterId === undefined || printers.length === 0) return;
+    const preferred =
+      printers.find((p) => p.id === preferredPrinterId) ?? printers.find((p) => p.is_default) ?? printers[0];
+    if (preferred) setSelectedPrinterId(preferred.id);
+  }, [preferredPrinterId, printers]);
+
   // Persist a deliberate change to the position (debounced, best-effort).
+  //
+  // The printer is only part of that once the member has actually picked one.
+  // The effect above *resolves* a printer — the position's remembered one, or
+  // the organization default, or whichever row happens to sort first — and
+  // treating that as a choice pinned it into the position's shared settings
+  // with nobody touching a control: an admin later marking a different printer
+  // as the org default would be ignored for good. `printer_id` is therefore
+  // left out of both the key and the payload until the select fires, and the
+  // backend reads its absence as "leave the remembered destination alone".
   useEffect(() => {
     if (lastSavedKeyRef.current === null) return;
     if (isCustom && !customValid) return;
-    const key = presetKey(presetId, customWidth, customHeight, symbology);
+    const printerSegment = printerTouchedRef.current ? selectedPrinterId : SAME_PRINTER;
+    const key = presetKey(presetId, customWidth, customHeight, symbology, printerSegment);
     if (key === lastSavedKeyRef.current) return;
     const timer = setTimeout(() => {
       lastSavedKeyRef.current = key;
       void labelService
         .setPreset(module, {
           preset: presetId,
+          ...(printerTouchedRef.current ? { printer_id: selectedPrinterId || null } : {}),
           symbology,
           ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
         })
@@ -282,7 +313,18 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
         });
     }, 500);
     return () => clearTimeout(timer);
-  }, [module, presetId, customWidth, customHeight, isCustom, customValid, customW, customH, symbology]);
+  }, [
+    module,
+    presetId,
+    customWidth,
+    customHeight,
+    isCustom,
+    customValid,
+    customW,
+    customH,
+    symbology,
+    selectedPrinterId,
+  ]);
 
   const labelItems: LabelListItem[] = [];
   for (let c = 0; c < copies; c++) for (const it of items) labelItems.push(it);
@@ -301,6 +343,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
   const sendToPrinter = async () => {
     if (!selectedPrinter || items.length === 0) return;
     setSendingToPrinter(true);
+    setPrintResult(null);
     try {
       const result = await labelPrinterService.print(
         module,
@@ -319,6 +362,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
           symbology,
         }
       );
+      setPrintResult(result);
       if (result.auto_populated > 0) {
         toast.success(
           `${result.auto_populated} record${result.auto_populated !== 1 ? 's' : ''} had a barcode generated`
@@ -529,16 +573,24 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   onClick={() => {
                     void sendToPrinter();
                   }}
-                  disabled={sendingToPrinter || !canSendToPrinter || items.length === 0 || (isCustom && !customValid)}
+                  disabled={
+                    sendingToPrinter ||
+                    !canSendToPrinter ||
+                    printerStockMismatch ||
+                    items.length === 0 ||
+                    (isCustom && !customValid)
+                  }
                   title={
                     canSendToPrinter
-                      ? `Send directly to ${selectedPrinter?.name ?? 'the label printer'}`
+                      ? printerStockMismatch
+                        ? 'Match the label size to the stock loaded in this printer first'
+                        : `Print directly to ${selectedPrinter?.name ?? 'the label printer'}`
                       : 'Choose a thermal label size to send directly to a label printer'
                   }
                   className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
                 >
                   {sendingToPrinter ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  <span className="hidden sm:inline">Send to</span> Printer
+                  {selectedPrinter ? `Print to ${selectedPrinter.name}` : 'Print to network printer'}
                 </button>
               )}
               <button
@@ -546,10 +598,42 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                 disabled={items.length === 0 || (isCustom && !customValid)}
                 className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
               >
-                <Printer className="h-4 w-4" /> <span className="hidden sm:inline">Print</span> Labels
+                <Printer className="h-4 w-4" /> Browser print dialog
               </button>
             </div>
           </div>
+
+          {printResult ? (
+            <div
+              className={`mb-4 rounded-lg border p-4 ${
+                printResult.printer_errors.length > 0
+                  ? 'border-red-500/30 bg-red-500/10'
+                  : 'border-emerald-500/30 bg-emerald-500/10'
+              }`}
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-theme-text-primary text-sm font-medium">
+                {printResult.labels_sent} label{printResult.labels_sent === 1 ? '' : 's'} sent to{' '}
+                {printResult.printer_name}
+              </p>
+              {printResult.printer_errors.length > 0 ? (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  Printer fault: {printResult.printer_errors.join(', ')}
+                </p>
+              ) : printResult.printer_warnings.length > 0 ? (
+                <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+                  Printer warning: {printResult.printer_warnings.join(', ')}
+                </p>
+              ) : !printResult.status_known ? (
+                <p className="text-theme-text-muted mt-1 text-sm">
+                  Delivery could not be confirmed because this printer does not report its status. Check the tray.
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-emerald-600 dark:text-emerald-400">The printer reported no faults.</p>
+              )}
+            </div>
+          ) : null}
 
           <div className="mb-4 flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
@@ -648,7 +732,10 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   <select
                     id="label-printer"
                     value={selectedPrinterId}
-                    onChange={(e) => setSelectedPrinterId(e.target.value)}
+                    onChange={(e) => {
+                      printerTouchedRef.current = true;
+                      setSelectedPrinterId(e.target.value);
+                    }}
                     className="form-input w-full sm:w-80"
                   >
                     {printers.map((p) => (

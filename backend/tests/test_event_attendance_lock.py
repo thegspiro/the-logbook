@@ -235,7 +235,7 @@ class TestReopen:
     async def test_reopen_clears_the_lock_and_the_derived_durations(self):
         event = _event()
         derived = SimpleNamespace(attendance_duration_minutes=120)
-        db = _mock_db(_one(event), _all([derived]))
+        db = _mock_db(_one(event), _all([derived]), _one(event))
         svc = EventService(db)
 
         result, err = await svc.reopen_event_attendance("event-1", "org-1")
@@ -260,7 +260,7 @@ class TestReopen:
                 "room_setup": "hall",
             }
         )
-        db = _mock_db(_one(event), _all([]))
+        db = _mock_db(_one(event), _all([]), _one(event))
         svc = EventService(db)
 
         await svc.reopen_event_attendance("event-1", "org-1")
@@ -274,13 +274,47 @@ class TestReopen:
         committed state, and the write can be a silent no-op."""
         committed = {"attendance_finalized": True, "registration": {"limit": 5}}
         event = _event(custom_fields=committed)
-        db = _mock_db(_one(event), _all([]))
+        db = _mock_db(_one(event), _all([]), _one(event))
 
         await EventService(db).reopen_event_attendance("event-1", "org-1")
 
         assert event.custom_fields is not committed
         assert event.custom_fields["registration"] is not committed["registration"]
         assert committed["attendance_finalized"] is True
+
+    async def test_reopen_eager_loads_the_location_for_the_response(self):
+        """The endpoint serializes the reopened event through
+        _build_event_response, which reads event.location_obj. Loaded lazily
+        that is IO outside the greenlet context — MissingGreenlet, surfacing as
+        a 500 on every event that has a location, while location-less events
+        short-circuit and look fine.
+
+        The eager load sits on the post-commit re-read, not on the locked
+        fetch: FOR UPDATE is meant for the event row alone."""
+        reopened = _event()
+        db = _mock_db(_one(_event()), _all([]), _one(reopened))
+
+        result, err = await EventService(db).reopen_event_attendance("event-1", "org-1")
+
+        assert err is None
+        assert result is reopened
+        statement = db.execute.await_args.args[0]
+        loaded = {
+            str(element)
+            for option in statement._with_options
+            for element in option.path
+        }
+        assert "Event.location_obj" in loaded
+
+    async def test_an_event_deleted_mid_reopen_reports_not_found(self):
+        """The reopen itself has committed; there is simply no row left to
+        serialize, and a 404 says that better than a lazy-load crash."""
+        db = _mock_db(_one(_event()), _all([]), _one(None))
+
+        result, err = await EventService(db).reopen_event_attendance("event-1", "org-1")
+
+        assert result is None
+        assert err == "Event not found"
 
     async def test_reopening_an_open_event_is_refused(self):
         svc = EventService(_mock_db(_one(_event(finalized=False))))
@@ -385,7 +419,7 @@ class TestRemovingAnAttendeeTakesTheHoursWithIt:
             err = await svc.remove_attendee("event-1", "user-1", "org-1")
 
         assert err is None
-        delete_entries.assert_awaited_once_with("rsvp-1")
+        delete_entries.assert_awaited_once_with("rsvp-1", "org-1")
 
 
 class TestBackfillMigration:
@@ -540,6 +574,139 @@ class TestCustomFieldsCannotDropTheMarker:
 
         assert event.custom_fields["attendance_finalized"] is True
         assert event.custom_fields["room"] == "bay"
+
+
+class TestLockIsAnAtomicTransition:
+    """PR #1791 review, P1: the guard was check-then-act. Finalize read the
+    event without a row lock and so did every writer, so a check-in could
+    commit between finalize's roster snapshot and the close — leaving that
+    member checked in, uncredited, and behind a lock with no way to see why."""
+
+    def _locked(self, statement) -> bool:
+        return (
+            "for update"
+            in str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+        )
+
+    async def test_finalize_takes_the_row_lock(self):
+        db = _mock_db(_one(None))
+        await EventService(db).finalize_event_attendance("event-1", "org-1")
+        assert self._locked(db.execute.await_args.args[0])
+
+    async def test_reopen_takes_the_row_lock(self):
+        db = _mock_db(_one(None))
+        await EventService(db).reopen_event_attendance("event-1", "org-1")
+        assert self._locked(db.execute.await_args.args[0])
+
+    async def test_every_attendance_writer_takes_it_too(self):
+        """A writer that reads the lock and then writes has to hold the row, or
+        it can act on a decision another transaction has already invalidated."""
+        svc_calls = [
+            ("check_in_attendee", lambda s: s.check_in_attendee("e", "u", "o")),
+            (
+                "manager_add_attendee",
+                lambda s: s.manager_add_attendee(
+                    event_id="e", user_id="u", organization_id="o", manager_id="m"
+                ),
+            ),
+            (
+                "override_rsvp_attendance",
+                lambda s: s.override_rsvp_attendance(
+                    event_id="e",
+                    user_id="u",
+                    organization_id="o",
+                    manager_id="m",
+                    override_data=SimpleNamespace(model_dump=lambda **_: {}),
+                ),
+            ),
+            ("remove_attendee", lambda s: s.remove_attendee("e", "u", "o")),
+            (
+                "record_actual_times",
+                lambda s: s.record_actual_times(
+                    event_id="e",
+                    organization_id="o",
+                    actual_start_time=None,
+                    actual_end_time=None,
+                ),
+            ),
+            ("end_event", lambda s: s.end_event("e", "o")),
+            ("self_check_in", lambda s: s.self_check_in("e", "u", "o")),
+            ("delete_event", lambda s: s.delete_event("e", "o")),
+        ]
+        for name, call in svc_calls:
+            db = _mock_db(_one(None))
+            await call(EventService(db))
+            assert self._locked(
+                db.execute.await_args.args[0]
+            ), f"{name} does not lock the event row"
+
+
+class TestBulkPathsHoldTheRowsToo:
+    """PR #1798 review, P1: the single-event fetches took the lock and the
+    series paths did not, so a bulk delete/cancel/retime could still pass its
+    finalized check and then act after finalization committed."""
+
+    def _locked(self, statement) -> bool:
+        return (
+            "for update"
+            in str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+        )
+
+    async def test_series_delete_locks_every_occurrence(self):
+        db = _mock_db(_all([]))
+        await EventService(db).delete_event_series("parent-1", "org-1")
+        assert self._locked(db.execute.await_args.args[0])
+
+    async def test_series_cancel_locks_every_occurrence(self):
+        db = _mock_db(_all([]))
+        await EventService(db).cancel_series("parent-1", "org-1", "weather")
+        assert self._locked(db.execute.await_args.args[0])
+
+
+class TestCreditRunsInsideTheLock:
+    """PR #1798 review, P1: committing the close before crediting released the
+    row lock while the credit loop was still running off a captured roster, so
+    a reopen could land mid-loop and the stale writes would overwrite the
+    correction. One commit now covers both."""
+
+    async def test_finalize_commits_once_after_crediting(self):
+        event = _event(finalized=False, event_type=None)
+        rsvp = SimpleNamespace(
+            id="rsvp-1",
+            user_id="user-1",
+            checked_in=True,
+            checked_in_at=event.start_datetime,
+            checked_out_at=event.end_datetime,
+            override_duration_minutes=None,
+            override_check_in_at=None,
+            attendance_duration_minutes=60,
+            early_check_in_minutes=None,
+        )
+        db = _mock_db(_one(event), _all([]), _all([rsvp]))
+        svc = EventService(db)
+
+        commits_when_credited = []
+        with patch("app.services.event_service.AdminHoursService") as ahs_cls, patch(
+            "app.services.event_service.NotificationsService"
+        ) as notif_cls:
+
+            async def _credit(**_kwargs):
+                # The close must already be staged, and nothing committed yet:
+                # that is what keeps the row lock held across the credit.
+                commits_when_credited.append(db.commit.await_count)
+                return 1
+
+            ahs_cls.return_value.credit_event_attendance = AsyncMock(
+                side_effect=_credit
+            )
+            notif_cls.return_value.archive_related_notifications = AsyncMock()
+            await svc.finalize_event_attendance("event-1", "org-1")
+
+        assert commits_when_credited == [0], (
+            "crediting ran after a commit, so the event row lock was already "
+            "released while stale credit writes were still landing"
+        )
+        assert event.attendance_finalized_at is not None
 
 
 class TestNewQueriesAreOrgScoped:

@@ -34,9 +34,78 @@ def service(mock_db):
     return EquipmentCheckService(mock_db)
 
 
+class TestCloneCompartment:
+    @staticmethod
+    def source():
+        item = SimpleNamespace(
+            equipment_id=None,
+            inventory_item_id="inventory-1",
+            name="Portable suction",
+            description="Charged",
+            sort_order=0,
+            check_type="function",
+            is_required=True,
+            required_quantity=None,
+            expected_quantity=None,
+            critical_minimum_quantity=None,
+            min_level=None,
+            level_unit=None,
+            serial_number="S-1",
+            lot_number=None,
+            image_url=None,
+            has_expiration=False,
+            expiration_date=None,
+            expiration_warning_days=30,
+        )
+        return SimpleNamespace(
+            template_id="template-1",
+            name="Cab",
+            description="Officer side",
+            image_url=None,
+            is_header=False,
+            container_type="compartment",
+            is_sealed=False,
+            parent_compartment_id=None,
+            items=[item],
+        )
+
+    async def test_rolls_back_the_whole_clone_when_commit_fails(self, service, mock_db):
+        mock_db.commit.side_effect = RuntimeError("database unavailable")
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=self.source(),
+        ):
+            with pytest.raises(RuntimeError, match="database unavailable"):
+                await service.clone_compartment("cab", "org-1", 1)
+
+        mock_db.rollback.assert_awaited_once()
+        assert mock_db.add.call_count == 2
+
+    async def test_clone_advances_template_revision(self, service, mock_db):
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = SimpleNamespace(id="clone-1")
+        mock_db.execute.return_value = result
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=self.source(),
+            ),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await service.clone_compartment("cab", "org-1", 1)
+
+        advance.assert_awaited_once_with("template-1")
+
+
 class TestUpdateTemplateApparatusValidation:
     async def test_foreign_apparatus_rejected(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -55,7 +124,7 @@ class TestUpdateTemplateApparatusValidation:
         mock_db.commit.assert_not_awaited()
 
     async def test_in_org_apparatus_passes(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -73,7 +142,7 @@ class TestUpdateTemplateApparatusValidation:
         mock_db.commit.assert_awaited_once()
 
     async def test_no_apparatus_change_skips_validation(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -89,7 +158,7 @@ class TestUpdateTemplateApparatusValidation:
 
     async def test_clearing_apparatus_skips_validation(self, service, mock_db):
         # apparatus_id=None clears it (a generic template) — not a foreign-id case.
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -109,6 +178,56 @@ class TestUpdateTemplateApparatusValidation:
         ):
             result = await service.update_template("tmpl-x", "org-1", {"name": "X"})
         assert result is None
+
+
+class TestTemplatePublicationValidation:
+    @pytest.mark.parametrize(
+        ("compartments", "message"),
+        [
+            ([], "operational compartment"),
+            ([{"name": "Cab", "items": []}], "cannot be empty"),
+            (
+                [
+                    {
+                        "name": "Cab",
+                        "items": [{"name": "Oxygen", "check_type": "quantity"}],
+                    }
+                ],
+                "required or expected quantity",
+            ),
+            (
+                [{"name": "Cab", "items": [{"name": "Oxygen", "check_type": "level"}]}],
+                "minimum level",
+            ),
+        ],
+    )
+    def test_activation_rejects_blocking_configuration(
+        self, service, compartments, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            service._validate_publishable_data({"name": "Daily check"}, compartments)
+
+    def test_complete_configuration_can_be_published(self, service):
+        service._validate_publishable_data(
+            {"name": "Daily check"},
+            [
+                {
+                    "name": "Cab",
+                    "items": [
+                        {
+                            "name": "Masks",
+                            "check_type": "quantity",
+                            "expected_quantity": 4,
+                        },
+                        {"name": "Oxygen", "check_type": "level", "min_level": 500},
+                    ],
+                }
+            ],
+        )
+
+    def test_submitter_visibility_excludes_drafts(self, service):
+        draft = SimpleNamespace(is_active=False, assigned_positions=None)
+        assert service._template_visible_to_submitter(draft, {"driver"}) is False
 
 
 class TestBulkItemCreation:
@@ -132,6 +251,9 @@ class TestBulkItemCreation:
                 return_value=MagicMock(),
             ),
             patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
         ):
             created, replayed = await service.add_items_bulk(
                 "comp-1",
@@ -144,6 +266,7 @@ class TestBulkItemCreation:
         assert [item.name for item in created] == ["A", "B"]
         assert [item.sort_order for item in created] == [8, 9]
         assert replayed is False
+        advance.assert_awaited_once()
         mock_db.commit.assert_awaited_once()
 
     async def test_invalid_foreign_key_writes_nothing(self, service, mock_db):
@@ -168,7 +291,181 @@ class TestBulkItemCreation:
                 )
         mock_db.add.assert_not_called()
         mock_db.commit.assert_not_awaited()
+
+
+class TestBulkItemDeletion:
+    """A delete batch is parent-scoped, atomic, and retry-safe."""
+
+    @staticmethod
+    def result(items):
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = None
+        result.scalars.return_value.all.return_value = items
+        return result
+
+    async def test_deletes_complete_validated_batch_in_one_commit(
+        self, service, mock_db
+    ):
+        compartment = SimpleNamespace(template_id="template-1")
+        items = [
+            SimpleNamespace(id="item-1", name="Radio"),
+            SimpleNamespace(id="item-2", name="Light"),
+        ]
+        mock_db.execute.side_effect = [
+            self.result([]),
+            self.result([]),
+            self.result(items),
+        ]
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=compartment,
+            ),
+            patch.object(service, "log_template_change", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            deleted, replayed = await service.delete_items_bulk(
+                "comp-1",
+                "org-1",
+                ["item-1", "item-2"],
+                "request-123",
+                "user-1",
+                "Tester",
+            )
+        assert deleted == ["item-1", "item-2"]
+        assert replayed is False
+        assert mock_db.delete.await_count == 2
+        advance.assert_awaited_once_with("template-1")
+        mock_db.commit.assert_awaited_once()
+
+    async def test_wrong_parent_rolls_back_without_deleting(self, service, mock_db):
+        mock_db.execute.side_effect = [
+            self.result([]),
+            self.result([]),
+            self.result([SimpleNamespace(id="item-1", name="Radio")]),
+        ]
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(template_id="template-1"),
+        ):
+            with pytest.raises(ValueError, match="specified compartment"):
+                await service.delete_items_bulk(
+                    "comp-1",
+                    "org-1",
+                    ["item-1", "foreign-item"],
+                    "request-123",
+                    "user-1",
+                    "Tester",
+                )
+        mock_db.delete.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
         mock_db.rollback.assert_awaited_once()
+
+    async def test_delete_failure_rolls_back_entire_batch(self, service, mock_db):
+        items = [
+            SimpleNamespace(id="item-1", name="Radio"),
+            SimpleNamespace(id="item-2", name="Light"),
+        ]
+        mock_db.execute.side_effect = [
+            self.result([]),
+            self.result([]),
+            self.result(items),
+        ]
+        mock_db.delete.side_effect = [None, RuntimeError("database failure")]
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(template_id="template-1"),
+            ),
+            patch.object(service, "log_template_change", new_callable=AsyncMock),
+        ):
+            with pytest.raises(RuntimeError, match="database failure"):
+                await service.delete_items_bulk(
+                    "comp-1",
+                    "org-1",
+                    ["item-1", "item-2"],
+                    "request-123",
+                    "user-1",
+                    "Tester",
+                )
+        mock_db.commit.assert_not_awaited()
+        mock_db.rollback.assert_awaited_once()
+
+    async def test_retry_returns_confirmed_ids_without_deleting(self, service, mock_db):
+        item_ids = ["item-1", "item-2"]
+        payload_hash = (
+            __import__("hashlib")
+            .sha256(__import__("json").dumps(item_ids, separators=(",", ":")).encode())
+            .hexdigest()
+        )
+        ledger = SimpleNamespace(payload_hash=payload_hash, item_ids=item_ids)
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = ledger
+        mock_db.execute.return_value = result
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(template_id="template-1"),
+        ):
+            deleted, replayed = await service.delete_items_bulk(
+                "comp-1",
+                "org-1",
+                item_ids,
+                "request-123",
+                "user-1",
+                "Tester",
+            )
+        assert deleted == item_ids
+        assert replayed is True
+        mock_db.delete.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
+
+    async def test_locks_parent_before_current_ledger_read(self, service, mock_db):
+        item_ids = ["item-1"]
+        payload_hash = (
+            __import__("hashlib")
+            .sha256(__import__("json").dumps(item_ids, separators=(",", ":")).encode())
+            .hexdigest()
+        )
+        ledger = SimpleNamespace(payload_hash=payload_hash, item_ids=item_ids)
+        parent_result = self.result([])
+        ledger_result = MagicMock()
+        ledger_result.scalars.return_value.first.return_value = ledger
+        mock_db.execute.side_effect = [parent_result, ledger_result]
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(template_id="template-1"),
+        ):
+            deleted, replayed = await service.delete_items_bulk(
+                "comp-1",
+                "org-1",
+                item_ids,
+                "request-123",
+                "user-1",
+                "Tester",
+            )
+
+        assert deleted == item_ids
+        assert replayed is True
+        parent_statement = mock_db.execute.await_args_list[0].args[0]
+        ledger_statement = mock_db.execute.await_args_list[1].args[0]
+        assert parent_statement._for_update_arg is not None
+        assert ledger_statement._for_update_arg is not None
+
+
+class TestBulkItemCreationFailures(TestBulkItemCreation):
+    """Additional creation failure and replay cases."""
 
     async def test_flush_failure_rolls_back_complete_batch(self, service, mock_db):
         mock_db.execute.return_value = self.empty_result()
@@ -236,6 +533,103 @@ class TestBulkItemCreation:
         assert replayed is True
         mock_db.add.assert_not_called()
         mock_db.commit.assert_not_awaited()
+
+
+class TestTemplateContentRevision:
+    """Every compartment/item content mutation invalidates older drafts."""
+
+    @staticmethod
+    def result_with(value):
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = value
+        return result
+
+    async def test_revision_advance_atomically_unpublishes_template(
+        self, service, mock_db
+    ):
+        await service._advance_content_revision("tmpl-1")
+
+        statement = mock_db.execute.await_args.args[0]
+        assert statement.compile().params["is_active"] is False
+
+    @pytest.mark.parametrize(
+        ("method", "args", "getter", "entity"),
+        [
+            (
+                "update_compartment",
+                ("comp-1", "org-1", {"name": "New"}),
+                "_get_compartment",
+                "compartment",
+            ),
+            (
+                "delete_compartment",
+                ("comp-1", "org-1"),
+                "_get_compartment",
+                "compartment",
+            ),
+            (
+                "reorder_compartments",
+                ("tmpl-1", "org-1", ["comp-1"]),
+                "get_template",
+                "template",
+            ),
+            (
+                "add_item",
+                ("comp-1", "org-1", {"name": "Mask"}),
+                "_get_compartment",
+                "compartment",
+            ),
+            ("update_item", ("item-1", "org-1", {"name": "New"}), "_get_item", "item"),
+            ("delete_item", ("item-1", "org-1"), "_get_item", "item"),
+            (
+                "reorder_items",
+                ("comp-1", "org-1", ["item-1"]),
+                "_get_compartment",
+                "compartment",
+            ),
+        ],
+    )
+    async def test_mutation_advances_revision(
+        self, service, mock_db, method, args, getter, entity
+    ):
+        compartment = SimpleNamespace(id="comp-1", template_id="tmpl-1", items=[])
+        item = SimpleNamespace(
+            id="item-1",
+            name="Old",
+            compartment_id="comp-1",
+            compartment=compartment,
+        )
+        template = SimpleNamespace(id="tmpl-1", compartments=[compartment])
+        returned = {"compartment": compartment, "item": item, "template": template}[
+            entity
+        ]
+        mock_db.execute.return_value = self.result_with(compartment)
+        with (
+            patch.object(
+                service, getter, new_callable=AsyncMock, return_value=returned
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await getattr(service, method)(*args)
+        advance.assert_awaited_once_with("tmpl-1")
+
+    async def test_add_compartment_advances_revision(self, service, mock_db):
+        template = SimpleNamespace(id="tmpl-1")
+        created = SimpleNamespace(id="comp-1")
+        mock_db.execute.return_value = self.result_with(created)
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await service.add_compartment("tmpl-1", "org-1", {"name": "Cab"})
+        advance.assert_awaited_once_with("tmpl-1")
 
 
 class TestSubmitterTemplateVisibility:
@@ -311,6 +705,49 @@ class TestStandaloneTemplateVisibility:
 
         mock_db.add.assert_not_called()
         mock_db.commit.assert_not_awaited()
+
+
+class TestOperationalInventoryTemplateVisibility:
+    @staticmethod
+    def empty_rows():
+        result = MagicMock()
+        result.all.return_value = []
+        return result
+
+    @staticmethod
+    def assert_active_filter(statement):
+        sql = str(statement)
+        assert "equipment_check_templates.is_active IS true" in sql
+
+    async def test_supply_overview_excludes_draft_templates(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_rows()
+        with patch(
+            "app.services.equipment_check_service.InventoryService.get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            await service.get_supply_overview("org-1")
+
+        self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
+
+    async def test_apparatus_inventory_excludes_draft_templates(self, service, mock_db):
+        mock_db.scalar.return_value = MagicMock()
+        mock_db.execute.return_value = self.empty_rows()
+        with patch(
+            "app.services.equipment_check_service.InventoryService.get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            await service.get_apparatus_inventory("apparatus-1", "org-1")
+
+        self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
+
+    async def test_item_deployments_exclude_draft_templates(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_rows()
+
+        assert await service.get_item_deployments("inventory-1", "org-1") == []
+
+        self.assert_active_filter(mock_db.execute.await_args.args[0])
 
 
 class TestAuthoritativeCheckTiming:
@@ -1078,3 +1515,121 @@ class TestShiftCheckStatusItemCount:
         assert len(summaries) == 1
         # Five template rows, of which a header and a text row are captions.
         assert summaries[0]["total_items"] == 3
+
+
+class TestSnapshottedTargetQuantity:
+    """The filed record's ``required_quantity`` is the target this service
+    means, not half of it.
+
+    ``_target_quantity`` is ``required_quantity or expected_quantity``. The
+    snapshot used to take the column alone, which gave the service two
+    definitions of "short": ``_compute_check_status`` and ``update_check``'s
+    recompute read this snapshot, while ``_is_short`` and ``swap_item_lot``'s
+    submitter limits read the resolved value. A position carrying
+    ``required_quantity = 0`` beside a positive ``expected_quantity`` was short
+    by one rule and full by the other.
+    """
+
+    @staticmethod
+    def template_item(**overrides):
+        values = {
+            "name": "4x4 gauze",
+            "_check_compartment_name": "Cab",
+            "check_type": "count",
+            "required_quantity": None,
+            "expected_quantity": None,
+            "critical_minimum_quantity": None,
+            "level_unit": None,
+            "serial_number": None,
+            "lot_number": None,
+            "expiration_date": None,
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_a_zero_minimum_falls_through_to_the_expected_count(self):
+        item = {}
+        EquipmentCheckService._snapshot_from_template(
+            item, self.template_item(required_quantity=0, expected_quantity=4)
+        )
+        assert item["required_quantity"] == 4
+
+    def test_a_required_minimum_still_outranks_the_expected_count(self):
+        item = {}
+        EquipmentCheckService._snapshot_from_template(
+            item, self.template_item(required_quantity=6, expected_quantity=4)
+        )
+        assert item["required_quantity"] == 6
+
+    def test_an_uncounted_position_snapshots_no_target(self):
+        item = {}
+        EquipmentCheckService._snapshot_from_template(item, self.template_item())
+        assert item["required_quantity"] is None
+
+    def test_an_absent_minimum_falls_through_to_the_expected_count(self):
+        # The common configuration, not an edge case: the template builder
+        # sends `required_quantity` only when its field is filled, and the
+        # field starts blank — so a count item whose author set an expected
+        # quantity and nothing else arrives here with NULL.
+        item = {}
+        EquipmentCheckService._snapshot_from_template(
+            item, self.template_item(required_quantity=None, expected_quantity=4)
+        )
+        assert item["required_quantity"] == 4
+
+    def test_an_absent_minimum_brings_the_shortfall_check_into_play(self):
+        # The sharper half of the change. A snapshot of None did not merely
+        # compare loosely — `_compute_check_status` skips the branch entirely
+        # when `req_qty is None`, so no shortfall was ever detected on the
+        # configuration most count items actually have.
+        template = self.template_item(required_quantity=None, expected_quantity=4)
+        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
+        EquipmentCheckService._snapshot_from_template(item, template)
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+
+        assert item["status"] == "fail"
+        assert failed == 1
+        assert overall == "fail"
+
+    def test_a_status_the_crew_already_failed_is_unaffected(self):
+        # Why the practical blast radius is small. The app computes the
+        # shortfall against the resolved target itself and submits `fail`, and
+        # `_compute_check_status` only ever upgrades a status — so on the
+        # normal path this change alters nothing. It bites a payload claiming
+        # `pass` on a short count: a stale offline-queue entry, an older
+        # client, a direct API caller.
+        template = self.template_item(required_quantity=None, expected_quantity=4)
+        item = {"template_item_id": "ti-1", "status": "fail", "quantity_found": 1}
+        EquipmentCheckService._snapshot_from_template(item, template)
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+
+        assert item["status"] == "fail"
+        assert failed == 1
+        assert overall == "fail"
+
+    def test_the_shortfall_verdict_now_agrees_with_is_short(self):
+        # The point of the change. Counting 1 against a position whose real
+        # target is 4 is a shortfall by `_is_short`, and the filed record has
+        # to say so rather than passing because the raw column read 0.
+        template = self.template_item(required_quantity=0, expected_quantity=4)
+        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
+        EquipmentCheckService._snapshot_from_template(item, template)
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+
+        assert item["status"] == "fail"
+        assert failed == 1
+        assert overall == "fail"
+
+    def test_a_position_at_its_expected_count_still_passes(self):
+        template = self.template_item(required_quantity=0, expected_quantity=4)
+        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 4}
+        EquipmentCheckService._snapshot_from_template(item, template)
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+
+        assert item["status"] == "pass"
+        assert failed == 0
+        assert overall == "pass"

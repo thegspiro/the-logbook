@@ -60,12 +60,38 @@ describe('SchedulingWidgets', () => {
     saveWidgetPreferences.mockResolvedValue({ widgets: {} });
   });
 
-  it('renders all operational totals and the configured timezone', async () => {
+  it('renders all operational totals without exposing the raw timezone identifier', async () => {
     renderWidget();
-    expect(await screen.findByText('America/New_York', { exact: false })).toBeInTheDocument();
     expect(await screen.findByLabelText('Today’s Staffing: 11. View filtered schedule.')).toBeInTheDocument();
+    // The organization timezone still drives which day "today" is; it is not
+    // copy for the member to read.
+    expect(screen.queryByText('America/New_York', { exact: false })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Future Coverage Gaps: 2. View filtered schedule.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Open Slots: 3. View filtered schedule.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Pending Changes: 4. View filtered schedule.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Incomplete Closeouts: 5. View filtered schedule.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Workload Balance: 6. View filtered schedule.')).toBeInTheDocument();
     expect(screen.getByLabelText('Special Operations: 7. View filtered schedule.')).toBeInTheDocument();
-    expect(getWidgetSummary).toHaveBeenCalledTimes(7);
+    expect(getWidgetSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('requests one summary for each distinct saved filter set', async () => {
+    getWidgetPreferences.mockResolvedValue({
+      widgets: {
+        today_staffing: { horizon_days: 30, station_id: 'station-1' },
+        open_slots: { horizon_days: 14, platoon: 'A' },
+      },
+    });
+
+    renderWidget();
+
+    await screen.findByLabelText('Today’s Staffing: 11. View filtered schedule.');
+    expect(getWidgetSummary).toHaveBeenCalledTimes(3);
+    expect(getWidgetSummary).toHaveBeenCalledWith(expect.objectContaining({ station_id: 'station-1' }));
+    expect(getWidgetSummary).toHaveBeenCalledWith(expect.objectContaining({ platoon: 'A' }));
+    expect(getWidgetSummary.mock.calls.some(([filters]) => !('station_id' in filters) && !('platoon' in filters))).toBe(
+      true
+    );
   });
 
   it('shows the disabled state instead of actionable totals', async () => {
@@ -95,6 +121,7 @@ describe('SchedulingWidgets', () => {
     getWidgetPreferences.mockRejectedValue(new Error('Forbidden'));
     renderWidget();
     await waitFor(() => expect(toastError).toHaveBeenCalled());
-    expect(screen.getAllByText('0')).toHaveLength(7);
+    expect(screen.getByRole('alert')).toHaveTextContent('Forbidden');
+    expect(screen.queryByLabelText(/View filtered schedule/)).not.toBeInTheDocument();
   });
 });

@@ -5578,13 +5578,17 @@ grep -rn '\["admin".*"chief"\]\|\["chief".*"admin"\]' backend/app/ --include="*.
 
 **Fix**: Replace inline arrays with the centralized constant from `app.core.constants`:
 
-| Constant                      | Roles                           | Purpose                       |
-| ----------------------------- | ------------------------------- | ----------------------------- |
-| `ADMIN_NOTIFY_ROLE_SLUGS`     | admin, quartermaster, chief     | Drop/archive CC notifications |
-| `LEADERSHIP_ROLE_SLUGS`       | chief, president, VP, secretary | Critical event alerts         |
-| `TRAINING_OFFICER_ROLE_SLUGS` | admin, training_officer, chief  | Training module checks        |
-| `OPERATIONAL_ROLE_SLUGS`      | chief, asst_chief, captain, …   | Election eligibility          |
-| `ADMINISTRATIVE_ROLE_SLUGS`   | president, VP, secretary, …     | Election eligibility          |
+| Constant                      | Roles                                | Purpose                       |
+| ----------------------------- | ------------------------------------ | ----------------------------- |
+| `ADMIN_NOTIFY_ROLE_SLUGS`     | it_manager, quartermaster, chief*    | Drop/archive CC notifications |
+| `LEADERSHIP_ROLE_SLUGS`       | chief*, president, VP, secretary     | Critical event alerts         |
+| `TRAINING_OFFICER_ROLE_SLUGS` | it_manager, training_officer, chief* | Training module checks        |
+
+\* Office keys, expanded through `OFFICE_CATALOG` by
+`position_slugs_for_offices` — `chief` resolves to **both** `fire_chief`
+(what onboarding seeds) and `chief` (what a custom position named "Chief"
+gets). Naming a raw slug here is how the chief came to be silently absent
+from every one of these notifications until 2026-08-26.
 
 ---
 

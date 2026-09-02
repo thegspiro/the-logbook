@@ -115,6 +115,9 @@ SYSTEM_FOLDERS = [
         "sort_order": 7,
         "icon": "users",
         "color": "text-emerald-400",
+        # Personal descendants enforce OWNER access. Keeping the navigation
+        # root organization-visible lets each owner satisfy every ancestor.
+        "visibility": FolderVisibility.ORGANIZATION,
     },
     {
         "slug": "apparatus",
@@ -123,6 +126,7 @@ SYSTEM_FOLDERS = [
         "sort_order": 8,
         "icon": "truck",
         "color": "text-orange-400",
+        "visibility": FolderVisibility.LEADERSHIP,
     },
     {
         "slug": "facilities",
@@ -131,6 +135,14 @@ SYSTEM_FOLDERS = [
         "sort_order": 9,
         "icon": "building",
         "color": "text-indigo-400",
+        # Facility permissions, rather than document leadership, are the
+        # sensitive-record contract for this entire tree.
+        "visibility": FolderVisibility.ORGANIZATION,
+        "required_permissions": [
+            "facilities.view_sensitive",
+            "facilities.edit",
+            "facilities.manage",
+        ],
     },
     {
         "slug": "events",
@@ -285,6 +297,14 @@ class DocumentFolder(Base):
         JSON, nullable=True
     )  # List of role slugs; null = no restriction
 
+    # List of permission names, ANY of which admits the holder; null = no
+    # restriction. Distinct from allowed_roles because a module's own contract
+    # is written in permissions, not role slugs: a facility's files are gated
+    # on facilities.view_sensitive/edit/manage, which no set of role slugs
+    # names stably — a department renames or adds roles, and a slug list
+    # silently stops matching while the permission does not.
+    required_permissions = Column(JSON, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -387,6 +407,19 @@ class Document(Base):
         # Resolves a generated document back to the record that produced it.
         Index("ix_documents_source", "source_type", "source_id"),
     )
+
+    @property
+    def has_file(self) -> bool:
+        """Whether this row has a downloadable file on disk.
+
+        A generated document (published minutes, a property return) carries
+        ``content_html`` and no ``file_path`` at all — the download endpoint
+        404s on it, same as an upload whose file was somehow lost. Exposed so
+        the frontend can hide the Download action for a document type it
+        knows in advance will never succeed, rather than showing an action
+        that deterministically fails.
+        """
+        return bool(self.file_path)
 
     def __repr__(self):
         return f"<Document(name={self.name}, type={self.file_type})>"

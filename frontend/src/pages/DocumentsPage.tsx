@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import {
   FileText,
@@ -14,6 +14,7 @@ import {
   File,
   ArrowLeft,
   Upload,
+  Download,
 } from 'lucide-react';
 import {
   documentsService,
@@ -28,6 +29,14 @@ import { asArray } from '../utils/asArray';
 
 type ViewMode = 'grid' | 'list';
 
+// Pseudo folder id selecting every document the caller can see, including
+// documents with no folder_id at all (org-level uploads, or the "No folder"
+// choice on the upload form) -- otherwise those documents are uploadable but
+// never visible or reachable anywhere in this page (Codex finding on #1827).
+const ALL_DOCUMENTS = '__all__';
+const DOCUMENTS_PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
+
 const DocumentsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('documents.manage');
@@ -36,18 +45,23 @@ const DocumentsPage: React.FC = () => {
   // Data state
   const [folders, setFolders] = useState<DocFolder[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [documentsTotal, setDocumentsTotal] = useState(0);
   const [summary, setSummary] = useState<DocumentsSummary | null>(null);
 
   // Loading / error state
   const [loading, setLoading] = useState(true);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [moreDocumentsLoading, setMoreDocumentsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState(false);
 
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const requestGeneration = useRef(0);
 
   // Modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -59,7 +73,7 @@ const DocumentsPage: React.FC = () => {
   const [uploadForm, setUploadForm] = useState({
     name: '',
     description: '',
-    folder: 'general',
+    folder: '',
     file: null as File | null,
   });
 
@@ -83,20 +97,39 @@ const DocumentsPage: React.FC = () => {
     try {
       const data = await documentsService.getSummary();
       setSummary(data);
+      setSummaryError(false);
     } catch {
-      // Summary is non-critical, silently ignore
+      setSummaryError(true);
     }
   }, []);
 
-  const fetchDocuments = useCallback(async (folderId: string) => {
-    setDocumentsLoading(true);
+  const fetchDocuments = useCallback(async (folderId: string, search: string, skip = 0, append = false) => {
+    const generation = ++requestGeneration.current;
+    if (append) {
+      setMoreDocumentsLoading(true);
+    } else {
+      setDocumentsLoading(true);
+    }
     try {
-      const response = await documentsService.getDocuments({ folder_id: folderId });
-      setDocuments(asArray(response.documents));
+      const response = await documentsService.getDocuments({
+        ...(folderId === ALL_DOCUMENTS ? {} : { folder_id: folderId }),
+        skip,
+        limit: DOCUMENTS_PAGE_SIZE,
+        ...(search ? { search } : {}),
+      });
+      if (generation !== requestGeneration.current) return;
+      const nextDocuments = asArray(response.documents);
+      setDocuments((current) => (append ? [...current, ...nextDocuments] : nextDocuments));
+      setDocumentsTotal(response.total);
     } catch {
-      setError('Unable to load documents. Please check your connection and try again.');
+      if (generation === requestGeneration.current) {
+        setError('Unable to load documents. Please check your connection and try again.');
+      }
     } finally {
-      setDocumentsLoading(false);
+      if (generation === requestGeneration.current) {
+        setDocumentsLoading(false);
+        setMoreDocumentsLoading(false);
+      }
     }
   }, []);
 
@@ -110,14 +143,25 @@ const DocumentsPage: React.FC = () => {
     void init();
   }, [fetchFolders, fetchSummary]);
 
-  // Fetch documents when folder is selected
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery]);
+
+  // A folder or server-side search change always starts again at the first page.
   useEffect(() => {
     if (selectedFolder) {
-      void fetchDocuments(selectedFolder);
-    } else {
       setDocuments([]);
+      setDocumentsTotal(0);
+      void fetchDocuments(selectedFolder, debouncedSearch);
+    } else {
+      requestGeneration.current += 1;
+      setDocuments([]);
+      setDocumentsTotal(0);
+      setDocumentsLoading(false);
+      setMoreDocumentsLoading(false);
     }
-  }, [selectedFolder, fetchDocuments]);
+  }, [selectedFolder, debouncedSearch, fetchDocuments]);
 
   // -------------------------------------------------------
   // Handlers
@@ -156,21 +200,28 @@ const DocumentsPage: React.FC = () => {
       if (uploadForm.description.trim()) {
         formData.append('description', uploadForm.description.trim());
       }
-      formData.append('folder_id', uploadForm.folder);
+      if (uploadForm.folder) {
+        formData.append('folder_id', uploadForm.folder);
+      }
       await documentsService.uploadDocument(formData);
       setShowUploadModal(false);
-      setUploadForm({ name: '', description: '', folder: selectedFolder || 'general', file: null });
+      setUploadForm({
+        name: '',
+        description: '',
+        folder: selectedFolder && selectedFolder !== ALL_DOCUMENTS ? selectedFolder : '',
+        file: null,
+      });
       await fetchFolders();
       await fetchSummary();
       if (selectedFolder) {
-        await fetchDocuments(selectedFolder);
+        await fetchDocuments(selectedFolder, debouncedSearch);
       }
     } catch {
       setError('Unable to upload document. Please check your connection and try again.');
     } finally {
       setActionLoading(false);
     }
-  }, [uploadForm, selectedFolder, fetchFolders, fetchSummary, fetchDocuments]);
+  }, [uploadForm, selectedFolder, debouncedSearch, fetchFolders, fetchSummary, fetchDocuments]);
 
   const handleDeleteDocument = useCallback(
     async (documentId: string) => {
@@ -182,7 +233,7 @@ const DocumentsPage: React.FC = () => {
         await fetchFolders();
         await fetchSummary();
         if (selectedFolder) {
-          await fetchDocuments(selectedFolder);
+          await fetchDocuments(selectedFolder, debouncedSearch);
         }
       } catch {
         setError('Unable to delete document. Please check your connection and try again.');
@@ -190,25 +241,51 @@ const DocumentsPage: React.FC = () => {
         setActionLoading(false);
       }
     },
-    [selectedFolder, fetchFolders, fetchSummary, fetchDocuments]
+    [selectedFolder, debouncedSearch, fetchFolders, fetchSummary, fetchDocuments]
   );
 
+  const handleDownloadDocument = useCallback(async (doc: DocumentRecord) => {
+    setError(null);
+    try {
+      const blob = await documentsService.downloadDocument(doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = doc.file_name || doc.name;
+      window.document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Unable to download document. Please check your connection and try again.');
+    }
+  }, []);
+
   const handleFolderSelect = useCallback((folderId: string) => {
+    requestGeneration.current += 1;
     setSelectedFolder(folderId);
     setError(null);
   }, []);
 
   const handleClearFolder = useCallback(() => {
+    requestGeneration.current += 1;
     setSelectedFolder(null);
     setDocuments([]);
     setError(null);
   }, []);
 
+  const handleLoadMore = useCallback(() => {
+    if (selectedFolder && !moreDocumentsLoading && documents.length < documentsTotal) {
+      void fetchDocuments(selectedFolder, debouncedSearch, documents.length, true);
+    }
+  }, [selectedFolder, moreDocumentsLoading, documents.length, documentsTotal, debouncedSearch, fetchDocuments]);
+
   const handleOpenUploadModal = useCallback(() => {
+    const currentFolder = selectedFolder && selectedFolder !== ALL_DOCUMENTS ? selectedFolder : '';
     setUploadForm({
       name: '',
       description: '',
-      folder: selectedFolder || (folders.length > 0 && folders[0] ? folders[0].id : 'general'),
+      folder: currentFolder || (folders.length > 0 && folders[0] ? folders[0].id : ''),
       file: null,
     });
     setShowUploadModal(true);
@@ -217,15 +294,6 @@ const DocumentsPage: React.FC = () => {
   // -------------------------------------------------------
   // Derived state
   // -------------------------------------------------------
-
-  const filteredDocuments = searchQuery.trim()
-    ? documents.filter(
-        (d) =>
-          (d.name && d.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (d.description && d.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (d.file_type && d.file_type.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : documents;
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -301,6 +369,21 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Summary Stats */}
+        {summaryError && (
+          <div
+            className="mb-8 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
+            role="status"
+          >
+            <p className="text-theme-text-secondary text-sm">Document statistics could not be loaded.</p>
+            <button
+              type="button"
+              onClick={() => void fetchSummary()}
+              className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-500/10 dark:text-amber-300"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {summary && (
           <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
             <div className="card p-4">
@@ -344,10 +427,17 @@ const DocumentsPage: React.FC = () => {
                 id="doc-search"
                 type="text"
                 placeholder={
-                  selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'
+                  selectedFolder === ALL_DOCUMENTS
+                    ? 'Search all documents...'
+                    : selectedFolder
+                      ? 'Search documents in this folder...'
+                      : 'Select a folder to browse documents...'
                 }
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  requestGeneration.current += 1;
+                  setSearchQuery(e.target.value);
+                }}
                 className="form-input placeholder-theme-text-muted pr-4 pl-10 focus:ring-amber-500"
               />
             </div>
@@ -387,6 +477,22 @@ const DocumentsPage: React.FC = () => {
         {!selectedFolder && (
           <div className="mb-8">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Folders</h2>
+            <div className="mb-4">
+              <button
+                onClick={() => handleFolderSelect(ALL_DOCUMENTS)}
+                className="stat-card group hover:bg-theme-surface-hover w-full text-left transition-all hover:border-amber-500/30 md:max-w-xs"
+              >
+                <div className="flex items-start space-x-3">
+                  <FileText className="h-8 w-8 text-amber-700 transition-transform group-hover:scale-110 dark:text-amber-400" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-theme-text-primary truncate font-semibold">All Documents</h3>
+                    <p className="text-theme-text-muted mt-1 text-sm">
+                      Every document you can see, including ones with no folder
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
             {folders.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {folders.map((folder) => (
@@ -427,11 +533,15 @@ const DocumentsPage: React.FC = () => {
                 <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-amber-700 dark:text-amber-400" />
                 <p className="text-theme-text-secondary text-sm">Loading documents...</p>
               </div>
-            ) : filteredDocuments.length > 0 ? (
+            ) : documents.length > 0 ? (
               viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {filteredDocuments.map((doc) => (
-                    <div key={doc.id} className="stat-card group hover:bg-theme-surface-hover transition-all">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      data-testid={`document-card-${doc.id}`}
+                      className="stat-card group hover:bg-theme-surface-hover transition-all"
+                    >
                       <div className="flex items-start space-x-3">
                         <File className="h-8 w-8 shrink-0 text-amber-700 dark:text-amber-400" />
                         <div className="min-w-0 flex-1">
@@ -450,18 +560,32 @@ const DocumentsPage: React.FC = () => {
                             {formatDate(doc.created_at, tz)}
                           </p>
                         </div>
-                        {canManage && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteConfirm(doc.id);
-                            }}
-                            className="text-theme-text-muted p-1 transition-all hover:text-red-800 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-red-400"
-                            title="Delete document"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
+                        <div className="flex shrink-0 items-start space-x-1">
+                          {doc.has_file && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleDownloadDocument(doc);
+                              }}
+                              className="text-theme-text-muted p-1 transition-all hover:text-amber-700 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-amber-400"
+                              title="Download document"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                          )}
+                          {canManage && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirm(doc.id);
+                              }}
+                              className="text-theme-text-muted p-1 transition-all hover:text-red-800 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-red-400"
+                              title="Delete document"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -500,18 +624,16 @@ const DocumentsPage: React.FC = () => {
                         >
                           Uploaded
                         </th>
-                        {canManage && (
-                          <th
-                            scope="col"
-                            className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium uppercase"
-                          >
-                            Actions
-                          </th>
-                        )}
+                        <th
+                          scope="col"
+                          className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium uppercase"
+                        >
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredDocuments.map((doc) => (
+                      {documents.map((doc) => (
                         <tr
                           key={doc.id}
                           className="border-theme-surface-border hover:bg-theme-surface-hover border-b transition-colors"
@@ -536,17 +658,28 @@ const DocumentsPage: React.FC = () => {
                             {doc.file_type || '-'}
                           </td>
                           <td className="text-theme-text-muted px-4 py-3 text-sm">{formatDate(doc.created_at, tz)}</td>
-                          {canManage && (
-                            <td className="px-4 py-3 text-right">
-                              <button
-                                onClick={() => setDeleteConfirm(doc.id)}
-                                className="text-theme-text-muted p-1 transition-colors hover:text-red-800 dark:hover:text-red-400"
-                                title="Delete document"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </td>
-                          )}
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end space-x-1">
+                              {doc.has_file && (
+                                <button
+                                  onClick={() => void handleDownloadDocument(doc)}
+                                  className="text-theme-text-muted p-1 transition-colors hover:text-amber-700 dark:hover:text-amber-400"
+                                  title="Download document"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </button>
+                              )}
+                              {canManage && (
+                                <button
+                                  onClick={() => setDeleteConfirm(doc.id)}
+                                  className="text-theme-text-muted p-1 transition-colors hover:text-red-800 dark:hover:text-red-400"
+                                  title="Delete document"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -565,6 +698,24 @@ const DocumentsPage: React.FC = () => {
                   >
                     <Upload className="h-5 w-5" />
                     <span>Upload First Document</span>
+                  </button>
+                )}
+              </div>
+            )}
+            {!documentsLoading && documents.length > 0 && (
+              <div className="mt-6 flex flex-col items-center gap-3" aria-live="polite">
+                <p className="text-theme-text-secondary text-sm">
+                  Showing 1–{documents.length} of {documentsTotal}
+                </p>
+                {documents.length < documentsTotal && (
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={moreDocumentsLoading}
+                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-5 py-2.5 text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {moreDocumentsLoading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                    <span>{moreDocumentsLoading ? 'Loading more documents...' : 'Load more'}</span>
                   </button>
                 )}
               </div>
@@ -675,6 +826,7 @@ const DocumentsPage: React.FC = () => {
                         onChange={(e) => setUploadForm({ ...uploadForm, folder: e.target.value })}
                         className="form-input focus:ring-amber-500"
                       >
+                        <option value="">No folder</option>
                         {folders.map((f) => (
                           <option key={f.id} value={f.id}>
                             {f.name}

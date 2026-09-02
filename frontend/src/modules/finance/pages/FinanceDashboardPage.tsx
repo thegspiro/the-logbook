@@ -180,10 +180,10 @@ const FinanceDashboardPage: React.FC = () => {
   }
 
   const budgetHealth = dashboard?.budgetHealth;
-  const totalBudgeted = budgetHealth?.totalBudgeted ?? 0;
-  const totalSpent = budgetHealth?.totalSpent ?? 0;
-  const totalEncumbered = budgetHealth?.totalEncumbered ?? 0;
-  const totalRemaining = budgetHealth?.totalRemaining ?? 0;
+  const totalBudgeted = Number(budgetHealth?.totalBudgeted ?? 0);
+  const totalSpent = Number(budgetHealth?.totalSpent ?? 0);
+  const totalEncumbered = Number(budgetHealth?.totalEncumbered ?? 0);
+  const totalRemaining = Number(budgetHealth?.totalRemaining ?? 0);
 
   return (
     <div className="space-y-6">

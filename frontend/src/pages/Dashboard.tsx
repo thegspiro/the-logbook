@@ -60,6 +60,7 @@ import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStat
 import { requirementTarget } from '../utils/pipelineProgress';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useEnabledModules } from '../hooks/useEnabledModules';
 import {
   addCalendarDays,
   formatCalendarDate,
@@ -68,7 +69,6 @@ import {
   formatTime,
   formatTimeOfDay,
   getTodayLocalDate,
-  toLocalDateString,
   toLocalISODate,
 } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
@@ -78,31 +78,65 @@ import type { NotificationLogRecord } from '../services/api';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
 import type { EventListItem } from '../types/event';
 import { dashboardService } from '../services/api';
-import { POSITION_LABELS } from '../constants/enums';
+import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
 
 /**
  * Main Dashboard Component — "station board"
  *
- * Two answers, in this order: what needs me, and what am I doing this week.
+ * Two answers, in this order: what needs me, and what am I doing next.
  * Everything the member is on the hook for collects in one "Needs you" panel;
- * shifts, open slots and events merge into one seven-day list rather than
+ * shifts, open slots and events merge into one thirty-day list rather than
  * three parallel ones. Organization-wide reporting lives behind the
  * Organization tab so
  * it does not outrank a member's own work.
  */
 const INSTALL_BANNER_DISMISSED_KEY = 'installBannerDismissed';
 
-/** Days the "Next 7 Days" list covers, counting today as day one. */
-const TIMELINE_DAYS = 7;
+/** Days the "Next 30 Days" list covers, counting today as day one. */
+const TIMELINE_DAYS = 30;
 
-/** Rows the seven-day list renders before deferring to the full schedule. */
+/**
+ * How far past the visible window the open-shift fetch reaches.
+ *
+ * The footer discloses how many open shifts lie beyond the window, and it can
+ * only count what it was given: with the fetch window equal to the display
+ * window that line is dead on every department, silently, because zero is
+ * also what an empty schedule looks like. Reaching further is what leaves it
+ * able to say there is more.
+ *
+ * Two consequences, both load-bearing. The count stops here, so the footer
+ * names this horizon ("in the following month") rather than implying it
+ * covers everything after the window — it does not. And the reach belongs to
+ * that footer alone: every other count describing what is open reads
+ * `openShiftsInWindow`, or it would quote the member a number matching
+ * nothing the card shows.
+ */
+const TIMELINE_LOOKAHEAD_DAYS = 60;
+
+/**
+ * Ceilings for the two fetches that feed the list.
+ *
+ * Both sit far above what a month of either can hold. They are here to bound
+ * a runaway response, not to trim the list — trimming is the window filter's
+ * job, and a limit low enough to do that as well truncates the wrong end,
+ * which is the bug this pair replaced: `limit: 5` applied before the filter.
+ *
+ * `/events` refuses anything above 500, so the event ceiling is that cap. The
+ * pagination dependency behind `/scheduling/my-shifts` allows up to 1000, but
+ * one member's own shifts inside a month cannot approach even 200 — asking
+ * for the maximum would only make a runaway response larger.
+ */
+const EVENT_FETCH_LIMIT = 500;
+const SHIFT_FETCH_LIMIT = 200;
+
+/** Rows the list renders before deferring to the full schedule. */
 const TIMELINE_ROWS_SHOWN = 6;
 
 /**
- * Rows the seven-day list shows on a phone before collapsing the rest onto one
+ * Rows the list shows on a phone before collapsing the rest onto one
  * tap-through line. Six rows of shift detail push the three quick actions —
- * which sit below the week on a phone, in the thumb's reach — off the first
+ * which sit below the list on a phone, in the thumb's reach — off the first
  * screen; two keep them on it, and the line names what is being held back.
  */
 const TIMELINE_ROWS_SHOWN_MOBILE = 2;
@@ -165,13 +199,25 @@ const Dashboard: React.FC = () => {
   // The legacy summary retains its settings gate, while chief operations is
   // available through the data-source permissions declared in its registry.
   // Everyone — including those leaders — still lands on the personal view.
+  //
+  // Every gate here is a *manage* grant on purpose. `inventory.view`,
+  // `apparatus.view`, `facilities.view` and `scheduling.view` are all baseline
+  // member grants (see DEFAULT_POSITIONS["member"]), so gating on them showed
+  // the My Department tab — department-wide staffing, fleet and facility
+  // reporting — to every firefighter in the department. These mirror the
+  // permissions the backend actually enforces on the widget endpoints, so the
+  // tab never advertises a panel that would come back empty or 403.
   const canViewLegacyAdmin = checkPermission('settings.manage');
-  const canViewAssets = ['inventory.view', 'apparatus.view', 'facilities.view'].some(checkPermission);
+  const canViewAssets =
+    canViewLegacyAdmin || ['inventory.manage', 'apparatus.manage', 'facilities.manage'].some(checkPermission);
   const canViewChiefOperations = canViewChiefDashboard(checkPermission);
   const canViewOrganization = canViewLegacyAdmin || canViewChiefOperations || canViewAssets;
-  const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
+  // Clearing a department-wide persistent message is a notifications action;
+  // holding a fleet or facility grant is not authority to retract one.
+  const canManageMessages = canViewLegacyAdmin || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
-  const canViewScheduling = checkPermission('scheduling.view');
+  const canViewScheduling = checkPermission('scheduling.manage');
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -192,16 +238,21 @@ const Dashboard: React.FC = () => {
   const [openShifts, setOpenShifts] = useState<ShiftRecord[]>([]);
   const [loadingOpenShifts, setLoadingOpenShifts] = useState(true);
   const [signingUpShiftId, setSigningUpShiftId] = useState<string | null>(null);
+  const [rsvpingEventId, setRsvpingEventId] = useState<string | null>(null);
   const [signupExpandedId, setSignupExpandedId] = useState<string | null>(null);
   const [dashboardSignupPosition, setDashboardSignupPosition] = useState('firefighter');
   const [dashboardEligiblePositions, setDashboardEligiblePositions] = useState<string[]>([]);
   const [loadingEligibility, setLoadingEligibility] = useState(false);
 
   // Hours
-  const [hours, setHours] = useState({
-    training: 0,
-    standby: 0,
-    administrative: 0,
+  const [hours, setHours] = useState<{
+    training: number | null;
+    standby: number | null;
+    administrative: number | null;
+  }>({
+    training: null,
+    standby: null,
+    administrative: null,
   });
   const [loadingHours, setLoadingHours] = useState(true);
 
@@ -300,18 +351,41 @@ const Dashboard: React.FC = () => {
         });
     }
 
+    void loadDeptMessages();
+    void loadUpcomingEvents();
+  }, []);
+
+  // Module-owned loaders, held until the module config lands.
+  //
+  // Each of these calls a router the module gate now refuses outright, so
+  // firing them before the answer is known costs a 403 per disabled module on
+  // every dashboard visit — and `classifyApiError` reports a 403 as
+  // API_FORBIDDEN, so a department's deliberate configuration would read as a
+  // fault in the error log, on the app's most-visited screen. Medical
+  // Screening makes it concrete: it is opt-in, so every organization that has
+  // not turned it on is in this case.
+  //
+  // The wait is what makes the guards inside the loaders meaningful.
+  // `isModuleOn` answers permissively while the config is unknown — right for
+  // a nav bar, which must render before the answer arrives, and wrong here,
+  // where it would wave through the very request this exists to avoid. The
+  // hook settles either way, so the cost is one tick.
+  //
+  // Each loader clears its own panel's loading flag on the way out, so a
+  // disabled module shows that panel's empty state rather than a skeleton
+  // that never resolves.
+  useEffect(() => {
+    if (modulesLoading) return;
     void loadNotifications();
     void loadMyShifts();
     void loadOpenShifts();
-    void loadDeptMessages();
-    void loadHours();
     void loadMySeats();
     void loadMyScreenings();
     void loadTrainingProgress();
     void loadMyEquipment();
-    void loadUpcomingEvents();
+    void loadHours();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [modulesLoading]);
 
   // Do not fetch department-wide reporting merely because a leader opened the
   // dashboard. The personal view is the default; department-wide data is loaded
@@ -358,6 +432,10 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMyEquipment = async () => {
+    if (!isModuleOn('inventory')) {
+      setLoadingMyEquipment(false);
+      return;
+    }
     if (!currentUser?.id) {
       setLoadingMyEquipment(false);
       return;
@@ -395,14 +473,28 @@ const Dashboard: React.FC = () => {
 
   const loadUpcomingEvents = async () => {
     try {
+      // Bounded to the window the list renders, and to a limit that can hold
+      // it. The old shape asked for the 5 soonest events of any future date
+      // and truncated *before* the window filter ran, so five socials spread
+      // across the next six months were enough to hide every drill in the
+      // coming month behind them — on a card whose subtitle promises drills.
+      //
+      // The bound is a plain instant a day past the window rather than the
+      // window's own last day resolved in the organization's timezone. That
+      // is deliberate on both counts: it over-fetches by a day so no calendar
+      // day near the edge can fall outside it whatever the offset, and it
+      // keeps this loader free of reactive values, which is what lets the
+      // mount effect below run once rather than on every timezone-carrying
+      // render. The window filter, which does resolve the timezone, remains
+      // the authority on what is actually shown.
       const data = await eventService.getEvents({
         end_after: new Date().toISOString(),
-        limit: 5,
+        start_before: new Date(Date.now() + (TIMELINE_DAYS + 1) * 24 * 60 * 60 * 1000).toISOString(),
+        limit: EVENT_FETCH_LIMIT,
       });
-      // Sort by start date ascending and take first 5
-      const sorted = data
-        .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime())
-        .slice(0, 5);
+      const sorted = [...data].sort(
+        (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
+      );
       setUpcomingEvents(sorted);
     } catch {
       // Upcoming events are non-critical
@@ -412,6 +504,11 @@ const Dashboard: React.FC = () => {
   };
 
   const loadNotifications = async () => {
+    if (!isModuleOn('notifications')) {
+      setNotifications([]);
+      setLoadingNotifications(false);
+      return;
+    }
     try {
       // The unread count is maintained by useNotificationPoller (mounted
       // in AppLayout), so we only need to fetch the notification list here.
@@ -494,13 +591,19 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMyShifts = async () => {
+    if (!isModuleOn('scheduling')) {
+      setMyShifts([]);
+      setLoadingMyShifts(false);
+      return;
+    }
     try {
       const today = getTodayLocalDate(tz);
-      const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
       const data = await schedulingService.getMyShifts({
         start_date: today,
-        end_date: nextMonth,
-        limit: 5,
+        // A day of slack past the window, for the same reason the event fetch
+        // takes it: the window filter is the authority on what is shown.
+        end_date: addCalendarDays(today, TIMELINE_DAYS),
+        limit: SHIFT_FETCH_LIMIT,
       });
       setMyShifts(data.shifts || []);
     } catch {
@@ -511,12 +614,17 @@ const Dashboard: React.FC = () => {
   };
 
   const loadOpenShifts = async () => {
+    if (!isModuleOn('scheduling')) {
+      setOpenShifts([]);
+      setLoadingOpenShifts(false);
+      return;
+    }
     try {
       const today = getTodayLocalDate(tz);
-      const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
       const data = await schedulingService.getOpenShifts({
         start_date: today,
-        end_date: nextMonth,
+        // Past the visible window on purpose — see TIMELINE_LOOKAHEAD_DAYS.
+        end_date: addCalendarDays(today, TIMELINE_LOOKAHEAD_DAYS),
       });
       setOpenShifts(data);
     } catch {
@@ -559,7 +667,38 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  /**
+   * Inline RSVP from the timeline, so an event reaches the same parity as an
+   * open shift: respond where you are rather than navigating to the detail
+   * page and back. Simpler than the shift case — there is no position to
+   * choose, so there is no expand step.
+   */
+  const handleEventRSVP = async (eventId: string, status: 'going' | 'not_going') => {
+    setRsvpingEventId(eventId);
+    try {
+      const saved = await eventService.createOrUpdateRSVP(eventId, { status, guest_count: 0 });
+      // The server's status, not the requested one: a full event returns
+      // `waitlisted`, and showing "Going" for a seat they did not get is worse
+      // than showing nothing.
+      const savedStatus = saved.status ?? status;
+      setUpcomingEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, user_rsvp_status: savedStatus } : e)));
+      if (savedStatus === 'waitlisted') {
+        toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
+      } else {
+        toast.success(savedStatus === 'going' ? "You're going" : 'Response saved');
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Could not save your RSVP'));
+    } finally {
+      setRsvpingEventId(null);
+    }
+  };
+
   const loadMySeats = async () => {
+    if (!isModuleOn('scheduling')) {
+      setMySeats([]);
+      return;
+    }
     try {
       // No shift id: the positions the member may hold in general, not the
       // ones open on a particular shift.
@@ -575,6 +714,10 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMyScreenings = async () => {
+    if (!isModuleOn('medical_screening')) {
+      setMyScreenings(null);
+      return;
+    }
     try {
       setMyScreenings(await medicalScreeningService.getMyCompliance());
     } catch {
@@ -594,28 +737,41 @@ const Dashboard: React.FC = () => {
       const monthStart = `${today.slice(0, 7)}-01`;
       const monthEnd = today;
 
+      const canLoadScheduling = isModuleOn('scheduling') && checkPermission('scheduling.view');
+      const canLoadTraining = isModuleOn('training') && checkPermission('training.view');
+      // Admin Hours currently has no ModuleSettings flag. Its established
+      // member-facing gate is admin_hours.view; manage is only for reviewing
+      // the whole department's entries.
+      const canLoadAdminHours = checkPermission('admin_hours.view');
+
       const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
-        schedulingService.getSummary().catch((err) => {
-          console.error('Failed to load scheduling summary:', err);
-          return null;
-        }),
-        trainingModuleConfigService.getMyTraining().catch((err) => {
-          console.error('Failed to load training summary:', err);
-          return null;
-        }),
-        adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
-          console.error('Failed to load admin hours summary:', err);
-          return null;
-        }),
+        canLoadScheduling
+          ? schedulingService.getSummary().catch((err) => {
+              console.error('Failed to load scheduling summary:', err);
+              return null;
+            })
+          : Promise.resolve(null),
+        canLoadTraining
+          ? trainingModuleConfigService.getMyTraining().catch((err) => {
+              console.error('Failed to load training summary:', err);
+              return null;
+            })
+          : Promise.resolve(null),
+        canLoadAdminHours
+          ? adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
+              console.error('Failed to load admin hours summary:', err);
+              return null;
+            })
+          : Promise.resolve(null),
       ]);
       // All three are month-to-date, because the card says "My Hours, August"
       // and the total adds them together. Training and administrative hours
       // were previously lifetime figures — so the headline total summed two
       // lifetime numbers with one monthly one and meant nothing.
       setHours({
-        training: trainingSummary?.hours_summary?.hours_this_month ?? 0,
-        standby: schedulingSummary?.hours_worked_this_month || 0,
-        administrative: adminHoursSummary?.totalHours ?? 0,
+        training: trainingSummary?.hours_summary?.hours_this_month ?? null,
+        standby: schedulingSummary?.hours_worked_this_month ?? null,
+        administrative: adminHoursSummary?.totalHours ?? null,
       });
       setMyCerts(trainingSummary?.certifications ?? []);
     } catch {
@@ -626,6 +782,11 @@ const Dashboard: React.FC = () => {
   };
 
   const loadTrainingProgress = async () => {
+    if (!isModuleOn('training')) {
+      setEnrollments([]);
+      setLoadingTraining(false);
+      return;
+    }
     try {
       const data = await trainingProgramService.getMyEnrollments('active');
       setEnrollments(data);
@@ -660,10 +821,10 @@ const Dashboard: React.FC = () => {
   const totalHours = sumHoursToQuarter([hours.training, hours.standby, hours.administrative]);
   const monthLabel = formatDateCustom(new Date(), { month: 'long' }, tz);
 
-  // ── The seven-day list ────────────────────────────────────────────────────
-  // My shifts, open slots and events are one question — "what am I doing this
-  // week" — so they merge into one date-ordered list rather than three panels
-  // the reader has to interleave by hand.
+  // ── The thirty-day list ───────────────────────────────────────────────────
+  // My shifts, open slots and events are one question — "what am I doing next"
+  // — so they merge into one date-ordered list rather than three panels the
+  // reader has to interleave by hand.
   const windowStart = getTodayLocalDate(tz);
   const windowEnd = addCalendarDays(windowStart, TIMELINE_DAYS - 1);
 
@@ -675,6 +836,19 @@ const Dashboard: React.FC = () => {
     const mine = new Set(myShifts.map((s) => s.id));
     return openShifts.filter((s) => !mine.has(s.id));
   }, [myShifts, openShifts]);
+
+  // The open shifts inside the window the card actually shows.
+  //
+  // `availableOpenShifts` reaches TIMELINE_LOOKAHEAD_DAYS out, and that reach
+  // exists for one purpose: letting the footer say how many more lie beyond
+  // the window. Any count that describes "what is open" to the member belongs
+  // to the window instead — a quick action reporting a shift sixty days out
+  // sends them to a schedule that is not showing it, and the number it quotes
+  // matches nothing they can see.
+  const openShiftsInWindow = useMemo(
+    () => availableOpenShifts.filter((s) => s.shift_date <= windowEnd),
+    [availableOpenShifts, windowEnd]
+  );
 
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
@@ -750,13 +924,13 @@ const Dashboard: React.FC = () => {
 
   const visibleTimeline = timeline.slice(0, TIMELINE_ROWS_SHOWN);
   const timelineCollapsedOnMobile = !timelineExpandedOnMobile && timeline.length > TIMELINE_ROWS_SHOWN_MOBILE;
-  // Counted from the whole week rather than the six rows the list renders: the
+  // Counted from the whole window rather than the six rows the list renders: the
   // footer that discloses entries past the desktop cap is itself held back
   // while collapsed, so this line is the only thing left saying they exist.
   const timelineHiddenOnMobile = timelineCollapsedOnMobile ? timeline.slice(TIMELINE_ROWS_SHOWN_MOBILE) : [];
   const firstHiddenTimelineRow = timelineHiddenOnMobile[0];
   const laterOpenShifts = availableOpenShifts.filter((s) => s.shift_date > windowEnd).length;
-  const shortStaffedOpenShifts = availableOpenShifts.filter(
+  const shortStaffedOpenShifts = openShiftsInWindow.filter(
     (s) => s.min_staffing != null && s.attendee_count < s.min_staffing
   ).length;
   const timelineLoading = loadingMyShifts || loadingOpenShifts || loadingUpcomingEvents;
@@ -829,7 +1003,10 @@ const Dashboard: React.FC = () => {
         unread: !msg.is_read,
         onClick: () => {
           if (!msg.is_read && !msg.is_persistent) void markMessageRead(msg.id);
-          void navigate('/messages');
+          // Deep-link to the message itself; its breadcrumb carries the member
+          // on to the full inbox, which tapping the feed row used to be the
+          // only way to reach.
+          void navigate(`/messages/${msg.id}`);
         },
         message: msg,
       });
@@ -885,16 +1062,16 @@ const Dashboard: React.FC = () => {
 
   const refreshDashboard = useCallback(async () => {
     await Promise.all([
+      loadDeptMessages(),
+      loadHours(),
+      loadUpcomingEvents(),
       loadNotifications(),
       loadMyShifts(),
       loadOpenShifts(),
-      loadDeptMessages(),
-      loadHours(),
       loadMySeats(),
       loadMyScreenings(),
       loadTrainingProgress(),
       loadMyEquipment(),
-      loadUpcomingEvents(),
       ...(activeTab === 'department' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
       ...(activeTab === 'department' && canViewChiefOperations ? [loadOperations()] : []),
       ...(activeTab === 'department' && canViewAssets ? [loadAssetWidgets()] : []),
@@ -973,14 +1150,49 @@ const Dashboard: React.FC = () => {
               >
                 {getRSVPStatusLabel(evt.user_rsvp_status)}
               </span>
-            ) : (
+            ) : evt.is_cancelled ||
+              (evt.rsvp_deadline && new Date(evt.rsvp_deadline) <= new Date()) ||
+              // This row only submits `going`, so an event that does not accept
+              // it has nothing here that can succeed — the API rejects the
+              // request deterministically against allowed_rsvp_statuses.
+              !(evt.allowed_rsvp_statuses ?? ['going', 'not_going']).includes('going') ? (
               <button
                 type="button"
                 onClick={() => void navigate(`/events/${evt.id}`)}
                 className="btn-secondary btn-auto inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold"
               >
-                {evt.requires_rsvp ? 'RSVP' : 'Open'}
+                Open
               </button>
+            ) : (
+              /* Inline, matching the open-shift row above: a member answers
+                 where they are instead of navigating to the detail page and
+                 back. requires_rsvp is not consulted — it says a response is
+                 expected, not that one is accepted. A passed rsvp_deadline is
+                 consulted, above: the API rejects those, and a prominent
+                 dashboard button that can never succeed is worse than a link. */
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleEventRSVP(evt.id, 'going')}
+                  disabled={rsvpingEventId === evt.id}
+                  className="btn-success btn-auto inline-flex min-h-[44px] shrink-0 items-center gap-1.5 px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {rsvpingEventId === evt.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  <span>Going</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleEventRSVP(evt.id, 'not_going')}
+                  disabled={rsvpingEventId === evt.id}
+                  className="btn-secondary btn-auto inline-flex min-h-[44px] shrink-0 items-center px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Can&apos;t
+                </button>
+              </div>
             ))}
         </div>
 
@@ -1010,7 +1222,7 @@ const Dashboard: React.FC = () => {
                 >
                   {dashboardEligiblePositions.map((pos) => (
                     <option key={pos} value={pos}>
-                      {POSITION_LABELS[pos] ?? pos}
+                      {positionLabel(pos)}
                     </option>
                   ))}
                 </select>
@@ -1161,7 +1373,7 @@ const Dashboard: React.FC = () => {
                       Take a Shift
                     </span>
                     <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      <span className="font-bold tabular-nums">{availableOpenShifts.length}</span> open
+                      <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
                       {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
                     </span>
                   </span>
@@ -1184,20 +1396,27 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* One time list: my shifts, open slots and events, merged */}
-              <section className="card order-2 overflow-hidden" aria-labelledby="next-seven-days-heading">
+              <section className="card order-2 overflow-hidden" aria-labelledby="next-thirty-days-heading">
                 <div className="border-theme-surface-border flex items-center gap-3 border-b px-4 py-3.5 sm:px-5">
                   <Calendar className="text-theme-text-secondary h-4.5 w-4.5 shrink-0" aria-hidden="true" />
-                  <h3 id="next-seven-days-heading" className="text-theme-text-primary text-base font-bold">
-                    Next 7 Days
+                  <h3 id="next-thirty-days-heading" className="text-theme-text-primary text-base font-bold">
+                    Next 30 Days
                   </h3>
                   <span className="text-theme-text-muted ml-auto hidden text-xs lg:inline">
                     Your shifts, drills and open slots in one list
                   </span>
+                  {/* "All Shifts", not "Full Schedule": this list carries
+                      drills and events too, and /scheduling carries neither —
+                      a label promising the whole schedule sends a member
+                      looking for Thursday's drill somewhere it cannot be.
+                      `view=month` because the list now spans thirty days, and
+                      because the phone grid draws a month whatever the view
+                      says while `week` fetches only seven days of data. */}
                   <button
-                    onClick={() => void navigate('/scheduling')}
+                    onClick={() => void navigate('/scheduling?view=month')}
                     className="text-theme-accent-red ml-auto inline-flex min-h-11 shrink-0 items-center gap-1 py-2 pl-2 text-sm font-semibold lg:ml-4"
                   >
-                    Full Schedule
+                    All Shifts
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
@@ -1252,7 +1471,7 @@ const Dashboard: React.FC = () => {
                             >
                               {laterOpenShifts} more open shift{laterOpenShifts === 1 ? '' : 's'}
                             </button>{' '}
-                            later this month
+                            in the following month
                           </>
                         )}
                       </p>
@@ -1378,7 +1597,7 @@ const Dashboard: React.FC = () => {
                               equally invalid and split apart by the parser.
                               LinkifiedText stops click propagation on its
                               anchors, so following a link doesn't also fire the
-                              row's navigation to /messages. */}
+                              row's navigation to the message. */}
                           {msg ? (
                             <div
                               role="button"
@@ -1389,8 +1608,9 @@ const Dashboard: React.FC = () => {
                                 // linkified body can hold focusable anchors,
                                 // and Enter on one bubbles here — without this
                                 // guard the row would swallow the keypress and
-                                // navigate to /messages instead of opening the
-                                // link (the anchor's guard covers clicks only).
+                                // navigate to the message instead of opening
+                                // the link (the anchor's guard covers clicks
+                                // only).
                                 if (e.target !== e.currentTarget) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
@@ -1617,14 +1837,22 @@ const Dashboard: React.FC = () => {
                       loading={loadingAdmin}
                     />
 
-                    <DashboardStatCard
-                      label="Training Compliance"
-                      value={`${adminSummary?.training_completion_pct ?? 0}%`}
-                      icon={GraduationCap}
-                      iconColor="text-green-700 dark:text-green-400"
-                      description={`${formatHours(adminSummary?.recent_training_hours)} hrs last 30 days`}
-                      loading={loadingAdmin}
-                    />
+                    {/*
+                      Null, not 0, is what says "this department does not run
+                      Training" — a genuine 0% still gets its card. Kept
+                      mounted while loading so the skeleton row does not
+                      reflow once the summary lands.
+                    */}
+                    {(loadingAdmin || adminSummary?.training_completion_pct != null) && (
+                      <DashboardStatCard
+                        label="Training Compliance"
+                        value={`${adminSummary?.training_completion_pct ?? 0}%`}
+                        icon={GraduationCap}
+                        iconColor="text-green-700 dark:text-green-400"
+                        description={`${formatHours(adminSummary?.recent_training_hours)} hrs last 30 days`}
+                        loading={loadingAdmin}
+                      />
+                    )}
 
                     <DashboardStatCard
                       label="Upcoming Events"
@@ -1635,24 +1863,26 @@ const Dashboard: React.FC = () => {
                       loading={loadingAdmin}
                     />
 
-                    <DashboardStatCard
-                      label="Action Items"
-                      value={adminSummary?.open_action_items ?? 0}
-                      icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
-                      iconColor={
-                        (adminSummary?.overdue_action_items ?? 0) > 0
-                          ? 'text-red-700 dark:text-red-400'
-                          : 'text-yellow-700 dark:text-yellow-400'
-                      }
-                      description={
-                        (adminSummary?.overdue_action_items ?? 0) > 0
-                          ? `${adminSummary?.overdue_action_items} overdue`
-                          : 'All on track'
-                      }
-                      loading={loadingAdmin}
-                      onClick={() => void navigate('/action-items')}
-                      ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
-                    />
+                    {(loadingAdmin || adminSummary?.open_action_items != null) && (
+                      <DashboardStatCard
+                        label="Action Items"
+                        value={adminSummary?.open_action_items ?? 0}
+                        icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
+                        iconColor={
+                          (adminSummary?.overdue_action_items ?? 0) > 0
+                            ? 'text-red-700 dark:text-red-400'
+                            : 'text-yellow-700 dark:text-yellow-400'
+                        }
+                        description={
+                          (adminSummary?.overdue_action_items ?? 0) > 0
+                            ? `${adminSummary?.overdue_action_items} overdue`
+                            : 'All on track'
+                        }
+                        loading={loadingAdmin}
+                        onClick={() => void navigate('/action-items')}
+                        ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
+                      />
+                    )}
 
                     <DashboardStatCard
                       label="Admin Hours"
@@ -1672,7 +1902,14 @@ const Dashboard: React.FC = () => {
                 ))}
             </div>
 
-            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
+            {/*
+              The widget summary comes from /api/v1/scheduling, which the
+              module gate refuses outright when Scheduling is off — so
+              without this the department tab renders a card that can only
+              fail. The permission says who may see the crew figures; the
+              module flag says whether this department schedules here at all.
+            */}
+            {canViewScheduling && isModuleOn('scheduling') && <SchedulingWidgets timezone={tz} />}
 
             {canViewOrganization && setupProgress && (
               <OrganizationSetupWidget

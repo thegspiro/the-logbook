@@ -190,7 +190,7 @@ holding an empty/whitespace string or an empty list/dict as missing, while `0` a
 and public required-field loops. **9 unit tests added** (`TestIsEmptyValue`)
 pinning the empty-vs-real-answer boundary (DB-free, since the helper is pure).
 
-### FORM-5 — LOW — `require_authentication` / `allow_multiple_submissions` not enforced — 🚩 FLAGGED (needs product decision)
+### FORM-5 — LOW — `require_authentication` / `allow_multiple_submissions` not enforced — ✅ FIXED (re-confirmed in security-review FORM-26, 2026-08-27)
 
 `get_form_by_slug` still gates on `is_public` + `PUBLISHED` only. A form marked
 both `is_public=True` and `require_authentication=True` still accepts anonymous
@@ -199,6 +199,13 @@ submissions, and `allow_multiple_submissions=False` isn't enforced server-side
 "public + require_authentication" needs a product decision on intended semantics
 (is it a contradiction to reject, or does it mean "public listing, authed
 submit"?). Recorded in `KNOWN_LIMITATIONS.md`.
+
+**Update (2026-08-27):** resolved since this pass — `submit_public_form`
+(both the endpoint and the service) now enforces both policies, including a
+locked, race-safe duplicate check for `allow_multiple_submissions=False` and
+a cross-org 404 for an authenticated submitter from a different org. See
+`docs/security-review/FORM-26-forms.md`. The `KNOWN_LIMITATIONS.md` entry
+should be marked resolved.
 
 ### FORM-4 — LOW — Form-definition text stored unescaped — 🚩 FLAGGED (do NOT escape at storage)
 
@@ -221,9 +228,17 @@ defense-in-depth against a future renderer change.
 
 ## Dead code / internal
 
-The 5 `{"success": False, "error": str(e)}` processor dicts are internal
-diagnostics (not client-facing). Sanitizing them is optional DiD; left to keep the
-change focused on the reachable leak.
+The 5 `{"success": False, "error": str(e)}` processor dicts were assessed here
+as internal diagnostics (not client-facing). Sanitizing them was left as
+optional DiD, to keep the change focused on the reachable leak.
+
+**Correction (security-review FORM-26 pass 2, 2026-08-31):** they were
+client-facing after all — `submission.integration_result` (the dict these
+sites populate) is a field on `FormSubmissionResponse`, the response model for
+`submit_form`/`get_submission`/`list_submissions`/
+`reprocess_submission_integrations`, and is rendered directly in
+`SubmissionViewer.tsx`. Fixed as FORM-9; see
+`docs/security-review/FORM-26-forms.md` pass 2.
 
 ## Documentation
 

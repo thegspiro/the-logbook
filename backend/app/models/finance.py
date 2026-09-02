@@ -1057,7 +1057,7 @@ class ExportMapping(Base):
 
 
 class ExportLog(Base):
-    """Log of QuickBooks export operations"""
+    """Log of an export attempt, including interrupted streams."""
 
     __tablename__ = "finance_export_logs"
 
@@ -1082,6 +1082,11 @@ class ExportLog(Base):
     exported_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # pending -> successful, failed (nothing delivered), or partial (some rows
+    # delivered before a generator error/client disconnect).
+    status = Column(String(20), nullable=False, default="pending")
+    error_message = Column(String(500), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     organization = relationship("Organization", foreign_keys=[organization_id])

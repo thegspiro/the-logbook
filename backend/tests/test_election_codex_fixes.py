@@ -369,6 +369,7 @@ class TestTokenVoteNullPositionDedup:
             is_test=False,
             positions_voted=None,
             eligible_positions=None,
+            eligible_item_ids=None,
             used=False,
             used_at=None,
         )

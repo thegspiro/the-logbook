@@ -155,9 +155,24 @@ class SalesforceService:
         return await self._refresh_access_token()
 
     def _api_url(self, path: str) -> str:
-        """Build a full Salesforce REST API URL."""
+        """Build a full Salesforce REST API URL.
+
+        self.instance_url is only validated against _INSTANCE_URL_RE on the
+        token-refresh paths (_token_url, _refresh_access_token's handling of
+        the returned instance_url). When an access token is already cached,
+        _ensure_access_token() returns it without ever calling
+        _refresh_access_token(), so this constructor-supplied,
+        org-admin-editable value would otherwise reach every outbound
+        request URL — with the org's live bearer token attached —
+        completely unvalidated. Validate it here too, since this is the one
+        call site every request goes through regardless of token state
+        (CRON2-31-12, SSRF-adjacent).
+        """
+        instance_url = self.instance_url.rstrip("/")
+        if not _INSTANCE_URL_RE.fullmatch(instance_url):
+            raise Exception("Salesforce instance URL is invalid or not configured")
         base = _API_PATH.format(version=self.api_version)
-        return f"{self.instance_url}{base}{path}"
+        return f"{instance_url}{base}{path}"
 
     async def _request(
         self,

@@ -292,7 +292,9 @@ class FacilityTypeBase(BaseModel):
 
 
 class FacilityTypeCreate(FacilityTypeBase):
-    pass
+    # Offered by the settings dialog on create; without it the choice is
+    # silently dropped and the lookup comes back active.
+    is_active: bool = True
 
 
 class FacilityTypeUpdate(BaseModel):
@@ -318,6 +320,10 @@ class FacilityTypeListItem(BaseModel):
     category: Optional[FacilityCategoryEnum] = None
     is_system: bool
     is_active: bool
+    # How many facilities reference this type. The settings screen shows it and
+    # disables Delete on a non-zero count; without it every row read 0, so the
+    # button was enabled for lookups the server then refused with a 400.
+    usage_count: int = 0
     model_config = _response_config
 
 
@@ -334,7 +340,7 @@ class FacilityStatusBase(BaseModel):
 
 
 class FacilityStatusCreate(FacilityStatusBase):
-    pass
+    is_active: bool = True
 
 
 class FacilityStatusUpdate(BaseModel):
@@ -362,6 +368,7 @@ class FacilityStatusListItem(BaseModel):
     is_operational: bool
     is_system: bool
     is_active: bool
+    usage_count: int = 0
     model_config = _response_config
 
 
@@ -522,9 +529,19 @@ class FacilityPhotoUpdate(BaseModel):
     is_primary: Optional[bool] = None
 
 
-class FacilityPhotoResponse(FacilityPhotoCreate):
+class FacilityPhotoResponse(BaseModel):
+    # Deliberately does not inherit FacilityPhotoCreate: `file_path` is an
+    # internal storage location, not something a `facilities.view` holder
+    # (the baseline permission gating these reads) should learn — mirrors
+    # DocumentResponse in the generic Documents module, which excludes the
+    # same field for the same reason.
     id: str
     organization_id: str
+    facility_id: str
+    file_name: str
+    mime_type: Optional[str] = None
+    caption: Optional[str] = None
+    is_primary: bool = False
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
     model_config = _response_config
@@ -553,9 +570,21 @@ class FacilityDocumentUpdate(BaseModel):
     expiration_date: Optional[date] = None
 
 
-class FacilityDocumentResponse(FacilityDocumentCreate):
+class FacilityDocumentResponse(BaseModel):
+    # Deliberately does not inherit FacilityDocumentCreate: `file_path` is an
+    # internal storage location, not something a `facilities.view` holder
+    # (the baseline permission gating these reads) should learn — mirrors
+    # DocumentResponse in the generic Documents module, which excludes the
+    # same field for the same reason.
     id: str
     organization_id: str
+    facility_id: str
+    file_name: str
+    mime_type: Optional[str] = None
+    document_type: Optional[str] = None
+    description: Optional[str] = None
+    document_date: Optional[date] = None
+    expiration_date: Optional[date] = None
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
     model_config = _response_config
@@ -575,7 +604,7 @@ class FacilityMaintenanceTypeBase(BaseModel):
 
 
 class FacilityMaintenanceTypeCreate(FacilityMaintenanceTypeBase):
-    pass
+    is_active: bool = True
 
 
 class FacilityMaintenanceTypeUpdate(BaseModel):
@@ -592,6 +621,7 @@ class FacilityMaintenanceTypeResponse(FacilityMaintenanceTypeBase):
     organization_id: Optional[str] = None
     is_system: bool
     is_active: bool
+    usage_count: int = 0
     created_at: datetime
     updated_at: datetime
     model_config = _response_config

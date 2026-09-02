@@ -29,6 +29,13 @@ tenant isolation).
   by minutes-publish). Frontend confirms no consumption.
 - **LIKE search escapes `\`, `%`, `_`; no raw SQL; flake8 clean; no TODOs.**
 
+**Correction (security review, 2026-08-25):** `docs/security-review/DOC-10-documents-legal.md`
+re-verified DOC-1/2/3/6 (still fixed) and DOC-4 (still open) and DOC-5 (resolved 2026-09-02 after being confirmed to extend identically to the facility-folder hierarchy
+added since this audit), and reviewed two files this audit never covered —
+`station_documents.py`/`print_document_service.py` and
+`legal_documents.py`/`legal_service.py` — for the first time. No new
+findings in either.
+
 ## Findings
 
 ### DOC-1 — MEDIUM (data retention) — `delete_document` orphaned the on-disk file — ✅ FIXED
@@ -71,17 +78,12 @@ owner-only (member personal), and role-restricted folders — so a plain
 **Status:** flagged — scoping the summary to `accessible_folder_ids` is a
 behavior change to a stats endpoint; left for a deliberate decision.
 
-### DOC-5 — LOW (design) — Folder ACL is per-folder, not hierarchical
+### DOC-5 — LOW (design) — Hierarchical folder ACL — ✅ FIXED (2026-09-02)
 
-`can_access_folder` inspects only the folder's own `visibility`/`allowed_roles`,
-never its ancestor chain. Apparatus/facility per-item child folders are created
-`ORGANIZATION`-visibility with no `allowed_roles` even though their parent roots
-are `LEADERSHIP`, so any `documents.view` user can read those child folders
-directly. The apparatus docstring claims "allowed_roles restricted" but no such
-restriction is coded.
-**Status:** flagged — confirm intent (org-visible apparatus/facility files may be
-desired). If leadership-only was intended, the ACL needs to walk the parent
-chain. Member personal folders are unaffected (individually `OWNER`).
+`can_access_folder` now requires the requested folder and every ancestor to admit
+the caller. Missing, cross-organization, and cyclic ancestry fails closed. Root
+ACLs are normalized so member owners and facility-sensitive permission holders
+retain intended access, while apparatus remains leadership-only.
 
 ### DOC-6 — LOW — Write-path FK/enum validation gaps (leadership-gated) — ✅ FIXED (app-review B8, 2026-08-06)
 

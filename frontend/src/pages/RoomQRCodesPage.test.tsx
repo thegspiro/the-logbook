@@ -115,6 +115,7 @@ describe('RoomQRCodesPage', () => {
     // Configurable module list including scheduling — apparatus section eligible
     mockGetEnabledModules.mockResolvedValue({
       enabled_modules: ['members', 'events', 'documents', 'roles', 'settings', 'scheduling'],
+      configured: true,
     });
     mockGetApparatusList.mockResolvedValue(mockApparatus);
   });
@@ -181,6 +182,7 @@ describe('RoomQRCodesPage', () => {
   it('hides the apparatus section when the scheduling module is off', async () => {
     mockGetEnabledModules.mockResolvedValue({
       enabled_modules: ['members', 'events', 'documents', 'roles', 'settings', 'facilities'],
+      configured: true,
     });
     renderPage();
 

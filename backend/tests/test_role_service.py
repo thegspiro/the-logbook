@@ -11,8 +11,11 @@ DB mocked; no MySQL.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.core.permissions import permission_matches
 from app.services.role_service import RoleManagementService, slugify
 
 
@@ -103,3 +106,190 @@ class TestUserHasAnyPermission:
             )
             is False
         )
+
+
+def _mutation_db():
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.flush = AsyncMock()
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
+    return db
+
+
+class TestRoleMutationAuditing:
+    async def test_member_system_position_display_name_can_change(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        member = SimpleNamespace(
+            id="member-role",
+            organization_id="org-1",
+            name="Member",
+            slug="member",
+            description="Baseline",
+            permissions=["events.view"],
+            is_system=True,
+            priority=10,
+        )
+        service.get_role = AsyncMock(return_value=member)
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=object()),
+        ) as audit:
+            updated = await service.update_role(
+                db, "member-role", "org-1", "admin-1", name="Volunteer"
+            )
+
+        assert updated.name == "Volunteer"
+        assert updated.slug == "member"
+        assert updated.permissions == ["events.view"]
+        assert permission_matches("events.view", set(updated.permissions))
+        assert audit.await_args.kwargs["event_data"]["changes"]["name"] == {
+            "old": "Member",
+            "new": "Volunteer",
+        }
+
+    async def test_other_system_position_name_update_is_rejected(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        service.get_role = AsyncMock(
+            return_value=SimpleNamespace(
+                id="chief-role",
+                name="Chief",
+                slug="chief",
+                is_system=True,
+            )
+        )
+
+        with pytest.raises(ValueError, match="Cannot rename this system position"):
+            await service.update_role(
+                db, "chief-role", "org-1", "admin-1", name="Commander"
+            )
+
+        db.flush.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
+    async def test_create_has_one_canonical_audit_before_commit(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        service.get_role_by_slug = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=object()),
+        ) as audit:
+            await service.create_role(db, "org-1", "Officer", [], "user-1")
+
+        audit.assert_awaited_once()
+        assert audit.await_args.kwargs["event_type"] == "role_created"
+        db.commit.assert_awaited_once()
+
+    async def test_create_audit_failure_rolls_back_without_commit(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        service.get_role_by_slug = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=None),
+        ):
+            with pytest.raises(RuntimeError, match="creation audit"):
+                await service.create_role(db, "org-1", "Officer", [], "user-1")
+
+        db.commit.assert_not_awaited()
+        db.rollback.assert_awaited_once()
+
+    async def test_assignment_has_one_audit_and_one_commit(self):
+        db = _mutation_db()
+        absent = MagicMock()
+        absent.first.return_value = None
+        role_name = MagicMock()
+        role_name.scalar.return_value = "Officer"
+        db.execute.side_effect = [absent, MagicMock(), role_name]
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=object()),
+        ) as audit:
+            changed = await RoleManagementService().assign_role_to_user(
+                db, "user-1", "role-1", "admin-1"
+            )
+
+        assert changed is True
+        audit.assert_awaited_once()
+        assert audit.await_args.kwargs["event_type"] == "role_assigned"
+        db.commit.assert_awaited_once()
+
+    async def test_assignment_audit_failure_rolls_back_without_commit(self):
+        db = _mutation_db()
+        absent = MagicMock()
+        absent.first.return_value = None
+        role_name = MagicMock()
+        role_name.scalar.return_value = "Officer"
+        db.execute.side_effect = [absent, MagicMock(), role_name]
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=None),
+        ):
+            with pytest.raises(RuntimeError, match="assignment audit"):
+                await RoleManagementService().assign_role_to_user(
+                    db, "user-1", "role-1", "admin-1"
+                )
+
+        db.commit.assert_not_awaited()
+        db.rollback.assert_awaited_once()
+
+    async def test_removal_audit_failure_rolls_back_without_commit(self):
+        db = _mutation_db()
+        role_name = MagicMock()
+        role_name.scalar.return_value = "Officer"
+        deleted = MagicMock()
+        deleted.rowcount = 1
+        db.execute.side_effect = [role_name, deleted]
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=None),
+        ):
+            with pytest.raises(RuntimeError, match="removal audit"):
+                await RoleManagementService().remove_role_from_user(
+                    db, "user-1", "role-1", "admin-1"
+                )
+
+        db.commit.assert_not_awaited()
+        db.rollback.assert_awaited_once()
+
+    async def test_bulk_replacement_writes_only_its_canonical_audit(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        new_role = SimpleNamespace(id="new-role")
+        service.get_user_roles = AsyncMock(side_effect=[[], [new_role]])
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=object()),
+        ) as audit:
+            roles = await service.set_user_roles(db, "user-1", ["new-role"], "admin-1")
+
+        assert roles == [new_role]
+        audit.assert_awaited_once()
+        assert audit.await_args.kwargs["event_type"] == "user_roles_replaced"
+        db.commit.assert_awaited_once()
+
+    async def test_bulk_audit_failure_rolls_back_all_assignment_changes(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        service.get_user_roles = AsyncMock(return_value=[])
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=None),
+        ):
+            with pytest.raises(RuntimeError, match="replacement audit"):
+                await service.set_user_roles(db, "user-1", ["new-role"], "admin-1")
+
+        db.commit.assert_not_awaited()
+        db.rollback.assert_awaited_once()

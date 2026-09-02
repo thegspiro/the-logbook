@@ -220,7 +220,7 @@ const EventQRCodePage: React.FC = () => {
               </p>
               {qrData.actual_end_time && (
                 <p className="text-theme-alert-warning-text mt-2 text-sm">
-                  Note: Event was ended early by event manager
+                  Note: Event was ended early by event officer
                 </p>
               )}
             </div>

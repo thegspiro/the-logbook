@@ -635,11 +635,13 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | `/scheduling/patterns`                              | SchedulingPatternsPage        | `scheduling.manage`                                                       |
 | `/scheduling/reports`                               | SchedulingReportsPage         | `scheduling.manage`                                                       |
 | `/scheduling/settings`                              | SchedulingSettingsPage        | `scheduling.manage`                                                       |
-| `/scheduling/equipment-check-templates/new`         | EquipmentCheckTemplateBuilder | `equipment_check.manage`                                                  |
-| `/scheduling/equipment-check-templates/:templateId` | EquipmentCheckTemplateBuilder | `equipment_check.manage`                                                  |
-| `/scheduling/equipment-check-reports`               | EquipmentCheckReportsPage     | `equipment_check.manage`                                                  |
-| `/scheduling/supply/expiring`                       | SupplyExpiringPage            | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
-| `/scheduling/apparatus-inventory`                   | ApparatusInventoryPage        | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| `/inventory/checklists/my`                          | MyChecklistsPage              | Authenticated (module only)                                               |
+| `/inventory/admin/checklists`                       | ChecklistsAdminPage           | `inventory.check_manage`                                                  |
+| `/inventory/admin/checklists/templates/new`         | EquipmentCheckTemplateBuilder | `inventory.check_manage`                                                  |
+| `/inventory/admin/checklists/templates/:templateId` | EquipmentCheckTemplateBuilder | `inventory.check_manage`                                                  |
+| `/inventory/admin/checklists/reports`               | EquipmentCheckReportsPage     | `inventory.check_view`                                                    |
+| `/inventory/admin/checklists/supply`                | SupplyExpiringPage            | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`    |
+| `/inventory/checklists/apparatus-inventory`         | ApparatusInventoryPage        | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 #### Facilities & Locations
 
@@ -1016,10 +1018,10 @@ columns.
 | Submitting an equipment check | `POST /equipment-checks/shifts/{id}/submit`              | A **recount** — a crew at the compartment outranks a running total that has drifted; `lot_found` / `serial_found` are written back onto the template item. `expiration_found` is recorded on the check but **not** written back _(2026-08-11)_ — a submitter asserting a fresh date must not be able to clear an expired-item auto-fail; authoritative expirations change only via the manage-level supply flows. Submitted items must belong to the named template |
 
 **Permissions.** Everything in that table is crew work and sits behind
-`equipment_check.submit` (the default member position) as well as the manage
+`inventory.check_submit` (the default member position) as well as the manage
 permissions. Requiring an officer to record a replacement is what leaves the
 bracket empty until morning. Reading — `GET .../apparatus/{id}/inventory`,
-`GET .../items/{id}/deployed-lots` — additionally accepts `equipment_check.view`
+`GET .../items/{id}/deployed-lots` — additionally accepts `inventory.check_view`
 or `inventory.view`.
 
 **Guards worth knowing:**
@@ -1086,13 +1088,15 @@ HIPAA exclusions (UNCACHEABLE_PREFIXES):
 | Forms               | Events                  | Event registration                                        | `FormIntegration` with target=events                                                                                                                                             |
 | Member Leaves       | Training Waivers        | Auto-create waiver from LOA                               | `leave.exempt_from_training_waiver` → auto-link                                                                                                                                  |
 | Users               | Notifications           | User notification preferences                             | `NotificationRule` per user/org                                                                                                                                                  |
-| Scheduling          | Apparatus               | Equipment check templates per apparatus                   | `equipment_check_template.apparatus_id` FK                                                                                                                                       |
-| Scheduling          | Apparatus               | Deficiency flag from failed checks                        | `apparatus.has_deficiency` set by check results                                                                                                                                  |
-| Scheduling          | Inventory               | Checklist position → catalog item                         | `check_template_items.inventory_item_id` FK (set at add time by the quick-add search, or in bulk via `GET`/`POST /equipment-checks/templates/{id}/inventory-matches` / `-links`) |
-| Scheduling          | Inventory               | Lots physically aboard a position                         | `check_item_deployed_lots.inventory_lot_id` FK (`SET NULL`; lot number and expiration are **snapshotted** so a consumed shelf lot does not erase the truck's record)             |
-| Scheduling          | Inventory               | Swap ready stock onto a truck                             | `POST /equipment-checks/items/{id}/swap` — decrements `inventory_lots.quantity`, writes a `CheckItemDeployedLot`, logs a `swap` changelog entry                                  |
-| Scheduling          | Inventory               | "What is expiring on my trucks", with the stock behind it | `GET /equipment-checks/supply/expiring-items`                                                                                                                                    |
+| Equipment Checks    | Apparatus               | Equipment check templates per apparatus                   | `equipment_check_template.apparatus_id` FK                                                                                                                                       |
+| Equipment Checks    | Apparatus               | Deficiency flag from failed checks                        | `apparatus.has_deficiency` set by check results                                                                                                                                  |
+| Equipment Checks    | Inventory               | Checklist position → catalog item                         | `check_template_items.inventory_item_id` FK (set at add time by the quick-add search, or in bulk via `GET`/`POST /equipment-checks/templates/{id}/inventory-matches` / `-links`) |
+| Equipment Checks    | Inventory               | Lots physically aboard a position                         | `check_item_deployed_lots.inventory_lot_id` FK (`SET NULL`; lot number and expiration are **snapshotted** so a consumed shelf lot does not erase the truck's record)             |
+| Equipment Checks    | Inventory               | Swap ready stock onto a truck                             | `POST /equipment-checks/items/{id}/swap` — decrements `inventory_lots.quantity`, writes a `CheckItemDeployedLot`, logs a `swap` changelog entry                                  |
+| Equipment Checks    | Inventory               | "What is expiring on my trucks", with the stock behind it | `GET /equipment-checks/supply/expiring-items`                                                                                                                                    |
 | Inventory           | Scheduling              | "Which trucks carry this item" (the reverse lookup)       | `GET /equipment-checks/supply/item-deployments/{inventory_item_id}`                                                                                                              |
+| Scheduling          | Equipment Checks        | A shift template names the checklists its shifts carry    | `shift_template_equipment_checks` join (org, both ids, sort order). Naming any **replaces** apparatus resolution; naming none falls back to it                                   |
+| Scheduling          | Equipment Checks        | A shift remembers the template it came from               | `shifts.template_id` FK (`SET NULL`, nullable). NULL on ad-hoc shifts and on every shift predating the column, both of which resolve checklists by apparatus                     |
 | Inventory           | Scheduling              | On-hand counted from in-date lots, not `quantity`         | Shared ready-lot-stock helper backs the reorder alert, the items grid and the CSV export                                                                                         |
 | Scheduling          | Notifications           | Weekly expiring-supply alert                              | `supply_expiration_alerts` in `scheduled_tasks.py`, split by whether an in-date lot is behind each row                                                                           |
 | Organization        | Communications          | Email footer library                                      | `Organization.settings["email_footers"]` → `{{footer_html}}` / `{{footer_text}}`, resolved by `build_context` a step before the template body                                    |
@@ -1173,7 +1177,7 @@ InventoryScanModal:
     → GET /api/v1/inventory/lookup?q=<barcode>
     → Item matches displayed in dropdown
     → User selects item → adds to batch (checkout or return)
-    → POST /api/v1/inventory/batch-checkout or batch-return
+    → POST /api/v1/inventory/distribute-items or batch-return
 
 MemberIdScannerModal / MemberScanPage:
   Camera → html5-qrcode (useHtml5Scanner hook)

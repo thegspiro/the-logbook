@@ -19,6 +19,14 @@ vi.mock('../services/api', () => ({
 }));
 
 const mockClearTempAccessToken = vi.fn();
+// Returns a real PurgeResult shape: logout reads `unsyncedDiscarded` off it to
+// decide whether to tell the member work was discarded.
+const emptyPurge = { drafts: 0, queuedChecks: 0, queuedReports: 0, queuedGeneric: 0, unsyncedDiscarded: 0 };
+const mockPurgeLocalMemberData = vi.fn(() => Promise.resolve({ ...emptyPurge }));
+
+vi.mock('../utils/purgeLocalMemberData', () => ({
+  purgeLocalMemberData: (...args: unknown[]) => mockPurgeLocalMemberData(...args) as unknown,
+}));
 
 vi.mock('../services/apiClient', () => ({
   markLoginComplete: (...args: unknown[]) => mockMarkLoginComplete(...args) as unknown,
@@ -26,7 +34,7 @@ vi.mock('../services/apiClient', () => ({
 }));
 
 // ---- Import store AFTER mocks are in place ----
-import { useAuthStore } from './authStore';
+import { markSignInPending, useAuthStore } from './authStore';
 
 // ---- Helpers ----
 
@@ -71,6 +79,13 @@ describe('authStore', () => {
 
     // Clear all mocks
     vi.clearAllMocks();
+    mockPurgeLocalMemberData.mockResolvedValue({
+      drafts: 0,
+      queuedChecks: 0,
+      queuedReports: 0,
+      queuedGeneric: 0,
+      unsyncedDiscarded: 0,
+    });
 
     // Clear localStorage and sessionStorage
     localStorage.clear();
@@ -405,17 +420,73 @@ describe('authStore', () => {
       expect(getState().isAuthenticated).toBe(true);
     });
 
-    it('clears session when getCurrentUser fails', async () => {
+    it('clears the session and purges device data when the server rejects it', async () => {
       localStorage.setItem('has_session', '1');
-      mockGetCurrentUser.mockRejectedValue(new Error('Unauthorized'));
+      mockGetCurrentUser.mockRejectedValue({ response: { status: 401 }, isAxiosError: true });
 
       await act(async () => {
         await getState().loadUser();
       });
 
       expect(localStorage.getItem('has_session')).toBeNull();
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
       expect(getState().isAuthenticated).toBe(false);
       expect(getState().user).toBeNull();
+    });
+
+    // Regression guard: purging local member data (offline shift-report
+    // drafts, equipment-check queues) must only happen on a *confirmed*
+    // auth failure. A transient error (offline, timeout, backend 5xx) does
+    // not mean the session is invalid, and silently discarding queued work
+    // on one of those — with no loss notice shown — is the defect this
+    // guards against.
+    it('purges local member data on a confirmed 401', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(Object.assign(new Error('Unauthorized'), { response: { status: 401 } }));
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalledTimes(1);
+    });
+
+    it('purges local member data on a confirmed 403', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(Object.assign(new Error('Forbidden'), { response: { status: 403 } }));
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT purge local member data on a network/timeout error', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(new Error('Network Error'));
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
+      // Still reports as unauthenticated for this load — the session state
+      // is unknown, but queued offline work must survive to sync later.
+      expect(getState().isAuthenticated).toBe(false);
+    });
+
+    it('does NOT purge local member data on a backend 500', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(
+        Object.assign(new Error('Internal Server Error'), { response: { status: 500 } })
+      );
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
     });
   });
 
@@ -508,6 +579,100 @@ describe('authStore', () => {
       useAuthStore.setState({ error: 'Something bad' });
       getState().clearError();
       expect(getState().error).toBeNull();
+    });
+  });
+
+  // ---- device ownership boundary ----
+
+  describe('offline data at the account boundary', () => {
+    /** Simulate the browser processing Set-Cookie headers from a login response. */
+    function simulateLoginCookies(): void {
+      document.cookie = `csrf_token=${Math.random().toString(36)}; Path=/`;
+    }
+
+    async function signIn(): Promise<void> {
+      mockLogin.mockImplementation(async () => {
+        simulateLoginCookies();
+        return { token_type: 'bearer', expires_in: 1800 };
+      });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+      await act(async () => {
+        await getState().login({ username: 'testuser', password: 'password123' });
+      });
+    }
+
+    it('discards the previous member’s work when a different member signs in', async () => {
+      // Shift-report drafts and the equipment-check queue live in the browser
+      // profile, and only logout cleared them. A station laptop whose session
+      // ended without one — a crash, a closed lid — handed the next member
+      // everything the last one had queued, to sync under their own name.
+      localStorage.setItem('device_member_id', 'someone-else');
+
+      await signIn();
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
+      expect(localStorage.getItem('device_member_id')).toBe('u1');
+    });
+
+    it('keeps a member’s own queued work when they sign back in', async () => {
+      localStorage.setItem('device_member_id', 'u1');
+
+      await signIn();
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
+    });
+
+    it('purges on a sign-in to a device whose owner was never recorded', async () => {
+      // Provenance is unknown, so it cannot be handed to the person signing
+      // in. This is the one-time cost of the upgrade to owner tracking.
+      await signIn();
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
+    });
+
+    it('purges on an OAuth sign-in to a device whose owner was never recorded', async () => {
+      // The OAuth callback is a *sign-in* that arrives through loadUser, and
+      // the provider redirect reloaded the app — so the store's own
+      // sign-in flag is gone and the claim would otherwise read this as a
+      // refresh. On a device with no recorded owner, which is every device the
+      // first time this ships, that hands the previous member's drafts and
+      // queued submissions to whoever signs in with Google next.
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        markSignInPending();
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
+      expect(localStorage.getItem('device_member_id')).toBe('u1');
+    });
+
+    it('leaves a live session’s own work alone across a page reload', async () => {
+      // The counterpart to the case above: a member already signed in when
+      // this shipped must not lose their drafts to the first refresh.
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
+      expect(localStorage.getItem('device_member_id')).toBe('u1');
+    });
+
+    it('purges on a reload when the recorded owner is a different member', async () => {
+      localStorage.setItem('has_session', '1');
+      localStorage.setItem('device_member_id', 'someone-else');
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
     });
   });
 });

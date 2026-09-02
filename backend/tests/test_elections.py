@@ -115,6 +115,76 @@ def _make_service(signing_key: str = "test-signing-key"):
     return service
 
 
+class TestVoterTypeMembershipBoundaries:
+    """Voter categories must not broaden when class and status are split."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", ["prospective", "retired"])
+    async def test_operational_excludes_non_active_standings(self, status):
+        service = _make_service()
+        user = SimpleNamespace(
+            member_class="operational", member_status=status, roles=[]
+        )
+
+        assert not await service._user_has_role_type(user, ["operational"])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("voter_type", ["regular", "life", "probationary"])
+    async def test_status_categories_require_operational_class(self, voter_type):
+        service = _make_service()
+        status = "regular" if voter_type == "regular" else voter_type
+        user = SimpleNamespace(
+            member_class="administrative", member_status=status, roles=[]
+        )
+
+        assert not await service._user_has_role_type(user, [voter_type])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("voter_type", "status"),
+        [
+            ("operational", "regular"),
+            ("regular", "regular"),
+            ("regular", "life"),
+            ("life", "life"),
+            ("probationary", "probationary"),
+        ],
+    )
+    async def test_legacy_operational_categories_remain_eligible(
+        self, voter_type, status
+    ):
+        service = _make_service()
+        user = SimpleNamespace(
+            member_class="operational", member_status=status, roles=[]
+        )
+
+        assert await service._user_has_role_type(user, [voter_type])
+
+    @pytest.mark.asyncio
+    async def test_administrative_is_eligible_for_administrative_category(self):
+        service = _make_service()
+        user = SimpleNamespace(
+            member_class="administrative", member_status="regular", roles=[]
+        )
+
+        assert await service._user_has_role_type(user, ["administrative"])
+
+    @pytest.mark.asyncio
+    async def test_social_is_eligible_only_for_social_category(self):
+        """'social' is a real, reachable eligible_voter_types value -- the
+        schema accepts any string, falling back to a role-slug match -- and
+        must not also satisfy 'operational'/'administrative'/'regular'."""
+        service = _make_service()
+        user = SimpleNamespace(
+            member_class="social", member_status="honorary", roles=[]
+        )
+
+        assert await service._user_has_role_type(user, ["social"])
+        assert not await service._user_has_role_type(user, ["operational"])
+        assert not await service._user_has_role_type(user, ["administrative"])
+        assert not await service._user_has_role_type(user, ["regular"])
+
+
 # ===================================================================
 # 1. Vote Signing & Integrity
 # ===================================================================

@@ -269,6 +269,58 @@ a partial fix is still a fix, and the leftover is reported.
 
 ---
 
+## Security Review Tooling
+
+### `json_column_ast_sweep.py`
+
+Enumerates every model attribute declared as `Column(JSON, ...)`,
+`Column(MutableDict.as_mutable(JSON), ...)`, or `Column(EncryptedJSON, ...)`
+across `app/models/*.py`, by parsing each file with the `ast` module rather
+than scanning source lines. Matched type names live in the script's
+`JSON_LIKE_TYPE_NAMES` — `EncryptedJSON` (`app/core/encrypted_types.py`) is
+a `TypeDecorator` around `Text` that transparently encrypts a `json.dumps`'d
+value; it is not `MutableDict`-wrapped, so it carries the same
+shallow-copy-then-reassign risk (pitfall #12) as bare `Column(JSON)`.
+
+**Purpose**: a line-anchored regex (`^\s*(\w+)\s*=\s*Column\(.*JSON`) cannot
+see a multiline declaration such as `report_email_recipients = Column(\n
+JSON, ...\n)` — the assignment target and the `JSON` reference land on
+different source lines. Four rounds of `docs/security-review/SEC-00-cross-
+cutting-baseline.md`'s sweep 9 were corrected because the JSON-column count
+behind it was produced by hand-derived, ad hoc methods, or — round 8 — because
+the script matched only the literal `JSON` identifier and missed a
+custom-named type wrapping it (`EncryptedJSON`, on the medical-screening PHI
+column). This script is the authoritative, structural method, checked into
+the repo so it can be re-run rather than re-derived.
+
+**Usage:**
+
+```bash
+cd backend
+python3 scripts/json_column_ast_sweep.py            # summary counts only
+python3 scripts/json_column_ast_sweep.py --list      # every attribute name + location
+python3 scripts/json_column_ast_sweep.py --by-file   # every declaration grouped by model file
+```
+
+**Expected Output:**
+
+```
+180 distinct attribute names, 231 Column(...) declarations referencing JSON,
+across 43 files in .../backend/app/models.
+```
+
+**Exit Codes:**
+
+- `0`: always — this is a reporting tool, not a gate. Pipe `--list` into a
+  diff against a recorded baseline if a future change wants CI to fail on
+  drift in the JSON-column set.
+
+**Requirements:**
+
+- No database needed — reads `app/models/*.py` source only
+
+---
+
 ## Deployment Setup
 
 ### `generate_vapid_keys.py`

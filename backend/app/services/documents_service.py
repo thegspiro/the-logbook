@@ -20,24 +20,52 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
+from app.core.permissions import (
+    get_rank_default_permissions,
+    permission_matches_any,
+)
 from app.models.document import (
     Document,
     DocumentFolder,
     DocumentStatus,
     FolderVisibility,
 )
-from app.models.user import User
+from app.models.user import Organization, User
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # Permissions that grant leadership-level access to all folders
 LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
 
+# The facilities module gates its sensitive records — access codes, utility
+# accounts, capital projects, insurance policies, lease terms — on this set,
+# and the facility file tree stores the bytes behind those records. It has to
+# carry the same gate or the record is protected and the file it points at is
+# not. Kept identical to _SENSITIVE_READ_PERMISSIONS in the facilities
+# endpoint; tests/test_facility_folder_access.py asserts the two agree.
+FACILITY_SENSITIVE_PERMISSIONS = [
+    "facilities.view_sensitive",
+    "facilities.edit",
+    "facilities.manage",
+]
+
 
 def _get_user_permissions(user: User) -> Set[str]:
-    """Collect all permissions from a user's roles."""
+    """Collect a user's effective permissions.
+
+    Must resolve them the same way the HTTP layer does
+    (``_collect_user_permissions`` in api/dependencies.py): positions **and**
+    operational-rank defaults. Reading positions alone refused a chief whose
+    facilities grants come from their rank — the endpoint admitted them and
+    then the folder gate turned them away, so the file they were entitled to
+    was unreachable with no indication why.
+    """
     perms: Set[str] = set()
     for role in user.roles:
         perms.update(role.permissions or [])
+    if user.rank:
+        perms.update(get_rank_default_permissions(user.rank))
     return perms
 
 
@@ -123,32 +151,20 @@ class DocumentsService:
         result = await self.db.execute(query)
         folders = result.scalars().all()
 
-        # Apply access filtering if a user is provided
+        # Apply access filtering if a user is provided.
+        #
+        # Delegated to can_access_folder rather than repeated here. This block
+        # used to re-implement the same rules inline, and the two copies did
+        # not stay equal: the by-id path learned required_permissions while the
+        # listing kept its own visibility-only walk, so a permission-gated
+        # folder stayed hidden from a direct fetch and listed in the browser.
+        # One owner for the rule is what keeps those answers the same.
         if current_user is not None:
-            user_perms = _get_user_permissions(current_user)
-            leadership = _is_leadership(user_perms)
-
-            if not leadership:
-                user_id = str(current_user.id)
-                user_roles = _get_user_role_slugs(current_user)
-                visible: List[DocumentFolder] = []
-
-                for f in folders:
-                    vis = f.visibility or FolderVisibility.ORGANIZATION
-
-                    # Organization-wide folders are always visible
-                    if vis == FolderVisibility.ORGANIZATION:
-                        # But check allowed_roles if set
-                        if f.allowed_roles and not (user_roles & set(f.allowed_roles)):
-                            continue
-                        visible.append(f)
-                    elif vis == FolderVisibility.OWNER:
-                        if f.owner_user_id and str(f.owner_user_id) == user_id:
-                            visible.append(f)
-                    # visibility='leadership' is hidden from non-leadership
-                    # (intentionally omitted from visible list)
-
-                folders = visible
+            folders = [
+                folder
+                for folder in folders
+                if await self.can_access_folder(folder, organization_id, current_user)
+            ]
 
         # Add document counts
         for folder in folders:
@@ -172,9 +188,30 @@ class DocumentsService:
         )
         return result.scalar_one_or_none()
 
-    def can_access_folder(self, folder: DocumentFolder, user: User) -> bool:
-        """Check if a user can access a specific folder."""
+    @staticmethod
+    def _folder_admits_user(folder: DocumentFolder, user: User) -> bool:
+        """Apply one folder's restrictions, without considering its parent.
+
+        ``required_permissions`` is checked *before* the leadership bypass and
+        is the one rule leadership does not override. Every other restriction
+        here answers "is this person senior enough", which documents.manage
+        legitimately settles. This one answers "does this person hold the
+        module grant the data is gated on" — a facility's insurance policies
+        and lease terms are readable with facilities.view_sensitive and not
+        otherwise, and a documents administrator holding no facilities grant is
+        exactly who that contract excludes. Letting the bypass win here would
+        reopen the leak this field exists to close, one module at a time.
+        """
         user_perms = _get_user_permissions(user)
+
+        if folder.required_permissions:
+            # permission_matches_any, not a raw set intersection: a member
+            # granted `facilities.*` holds every facilities permission, and an
+            # intersection sees none of them. It also subsumes the global "*"
+            # case this previously special-cased by hand.
+            if not permission_matches_any(folder.required_permissions, user_perms):
+                return False
+
         if _is_leadership(user_perms):
             return True
 
@@ -195,6 +232,53 @@ class DocumentsService:
 
         return True
 
+    async def can_access_folder(
+        self,
+        folder: DocumentFolder,
+        organization_id: UUID,
+        user: User,
+        folders_by_id: Optional[Dict[str, DocumentFolder]] = None,
+    ) -> bool:
+        """Authorize a folder by evaluating it and every ancestor.
+
+        Restrictions compose with logical AND: every folder from the requested
+        folder through the root must admit the caller.  Missing ancestors,
+        ancestors belonging to another organization, and ancestry cycles all
+        fail closed.  The per-folder leadership bypass still cannot override
+        ``required_permissions``.
+
+        ``folders_by_id`` may contain an already org-scoped folder snapshot for
+        callers authorizing many folders.  A missing id in such a snapshot is
+        treated as corrupt ancestry rather than triggering an unscoped lookup.
+        """
+        expected_org = str(organization_id)
+        current: Optional[DocumentFolder] = folder
+        seen: Set[str] = set()
+
+        while current is not None:
+            current_id = str(current.id)
+            if current_id in seen:
+                return False
+            seen.add(current_id)
+
+            if str(current.organization_id) != expected_org:
+                return False
+            if not self._folder_admits_user(current, user):
+                return False
+
+            parent_id = current.parent_id
+            if parent_id is None:
+                return True
+
+            if folders_by_id is not None:
+                current = folders_by_id.get(str(parent_id))
+            else:
+                current = await self.get_folder_by_id(parent_id, organization_id)
+            if current is None:
+                return False
+
+        return False
+
     async def can_access_document(
         self, document: Document, organization_id: UUID, user: User
     ) -> bool:
@@ -213,27 +297,67 @@ class DocumentsService:
             # Fail closed: a document that references a folder we can't resolve
             # must not become readable by falling through the ACL.
             return False
-        return self.can_access_folder(folder, user)
+        return await self.can_access_folder(folder, organization_id, user)
 
     async def accessible_folder_ids(
         self, organization_id: UUID, user: User
-    ) -> Optional[Set[str]]:
-        """Ids of folders the user may access, or None when they may access all
-        (leadership). Used to keep a document listing consistent with the folder
-        access rules even when no folder filter is supplied — otherwise listing
-        documents without a folder returned every org document, including those
-        in restricted/owner-only folders.
+    ) -> Set[str]:
+        """Return exactly the folder ids whose complete hierarchy is accessible.
+
+        An explicit set is returned even for leadership because corrupt or
+        cross-organization ancestry must never be converted into an unrestricted
+        document query. This keeps unfiltered listings consistent with direct
+        folder and document authorization.
         """
-        user_perms = _get_user_permissions(user)
-        if _is_leadership(user_perms):
-            return None
         result = await self.db.execute(
             select(DocumentFolder).where(
                 DocumentFolder.organization_id == str(organization_id)
             )
         )
         folders = result.scalars().all()
-        return {f.id for f in folders if self.can_access_folder(f, user)}
+        folders_by_id = {str(folder.id): folder for folder in folders}
+        accessible = set()
+        for folder in folders:
+            if await self.can_access_folder(
+                folder, organization_id, user, folders_by_id
+            ):
+                accessible.add(folder.id)
+        return accessible
+
+    async def _creates_cycle(
+        self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID
+    ) -> bool:
+        """True if *candidate_parent_id* is *folder_id* itself or one of its
+        own descendants — i.e. re-parenting under it would make the folder its
+        own ancestor.
+
+        `assert_in_org` only proves the candidate parent exists in the org; it
+        has no way to know it is the folder being moved (self-parenting) or
+        already sits underneath it (a cycle), either of which drops the folder
+        out of root-based navigation and can break cascade delete. Walks the
+        candidate's ancestor chain rather than the folder's descendants,
+        because the chain to the root is bounded by tree depth, while the
+        descendant subtree can be arbitrarily wide.
+        """
+        target = str(folder_id)
+        current: Optional[str] = str(candidate_parent_id)
+        seen: Set[str] = set()
+        while current:
+            if current == target:
+                return True
+            if current in seen:
+                # A pre-existing cycle we didn't create — stop rather than
+                # loop forever; it is not this call's job to repair it.
+                break
+            seen.add(current)
+            result = await self.db.execute(
+                select(DocumentFolder.parent_id).where(
+                    DocumentFolder.id == current,
+                    DocumentFolder.organization_id == str(organization_id),
+                )
+            )
+            current = result.scalar_one_or_none()
+        return False
 
     async def update_folder(
         self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
@@ -245,14 +369,22 @@ class DocumentsService:
 
         # DOC-6 (XC-1): validate re-pointed FKs are in-org before applying.
         if "parent_id" in update_data:
+            new_parent_id = update_data["parent_id"]
             await assert_in_org(
                 self.db,
                 DocumentFolder,
-                update_data["parent_id"],
+                new_parent_id,
                 organization_id,
                 allow_none=True,
                 label="parent folder",
             )
+            if new_parent_id and await self._creates_cycle(
+                folder_id, new_parent_id, organization_id
+            ):
+                raise ValueError(
+                    "A folder cannot be moved into itself or one of its own "
+                    "descendants"
+                )
         if "owner_user_id" in update_data:
             await assert_in_org(
                 self.db,
@@ -263,8 +395,22 @@ class DocumentsService:
                 label="owner",
             )
 
-        for key, value in update_data.items():
-            setattr(folder, key, value)
+        # DOC-20 (Codex round-2 on #1826): color/icon are DB-nullable (the
+        # column predates the "#3B82F6"/"folder" defaults) but
+        # DocumentFolderResponse declares both as plain, non-Optional str.
+        # apply_updates only rejects a null against a NOT NULL column, so an
+        # explicit `{"color": null}` would sail through, commit, and only
+        # fail when this (or any later) response tries to serialize the row
+        # -- a 500 after the bad value is already persisted, and a folder
+        # listing that happens to include this row breaks too. Reject the
+        # clear here, at the same layer as the other folder-specific
+        # validation above, rather than letting a DB-level nullable column
+        # stand in for a response-schema contract it doesn't enforce.
+        for _field in ("color", "icon"):
+            if _field in update_data and update_data[_field] is None:
+                raise ValueError(f"'{_field}' cannot be cleared; provide a value")
+
+        apply_updates(folder, update_data)
 
         await self.db.commit()
         await self.db.refresh(folder)
@@ -376,14 +522,11 @@ class DocumentsService:
             query = query.where(Document.status == DocumentStatus.ACTIVE)
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
-                Document.name.ilike(search_term)
-                | Document.description.ilike(search_term)
-                | Document.tags.ilike(search_term)
+                Document.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
+                | Document.description.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
+                | Document.tags.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
             )
 
         # Count
@@ -477,8 +620,7 @@ class DocumentsService:
                 label="folder",
             )
 
-        for key, value in update_data.items():
-            setattr(document, key, value)
+        apply_updates(document, update_data)
 
         await self.db.commit()
         await self.db.refresh(document)
@@ -520,7 +662,7 @@ class DocumentsService:
         so only the member and leadership can see it.
 
         Folder hierarchy:
-          Member Files/              (system, visibility=leadership)
+          Member Files/              (system, visibility=organization)
             └── Last, First/         (owner=user, visibility=owner)
         """
         # Find the 'members' system folder
@@ -546,7 +688,7 @@ class DocumentsService:
                 color=members_def["color"],
                 sort_order=members_def["sort_order"],
                 is_system=True,
-                visibility=FolderVisibility.LEADERSHIP,
+                visibility=FolderVisibility.ORGANIZATION,
             )
             self.db.add(members_root)
             await self.db.flush()
@@ -593,7 +735,7 @@ class DocumentsService:
 
         Folder hierarchy:
           Apparatus Files/                      (system, visibility=leadership)
-            └── Engine 1 (unit_number)/         (visibility=organization, allowed_roles restricted)
+            └── Engine 1 (unit_number)/         (visibility=organization)
                 ├── Photos/
                 ├── Registration & Insurance/
                 ├── Maintenance Records/
@@ -682,7 +824,7 @@ class DocumentsService:
         return vehicle_folder
 
     async def get_apparatus_sub_folders(
-        self, organization_id: UUID, apparatus_id: str
+        self, organization_id: UUID, apparatus_id: str, current_user: User
     ) -> List[DocumentFolder]:
         """
         Get the sub-folders for a specific apparatus.
@@ -717,6 +859,11 @@ class DocumentsService:
             .order_by(DocumentFolder.sort_order, DocumentFolder.name)
         )
         sub_folders = list(result.scalars().all())
+        sub_folders = [
+            folder
+            for folder in sub_folders
+            if await self.can_access_folder(folder, organization_id, current_user)
+        ]
 
         for folder in sub_folders:
             count_result = await self.db.execute(
@@ -740,7 +887,8 @@ class DocumentsService:
         under the 'Facility Files' system folder.
 
         Folder hierarchy:
-          Facility Files/                           (system, visibility=leadership)
+          Facility Files/                           (organization visibility,
+                                                     facility permission gate)
             └── Station 1 - Main St (display_name)/ (visibility=organization)
                 ├── Photos/
                 ├── Blueprints & Permits/
@@ -748,13 +896,43 @@ class DocumentsService:
                 ├── Inspection Reports/
                 ├── Insurance & Leases/
                 └── Capital Projects/
+
+        The whole get-or-create is a read-then-write with no uniqueness
+        constraint behind it (Pitfall #27 shape): two requests that both see
+        "no folder yet" would otherwise both insert a facility folder (and
+        its sub-folders), and every later read would break with
+        MultipleResultsFound. Locking the organization row for the duration
+        serializes concurrent first-accesses across the org's facilities —
+        cheap, since this only runs once per facility ever.
+
+        The lock alone is not sufficient (Pitfall #27's second half): the
+        caller (``GET /facilities/{id}/folders``) reads the ``Facility`` row
+        before this method ever runs, which under this app's default
+        REPEATABLE READ establishes the transaction's snapshot before the
+        organization lock is acquired. A plain ``SELECT`` for
+        ``facilities_root``/``facility_folder`` after that would still
+        answer from that earlier snapshot and could report "no folder yet"
+        even though a concurrent transaction already created and committed
+        one while this one waited for the lock. Both existence checks below
+        are therefore locking reads too, not just the organization row.
         """
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+
         # Find the 'facilities' system folder
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == FOLDER_FACILITIES)
             .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
         )
         facilities_root = result.scalar_one_or_none()
 
@@ -773,7 +951,8 @@ class DocumentsService:
                 color=facilities_def["color"],
                 sort_order=facilities_def["sort_order"],
                 is_system=True,
-                visibility=FolderVisibility.LEADERSHIP,
+                visibility=FolderVisibility.ORGANIZATION,
+                required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
             )
             self.db.add(facilities_root)
             await self.db.flush()
@@ -785,6 +964,9 @@ class DocumentsService:
             select(DocumentFolder)
             .where(DocumentFolder.parent_id == facilities_root.id)
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
         )
         facility_folder = result.scalar_one_or_none()
 
@@ -797,6 +979,7 @@ class DocumentsService:
                 icon="building",
                 color="text-indigo-400",
                 visibility=FolderVisibility.ORGANIZATION,
+                required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
                 is_system=False,
             )
             self.db.add(facility_folder)
@@ -820,6 +1003,11 @@ class DocumentsService:
                     color=sub_def["color"],
                     sort_order=sub_def["sort_order"],
                     visibility=FolderVisibility.ORGANIZATION,
+                    # Matches migration a9c4e7b2f631, which stamped the whole
+                    # facility tree (slug 'facilities' or 'facility-%') on
+                    # existing installs. Without it here, every facility
+                    # created after that deploy reopens the same leak.
+                    required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
                     is_system=False,
                 )
                 self.db.add(sub_folder)
@@ -832,17 +1020,24 @@ class DocumentsService:
         return facility_folder
 
     async def get_facility_sub_folders(
-        self, organization_id: UUID, facility_id: str
+        self, organization_id: UUID, facility_id: str, current_user: User
     ) -> List[DocumentFolder]:
         """
         Get the sub-folders for a specific facility.
         Returns an empty list if the facility folder doesn't exist.
+
+        Uses ``limit(1)`` rather than ``scalar_one_or_none()`` on both lookups
+        so a pre-existing duplicate row (from a race predating the lock in
+        ``ensure_facility_folder``) degrades to picking one deterministically
+        instead of a persistent 500 on every read.
         """
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == FOLDER_FACILITIES)
             .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facilities_root = result.scalar_one_or_none()
         if not facilities_root:
@@ -853,6 +1048,8 @@ class DocumentsService:
             select(DocumentFolder)
             .where(DocumentFolder.parent_id == facilities_root.id)
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facility_folder = result.scalar_one_or_none()
         if not facility_folder:
@@ -864,6 +1061,11 @@ class DocumentsService:
             .order_by(DocumentFolder.sort_order, DocumentFolder.name)
         )
         sub_folders = list(result.scalars().all())
+        sub_folders = [
+            folder
+            for folder in sub_folders
+            if await self.can_access_folder(folder, organization_id, current_user)
+        ]
 
         for folder in sub_folders:
             count_result = await self.db.execute(

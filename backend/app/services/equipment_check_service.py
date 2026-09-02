@@ -7,11 +7,12 @@ check submissions, checklist resolution by position, and item history.
 
 import hashlib
 import json
+import math
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -23,6 +24,7 @@ from app.models.apparatus import (
     CheckItemDeployedLot,
     CheckTemplateCompartment,
     CheckTemplateItem,
+    EquipmentCheckBulkDeleteRequest,
     EquipmentCheckBulkRequest,
     EquipmentCheckTemplate,
     TemplateChangeLog,
@@ -35,13 +37,16 @@ from app.models.training import (
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
     ShiftEquipmentCheckSeal,
+    ShiftTemplateEquipmentCheck,
 )
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
 from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_ref
+from app.utils.check_types import COUNT, EXPIRY, LEVEL, normalize_check_type
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class EquipmentCheckConflictError(ValueError):
@@ -60,6 +65,17 @@ class EquipmentCheckService:
             "created_by",
         }
     )
+
+    async def _advance_content_revision(self, template_id: str) -> None:
+        """Atomically move edited content to draft and invalidate stale answers."""
+        await self.db.execute(
+            update(EquipmentCheckTemplate)
+            .where(EquipmentCheckTemplate.id == template_id)
+            .values(
+                content_revision=EquipmentCheckTemplate.content_revision + 1,
+                is_active=False,
+            )
+        )
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -99,6 +115,8 @@ class EquipmentCheckService:
     ) -> EquipmentCheckTemplate:
         """Create a new equipment check template with nested compartments."""
         compartments_data = data.pop("compartments", None) or []
+        if data.get("is_active"):
+            self._validate_publishable_data(data, compartments_data)
 
         template = EquipmentCheckTemplate(
             id=generate_uuid(),
@@ -114,6 +132,82 @@ class EquipmentCheckService:
 
         await self.db.commit()
         return await self.get_template(template.id, organization_id)
+
+    @staticmethod
+    def _validate_publishable_data(template: Any, compartments: List[Any]) -> None:
+        """Enforce only rules that make a crew checklist unusable."""
+
+        errors = EquipmentCheckService._publication_errors(template, compartments)
+        if errors:
+            display_errors = [
+                (
+                    f"{error} (cannot be empty)"
+                    if "has no checkable items" in error
+                    else error
+                )
+                for error in errors
+            ]
+            raise ValueError(
+                "Template cannot be activated: " + "; ".join(display_errors)
+            )
+
+    @staticmethod
+    def _publication_errors(template: Any, compartments: List[Any]) -> List[str]:
+        """Return every blocking issue so callers can fix activation in one pass."""
+
+        def value(obj: Any, key: str, default: Any = None) -> Any:
+            return (
+                obj.get(key, default)
+                if isinstance(obj, dict)
+                else getattr(obj, key, default)
+            )
+
+        errors: List[str] = []
+        if not str(value(template, "name", "")).strip():
+            errors.append("template name is required")
+
+        operational = [c for c in compartments if not value(c, "is_header", False)]
+        if not operational:
+            errors.append("at least one operational compartment is required")
+
+        for compartment in compartments:
+            label = str(value(compartment, "name", "")).strip()
+            if not label:
+                errors.append("every operational compartment needs a name")
+            if value(compartment, "is_header", False):
+                continue
+            items = list(value(compartment, "items", []) or [])
+            checkable = [
+                item
+                for item in items
+                if value(item, "check_type", "pass_fail") not in ("header", "text")
+            ]
+            if not checkable:
+                errors.append(
+                    f'operational compartment "{label or "Untitled"}" has no checkable items'
+                )
+            for item in items:
+                item_label = str(value(item, "name", "")).strip()
+                if not item_label:
+                    errors.append("every checklist item needs a name")
+                check_type = value(item, "check_type", "")
+                if (
+                    check_type in ("count", "quantity")
+                    and value(item, "required_quantity") is None
+                    and value(item, "expected_quantity") is None
+                ):
+                    errors.append(
+                        f'count item "{item_label or "Untitled"}" needs an expected quantity '
+                        "(required or expected quantity)"
+                    )
+                if (
+                    check_type in ("level", "reading")
+                    and value(item, "min_level") is None
+                ):
+                    errors.append(
+                        f'level item "{item_label or "Untitled"}" needs a minimum level'
+                    )
+        return list(dict.fromkeys(errors))
 
     async def get_template(
         self,
@@ -206,8 +300,14 @@ class EquipmentCheckService:
         apparatus_type: Optional[str] = None,
         check_timing: Optional[str] = None,
         visible_positions: Optional[set[str]] = None,
+        template_ids: Optional[Sequence[str]] = None,
     ) -> List[EquipmentCheckTemplate]:
-        """List templates with optional filters and submitter visibility."""
+        """List templates with optional filters and submitter visibility.
+
+        ``template_ids`` narrows to an explicit set — the checklists a shift
+        template names. The org filter below still applies, so an id belonging
+        to another department resolves to nothing rather than leaking a row.
+        """
         query = (
             select(EquipmentCheckTemplate)
             .where(EquipmentCheckTemplate.organization_id == organization_id)
@@ -225,6 +325,11 @@ class EquipmentCheckService:
             query = query.where(EquipmentCheckTemplate.apparatus_type == apparatus_type)
         if check_timing is not None:
             query = query.where(EquipmentCheckTemplate.check_timing == check_timing)
+        if template_ids is not None:
+            # An empty sequence means "no templates", not "no filter" — the
+            # caller already decided the set, and in_(()) is the honest
+            # translation of an empty one.
+            query = query.where(EquipmentCheckTemplate.id.in_(list(template_ids)))
 
         result = await self.db.execute(query)
         return [
@@ -307,6 +412,10 @@ class EquipmentCheckService:
         if not template:
             return None
 
+        if data.get("is_active", template.is_active):
+            projected = {"name": data.get("name", template.name)}
+            self._validate_publishable_data(projected, template.compartments)
+
         # XC-1: create_template/clone_template validate the apparatus is in-org,
         # but this generic setattr loop did not — and the template's apparatus_id
         # is resolved to an apparatus *name* in the checklist/supply listings, so
@@ -372,7 +481,8 @@ class EquipmentCheckService:
             check_timing=source.check_timing,
             template_type=source.template_type,
             assigned_positions=source.assigned_positions,
-            is_active=source.is_active,
+            # A clone is a new work-in-progress and must be reviewed before use.
+            is_active=False,
             sort_order=source.sort_order,
             created_by=created_by,
         )
@@ -422,6 +532,7 @@ class EquipmentCheckService:
         for item_data in items_data:
             self._create_item(compartment.id, item_data)
 
+        await self._advance_content_revision(template_id)
         await self.db.commit()
 
         # Re-fetch with eager-loaded relationships to avoid MissingGreenlet
@@ -454,6 +565,7 @@ class EquipmentCheckService:
             if key not in self.PROTECTED_FIELDS and hasattr(compartment, key):
                 setattr(compartment, key, value)
 
+        await self._advance_content_revision(str(compartment.template_id))
         await self.db.commit()
 
         # Re-fetch with eager-loaded relationships to avoid MissingGreenlet
@@ -472,9 +584,179 @@ class EquipmentCheckService:
         if not compartment:
             return False
 
+        template_id = str(compartment.template_id)
         await self.db.delete(compartment)
+        await self._advance_content_revision(template_id)
         await self.db.commit()
         return True
+
+    async def replace_compartments(
+        self,
+        template_id: str,
+        organization_id: str,
+        compartments: List[Dict[str, Any]],
+    ) -> Optional[Tuple[List[Tuple[str, str]], List[CheckTemplateCompartment]]]:
+        """Swap a template's whole compartment tree in one transaction.
+
+        The builder's three bulk-replacement paths — vehicle preset, JSON
+        import, CSV import — each promise to discard everything currently on
+        the template and put the new contents in its place. Both halves are
+        one request because they are one decision: discarding on its own
+        commits an empty template, with the replacement existing nowhere but
+        the browser until the next Save. A closed tab or a failure in between
+        leaves the department with a checklist that has no contents at all,
+        and the screen showing contents that were never persisted.
+
+        Everything the new contents reference is validated before anything is
+        deleted, so a rejected item leaves the old tree exactly as it was.
+
+        An empty list is a valid request: it clears the template.
+
+        Replacement compartments cannot name a parent. Every compartment on
+        the template is being replaced, so a parent id could only point at a
+        row this call is deleting; the three callers send flat lists.
+
+        Returns None when the template is not the caller's, otherwise the
+        (id, name) pairs it discarded and the compartments it created — the
+        endpoint's audit trail names the discarded rows, and after the swap
+        there is nothing left to read a name from.
+        """
+        template = await self.get_template(template_id, organization_id)
+        if not template:
+            return None
+
+        for entry in compartments:
+            if entry.get("parent_compartment_id"):
+                raise ValueError(
+                    "A replacement compartment cannot name a parent compartment"
+                )
+            # EC2-4: nested items carry client-supplied inventory_item_id /
+            # equipment_id, exactly as add_compartment's do.
+            for item_data in entry.get("items") or []:
+                await self._validate_item_fks(item_data, organization_id)
+
+        existing = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .where(CheckTemplateCompartment.template_id == template_id)
+            .with_for_update()
+        )
+        doomed = list(existing.scalars().all())
+        discarded = [(str(comp.id), comp.name) for comp in doomed]
+        for comp in doomed:
+            await self.db.delete(comp)
+        await self.db.flush()
+
+        created_ids: List[str] = []
+        for index, entry in enumerate(compartments):
+            data = dict(entry)
+            items_data = data.pop("items", None) or []
+            data.pop("parent_compartment_id", None)
+            # Position comes from the list order the caller sent. A preset or
+            # an import describes a sequence, and trusting a sort_order that
+            # every entry may have left at its default would collapse it.
+            data["sort_order"] = index
+            compartment = CheckTemplateCompartment(
+                id=generate_uuid(),
+                template_id=template_id,
+                **data,
+            )
+            self.db.add(compartment)
+            await self.db.flush()
+
+            for item_data in items_data:
+                self._create_item(compartment.id, item_data)
+            created_ids.append(str(compartment.id))
+
+        await self._advance_content_revision(template_id)
+        await self.db.commit()
+
+        if not created_ids:
+            return discarded, []
+
+        # Re-fetch with eager-loaded relationships to avoid MissingGreenlet
+        # errors when FastAPI serializes the response outside the async context.
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .options(selectinload(CheckTemplateCompartment.items))
+            .where(CheckTemplateCompartment.id.in_(created_ids))
+            .order_by(CheckTemplateCompartment.sort_order)
+        )
+        return discarded, list(result.scalars().all())
+
+    async def clone_compartment(
+        self, compartment_id: str, organization_id: str, sort_order: int
+    ) -> Optional[CheckTemplateCompartment]:
+        """Clone a saved compartment and all of its items in one transaction."""
+        source = await self._get_compartment(compartment_id, organization_id)
+        if not source:
+            return None
+
+        # Make room in the same transaction as the clone. Committing the clone
+        # and repairing sibling positions in a second request can leave two
+        # rows at the same position when that second request fails.
+        await self.db.execute(
+            update(CheckTemplateCompartment)
+            .where(
+                CheckTemplateCompartment.template_id == source.template_id,
+                CheckTemplateCompartment.parent_compartment_id
+                == source.parent_compartment_id,
+                CheckTemplateCompartment.sort_order >= sort_order,
+            )
+            .values(sort_order=CheckTemplateCompartment.sort_order + 1)
+        )
+
+        clone = CheckTemplateCompartment(
+            id=generate_uuid(),
+            template_id=source.template_id,
+            name=f"{source.name} (copy)",
+            description=source.description,
+            sort_order=sort_order,
+            image_url=source.image_url,
+            is_header=source.is_header,
+            container_type=source.container_type,
+            is_sealed=source.is_sealed,
+            parent_compartment_id=source.parent_compartment_id,
+        )
+        self.db.add(clone)
+        await self.db.flush()
+        for item in source.items:
+            self.db.add(
+                CheckTemplateItem(
+                    id=generate_uuid(),
+                    compartment_id=clone.id,
+                    equipment_id=item.equipment_id,
+                    inventory_item_id=item.inventory_item_id,
+                    name=item.name,
+                    description=item.description,
+                    sort_order=item.sort_order,
+                    check_type=item.check_type,
+                    is_required=item.is_required,
+                    required_quantity=item.required_quantity,
+                    expected_quantity=item.expected_quantity,
+                    critical_minimum_quantity=item.critical_minimum_quantity,
+                    min_level=item.min_level,
+                    level_unit=item.level_unit,
+                    serial_number=item.serial_number,
+                    lot_number=item.lot_number,
+                    image_url=item.image_url,
+                    has_expiration=item.has_expiration,
+                    expiration_date=item.expiration_date,
+                    expiration_warning_days=item.expiration_warning_days,
+                )
+            )
+        try:
+            await self._advance_content_revision(str(source.template_id))
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .options(selectinload(CheckTemplateCompartment.items))
+            .where(CheckTemplateCompartment.id == clone.id)
+        )
+        return result.scalars().first()
 
     async def reorder_compartments(
         self,
@@ -493,6 +775,7 @@ class EquipmentCheckService:
                     comp.sort_order = idx
                     break
 
+        await self._advance_content_revision(template_id)
         await self.db.commit()
         return True
 
@@ -539,6 +822,7 @@ class EquipmentCheckService:
             **data,
         )
         self.db.add(item)
+        await self._advance_content_revision(str(compartment.template_id))
         await self.db.commit()
         await self.db.refresh(item)
         return item
@@ -647,6 +931,7 @@ class EquipmentCheckService:
                     entity_name=item.name,
                     changes={"bulk_idempotency_key": idempotency_key},
                 )
+            await self._advance_content_revision(str(compartment.template_id))
             await self.db.commit()
             return created, False
         except IntegrityError:
@@ -692,16 +977,20 @@ class EquipmentCheckService:
         if not item:
             return None
 
+        original_template_id = str(item.compartment.template_id)
         # XC-1 (cross-org write): compartment_id is client-supplied and the
         # generic setattr loop would move the item under it. A foreign
         # compartment_id would transfer this item — with the caller's content —
         # into another org's checklist (the item is org-scoped only via
         # compartment -> template, so it leaves this org entirely). Validate the
         # target compartment is in-org before re-parenting.
-        if data.get("compartment_id") and not await self._get_compartment(
-            data["compartment_id"], organization_id
-        ):
-            raise ValueError("Invalid compartment")
+        target_compartment = None
+        if data.get("compartment_id"):
+            target_compartment = await self._get_compartment(
+                data["compartment_id"], organization_id
+            )
+            if not target_compartment:
+                raise ValueError("Invalid compartment")
 
         # EC2-3/EC2-4: a reassigned inventory_item_id/equipment_id must be in-org
         # (inventory_item_id is name-projected in get_my_checklists).
@@ -713,6 +1002,11 @@ class EquipmentCheckService:
         # of a flush-time IntegrityError.
         apply_updates(item, data, skip=self.PROTECTED_FIELDS)
 
+        await self._advance_content_revision(original_template_id)
+        if target_compartment:
+            target_template_id = str(target_compartment.template_id)
+            if target_template_id != original_template_id:
+                await self._advance_content_revision(target_template_id)
         await self.db.commit()
         await self.db.refresh(item)
         return item
@@ -723,9 +1017,99 @@ class EquipmentCheckService:
         if not item:
             return False
 
+        template_id = str(item.compartment.template_id)
         await self.db.delete(item)
+        await self._advance_content_revision(template_id)
         await self.db.commit()
         return True
+
+    async def delete_items_bulk(
+        self,
+        compartment_id: str,
+        organization_id: str,
+        item_ids: List[str],
+        idempotency_key: str,
+        user_id: str,
+        user_name: str,
+    ) -> Optional[tuple[List[str], bool]]:
+        """Validate and delete an entire item batch in one transaction."""
+        if len(set(item_ids)) != len(item_ids):
+            raise ValueError("Item IDs must be unique")
+        payload_hash = hashlib.sha256(
+            json.dumps(item_ids, separators=(",", ":")).encode()
+        ).hexdigest()
+        try:
+            compartment = await self._get_compartment(compartment_id, organization_id)
+            if not compartment:
+                return None
+            # Serialize retries on the parent before reading the ledger. The
+            # ledger read is also locking/current so a request that waited for
+            # an overlapping delete sees the winner under MySQL REPEATABLE READ.
+            await self.db.execute(
+                select(CheckTemplateCompartment)
+                .where(CheckTemplateCompartment.id == compartment_id)
+                .with_for_update()
+            )
+            ledger_result = await self.db.execute(
+                select(EquipmentCheckBulkDeleteRequest)
+                .where(
+                    EquipmentCheckBulkDeleteRequest.organization_id == organization_id,
+                    EquipmentCheckBulkDeleteRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkDeleteRequest.idempotency_key == idempotency_key,
+                )
+                .with_for_update()
+            )
+            ledger = ledger_result.scalars().first()
+            if ledger:
+                if ledger.payload_hash != payload_hash:
+                    raise ValueError(
+                        "Idempotency key was already used with different items"
+                    )
+                return list(ledger.item_ids), True
+
+            items_result = await self.db.execute(
+                select(CheckTemplateItem)
+                .where(
+                    CheckTemplateItem.compartment_id == compartment_id,
+                    CheckTemplateItem.id.in_(item_ids),
+                )
+                .with_for_update()
+            )
+            items = items_result.scalars().all()
+            by_id = {str(item.id): item for item in items}
+            if set(by_id) != set(item_ids):
+                raise ValueError("Every item must belong to the specified compartment")
+
+            self.db.add(
+                EquipmentCheckBulkDeleteRequest(
+                    id=generate_uuid(),
+                    organization_id=organization_id,
+                    compartment_id=compartment_id,
+                    idempotency_key=idempotency_key,
+                    payload_hash=payload_hash,
+                    item_ids=item_ids,
+                )
+            )
+            for item_id in item_ids:
+                item = by_id[item_id]
+                await self.log_template_change(
+                    organization_id=organization_id,
+                    template_id=str(compartment.template_id),
+                    user_id=user_id,
+                    user_name=user_name,
+                    action="delete",
+                    entity_type="item",
+                    entity_id=item_id,
+                    entity_name=item.name,
+                    changes={"bulk_idempotency_key": idempotency_key},
+                )
+                await self.db.delete(item)
+            await self._advance_content_revision(str(compartment.template_id))
+            await self.db.commit()
+            return item_ids, False
+        except Exception:
+            await self.db.rollback()
+            raise
 
     async def reorder_items(
         self,
@@ -744,6 +1128,7 @@ class EquipmentCheckService:
                     item.sort_order = idx
                     break
 
+        await self._advance_content_revision(str(compartment.template_id))
         await self.db.commit()
         return True
 
@@ -950,21 +1335,8 @@ class EquipmentCheckService:
             # had drifted to, and it settles a shortfall report if the truck is
             # back to full.
             found_qty = item_data.get("quantity_found")
-            if (
-                tmpl_item is not None
-                and found_qty is not None
-                and self._target_quantity(tmpl_item) is not None
-            ):
-                counted = max(0, int(found_qty))
-                # Where lots are aboard the total has to be reconciled against
-                # them; writing the scalar alone would be discarded, since the
-                # lot sum is what every reader uses.
-                if self._deployed_lots(tmpl_item):
-                    self._reconcile_to_total(tmpl_item, counted, organization_id)
-                    tmpl_item.quantity_on_truck = self._on_truck(tmpl_item)
-                else:
-                    tmpl_item.quantity_on_truck = counted
-                self._sync_restock_after_restocking(tmpl_item)
+            if tmpl_item is not None and found_qty is not None:
+                self._reconcile_count_observation(tmpl_item, found_qty, organization_id)
 
             check_item = ShiftEquipmentCheckItem(
                 id=generate_uuid(),
@@ -993,6 +1365,25 @@ class EquipmentCheckService:
             self.db.add(check_item)
             created.append(check_item)
         return created
+
+    def _reconcile_count_observation(
+        self,
+        template_item: CheckTemplateItem,
+        counted: int,
+        organization_id: str,
+    ) -> None:
+        """Write the already-validated count to every inventory representation."""
+        if normalize_check_type(template_item.check_type) != COUNT:
+            return
+        # Where lots are aboard the total has to be reconciled against them;
+        # writing the scalar alone would be discarded, since their sum is what
+        # every reader uses.
+        if self._deployed_lots(template_item):
+            self._reconcile_to_total(template_item, counted, organization_id)
+            template_item.quantity_on_truck = self._on_truck(template_item)
+        else:
+            template_item.quantity_on_truck = counted
+        self._sync_restock_after_restocking(template_item)
 
     async def _create_check_seals(
         self,
@@ -1135,8 +1526,9 @@ class EquipmentCheckService:
     def _validate_and_snapshot_submission(
         items_data: List[Dict[str, Any]],
         template_items_map: Dict[str, CheckTemplateItem],
+        require_all: bool = True,
     ) -> None:
-        """Require exactly one answer for every authoritative question row."""
+        """Validate answers and snapshot their authoritative question rows."""
         submitted_ids: List[str] = []
         for item in items_data:
             template_item_id = item.get("template_item_id")
@@ -1155,15 +1547,80 @@ class EquipmentCheckService:
                 f"Items do not belong to template: {', '.join(sorted(unknown))}"
             )
         omitted = expected_ids - supplied_ids
-        if omitted:
+        if require_all and omitted:
             raise ValueError(
                 f"Submission is missing template items: {', '.join(sorted(omitted))}"
             )
 
         for item, template_item_id in zip(items_data, submitted_ids):
             item["template_item_id"] = template_item_id
+            EquipmentCheckService._validate_and_normalize_observation(
+                item, template_items_map[template_item_id]
+            )
             EquipmentCheckService._snapshot_from_template(
                 item, template_items_map[template_item_id]
+            )
+
+    @staticmethod
+    def _validate_and_normalize_observation(
+        item: Dict[str, Any], template_item: CheckTemplateItem
+    ) -> None:
+        """Validate the answer shape selected by the authoritative template."""
+        check_type = normalize_check_type(template_item.check_type)
+        status = item.get("status", "not_checked")
+
+        if check_type != COUNT:
+            item["quantity_found"] = None
+        if check_type != LEVEL:
+            item["level_reading"] = None
+
+        observation_passes: Optional[bool] = None
+        if check_type == COUNT and item.get("quantity_found") is not None:
+            quantity = item["quantity_found"]
+            if isinstance(quantity, bool) or not isinstance(quantity, int):
+                raise ValueError("Count observations must be integers")
+            if quantity < 0:
+                raise ValueError("Count observations must be non-negative")
+            # Keep the value used by reconciliation explicitly tied to the
+            # validated snapshot value. This assignment is intentionally
+            # before either destination consumes the submission.
+            item["quantity_found"] = quantity
+            target = EquipmentCheckService._target_quantity(template_item)
+            if target is not None:
+                observation_passes = quantity >= target
+        elif check_type == LEVEL and item.get("level_reading") is not None:
+            reading = item["level_reading"]
+            if isinstance(reading, bool) or not isinstance(reading, (int, float)):
+                raise ValueError("Level observations must be numbers")
+            reading = float(reading)
+            if not math.isfinite(reading):
+                raise ValueError("Level observations must be finite")
+            item["level_reading"] = reading
+            minimum = template_item.min_level
+            if minimum is not None and reading < minimum:
+                observation_passes = False
+            elif minimum is not None:
+                observation_passes = True
+        elif check_type == EXPIRY:
+            expiration = (
+                template_item.expiration_date if template_item.has_expiration else None
+            )
+            if expiration is not None:
+                observation_passes = expiration >= date.today()
+
+        # One direction only. A measurement can refute a "pass" — a cylinder
+        # reading below the minimum is not a serviceable cylinder, whatever
+        # the crew tapped — but it cannot refute a "fail". An AED pad packet
+        # can be torn open a year before the pads expire, a regulator can be
+        # cracked on a full cylinder, and a full drawer can hold the wrong
+        # size. Rejecting those answers 400s the *entire* checklist, with a
+        # message that gives the crew nothing to do, and offline the same
+        # payload is retried to the queue ceiling and then discarded — the
+        # finding is lost rather than filed.
+        if status == "pass" and observation_passes is False:
+            raise ValueError(
+                f"Status 'pass' contradicts the authoritative "
+                f"{check_type} observation"
             )
 
     @staticmethod
@@ -1177,11 +1634,24 @@ class EquipmentCheckService:
         unit was checked. Taking them from the request lets a client file a
         result whose serial or lot disagrees with the authoritative row it
         claims to answer, and every report downstream reads the snapshot.
+
+        ``required_quantity`` is snapshotted through ``_target_quantity`` rather
+        than off the column, because the column is only half of what this
+        service means by a target: ``required_quantity or expected_quantity``.
+        Storing the raw value gave the service two definitions of "short" —
+        ``_compute_check_status`` and the recompute in ``update_check`` compared
+        against this snapshot, while ``_is_short`` and ``swap_item_lot``'s
+        submitter limits used the resolved one. A position carrying
+        ``required_quantity = 0`` beside a positive ``expected_quantity`` was
+        therefore short by one rule and full by the other, and the crew-facing
+        screens read the resolved rule while the filed record kept the raw one.
         """
         item["item_name"] = template_item.name
         item["compartment_name"] = template_item._check_compartment_name
         item["check_type"] = template_item.check_type
-        item["required_quantity"] = template_item.required_quantity
+        item["required_quantity"] = EquipmentCheckService._target_quantity(
+            template_item
+        )
         item["critical_minimum_quantity"] = template_item.critical_minimum_quantity
         item["level_unit"] = template_item.level_unit
         item["serial_number"] = template_item.serial_number
@@ -1550,23 +2020,14 @@ class EquipmentCheckService:
         template_items_map = await self._load_checkable_template_items(
             organization_id, str(template_id)
         )
-        submitted_ids = {item.get("template_item_id") for item in items_data}
-        if None in submitted_ids:
-            raise ValueError("template_item_id is required for every item")
-        invalid = submitted_ids - template_items_map.keys()
-        if invalid:
-            raise ValueError(
-                f"Items do not belong to template: {', '.join(sorted(invalid))}"
-            )
         # A standalone check may deliberately cover part of a template, so
         # completeness is not required here as it is for a shift check — but
-        # the rows it does carry are snapshotted from the authoritative record
-        # all the same. Without this, serial and lot numbers reached the stored
-        # result (and every report reading it) straight from the request.
-        for item in items_data:
-            self._snapshot_from_template(
-                item, template_items_map[item["template_item_id"]]
-            )
+        # every row still takes the shared observation-validation and snapshot
+        # path. Without this, serial and lot numbers reached the stored result
+        # (and every report reading it) straight from the request.
+        self._validate_and_snapshot_submission(
+            items_data, template_items_map, require_all=False
+        )
         total, completed, failed, overall_status = self._compute_check_status(
             items_data, template_items_map
         )
@@ -1623,7 +2084,7 @@ class EquipmentCheckService:
         """Complete remaining items on an incomplete check.
 
         Only the member who originally performed the check may complete it,
-        unless ``allow_any`` is set (caller holds equipment_check.manage). This
+        unless ``allow_any`` is set (caller holds inventory.check_manage). This
         prevents an IDOR where any member could overwrite another member's
         safety-critical equipment check by supplying its id.
         """
@@ -1702,6 +2163,15 @@ class EquipmentCheckService:
                 )
                 existing.notes = item_data.get("notes", existing.notes)
                 tmpl_item = template_items_map.get(tmpl_id or "")
+                if (
+                    tmpl_item is not None
+                    and item_data.get("quantity_found") is not None
+                ):
+                    self._reconcile_count_observation(
+                        tmpl_item,
+                        item_data["quantity_found"],
+                        organization_id,
+                    )
                 # Lot metadata is inventory-owned. Ignore legacy/client
                 # observations when a saved incomplete check is resumed.
                 existing.serial_found = None
@@ -2203,6 +2673,7 @@ class EquipmentCheckService:
             )
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.is_active.is_(True),
                 # Two ways onto this worklist. A date the officer can see
                 # coming, and a crew's report that something was used or pulled
                 # — the second has no expiration to sort by and would otherwise
@@ -2376,6 +2847,7 @@ class EquipmentCheckService:
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
                 EquipmentCheckTemplate.apparatus_id == apparatus_id,
+                EquipmentCheckTemplate.is_active.is_(True),
             )
             .order_by(
                 CheckTemplateCompartment.sort_order.asc(),
@@ -2676,10 +3148,25 @@ class EquipmentCheckService:
         wrong, and a negative count is not a fact about any truck.
         """
         item, template_id = await self._get_item_with_template(
-            template_item_id, organization_id
+            template_item_id, organization_id, for_update=True
         )
         if item is None:
             return None
+
+        # Same lock-order as swap_item_lot (position first, always in that
+        # order): a read-modify-write on this item's deployed-lot quantities
+        # follows, so two crews reporting use of the same item at once must
+        # be serialized here too, or both read the same starting quantity and
+        # both decrement it independently -- the count ends up one use short
+        # instead of two.
+        await self.db.execute(
+            select(CheckItemDeployedLot.id)
+            .where(
+                CheckItemDeployedLot.template_item_id == item.id,
+                CheckItemDeployedLot.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
 
         before = self._on_truck(item)
         if quantity_used:
@@ -2790,12 +3277,18 @@ class EquipmentCheckService:
         lot the truck carries, and an empty row would keep contributing its
         date to the position's soonest-expiry reading forever.
 
-        ``allow_metadata_change=False`` (a submit-only caller) still permits
-        quantity edits and lot removal; it only refuses a ``lot_number`` /
-        ``expiration_date`` value that actually *differs* from what the row
-        holds. Keying the refusal off the payload merely containing those keys
-        broke every quantity-only save from the check form, which round-trips
-        the metadata it was shown.
+        ``allow_metadata_change=False`` (a submit-only caller) still permits a
+        quantity *decrease* or lot removal — the ordinary "we used one" or
+        "we found fewer than the record said" corrections. A quantity
+        *increase* requires the elevated permission too: this figure is what
+        ``swap_item_lot``'s submitter cap trusts as the ceiling on how much
+        real stock a submit-only caller may draw when replacing this lot, so
+        letting a submitter inflate it here would let them set their own
+        cap. It also refuses a ``lot_number`` / ``expiration_date`` value
+        that actually *differs* from what the row holds. Keying the metadata
+        refusal off the payload merely containing those keys broke every
+        quantity-only save from the check form, which round-trips the
+        metadata it was shown.
         """
         quantity = updates.get("quantity")
         if quantity is None or quantity < 0:
@@ -2813,6 +3306,11 @@ class EquipmentCheckService:
         )
         if target is None:
             return None
+
+        if not allow_metadata_change and quantity > target.quantity:
+            raise PermissionError(
+                "Increasing a deployed lot's quantity requires a manage " "permission"
+            )
 
         # Metadata is only applied on the quantity > 0 path below, so removal
         # (quantity == 0) never needs the elevated permission.
@@ -3056,6 +3554,7 @@ class EquipmentCheckService:
             .where(
                 CheckTemplateItem.inventory_item_id == inventory_item_id,
                 EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.is_active.is_(True),
             )
             .order_by(CheckTemplateItem.expiration_date.asc())
         )
@@ -3643,24 +4142,94 @@ class EquipmentCheckService:
     # Private Helpers
     # ------------------------------------------------------------------
 
+    async def _active_templates(self, organization_id: str, **filters):
+        """``list_templates`` with drafts removed.
+
+        ``list_templates`` only filters ``is_active`` when a position filter
+        is supplied, so every caller that cares has to do it itself.
+        """
+        return [
+            t
+            for t in await self.list_templates(organization_id, **filters)
+            if t.is_active
+        ]
+
+    async def _linked_check_template_ids(
+        self, shift_template_id: str, organization_id: str
+    ) -> List[str]:
+        """The checklist ids a shift template names, in the officer's order.
+
+        Org-scoped on the link row itself rather than trusted from the shift:
+        a by-id read of a client-reachable id gets the org filter (pitfall
+        #14a), even though the shift it came from was already resolved in-org.
+        """
+        result = await self.db.execute(
+            select(ShiftTemplateEquipmentCheck.equipment_check_template_id)
+            .where(
+                ShiftTemplateEquipmentCheck.shift_template_id == shift_template_id,
+                ShiftTemplateEquipmentCheck.organization_id == organization_id,
+            )
+            .order_by(ShiftTemplateEquipmentCheck.sort_order)
+        )
+        return [str(row) for row in result.scalars().all()]
+
     async def _resolve_templates(
         self,
         shift: Shift,
         organization_id: str,
         user_position: Optional[str],
     ) -> List[EquipmentCheckTemplate]:
-        """Resolve applicable templates for a shift apparatus.
+        """Resolve applicable templates for a shift.
 
-        Templates are defined either for one specific apparatus
-        (``EquipmentCheckTemplate.apparatus_id``, an FK to ``apparatus.id``) or
-        for an apparatus *type* (``apparatus_type``, a plain string). A
-        department on ``BasicApparatus`` has no full apparatus records, so only
-        the type-level route can ever match for it — which is why the shift's
-        id has to be classified rather than assumed.
+        Two routes, and the first one wins outright.
+
+        **The shift's template names them.** If the shift came from a
+        ``ShiftTemplate`` carrying ``shift_template_equipment_checks`` rows,
+        those are the checklists — the officer who wrote the template said so,
+        and the apparatus-type default is not a second opinion to be merged in.
+
+        **Otherwise, the apparatus.** Templates are defined either for one
+        specific apparatus (``EquipmentCheckTemplate.apparatus_id``, an FK to
+        ``apparatus.id``) or for an apparatus *type* (``apparatus_type``, a
+        plain string). A department on ``BasicApparatus`` has no full apparatus
+        records, so only the type-level route can ever match for it — which is
+        why the shift's id has to be classified rather than assumed.
+
+        The fallback is gated on whether the template named *any* checklists,
+        not on whether the lookup returned any rows. A template whose links all
+        point at deactivated checklists resolves to nothing, which is right:
+        the officer said which checklists this shift carries, and "none of them
+        are active any more" is not an invitation to substitute the apparatus's.
         """
         templates = []
 
-        if shift.apparatus_id:
+        explicit = False
+        if getattr(shift, "template_id", None):
+            linked_ids = await self._linked_check_template_ids(
+                str(shift.template_id), organization_id
+            )
+            if linked_ids:
+                explicit = True
+                # Drafts are dropped here too, and `explicit` is already
+                # True: it is set from the link rows, not from what they
+                # resolve to. A template whose links all point at deactivated
+                # checklists therefore resolves to nothing rather than
+                # falling through to the apparatus's — see the docstring.
+                fetched = await self._active_templates(
+                    organization_id, template_ids=linked_ids
+                )
+                # Back into the officer's order. list_templates sorts by the
+                # checklist's own sort_order, which is the right answer when
+                # it is listing a catalogue and the wrong one here: the link
+                # rows carry the order an officer arranged, and the reminder
+                # resolver already honours it. Disagreeing would show the crew
+                # a different running order than the reminder named.
+                by_id = {str(t.id): t for t in fetched}
+                templates = [
+                    by_id[linked_id] for linked_id in linked_ids if linked_id in by_id
+                ]
+
+        if not explicit and shift.apparatus_id:
             ref = await resolve_apparatus_ref(
                 self.db, shift.apparatus_id, organization_id
             )
@@ -3668,8 +4237,19 @@ class EquipmentCheckService:
             # Apparatus-specific templates, only meaningful when the shift's
             # apparatus is a full Apparatus record — the template FK targets
             # that table, so a BasicApparatus id could never match one.
+            # Drafts are filtered out *before* the precedence decision below.
+            # A draft is not a checklist the crew can be shown, so it must not
+            # be what suppresses the type-level fallback: an officer starting
+            # an Engine-1-specific template — or merely editing an item on an
+            # existing one, which sets is_active=False — otherwise took the
+            # published "Engine — start of shift" checklist off every Engine 1
+            # shift and left the crew with nothing. This is also the order
+            # equipment_readiness_service._load_templates and
+            # scheduled_tasks._resolve_check_templates already use, and the
+            # three disagreeing is what let readiness report a MISSING check
+            # for a checklist nobody was ever offered.
             if ref.full is not None:
-                templates = await self.list_templates(
+                templates = await self._active_templates(
                     organization_id, apparatus_id=ref.full_id
                 )
 
@@ -3680,12 +4260,9 @@ class EquipmentCheckService:
             if not templates:
                 type_slug = ref.type_slug
                 if type_slug:
-                    templates = await self.list_templates(
+                    templates = await self._active_templates(
                         organization_id, apparatus_type=type_slug
                     )
-
-        # Filter by active status
-        templates = [t for t in templates if t.is_active]
 
         # Filter by user position if specified
         if user_position:
@@ -3840,6 +4417,7 @@ class EquipmentCheckService:
                 CheckTemplateItem.id == item_id,
                 EquipmentCheckTemplate.organization_id == organization_id,
             )
+            .options(selectinload(CheckTemplateItem.compartment))
         )
         return result.scalars().first()
 
@@ -4008,7 +4586,7 @@ class EquipmentCheckService:
                     category="equipment_check",
                     subject=notif_subject,
                     message=message,
-                    action_url=(f"/scheduling/shifts/{shift.id}"),
+                    action_url="/inventory/checklists/log",
                     delivered=True,
                 )
                 self.db.add(notif)
@@ -4299,11 +4877,10 @@ class EquipmentCheckService:
         if item_name:
             # Escape LIKE wildcards so a literal % or _ in the filter doesn't
             # act as a wildcard (declare the escape char so it's honored).
-            safe_item = (
-                item_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
             base_q = base_q.where(
-                ShiftEquipmentCheckItem.item_name.ilike(f"%{safe_item}%", escape="\\")
+                ShiftEquipmentCheckItem.item_name.ilike(
+                    like_pattern(item_name), escape=LIKE_ESCAPE_CHAR
+                )
             )
 
         # Count

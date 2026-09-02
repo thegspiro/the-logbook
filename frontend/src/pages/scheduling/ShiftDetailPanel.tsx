@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 import {
   X,
   Users,
@@ -43,11 +44,12 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment } from '../../types/scheduling';
-import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
+import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/inventory/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
@@ -63,6 +65,7 @@ import { formatHours } from '../../utils/hoursFormatting';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
 import { PrintDocumentButton } from '../../components/PrintDocumentButton';
 import { StationDocument } from '../../services/stationDocumentService';
@@ -256,19 +259,44 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     () =>
       hasApparatusPositions
         ? apparatusPositions.map(({ position: name }) => {
-            return [name, POSITION_LABELS[name] || name.charAt(0).toUpperCase() + name.slice(1)] as [string, string];
+            return [name, positionLabel(name)] as [string, string];
           })
         : Object.entries(POSITION_LABELS),
     [hasApparatusPositions, apparatusPositions]
   );
 
-  // Set default signup position
+  // Which seats on this shift this member may claim. The signup endpoint is
+  // the gate; these buttons are only the affordance — so offering a seat the
+  // server will refuse is what we are removing here, not adding a second rule.
+  const {
+    positions: eligiblePositions,
+    loading: eligibilityLoading,
+    error: eligibilityError,
+  } = useEligiblePositions(shift.id);
+
+  // The two ways of not knowing get opposite answers on purpose. While the
+  // lookup is in flight we withhold the button rather than show one that
+  // disappears under a thumb. If the lookup *failed* we offer it and let the
+  // server decide: taking self-signup away from the whole department over a
+  // network blip is the worse outcome, and the 403 explains itself.
+  const canSignUpFor = useCallback(
+    (position: string) => eligibilityError !== null || (!eligibilityLoading && eligiblePositions.includes(position)),
+    [eligibilityError, eligibilityLoading, eligiblePositions]
+  );
+
+  const signupOptions = useMemo(
+    () => positionOptions.filter(([value]) => canSignUpFor(value)),
+    [positionOptions, canSignUpFor]
+  );
+
+  // Keep the chosen position one the member can actually be signed up for —
+  // a stale selection left over from before eligibility resolved would submit
+  // a seat the endpoint refuses.
   useEffect(() => {
-    if (positionOptions.length > 0 && !signupPosition) {
-      const firstOption = positionOptions[0];
-      if (firstOption) setSignupPosition(firstOption[0]);
-    }
-  }, [positionOptions, signupPosition]);
+    setSignupPosition((current) =>
+      signupOptions.some(([value]) => value === current) ? current : (signupOptions[0]?.[0] ?? '')
+    );
+  }, [signupOptions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -277,7 +305,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       try {
         const [assignData, checkData, attendanceData, allAttData, detail, handoffData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
-          schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
+          equipmentCheckService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
           schedulingService.getMyAttendance(shift.id),
           schedulingService.getShiftAttendance(shift.id).catch(() => []),
           schedulingService.getShift(shift.id).catch(() => null),
@@ -573,7 +601,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         });
         successCount++;
       } catch (err) {
-        toast.error(`Failed to assign ${position}: ${getErrorMessage(err, 'Unknown error')}`);
+        toast.error(`Failed to assign ${positionLabel(position)}: ${getErrorMessage(err, 'Unknown error')}`);
       }
     }
     if (successCount > 0) {
@@ -858,6 +886,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     () => crewBoard?.filter((s) => !s.assignment).map((s) => s.position) || [],
     [crewBoard]
   );
+
+  // Seats are open but none of them are theirs to take. Say so once, under the
+  // board — a board of open seats with every button quietly missing reads as a
+  // broken page, which is the confusion this gating exists to end.
+  const showNoClaimableSeatNote =
+    !isPast &&
+    !isUserAssigned &&
+    !eligibilityLoading &&
+    eligibilityError === null &&
+    openPositions.length > 0 &&
+    !openPositions.some((position) => canSignUpFor(position));
 
   // Default the assign form to the first open position
   useEffect(() => {
@@ -1846,6 +1885,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     canAssign={canAssign}
                     isPast={isPast}
                     isUserAssigned={isUserAssigned}
+                    canSignUp={canSignUpFor(position)}
                     positionOptions={positionOptions}
                     attendanceRecord={assignment ? attendanceByUser.get(assignment.user_id) : undefined}
                     tz={tz}
@@ -1875,6 +1915,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   />
                 ))}
               </div>
+
+              {showNoClaimableSeatNote && (
+                <p className="text-theme-text-muted mt-2 text-xs">
+                  None of the open seats on this shift match your rank, the positions you hold, or your completed
+                  training, so there is nothing here for you to claim. A scheduling admin can review your rank and
+                  positions, or the positions on this shift.
+                </p>
+              )}
 
               {/* Extra assignments (not matching apparatus positions) */}
               {extraAssignments.length > 0 && (
@@ -2112,7 +2160,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <p className="text-theme-text-muted text-xs">Select a member for each open position.</p>
                   <div className="space-y-2">
                     {openPositions.map((pos) => {
-                      const label = POSITION_LABELS[pos] ?? pos;
+                      const label = positionLabel(pos);
                       return (
                         <div key={pos} className="flex items-center gap-2">
                           <span className="text-theme-text-secondary w-24 shrink-0 text-xs font-medium capitalize">
@@ -2162,38 +2210,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           )}
 
           {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
-          {!hasApparatusPositions && !isPast && !isUserAssigned && (
+          {!hasApparatusPositions && !isPast && !isUserAssigned && !eligibilityLoading && (
             <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
               <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
                 <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this shift
               </h3>
-              <div className="flex items-center gap-2">
-                <select
-                  value={signupPosition}
-                  onChange={(e) => setSignupPosition(e.target.value)}
-                  className={'flex-1 ' + inputCls}
-                >
-                  {positionOptions.map(([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => {
-                    void handleSignup();
-                  }}
-                  disabled={pending.signingUp}
-                  className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-                >
-                  {pending.signingUp ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <UserPlus className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  Sign myself up
-                </button>
-              </div>
+              {signupOptions.length === 0 ? (
+                <p className="text-theme-text-muted text-xs">
+                  No position on this shift matches your rank, the positions you hold, or your completed training. A
+                  scheduling admin can review your rank and positions, or the positions on this shift.
+                </p>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={signupPosition}
+                    onChange={(e) => setSignupPosition(e.target.value)}
+                    className={'flex-1 ' + inputCls}
+                  >
+                    {signupOptions.map(([val, label]) => (
+                      <option key={val} value={val}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => {
+                      void handleSignup();
+                    }}
+                    disabled={pending.signingUp}
+                    className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    {pending.signingUp ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <UserPlus className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    Sign myself up
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -2445,7 +2500,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <button
                     onClick={() => {
                       onClose();
-                      void navigate(`/scheduling?tab=equipment-checks&shift=${shift.id}`);
+                      void navigate(`/inventory/checklists/my?shift=${shift.id}`);
                     }}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-400"
                   >

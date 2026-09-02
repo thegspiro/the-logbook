@@ -19,14 +19,17 @@ interface LegalTextResponse {
   organizationName: string | null;
   privacyPolicy: string | null;
   termsOfService: string | null;
-  lastUpdated: string | null;
+  privacyPolicyLastUpdated: string | null;
+  termsOfServiceLastUpdated: string | null;
 }
 
 /**
  * Revision date of the built-in defaults. Reviewers of a privacy notice expect
  * to see when it last changed, so bump this whenever the text in
  * legalContent.ts is edited. A department publishing its own wording supplies
- * its own date via settings["legal"]["last_updated"].
+ * its own date, stored per document type (settings["legal"]["privacy_policy_
+ * effective_date"] / "terms_of_service_effective_date") so publishing one
+ * document never misdates the other.
  */
 const DEFAULT_LEGAL_LAST_UPDATED = 'August 17, 2026';
 
@@ -63,9 +66,11 @@ const LegalPage: React.FC = () => {
   const orgName = legal?.organizationName || 'the department';
   const customText = isPrivacy ? legal?.privacyPolicy : legal?.termsOfService;
   const title = isPrivacy ? 'Privacy Policy' : 'Terms of Service';
-  // A department's own wording carries its own revision date; the built-in
-  // date describes only the built-in text and would misdate custom text.
-  const lastUpdated = customText ? legal?.lastUpdated : DEFAULT_LEGAL_LAST_UPDATED;
+  // A department's own wording carries its own revision date, per document;
+  // the built-in date describes only the built-in text and would misdate
+  // custom text.
+  const customLastUpdated = isPrivacy ? legal?.privacyPolicyLastUpdated : legal?.termsOfServiceLastUpdated;
+  const lastUpdated = customText ? customLastUpdated : DEFAULT_LEGAL_LAST_UPDATED;
 
   return (
     <main

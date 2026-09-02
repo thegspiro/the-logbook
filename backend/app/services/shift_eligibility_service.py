@@ -2,8 +2,8 @@
 Shift Position Eligibility Service
 
 Determines which shift positions a member is eligible to sign up for
-based on their rank, completed training programs, org-wide open
-positions, membership type, and EVOC certification levels.
+based on their rank, qualifications, completed training programs,
+org-wide open positions, membership type, and EVOC certification levels.
 """
 
 import copy
@@ -27,9 +27,26 @@ from app.models.training import (
     Shift,
     TrainingProgram,
 )
-from app.models.user import Organization, User
+from app.models.user import (
+    Organization,
+    Position,
+    User,
+    UserStatus,
+    user_positions,
+)
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
+from app.services.operational_rank_service import DEFAULT_RANKS
+from app.services.qualification_service import (
+    QualificationService,
+    positions_for_qualifications,
+    qualification_label,
+)
+from app.utils.membership import (
+    effective_member_class,
+    is_administrative,
+    is_operational,
+)
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -49,6 +66,22 @@ DEFAULT_EXCLUDED_MEMBERSHIP_TYPES = [
     "honorary",
     "prospective",
 ]
+
+# rank_code -> the shift positions that rank may fill, and rank_code -> label,
+# both derived from the seed set so there is one source of truth.
+#
+# These are the *fallback* for a code the organization has no
+# ``operational_ranks`` row for. ``seed_defaults`` only inserts when the table
+# is empty for the org, so a department onboarded before a code was added to
+# DEFAULT_RANKS never receives it — and without a fallback every member
+# carrying that code resolves to zero eligible positions and is refused
+# self-signup with no way to tell why.
+DEFAULT_RANK_ELIGIBILITY: Dict[str, List[str]] = {
+    code: list(positions) for code, _label, _order, positions in DEFAULT_RANKS
+}
+DEFAULT_RANK_LABELS: Dict[str, str] = {
+    code: label for code, label, _order, _positions in DEFAULT_RANKS
+}
 
 
 # Mirrors the pattern and length bound on CallTypeOption. Kept beside the
@@ -168,6 +201,43 @@ class ShiftEligibilityService:
     # Eligibility resolution
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _account_is_active(user) -> bool:
+        """Whether this member's account is in a state that can work a shift.
+
+        ``User.status`` and the member's *standing* are two different axes that
+        share three spellings, and nothing reconciles them: retiring somebody
+        through ``POST /member-status/{id}/status`` sets ``status`` and never
+        touches ``membership_type``, so a retired member reads as a regular
+        operational one to every rule that consults membership.
+
+        ``get_position_roster`` already filters ``User.is_active`` and so gets
+        this right; self-signup did not, which made the roster stricter than the
+        endpoint it exists to mirror.
+
+        This is not closing a stale-session gap: ``get_current_user`` calls
+        ``AuthService.get_user_from_token``, which reloads the user on every
+        request and returns ``None`` unless ``is_active`` holds, so a member's
+        own session is already rejected the request after their status
+        changes. The gap this closes is narrower and does not run through
+        that check at all — ``_validate_assignment_candidate``'s
+        ``enforce_position_eligibility`` branch loads the *candidate* by a
+        client-supplied ``user_id`` with no status filter, and that candidate
+        is not always the caller: an officer's own session is perfectly valid
+        while they assign a *different*, now-retired or suspended member to a
+        shift (``create_assignment`` with ``self_signup=False``). Without this
+        check, that target's inactive status was never consulted by anything.
+
+        Absent status means "not a real User row" — a stub, or a caller passing
+        a lighter object — and is left alone rather than guessed at. The gate is
+        for the values that explicitly say the account is no longer active.
+        """
+        status_value = getattr(user, "status", None)
+        if status_value is None:
+            return True
+        raw = getattr(status_value, "value", status_value)
+        return str(raw) == UserStatus.ACTIVE.value
+
     async def get_eligible_positions(
         self,
         user: User,
@@ -177,14 +247,18 @@ class ShiftEligibilityService:
         """Compute the set of shift positions the user may sign up for.
 
         Resolution order:
+        0. Check account status — a member whose account is no longer active
+           is eligible for nothing, including an open-to-all shift.
         1. If a shift_id is provided and the shift is marked
            ``open_to_all_members``, return all positions defined on
            that shift (bypasses membership type and rank checks).
         2. Check membership type — if excluded, return empty list.
         3. Union of:
            a) Rank-based eligible_positions
-           b) Training-completion-unlocked positions
-           c) Org-wide open positions
+           b) Qualification-based positions (what the member is *certified*
+              to do, as of the shift date)
+           c) Training-completion-unlocked positions
+           d) Org-wide open positions
         4. If a shift_id is provided, intersect with the shift's
            defined positions (only return positions that are actually
            on the shift).
@@ -193,11 +267,39 @@ class ShiftEligibilityService:
         if not org:
             return []
 
+        # ----- Step 0: Account status -----
+        # Ahead of the open-to-all bypass, deliberately. "Open to all members"
+        # waives the membership-type and rank checks; it does not make a
+        # dropped, suspended or archived account a member again.
+        if not self._account_is_active(user):
+            return []
+
+        administrative = is_administrative(
+            getattr(user, "member_class", None),
+            getattr(user, "membership_type", None),
+        )
+        # Affirmative, not "is not one of the two non-riding classes". The
+        # bypass below waives the membership-type, rank, training and
+        # qualification checks in one step, so it has to be granted on a class
+        # that is actually established. A member whose class cannot be
+        # resolved — a legacy row carrying a custom tier, written before the
+        # reconciler stopped erasing the class — falls through to the normal
+        # eligibility path instead, which is the safe direction: they are
+        # judged on rank and training rather than handed every seat.
+        can_ride = is_operational(
+            effective_member_class(
+                getattr(user, "member_class", None),
+                getattr(user, "membership_type", None),
+            )
+        )
+
         # ----- Step 1: Check for open-to-all shift -----
         shift = None
         if shift_id:
             shift = await self._get_shift(shift_id, organization_id)
-            if shift and shift.open_to_all_members:
+            if shift and administrative:
+                return self._administrative_shift_positions(shift)
+            if shift and shift.open_to_all_members and can_ride:
                 return self._shift_position_list(shift)
 
         # ----- Step 2: Membership type gate -----
@@ -208,18 +310,38 @@ class ShiftEligibilityService:
 
         # ----- Step 3: Compute eligible positions -----
         eligible: Set[str] = set()
+        slug_map = await self._get_slug_eligibility_map(organization_id)
 
         # 3a: Rank-based
-        rank_positions = await self._get_rank_positions(user.rank, organization_id)
-        eligible.update(rank_positions)
+        eligible.update(self._positions_for_slugs([user.rank], slug_map))
 
-        # 3b: Training-completion-based
+        # Keep consuming the existing query result for compatibility with
+        # lightweight session adapters, but never turn RBAC position names into
+        # operational qualifications.
+        await self._get_held_position_slugs(str(user.id), organization_id)
+
+        # 3b: Qualification-based.
+        #
+        # Rank says where a member sits in the chain of command; a
+        # qualification says what they are trained to do, and the two are
+        # independent. A Captain may also be a Paramedic, and until
+        # qualifications existed there was nowhere to record the second half
+        # of that. Asked as of the shift date rather than today: a
+        # certification that is current now and lapses before the shift
+        # qualifies nobody to work it.
+        eligible.update(
+            await self._get_qualification_positions(
+                str(user.id), organization_id, self._shift_date(shift)
+            )
+        )
+
+        # 3c: Training-completion-based
         training_positions = await self._get_training_positions(
             str(user.id), organization_id
         )
         eligible.update(training_positions)
 
-        # 3c: Org-wide open positions
+        # 3d: Org-wide open positions
         eligible.update(self.get_open_positions(org))
 
         # ----- Step 4: Intersect with shift positions if given -----
@@ -243,9 +365,10 @@ class ShiftEligibilityService:
     ) -> Dict[str, List[str]]:
         """The same answer as ``get_eligible_positions``, for many shifts at once.
 
-        Steps 1–3 above are about the *member* — their membership type, rank,
-        completed training, and the org's open positions — and do not vary by
-        shift. Asking per shift re-ran all of it and reloaded the same maps
+        Steps 0–3 above are about the *member* — their account status,
+        membership type, rank,
+        qualifications, completed training, and the org's open positions — and
+        do not vary by shift. Asking per shift re-ran all of it and reloaded the same maps
         each time; a day panel showing two shifts paid for it twice, and a
         station running six apparatus paid six times for one answer.
 
@@ -260,6 +383,12 @@ class ShiftEligibilityService:
         if not org:
             return {shift_id: [] for shift_id in shift_ids}
 
+        # Ahead of everything else, matching get_eligible_positions: an
+        # account that is no longer active is not eligible for an open-to-all
+        # shift either, and there is nothing left to look up once that is true.
+        if not self._account_is_active(user):
+            return {shift_id: [] for shift_id in shift_ids}
+
         result = await self.db.execute(
             select(Shift).where(
                 Shift.id.in_(sorted(set(shift_ids))),
@@ -271,14 +400,42 @@ class ShiftEligibilityService:
         excluded = self.get_excluded_membership_types(org)
         member_type = getattr(user, "membership_type", None) or "active"
         blocked = member_type in excluded
+        administrative = is_administrative(
+            getattr(user, "member_class", None), member_type
+        )
+        # Affirmative, for the reason given in get_eligible_positions.
+        can_ride = is_operational(
+            effective_member_class(getattr(user, "member_class", None), member_type)
+        )
 
         base: Set[str] = set()
         if not blocked:
-            base.update(await self._get_rank_positions(user.rank, organization_id))
+            slug_map = await self._get_slug_eligibility_map(organization_id)
+            base.update(self._positions_for_slugs([user.rank], slug_map))
+            await self._get_held_position_slugs(str(user.id), organization_id)
             base.update(
                 await self._get_training_positions(str(user.id), organization_id)
             )
             base.update(self.get_open_positions(org))
+
+        # Qualifications are the one source that is *not* shift-independent:
+        # a certification current today may have lapsed by a shift three months
+        # out, and that shift must not offer the seat. Still resolved per
+        # distinct shift date — but off one statement rather than one per date.
+        # A member listing a year of generated shifts has ~365 distinct dates
+        # on the page, and a query each made the list request that many
+        # sequential round trips.
+        quals_by_date: Dict[date, Set[str]] = {}
+        if not blocked:
+            windows = await QualificationService(self.db).get_member_code_windows(
+                str(user.id), organization_id
+            )
+            for shift in shifts.values():
+                as_of = self._shift_date(shift)
+                if as_of not in quals_by_date:
+                    quals_by_date[as_of] = positions_for_qualifications(
+                        QualificationService.codes_in_force(windows, as_of)
+                    )
 
         answers: Dict[str, List[str]] = {}
         for shift_id in shift_ids:
@@ -289,13 +446,17 @@ class ShiftEligibilityService:
                 # missing key would read as "not answered yet".
                 answers[str(shift_id)] = []
                 continue
-            if shift.open_to_all_members:
+            if administrative:
+                answers[str(shift_id)] = self._administrative_shift_positions(shift)
+                continue
+            if shift.open_to_all_members and can_ride:
                 answers[str(shift_id)] = sorted(set(self._shift_position_list(shift)))
                 continue
             if blocked:
                 answers[str(shift_id)] = []
                 continue
             eligible = set(base)
+            eligible.update(quals_by_date.get(self._shift_date(shift), set()))
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:
                 eligible &= shift_positions
@@ -315,15 +476,21 @@ class ShiftEligibilityService:
 
         Answers "who is cleared to drive?" in one query set rather than making
         an officer open each apparatus in turn. For each member it reports the
-        *sources* of their eligibility (rank, completed training, or the org's
-        open-position list), their current EVOC standing, and the apparatus
-        they hold an operator record on.
+        *sources* of their eligibility (rank, qualification,
+        completed training, or the org's open-position list), their current
+        EVOC standing, and the apparatus they hold an operator record on.
 
-        Eligibility mirrors ``get_eligible_positions`` exactly — same union of
-        rank / training / open positions behind the same membership-type gate —
-        so the roster can never disagree with what self-signup enforces. The
-        per-shift narrowing is deliberately not applied: this is the
-        department-wide roster, not a roster for one shift.
+        Eligibility mirrors ``get_eligible_positions`` exactly — the same union
+        behind the same membership-type gate — so the roster can never disagree
+        with what self-signup enforces. Every source there has to appear here
+        too: a member the roster omits is also missing from
+        ``SchedulingService.get_trade_candidates``, so an officer looking for
+        cover would not be offered somebody the signup endpoint would happily
+        accept. Qualifications are resolved as of **today**, since a
+        department-wide roster is not asked about any particular shift; the
+        per-shift narrowing is deliberately not applied for the same reason.
+        Each one carries its expiry, because resolving as of today would
+        otherwise show a card that lapses next week as an unqualified grant.
         """
         org = await self._get_org(organization_id)
         if not org:
@@ -348,8 +515,13 @@ class ShiftEligibilityService:
         users = list(users_result.scalars().all())
 
         rank_map = await self._get_rank_map(organization_id)
+        slug_map = await self._get_slug_eligibility_map(organization_id)
+        await self._get_held_position_map(organization_id)
         training_map = await self._get_training_program_map(organization_id, position)
         operator_map = await self._get_operator_map(organization_id)
+        qualification_map = await QualificationService(self.db).get_current_by_member(
+            organization_id
+        )
 
         members: List[Dict[str, Any]] = []
         for user in users:
@@ -359,16 +531,36 @@ class ShiftEligibilityService:
 
             sources: List[Dict[str, Any]] = []
 
-            rank_entry = rank_map.get(user.rank or "")
-            if rank_entry and position in rank_entry["positions"]:
+            rank_code = user.rank or ""
+            rank_entry = rank_map.get(rank_code)
+            if position in slug_map.get(rank_code, []):
                 sources.append(
                     {
                         "type": "rank",
-                        "label": rank_entry["display_name"],
+                        "label": (
+                            rank_entry["display_name"]
+                            if rank_entry
+                            else DEFAULT_RANK_LABELS.get(rank_code, rank_code)
+                        ),
                     }
                 )
 
+            for qualification in qualification_map.get(str(user.id), []):
+                code = qualification["code"]
+                if position in positions_for_qualifications([code]):
+                    sources.append(
+                        {
+                            "type": "qualification",
+                            "label": qualification_label(code),
+                            "expires_on": qualification["expires_on"],
+                        }
+                    )
+
+            seen_programs: Set[str] = set()
             for program_name in training_map.get(str(user.id), []):
+                if program_name in seen_programs:
+                    continue
+                seen_programs.add(program_name)
                 sources.append({"type": "training", "label": program_name})
 
             if is_open:
@@ -540,21 +732,118 @@ class ShiftEligibilityService:
                     result.append(pos)
         return result
 
-    async def _get_rank_positions(
-        self, rank_code: Optional[str], organization_id: str
-    ) -> List[str]:
-        """Look up eligible positions for the user's rank."""
-        if not rank_code:
-            return []
+    def _administrative_shift_positions(self, shift: Shift) -> List[str]:
+        """Return only positions explicitly opened to administrative members."""
+        return sorted(
+            [
+                str(entry.get("position"))
+                for entry in (shift.positions or [])
+                if isinstance(entry, dict)
+                and entry.get("position")
+                and entry.get("allow_administrative_members") is True
+            ]
+        )
+
+    async def _get_slug_eligibility_map(
+        self, organization_id: str
+    ) -> Dict[str, List[str]]:
+        """slug -> the shift positions it grants, for this organization.
+
+        Position slugs are deliberately not resolved through this map. Positions
+        are RBAC/organizational roles and can be created or assigned by role
+        managers; treating their names as qualifications would let those
+        managers grant themselves operational shift eligibility.
+
+        Precedence is deliberate: a stored row always wins, so an admin who
+        edits ``eligible_positions`` — or clears it, or deactivates the rank —
+        gets exactly what they configured, including the empty answer. The
+        built-in defaults fill in only for a code with no row at all.
+        """
         result = await self.db.execute(
-            select(OperationalRank.eligible_positions).where(
-                OperationalRank.organization_id == organization_id,
-                OperationalRank.rank_code == rank_code,
-                OperationalRank.is_active.is_(True),
+            select(
+                OperationalRank.rank_code,
+                OperationalRank.eligible_positions,
+                OperationalRank.is_active,
+            ).where(OperationalRank.organization_id == organization_id)
+        )
+        stored = {
+            rank_code: (list(positions or []) if is_active else [])
+            for rank_code, positions, is_active in result.all()
+        }
+        mapping = {
+            code: list(positions)
+            for code, positions in DEFAULT_RANK_ELIGIBILITY.items()
+            if code not in stored
+        }
+        mapping.update(stored)
+        return mapping
+
+    @staticmethod
+    def _positions_for_slugs(
+        slugs: List[Optional[str]], slug_map: Dict[str, List[str]]
+    ) -> Set[str]:
+        """Union the shift positions granted by every slug in ``slugs``."""
+        granted: Set[str] = set()
+        for slug in slugs:
+            if slug:
+                granted.update(slug_map.get(slug, []))
+        return granted
+
+    @staticmethod
+    def _shift_date(shift) -> date:
+        """The day the member would actually work, for currency checks.
+
+        Falls back to today when a shift carries no date, and when eligibility
+        is asked without a shift at all — a qualification list has to be
+        resolved as of *some* day, and today is the only defensible one when
+        no shift is in hand.
+        """
+        if shift is None:
+            return date.today()
+        value = getattr(shift, "shift_date", None) or getattr(shift, "start_time", None)
+        if value is None:
+            return date.today()
+        return value.date() if hasattr(value, "date") else value
+
+    async def _get_qualification_positions(
+        self, user_id: str, organization_id: str, as_of: date
+    ) -> Set[str]:
+        """Shift seats the member's current certifications clear them for."""
+        codes = await QualificationService(self.db).get_member_codes(
+            user_id, organization_id, as_of
+        )
+        return positions_for_qualifications(codes)
+
+    async def _get_held_position_slugs(
+        self, user_id: str, organization_id: str
+    ) -> List[str]:
+        """Return held RBAC position slugs without treating them as credentials."""
+        result = await self.db.execute(
+            select(Position.slug)
+            .join(user_positions, Position.id == user_positions.c.position_id)
+            .where(
+                user_positions.c.user_id == user_id,
+                Position.organization_id == organization_id,
             )
         )
-        row = result.scalar_one_or_none()
-        return row if row else []
+        return [slug for (slug,) in result.all() if slug]
+
+    async def _get_held_position_map(
+        self, organization_id: str
+    ) -> Dict[str, List[Dict[str, str]]]:
+        """Return held RBAC positions for callers that display role metadata."""
+        result = await self.db.execute(
+            select(user_positions.c.user_id, Position.slug, Position.name)
+            .join(Position, Position.id == user_positions.c.position_id)
+            .where(Position.organization_id == organization_id)
+        )
+        by_user: Dict[str, List[Dict[str, str]]] = {}
+        for user_id, slug, name in result.all():
+            if slug:
+                by_user.setdefault(str(user_id), []).append(
+                    {"slug": slug, "name": name}
+                )
+        return by_user
 
     async def _get_training_positions(
         self, user_id: str, organization_id: str

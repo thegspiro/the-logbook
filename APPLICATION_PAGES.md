@@ -92,6 +92,47 @@ Complete reference of all pages in the application, organized by module.
 
 ---
 
+## Testing Home
+
+| URL                     | Page                   | Permission    | Module    |
+| ----------------------- | ---------------------- | ------------- | --------- |
+| `/testing`              | Testing Home           | Authenticated | `testing` |
+| `/testing/report/print` | Testing Report (print) | Authenticated | `testing` |
+
+> An index of every route in this document, as boxes that open the page and
+> record Pass/Fail/Blocked plus a note. The run is stored per department, one
+> row per tester per page (`/api/v1/testing-checklist`), so a member testing
+> from their own account and an officer testing from theirs contribute to the
+> same list.
+>
+> Each box also shows the gate its route enforces and whether the signed-in
+> account satisfies it, which is how the permission gates are tested from the
+> outside — so the route is deliberately **authenticated-only**: a page a
+> firefighter could not open would be useless for checking what a firefighter
+> is refused. The navigation entry is gated on `settings.manage`; the URL is
+> not.
+>
+> The module is **off by default** and is not offered during onboarding — a
+> department turns **Testing Checklist** on under Settings → Modules when it
+> wants it. While it is off the nav entry, the route and `/api/v1/testing-checklist`
+> all refuse; recorded marks are kept and return when it is switched back on.
+>
+> Marks belong to a **run** — one named pass over the checklist. The newest run
+> is the current one, so starting a run archives the previous one; earlier runs
+> stay readable and exportable from the picker. Each mark also records the build
+> it was made against and what the app predicted that account would meet, which
+> is what turns "this page opened for a firefighter" into a reported finding
+> rather than a pass. Exports: CSV, a page-by-tester permission matrix, the
+> printable report at `/testing/report/print`, and Markdown.
+>
+> `settings.manage` (which the System Owner's `*` covers) additionally opens
+> **every tester's** marks: each box lists what other accounts found and the
+> position they held, and the same grant unlocks clearing the department's
+> whole run — an audited, irreversible action. Without it a tester reads and
+> clears only their own. See TESTING_CHECKLIST.md → "How to work through this".
+
+---
+
 ## Members
 
 ### Member-Facing Pages
@@ -256,6 +297,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/facilities/:id`         | Facility Detail            | `facilities.view` **OR** `facilities.manage` |
 | `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` **OR** `facilities.manage` |
 | `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` **OR** `facilities.manage` |
+| `/facilities/settings`    | Facility Settings          | `facilities.manage`                          |
 
 > The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent maintenance completions, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in; standalone Locations may reference a Facility but do not create or update Facility Rooms. **Rooms can be nested inside other rooms** _(2026-08-16)_: the Rooms section renders the containment tree with per-room sub-room counts and an add-a-room-inside action, the room form offers a "Located inside" picker (same facility only, no cycles, five levels max), and deleting a room re-parents its sub-rooms one level up rather than deleting them. A nested room's linked Location carries the full containment path (e.g. "Quartermaster's Storage — Volunteer Office — Station 1"), and the cross-module room picker in Events, Training, and Scheduling indents sub-rooms under their container. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
@@ -510,16 +552,15 @@ Tab-based interface with the following views:
 
 ### Scheduling Admin Pages (2026-03-19)
 
-| URL                           | Page                          | Permission                                                                  |
-| ----------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
-| `/scheduling/templates`       | Shift Templates Management    | `scheduling.manage`                                                         |
-| `/scheduling/patterns`        | Shift Pattern Management      | `scheduling.manage`                                                         |
-| `/scheduling/reports`         | Scheduling Reports            | `scheduling.manage`                                                         |
-| `/scheduling/settings`        | Scheduling Settings           | `scheduling.manage`                                                         |
-| `/scheduling/platoons`        | Platoon Management            | `scheduling.manage`                                                         |
-| `/scheduling/qualifications`  | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage`          |
-| `/scheduling/checkin`         | Shift Check-In                | Authenticated                                                               |
-| `/scheduling/supply/expiring` | Expiring Supply Items         | `equipment_check.view` **OR** `inventory.manage` **OR** `scheduling.manage` |
+| URL                          | Page                          | Permission                                                         |
+| ---------------------------- | ----------------------------- | ------------------------------------------------------------------ |
+| `/scheduling/templates`      | Shift Templates Management    | `scheduling.manage`                                                |
+| `/scheduling/patterns`       | Shift Pattern Management      | `scheduling.manage`                                                |
+| `/scheduling/reports`        | Scheduling Reports            | `scheduling.manage`                                                |
+| `/scheduling/settings`       | Scheduling Settings           | `scheduling.manage`                                                |
+| `/scheduling/platoons`       | Platoon Management            | `scheduling.manage`                                                |
+| `/scheduling/qualifications` | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage` |
+| `/scheduling/checkin`        | Shift Check-In                | Authenticated                                                      |
 
 > Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
 
@@ -645,19 +686,21 @@ resumes rather than restarting:
 
 | URL                                                 | Page                             | Permission                                                                   |
 | --------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- |
-| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `scheduling.manage`                                                          |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `scheduling.manage`                                                          |
-| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`                                                          |
-| `/scheduling?tab=equipment-checks`                  | My Equipment Checklists          | Authenticated                                                                |
-| `/scheduling/supply/expiring`                       | Expiring on Apparatus            | any of `scheduling.manage`, `equipment_check.view`, `inventory.manage`       |
-| `/scheduling/apparatus-inventory`                   | Apparatus Inventory              | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view`    |
-| `/scheduling/equipment`                             | Fleet Board                      | any of `equipment_check.view`, `scheduling.manage`                           |
-| `/scheduling/equipment/checks`                      | Check Log                        | any of `equipment_check.submit`, `equipment_check.view`, `scheduling.manage` |
-| `/scheduling/equipment/:apparatusId`                | Apparatus Detail                 | any of `equipment_check.view`, `scheduling.manage`                           |
+| `/inventory/admin/checklists/templates/new`         | Equipment Check Template Builder | `inventory.check_manage`                                                     |
+| `/inventory/admin/checklists/templates/:templateId` | Edit Equipment Check Template    | `inventory.check_manage`                                                     |
+| `/inventory/admin/checklists/reports`               | Equipment Check Reports          | `inventory.check_view`                                                       |
+| `/inventory/checklists/my`                          | My Equipment Checklists          | Authenticated                                                                |
+| `/inventory/admin/checklists`                       | Equipment Checklists admin       | `inventory.check_manage`                                                     |
+| `/inventory/admin/checklists/supply`                | Expiring on Apparatus            | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`       |
+| `/inventory/admin/checklists/settings`              | Checklist Settings               | any of `settings.manage`, `organization.update_settings`                     |
+| `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory              | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view`    |
+| `/inventory/checklists`                             | Fleet Board                      | any of `inventory.check_view`, `scheduling.manage`                           |
+| `/inventory/checklists/log`                         | Check Log                        | any of `inventory.check_submit`, `inventory.check_view`, `scheduling.manage` |
+| `/inventory/checklists/apparatus/:apparatusId`      | Apparatus Detail                 | any of `inventory.check_view`, `scheduling.manage`                           |
 
 > The **Template Builder** provides a drag-and-drop interface for creating structured checklists with nested compartments and multiple check types (pass/fail, quantity, level, date/lot, reading). Its quick-add bar searches the inventory catalog as you type, so **adding a position and linking it to a catalog item are one act** _(2026-08-10)_ — and the toolbar carries a linked/unlinked count, because everything the supply screens can do hangs off `inventory_item_id`. For checklists that already exist there is a reviewed bulk pass that proposes a catalog item for every unlinked position; **only exact name matches are pre-selected**, since "Oxygen Mask" scores high against both the adult and the pediatric mask. The **Reports** page has three tabs: Compliance Dashboard, Failure/Deficiency Log, and Item Trend History with CSV and PDF export.
 
-#### Fleet Board (`/scheduling/equipment`) _(documented 2026-08-18)_
+#### Fleet Board (`/inventory/checklists`) _(documented 2026-08-18)_
 
 The front door for equipment checks, organised around the apparatus rather than
 the checklist assignment — "is E-1 good?" is the question an officer arrives
@@ -666,7 +709,7 @@ was spread across several cards, a separate inventory page, and an admin-only
 report. A member's own due checks stay on the page as a strip at the top, ranked
 so an overdue check cannot read as one due next Tuesday.
 
-#### Apparatus Detail (`/scheduling/equipment/:apparatusId`) _(documented 2026-08-18)_
+#### Apparatus Detail (`/inventory/checklists/apparatus/:apparatusId`) _(documented 2026-08-18)_
 
 One rig, four tabs, each of which used to be a different page: today's checks,
 what it carries (Apparatus Inventory), what is wrong or expiring with it
@@ -674,7 +717,7 @@ what it carries (Apparatus Inventory), what is wrong or expiring with it
 getting checked at all. Nothing new is added here — the existing surfaces are
 gathered behind the apparatus they were always about.
 
-#### Check Log (`/scheduling/equipment/checks`) _(documented 2026-08-18)_
+#### Check Log (`/inventory/checklists/log`) _(documented 2026-08-18)_
 
 Expected-versus-actual check history, in two views over one dataset: a **grid**
 of apparatus against duty days, read by colour, for "is the pattern okay?"; and
@@ -684,12 +727,12 @@ only ever report 100% completion, so the server reconstructs the expected side
 and a missed check arrives as an entry with no check id. The same component runs
 scoped to a single apparatus as the Check log tab of Apparatus Detail.
 
-> **Crew-level, unlike the rest of the fleet pages.** `equipment_check.submit`
+> **Crew-level, unlike the rest of the fleet pages.** `inventory.check_submit`
 > opens the Check Log because the server narrows a member without
-> `equipment_check.view` to their own checks rather than returning 403 — the
+> `inventory.check_view` to their own checks rather than returning 403 — the
 > route matches what the API will actually serve.
 
-#### Expiring on Apparatus (`/scheduling/supply/expiring`) _(documented 2026-08-10)_
+#### Expiring on Apparatus (`/inventory/admin/checklists/supply`) _(documented 2026-08-10)_
 
 The supply officer's worklist. Reached from **Scheduling → Supply** (the tile
 carries a count badge) and from the **Inventory Admin Hub**. Lists checklist
@@ -707,7 +750,7 @@ need ordering. **Expired shelf stock is struck through and cannot be swapped** �
 offering it would put expired supplies in service and fail the item on the next
 check.
 
-#### Apparatus Inventory (`/scheduling/apparatus-inventory`) _(added 2026-08-10)_
+#### Apparatus Inventory (`/inventory/checklists/apparatus-inventory`) _(added 2026-08-10)_
 
 The standing view of one truck, outside any check. Reached from **My Equipment
 Checklists → Apparatus Inventory**. Pick an apparatus and see its tracked
@@ -718,10 +761,10 @@ position, and the ready stock behind it.
 scheduled, signed pass over a whole apparatus that produces a report; a crew
 that used the last of something at 03:00 needs somewhere to put that fact
 _now_, not at the next morning's check. So reporting an item used accepts
-`equipment_check.submit` — the default member position — as well as the manage
+`inventory.check_submit` — the default member position — as well as the manage
 permissions. **Corrections of record are not** _(2026-08-11)_: withdrawing a
 restock report, swapping a lot onto the apparatus, and rewriting a deployed
-lot's number or expiration date require `equipment_check.manage` or
+lot's number or expiration date require `inventory.check_manage` or
 `inventory.manage`.
 
 | Action on a position | What it means                                                                                                                     |
@@ -766,21 +809,6 @@ lot's number or expiration date require `equipment_check.manage` or
 | URL                  | Page              | Permission               |
 | -------------------- | ----------------- | ------------------------ |
 | `/medical-screening` | Medical Screening | `medical_screening.view` |
-
-> **The route is not permission-gated, though this table said it was**
-> _(corrected 2026-08-16, found by `scripts/check_route_permissions.py`)_. Every
-> other module wraps its routes in `<ProtectedRoute requiredPermission=…>`;
-> `getMedicalScreeningRoutes()` returns a bare `<Route>`, so any signed-in member
-> can open the page.
->
-> **What actually protects the data is the API**, which enforces
-> `medical_screening.view` on every read — so a member without it gets an empty
-> or erroring screen rather than PHI, the same server-side-redaction pattern the
-> skills-testing print routes use. This is therefore a defence-in-depth and UX
-> gap rather than a disclosure: the member sees a broken page instead of a clean
-> "not authorized". **Adding the route gate would match every other module** and
-> is recorded in [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) for an
-> owner decision, since it changes who can reach the URL.
 
 > Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Availability is controlled per organization via the `enabled_modules` setting in Organization/Admin Settings.
 
@@ -971,11 +999,57 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## Communications & Messaging _(documented 2026-08-10)_
 
-| URL                               | Page                      | Permission             |
-| --------------------------------- | ------------------------- | ---------------------- |
-| `/messages`                       | Messages                  | Authenticated          |
-| `/communications/messages`        | Message Administration    | `notifications.manage` |
-| `/communications/email-templates` | Email Template Management | `settings.manage`      |
+| URL                                 | Page                      | Permission                                                                           |
+| ----------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| `/messages`                         | Messages                  | Authenticated                                                                        |
+| `/messages/:messageId`              | Message Detail            | Authenticated _(2026-08-26)_                                                         |
+| `/communications/messages`          | Message Administration    | `notifications.manage`                                                               |
+| `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                    |
+| `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit` |
+
+> **Photo Use Consent** _(2026-08-25)_ lists every member's answer to the
+> photo-use privacy choice they set in User Settings, so the PIO can check the
+> whole roster before a newsletter or social post rather than one member at a
+> time. Read-only: consent recorded by somebody else is not consent, so there is
+> no admin write counterpart — matching `/users/{user_id}/consents`.
+>
+> **"Not answered" is counted separately from "Declined" and means the same
+> thing.** Both are "do not publish"; they are split because only one of them
+> describes a member who can still be asked. Inactive members are hidden by
+> default (a retiree's photo can still be in the archive, so the toggle exists).
+>
+> **Permission: `notifications.manage`, `members.manage`, or `users.edit`.**
+> `users.view` was the first choice and was wrong _(corrected in review)_: it
+> reads as a narrow grant but 25 of the 30 default positions carry it — the EMS
+> Supply Officer and Apparatus Officer among them — which would have made a
+> whole-department list a **weaker** gate than reading one member's consent via
+> `/users/{user_id}/consents` (`users.edit` or `members.manage`).
+> `notifications.manage` is what puts the PIO here: it is the grant that
+> distinguishes the Communications Officer, and it already gates this page's
+> neighbours under Forms & Comms.
+>
+> **`users.view_consents` was added for the Historian and Public Outreach
+> positions** _(2026-08-25)_, who have a real claim on the page — a historian
+> curates the photo archive — but who share nothing with each other beyond
+> broad grants (`users.view`, `members.view`, `events.view`). Widening to any
+> of those would have reopened what the paragraph above closed, so the grant
+> had to be one that means only this. It is seeded to those two positions plus
+> the Communications Officer, and backfilled onto existing installations by
+> `20260825_1900_c4a91b7e2f08` — a registry change alone reaches new
+> departments only (CLAUDE.md pitfall 23).
+>
+> That backfill rewrites a stored position **only when its permission set still
+> equals the pre-change default**, not merely when `is_system` is true:
+> `RoleService.update_role` edits a system position's permissions in place, so
+> the flag stays true on one a department has customized. A department that has
+> changed its Historian keeps its own set and grants the permission itself in
+> Role Management if it wants the page.
+>
+> The response deliberately carries **no contact fields**. The member directory
+> gates email behind the organization's contact-visibility setting, and a second
+> list carrying it unconditionally would quietly undo that — so the roster
+> returns only what identifies somebody on a photo call sheet: name, rank,
+> station, membership number.
 
 > The Email Templates page has a **Footers** tab _(2026-08-10)_. The footer used
 > to be copy-pasted into all 35 default bodies; it is now a named library on the
@@ -1006,10 +1080,10 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## IP Security _(documented 2026-08-10)_
 
-| URL                        | Page                       | Permission        |
-| -------------------------- | -------------------------- | ----------------- |
-| `/ip-security`             | IP Security Administration | `security.manage` |
-| `/ip-security/my-requests` | My Access Requests         | Authenticated     |
+| URL                        | Page                       | Permission                                  |
+| -------------------------- | -------------------------- | ------------------------------------------- |
+| `/ip-security`             | IP Security Administration | any of `security.manage`, `settings.manage` |
+| `/ip-security/my-requests` | My Access Requests         | Authenticated                               |
 
 ---
 

@@ -200,6 +200,9 @@ export interface ErrorLogRecord {
   troubleshooting_steps: string[];
   context: Record<string, unknown>;
   user_id?: string;
+  /** Resolved server-side from user_id; null once the account is deleted. */
+  user_name?: string | null;
+  user_username?: string | null;
   event_id?: string;
   created_at: string;
 }
@@ -801,6 +804,13 @@ export interface AckReportRecipient {
   read_at?: string;
   is_acknowledged: boolean;
   acknowledged_at?: string;
+  /**
+   * The member was removed from the audience after this message published.
+   * Their receipt is kept as evidence — it is the only record that they read
+   * or acknowledged it — but they are outside the totals and can no longer
+   * act on it, so an unacknowledged one is not an outstanding obligation.
+   */
+  removed_from_audience?: boolean;
 }
 
 export interface AcknowledgmentReport {

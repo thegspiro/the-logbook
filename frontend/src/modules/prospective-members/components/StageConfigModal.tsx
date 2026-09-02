@@ -5,7 +5,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useDialog } from '../../../hooks/useDialog';
+import { DialogPortal } from '../../../components/DialogPortal';
 import {
   X,
   FileText,
@@ -46,7 +48,7 @@ import type {
   MedicalScreeningStageConfig,
   StageConfig,
 } from '../types';
-import { DEFAULT_EMAIL_SECTION_ORDER } from '../types';
+import { DEFAULT_EMAIL_SECTION_ORDER, defaultStageConfig } from '../types';
 import { formsService } from '@/services/formsServices';
 import type { FormDef } from '@/services/formTypes';
 import { pipelineService } from '../services/api';
@@ -288,54 +290,6 @@ const STAGE_PRESETS: StagePreset[] = [
   },
 ];
 
-const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
-  form_submission: () => ({ form_id: '', form_name: '' }),
-  document_upload: () => ({ required_document_types: [''], allow_multiple: true }),
-  election_vote: () => ({
-    voting_method: VotingMethod.SIMPLE_MAJORITY,
-    victory_condition: 'majority' as const,
-    eligible_voter_roles: [],
-    anonymous_voting: true,
-  }),
-  manual_approval: () => ({ approver_roles: [], require_notes: false }),
-  meeting: () => ({ meeting_type: 'chief_meeting' as MeetingType, meeting_description: '' }),
-  status_page_toggle: () => ({ enable_public_status: true, custom_message: '' }),
-  automated_email: () => ({
-    email_subject: 'Welcome to the Membership Process',
-    include_welcome: true,
-    welcome_message: '',
-    include_faq_link: false,
-    faq_url: '',
-    include_next_meeting: false,
-    next_meeting_details: '',
-    include_status_tracker: false,
-    custom_sections: [],
-    section_order: [...DEFAULT_EMAIL_SECTION_ORDER],
-  }),
-  reference_check: () => ({
-    required_count: 3,
-    reference_types: ['Professional', 'Personal'],
-    collect_method: 'manual' as const,
-    require_all_before_advance: true,
-  }),
-  checklist: () => ({
-    items: [{ label: '' }] as ChecklistItemConfig[],
-    require_all: true,
-  }),
-  interview_requirement: () => ({
-    required_count: 2,
-  }),
-  multi_approval: () => ({
-    required_approvers: [],
-    require_notes: false,
-    approval_order: 'any' as const,
-  }),
-  medical_screening: () => ({
-    required_screenings: ['physical_exam'],
-    require_all_passed: true,
-  }),
-};
-
 export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   isOpen,
   onClose,
@@ -350,7 +304,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [stageType, setStageType] = useState<StageType>('manual_approval');
-  const [config, setConfig] = useState<StageConfig>(DEFAULT_CONFIGS.manual_approval());
+  const [config, setConfig] = useState<StageConfig>(defaultStageConfig(StageTypeConst.MANUAL_APPROVAL));
   const [isRequired, setIsRequired] = useState(true);
   const [notifyProspect, setNotifyProspect] = useState(false);
   const [publicVisible, setPublicVisible] = useState(true);
@@ -441,7 +395,11 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       setName(editingStage.name);
       setDescription(editingStage.description ?? '');
       setStageType(editingStage.stage_type);
-      setConfig(editingStage.config);
+      // Merged over the type's defaults, not taken as-is: a stage stored before
+      // its editor grew a field — or seeded by a template that wrote no config
+      // at all — arrives without the arrays this form maps over, and rendering
+      // one straight took the page down rather than opening the stage.
+      setConfig({ ...defaultStageConfig(editingStage.stage_type), ...editingStage.config });
       setIsRequired(editingStage.is_required);
       setNotifyProspect(editingStage.notify_prospect_on_completion ?? false);
       setPublicVisible(editingStage.public_visible ?? true);
@@ -473,7 +431,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       setName('');
       setDescription('');
       setStageType(StageTypeConst.MANUAL_APPROVAL);
-      setConfig(DEFAULT_CONFIGS.manual_approval());
+      setConfig(defaultStageConfig(StageTypeConst.MANUAL_APPROVAL));
       setIsRequired(true);
       setNotifyProspect(false);
       setPublicVisible(true);
@@ -535,7 +493,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
   const handleStageTypeChange = (type: StageType) => {
     setStageType(type);
-    setConfig(DEFAULT_CONFIGS[type]());
+    setConfig(defaultStageConfig(type));
   };
 
   const retryLoadForms = () => {
@@ -553,7 +511,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     );
   };
 
-  const validate = (): boolean => {
+  /** Returns the errors found, empty when the stage is ready to save. */
+  const validate = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = 'Stage name is required';
 
@@ -641,11 +600,19 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleSave = () => {
-    if (!validate()) return;
+    const found = validate();
+    if (Object.keys(found).length > 0) {
+      // The offending field's message renders beside the field, which on a
+      // long stage form is usually scrolled out of sight — so a rejected save
+      // read as a dead button. Name the first problem where the user is
+      // looking; the inline message still marks which control it belongs to.
+      toast.error(Object.values(found)[0] || 'Please fix the highlighted fields before saving.');
+      return;
+    }
 
     let finalConfig = config;
     if (stageType === StageTypeConst.AUTOMATED_EMAIL) {
@@ -692,799 +659,805 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const medicalScreeningConfig = config as MedicalScreeningStageConfig;
 
   return (
-    <div
-      className="modal-overlay z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="stage-config-modal-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
-    >
-      <div ref={dialogRef} className="modal-panel modal-body w-full max-w-2xl">
-        {/* Header */}
-        <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-          <h2 id="stage-config-modal-title" className="text-theme-text-primary text-xl font-bold">
-            {editingStage ? 'Edit Stage' : 'Add Pipeline Stage'}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-            aria-label="Close dialog"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="space-y-6 p-6">
-          {/* Stage Name */}
-          <div>
-            <label htmlFor="stage-name" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-              Stage Name <span aria-hidden="true">*</span>
-            </label>
-            <input
-              id="stage-name"
-              type="text"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setErrors((prev) => ({ ...prev, name: '' }));
-              }}
-              placeholder="e.g., Application Review"
-              required
-              aria-required="true"
-              className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-            />
-            {errors.name && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.name}</p>}
+    <DialogPortal>
+      <div
+        className="modal-overlay z-50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stage-config-modal-title"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose();
+        }}
+      >
+        <div ref={dialogRef} className="modal-panel modal-body w-full max-w-2xl">
+          {/* Header */}
+          <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+            <h2 id="stage-config-modal-title" className="text-theme-text-primary text-xl font-bold">
+              {editingStage ? 'Edit Stage' : 'Add Pipeline Stage'}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
+              aria-label="Close dialog"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
           </div>
 
-          {/* Description */}
-          <div>
-            <label htmlFor="stage-description" className="text-theme-text-secondary mb-2 block text-sm font-medium">
-              Description
-            </label>
-            <textarea
-              id="stage-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe what happens at this stage..."
-              rows={2}
-              className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-            />
-          </div>
-
-          {/* Stage Presets (only when creating, not editing) */}
-          {!editingStage && (
+          {/* Body */}
+          <div className="space-y-6 p-6">
+            {/* Stage Name */}
             <div>
-              <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Quick Presets</label>
-              <div className="flex flex-wrap gap-2">
-                {STAGE_PRESETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => {
-                      setName(preset.name);
-                      setDescription(preset.description);
-                      setStageType(preset.stageType);
-                      setConfig(preset.config());
-                    }}
-                    className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-red-500/50"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Stage Type */}
-          <div>
-            <label className="text-theme-text-secondary mb-3 block text-sm font-medium">Stage Type *</label>
-            <div className="form-grid-2">
-              {STAGE_TYPE_OPTIONS.map((opt) => {
-                const Icon = opt.icon;
-                const selected = stageType === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => handleStageTypeChange(opt.value)}
-                    className={`flex flex-col items-start rounded-lg border p-4 text-left transition-all ${
-                      selected
-                        ? 'border-red-500 bg-red-500/10'
-                        : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
-                    }`}
-                  >
-                    <div className="mb-1 flex items-center gap-2">
-                      <Icon
-                        className={`h-4 w-4 ${selected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'}`}
-                        aria-hidden="true"
-                      />
-                      <span
-                        className={`text-sm font-medium ${selected ? 'text-theme-text-primary' : 'text-theme-text-secondary'}`}
-                      >
-                        {opt.label}
-                      </span>
-                    </div>
-                    <p className="text-theme-text-muted text-xs">{opt.description}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Type-Specific Configuration */}
-          <div className="border-theme-surface-border border-t pt-6">
-            <h3 className="text-theme-text-secondary mb-4 text-sm font-medium">Stage Configuration</h3>
-
-            {/* Form Submission Config */}
-            {stageType === StageTypeConst.FORM_SUBMISSION && (
-              <FormSubmissionConfig
-                config={config}
-                setConfig={setConfig}
-                errors={errors}
-                setErrors={setErrors}
-                availableForms={availableForms}
-                formsLoading={formsLoading}
-                formsError={formsError}
-                retryLoadForms={retryLoadForms}
-                formValidation={formValidation}
-                formValidationLoading={formValidationLoading}
-                setFormValidation={setFormValidation}
-                setFormValidationLoading={setFormValidationLoading}
+              <label htmlFor="stage-name" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                Stage Name <span aria-hidden="true">*</span>
+              </label>
+              <input
+                id="stage-name"
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setErrors((prev) => ({ ...prev, name: '' }));
+                }}
+                placeholder="e.g., Application Review"
+                required
+                aria-required="true"
+                className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
               />
+              {errors.name && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.name}</p>}
+            </div>
+
+            {/* Description */}
+            <div>
+              <label htmlFor="stage-description" className="text-theme-text-secondary mb-2 block text-sm font-medium">
+                Description
+              </label>
+              <textarea
+                id="stage-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe what happens at this stage..."
+                rows={2}
+                className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+              />
+            </div>
+
+            {/* Stage Presets (only when creating, not editing) */}
+            {!editingStage && (
+              <div>
+                <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Quick Presets</label>
+                <div className="flex flex-wrap gap-2">
+                  {STAGE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setName(preset.name);
+                        setDescription(preset.description);
+                        setStageType(preset.stageType);
+                        setConfig(preset.config());
+                      }}
+                      className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-red-500/50"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
-            {/* Document Upload Config */}
-            {stageType === StageTypeConst.DOCUMENT_UPLOAD && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-theme-text-muted mb-2 block text-sm">Required Document Types</label>
-                  {docConfig.required_document_types.map((docType, idx) => (
-                    <div key={idx} className="mb-2 flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={docType}
-                        onChange={(e) => {
-                          const updated = [...docConfig.required_document_types];
-                          updated[idx] = e.target.value;
-                          setConfig({ ...docConfig, required_document_types: updated });
-                        }}
-                        placeholder="e.g., Photo ID, Background Check"
-                        aria-label={`Document type ${idx + 1}`}
-                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
-                      />
-                      {docConfig.required_document_types.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = docConfig.required_document_types.filter((_, i) => i !== idx);
+            {/* Stage Type */}
+            <div>
+              <label className="text-theme-text-secondary mb-3 block text-sm font-medium">Stage Type *</label>
+              <div className="form-grid-2">
+                {STAGE_TYPE_OPTIONS.map((opt) => {
+                  const Icon = opt.icon;
+                  const selected = stageType === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleStageTypeChange(opt.value)}
+                      className={`flex flex-col items-start rounded-lg border p-4 text-left transition-all ${
+                        selected
+                          ? 'border-red-500 bg-red-500/10'
+                          : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border'
+                      }`}
+                    >
+                      <div className="mb-1 flex items-center gap-2">
+                        <Icon
+                          className={`h-4 w-4 ${selected ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'}`}
+                          aria-hidden="true"
+                        />
+                        <span
+                          className={`text-sm font-medium ${selected ? 'text-theme-text-primary' : 'text-theme-text-secondary'}`}
+                        >
+                          {opt.label}
+                        </span>
+                      </div>
+                      <p className="text-theme-text-muted text-xs">{opt.description}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Type-Specific Configuration */}
+            <div className="border-theme-surface-border border-t pt-6">
+              <h3 className="text-theme-text-secondary mb-4 text-sm font-medium">Stage Configuration</h3>
+
+              {/* Form Submission Config */}
+              {stageType === StageTypeConst.FORM_SUBMISSION && (
+                <FormSubmissionConfig
+                  config={config}
+                  setConfig={setConfig}
+                  errors={errors}
+                  setErrors={setErrors}
+                  availableForms={availableForms}
+                  formsLoading={formsLoading}
+                  formsError={formsError}
+                  retryLoadForms={retryLoadForms}
+                  formValidation={formValidation}
+                  formValidationLoading={formValidationLoading}
+                  setFormValidation={setFormValidation}
+                  setFormValidationLoading={setFormValidationLoading}
+                />
+              )}
+
+              {/* Document Upload Config */}
+              {stageType === StageTypeConst.DOCUMENT_UPLOAD && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-theme-text-muted mb-2 block text-sm">Required Document Types</label>
+                    {docConfig.required_document_types.map((docType, idx) => (
+                      <div key={idx} className="mb-2 flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={docType}
+                          onChange={(e) => {
+                            const updated = [...docConfig.required_document_types];
+                            updated[idx] = e.target.value;
                             setConfig({ ...docConfig, required_document_types: updated });
                           }}
-                          className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                          aria-label={`Remove document type ${idx + 1}`}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setConfig({
-                        ...docConfig,
-                        required_document_types: [...docConfig.required_document_types, ''],
-                      })
-                    }
-                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <Plus className="h-3 w-3" aria-hidden="true" /> Add document type
-                  </button>
-                  {errors.document_types && (
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.document_types}</p>
-                  )}
-                </div>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={docConfig.allow_multiple}
-                    onChange={(e) => setConfig({ ...docConfig, allow_multiple: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Allow multiple files per document type
-                </label>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={docConfig.auto_advance ?? false}
-                    onChange={(e) => setConfig({ ...docConfig, auto_advance: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Auto-advance when documents are uploaded
-                </label>
-                <p className="text-theme-text-muted ml-6 text-xs">
-                  Automatically complete this step and advance the prospect when documents are uploaded.
-                </p>
-                {isIntegrationConnected('documenso') && (
-                  <div className="border-theme-surface-border mt-2 rounded-lg border border-dashed p-3">
-                    <label htmlFor="stage-doc-signing" className="text-theme-text-muted mb-2 block text-sm">
-                      Collection Method
-                    </label>
-                    <select
-                      id="stage-doc-signing"
-                      value={docConfig.signing_provider ?? 'upload'}
-                      onChange={(e) => {
-                        const provider = e.target.value as DocumentStageConfig['signing_provider'];
-                        setConfig({
-                          ...docConfig,
-                          signing_provider: provider,
-                          documenso_template_id: provider === 'documenso' ? docConfig.documenso_template_id : undefined,
-                        });
-                      }}
-                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                    >
-                      <option value="upload">Upload — applicant uploads files</option>
-                      <option value="documenso">Documenso — send for e-signature</option>
-                    </select>
-                    {docConfig.signing_provider === 'documenso' && (
-                      <div className="mt-3">
-                        <label htmlFor="stage-doc-template" className="text-theme-text-muted mb-2 block text-sm">
-                          Documenso Template ID (optional)
-                        </label>
-                        <input
-                          id="stage-doc-template"
-                          type="text"
-                          value={docConfig.documenso_template_id ?? ''}
-                          onChange={(e) =>
-                            setConfig({
-                              ...docConfig,
-                              documenso_template_id: e.target.value.trim() || undefined,
-                            })
-                          }
-                          placeholder="e.g., 1234"
-                          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
-                        />
-                        <p className="text-theme-text-muted mt-1 text-xs">
-                          Applicants are told documents will be sent for e-signature. The template ID is stored for
-                          automated sending in a later release.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {!isIntegrationConnected('documenso') && !integrationsLoading && (
-                  <p className="text-theme-text-muted text-xs">
-                    Want documents e-signed instead of uploaded?{' '}
-                    <a href="/integrations" className="text-red-700 underline hover:text-red-600 dark:text-red-400">
-                      Connect Documenso
-                    </a>{' '}
-                    to send them for signature.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Meeting Config */}
-            {stageType === StageTypeConst.MEETING && (
-              <MeetingConfig
-                config={config}
-                setConfig={setConfig}
-                customCategories={customCategories}
-                getNextEventForType={getNextEventForType}
-                renderEventPreview={renderEventPreview}
-                calcomConnected={isIntegrationConnected('calcom')}
-                integrationsReady={!integrationsLoading}
-              />
-            )}
-
-            {/* Election Vote Config */}
-            {stageType === StageTypeConst.ELECTION_VOTE && (
-              <ElectionVoteConfig config={config} setConfig={setConfig} errors={errors} />
-            )}
-
-            {/* Manual Approval Config */}
-            {stageType === StageTypeConst.MANUAL_APPROVAL && (
-              <div className="space-y-4">
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={approvalConfig.require_notes}
-                    onChange={(e) => setConfig({ ...approvalConfig, require_notes: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Require approval notes
-                </label>
-                <p className="text-theme-text-muted text-xs">
-                  Approver roles can be configured in the organization settings. Any user with the{' '}
-                  <code className="text-theme-text-muted">prospective_members.manage</code> permission can approve.
-                </p>
-              </div>
-            )}
-
-            {/* Status Page Toggle Config */}
-            {stageType === StageTypeConst.STATUS_PAGE_TOGGLE && (
-              <div className="space-y-4">
-                <div className="bg-theme-surface-hover border-theme-surface-border rounded-lg border p-4">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Globe className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
-                    <span className="text-theme-text-primary text-sm font-medium">
-                      {statusPageConfig.enable_public_status ? 'Enables' : 'Disables'} the public status page
-                    </span>
-                  </div>
-                  <p className="text-theme-text-muted text-xs">
-                    When the prospect reaches this stage, their public status page will be
-                    {statusPageConfig.enable_public_status ? ' activated' : ' deactivated'}. They will receive a link to
-                    check their application progress.
-                  </p>
-                </div>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={statusPageConfig.enable_public_status}
-                    onChange={(e) => setConfig({ ...statusPageConfig, enable_public_status: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Enable public status page at this stage
-                </label>
-                <div>
-                  <label htmlFor="stage-status-page-message" className="text-theme-text-muted mb-2 block text-sm">
-                    Custom Status Message (optional)
-                  </label>
-                  <textarea
-                    id="stage-status-page-message"
-                    value={statusPageConfig.custom_message ?? ''}
-                    onChange={(e) => setConfig({ ...statusPageConfig, custom_message: e.target.value })}
-                    placeholder="e.g., Welcome! You can now track your application progress here."
-                    rows={2}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Automated Email Config */}
-            {stageType === StageTypeConst.AUTOMATED_EMAIL && (
-              <AutomatedEmailConfig
-                config={config}
-                setConfig={setConfig}
-                errors={errors}
-                showEmailPreview={showEmailPreview}
-                setShowEmailPreview={setShowEmailPreview}
-                getNextEventForType={getNextEventForType}
-                renderEventPreview={renderEventPreview}
-              />
-            )}
-
-            {/* Reference Check Config */}
-            {stageType === StageTypeConst.REFERENCE_CHECK && (
-              <ReferenceCheckStageConfig config={config} setConfig={setConfig} errors={errors} />
-            )}
-
-            {/* Checklist Config */}
-            {stageType === StageTypeConst.CHECKLIST && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-theme-text-muted mb-2 block text-sm">Checklist Items</label>
-                  {checklistConfig.items.map((item, idx) => (
-                    <div key={idx} className="mb-3 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={item.label}
-                          onChange={(e) => {
-                            const updated = [...checklistConfig.items];
-                            const current = updated[idx];
-                            if (current) {
-                              updated[idx] = { ...current, label: e.target.value };
-                              setConfig({ ...checklistConfig, items: updated });
-                            }
-                          }}
-                          placeholder="Checklist item label"
-                          aria-label={`Checklist item ${idx + 1}`}
+                          placeholder="e.g., Photo ID, Background Check"
+                          aria-label={`Document type ${idx + 1}`}
                           className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
                         />
-                        {checklistConfig.items.length > 1 && (
+                        {docConfig.required_document_types.length > 1 && (
                           <button
                             type="button"
                             onClick={() => {
-                              const updated = checklistConfig.items.filter((_, i) => i !== idx);
-                              setConfig({ ...checklistConfig, items: updated });
+                              const updated = docConfig.required_document_types.filter((_, i) => i !== idx);
+                              setConfig({ ...docConfig, required_document_types: updated });
                             }}
                             className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                            aria-label={`Remove checklist item ${idx + 1}`}
+                            aria-label={`Remove document type ${idx + 1}`}
                           >
                             <Trash2 className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>
-                      <input
-                        type="text"
-                        value={item.description ?? ''}
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfig({
+                          ...docConfig,
+                          required_document_types: [...docConfig.required_document_types, ''],
+                        })
+                      }
+                      className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      <Plus className="h-3 w-3" aria-hidden="true" /> Add document type
+                    </button>
+                    {errors.document_types && (
+                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.document_types}</p>
+                    )}
+                  </div>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={docConfig.allow_multiple}
+                      onChange={(e) => setConfig({ ...docConfig, allow_multiple: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Allow multiple files per document type
+                  </label>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={docConfig.auto_advance ?? false}
+                      onChange={(e) => setConfig({ ...docConfig, auto_advance: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Auto-advance when documents are uploaded
+                  </label>
+                  <p className="text-theme-text-muted ml-6 text-xs">
+                    Automatically complete this step and advance the prospect when documents are uploaded.
+                  </p>
+                  {isIntegrationConnected('documenso') && (
+                    <div className="border-theme-surface-border mt-2 rounded-lg border border-dashed p-3">
+                      <label htmlFor="stage-doc-signing" className="text-theme-text-muted mb-2 block text-sm">
+                        Collection Method
+                      </label>
+                      <select
+                        id="stage-doc-signing"
+                        value={docConfig.signing_provider ?? 'upload'}
                         onChange={(e) => {
-                          const updated = [...checklistConfig.items];
-                          const current = updated[idx];
-                          if (current) {
-                            updated[idx] = { ...current, description: e.target.value || undefined };
-                            setConfig({ ...checklistConfig, items: updated });
-                          }
+                          const provider = e.target.value as DocumentStageConfig['signing_provider'];
+                          setConfig({
+                            ...docConfig,
+                            signing_provider: provider,
+                            documenso_template_id:
+                              provider === 'documenso' ? docConfig.documenso_template_id : undefined,
+                          });
                         }}
-                        placeholder="Optional description"
-                        aria-label={`Checklist item ${idx + 1} description`}
-                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring ml-0 w-full rounded-lg border px-4 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
-                      />
+                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                      >
+                        <option value="upload">Upload — applicant uploads files</option>
+                        <option value="documenso">Documenso — send for e-signature</option>
+                      </select>
+                      {docConfig.signing_provider === 'documenso' && (
+                        <div className="mt-3">
+                          <label htmlFor="stage-doc-template" className="text-theme-text-muted mb-2 block text-sm">
+                            Documenso Template ID (optional)
+                          </label>
+                          <input
+                            id="stage-doc-template"
+                            type="text"
+                            value={docConfig.documenso_template_id ?? ''}
+                            onChange={(e) =>
+                              setConfig({
+                                ...docConfig,
+                                documenso_template_id: e.target.value.trim() || undefined,
+                              })
+                            }
+                            placeholder="e.g., 1234"
+                            className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                          />
+                          <p className="text-theme-text-muted mt-1 text-xs">
+                            Applicants are told documents will be sent for e-signature. The template ID is stored for
+                            automated sending in a later release.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setConfig({
-                        ...checklistConfig,
-                        items: [...checklistConfig.items, { label: '' }],
-                      })
-                    }
-                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <Plus className="h-3 w-3" aria-hidden="true" /> Add checklist item
-                  </button>
-                  {errors.checklist_items && (
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.checklist_items}</p>
+                  )}
+                  {!isIntegrationConnected('documenso') && !integrationsLoading && (
+                    <p className="text-theme-text-muted text-xs">
+                      Want documents e-signed instead of uploaded?{' '}
+                      <a href="/integrations" className="text-red-700 underline hover:text-red-600 dark:text-red-400">
+                        Connect Documenso
+                      </a>{' '}
+                      to send them for signature.
+                    </p>
                   )}
                 </div>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={checklistConfig.require_all}
-                    onChange={(e) => setConfig({ ...checklistConfig, require_all: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Require all items completed before advancing
-                </label>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={checklistConfig.auto_advance ?? false}
-                    onChange={(e) => setConfig({ ...checklistConfig, auto_advance: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Auto-advance when checklist is completed
-                </label>
-                <p className="text-theme-text-muted ml-6 text-xs">
-                  Automatically complete this step and advance the prospect when all required checklist items are
-                  checked off.
-                </p>
-              </div>
-            )}
+              )}
 
-            {/* Interview Requirement Config */}
-            {stageType === StageTypeConst.INTERVIEW_REQUIREMENT && (
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="stage-interview-count" className="text-theme-text-muted mb-2 block text-sm">
-                    Required Number of Interviews
+              {/* Meeting Config */}
+              {stageType === StageTypeConst.MEETING && (
+                <MeetingConfig
+                  config={config}
+                  setConfig={setConfig}
+                  customCategories={customCategories}
+                  getNextEventForType={getNextEventForType}
+                  renderEventPreview={renderEventPreview}
+                  calcomConnected={isIntegrationConnected('calcom')}
+                  integrationsReady={!integrationsLoading}
+                />
+              )}
+
+              {/* Election Vote Config */}
+              {stageType === StageTypeConst.ELECTION_VOTE && (
+                <ElectionVoteConfig config={config} setConfig={setConfig} errors={errors} />
+              )}
+
+              {/* Manual Approval Config */}
+              {stageType === StageTypeConst.MANUAL_APPROVAL && (
+                <div className="space-y-4">
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={approvalConfig.require_notes}
+                      onChange={(e) => setConfig({ ...approvalConfig, require_notes: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Require approval notes
                   </label>
-                  <input
-                    id="stage-interview-count"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={interviewReqConfig.required_count}
-                    onChange={(e) => setConfig({ ...interviewReqConfig, required_count: Number(e.target.value) })}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
-                  />
-                  {errors.required_count && (
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_count}</p>
-                  )}
-                </div>
-                <div>
-                  <label htmlFor="stage-interview-recommendation" className="text-theme-text-muted mb-2 block text-sm">
-                    Minimum Recommendation (optional)
-                  </label>
-                  <select
-                    id="stage-interview-recommendation"
-                    value={interviewReqConfig.required_recommendation ?? ''}
-                    onChange={(e) =>
-                      setConfig({
-                        ...interviewReqConfig,
-                        required_recommendation: (e.target.value ||
-                          undefined) as InterviewRequirementConfig['required_recommendation'],
-                      })
-                    }
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  >
-                    <option value="">Any recommendation</option>
-                    <option value="recommend">Recommend</option>
-                    <option value="recommend_with_reservations">Recommend with Reservations</option>
-                  </select>
-                  <p className="text-theme-text-muted mt-1 text-xs">
-                    If set, at least one interview must have this recommendation (or better) to advance.
+                  <p className="text-theme-text-muted text-xs">
+                    Approver roles can be configured in the organization settings. Any user with the{' '}
+                    <code className="text-theme-text-muted">prospective_members.manage</code> permission can approve.
                   </p>
                 </div>
-                <p className="text-theme-text-muted text-xs">
-                  Interviews are managed in the applicant detail view. This stage gates advancement until the required
-                  number of interviews are recorded.
-                </p>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={interviewReqConfig.auto_advance ?? false}
-                    onChange={(e) => setConfig({ ...interviewReqConfig, auto_advance: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Auto-advance when interview requirement is met
-                </label>
-                <p className="text-theme-text-muted ml-6 text-xs">
-                  Automatically complete this step and advance the prospect when the required number of interviews are
-                  recorded.
-                </p>
-              </div>
-            )}
+              )}
 
-            {/* Multi-Signer Approval Config */}
-            {stageType === StageTypeConst.MULTI_APPROVAL && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-theme-text-muted mb-2 block text-sm">Required Approver Roles</label>
-                  <p className="text-theme-text-muted mb-2 text-xs">
-                    All listed roles must sign off before this stage advances.
+              {/* Status Page Toggle Config */}
+              {stageType === StageTypeConst.STATUS_PAGE_TOGGLE && (
+                <div className="space-y-4">
+                  <div className="bg-theme-surface-hover border-theme-surface-border rounded-lg border p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <Globe className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+                      <span className="text-theme-text-primary text-sm font-medium">
+                        {statusPageConfig.enable_public_status ? 'Enables' : 'Disables'} the public status page
+                      </span>
+                    </div>
+                    <p className="text-theme-text-muted text-xs">
+                      When the prospect reaches this stage, their public status page will be
+                      {statusPageConfig.enable_public_status ? ' activated' : ' deactivated'}. They will receive a link
+                      to check their application progress.
+                    </p>
+                  </div>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={statusPageConfig.enable_public_status}
+                      onChange={(e) => setConfig({ ...statusPageConfig, enable_public_status: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Enable public status page at this stage
+                  </label>
+                  <div>
+                    <label htmlFor="stage-status-page-message" className="text-theme-text-muted mb-2 block text-sm">
+                      Custom Status Message (optional)
+                    </label>
+                    <textarea
+                      id="stage-status-page-message"
+                      value={statusPageConfig.custom_message ?? ''}
+                      onChange={(e) => setConfig({ ...statusPageConfig, custom_message: e.target.value })}
+                      placeholder="e.g., Welcome! You can now track your application progress here."
+                      rows={2}
+                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Automated Email Config */}
+              {stageType === StageTypeConst.AUTOMATED_EMAIL && (
+                <AutomatedEmailConfig
+                  config={config}
+                  setConfig={setConfig}
+                  errors={errors}
+                  showEmailPreview={showEmailPreview}
+                  setShowEmailPreview={setShowEmailPreview}
+                  getNextEventForType={getNextEventForType}
+                  renderEventPreview={renderEventPreview}
+                />
+              )}
+
+              {/* Reference Check Config */}
+              {stageType === StageTypeConst.REFERENCE_CHECK && (
+                <ReferenceCheckStageConfig config={config} setConfig={setConfig} errors={errors} />
+              )}
+
+              {/* Checklist Config */}
+              {stageType === StageTypeConst.CHECKLIST && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-theme-text-muted mb-2 block text-sm">Checklist Items</label>
+                    {checklistConfig.items.map((item, idx) => (
+                      <div key={idx} className="mb-3 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={item.label}
+                            onChange={(e) => {
+                              const updated = [...checklistConfig.items];
+                              const current = updated[idx];
+                              if (current) {
+                                updated[idx] = { ...current, label: e.target.value };
+                                setConfig({ ...checklistConfig, items: updated });
+                              }
+                            }}
+                            placeholder="Checklist item label"
+                            aria-label={`Checklist item ${idx + 1}`}
+                            className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                          />
+                          {checklistConfig.items.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = checklistConfig.items.filter((_, i) => i !== idx);
+                                setConfig({ ...checklistConfig, items: updated });
+                              }}
+                              className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                              aria-label={`Remove checklist item ${idx + 1}`}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          value={item.description ?? ''}
+                          onChange={(e) => {
+                            const updated = [...checklistConfig.items];
+                            const current = updated[idx];
+                            if (current) {
+                              updated[idx] = { ...current, description: e.target.value || undefined };
+                              setConfig({ ...checklistConfig, items: updated });
+                            }
+                          }}
+                          placeholder="Optional description"
+                          aria-label={`Checklist item ${idx + 1} description`}
+                          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring ml-0 w-full rounded-lg border px-4 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
+                        />
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfig({
+                          ...checklistConfig,
+                          items: [...checklistConfig.items, { label: '' }],
+                        })
+                      }
+                      className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      <Plus className="h-3 w-3" aria-hidden="true" /> Add checklist item
+                    </button>
+                    {errors.checklist_items && (
+                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.checklist_items}</p>
+                    )}
+                  </div>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={checklistConfig.require_all}
+                      onChange={(e) => setConfig({ ...checklistConfig, require_all: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Require all items completed before advancing
+                  </label>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={checklistConfig.auto_advance ?? false}
+                      onChange={(e) => setConfig({ ...checklistConfig, auto_advance: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Auto-advance when checklist is completed
+                  </label>
+                  <p className="text-theme-text-muted ml-6 text-xs">
+                    Automatically complete this step and advance the prospect when all required checklist items are
+                    checked off.
                   </p>
-                  {multiApprovalConfig.required_approvers.map((role, idx) => (
-                    <div key={idx} className="mb-2 flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={role}
-                        onChange={(e) => {
-                          const updated = [...multiApprovalConfig.required_approvers];
-                          updated[idx] = e.target.value;
-                          setConfig({ ...multiApprovalConfig, required_approvers: updated });
-                        }}
-                        placeholder="e.g., chief, president, safety_officer"
-                        aria-label={`Approver role ${idx + 1}`}
-                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
-                      />
-                      {multiApprovalConfig.required_approvers.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = multiApprovalConfig.required_approvers.filter((_, i) => i !== idx);
+                </div>
+              )}
+
+              {/* Interview Requirement Config */}
+              {stageType === StageTypeConst.INTERVIEW_REQUIREMENT && (
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="stage-interview-count" className="text-theme-text-muted mb-2 block text-sm">
+                      Required Number of Interviews
+                    </label>
+                    <input
+                      id="stage-interview-count"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={interviewReqConfig.required_count}
+                      onChange={(e) => setConfig({ ...interviewReqConfig, required_count: Number(e.target.value) })}
+                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                    />
+                    {errors.required_count && (
+                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_count}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="stage-interview-recommendation"
+                      className="text-theme-text-muted mb-2 block text-sm"
+                    >
+                      Minimum Recommendation (optional)
+                    </label>
+                    <select
+                      id="stage-interview-recommendation"
+                      value={interviewReqConfig.required_recommendation ?? ''}
+                      onChange={(e) =>
+                        setConfig({
+                          ...interviewReqConfig,
+                          required_recommendation: (e.target.value ||
+                            undefined) as InterviewRequirementConfig['required_recommendation'],
+                        })
+                      }
+                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                    >
+                      <option value="">Any recommendation</option>
+                      <option value="recommend">Recommend</option>
+                      <option value="recommend_with_reservations">Recommend with Reservations</option>
+                    </select>
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      If set, at least one interview must have this recommendation (or better) to advance.
+                    </p>
+                  </div>
+                  <p className="text-theme-text-muted text-xs">
+                    Interviews are managed in the applicant detail view. This stage gates advancement until the required
+                    number of interviews are recorded.
+                  </p>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={interviewReqConfig.auto_advance ?? false}
+                      onChange={(e) => setConfig({ ...interviewReqConfig, auto_advance: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Auto-advance when interview requirement is met
+                  </label>
+                  <p className="text-theme-text-muted ml-6 text-xs">
+                    Automatically complete this step and advance the prospect when the required number of interviews are
+                    recorded.
+                  </p>
+                </div>
+              )}
+
+              {/* Multi-Signer Approval Config */}
+              {stageType === StageTypeConst.MULTI_APPROVAL && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-theme-text-muted mb-2 block text-sm">Required Approver Roles</label>
+                    <p className="text-theme-text-muted mb-2 text-xs">
+                      All listed roles must sign off before this stage advances.
+                    </p>
+                    {multiApprovalConfig.required_approvers.map((role, idx) => (
+                      <div key={idx} className="mb-2 flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={role}
+                          onChange={(e) => {
+                            const updated = [...multiApprovalConfig.required_approvers];
+                            updated[idx] = e.target.value;
                             setConfig({ ...multiApprovalConfig, required_approvers: updated });
                           }}
-                          className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                          aria-label={`Remove approver role ${idx + 1}`}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setConfig({
-                        ...multiApprovalConfig,
-                        required_approvers: [...multiApprovalConfig.required_approvers, ''],
-                      })
-                    }
-                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <Plus className="h-3 w-3" aria-hidden="true" /> Add approver role
-                  </button>
-                  {errors.required_approvers && (
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_approvers}</p>
-                  )}
-                </div>
-                <div>
-                  <label htmlFor="stage-approval-order" className="text-theme-text-muted mb-2 block text-sm">
-                    Approval Order
+                          placeholder="e.g., chief, president, safety_officer"
+                          aria-label={`Approver role ${idx + 1}`}
+                          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                        />
+                        {multiApprovalConfig.required_approvers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = multiApprovalConfig.required_approvers.filter((_, i) => i !== idx);
+                              setConfig({ ...multiApprovalConfig, required_approvers: updated });
+                            }}
+                            className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                            aria-label={`Remove approver role ${idx + 1}`}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfig({
+                          ...multiApprovalConfig,
+                          required_approvers: [...multiApprovalConfig.required_approvers, ''],
+                        })
+                      }
+                      className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      <Plus className="h-3 w-3" aria-hidden="true" /> Add approver role
+                    </button>
+                    {errors.required_approvers && (
+                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_approvers}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="stage-approval-order" className="text-theme-text-muted mb-2 block text-sm">
+                      Approval Order
+                    </label>
+                    <select
+                      id="stage-approval-order"
+                      value={multiApprovalConfig.approval_order}
+                      onChange={(e) =>
+                        setConfig({
+                          ...multiApprovalConfig,
+                          approval_order: e.target.value as 'any' | 'sequential',
+                        })
+                      }
+                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                    >
+                      <option value="any">Any order — approvers can sign off in parallel</option>
+                      <option value="sequential">Sequential — must approve in the listed order</option>
+                    </select>
+                  </div>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={multiApprovalConfig.require_notes}
+                      onChange={(e) => setConfig({ ...multiApprovalConfig, require_notes: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Require notes with each approval
                   </label>
-                  <select
-                    id="stage-approval-order"
-                    value={multiApprovalConfig.approval_order}
-                    onChange={(e) =>
-                      setConfig({
-                        ...multiApprovalConfig,
-                        approval_order: e.target.value as 'any' | 'sequential',
-                      })
-                    }
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  >
-                    <option value="any">Any order — approvers can sign off in parallel</option>
-                    <option value="sequential">Sequential — must approve in the listed order</option>
-                  </select>
                 </div>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={multiApprovalConfig.require_notes}
-                    onChange={(e) => setConfig({ ...multiApprovalConfig, require_notes: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Require notes with each approval
-                </label>
-              </div>
-            )}
+              )}
 
-            {/* Medical Screening Config */}
-            {stageType === StageTypeConst.MEDICAL_SCREENING && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-theme-text-muted mb-2 block text-sm">Required Screening Types</label>
-                  {medicalScreeningConfig.required_screenings.map((screening, idx) => (
-                    <div key={idx} className="mb-2 flex items-center gap-2">
-                      <select
-                        value={screening}
-                        onChange={(e) => {
-                          const updated = [...medicalScreeningConfig.required_screenings];
-                          updated[idx] = e.target.value;
-                          setConfig({ ...medicalScreeningConfig, required_screenings: updated });
-                        }}
-                        aria-label={`Screening type ${idx + 1}`}
-                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                      >
-                        <option value="physical_exam">Physical Exam</option>
-                        <option value="medical_clearance">Medical Clearance</option>
-                        <option value="drug_screening">Drug Screening</option>
-                        <option value="vision_hearing">Vision & Hearing Test</option>
-                        <option value="fitness_assessment">Fitness Assessment (CPAT)</option>
-                        <option value="psychological">Psychological Evaluation</option>
-                      </select>
-                      {medicalScreeningConfig.required_screenings.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = medicalScreeningConfig.required_screenings.filter((_, i) => i !== idx);
+              {/* Medical Screening Config */}
+              {stageType === StageTypeConst.MEDICAL_SCREENING && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-theme-text-muted mb-2 block text-sm">Required Screening Types</label>
+                    {medicalScreeningConfig.required_screenings.map((screening, idx) => (
+                      <div key={idx} className="mb-2 flex items-center gap-2">
+                        <select
+                          value={screening}
+                          onChange={(e) => {
+                            const updated = [...medicalScreeningConfig.required_screenings];
+                            updated[idx] = e.target.value;
                             setConfig({ ...medicalScreeningConfig, required_screenings: updated });
                           }}
-                          className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                          aria-label={`Remove screening type ${idx + 1}`}
+                          aria-label={`Screening type ${idx + 1}`}
+                          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
                         >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setConfig({
-                        ...medicalScreeningConfig,
-                        required_screenings: [...medicalScreeningConfig.required_screenings, 'physical_exam'],
-                      })
-                    }
-                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <Plus className="h-3 w-3" aria-hidden="true" /> Add screening type
-                  </button>
-                  {errors.required_screenings && (
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_screenings}</p>
-                  )}
+                          <option value="physical_exam">Physical Exam</option>
+                          <option value="medical_clearance">Medical Clearance</option>
+                          <option value="drug_screening">Drug Screening</option>
+                          <option value="vision_hearing">Vision & Hearing Test</option>
+                          <option value="fitness_assessment">Fitness Assessment (CPAT)</option>
+                          <option value="psychological">Psychological Evaluation</option>
+                        </select>
+                        {medicalScreeningConfig.required_screenings.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = medicalScreeningConfig.required_screenings.filter((_, i) => i !== idx);
+                              setConfig({ ...medicalScreeningConfig, required_screenings: updated });
+                            }}
+                            className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
+                            aria-label={`Remove screening type ${idx + 1}`}
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfig({
+                          ...medicalScreeningConfig,
+                          required_screenings: [...medicalScreeningConfig.required_screenings, 'physical_exam'],
+                        })
+                      }
+                      className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      <Plus className="h-3 w-3" aria-hidden="true" /> Add screening type
+                    </button>
+                    {errors.required_screenings && (
+                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_screenings}</p>
+                    )}
+                  </div>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={medicalScreeningConfig.require_all_passed}
+                      onChange={(e) => setConfig({ ...medicalScreeningConfig, require_all_passed: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Require all screenings passed before advancing
+                  </label>
+                  <p className="text-theme-text-muted text-xs">
+                    Medical screening records are managed in the Medical Screening module. This stage checks that the
+                    prospect has current, passing records for each required screening type.
+                  </p>
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={medicalScreeningConfig.auto_advance ?? false}
+                      onChange={(e) => setConfig({ ...medicalScreeningConfig, auto_advance: e.target.checked })}
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                    />
+                    Auto-advance when all screenings pass
+                  </label>
+                  <p className="text-theme-text-muted ml-6 text-xs">
+                    Automatically complete this step and advance the prospect when all required medical screenings are
+                    passed.
+                  </p>
                 </div>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={medicalScreeningConfig.require_all_passed}
-                    onChange={(e) => setConfig({ ...medicalScreeningConfig, require_all_passed: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Require all screenings passed before advancing
-                </label>
-                <p className="text-theme-text-muted text-xs">
-                  Medical screening records are managed in the Medical Screening module. This stage checks that the
-                  prospect has current, passing records for each required screening type.
-                </p>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={medicalScreeningConfig.auto_advance ?? false}
-                    onChange={(e) => setConfig({ ...medicalScreeningConfig, auto_advance: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Auto-advance when all screenings pass
-                </label>
-                <p className="text-theme-text-muted ml-6 text-xs">
-                  Automatically complete this step and advance the prospect when all required medical screenings are
-                  passed.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Inactivity Timeout Override */}
-          <div className="border-theme-surface-border border-t pt-6">
-            <div className="mb-3 flex items-center gap-2">
-              <Clock className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
-              <h3 className="text-theme-text-secondary text-sm font-medium">Inactivity Timeout Override</h3>
+              )}
             </div>
-            <p className="text-theme-text-muted mb-3 text-xs">
-              Override the pipeline's default inactivity timeout for this stage. Useful for stages that naturally take
-              longer (e.g., background checks, scheduling votes).
-            </p>
-            <label className="text-theme-text-secondary mb-3 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={hasTimeoutOverride}
-                onChange={(e) => setHasTimeoutOverride(e.target.checked)}
-                className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-              />
-              Use a custom timeout for this stage
-            </label>
-            {hasTimeoutOverride && (
-              <div className="ml-6 flex items-center gap-3">
+
+            {/* Inactivity Timeout Override */}
+            <div className="border-theme-surface-border border-t pt-6">
+              <div className="mb-3 flex items-center gap-2">
+                <Clock className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+                <h3 className="text-theme-text-secondary text-sm font-medium">Inactivity Timeout Override</h3>
+              </div>
+              <p className="text-theme-text-muted mb-3 text-xs">
+                Override the pipeline's default inactivity timeout for this stage. Useful for stages that naturally take
+                longer (e.g., background checks, scheduling votes).
+              </p>
+              <label className="text-theme-text-secondary mb-3 flex items-center gap-2 text-sm">
                 <input
-                  type="number"
-                  min={1}
-                  max={730}
-                  value={timeoutOverrideDays}
-                  onChange={(e) => setTimeoutOverrideDays(Math.max(1, Number(e.target.value)))}
-                  aria-label="Timeout override days"
-                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  type="checkbox"
+                  checked={hasTimeoutOverride}
+                  onChange={(e) => setHasTimeoutOverride(e.target.checked)}
+                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                 />
-                <span className="text-theme-text-muted text-sm">days before marked inactive</span>
-              </div>
-            )}
-          </div>
-
-          {/* Required toggle */}
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isRequired}
-              onChange={(e) => setIsRequired(e.target.checked)}
-              className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-            />
-            This stage is required (cannot be skipped)
-          </label>
-
-          {/* Prospect Notification & Public Visibility */}
-          <div className="border-theme-surface-border space-y-3 border-t pt-6">
-            <div className="mb-2 flex items-center gap-2">
-              <Bell className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
-              <h3 className="text-theme-text-secondary text-sm font-medium">Prospect Communication</h3>
+                Use a custom timeout for this stage
+              </label>
+              {hasTimeoutOverride && (
+                <div className="ml-6 flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={730}
+                    value={timeoutOverrideDays}
+                    onChange={(e) => setTimeoutOverrideDays(Math.max(1, Number(e.target.value)))}
+                    aria-label="Timeout override days"
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                  <span className="text-theme-text-muted text-sm">days before marked inactive</span>
+                </div>
+              )}
             </div>
-            <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={notifyProspect}
-                onChange={(e) => setNotifyProspect(e.target.checked)}
-                className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-              />
-              Notify prospect when this stage is completed
-            </label>
-            <p className="text-theme-text-muted ml-6 text-xs">
-              When checked, the prospect will receive an email notification when they advance past this stage.
-            </p>
-            <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={publicVisible}
-                onChange={(e) => setPublicVisible(e.target.checked)}
-                className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-              />
-              Show this stage on the public status page
-            </label>
-            <p className="text-theme-text-muted ml-6 text-xs">
-              When unchecked, this stage will be hidden from the prospect's status check page. Useful for internal-only
-              steps like background checks.
-            </p>
-          </div>
-        </div>
 
-        {/* Footer */}
-        <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-          >
-            Cancel
-          </button>
-          <button type="button" onClick={handleSave} className="btn-primary px-6">
-            {editingStage ? 'Update Stage' : 'Add Stage'}
-          </button>
+            {/* Required toggle */}
+            <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isRequired}
+                onChange={(e) => setIsRequired(e.target.checked)}
+                className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+              />
+              This stage is required (cannot be skipped)
+            </label>
+
+            {/* Prospect Notification & Public Visibility */}
+            <div className="border-theme-surface-border space-y-3 border-t pt-6">
+              <div className="mb-2 flex items-center gap-2">
+                <Bell className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+                <h3 className="text-theme-text-secondary text-sm font-medium">Prospect Communication</h3>
+              </div>
+              <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={notifyProspect}
+                  onChange={(e) => setNotifyProspect(e.target.checked)}
+                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                />
+                Notify prospect when this stage is completed
+              </label>
+              <p className="text-theme-text-muted ml-6 text-xs">
+                When checked, the prospect will receive an email notification when they advance past this stage.
+              </p>
+              <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={publicVisible}
+                  onChange={(e) => setPublicVisible(e.target.checked)}
+                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
+                />
+                Show this stage on the public status page
+              </label>
+              <p className="text-theme-text-muted ml-6 text-xs">
+                When unchecked, this stage will be hidden from the prospect's status check page. Useful for
+                internal-only steps like background checks.
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button type="button" onClick={handleSave} className="btn-primary px-6">
+              {editingStage ? 'Update Stage' : 'Add Stage'}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </DialogPortal>
   );
 };

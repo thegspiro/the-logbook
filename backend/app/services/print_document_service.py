@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.positions import position_label
 from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
 from app.utils.scheduling_dates import DEFAULT_TIMEZONE
 
@@ -56,6 +57,31 @@ _POSITION_RANK = {
 # Someone who declined or was cancelled is not on the shift; printing them
 # would have the oncoming crew looking for a person who is not coming.
 _ROSTER_EXCLUDED_STATUSES = {"declined", "cancelled", "no_show"}
+
+# How much of a 32-character line the seat may take before the name it sits
+# beside stops being readable.
+_SEAT_COLUMN_WIDTH = 12
+
+
+def _seat_column(position: Any) -> Optional[str]:
+    """The seat's name for the roster's right-hand column.
+
+    The seat is named the way every screen names it — the ``ems`` seat prints
+    as EMT. A slash separates two names for one seat ("Driver/Operator"), so
+    dropping the alternative when the label will not fit costs nothing and
+    avoids "DRIVER/OPERA", which reads as a printer fault.
+
+    What is left is truncated rather than reduced to its first word. Two seats
+    a department named "Assistant Chief" and "Assistant Driver" would both
+    print as ASSISTANT that way, and a column that cannot tell two seats apart
+    defeats the reason the roster names them at all.
+    """
+    label = position_label(position)
+    if not label:
+        return None
+    if len(label) > _SEAT_COLUMN_WIDTH:
+        label = label.split("/", 1)[0].strip()
+    return label.upper()[:_SEAT_COLUMN_WIDTH] or None
 
 
 async def _org_timezone(db: AsyncSession, organization_id: str) -> str:
@@ -194,7 +220,7 @@ async def build_shift_roster(
             marks.append("unconfirmed")
         if marks:
             name = f"{name} ({', '.join(marks)})"
-        crew_rows.append(DocumentRow(left=name, right=position.upper()[:12] or None))
+        crew_rows.append(DocumentRow(left=name, right=_seat_column(position)))
 
     if not crew_rows:
         crew_rows.append(DocumentRow(left="No one assigned", emphasis=True))
@@ -269,7 +295,7 @@ async def build_apparatus_check_sheet(
 
     Read through :class:`EquipmentCheckService` rather than with a query of our
     own, so this inherits the narrowing the module already applies: a member
-    who only holds ``equipment_check.submit`` sees the checklists for the
+    who only holds ``inventory.check_submit`` sees the checklists for the
     positions they actually check, and not the rest of the department's.
     Querying the table directly would quietly hand them all of it.
     """
@@ -280,8 +306,8 @@ async def build_apparatus_check_sheet(
     permissions = _collect_user_permissions(viewer)
     visible_positions = None
     if not (
-        _has_permission("equipment_check.view", permissions)
-        or _has_permission("equipment_check.manage", permissions)
+        _has_permission("inventory.check_view", permissions)
+        or _has_permission("inventory.check_manage", permissions)
     ):
         visible_positions = await service.get_user_check_positions(
             str(viewer.id), str(organization_id)
@@ -394,9 +420,9 @@ MODULE_DOCUMENTS: Dict[str, Tuple[Tuple[str, ...], DocumentBuilder]] = {
     # department's whole checklist configuration.
     "apparatus_check_sheet": (
         (
-            "equipment_check.view",
-            "equipment_check.submit",
-            "equipment_check.manage",
+            "inventory.check_view",
+            "inventory.check_submit",
+            "inventory.check_manage",
         ),
         build_apparatus_check_sheet,
     ),

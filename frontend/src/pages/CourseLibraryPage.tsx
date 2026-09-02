@@ -8,6 +8,8 @@ import { SkeletonCardGrid } from '../components/ux/Skeleton';
 import { Pagination } from '../components/ux/Pagination';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
+import { COURSE_QUALIFICATIONS } from '../constants/enums';
+import { formCoercions } from '../utils/formValues';
 import type {
   TrainingCourse,
   TrainingCourseCreate,
@@ -47,6 +49,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
     instructor: '',
     max_participants: '',
     expiration_months: '',
+    grants_qualification: '',
     category_ids: [] as string[],
     materials_required: '',
   });
@@ -65,6 +68,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
         instructor: course.instructor || '',
         max_participants: course.max_participants?.toString() || '',
         expiration_months: course.expiration_months?.toString() || '',
+        grants_qualification: course.grants_qualification || '',
         category_ids: course.category_ids || [],
         materials_required: (course.materials_required || []).join('\n'),
       });
@@ -79,6 +83,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
         instructor: '',
         max_participants: '',
         expiration_months: '',
+        grants_qualification: '',
         category_ids: [],
         materials_required: '',
       });
@@ -91,6 +96,8 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
     setIsSubmitting(true);
     setError('');
 
+    const { pick } = formCoercions(isEdit);
+
     const payload = {
       name: formData.name,
       ...(formData.code ? { code: formData.code } : {}),
@@ -101,6 +108,10 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
       ...(formData.instructor ? { instructor: formData.instructor } : {}),
       max_participants: formData.max_participants ? parseInt(formData.max_participants) : undefined,
       expiration_months: formData.expiration_months ? parseInt(formData.expiration_months) : undefined,
+      // pick() sends an explicit null when editing: omitting the key means
+      // "leave it alone" to a model_dump(exclude_unset=True) backend, so
+      // clearing the grant would silently keep conferring it.
+      grants_qualification: pick(formData.grants_qualification),
       category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
       materials_required: formData.materials_required
         ? formData.materials_required.split('\n').filter((m) => m.trim())
@@ -283,6 +294,33 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                 min={1}
               />
             </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="course-grants-qualification"
+              className="text-theme-text-secondary mb-1 block text-sm font-medium"
+            >
+              Certifies
+            </label>
+            <select
+              id="course-grants-qualification"
+              value={formData.grants_qualification}
+              onChange={(e) => setFormData({ ...formData, grants_qualification: e.target.value })}
+              className="form-input text-sm"
+            >
+              <option value="">Nothing — this course certifies no qualification</option>
+              {COURSE_QUALIFICATIONS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Completing this course grants the member this qualification, dated from the training record&apos;s
+              completion and expiry. The qualification decides which shift positions they may fill, and stops counting
+              on its own when the card lapses.
+            </p>
           </div>
 
           {/* Categories */}
@@ -648,6 +686,15 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false 
 
                   <div className="mb-3 flex flex-wrap gap-1.5">
                     <TypeBadge type={course.training_type} />
+                    {/* Which courses actually certify something is otherwise
+                        invisible until you open each one. */}
+                    {course.grants_qualification && (
+                      <span className="rounded-sm bg-teal-500/15 px-2 py-0.5 text-xs text-teal-700 dark:text-teal-400">
+                        Certifies:{' '}
+                        {COURSE_QUALIFICATIONS.find((p) => p.value === course.grants_qualification)?.label ??
+                          course.grants_qualification}
+                      </span>
+                    )}
                     {!course.active && (
                       <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
                         Inactive

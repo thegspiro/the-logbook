@@ -8,14 +8,18 @@ Permission aggregation combines **position permissions** (from the
 (from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
-from fastapi import Cookie, Depends, Header, Query, Request, status
+from fastapi import Cookie, Depends, Header, HTTPException, Query, Request, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
-from app.core.permissions import get_rank_default_permissions, permission_matches
+from app.core.permissions import (
+    expand_legacy_permissions,
+    get_rank_default_permissions,
+    permission_matches,
+)
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
 from app.utils.db_retry import is_transient_db_error
@@ -54,6 +58,7 @@ def _collect_user_permissions(user: User) -> set:
     Aggregate all permissions for *user* by combining:
     1. Permissions from every assigned **position**.
     2. Default permissions from the user's operational **rank**.
+    3. The current name of any retired permission string found in either.
     """
     perms: set = set()
 
@@ -66,7 +71,11 @@ def _collect_user_permissions(user: User) -> set:
     if user.rank:
         perms.update(get_rank_default_permissions(user.rank))
 
-    return perms
+    # A stored row may predate a permission rename (see
+    # LEGACY_PERMISSION_ALIASES). Expanding here rather than at each call site
+    # is what keeps the compatibility in one place: every check in the app
+    # resolves through this function.
+    return expand_legacy_permissions(perms)
 
 
 # Paths a user with must_change_password=True may still reach, so they can
@@ -105,6 +114,23 @@ async def get_current_user(
     1. HttpOnly ``access_token`` cookie (preferred — immune to XSS).
     2. ``Authorization: Bearer <token>`` header (API / non-browser clients).
     """
+    # Resolved at most once per request. FastAPI's dependency cache dedupes
+    # `Depends(get_current_user)` against itself, but not against the plain
+    # call inside `get_optional_current_user` — and `require_module` hangs off
+    # the optional one so that public token routes inside gated routers still
+    # answer. Without this, every authenticated request to a gated router ran
+    # the session lookup, the user/role query, the activity-timestamp flush
+    # and sometimes the MFA organization query twice before the handler began.
+    #
+    # Keyed on nothing because it needs no key: the credentials are fixed for
+    # the life of a request, so the second resolution can only reach the same
+    # user. Cached on `request.state` rather than in a module-level dict for
+    # the reason CLAUDE.md pitfall 9 gives — a process-lifetime cache of user
+    # objects is an unbounded one.
+    cached_user = getattr(request.state, "authenticated_user", None)
+    if cached_user is not None:
+        return cached_user
+
     # Two curated codes for the same 401: "no credentials at all" and
     # "credentials present but rejected" send IT down different paths
     # (cookie/browser problems vs expired or revoked sessions).
@@ -192,6 +218,9 @@ async def get_current_user(
                     headers={"X-MFA-Enrollment-Required": "true"},
                 )
 
+    # Cached only here, past every rejection above, so a refusal is never
+    # short-circuited into an approval on the second resolution.
+    request.state.authenticated_user = user
     return user
 
 
@@ -379,3 +408,116 @@ def require_secretary():
         "settings.manage_contact_visibility",
         "organization.update_settings",
     )
+
+
+async def get_request_enabled_modules(
+    request: Request,
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
+    db: AsyncSession = Depends(get_db),
+) -> frozenset[str] | None:
+    """The caller's organization's enabled modules, resolved once per request.
+
+    ``None`` when the request carries no *usable* session. That is not the
+    same as "no modules": module enablement is a property of an
+    organization, and a caller with no organization to name has nothing to
+    compare against, so :func:`require_module` stands aside.
+
+    Calls :func:`get_optional_current_user` directly rather than via
+    ``Depends`` so an invalid/expired ``access_token`` cookie can be caught
+    here instead of raising before this function's body ever runs.
+    :func:`require_module` gates whole routers, including ones that carry
+    token-authorized public routes (the ballot a member votes from an
+    emailed link) reachable with no Logbook session at all. Those callers
+    are meant to sail through on "no session" -- but a voter who also
+    happens to be logged into the main app, with a since-revoked or expired
+    session cookie still sitting in their browser, supplies *a* credential,
+    and :func:`get_optional_current_user` deliberately fails rather than
+    downgrading an invalid one to anonymous (right for routes that read who
+    is asking). For the module flag specifically, an unusable session
+    carries no more organization information than no session at all, so it
+    is treated the same way here. This does not weaken authentication
+    anywhere: an endpoint that actually needs a signed-in user still
+    declares its own ``Depends(get_current_user)``, a separate resolution
+    unaffected by this one, and still rejects an invalid token normally.
+
+    Memoized on ``request.state`` because a single request can ask more than
+    once — a router-level ``require_module`` plus an endpoint that consults the
+    set itself, for instance — and each resolution is a database read.
+    """
+    try:
+        current_user = await get_optional_current_user(
+            request, authorization, access_token, db
+        )
+    except HTTPException:
+        return None
+    if current_user is None:
+        return None
+
+    cached = getattr(request.state, "enabled_modules", None)
+    if cached is not None:
+        return cached
+
+    from app.services.organization_service import OrganizationService
+
+    modules = frozenset(
+        (
+            await OrganizationService(db).get_enabled_modules(
+                current_user.organization_id
+            )
+        ).enabled_modules
+    )
+    request.state.enabled_modules = modules
+    return modules
+
+
+def require_module(module: str, label: str | None = None):
+    """Require that *module* is switched on for the caller's organization.
+
+    Module enablement and permissions answer different questions and neither
+    substitutes for the other. A permission asks whether this member may see
+    this data; the module flag asks whether the department runs this part of
+    the app at all. A treasurer holds ``finance.manage`` whether or not the
+    department keeps its books here, so the permission alone cannot decide.
+
+    Mounted at ``include_router`` rather than per-endpoint, so a route added
+    to an already-gated module inherits the gate instead of relying on
+    whoever adds it to remember.
+
+    **A request with no session passes through.** Several gated routers carry
+    token-authenticated public routes — the ballot a member votes from an
+    emailed link, the Salesforce OAuth callback — and those callers have no
+    organization for this to be a question about; the token, not a session,
+    is what authorizes them. Depending on the *mandatory* current-user
+    dependency here would have quietly turned those into 401s, which is why
+    this takes the optional one. Every authenticated caller is still gated,
+    and that is the surface the module switch is about.
+
+    403 rather than 404: hiding the module's existence buys nothing (the
+    settings screen lists every module to any admin) and would turn a
+    configuration choice into a debugging exercise. The dedicated error code
+    is what lets the client tell "your department switched this off" apart
+    from "you lack the permission", which are opposite problems with opposite
+    fixes.
+    """
+
+    async def check_module_enabled(
+        enabled: frozenset[str] | None = Depends(get_request_enabled_modules),
+    ) -> None:
+        if enabled is None or module in enabled:
+            return
+        name = label or module.replace("_", " ").title()
+        raise CodedHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"The {name} module is not enabled for this organization. "
+                "An administrator can turn it on under Settings > Modules."
+            ),
+            error_code=ErrorCode.ORG_MODULE_DISABLED,
+        )
+
+    # Named on the function rather than left in a closure cell, so tooling can
+    # read the map off a built app. Mirrors ``required_permissions`` on the
+    # permission checkers; cell ordering is not part of the language contract.
+    check_module_enabled.required_module = module
+    return check_module_enabled

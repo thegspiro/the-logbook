@@ -15,7 +15,18 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { Settings, Loader2, FileText, ExternalLink, ClipboardList, Clock, Mail, Tag, LayoutGrid } from 'lucide-react';
+import {
+  Settings,
+  Loader2,
+  FileText,
+  ExternalLink,
+  ClipboardList,
+  Clock,
+  Mail,
+  Tag,
+  LayoutGrid,
+  Users,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService, eventRequestService, userService } from '../services/api';
 import type { EventModuleSettings, EventType, EventCategoryConfig, EmailTemplate } from '../types/event';
@@ -24,6 +35,7 @@ import {
   CategoriesSection,
   OutreachSection,
   HourTrackingSection,
+  AttendanceSection,
   PipelineSection,
   EmailSection,
   FormSection,
@@ -47,11 +59,12 @@ const DEFAULT_CATEGORY_COLOR = 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 da
 // ─── Section Definitions ───────────────────────────────────────────────────────
 
 type SectionKey =
-  'visibility' | 'categories' | 'outreach' | 'hour_tracking' | 'pipeline' | 'email' | 'form' | 'metrics';
+  'visibility' | 'categories' | 'attendance' | 'outreach' | 'hour_tracking' | 'pipeline' | 'email' | 'form' | 'metrics';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'visibility', label: 'Visibility', icon: Settings, description: 'Primary filter categories' },
   { key: 'categories', label: 'Categories', icon: Tag, description: 'Custom event categories' },
+  { key: 'attendance', label: 'Attendance', icon: Users, description: "Who can see who's going" },
   { key: 'outreach', label: 'Outreach Types', icon: FileText, description: 'Public outreach event types' },
   { key: 'hour_tracking', label: 'Hour Tracking', icon: Clock, description: 'Map events to admin hours' },
   { key: 'pipeline', label: 'Pipeline', icon: ClipboardList, description: 'Request processing config' },
@@ -214,6 +227,18 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
     const updated = isVisible ? current.filter((t) => t !== eventType) : [...current, eventType];
 
     void saveSettings({ visible_event_types: updated });
+  };
+
+  const setAttendeeVisibility = (value: 'members' | 'managers') => {
+    if (!settings) return;
+    // The whole `defaults` block is sent back, not just the one key: the
+    // backend shallow-merges each settings section, so this is safe, and
+    // sending the block keeps the patch shape identical to what the API
+    // returned.
+    void saveSettings(
+      { defaults: { ...settings.defaults, attendee_visibility: value } },
+      'Failed to update attendee list visibility.'
+    );
   };
 
   const toggleCategoryVisibility = (categoryValue: string) => {
@@ -531,6 +556,14 @@ const EventsSettingsTab: React.FC<EventsSettingsTabProps> = ({ onMetricsSaved })
             onRemoveRole={(v) => void removeOutreachRole(v)}
             newRoleLabel={newRoleLabel}
             onNewRoleLabelChange={setNewRoleLabel}
+          />
+        );
+      case 'attendance':
+        return (
+          <AttendanceSection
+            settings={settings}
+            saving={saving}
+            onChangeAttendeeVisibility={(value) => void setAttendeeVisibility(value)}
           />
         );
       case 'hour_tracking':

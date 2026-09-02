@@ -34,6 +34,15 @@ const makeWriteOff = (overrides: Record<string, unknown> = {}) => ({
   item_serial_number: 'SN-12345',
   item_asset_tag: 'AT-001',
   item_value: 450.0,
+  current_status: 'available',
+  current_holder: undefined,
+  replacement_value: 625,
+  active_assignment_count: 0,
+  active_checkout_count: 0,
+  active_issuance_count: 0,
+  acknowledgement_required: false,
+  acknowledgement_threshold: 1000,
+  holder_signature: 'none',
   review_notes: '',
   created_at: '2026-02-10T10:00:00Z',
   ...overrides,
@@ -98,13 +107,13 @@ describe('WriteOffsPage', () => {
     });
     await user.click(screen.getByText('Review'));
     await waitFor(() => {
-      expect(screen.getByText('Review Notes (optional)')).toBeInTheDocument();
+      expect(screen.getByText(/Review note/)).toBeInTheDocument();
     });
     // "Reason: fire_damage" appears in both the list card and the modal
     expect(screen.getAllByText(/Reason: fire_damage/).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('approves a write-off', async () => {
+  it('approves an ordinary retirement with a required note', async () => {
     const user = userEvent.setup();
     mockReviewWriteOff.mockResolvedValue({});
     renderWithRouter(<WriteOffsPage />);
@@ -112,11 +121,15 @@ describe('WriteOffsPage', () => {
       expect(screen.getByText('Damaged Helmet')).toBeInTheDocument();
     });
     await user.click(screen.getByText('Review'));
-    await user.click(await screen.findByText('Approve'));
+    await user.type(await screen.findByPlaceholderText('Document the reason for this decision...'), 'Reviewed damage');
+    await user.click(await screen.findByText('Approve and retire item'));
     await waitFor(() => {
       expect(mockReviewWriteOff).toHaveBeenCalledWith('wo-1', {
         status: 'approved',
-        review_notes: undefined,
+        review_notes: 'Reviewed damage',
+        acknowledgement: false,
+        expected_item_status: 'available',
+        expected_holder_signature: 'none',
       });
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Write-off approved');
@@ -130,16 +143,50 @@ describe('WriteOffsPage', () => {
       expect(screen.getByText('Damaged Helmet')).toBeInTheDocument();
     });
     await user.click(screen.getByText('Review'));
-    const notesField = await screen.findByPlaceholderText('Optional notes...');
+    const notesField = await screen.findByPlaceholderText('Document the reason for this decision...');
     await user.type(notesField, 'Needs more documentation');
     await user.click(screen.getByText('Deny'));
     await waitFor(() => {
       expect(mockReviewWriteOff).toHaveBeenCalledWith('wo-1', {
         status: 'denied',
         review_notes: 'Needs more documentation',
+        acknowledgement: false,
+        expected_item_status: 'available',
+        expected_holder_signature: 'none',
       });
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Write-off denied');
+  });
+
+  it('requires acknowledgement for a held item and describes records that close', async () => {
+    const user = userEvent.setup();
+    mockGetWriteOffRequests.mockResolvedValue([
+      makeWriteOff({
+        reason: 'lost',
+        current_holder: 'Alex Member',
+        current_status: 'assigned',
+        active_assignment_count: 1,
+        acknowledgement_required: true,
+        holder_signature: 'member-1:a1',
+      }),
+    ]);
+    renderWithRouter(<WriteOffsPage />);
+    await user.click(await screen.findByText('Review'));
+    expect(screen.getByText('Alex Member')).toBeInTheDocument();
+    expect(screen.getByText(/close 1 active assignment/)).toBeInTheDocument();
+    const approve = screen.getByRole('button', { name: 'Approve and mark lost' });
+    await user.type(screen.getByPlaceholderText('Document the reason for this decision...'), 'Confirmed loss');
+    expect(approve).toBeDisabled();
+    await user.click(screen.getByRole('checkbox'));
+    expect(approve).toBeEnabled();
+  });
+
+  it('labels stolen approval according to the resulting status', async () => {
+    const user = userEvent.setup();
+    mockGetWriteOffRequests.mockResolvedValue([makeWriteOff({ reason: 'stolen' })]);
+    renderWithRouter(<WriteOffsPage />);
+    await user.click(await screen.findByText('Review'));
+    expect(screen.getByRole('button', { name: 'Approve and mark stolen' })).toBeInTheDocument();
   });
 
   it('does not show Review for non-pending write-offs', async () => {

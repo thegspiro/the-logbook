@@ -5,7 +5,7 @@ Business logic for fundraising campaigns, donors, donations, pledges,
 and fundraising events. Provides dashboard aggregation and reporting.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -23,7 +23,9 @@ from app.models.grant import (
     Pledge,
     PledgeStatus,
 )
+from app.utils.model_updates import apply_updates
 from app.utils.sql_ordering import nulls_last_asc
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 def _json_safe_amounts(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -118,8 +120,11 @@ class FundraisingService:
         campaign = await self.get_campaign(campaign_id, organization_id)
         if not campaign:
             return None
-        for key, value in _json_safe_amounts(data).items():
-            setattr(campaign, key, value)
+        apply_updates(
+            campaign,
+            _json_safe_amounts(data),
+            skip={"organization_id", "id"},
+        )
         await self.db.flush()
         return campaign
 
@@ -148,13 +153,12 @@ class FundraisingService:
         if donor_type:
             query = query.where(Donor.donor_type == donor_type)
         if search:
-            safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            pattern = f"%{safe}%"
+            pattern = like_pattern(search)
             query = query.where(
-                (Donor.first_name.ilike(pattern, escape="\\"))
-                | (Donor.last_name.ilike(pattern, escape="\\"))
-                | (Donor.email.ilike(pattern, escape="\\"))
-                | (Donor.company_name.ilike(pattern, escape="\\"))
+                (Donor.first_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+                | (Donor.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+                | (Donor.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+                | (Donor.company_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
         query = query.order_by(Donor.last_name.asc(), Donor.first_name.asc())
         result = await self.db.execute(query)
@@ -186,8 +190,7 @@ class FundraisingService:
         donor = await self.get_donor(donor_id, organization_id)
         if not donor:
             return None
-        for key, value in data.items():
-            setattr(donor, key, value)
+        apply_updates(donor, data, skip={"organization_id", "id"})
         await self.db.flush()
         return donor
 
@@ -209,9 +212,20 @@ class FundraisingService:
         if donor_id:
             query = query.where(Donation.donor_id == donor_id)
         if start_date:
-            query = query.where(Donation.donation_date >= start_date)
+            query = query.where(
+                Donation.donation_date
+                >= datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=timezone.utc
+                )
+            )
         if end_date:
-            query = query.where(Donation.donation_date <= end_date)
+            # donation_date is DateTime; a bare date compares as that date's
+            # midnight, silently excluding donations recorded later the same
+            # day. Match reports_service.py's end-of-day boundary pattern.
+            query = query.where(
+                Donation.donation_date
+                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+            )
         query = query.order_by(Donation.donation_date.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -258,6 +272,24 @@ class FundraisingService:
         # otherwise skip the campaign/donor total update.
         if not donation.payment_status:
             donation.payment_status = PaymentStatus.COMPLETED
+
+        # Lock the campaign/donor parents *before* inserting the donation
+        # below. Donation.campaign_id / donor_id are FK columns — InnoDB's
+        # own FK check on the INSERT takes a shared lock on the referenced
+        # parent row, held until this transaction ends. If that happened
+        # first, two concurrent completed donations to the same campaign (or
+        # donor) would each hold a shared lock from their own FK check, then
+        # both try to upgrade to the exclusive FOR UPDATE lock
+        # `_update_campaign_total`/`_update_donor_stats` take below — a
+        # lock-upgrade deadlock InnoDB resolves by killing one transaction
+        # (an unhandled 500, not retried). Locking first, in the same order
+        # the recompute below will need, avoids that.
+        if donation.payment_status == PaymentStatus.COMPLETED:
+            if donation.campaign_id:
+                await self._lock_campaign(donation.campaign_id, organization_id)
+            if donation.donor_id:
+                await self._lock_donor(donation.donor_id, organization_id)
+
         self.db.add(donation)
         await self.db.flush()
 
@@ -307,8 +339,17 @@ class FundraisingService:
         ):
             raise ValueError("Donor not found")
 
-        for key, value in data.items():
-            setattr(donation, key, value)
+        # Lock every campaign/donor this update could touch — old and
+        # (if reassigned) new — before the update flush below, for the same
+        # reason create_donation locks them before its insert.
+        new_campaign_id = data.get("campaign_id", old_campaign_id)
+        new_donor_id = data.get("donor_id", old_donor_id)
+        for cid in {old_campaign_id, new_campaign_id} - {None}:
+            await self._lock_campaign(cid, organization_id)
+        for did in {old_donor_id, new_donor_id} - {None}:
+            await self._lock_donor(did, organization_id)
+
+        apply_updates(donation, data, skip={"organization_id", "id"})
         await self.db.flush()
 
         # Recalculate aggregates for both the old and new campaign/donor.
@@ -319,53 +360,110 @@ class FundraisingService:
 
         return donation
 
+    async def _lock_campaign(self, campaign_id: str, organization_id: str) -> None:
+        """Acquire a FOR UPDATE lock on a campaign ahead of a child insert/update.
+
+        Called before `create_donation`/`update_donation` flush a `Donation`
+        row whose `campaign_id` FK would otherwise be the first thing to
+        lock this row this transaction (see the callers for the deadlock
+        this avoids).
+        """
+        await self.db.execute(
+            select(FundraisingCampaign.id)
+            .where(
+                FundraisingCampaign.id == campaign_id,
+                FundraisingCampaign.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+
+    async def _lock_donor(self, donor_id: str, organization_id: str) -> None:
+        """Acquire a FOR UPDATE lock on a donor ahead of a child insert/update.
+
+        Same reasoning as `_lock_campaign` above, for `Donation.donor_id`.
+        """
+        await self.db.execute(
+            select(Donor.id)
+            .where(
+                Donor.id == donor_id,
+                Donor.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+
     async def _update_campaign_total(
         self, campaign_id: str, organization_id: str
     ) -> None:
+        """Recalculate a campaign's running total from its donations.
+
+        Read-then-write aggregate recompute (Pitfall #27): two donations to
+        the same campaign, recorded/updated concurrently, would each read a
+        stale SUM and one could overwrite the other's contribution. Lock the
+        campaign row first — the parent both writers actually contend on —
+        and make the SUM itself a locking read too: under REPEATABLE READ a
+        plain SELECT answers from the transaction's first-read snapshot even
+        after a lock is acquired elsewhere, so the row lock alone would not
+        make the SUM current.
+        """
+        camp_result = await self.db.execute(
+            select(FundraisingCampaign)
+            .where(
+                FundraisingCampaign.id == campaign_id,
+                FundraisingCampaign.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        campaign = camp_result.scalar_one_or_none()
+        if not campaign:
+            return
         result = await self.db.execute(
-            select(func.coalesce(func.sum(Donation.amount), 0)).where(
+            select(func.coalesce(func.sum(Donation.amount), 0))
+            .where(
                 Donation.campaign_id == campaign_id,
                 Donation.organization_id == organization_id,
                 Donation.payment_status == PaymentStatus.COMPLETED.value,
             )
+            .with_for_update()
         )
-        total = result.scalar()
-        camp_result = await self.db.execute(
-            select(FundraisingCampaign).where(
-                FundraisingCampaign.id == campaign_id,
-                FundraisingCampaign.organization_id == organization_id,
-            )
-        )
-        campaign = camp_result.scalar_one_or_none()
-        if campaign:
-            campaign.current_amount = total
+        campaign.current_amount = result.scalar()
 
     async def _update_donor_stats(self, donor_id: str, organization_id: str) -> None:
+        """Recalculate a donor's lifetime stats from their donations.
+
+        Same read-then-write race as `_update_campaign_total` above — lock
+        the donor row first, then make the aggregate read itself a locking
+        read so it does not answer from a pre-lock snapshot.
+        """
+        donor_result = await self.db.execute(
+            select(Donor)
+            .where(
+                Donor.id == donor_id,
+                Donor.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        donor = donor_result.scalar_one_or_none()
+        if not donor:
+            return
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(Donation.amount), 0),
                 func.count(Donation.id),
                 func.min(Donation.donation_date),
                 func.max(Donation.donation_date),
-            ).where(
+            )
+            .where(
                 Donation.donor_id == donor_id,
                 Donation.organization_id == organization_id,
                 Donation.payment_status == PaymentStatus.COMPLETED.value,
             )
+            .with_for_update()
         )
         row = result.one()
-        donor_result = await self.db.execute(
-            select(Donor).where(
-                Donor.id == donor_id,
-                Donor.organization_id == organization_id,
-            )
-        )
-        donor = donor_result.scalar_one_or_none()
-        if donor:
-            donor.total_donated = row[0]
-            donor.donation_count = row[1]
-            donor.first_donation_date = row[2].date() if row[2] else None
-            donor.last_donation_date = row[3].date() if row[3] else None
+        donor.total_donated = row[0]
+        donor.donation_count = row[1]
+        donor.first_donation_date = row[2].date() if row[2] else None
+        donor.last_donation_date = row[3].date() if row[3] else None
 
     # ------------------------------------------------------------------
     # Pledges
@@ -430,8 +528,7 @@ class FundraisingService:
         if not pledge:
             return None
         await self._validate_pledge_fks(data, organization_id)
-        for key, value in data.items():
-            setattr(pledge, key, value)
+        apply_updates(pledge, data, skip={"organization_id", "id"})
         await self.db.flush()
         return pledge
 
@@ -508,8 +605,7 @@ class FundraisingService:
         if not event:
             return None
         await self._validate_fundraising_event_fks(data, organization_id)
-        for key, value in data.items():
-            setattr(event, key, value)
+        apply_updates(event, data, skip={"organization_id", "id"})
         await self.db.flush()
         return event
 
@@ -611,9 +707,20 @@ class FundraisingService:
             Donation.payment_status == PaymentStatus.COMPLETED.value,
         )
         if start_date:
-            query = query.where(Donation.donation_date >= start_date)
+            query = query.where(
+                Donation.donation_date
+                >= datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=timezone.utc
+                )
+            )
         if end_date:
-            query = query.where(Donation.donation_date <= end_date)
+            # donation_date is DateTime; a bare date compares as that date's
+            # midnight, silently excluding donations recorded later the same
+            # day. Match reports_service.py's end-of-day boundary pattern.
+            query = query.where(
+                Donation.donation_date
+                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+            )
         result = await self.db.execute(query)
         donations = list(result.scalars().all())
 

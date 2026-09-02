@@ -140,6 +140,26 @@ async def test_resolve_user_enforces_domain_allowlist(monkeypatch):
     assert reason == "domain_not_allowed"
 
 
+async def test_resolve_user_no_active_organization():
+    # A deactivated (or absent) organization must fail closed: no org filter
+    # should ever be dropped, and the user lookup must not run at all.
+    org_result = MagicMock()
+    org_result.scalar_one_or_none.return_value = None
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=org_result)
+
+    svc = GoogleOAuthService(db)
+    resolved, reason = await svc.resolve_user(
+        {"email": "alice@dept.org", "email_verified": True, "sub": "g-123"}
+    )
+    assert resolved is None
+    assert reason == "no_account"
+    assert db.execute.await_count == 1
+
+    org_query = str(db.execute.await_args_list[0].args[0])
+    assert "organizations.active IS true" in org_query
+
+
 async def test_resolve_user_no_local_account():
     svc = GoogleOAuthService(_db_returning(None))
     resolved, reason = await svc.resolve_user(

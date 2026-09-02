@@ -120,6 +120,12 @@ export const userService = {
     mobile?: string | undefined;
     date_of_birth?: string | undefined;
     hire_date?: string | undefined;
+    // The two independent facts the legacy `membership_type` fuses. Send the
+    // pair rather than that string: it is the only way to state a standing the
+    // fused vocabulary cannot hold (an administrative probationer), and the
+    // backend derives `membership_type` back from it.
+    member_class?: string | undefined;
+    member_status?: string | undefined;
     rank?: string | undefined;
     station?: string | undefined;
     platoon?: string | undefined;
@@ -246,6 +252,18 @@ export const userService = {
   },
 
   /**
+   * Every member's photo-use standing, for the PIO deciding which faces may
+   * appear in a newsletter or social post. Read-only: consent belongs to the
+   * member, and is set from their own settings page.
+   */
+  async getPhotoUseConsentRoster(includeInactive: boolean = false): Promise<import('../types/user').ConsentRoster> {
+    const response = await api.get<import('../types/user').ConsentRoster>('/users/consents/photo-use', {
+      params: { include_inactive: includeInactive },
+    });
+    return response.data;
+  },
+
+  /**
    * Delete a user (soft or hard delete)
    */
   async deleteUserWithMode(userId: string, hard: boolean = false): Promise<void> {
@@ -333,6 +351,9 @@ export interface ModuleSettingsData {
   medical_supplies: boolean;
   prospective_members: boolean;
   public_info: boolean;
+  finance: boolean;
+  medical_screening: boolean;
+  testing: boolean;
 }
 
 export interface OrganizationProfile {
@@ -364,6 +385,14 @@ export interface OrganizationProfile {
 export interface EnabledModulesResponse {
   enabled_modules: string[];
   module_settings: ModuleSettingsData;
+  /**
+   * True when the organization has actually chosen its modules. False means
+   * `enabled_modules` reflects declared defaults, not a decision — the case
+   * the navigation treats permissively. Optional on the client because a
+   * response predating the field should read as "not configured", which is
+   * the permissive answer this has always defaulted to.
+   */
+  configured?: boolean;
 }
 
 export const organizationService = {

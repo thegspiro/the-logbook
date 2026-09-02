@@ -474,6 +474,15 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const selectedLocation = locations.find((l) => l.id === formData.location_id);
 
+  // A facility room's Location name includes its full containment path and
+  // facility (for example, "Storage — Office — Station 1"). That context is
+  // useful when an organization has multiple facilities, but is redundant and
+  // harder to scan when every facility-backed location belongs to one building.
+  const hasSingleFacility = useMemo(
+    () => new Set(locations.map((location) => location.facility_id).filter(Boolean)).size === 1,
+    [locations]
+  );
+
   const formatLocationAddress = (loc: Location) => {
     const parts: string[] = [];
     if (loc.address) parts.push(loc.address);
@@ -487,7 +496,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   };
 
   const formatLocationLabel = (loc: Location) => {
-    const parts = [loc.name];
+    const roomName = hasSingleFacility && loc.facility_room_id ? loc.name.split(' — ', 1)[0] : loc.name;
+    if (hasSingleFacility && loc.facility_room_id) return roomName;
+    const parts = [roomName];
     if (loc.building) parts.push(`(${loc.building})`);
     const addr = [loc.address, loc.city].filter(Boolean).join(', ');
     if (addr) parts.push(`— ${addr}`);
@@ -526,12 +537,14 @@ export const EventForm: React.FC<EventFormProps> = ({
       submitData.location_id = undefined;
     }
 
-    // Clear RSVP fields if not required
+    // Only the deadline is cleared when a response is not required. Capacity,
+    // guests and the allowed statuses all still apply, because an event that
+    // does not *require* an RSVP still accepts voluntary ones — clearing them
+    // here would silently uncap the event and revoke guests on every save.
+    // A deadline is the one field that genuinely has no meaning without an
+    // expectation to be late for.
     if (!submitData.requires_rsvp) {
       submitData.rsvp_deadline = undefined;
-      submitData.max_attendees = undefined;
-      submitData.allow_guests = false;
-      submitData.allowed_rsvp_statuses = undefined;
     }
 
     // Clear empty strings
@@ -1252,6 +1265,10 @@ export const EventForm: React.FC<EventFormProps> = ({
             </label>
           </div>
 
+          {/* Only the deadline lives behind "Require RSVP". Capacity, guests,
+              the allowed statuses and roster visibility all apply to an event
+              that merely *accepts* responses, so hiding them here would leave
+              an organizer unable to cap a voluntary event. */}
           {formData.requires_rsvp && (
             <div className="space-y-4 border-l-2 border-red-500/30 pl-4">
               <div>
@@ -1265,60 +1282,90 @@ export const EventForm: React.FC<EventFormProps> = ({
                   className={inputClass}
                 />
               </div>
-              <div>
-                <label htmlFor="max-attendees" className={labelClass}>
-                  Max Attendees
-                </label>
-                <input
-                  type="number"
-                  id="max-attendees"
-                  min="1"
-                  value={formData.max_attendees || ''}
-                  onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
-                  className={inputClass}
-                  placeholder="Unlimited"
-                />
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  id="allow-guests"
-                  checked={formData.allow_guests}
-                  onChange={(e) => update({ allow_guests: e.target.checked })}
-                  className={checkboxClass}
-                />
-                <label htmlFor="allow-guests" className="text-theme-text-secondary text-sm">
-                  Allow guests
-                </label>
-              </div>
-
-              <fieldset>
-                <legend className={labelClass}>RSVP Status Options</legend>
-                <div className="flex flex-wrap gap-3">
-                  {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map(
-                    (status) => (
-                      <label key={status} className="flex cursor-pointer items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={formData.allowed_rsvp_statuses?.includes(status) || false}
-                          onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
-                          className={checkboxClass}
-                        />
-                        <span className="text-theme-text-secondary">
-                          {status === RSVPStatusEnum.GOING
-                            ? 'Going'
-                            : status === RSVPStatusEnum.NOT_GOING
-                              ? 'Not Going'
-                              : 'Maybe'}
-                        </span>
-                      </label>
-                    )
-                  )}
-                </div>
-              </fieldset>
             </div>
           )}
+
+          <div className="space-y-4 border-l-2 border-red-500/30 pl-4">
+            <div>
+              <label htmlFor="max-attendees" className={labelClass}>
+                Max Attendees
+              </label>
+              <input
+                type="number"
+                id="max-attendees"
+                min="1"
+                value={formData.max_attendees || ''}
+                onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
+                className={inputClass}
+                placeholder="Unlimited"
+              />
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                id="allow-guests"
+                checked={formData.allow_guests}
+                onChange={(e) => update({ allow_guests: e.target.checked })}
+                className={checkboxClass}
+              />
+              <label htmlFor="allow-guests" className="text-theme-text-secondary text-sm">
+                Allow guests
+              </label>
+            </div>
+
+            <fieldset>
+              <legend className={labelClass}>RSVP Status Options</legend>
+              <div className="flex flex-wrap gap-3">
+                {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map(
+                  (status) => (
+                    <label key={status} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={formData.allowed_rsvp_statuses?.includes(status) || false}
+                        onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
+                        className={checkboxClass}
+                      />
+                      <span className="text-theme-text-secondary">
+                        {status === RSVPStatusEnum.GOING
+                          ? 'Going'
+                          : status === RSVPStatusEnum.NOT_GOING
+                            ? 'Not Going'
+                            : 'Maybe'}
+                      </span>
+                    </label>
+                  )
+                )}
+              </div>
+            </fieldset>
+
+            <div>
+              <label htmlFor="attendee-visibility" className={labelClass}>
+                Who can see who&apos;s going
+              </label>
+              <select
+                id="attendee-visibility"
+                /* '' is the inherit state. It must go back out as an explicit
+                     null, never an omitted key: the API dumps updates with
+                     exclude_unset, so omitting it would leave a previous
+                     override in place behind a success toast. */
+                value={formData.attendee_visibility ?? ''}
+                onChange={(e) =>
+                  update({
+                    attendee_visibility: (e.target.value || null) as 'members' | 'managers' | null,
+                  })
+                }
+                className={selectClass}
+              >
+                <option value="">Use organization default</option>
+                <option value="members">Everyone in the department</option>
+                <option value="managers">Only event managers</option>
+              </select>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Members only ever see names of people going — never contact details, notes or accessibility information.
+              </p>
+            </div>
+          </div>
         </section>
       </div>
 

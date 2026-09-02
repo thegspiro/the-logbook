@@ -519,12 +519,16 @@ class TestColumnConstraints:
             "added_at",
             "assigned_at",
             "recorded_at",
+            "received_at",
             "checked_at",
             "synced_at",
             "imported_at",
             "sent_at",
             "exported_at",
             "generated_at",
+            # department_message_deliveries records when the send was claimed;
+            # the row is the attempt, so "attempted_at" is its creation stamp.
+            "attempted_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():
@@ -945,17 +949,23 @@ class TestSchemaCrossReferences:
         )
 
     def test_user_roles_junction_has_both_fks(self):
-        """The user_roles junction table must FK to both users and roles."""
-        user_roles = _tables.get("user_roles")
-        if user_roles is None:
-            pytest.skip("user_roles table not found")
+        """The user-position junction table must FK to both users and positions.
+
+        The ORM's ``user_roles`` name is a backward-compatible Python alias
+        for ``user_positions`` (models/user.py) — the live table is named
+        ``user_positions``, not ``user_roles``. Looking it up by the old name
+        always skipped this test silently rather than verifying anything.
+        """
+        user_positions = _tables.get("user_positions")
+        if user_positions is None:
+            pytest.skip("user_positions table not found")
         fk_targets = {
             fk.column.table.name
-            for col in user_roles.columns
+            for col in user_positions.columns
             for fk in col.foreign_keys
         }
-        assert "users" in fk_targets, "user_roles must FK to users"
-        assert "roles" in fk_targets, "user_roles must FK to roles"
+        assert "users" in fk_targets, "user_positions must FK to users"
+        assert "positions" in fk_targets, "user_positions must FK to positions"
 
     def test_event_rsvps_link_events_and_users(self):
         """Event RSVPs must connect events to users."""
@@ -1103,18 +1113,22 @@ class TestUniqueConstraints:
             found
         ), "users table must have a unique index on (organization_id, username)"
 
-    def test_role_slug_unique_per_org(self):
-        """Role slug should be unique within an organization."""
-        roles = _tables.get("roles")
-        if roles is None:
-            pytest.skip("roles table not found")
-        found = False
-        for idx in roles.indexes:
-            idx_cols = {c.name for c in idx.columns}
-            if "organization_id" in idx_cols and "slug" in idx_cols and idx.unique:
-                found = True
-                break
-        assert found, "roles table must have a unique index on (organization_id, slug)"
+    def test_position_slug_unique_per_org(self):
+        """Position slug must be unique within an organization.
+
+        The table is ``positions``. ``Role`` is an alias of ``Position``
+        (``Role = Position`` in app/models/user.py), so there is no ``roles``
+        table in ``Base.metadata`` — and this test, written against that name,
+        skipped on every run since it was added. The invariant it describes is
+        real and does hold; nothing was checking it.
+        """
+        positions = _tables.get("positions")
+        assert positions is not None, "positions table not found in metadata"
+        found = any(
+            idx.unique and {"organization_id", "slug"} <= {c.name for c in idx.columns}
+            for idx in positions.indexes
+        )
+        assert found, "positions must have a unique index on (organization_id, slug)"
 
     def test_session_token_is_unique(self):
         """Session tokens must be globally unique."""

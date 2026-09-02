@@ -59,8 +59,6 @@ from app.models.operational_rank import OperationalRank
 from app.models.user import User
 from app.schemas.inventory import (
     AllowanceCheckResponse,
-    BatchCheckoutRequest,
-    BatchCheckoutResponse,
     BatchReturnRequest,
     BatchReturnResponse,
     BulkIssuanceRequest,
@@ -78,6 +76,8 @@ from app.schemas.inventory import (
     CompleteClearanceRequest,
     DepartureClearanceCreate,
     DepartureClearanceResponse,
+    DistributeItemsRequest,
+    DistributeItemsResponse,
     EquipmentKitCreate,
     EquipmentKitDetailResponse,
     EquipmentKitResponse,
@@ -103,6 +103,7 @@ from app.schemas.inventory import (
     InventoryItemBulkCreate,
     InventoryItemBulkResult,
     InventoryItemCreate,
+    InventoryItemCreateIfAbsentResult,
     InventoryItemResponse,
     InventoryItemUpdate,
     InventoryLotBulkCreate,
@@ -111,6 +112,8 @@ from app.schemas.inventory import (
     InventoryLotUpdate,
     InventorySetupStatus,
     InventorySummary,
+    InventoryTransferRequest,
+    InventoryTransferResponse,
     InventoryVendorContactCreate,
     InventoryVendorContactResponse,
     InventoryVendorContactUpdate,
@@ -149,9 +152,12 @@ from app.schemas.inventory import (
     NFPAExposureRecordCreate,
     NFPAExposureRecordResponse,
     NFPASummaryResponse,
+    ReorderCorrectionRequest,
+    ReorderReceiptCreate,
     ReorderRequestCreate,
     ReorderRequestResponse,
     ReorderRequestUpdate,
+    ReorderTransitionRequest,
     ResolveClearanceItemRequest,
     ReturnRequestCreate,
     ReturnRequestResponse,
@@ -175,7 +181,7 @@ from app.schemas.inventory import (
     WriteOffReview,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import InventoryService, is_pool_without_stock
 from app.services.label_service import LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
@@ -792,6 +798,65 @@ async def create_items_bulk(
     )
 
 
+@router.post(
+    "/items/create-if-absent", response_model=InventoryItemCreateIfAbsentResult
+)
+async def create_item_if_absent(
+    item: InventoryItemCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a catalog item, or return the one already carrying the name.
+
+    Declared above `/items/{item_id}` so the literal path wins the match.
+
+    For create-and-link screens. The gear list they search excludes medical
+    types and returns one page, so "no match on screen" is not "not in the
+    catalog", and a caller that checks from the browser and then posts leaves
+    seconds in which somebody else files the same name. Both roads end at one
+    item stored as two rows, its checklist links and replacement lots split
+    between them. Deciding it here, in one request, is what keeps the answer
+    and the write together.
+
+    `created` reports which happened, so the caller can say whether it added
+    the item or found it.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    new_item, created, error = await service.create_item_if_absent(
+        organization_id=current_user.organization_id,
+        item_data=item.model_dump(exclude_unset=True),
+        created_by=current_user.id,
+    )
+
+    if error or not new_item:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error or "Could not create the item"),
+        )
+
+    if created:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_item_created",
+            event_category="inventory",
+            severity="info",
+            event_data={"item_id": str(new_item.id), "item_name": new_item.name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "item_created",
+            {"item_id": str(new_item.id), "item_name": new_item.name},
+        )
+
+    return InventoryItemCreateIfAbsentResult(item=new_item, created=created)
+
+
 @router.get("/items/export")
 async def export_items_csv(
     category_id: UUID | None = None,
@@ -1380,6 +1445,23 @@ async def import_items_csv(
                 unmatched_key = vendor_raw.lower()
 
         item_data.pop("barcode", None)
+
+        # A stock list entering counts is a different contract from a single
+        # catalog row created by hand: a pool line with no quantity is a
+        # mis-parsed spreadsheet, not an out-of-stock item. `create_item` used
+        # to enforce this for every caller and no longer does, so the rule
+        # lives with the callers that want it — here and in
+        # `create_items_bulk`, the two list-oriented paths.
+        if is_pool_without_stock(item_data):
+            errors.append(
+                {
+                    "row": row_num,
+                    "error": "Pool items must have a quantity of 1 or more",
+                }
+            )
+            failed += 1
+            continue
+
         new_item, error = await service.create_item(
             organization_id=current_user.organization_id,
             item_data=item_data,
@@ -1391,10 +1473,11 @@ async def import_items_csv(
             failed += 1
         else:
             imported += 1
-            # Recorded only now. create_item still rejects rows the CSV parse
-            # accepted — a duplicate serial, a pool item with no quantity — and
-            # a name banked before that is known would send the reader to
-            # Attach for rows that were never written.
+            # Recorded only now. Rows the CSV parse accepted are still
+            # rejected after it — a duplicate serial by create_item, a pool
+            # item with no quantity by the check just above — and a name
+            # banked before that is known would send the reader to Attach for
+            # rows that were never written.
             if unmatched_key:
                 unmatched_vendors.setdefault(unmatched_key, vendor_raw)
 
@@ -2976,18 +3059,19 @@ async def lookup_item_by_code(
     return ScanLookupListResponse(results=results, total=len(results))
 
 
-@router.post("/batch-checkout", response_model=BatchCheckoutResponse)
-async def batch_checkout_items(
-    request: BatchCheckoutRequest,
+@router.post("/distribute-items", response_model=DistributeItemsResponse)
+async def distribute_items_endpoint(
+    request: DistributeItemsRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
-    Assign/checkout/issue multiple scanned items to a member in one operation.
+    Distribute multiple scanned items to a member in one operation.
 
     The quartermaster scans multiple barcodes, building a list, then submits
-    the batch. Each item is processed based on its tracking type:
-    - **Individual + available** → permanently assigned
+    the distribution. Each item is processed based on its tracking type and
+    explicit requested operation:
+    - **Individual + available** → ongoing assignment or temporary loan
     - **Pool item** → units issued from the pool
     - Items that are already assigned or unavailable will fail individually
 
@@ -2995,7 +3079,7 @@ async def batch_checkout_items(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
-    result = await service.batch_checkout(
+    result = await service.distribute_items(
         user_id=request.user_id,
         organization_id=current_user.organization_id,
         performed_by=current_user.id,
@@ -3006,7 +3090,7 @@ async def batch_checkout_items(
     if result["successful"] > 0:
         await log_audit_event(
             db=db,
-            event_type="inventory_batch_checkout",
+            event_type="inventory_distribute_items",
             event_category="inventory",
             severity="info",
             event_data={
@@ -3021,10 +3105,28 @@ async def batch_checkout_items(
 
         await _publish_inventory_event(
             str(current_user.organization_id),
-            "batch_checkout",
+            "distribute_items",
             {"user_id": str(request.user_id), "successful": result["successful"]},
         )
 
+    return result
+
+
+@router.post("/transfer", response_model=InventoryTransferResponse)
+async def transfer_inventory_item(
+    request: InventoryTransferRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Explicitly transfer custody; stale confirmations fail rather than overwrite."""
+    service = InventoryService(db)
+    result, error = await service.transfer_item_holding(
+        **request.model_dump(),
+        organization_id=current_user.organization_id,
+        performed_by=current_user.id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error)
     return result
 
 
@@ -3265,13 +3367,19 @@ async def list_departure_clearances(
 async def get_departure_clearance(
     clearance_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Get a departure clearance with all line items.
 
+    Returns another member's full line-item detail (item names, serials,
+    values, disposition) by id, so this is quartermaster business like its
+    siblings (initiate/list/resolve/complete), not a `.view`-level read —
+    matching the self-or-quartermaster gate already applied to
+    `/users/{user_id}/clearance`.
+
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = DepartureClearanceService(db)
     clearance = await service.get_clearance(
@@ -3527,7 +3635,12 @@ async def create_equipment_request(
         item_id=str(request_data.item_id) if request_data.item_id else None,
         category_id=str(request_data.category_id) if request_data.category_id else None,
         quantity=request_data.quantity,
-        request_type=request_data.request_type,
+        # Keep the legacy transaction-oriented field populated for older
+        # integrations; requested_duration is the authoritative member intent.
+        request_type=(
+            "checkout" if request_data.requested_duration == "temporary" else "issuance"
+        ),
+        requested_duration=request_data.requested_duration,
         priority=request_data.priority,
         reason=request_data.reason,
     )
@@ -3543,7 +3656,7 @@ async def create_equipment_request(
         event_data={
             "request_id": str(req.id),
             "item_name": req.item_name,
-            "request_type": request_data.request_type,
+            "requested_duration": request_data.requested_duration,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -3579,6 +3692,8 @@ async def list_equipment_requests(
         .options(
             selectinload(EquipmentRequest.requester),
             selectinload(EquipmentRequest.reviewer),
+            selectinload(EquipmentRequest.item),
+            selectinload(EquipmentRequest.category),
         )
     )
 
@@ -3612,12 +3727,51 @@ async def list_equipment_requests(
                 "item_name": r.item_name,
                 "item_id": r.item_id,
                 "category_id": r.category_id,
+                "category_name": r.category.name if r.category else None,
+                "requested_item": (
+                    {
+                        "tracking_type": (
+                            r.item.tracking_type.value
+                            if hasattr(r.item.tracking_type, "value")
+                            else r.item.tracking_type
+                        ),
+                        "status": (
+                            r.item.status.value
+                            if hasattr(r.item.status, "value")
+                            else r.item.status
+                        ),
+                        "available_quantity": (
+                            r.item.quantity
+                            if (
+                                r.item.tracking_type.value
+                                if hasattr(r.item.tracking_type, "value")
+                                else r.item.tracking_type
+                            )
+                            == "pool"
+                            else (
+                                1
+                                if (
+                                    r.item.status.value
+                                    if hasattr(r.item.status, "value")
+                                    else r.item.status
+                                )
+                                == "available"
+                                else 0
+                            )
+                        ),
+                        "min_rank_order": r.item.min_rank_order,
+                        "restricted_to_positions": r.item.restricted_to_positions,
+                    }
+                    if r.item
+                    else None
+                ),
                 "quantity": r.quantity,
                 "request_type": (
                     r.request_type
                     if isinstance(r.request_type, str)
                     else r.request_type.value
                 ),
+                "requested_duration": r.requested_duration,
                 "priority": (
                     r.priority if isinstance(r.priority, str) else r.priority.value
                 ),
@@ -3731,6 +3885,8 @@ async def fulfill_equipment_request(
         quantity=fulfill_data.quantity,
         expected_return_at=fulfill_data.expected_return_at,
         override_allowance=fulfill_data.override_allowance,
+        fulfillment_type=fulfill_data.fulfillment_type,
+        substitution_override_reason=fulfill_data.substitution_override_reason,
     )
 
     if error:
@@ -3748,6 +3904,7 @@ async def fulfill_equipment_request(
             "request_id": str(request_id),
             "fulfillment_type": req.fulfillment_type,
             "fulfillment_reference_id": req.fulfillment_reference_id,
+            "substitution_override_reason": fulfill_data.substitution_override_reason,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -4621,6 +4778,9 @@ async def review_write_off_request(
         reviewed_by=str(current_user.id),
         decision=review_data.status,
         review_notes=review_data.review_notes,
+        acknowledgement=review_data.acknowledgement,
+        expected_item_status=review_data.expected_item_status,
+        expected_holder_signature=review_data.expected_holder_signature,
     )
 
     if error:
@@ -5067,7 +5227,7 @@ async def inventory_websocket(
         { "type": "inventory_changed", "action": "...", "data": {...} }
 
     Actions: item_created, item_updated, item_assigned, item_unassigned,
-             item_checked_out, item_checked_in, batch_checkout, batch_return,
+             item_checked_out, item_checked_in, distribute_items, batch_return,
              pool_issued, pool_returned, item_retired, write_off_reviewed
     """
     allowed_origins = settings.ALLOWED_ORIGINS
@@ -5670,7 +5830,10 @@ async def review_return_request(
         reviewer_id=current_user.id,
         status=data.status,
         review_notes=data.review_notes,
-        override_condition=data.override_condition,
+        observed_condition=data.observed_condition,
+        verified_identifier=data.verified_identifier,
+        received_quantity=data.received_quantity,
+        follow_up=data.follow_up,
     )
 
     if not success:
@@ -5751,6 +5914,9 @@ def _reorder_response(req) -> ReorderRequestResponse:
     caller did not eager-load it, so the name is simply left unset.
     """
     resp = ReorderRequestResponse.model_validate(req)
+    resp.quantity_outstanding = max(
+        0, req.quantity_requested - (req.quantity_received or 0)
+    )
     requester = req.__dict__.get("requester")
     if requester is not None:
         resp.requester_name = (
@@ -5852,6 +6018,126 @@ async def create_reorder_request(
     )
 
     return _reorder_response(reorder)
+
+
+@router.post(
+    "/reorder-requests/{request_id}/transition", response_model=ReorderRequestResponse
+)
+async def transition_reorder_request(
+    request_id: UUID,
+    data: ReorderTransitionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    payload = data.model_dump(exclude_unset=True)
+    reorder, error = await service.transition_reorder_request(
+        request_id, current_user.organization_id, payload, current_user.id
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if "another user" in error else 400, detail=error
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_status_transition",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "action": data.action,
+            "status": reorder.status.value,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
+
+
+@router.post(
+    "/reorder-requests/{request_id}/correct-status",
+    response_model=ReorderRequestResponse,
+)
+async def correct_reorder_status(
+    request_id: UUID,
+    data: ReorderCorrectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    reorder, error = await service.correct_reorder_status(
+        request_id, current_user.organization_id, data.model_dump()
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if "another user" in error else 400, detail=error
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_status_corrected",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "status": data.status,
+            "reason": data.reason,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
+
+
+@router.post(
+    "/reorder-requests/{request_id}/receipts", response_model=ReorderRequestResponse
+)
+async def receive_reorder_stock(
+    request_id: UUID,
+    data: ReorderReceiptCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    reorder, error = await service.receive_reorder(
+        request_id, current_user.organization_id, data.model_dump(), current_user.id
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if ("already" in error or "another user" in error) else 400,
+            detail=error,
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_stock_received",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "quantity": data.quantity,
+            "idempotency_key": data.idempotency_key,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
 
 
 @router.patch("/reorder-requests/{request_id}", response_model=ReorderRequestResponse)
@@ -6488,11 +6774,14 @@ async def update_item_lot(
 ):
     """Update a stock lot (quantity, expiration, lot number, notes)."""
     service = InventoryService(db)
-    lot = await service.update_lot(
-        lot_id=lot_id,
-        organization_id=str(current_user.organization_id),
-        data=data.model_dump(exclude_unset=True),
-    )
+    try:
+        lot = await service.update_lot(
+            lot_id=lot_id,
+            organization_id=str(current_user.organization_id),
+            data=data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if lot is None:
         raise HTTPException(status_code=404, detail="Lot not found")
     return lot

@@ -67,7 +67,12 @@ logs/
 docker-compose.override.yml
 
 # Node.js / Frontend
-node_modules/
+# No trailing slash: that form matches directories only, and a *symlink* named
+# node_modules slips past it. One reached a commit on 2026-09-01 from an agent
+# worktree, where the link is normal — and checking that commit out replaces a
+# real node_modules with a link pointing at itself, so the next npm command
+# has nothing to run against.
+node_modules
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
@@ -180,9 +185,18 @@ Desktop.ini
 # slash commands: they are part of the repo's workflow (/app-review drives the
 # docs/app-review rotation) and are useless if every clone must recreate them.
 # Must be `.claude/*` not `.claude/` — git cannot re-include a path through an
-# excluded parent directory, so the negation below would never apply.
+# excluded parent directory, so the negations below would never apply.
+#
+# The SessionStart hook is shared for the same reason, and a stronger one: it
+# stands up MariaDB and Redis so a web session can run the DB-backed half of
+# the test suite. Without it those 1000+ tests do not fail, they ERROR out of
+# fixture setup, and the summary line still reads as a pass. Recreating that
+# per clone is how a session reports green on a suite that never ran.
+# settings.local.json stays ignored — it is personal, and is not re-included.
 .claude/*
 !.claude/commands/
+!.claude/hooks/
+!.claude/settings.json
 
 # Playwright
 /frontend/test-results/
@@ -197,3 +211,24 @@ Desktop.ini
 /frontend/reports/
 /backend/reports/
 /frontend/.stryker-tmp/
+
+# Scratch reproductions and lint/type probes.
+#
+# Review and verification agents write throwaway files into the tree to prove a
+# finding — a failing repro, a probe that checks whether a lint rule actually
+# fires. They are debugging instruments, not tests: they routinely carry a
+# deliberate always-fail sentinel (`toEqual('SHOWME')`) to dump an observed
+# value, so one committed by accident is a guaranteed-red CI run. Two reached
+# `git add -A` on 2026-08-30 and were only caught by the pre-commit hook.
+#
+# Ignored rather than merely remembered, because the failure mode is silent and
+# the cost of a miss is a broken main. Keep the names distinctive so a genuine
+# test is never swallowed: a real one is never called `__scratch` or `__probe`.
+__scratch*
+__probe*
+__lintprobe*
+scratchRepro*
+# Deliberately no `test_zz_*` or `*_tmp.py`: both are names a real file could
+# take — a genuine suite ordered last, a module about temporary state — and an
+# ignore that swallows one is silent. A throwaway pytest file goes under one of
+# the prefixes above, or outside the tree entirely.

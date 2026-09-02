@@ -42,6 +42,7 @@ const UNCACHEABLE_PREFIXES = [
   '/email-templates/scheduled', // scheduled emails: recipient PII
   '/officers', // office holders: member names, emails, phone numbers (PII)
   '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
+  '/testing-checklist', // shared testing run: another tester's mark can land at any moment, and a stale one reads as a lost result
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
@@ -56,11 +57,18 @@ const UNCACHEABLE_PREFIXES = [
   '/training/programs/enrollments/', // per-member program enrollment & progress
   '/training/instructors/qualifications', // per-member instructor credentials
   '/training/compliance-matrix', // org-wide per-member compliance rollup (names + status)
+  '/training/competency-matrix', // org-wide per-member competency heat map (names + status) — same shape as compliance-matrix above
+  '/training/dashboard-summary', // dashboard widgets: per-member names on at-risk/needs-intervention lists
+  '/training/sessions/approve/', // approval-token roster: attendee names + emails (GET /sessions/approve/{token})
   '/training/certifications/expiring', // member cert-expiry list (names, numbers)
   '/training/expiring-certifications', // under-gated twin of the above (member certs)
   '/training/reports/compliance-forecast', // per-member compliance projection
+  '/training/effectiveness/evaluations', // per-member evaluation: user_id + free-text comments/behavior/results notes (PII)
   '/training/records', // individual training records (scores, certs) — member PHI-adjacent
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
+  '/training/cohorts/', // cohort detail carries a resolved-name+email member roster (bare list is roster-free)
+  '/training/programs/programs/', // per-program enrollment eligibility carries a full member roster + reason
+  '/training/external/providers/', // provider user-mappings carry internal member name + email
   '/facilities/emergency-contacts', // emergency contact PII
   '/messages', // department messages: targeted announcements + per-member inbox/read state (no trailing slash covers GET /messages)
   '/admin-hours/', // individual work hours and clock-in records
@@ -73,8 +81,9 @@ const UNCACHEABLE_PREFIXES = [
   '/meetings', // meeting list + detail: attendee PII, notes/motions/agenda (no trailing slash covers both)
   '/event-requests', // external event-request intake: contact name/email/phone, venue address (PII)
   '/events/missed-mandatory', // caller's own missed mandatory attendance (per-member compliance)
-  '/forms/', // form submissions may contain PII
+  '/forms', // form defs carry admin notification emails + creator id; no trailing slash so GET /forms list is covered too
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
+  '/dashboard/action-items', // unified meeting/minutes action items: assignee_name + free-text description (RPT-29)
   '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)
   '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
   '/inventory/members/', // member size preferences — body measurements (PII)
@@ -85,12 +94,14 @@ const UNCACHEABLE_PREFIXES = [
   '/compliance/', // compliance attestations, member compliance data (PII)
   '/integrations', // integration config (list + detail): API keys, webhook URLs, secrets
   '/finance/', // budgets, purchase/expense/check requests & reimbursements tied to members (PII)
-  '/grants/', // grant applications and donor/fundraising records (PII)
+  '/grants', // grant applications and donor/fundraising records (PII); no trailing slash so GET /grants list is covered too
   '/roles/user/', // an arbitrary user's full permission set (authz data)
   '/roles/admin-access', // admin-status probe (authz decision — must not go stale)
   '/facilities/occupants', // facility occupant PII
   '/facilities/access-keys', // physical building access-key inventory
   '/admin-hub/', // module attention queues: medical-screening lapses, applicant backlogs (PHI/PII-adjacent)
+  '/equipment-checks', // reporter/member names, free-text restock notes, deployed-lot detail (PII)
+  '/analytics/export', // raw analytics events: per-event user_id + free-form metadata
 ] as const;
 
 /**
@@ -101,6 +112,10 @@ const UNCACHEABLE_PREFIXES = [
  */
 const UNCACHEABLE_SUBSTRINGS = [
   '/rsvps', // event attendance roster (member names/status — PII)
+  '/attendees', // the member-facing half of the same roster: going-only member
+  // names. Served under a different noun, so '/rsvps' does not cover it, and a
+  // cached copy would stay readable for 90s after an organizer restricts the
+  // event's attendee visibility.
   '/rsvp-history', // per-member attendance/decline history (PII) — not matched by '/rsvps'
   '/eligible-members', // returns member first/last name + email (PII)
   '/external-attendees', // external attendee PII
