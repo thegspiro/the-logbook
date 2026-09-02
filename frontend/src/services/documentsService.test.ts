@@ -43,6 +43,16 @@ describe('documentsService', () => {
 
       expect(mockGet).toHaveBeenCalledWith('/documents/folders', { params: { parent_id: 'parent-1' } });
     });
+
+    it('forwards an opaque nested folder id without changing it', async () => {
+      mockGet.mockResolvedValueOnce({ data: { folders: [], total: 0 } });
+
+      await documentsService.getFolders('8b653a70-665f-4fd4-9077-a23bc13f3984');
+
+      expect(mockGet).toHaveBeenCalledWith('/documents/folders', {
+        params: { parent_id: '8b653a70-665f-4fd4-9077-a23bc13f3984' },
+      });
+    });
   });
 
   // --- createFolder ---
