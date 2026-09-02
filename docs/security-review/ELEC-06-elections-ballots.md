@@ -1,6 +1,125 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1)
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1), [#1948](https://github.com/thegspiro/the-logbook/pull/1948) (pass 2)
+
+---
+
+## Pass 3 (2026-09-02)
+
+**Scoping, done the way FIN-05 pass 3 documented it is necessary:** this
+repo's history has been rewritten more than once since pass 2 merged, so
+pass 2's own PR head is not an ancestor of `origin/main` by commit hash.
+The real landing point is identified by content match instead —
+`a518957e5` (`fix(elections): fix quorum staleness, public-ballot 401s, and
+a mislabeled option (Codex on #1948)`) is the commit whose diff is pass 2's
+own fix set verbatim (the `populate_existing=True` line in
+`quorum_service.py`, the `get_optional_current_user` exception handling in
+the module gate, the corrected `BallotBuilder.tsx` label), and
+`git merge-base --is-ancestor a518957e5 origin/main` confirms it is an
+ancestor of the current head. (The working clone started shallow; unshallowed
+to `git log` past it rather than trusting a blame boundary commit.)
+
+**Diffed from there — zero change in the core module:**
+`backend/app/api/v1/endpoints/elections.py`,
+`backend/app/services/election_service.py`,
+`backend/app/services/quorum_service.py`, `backend/app/models/election.py`,
+and `backend/app/schemas/election.py` are all byte-identical to their state
+at `a518957e5` (`git diff --stat a518957e5..origin/main -- <these 5 files>`
+returns nothing). 55 migrations landed since then; none touch an election
+table by content (checked every migration's body, not just its filename, per
+pass 2's own established method) — the one hit,
+`20260901_1320_f7b3c8d2e569_restore_seeded_position_grants.py`, only lists
+`elections.view`/`elections.manage` among the many permission strings a
+cross-cutting onboarding-wizard fix restores across every module; it is not
+an elections-specific change. No frontend file under `frontend/src/`
+mentioning `ballot`/`election`/`quorum` (word-bounded, not a substring match —
+substring matching on "election" over-matches on words like "selection")
+changed either, beyond a handful of cross-cutting files (navigation, the QA
+`testingRegistry`, onboarding's module-name lists, `apiCache`'s
+`UNCACHEABLE_PREFIXES`) whose diffs, checked line by line, touch unrelated
+modules and only incidentally list `'elections'` as one module name among
+several — not an elections-specific behavior change.
+
+**Given zero code change, this pass re-verified rather than re-derived —
+enumerating routes and sampling code paths pass 1/2 did not read in the
+depth applied here, not re-reading everything:**
+
+- **Route inventory re-confirmed exactly: 65 routes, 56
+  `require_permission`, 5 authenticated-only, 4 public**
+  (`grep -c "Depends(require_permission" / "Depends(get_current_user)" /
+"^@router\."` — 56 / 5 / 65, matching the documented 56+5+4 split exactly).
+  Every `require_permission` call is single-argument (`"elections.view"` or
+  `"elections.manage"`) — no OR-gate multi-permission call exists in this
+  module for the CLAUDE.md Pitfall #23 class of risk to apply to.
+- **Baseline-grant check (checklist §2, not previously called out by name in
+  this file): clean.** `DEFAULT_POSITIONS["member"]`
+  (`app/core/permissions.py:2135`) carries `ELECTIONS_VIEW` and nothing else
+  from this module — matches the module's own design (every member may
+  attempt to vote; the 5 self-scoped routes do their own eligibility check).
+  `elections.manage` is not in any baseline grant (`member` or the
+  `firefighter` rank's `default_permissions`).
+- **Manual-ballot-batch surface (`attest_manual_ballot_batch`,
+  `void_manual_ballot_batch`, `list_manual_ballot_batches`,
+  `election_service.py:3502-3766`) read in full — not previously singled out
+  by name in this file's Verified-good list.** Both mutating paths take
+  `.with_for_update()` on `ManualBallotBatch` (attest) or resolve `Vote`
+  through a `.join(Election).where(Election.organization_id == ...)` (void),
+  both re-check `organization_id` on every fetch, and the separation-of-duties
+  rule (`checklist §2` — "the reviewer cannot be the subject") is enforced in
+  code: `attest_manual_ballot_batch` refuses when
+  `attested_by == batch.recorded_by`. The one non-org-filtered query in this
+  block (`select(User.id, ...).where(User.id.in_(list(user_ids)))` in
+  `list_manual_ballot_batches`, resolving display names) is not an IDOR
+  vector — `user_ids` is built entirely from `recorded_by`/`attested_by`
+  columns on rows already scoped to the caller's org, not from any
+  client-supplied id.
+- **The 4 public token routes re-read against their compensating controls,
+  full route bodies not just descriptions** (`lookup_ballot_by_token`,
+  `cast_vote_with_token`, `submit_ballot_with_token`, `verify_vote_receipt`,
+  `elections.py:508-723`, `3775-3809`) — token in body/fragment never a URL
+  query param, rate-limited via `_ballot_read_rate_limit`/
+  `_ballot_vote_rate_limit`, `eligible_item_ids`/`eligible_positions`
+  snapshot filtering intact, receipt lookup returns no PII beyond
+  `voted_at`/`position`. Matches pass 1's description exactly; no drift.
+- **ELEC-12 re-verified still accurate and still open** — see below.
+- **No `.like()`/`.ilike()` anywhere in the module** (still zero, re-grepped).
+  No `csv.writer`/`SafeCsvWriter` call in the module — elections has no CSV
+  export, so Pitfall #15 is still n/a here, not overlooked.
+- **10 `.with_for_update()` sites, re-enumerated**
+  (`election_service.py:1110,1352,2992,3048,3286,3527,4413,4667,7118,7128`) —
+  consistent with the locking pass 1/2 already documented (open/close
+  election, quorum calc, token consumption, manual-ballot attestation); no
+  new capacity/race surface introduced since nothing changed.
+
+**0 fixes, 0 new findings.** ELEC-12 is the only standing item and remains
+open (unchanged code, unchanged disposition):
+
+### ELEC-12 — LOW/MED — `SavedBallotTemplate` list/create still unbounded — 🚩 OPEN (re-verified, pass 3)
+
+Unchanged from pass 1's write-up below: `list_saved_ballot_templates`
+(`elections.py:387-400`) still returns `result.scalars().all()` with no
+pagination, and `save_ballot_template` (`elections.py:403-452`) still
+imposes no per-org creation cap. Re-read both handlers in full this pass —
+line numbers and behavior identical to pass 1. Still flagged, not fixed, for
+the same reason: both remedies (pagination envelope, a chosen numeric cap)
+are product decisions, not mechanical fixes. Already mirrored in
+`docs/KNOWN_LIMITATIONS.md` ("Elections — Saved Ballot Templates Have No
+List Bound or Creation Cap", 2026-08-25) — confirmed that entry is still
+accurate against current code.
+
+**Completion gate (pass 3):**
+
+| Check                                                        | Result                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | ✅ 0 violations (no Python file changed)                                  |
+| `black --check app/ tests/ alembic/`                         | ✅ 1377 files unchanged                                                   |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI's pin)  | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`            | ✅ 409 revisions, single head (`f7b3c8d2e569`)                            |
+| `pytest tests/ -q -k "election or ballot or vote or quorum"` | ✅ 452 passed, 1 skipped (pre-existing `py_vapid` optional dep), 0 failed |
+| `tsc --noEmit` / `eslint .`                                  | not run — no frontend file changed this pass                              |
+
+No guard test added — no behavior changed, so there is no new class of
+regression to guard against.
 
 ---
 

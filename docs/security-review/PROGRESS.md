@@ -20,6 +20,42 @@ None.
 
 ---
 
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) — 0 fixes, 1 re-verified open (ELEC-12) — PR pending
+
+Unshallowed the clone (it started shallow at 803 commits) to trace history
+past a rewritten-history boundary, the same obstacle FIN-05 pass 3 named.
+Pass 2's fix commit (`a518957e5`) is confirmed an ancestor of `origin/main`
+by `git merge-base --is-ancestor`. Diffed the full elections domain from
+there: **zero change** in `elections.py`, `election_service.py`,
+`quorum_service.py`, `models/election.py`, `schemas/election.py` (byte-
+identical to pass 2's landing state) and no elections-table migration among
+the 55 that landed since (checked by content, not filename — the one hit
+only lists `elections.view`/`elections.manage` among many permission
+strings in an unrelated cross-cutting onboarding fix). No elections-specific
+frontend change either.
+
+With nothing changed, re-verified rather than re-derived: route inventory
+re-confirmed exactly 65 routes / 56 `require_permission` / 5
+authenticated-only / 4 public by direct count; no OR-gate
+`require_permission(a, b)` call exists in the module (Pitfall #23 class,
+n/a here); baseline-grant check confirmed `DEFAULT_POSITIONS["member"]`
+carries only `elections.view`, never `elections.manage`; the manual-ballot-
+batch surface (`attest`/`void`/`list`, `election_service.py:3502-3766`) read
+in full for the first time by name in this file — org-scoped, row-locked,
+and separation-of-duties enforced in code (an officer cannot attest their
+own batch); the 4 public token routes re-read against their compensating
+controls with no drift from pass 1's description. ELEC-12 (unbounded
+`SavedBallotTemplate` list/create, LOW/MED, flagged in pass 1) re-verified
+still open and unchanged — both remedies remain product decisions, already
+mirrored in `KNOWN_LIMITATIONS.md`.
+
+Completion gate: flake8/black/isort clean on `app/ tests/ alembic/`
+(isort 9.0.1, CI's pin); `validate_migrations.py --strict` (409 revisions,
+single head); `pytest -k "election or ballot or vote or quorum"` 452
+passed/1 skipped (pre-existing)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. See `ELEC-06-elections-ballots.md`'s Pass 3 section
+for the full write-up. Rotation row 06 → ⏳ (awaiting PR merge).
+
 ### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) ✅ merged — PR #2159
 
 PR #2159 merged clean: a `CHANGELOG.md` conflict against `main` (two
@@ -5965,7 +6001,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | 🔄     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
