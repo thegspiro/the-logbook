@@ -1,6 +1,133 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), (this PR) (pass 2)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), [#1950](https://github.com/thegspiro/the-logbook/pull/1950) (pass 2), (this PR) (pass 3)
+
+---
+
+## Pass 3 (2026-09-02) — full re-verification, zero code diff, no new findings
+
+**Scope.** Diffed the full domain against pass 2's merge commit (`58535700`,
+PR #1950): `endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
+`models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, `frontend/src/modules/prospective-members/`, and
+`frontend/src/utils/membership.ts` are all **byte-identical** to pass 2
+(`git diff --stat`, not assumed — confirmed for both the declared backend
+files and a broad `git diff --name-only` over all of `frontend/src/`, which
+turned up one incidental hit, `RoleSetup.membership.test.ts` in the
+onboarding module — a substring match on "membership" in an unrelated test
+file, not this feature). Every new migration since pass 2 (24 files) was
+content-grepped for `prospect|membership_pipeline|pipeline_stage`; the one
+hit, `20260901_1320_f7b3c8d2e569_restore_seeded_position_grants.py`, is the
+same class of false positive pass 2 already documented — every match is a
+`"prospective_members.*"` permission-string literal in an unrelated
+position-grant backfill, not a schema change to any table this feature owns.
+
+Given the zero diff, this pass did not re-derive conclusions from the prior
+write-up — it independently re-read the current code against all seven
+`CHECKLIST.md` dimensions and re-verified, at the cited line, that every
+prior fix is still in place:
+
+- **MP-8/MP-9** (`update_prospect`, `membership_pipeline_service.py:1166`) —
+  confirmed `apply_updates` is still the write path (explicit `null` clears a
+  field rather than being silently dropped) and the `TRANSFERRED`-status
+  guard (`:1195-1204`) still refuses to set or clear that status through the
+  generic update.
+- **MP-11** (`approve-step`, `membership_pipeline.py:1160-1216`) — confirmed
+  the route still returns `StepApprovalResponse` (id/step/`step_completed`
+  only), not the full `ProspectResponse`.
+- **MP-12** (interview self-access, `membership_pipeline.py:2200-2258`) —
+  confirmed both `PUT`/`DELETE /interviews/{interview_id}` still carry
+  `dependencies=[Depends(block_self_interview_access)]`.
+- **Pass 2's two Codex findings** (role-grant ceiling and the transfer row
+  lock) — confirmed in `membership_pipeline.py:1543-1561` (role ids resolved
+  in-org and run through `_enforce_role_grant_ceiling` before
+  `transfer_to_membership` is called) and
+  `membership_pipeline_service.py:2402-2404` (`get_prospect(...,
+lock_for_update=True)` ahead of the `TRANSFERRED` check).
+- **MP-10** (unbounded election-package list/create,
+  `membership_pipeline_service.py:4698-4718` /
+  `:4512-4631`) — confirmed still open exactly as flagged: `list_election_packages`
+  is still a bare `.scalars().all()` with no `limit`/`offset`, and
+  `create_election_package` still has no per-prospect ready-package cap. No
+  change — still a product decision, already mirrored in
+  `KNOWN_LIMITATIONS.md`.
+
+**Fresh checks, not previously written up explicitly, all clean:**
+
+- **Route inventory** re-enumerated from source (51 routes across both
+  files): every route carries `Depends(get_current_user)` at minimum, every
+  route but `approve-step` (intentional — see pass 1's Verified good) carries
+  a `require_permission(...)` gate matching its sensitivity, and every by-id
+  route is either explicitly org-scoped in its service call or resolved
+  through an org-scoped parent. No new route since pass 1's inventory.
+- **Client-supplied FKs** — re-checked every write path that accepts one:
+  `update_prospect`'s `referred_by` (`assert_in_org`,
+  `membership_pipeline_service.py:1181-1188`), `create_election_package`'s
+  `pipeline_id`/`step_id` (`:4535-4544`), `assign_package_to_election`'s
+  `election_id` (org-scoped `select`, `:4755-4763`), `link_event`'s
+  `event_id` (org-scoped `select`, `:5571-5581`), and
+  `transfer_prospect`'s `role_ids` (see above). All validated in-org before
+  being stored; none found unvalidated.
+- **`ondelete="SET NULL"` nullability** (Pitfall #2) — every `SET NULL`
+  foreign key in `models/membership_pipeline.py` (11 occurrences) carries
+  `nullable=True`. Read in full, not sampled.
+- **LIKE escaping** (Pitfall #25) — the two `.ilike()` call sites in this
+  service (`:751-755` name/email search, `:2752` an unrelated
+  `TrainingProgram.name` lookup used by a stage-config helper) both pass
+  `escape=LIKE_ESCAPE_CHAR`.
+- **JSON-column mutation** (Pitfall #12) — `assign_package_to_election`'s
+  writes to `election.ballot_items` and `pkg.package_config`
+  (`:4814-4825`) both go through `copy.deepcopy()` before reassignment.
+- **Injection & output encoding** — no raw SQL (`text()`/f-string `.execute`)
+  anywhere in the service; every user-controlled value interpolated into the
+  applicant-notification email HTML (title, format, location, org name,
+  first name, custom welcome message, FAQ link, status-check URL) is
+  `html.escape`d before use (`:2859-2969`).
+- **File upload/download** (`add_prospect_document`,
+  `download_prospect_document`, `membership_pipeline.py:1706-1857`) — magic-byte
+  MIME detection (not the client `Content-Type`), UUID filename with a
+  MIME-derived extension, 50 MB size cap, and org+prospect-scoped storage
+  path. Download re-validates the stored path resolves inside
+  `PROSPECT_DOCUMENT_DIR` via `os.path.realpath` before serving. A failed
+  document-metadata write cleans up the file it already wrote to disk
+  (`except ValueError` / `except Exception` both call
+  `_remove_prospect_document_file`), so a rejected upload cannot leave an
+  orphaned file.
+- **Bulk actions bounded** — `BulkAdvanceRequest`/`BulkStatusRequest.prospect_ids`
+  both declare `max_length=_MAX_BULK_PROSPECTS` (`schemas/membership_pipeline.py:529,561`).
+- **Frontend module axios instance** (Pitfall #7) — `services/api.ts` builds
+  its client via the shared `createApiClient` factory
+  (`frontend/src/utils/createApiClient.ts`), which sets
+  `withCredentials: true` and the CSRF header interceptor; not a hand-rolled
+  instance missing either.
+- **`UNCACHEABLE_PREFIXES`** — `/prospective-members/` is listed in
+  `frontend/src/utils/apiCache.ts`, and that is the exact router prefix this
+  feature is mounted under (`api/v1/api.py:267-271`).
+- **No banned frontend patterns** — zero `window.confirm`/`alert`/`prompt`,
+  zero `dangerouslySetInnerHTML`, zero banned `.toLocale*` calls, zero direct
+  `fetch()` in `modules/prospective-members/` or `modules/membership/`
+  (grepped).
+
+**Conclusion:** no new findings. Every prior finding's fix is intact at its
+original mechanism; MP-10 remains correctly OPEN/FLAGGED, unchanged.
+Completion gate below. Rotation row 08 -> awaiting PR merge. Next: 09 medical
+screening (PHI).
+
+### Completion gate (pass 3)
+
+| Check                                                        | Result                                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                | pass, 0 violations                                               |
+| `black --check app/ tests/ alembic/`                         | pass, 1387 files unchanged                                       |
+| `isort --check-only app/ tests/ alembic/` (9.0.1, CI-pinned) | pass, 0 violations                                               |
+| `python3 scripts/validate_migrations.py --strict`            | pass — 409 revisions, single head                                |
+| scoped pytest (20 membership/prospect/pipeline test files)   | 322 passed / 0 failed                                            |
+| full backend suite (`pytest tests/ -q`)                      | 9833 passed / 21 skipped (pre-existing/environmental) / 0 failed |
+| `npx tsc --noEmit`                                           | pass, 0 errors                                                   |
+| `npx eslint .`                                               | pass, 0 errors (see below)                                       |
+
+No frontend file in this feature changed, so `tsc`/`eslint` are whole-repo
+runs, not a scoped diff check.
 
 ---
 

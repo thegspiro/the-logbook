@@ -16,9 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2175](https://github.com/thegspiro/the-logbook/pull/2175) (Feature 07,
-Users & organizations, pass 3) — 1 fixed (USR-7), 1 flagged (USR-8). See the
-Log below for detail.
+[#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING) (Feature 08,
+Membership pipeline, pass 3) — full re-verification, zero code diff since
+pass 2, no new findings. See the Log below for detail.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) — 0 fixed, 0 flagged (re-verification) — PR #PENDING
+
+Diffed the full domain against pass 2's merge (`58535700`, PR #1950):
+`endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
+`models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, and the frontend `prospective-members` module are
+all byte-identical to pass 2 — confirmed by `git diff --stat`, not assumed.
+Independently re-read the current code against all seven `CHECKLIST.md`
+dimensions rather than trusting the prior write-up, and re-verified every
+prior fix (MP-8/MP-9/MP-11/MP-12, the two pass-2 Codex findings) is still
+intact at its cited line, plus a set of checks not previously written up
+explicitly (client-FK validation on every write path, `SET NULL`
+nullability, LIKE escaping, JSON deep-copy, upload/download hardening,
+bulk-action caps, module axios auth, `UNCACHEABLE_PREFIXES`). MP-10
+(unbounded election-package list/create) remains correctly OPEN/FLAGGED,
+unchanged, already in `KNOWN_LIMITATIONS.md`. No new findings. Completion
+gate clean: flake8/black/isort (9.0.1, CI-pinned) on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head); scoped
+suite (20 files) 322 passed/0 failed; full backend suite 9833 passed/21
+skipped (pre-existing/environmental)/0 failed; `tsc --noEmit` 0 errors;
+`eslint .` clean. Full detail in `MP-08-membership-pipeline.md` → Pass 3.
+Rotation row 08 → ⏳ (awaiting PR merge). Next: 09 medical screening (PHI),
+once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 07 (Users & organizations, pass 3) ✅ merged — PR #2175
+
+Merged to `main` as commit `9860bde5`. Rotation row 07 → ✅. Next: 08
+Membership pipeline.
 
 ---
 
@@ -6676,8 +6709,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⏳     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
