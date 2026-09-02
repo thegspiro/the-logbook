@@ -612,6 +612,27 @@ def _withhold_profile_visibility(
     payload.profile_visibility = None
 
 
+def _profile_response(
+    user: User, current_user: User, is_self: bool
+) -> User | UserProfileResponse:
+    """What a profile write returns.
+
+    The subject and members-managers get the row itself, which FastAPI
+    serialises through ``UserProfileResponse`` exactly as before. Anyone else
+    — a ``users.edit`` holder editing a colleague — gets a payload with the
+    subject's visibility choice withheld, on the same terms as the read.
+    Serialising only on that path keeps the write handlers indifferent to how
+    complete the row object is, which their unit tests rely on.
+    """
+    if is_self or _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    ):
+        return user
+    payload = UserProfileResponse.model_validate(user)
+    payload.profile_visibility = None
+    return payload
+
+
 def _clear_hidden_contact_fields(
     payload: UserWithRolesResponse | UserProfileResponse,
     visibility: dict[str, bool],
@@ -1465,11 +1486,9 @@ async def update_contact_info(
         username=current_user.username,
     )
 
-    payload = UserProfileResponse.model_validate(user)
-    _withhold_profile_visibility(
-        payload, current_user, is_self=str(current_user.id) == str(user_id)
+    return _profile_response(
+        user, current_user, is_self=str(current_user.id) == str(user_id)
     )
-    return payload
 
 
 @router.patch("/{user_id}/profile", response_model=UserProfileResponse)
@@ -1764,9 +1783,7 @@ async def update_user_profile(
         username=current_user.username,
     )
 
-    payload = UserProfileResponse.model_validate(user)
-    _withhold_profile_visibility(payload, current_user, is_self)
-    return payload
+    return _profile_response(user, current_user, is_self)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

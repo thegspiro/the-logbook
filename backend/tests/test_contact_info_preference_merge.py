@@ -7,7 +7,6 @@ preference silently switched the rest back on, behind a 200. DB and the audit
 log are mocked; no MySQL.
 """
 
-from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -21,9 +20,6 @@ ORG = str(uuid4())
 
 
 def _member(user_id, preferences):
-    # The handler now serialises its response itself (so it can withhold the
-    # subject's profile-visibility choice from non-managers), so the stand-in
-    # carries the columns UserProfileResponse requires.
     return SimpleNamespace(
         id=str(user_id),
         username="jsmith",
@@ -32,9 +28,6 @@ def _member(user_id, preferences):
         email_verified=True,
         phone=None,
         mobile=None,
-        status="active",
-        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         notification_preferences=preferences,
     )
 

@@ -22,6 +22,7 @@ from fastapi import HTTPException
 from app.api.v1.endpoints.users import (
     _clear_directory_only_profile_metadata,
     _clear_hidden_contact_fields,
+    _profile_response,
     _redact_contact_fields,
     _withhold_profile_visibility,
     get_user_with_roles,
@@ -558,6 +559,24 @@ class TestWithholdProfileVisibility:
         )
 
         assert payload.profile_visibility is None
+
+    def test_profile_writes_hand_the_row_back_to_subject_and_managers(self):
+        # The row itself, serialised by FastAPI as before — not a rebuilt
+        # payload — so the write handlers stay indifferent to row shape.
+        member = _member(SHARE_EVERYTHING)
+        assert _profile_response(member, _caller_with([]), is_self=True) is member
+        assert (
+            _profile_response(member, _caller_with(["members.manage"]), is_self=False)
+            is member
+        )
+
+    def test_profile_writes_withhold_the_choice_from_a_users_edit_holder(self):
+        member = _member(SHARE_EVERYTHING)
+        result = _profile_response(member, _caller_with(["users.edit"]), is_self=False)
+
+        assert isinstance(result, UserProfileResponse)
+        assert result.profile_visibility is None
+        assert result.address_street == "12 Ladder Lane"
 
 
 def _caller_with(permissions: list[str]) -> MagicMock:
