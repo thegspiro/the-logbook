@@ -16,11 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2159](https://github.com/thegspiro/the-logbook/pull/2159) (Feature 05,
-Finance & approvals, pass 3) — 4 fixes (FIN-23–26), 0 flagged. See the Log
-below for detail.
+None.
 
 ---
+
+### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) ✅ merged — PR #2159
+
+PR #2159 merged clean: a `CHANGELOG.md` conflict against `main` (two
+unrelated `[Unreleased]` sections) resolved by keeping both entries, 17/17
+CI checks green on the merge commit, Codex review completed with no
+findings. Rotation row 05 → ✅. Next: 06 elections & ballots.
 
 ### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) — 4 fixes, 0 flagged — PR #2159
 
