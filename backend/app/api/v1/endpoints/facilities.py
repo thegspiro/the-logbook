@@ -3756,12 +3756,23 @@ async def get_facility_folders(
     # Every generic folder/document/summary read in the Documents module
     # requires documents.view; a document_count here is the same aggregate
     # disclosure DOC-4 already flags for that module's own summary endpoint.
-    # A facilities.view-only caller sees the folders (they're a fixed part
-    # of the facility record) but not how many documents are inside them.
+    #
+    # A facilities.view-only caller currently gets an empty folder list here
+    # (not just redacted counts), because every facility folder's
+    # required_permissions is FACILITY_SENSITIVE_PERMISSIONS. See FAC-13
+    # (docs/security-review/FAC-12-facilities.md) for why this is flagged
+    # rather than fixed.
     can_see_counts = user_has_permission(
         current_user, "documents.view"
     ) or user_has_permission(current_user, "documents.manage")
 
+    # This route has no pagination params of its own -- a facility's folder
+    # tree is a fixed, small set (the six sub-folders) -- so skip/limit are
+    # not request-echoed the way list_folders' are; they report the whole
+    # unpaginated result, which is what FoldersListResponse's required
+    # skip/limit fields need to validate on every return path, including the
+    # empty-list one (Codex review, PR #2191: the prior return omitted them
+    # entirely, so response-model validation 500'd on every real HTTP call).
     return {
         "folders": [
             {
@@ -3773,6 +3784,8 @@ async def get_facility_folders(
             for f in sub_folders
         ],
         "total": len(sub_folders),
+        "skip": 0,
+        "limit": len(sub_folders),
     }
 
 

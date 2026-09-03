@@ -21,7 +21,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects import mysql
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -316,10 +316,18 @@ class DocumentFolder(Base):
     documents = relationship(
         "Document", back_populates="folder", cascade="all, delete-orphan"
     )
+    # ``remote_side`` belongs on the *singular* backref (``parent``), not on
+    # ``children`` itself. Placed on ``children`` (as this was before) it
+    # inverts the self-referential join, so ``folder.children`` resolves to
+    # nothing usable and -- because SQLAlchemy no longer sees any cascaded
+    # relationship pointing at a deleted parent's descendants -- deleting a
+    # folder with ``passive_deletes`` off proactively NULLs every child's
+    # ``parent_id`` before the DELETE even runs, silently orphaning the
+    # entire subtree as detached root folders instead of removing it (FAC-16:
+    # this is what the folder-delete cascade regression test caught).
     children = relationship(
         "DocumentFolder",
-        backref="parent",
-        remote_side=[id],
+        backref=backref("parent", remote_side=[id]),
         cascade="all, delete-orphan",
         single_parent=True,
     )

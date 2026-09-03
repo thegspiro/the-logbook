@@ -16,16 +16,520 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Follow-up to #2188 (Feature 11, Inventory, pass 3, merged) — fixes INV-20,
-a lock-ordering deadlock risk that #2188's own INV-18/INV-19 fix
-introduced. Codex caught it on the merged PR before this pass's agent
-finished; the corrected fix could not be pushed to #2188's branch (already
-merged, dead per CLAUDE.md Pitfall #24), so it lands as a fresh PR. Feature
-11 itself is otherwise done (#2188 merged); this is a correctness
-follow-up, not a new review pass. Rotation row 11 → ⏳ (awaiting this
-follow-up's merge).
+#2191 (`claude/security-review-facilities`) — Feature 12, Facilities, pass
+3, complete and ready for review. One HIGH finding flagged (FAC-13:
+facility-file folder access over-restricted for three established-baseline
+categories — Photos, Maintenance Records, Inspection Reports; Blueprints &
+Permits' classification is separately undecided — needs an owner decision,
+not auto-fixed) and eight P1/P2/MED findings fixed same-day across six
+Codex review rounds of this PR's own fix commits and write-up: FAC-14
+(documents.manage bypassing a document's own folder ACL on the generic
+update/delete routes), FAC-15 (the same bypass on a document _move_'s
+destination folder, missed by FAC-14's fix), FAC-16 (the identical bypass
+on the folder-mutation routes themselves — rename/reparent/delete of the
+target folder — which also uncovered and fixed a pre-existing bug where
+deleting a folder with descendants silently orphaned them instead of
+cascading; two sibling relationships elsewhere in the codebase flagged with
+the same shape, not fixed, out of scope), FAC-17 (`get_facility_folders`'s
+return value never satisfied its own declared `FoldersListResponse`, so
+response-model validation 500'd on every real HTTP call — direct-Python-call
+tests never exercised FastAPI's response cycle, so it went uncaught; fixed,
+and re-covered with a real ASGI request), FAC-18 (the same
+destination-not-checked shape as FAC-15 on folder reparenting's new parent,
+missed by FAC-16's fix), FAC-19 (the identical gap on folder creation's
+parent), FAC-20 (a defense-in-depth guard so the now-working folder-delete
+cascade cannot follow a cross-organization `parent_id`, even though no
+current write path can create one), and FAC-21 (the delete cascade checked
+only the folder named in the request, never any descendant's own
+`required_permissions` — found by Codex on the FAC-18/19/20 fix commit
+itself, after a systematic sweep of every remaining folder/document route
+in `documents.py` had already (wrongly) concluded no further instance of
+this bug class remained; every descendant is now checked too). Plus two
+doc-accuracy corrections (stale comments claiming a now-false
+"facilities.view-only sees the folders" invariant), and a
+separately-diagnosed, separately-fixed CI failure (two of an earlier
+round's own regression test classes were missing
+`@pytest.mark.integration`, so the DB-less "Backend Unit Tests" job tried to
+run them against no MySQL and errored on all 8; traced to root cause during
+FAC-17's investigation, fixed by a concurrent commit (`acc4e29d`) rebased
+onto — now marked and deselected there correctly). Full completion gate
+green, 10017/10017 full backend suite (+13 total across FAC-17's,
+FAC-18/19/20's, and FAC-21's regression tests, over the pre-round-4
+baseline of 10004), and the exact CI unit-test filter (`-m "not integration
+and not slow and not docker"`) 8474 passed/0 errors (was 8472 passed/8
+errors before `acc4e29d`). Rotation row 12 → ⏳ (awaiting this PR's merge).
 
 ---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) — 0 fixed (2 doc-accuracy corrections), 1 HIGH flagged
+
+Prior art (`docs/module-audit/facilities.md`, `docs/app-review/facilities.md`,
+this doc's own pass 1/pass 2) re-read in full; no open findings inherited —
+all re-verified intact against current code. Enumerated 98/98 routes by
+exact grep count (`require_permission(\|require_all_permissions(` matches
+`^@router\.` 1:1), 0 bare `get_current_user`, unchanged since pass 2 — no
+new route landed. Backend/frontend diff since pass 2's merge reviewed in
+full (small: an `include_inactive` list param + `usage_count` on the three
+lookup-table endpoints for the new settings screen; larger on the frontend,
+already-landed `window.confirm` removal and stale-response-race fixes,
+re-verified clean, no new gap).
+
+This pass's specific brief was to check whether PR #2160 (the DOC-5
+folder-ACL fix from feature 10, which touched `facilities.py` by wiring
+`current_user` into `get_facility_sub_folders`) left a facilities-specific
+gap, without re-deriving the mechanism DOC-10's own pass 3 already verified
+sound. It did: **FAC-13 (HIGH, correctness/access, not a leak, flagged)** —
+`ensure_facility_folder` stamps the shared `facilities` folder root, every
+per-facility folder, and **all six** sub-folders (not just the two
+genuinely sensitive ones, Insurance & Leases and Capital Projects) with the
+same `facilities.view_sensitive`/`.edit`/`.manage` requirement. That stamp
+existed since 2026-08-27 but was inert until #2160 wired enforcement
+(2026-09-02); because folder authorization ANDs every ancestor, a caller
+admitted only at baseline `facilities.view` — secretary, quartermaster,
+safety officer, training officer, by FAC-5's own design — now gets an
+**empty** folder list for every facility, including the non-sensitive
+Photos/Maintenance/Inspection categories they're meant to see (Blueprints &
+Permits' classification is separately undecided — see below).
+Verified empirically against the real `can_access_folder` code path (not a
+reimplementation): a `facilities.view`-only caller is refused a
+sensitive-stamped folder, a `facilities.manage` caller is admitted.
+Fail-closed, so not a security leak — a functional regression a permission
+tier can no longer do the file-viewing part of its job. Flagged rather than
+fixed: a correct narrowing needs a new "any facilities access" permission
+tier (simply clearing `required_permissions` would let any `documents.view`
+holder — the default `member` position — browse these folders with zero
+facilities grant, reopening the leak the stamp exists to prevent), an owner
+call on whether Blueprints & Permits specifically should stay sensitive,
+and a migration for already-stamped rows. Corrected two now-false code
+comments that assumed the pre-#2160 behavior (`facilities.py`'s
+`get_facility_folders` docstring/comment and `test_facilities_folders.py`'s
+module docstring) — zero-behavior-change doc fixes, distinct from the
+flagged access gap itself. Mirrored to `docs/KNOWN_LIMITATIONS.md` and
+`CHANGELOG.md`. Full local completion gate green: flake8/black/isort clean
+across `app/ tests/ alembic/`, migrations validated (no schema change),
+249/249 scoped and 9992/9992 full backend suite pass (21 pre-existing
+skips), `npm run typecheck` (the real TS 7 build compiler, not bare `tsc`,
+which resolves to the 5.9 lint compiler) 0 errors, `eslint .` clean (no
+frontend code changed this pass). Findings doc:
+`docs/security-review/FAC-12-facilities.md`. PR #2191 opened and
+subscribed. Next: 13 apparatus & NFC, once #2191 merges.
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 2) — 1 fixed (FAC-14), 4 doc corrections (Codex review of PR #2191's `0231a904`)
+
+Codex reviewed pass 3's fix commit (`0231a904`, the response to the first
+Codex round — CHANGELOG/KNOWN_LIMITATIONS/FAC-12 wording corrections and a
+trimmed endpoint comment) and posted 5 new comments. All 5 independently
+verified against current code before acting on any of them; disposition
+below.
+
+**FAC-14 (HIGH, access control/IDOR, fixed).** `PATCH /documents/{document_id}`
+and `DELETE /documents/{document_id}` were gated on `documents.manage`
+alone and never called `can_access_document`/`can_access_folder` — the
+same check `get_document`/`download_document` already run — so a
+`documents.manage` holder with zero facilities permission could `PATCH`
+`{"folder_id": null}` on a facility's `facilities.view_sensitive`-gated
+document (unfiling it to org-level storage, after which any
+`documents.view` holder could read it) or `DELETE` it outright, despite
+never being authorized to view it in the first place. Confirmed
+independently by reading both routes and `_folder_admits_user` in full
+(the `required_permissions` check genuinely isn't overridden by
+`documents.manage`'s leadership bypass, so the read-side check this fix
+reuses is a real gate, not a no-op for that grant). Fixed: both routes now
+call `can_access_document` on the existing document before mutating it,
+returning 404 (matching the existing "don't confirm existence" convention)
+when it fails; a caller who holds the folder's own required permission is
+unaffected. Regression tests in
+`tests/test_documents_access.py::TestUpdateAndDeleteDocumentRespectFolderAcl`
+(4 tests: 2 bypass, 2 positive-control) — the 2 bypass tests independently
+confirmed to fail (`DID NOT RAISE HTTPException`) against the pre-fix
+routes via `git stash`, pass again once restored.
+
+**Extended, not fixed — FAC-13's remediation plan, item (3).** A second
+report showed `_validate_shared_document_reference` only relocates a
+document when currently unfiled (`folder_id is None`) — deliberately, per
+its own docstring — so a reference to an already-org-shared document
+already sitting in a weakly-protected folder is left there, and
+`GET /documents/{id}/download` authorizes purely on that folder's own ACL
+with no facility-specific check, so a default `documents.view` holder can
+already download it. Confirmed independently by re-reading the function
+and the download endpoint in full. Judged this a flag, not a same-day fix:
+unlike FAC-14's missing-call-to-an-existing-check shape, this needs an
+"is folder A's ACL at least as strong as folder B's requirement"
+comparison that doesn't exist anywhere in the codebase, and every
+candidate remedy (silent relocation, rejection, per-document
+re-authorization) reverses or extends a prior intentional design decision
+— the same "owner call" bar as the Blueprints & Permits question already
+flagged in this finding. Remediation-plan item (3) in
+`FAC-12-facilities.md` extended to describe both cases explicitly;
+mirrored to `KNOWN_LIMITATIONS.md`.
+
+**3 doc-accuracy corrections, all confirmed and applied:**
+
+- CHANGELOG.md's flagged-entry heading/body said the Facilities "Files"
+  UI section was emptied by FAC-13; a repo-wide frontend search found no
+  consumer of `GET /{facility_id}/folders` at all —
+  `FilesSection.tsx` loads via `getPhotos`/`getFacilityDocuments` and
+  stays populated. Reworded to name the actual impact (direct API clients,
+  generic Documents-module browsing/downloads).
+- The completion-gate table in `FAC-12-facilities.md` recorded a bare
+  `tsc --noEmit`, which per CLAUDE.md's own documented two-TypeScript-
+  installs setup resolves to the 5.9 lint compiler, not the 7.0.2 build
+  compiler `npm run typecheck` actually invokes. Re-ran the real gate
+  against this PR's head — 0 errors — and corrected the table to name and
+  record that command; same correction applied to this doc's own pass-3
+  log entry above, which had the identical stale claim.
+- This log entry's own pass-3 summary (line 21 as originally written)
+  still said "four non-sensitive categories" and "Photos/Blueprints/
+  Maintenance/Inspection" after a previous round had already corrected
+  `FAC-12-facilities.md`, `KNOWN_LIMITATIONS.md`, and `CHANGELOG.md` to
+  name three established-baseline categories with Blueprints & Permits
+  called out separately as undecided. Corrected here to match.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/documents.py` and `tests/test_documents_access.py`,
+migrations validated (no schema change), 253/253 scoped (`facilities or
+documents`, +4 for FAC-14's regression tests) and 9996/9996 full backend
+suite pass (21 pre-existing skips), `npm run typecheck` 0 errors, `eslint .`
+clean (no frontend code changed this round), prettier clean on the four
+markdown docs touched. Findings doc: `docs/security-review/
+FAC-12-facilities.md` (FAC-14, and FAC-13's extended remediation item 3).
+Pushed to `claude/security-review-facilities`. Rotation row 12 stays ⏳
+(awaiting PR #2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 3) — 2 fixed (FAC-15, FAC-16) plus a cascade-delete bug found and fixed while regression-testing FAC-16 (Codex review of PR #2191's `b5fdf79d`)
+
+Codex reviewed pass 3 round 2's fix commit (`b5fdf79d`, the FAC-14 fix) and
+posted 2 new comments, both on the same shape of gap FAC-14 had just closed
+on a different route. Both independently verified against current code
+before acting.
+
+**FAC-15 (P1, access control, fixed).** FAC-14's fix checked
+`can_access_document` on a document's _current_ folder before
+`update_document`/`delete_document` acted, but `update_document` never
+checked the _destination_ folder when `folder_id` changed to a new,
+non-null value — `DocumentsService.update_document` validated only
+same-organization membership (`assert_in_org`, DOC-6/XC-1), not the
+caller's access to that folder. A `documents.manage` holder with zero
+facilities permission could move a document they already had legitimate
+access to _into_ a `facilities.view_sensitive`-gated folder — the opposite
+direction from FAC-14 (write-into rather than read-out-of). Confirmed by
+reading `update_document` and `DocumentsService.update_document` in full,
+and by comparing against `upload_document`, which already resolves and
+authorizes its destination folder before saving a new upload — the pattern
+this fix mirrors. Fixed: `update_document` now resolves the destination
+folder and calls `can_access_folder` on it whenever `folder_id` is present,
+non-null, and different from the current value (403 on denial); moving out
+to unfiled needs no destination check. Regression tests in
+`tests/test_documents_access.py::TestUpdateDocumentRespectsDestinationFolderAcl`
+(3 tests: 1 bypass, 1 positive-control, 1 same-folder no-op) — the bypass
+test independently confirmed to fail (no `HTTPException` raised — the move
+silently succeeded) against the pre-fix route via `git stash`, passes again
+once restored.
+
+**FAC-16 (P1, access control/IDOR, fixed).** `PATCH`/
+`DELETE /documents/folders/{folder_id}` required only `documents.manage`
+and never checked `can_access_folder` on the target folder at all — unlike
+the read-side `get_facility_sub_folders`, which already filters through it.
+A `documents.manage` holder with zero facilities permission could rename,
+reparent, or delete a sensitive-gated facility folder outright — a full
+destructive cascade rather than FAC-14/15's single-document scope. Fixed:
+both routes now fetch the target folder and call `can_access_folder` on it
+before mutating (404 on denial, matching the "don't confirm existence"
+convention). Regression tests in
+`tests/test_documents_access.py::TestFolderMutationRespectsOwnFolderAcl`
+(5 tests: 3 bypass — rename, reparent, delete — 2 positive-control),
+independently confirmed to fail pre-fix via `git stash`, pass again once
+restored.
+
+**A second, independent bug found and fixed while writing FAC-16's
+delete-cascade positive-control test.** The test — proving an authorized
+caller's delete still cascades through a multi-level folder tree — failed
+on an `AssertionError`, not an ACL error: the child folder survived. Traced
+to `DocumentFolder.children` (`app/models/document.py`) declaring
+`remote_side=[id]` on the plural `children` relationship itself instead of
+on its singular `parent` backref — inverted from the standard
+self-referential idiom this codebase uses correctly everywhere else
+(`FacilityRoom.parent_room`, `BudgetCategory.parent`, `StorageArea.parent`,
+`Event.recurrence_parent`). Empirically confirmed with a raw fixture:
+`session.delete(parent)` did not cascade to the child; instead SQLAlchemy,
+finding no cascade-configured relationship pointing at the child, nulled
+its foreign key before issuing the `DELETE`, so the database's own
+`ON DELETE CASCADE` (confirmed present at the schema level) never fired —
+deleting a folder with descendants silently orphaned them as detached
+root folders instead of removing them, despite `delete_folder`'s own
+docstring and this pass's audit-log severity both describing a full
+destructive cascade. No production code reads `.children`/`.parent`
+directly (every call site queries `parent_id` explicitly), so fixing the
+relationship's direction changes only this cascade behavior. Fixed by
+moving `remote_side=[id]` onto the `parent` backref; re-verified with a
+three-level fixture (root → child → grandchild → document) that a delete
+now removes every row. **Not fixed, flagged:** the same inverted shape
+exists in `CheckTemplateCompartment.children` (apparatus.py) and
+`TrainingCategory.subcategories` (training.py), found by grepping every
+`remote_side` usage while diagnosing this one — out of scope for this
+feature, unverified beyond the pattern match, mirrored to
+`KNOWN_LIMITATIONS.md`.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/documents.py`, `app/models/document.py`, and
+`tests/test_documents_access.py`; migrations validated (no schema change —
+this is a relationship-mapping fix, not a column/constraint change);
+`facilities`/`documents`-scoped and 10004/10004 full backend suite pass
+(+8 over round 2's 9996, 21 pre-existing skips); `npm run typecheck` 0
+errors, `eslint .` clean (no frontend code changed this round); prettier
+clean on the markdown docs touched. Findings doc: `docs/security-review/
+FAC-12-facilities.md` (FAC-15, FAC-16). Pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 4) — 1 fixed (FAC-17); a second, unrelated CI failure investigated and traced, fixed by a concurrent commit (Codex review of PR #2191's FAC-13 write-up)
+
+Codex reviewed the FAC-13 write-up itself (round 1's finding text, which
+describes `GET /{facility_id}/folders` returning `{"folders": [], "total":
+0}` for the empty-list case) and flagged that this is not observable over
+real HTTP: `FoldersListResponse` requires `skip`/`limit`, the handler's
+single return statement never set them, and `TestFacilityFolderDocument
+CountRedaction` (the only existing coverage) calls the handler as a plain
+Python coroutine, bypassing FastAPI's response-model validation entirely.
+Independently verified: `skip: int`/`limit: int` are non-`Optional` fields
+on `FoldersListResponse`; the handler's one return path (shared by both the
+empty and populated cases) set only `folders`/`total`; a real ASGI request
+through the actual router (`httpx.AsyncClient` + `ASGITransport`,
+dependency-overriding `get_current_user`/`get_db`, the pattern already
+established in `test_equipment_check_endpoint_permissions.py`) reproduced
+the exact failure Codex described —
+`fastapi.exceptions.ResponseValidationError`, `Field required` on both
+`skip` and `limit` — on every successful call, not just the empty-list one.
+
+**FAC-17 (MED, correctness, fixed).** The return now includes `"skip": 0,
+"limit": len(sub_folders)` alongside `folders`/`total`. This route has no
+pagination parameters of its own (a facility's folder tree is a small,
+fixed set — six sub-folders), so it reports the whole unpaginated result
+rather than echoing request query params, unlike the generic, actually-
+paginated `GET /folders` in `documents.py`. Widening the response schema to
+make `skip`/`limit` optional was rejected — `FoldersListResponse` is a
+shared pagination shape with a genuinely paginated sibling caller, and
+weakening the contract there to fit one non-paginated route risks a future
+paginated caller silently omitting the fields too. New tests
+(`TestFolderRouteResponseValidation` in `test_facilities_folders.py`, 2
+tests: empty-list and populated-list) issue a real ASGI request and assert
+a 200 with `skip`/`limit` present; both independently confirmed to fail
+with `ResponseValidationError` against the pre-fix return statement via
+`git stash`, pass again once restored.
+
+**A second, unrelated CI failure investigated alongside the fix above.**
+The coordinator flagged a red "Backend Unit Tests" job on the PR's then-head
+(`489f8c9e`) and attributed it to CI's "Generated schema docs are stale"
+step, tied to round 3's `DocumentFolder.children`/`remote_side` fix.
+Verified that attribution was wrong before acting on it: the CI log showed
+that step completing with no error, and `python scripts/
+generate_schema_docs.py --check` was clean locally with no diff — consistent
+with `remote_side` being ORM-relationship metadata that carries no
+table/column/FK/index representation for that generator to reflect. Reading
+the same job's log in full found the real cause: `TestUpdateDocumentRespects
+DestinationFolderAcl` and `TestFolderMutationRespectsOwnFolderAcl` (round
+3's own FAC-15/FAC-16 regression tests) use the real `db_session` fixture,
+exactly like their sibling `TestUpdateAndDeleteDocumentRespectFolderAcl`
+(FAC-14) — but unlike that sibling and every other `db_session`-backed class
+in the file, neither carried `@pytest.mark.integration`, so the DB-less
+"Backend Unit Tests" job (`-m "not integration and not slow and not
+docker"`, no MySQL service — see its own "no DB required" comment in
+`.github/workflows/ci.yml`) tried to run them anyway and errored on all 8
+with `Can't connect to MySQL server on 'localhost'`. Before this round's own
+fix commit could land, a separate, concurrent session pushed exactly that
+fix (`acc4e29d`, "fix Backend Unit Tests CI failure -- mark two new
+DB-backed test classes integration") — this round rebased onto it rather
+than duplicating it. Re-verified post-rebase: all 8 pass unmodified against
+a real database, and are correctly deselected (not run, not errored) under
+the unit-only filter.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/facilities.py`, `tests/test_facilities_folders.py`;
+`pytest tests/ -m "not integration and not slow and not docker"` (mirrors
+CI exactly) 8474 passed/1 skipped/0 errors (was 8472 passed/8 errors before
+`acc4e29d`'s fix); `facilities`/`documents`-scoped 263 passed/1 skipped;
+full backend suite 10006/10006 passed (+2), 21 pre-existing skips — no
+regression from round 3's 10004 baseline; `generate_schema_docs.py --check`
+clean. Findings doc: `docs/security-review/FAC-12-facilities.md` (FAC-17,
+pass 3 round 4). Rebased onto and pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 5) — 3 fixed (FAC-18, FAC-19, FAC-20) plus a full sweep of every folder/document route in `documents.py` (Codex review of PR #2191's `489f8c9e`)
+
+Before starting, verified PR #2191 was still open and fetched the branch's
+current remote head — it had moved twice since `489f8c9e`: first to
+`acc4e29d` (another agent marking two DB-backed test classes
+`@pytest.mark.integration` to fix a CI failure), fast-forward merged with no
+conflict; then, mid-round, to `8b8aeabf` (a concurrent session's own round 4
+— FAC-17, the `get_facility_folders` response-model bug). The second move
+did conflict: this round's own draft had independently found and fixed the
+identical response-model bug (under a different name, with its own
+duplicate test class) as part of the same sweep. Reconciled by dropping this
+round's duplicate fix and test class entirely in favor of round 4's, keeping
+only this round's three genuinely distinct findings, and renumbering them
+(this round's draft had used FAC-17/18/19/20; round 4 had already claimed
+FAC-17) to FAC-18/19/20 so the two rounds' numbering doesn't collide. See
+`docs/security-review/FAC-12-facilities.md`'s "round 5" gate table for the
+full account.
+
+Codex reviewed round 3's fix commit (`489f8c9e`, the FAC-15/16 fixes) and
+posted 3 new comments, all the identical "destination not checked" shape
+FAC-15/16 had just closed on different routes, plus this round's own brief
+to sweep every remaining folder/document route in `documents.py` rather
+than reacting to one comment at a time. All three independently verified
+against current code before acting; the sweep found no further instance
+beyond round 4's FAC-17 (found independently by both this round's draft and
+round 4, and fixed only once).
+
+**FAC-18 (P1, access control/IDOR, fixed).** FAC-16's fix authorized only a
+folder's own (pre-move) ancestry via `can_access_folder`; reparenting it —
+`update_folder`'s `parent_id` — was validated only for same-organization
+membership (DOC-6/XC-1), never the caller's access to the _new_ parent. A
+`documents.manage` holder with zero facilities permission could reparent an
+accessible folder, and everything inside it, into a sensitive-gated
+facility tree. Fixed: `update_folder` now resolves the new parent and calls
+`can_access_folder` on it whenever `parent_id` changes to a new, non-null
+value, mirroring FAC-15's destination check exactly. Regression tests in
+`tests/test_documents_access.py::TestFolderReparentRespectsNewParentAcl`
+(3 tests: 1 bypass, 1 positive-control, 1 same-parent no-op).
+
+**FAC-19 (P2, access control/IDOR, fixed).** Same gap on `create_folder`:
+only same-organization membership was checked on a supplied `parent_id`,
+never the caller's access to it. Lower severity than FAC-18 — the injected
+folder starts empty, and `upload_document` already gates populating it —
+but still an unauthorized write into a restricted tree. Fixed: `create_folder`
+now calls `can_access_folder` on a non-null `parent_id` before creating.
+Regression tests in
+`tests/test_documents_access.py::TestFolderCreationRespectsParentAcl`
+(3 tests: 1 bypass, 1 positive-control, 1 root-level-create no-op).
+
+**FAC-20 (P1, access control/cross-tenant, defense-in-depth, fixed).**
+FAC-16's fix made `DocumentFolder.children`'s cascade actually work — but
+that cascade (and the ORM's own descendant-loading on `self.db.delete`)
+walks `parent_id` with no `organization_id` filter, unlike the file-cleanup
+subtree walk beside it. Searched every `DocumentFolder(` construction site
+in the backend: exactly two client-facing writers of `parent_id`
+(`create_folder`, `update_folder`), both validated via `assert_in_org`
+(DOC-6) today — so not currently reachable through the application — but
+`parent_id` has no _database_ constraint enforcing same-organization
+parentage, only that application-level guard on two call sites (which is
+exactly the kind of guard FAC-18/19 themselves just showed can be forgotten
+at a new call site). Fixed as defense-in-depth rather than left flagged:
+`delete_folder`'s subtree walk now checks each discovered descendant's
+`organization_id` against the caller's and raises before deleting anything
+if one doesn't match, rather than trusting the org-unaware ORM cascade.
+Regression tests in
+`tests/test_documents_access.py::TestDeleteFolderRefusesCrossOrgCascade` (a
+cross-org child constructed directly, since the guarded write paths cannot
+produce one; a same-org positive control proving the ordinary cascade is
+unaffected).
+
+All three bypass tests independently confirmed to fail against pre-fix code
+via `git stash` (`DID NOT RAISE HTTPException`/`ValueError`), pass again
+once restored, with every positive-control test in the same classes passing
+throughout (proving the tests target the fix, not an unrelated setup
+issue).
+
+**Sweep result:** every route in `documents.py` that accepts a `folder_id`/
+`parent_id` from the client, or resolves one to serve a response,
+enumerated in a table in `docs/security-review/FAC-12-facilities.md` — 12
+routes total (no copy/duplicate or bulk endpoint exists in this file). Every
+one now authorizes every folder reference it touches, source and
+destination alike. No further instance of this bug class found. **This
+conclusion turned out to be wrong** — see the round 6 entry below (FAC-21,
+found on this round's own fix commit): the sweep checked that every route
+authorizes the folder(s) _named in the request_, but `DELETE
+/folders/{folder_id}` also authorizes an entire _subtree_ it cascades
+into, and nothing in the sweep checked whether every folder _in_ that
+subtree — not just the one named — was itself authorized.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/documents.py`, `app/services/documents_service.py`,
+and `tests/test_documents_access.py`; migrations validated (no schema
+change — no model file touched this round, so `DATABASE_SCHEMA.md` had
+nothing to regenerate); 10014/10014 full backend suite pass (+8 over round
+4's 10006, 21 pre-existing skips); `npm run typecheck` 0 errors, `eslint .`
+clean (no frontend code changed this round); prettier clean on the four
+markdown docs touched. Findings doc: `docs/security-review/
+FAC-12-facilities.md` (FAC-18 through FAC-20). Pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 6) — 1 fixed (FAC-21), correcting round 5's "no further instance" conclusion (Codex review of PR #2191's `8b8aeabf`)
+
+The coordinator relayed a new Codex comment on this round's own prior
+commit (`8b8aeabf`, round 5's FAC-18/19/20 fixes) shortly after that round's
+sweep had already been written and pushed. Before acting: re-fetched the
+branch's remote head and confirmed it had not moved past `8b8aeabf` since
+the round 5 push, so no rebase was needed this time.
+
+**FAC-21 (P1, access control/IDOR, fixed).** `delete_folder`'s
+endpoint-level `can_access_folder` check (FAC-16) authorizes the folder
+named in the `DELETE` request, and — through that call's own ancestor
+walk — everything _above_ it. It never checks anything _below_ it.
+`required_permissions` is set per-folder independently; nothing enforces
+that a child folder's restrictions can only get looser than its parent's,
+so a caller admitted at an accessible parent is not necessarily admitted at
+every descendant the cascade is about to destroy. Verified this is not
+exploitable in the _current_ facility tree specifically (every facility
+folder, root through all six sub-folders, still carries the identical
+sensitive permission set per the still-open FAC-13 bug — no
+accessible-parent/inaccessible-child pair exists there yet) — but
+`required_permissions` can only be set by system code, not the API, and
+FAC-13's own eventual remediation plan is to give three of those six
+sub-folders a _weaker_ tier than their siblings, which would create this
+exact shape the day it lands. Fixed now rather than flagged, since the fix
+is mechanical (reuses the existing `_folder_admits_user` per-folder check)
+and the alternative is landing FAC-13's fix with this hole still open.
+Fixed: `delete_folder`'s subtree walk (already extended once for FAC-20's
+cross-org check) now also takes an optional `current_user` and checks each
+descendant's own `_folder_admits_user` result as it walks the tree — not a
+full ancestor re-walk per descendant, since the walk already visits every
+folder between the authorized root and each descendant, so checking each
+one's own admission is equivalent to what a full `can_access_folder` would
+compute. Raises the same `ValueError` → 400 shape as FAC-20. Regression
+tests in `tests/test_documents_access.py::
+TestDeleteFolderRefusesInaccessibleDescendant` (3 tests: 1 bypass — an
+accessible root with a sensitive child underneath, deleting the root
+400s and nothing is touched — 1 positive control proving a caller holding
+the child's own permission can still delete the whole subtree, 1 positive
+control proving the pre-FAC-21 no-`current_user` call shape still works).
+Independently confirmed failing pre-fix via `git stash` (`DID NOT RAISE
+HTTPException` — the delete silently cascaded into the sensitive child) and
+passing post-fix.
+
+Also corrected round 5's sweep table and closing claim in
+`docs/security-review/FAC-12-facilities.md` to reflect FAC-21 rather than
+silently leaving the wrong "no further instance found" conclusion standing,
+and added a note there that the sweep's own miss is itself evidence that
+"no further instance found" documents what a method found, not that none
+exist.
+
+Full local completion gate green: flake8/black/isort clean on the two
+source files and the test file; migrations validated (no schema change);
+`facilities`/`documents`-scoped 95 passed (+3); full backend suite
+10017/10017 passed (+3 over round 5's 10014), 21 pre-existing skips;
+`npm run typecheck` 0 errors, `eslint .` clean (no frontend code changed
+this round); prettier clean on the four markdown docs touched. Findings
+doc: `docs/security-review/FAC-12-facilities.md` (FAC-21). Pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 11 (Inventory) fully closed — PR #2190 merged
+
+PR #2190 (the INV-20/INV-21 follow-up to #2188) merged. It fixed INV-20 (a
+lock-ordering deadlock the INV-18/INV-19 fix itself introduced —
+restructured `return_to_pool`/`checkin_item` to lock the item before the
+holding record, matching the other three sibling methods) and INV-21 (a
+SQLAlchemy identity-map staleness bug: the locked re-read after acquiring
+the row lock returned the same already-in-session Python object with its
+pre-lock attribute values instead of the freshly-committed ones, because a
+second `SELECT` on an identity-mapped row needs `populate_existing=True` or
+an explicit `session.refresh()` to pick up a concurrent writer's commit —
+both caught by Codex reviewing the merged #2188, both independently
+re-verified real by this rotation before landing). Feature 11 is now fully
+✅. Rotation row 11 updated accordingly. Next: 12 Facilities.
 
 ### 2026-09-02 — Feature 11 doc fix — INV-20, a lock-ordering deadlock the INV-18/19 fix itself introduced
 
@@ -7164,8 +7668,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⏳     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
