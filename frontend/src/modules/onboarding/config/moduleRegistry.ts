@@ -177,11 +177,12 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   },
   {
     id: 'inventory',
-    // Same name the nav and the pages use. "Equipment & Inventory" said both
-    // of the two words this app overloads most, and matched no screen label.
-    name: 'Gear & Uniforms',
+    // Same name the nav and the pages use. The module started as gear and
+    // uniforms and was named for that; it now covers EMS supplies on the same
+    // catalog, so the name is the category rather than a list of its parts.
+    name: 'Inventory',
     description:
-      'Issue and track turnout gear, uniforms, tools and radios. Sizes, assignments, returns, and NFPA lifecycle.',
+      'Issue and track turnout gear, uniforms, tools, radios and EMS supplies. Sizes, assignments, returns, and NFPA lifecycle.',
     icon: Package,
     priority: 'recommended',
     category: 'Operations',

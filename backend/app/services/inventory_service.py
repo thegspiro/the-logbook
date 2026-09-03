@@ -21,6 +21,7 @@ from sqlalchemy.sql import Select
 
 from app.core.audit import log_audit_event
 from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
     AssignmentType,
     CheckOutRecord,
     DepartureClearance,
@@ -3366,6 +3367,41 @@ class InventoryService:
             row.condition.value: row.count for row in condition_result.all()
         }
 
+        # Items by domain, for the supply-line entry points on the inventory
+        # admin hub.
+        #
+        # A row count, deliberately unlike `total_items` above, which sums
+        # quantities. This number sits on a card linking straight to
+        # GET /items?item_type=..., and that endpoint reports rows: two numbers
+        # disagreeing about the same set on the same screen read as a bug even
+        # when each is right on its own terms.
+        #
+        # Medical is excluded to match GET /items, which carves it out — EMS
+        # stock is gated on inventory.view_medical and this response is not.
+        # An item with no category carries no domain and lands in no bucket.
+        type_result = await self.db.execute(
+            select(
+                InventoryCategory.item_type,
+                func.count(InventoryItem.id).label("count"),
+            )
+            .join(
+                InventoryCategory,
+                # Org-scoped inside the join rather than left to the outer
+                # filter, for the reason spelled out on _category_ids_of_type:
+                # without it an item could match another organization's
+                # category.
+                and_(
+                    InventoryItem.category_id == InventoryCategory.id,
+                    InventoryCategory.organization_id == str(organization_id),
+                ),
+            )
+            .where(InventoryItem.organization_id == str(organization_id))
+            .where(InventoryItem.active.is_(True))
+            .where(InventoryCategory.item_type.notin_(list(MEDICAL_ITEM_TYPES)))
+            .group_by(InventoryCategory.item_type)
+        )
+        items_by_type = {row.item_type.value: row.count for row in type_result.all()}
+
         # Total value (multiply per-unit value by quantity for accurate totals)
         value_result = await self.db.execute(
             select(
@@ -3409,6 +3445,7 @@ class InventoryService:
             "total_items": total_items,
             "items_by_status": items_by_status,
             "items_by_condition": items_by_condition,
+            "items_by_type": items_by_type,
             "total_value": float(total_value),
             "active_checkouts": effective_checkouts,
             "overdue_checkouts": overdue_checkouts or 0,

@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { MEDICAL_VIEW_PERMISSIONS } from './modules/medical-supplies/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from './modules/facilities/routes';
 import { QUICK_ADD_ACTIONS } from './components/layout/quickAddActions';
+import { barePath, routeGate, routeSources } from './test/routeGates';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8');
@@ -212,56 +213,10 @@ describe('navigation gates match the routes they target', () => {
   });
 });
 
-/** Every file that can define a `<Route>`, concatenated once. */
-const routeSources = (): string => {
-  const modulesDir = path.join(SRC, 'modules');
-  const files = fs
-    .readdirSync(modulesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => path.join(modulesDir, entry.name, 'routes.tsx'))
-    .filter((file) => fs.existsSync(file));
-  return [path.join(SRC, 'App.tsx'), ...files].map((file) => fs.readFileSync(file, 'utf8')).join('\n');
-};
-
-interface RouteGate {
-  permissions: string[];
-  module: string | null;
-  /** False when no `<Route>` declares this path at all. */
-  exists: boolean;
-}
-
-/**
- * Read the gate a route actually enforces.
- *
- * The slice runs from the `path="…"` attribute to the next `<Route` so a
- * neighbouring route's `ProtectedRoute` cannot bleed in, and only the first
- * `<ProtectedRoute` opening tag inside it is read — that is the one wrapping
- * the element, whatever `<Suspense>` sits either side of it.
- */
-const routeGate = (sources: string, routePath: string): RouteGate => {
-  const marker = `path="${routePath}"`;
-  const start = sources.indexOf(marker);
-  if (start === -1) return { permissions: [], module: null, exists: false };
-
-  const nextRoute = sources.indexOf('<Route', start);
-  const block = sources.slice(start, nextRoute === -1 ? sources.length : nextRoute);
-
-  const guardStart = block.indexOf('<ProtectedRoute');
-  if (guardStart === -1) return { permissions: [], module: null, exists: true };
-  const guard = block.slice(guardStart, block.indexOf('>', guardStart));
-
-  const any = guard.match(/requiredAnyPermission=\{\[([^\]]*)\]\}/);
-  const single = guard.match(/requiredPermission="([^"]+)"/);
-  const module = guard.match(/requiredModule="([^"]+)"/);
-
-  const permissions = any?.[1]
-    ? [...any[1].matchAll(/'([^']+)'/g)].map((match) => match[1] as string)
-    : single?.[1]
-      ? [single[1]]
-      : [];
-
-  return { permissions, module: module?.[1] ?? null, exists: true };
-};
+// `routeSources` / `routeGate` moved to `test/routeGates.ts` when the
+// inventory hub's card registry started checking itself the same way. One
+// parser, so a route-declaration shape it cannot read fails everywhere at once
+// rather than quietly disarming whichever surface still had its own copy.
 
 describe('Quick Add offers only what its routes will open', () => {
   const sources = routeSources();
@@ -295,7 +250,7 @@ describe('Quick Add offers only what its routes will open', () => {
     '%s targets a route that exists',
     (_id, action) => {
       // Query strings are the row's business, not the router's.
-      const bare = action.path.split('?')[0] ?? action.path;
+      const bare = barePath(action.path);
       expect(routeGate(sources, bare).exists, `no <Route> defines ${bare}`).toBe(true);
     }
   );
@@ -306,7 +261,7 @@ describe('Quick Add offers only what its routes will open', () => {
    * generated case an assertion — a skipped-by-`return` case reads as a pass.
    */
   const resolved = QUICK_ADD_ACTIONS.map((action) => {
-    const bare = action.path.split('?')[0] ?? action.path;
+    const bare = barePath(action.path);
     return {
       action,
       bare,

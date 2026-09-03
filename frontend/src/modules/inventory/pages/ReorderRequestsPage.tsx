@@ -21,6 +21,7 @@ import {
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
@@ -103,7 +104,9 @@ const ReorderFormModal: React.FC<{
   vendors: InventoryVendor[];
   lowStockAlerts: LowStockAlert[];
   editRequest?: ReorderRequest | null;
-}> = ({ isOpen, onClose, onSaved, categories, vendors, lowStockAlerts, editRequest }) => {
+  /** Category the caller arrived to order for, from `?category=` on the URL. */
+  prefillAlert?: LowStockAlert | null;
+}> = ({ isOpen, onClose, onSaved, categories, vendors, lowStockAlerts, editRequest, prefillAlert }) => {
   const [f, setF] = useState<CreateFD>(EMPTY_CREATE);
   const [saving, setSaving] = useState(false);
 
@@ -123,10 +126,21 @@ const ReorderFormModal: React.FC<{
         urgency: editRequest.urgency,
         notes: editRequest.notes ?? '',
       });
+    } else if (prefillAlert) {
+      // Same seed the "Quick fill from low stock" chips apply, done for the
+      // reader who arrived from the hub already knowing which category is
+      // short — that is what their click said.
+      const firstItem = prefillAlert.items?.[0];
+      setF({
+        ...EMPTY_CREATE,
+        item_name: firstItem?.name ?? prefillAlert.category_name,
+        category_id: prefillAlert.category_id,
+        quantity_requested: String(Math.max(1, prefillAlert.threshold - prefillAlert.current_stock)),
+      });
     } else {
       setF(EMPTY_CREATE);
     }
-  }, [editRequest, isOpen]);
+  }, [editRequest, isOpen, prefillAlert]);
 
   const up = (k: keyof CreateFD, v: string) => setF((p) => ({ ...p, [k]: v }));
 
@@ -556,6 +570,7 @@ export const ReorderRequestsPage: React.FC = () => {
   const [editRequest, setEditRequest] = useState<ReorderRequest | null>(null);
   const [statusRequest, setStatusRequest] = useState<ReorderRequest | null>(null);
   const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
+  const [prefillAlert, setPrefillAlert] = useState<LowStockAlert | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -586,6 +601,34 @@ export const ReorderRequestsPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // "Receive" on the inventory hub's attention queue names an overdue
+  // delivery; open its dialog rather than the unfiltered list. An order that
+  // has been placed opens straight on Receive stock — that is what the link
+  // said — while anything else opens the generic dialog, since the right next
+  // step for it is the officer's call and not this link's.
+  useDeepLinkedRecord(
+    'request',
+    requests,
+    (request) => request.id,
+    (request) => {
+      setStatusRequest(request);
+      setWorkflowAction(request.status === 'ordered' ? 'receive' : null);
+    }
+  );
+
+  // A low-stock row on that queue names the category that is short, not a
+  // request — there is nothing to open yet, which is the point. Open the
+  // create form already filled in for it.
+  useDeepLinkedRecord(
+    'category',
+    lowStockAlerts,
+    (alert) => alert.category_id,
+    (alert) => {
+      setPrefillAlert(alert);
+      setShowCreate(true);
+    }
+  );
 
   const stats = useMemo(() => {
     const pending = requests.filter((r) => r.status === 'pending').length;
@@ -867,6 +910,9 @@ export const ReorderRequestsPage: React.FC = () => {
           onClose={() => {
             setShowCreate(false);
             setEditRequest(null);
+            // Cleared with the dialog, or the next manual "New request" would
+            // open pre-filled for whatever category the last deep link named.
+            setPrefillAlert(null);
           }}
           onSaved={() => {
             void load();
@@ -874,6 +920,7 @@ export const ReorderRequestsPage: React.FC = () => {
           categories={categories}
           vendors={vendors}
           lowStockAlerts={lowStockAlerts}
+          prefillAlert={prefillAlert}
           editRequest={editRequest}
         />
         <WorkflowActionModal
