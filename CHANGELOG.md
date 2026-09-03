@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a fourth round on the delete/autosave interaction, and a bulk-replace path that never refreshed the reparent-guard's server-truth map (2026-09-03)
+
+**Fixed**
+
+- **AP-13 finding 1 (P2, frontend) — the subtree-delete autosave-quiescing
+  step only inspected `autoSavePendingRef`, not the separate
+  `autoSaveInFlightRef` a timer moves into once it actually fires**: if the
+  delete-confirmation dialog was left open past the 1.5s debounce window,
+  the queued item auto-save had already fired and its PATCH was in flight
+  by the time the user confirmed — invisible to the doomed-item capture
+  loop, which only cancels still-pending timers. Left unawaited, that PATCH
+  could settle after the DELETE, reporting "Save failed" for an item the
+  delete had just removed, or racing it outright. Fixed by keying
+  `autoSaveInFlightRef` by item id (it was an anonymous `Set<Promise>`) so
+  the same quiescing step can find and await a doomed item's in-flight
+  request too, not just its pending timer.
+- **AP-13 finding 2 (P2, frontend) — `replaceAllCompartments` (vehicle
+  preset apply / JSON import / CSV import) never refreshed
+  `savedParentByIdRef` with the newly-persisted ids the backend hands
+  back**: the AP-13 pending-reparent delete guard treats an id absent from
+  that map as nothing to compare, not as something to block on — so an
+  unsaved indent of one of these brand-new rows under another, followed by
+  a delete of the parent, bypassed the guard entirely. The backend cascade
+  then removed only the still-top-level parent (the reparent was never
+  saved), leaving the child alive in the database and reappearing
+  unexpectedly on the next reload, though the frontend's own local state
+  showed it gone. Fixed by rebuilding the map from the bulk-replace's
+  freshly-persisted response, the same way the initial load already does
+  — extracted the shared rebuild into `buildParentByIdMap`
+  (`equipmentCheckHierarchy.ts`) so both call sites share one
+  implementation instead of two copies of the same loop.
+- Both reproduced live via a component test confirmed failing pre-fix and
+  passing post-fix. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 8) for the full writeup.
+
 ### Security: a clone could silently drop a disconnected compartment, and the delete/autosave interaction took two more rounds to close for good (2026-09-03)
 
 **Fixed**

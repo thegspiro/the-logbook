@@ -1,12 +1,173 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–7)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py` (new),
 `api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 8 (2026-09-03) — a fifth Codex round on the delete/autosave interaction (finding 1), plus the first miss in the reparent-guard's other half, `savedParentByIdRef` population (finding 2)
+
+**Trigger.** Codex reviewed pass 7's `deleteCompartment` fix (finding 12,
+which closed the pending-timer race) and the AP-13 pending-reparent guard's
+`savedParentByIdRef` map together, and found one gap in each — distinct
+mechanisms, not two more variants of the same bug, so kept as two findings
+rather than folded together. Both reproduced live via a component test
+confirmed failing pre-fix and passing post-fix, in the manner established
+across this whole fix chain.
+
+### AP-13 finding 1 — P2 (frontend, stale-save race) — the subtree-delete quiescing step never looked at `autoSaveInFlightRef`, only `autoSavePendingRef` — ✅ FIXED
+
+**What:** Finding 12 (pass 7) made `deleteCompartment` capture and cancel
+every doomed item's pending debounce timer, synchronously, before the
+backend delete call — closing the race where a timer could fire while the
+delete was already in flight. It only ever inspected
+`autoSavePendingRef`, though, which only holds timers that have **not yet
+fired**. `scheduleAutoSaveItem` moves a request out of that map and into
+`autoSaveInFlightRef` — a separate, anonymous `Set<Promise<void>>` with no
+per-item key — the instant its debounce timer actually elapses and the
+PATCH is sent. If the user left the delete-confirmation dialog open past
+that 1.5s window, the capture loop had nothing left to find: the item's
+save was already in flight, invisible to a check that only reads the
+pending map, and the same "Save failed"-for-a-deleted-item symptom finding
+8/12 closed from the pending side was still reachable from the in-flight
+side.
+
+**Where:**
+`frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx`,
+`deleteCompartment` (the doomed-item capture loop finding 12 added) and
+`scheduleAutoSaveItem` (where a fired timer's request moves into
+`autoSaveInFlightRef`).
+
+**Failure scenario, reproduced live (component test, `git stash` on just
+the fix):** rendered the builder, queued a debounced edit on `Radio` (a
+`Cab` item), clicked delete on `Cab` to open the confirmation dialog, then
+— with the dialog still open — outwaited the 1.5s debounce window so the
+queued save fired and `updateCheckItem('radio', ...)` was called, its
+promise left unresolved. Only then confirmed the delete. Pre-fix, the
+compartment DELETE was sent immediately, with Radio's PATCH still
+outstanding — nothing in `deleteCompartment` was waiting on it, so the two
+requests were free to settle in either order against the server.
+
+**Impact:** UI-honesty and save-reliability, the same class as findings 4/8/12
+— no data-integrity risk on its own (the item really is about to be
+deleted), but a real chance of the auto-save indicator reporting failure
+for a row already gone, or (against a real backend) the PATCH and DELETE
+racing each other.
+
+**Fix:** `autoSaveInFlightRef` is now keyed by item id
+(`Map<string, Set<Promise<void>>>`, mirroring `autoSavePendingRef`'s
+shape) rather than an anonymous `Set`, so a specific item's in-flight
+request can be found. `deleteCompartment`'s quiescing step now also
+collects each doomed item's in-flight requests from that map and `await`s
+them — alongside cancelling pending timers, and still synchronously, before
+the DELETE is sent — so nothing touching a doomed item can still be
+running once the delete goes out, regardless of whether the user left the
+dialog open past the debounce window. The request's own `.catch` already
+swallows a PATCH failure internally (it only flags the error indicator), so
+awaiting it can never itself reject and abort the delete. `flushPendingAutoSaves`
+(the Save button's own flush, which already awaited every in-flight
+request) was updated for the new keyed shape rather than left to read a
+`Set` that no longer exists.
+
+### AP-13 finding 2 — P2 (frontend, stale server-truth map) — `replaceAllCompartments` never refreshed `savedParentByIdRef` with the ids a bulk replace persists — ✅ FIXED
+
+**What:** The AP-13 (pass 5) pending-reparent delete guard compares the
+live client hierarchy against `savedParentByIdRef`, a last-known-server
+`id -> parentCompartmentId` map, and only blocks a delete when both sides
+have a record of the same id and disagree — an id the map has never heard
+of is treated as nothing to compare, not as a reason to block. The map is
+rebuilt on initial load and updated incrementally at every other point
+that persists a compartment's parent (`add_compartment`,
+`add_compartment`-backed section headers, clone). `replaceAllCompartments`
+— the shared bulk-replacement path behind vehicle-preset apply, JSON
+import, and CSV import — was the one persistence path that never touched
+it at all: `replaceCompartments` returns a wholly new set of persisted
+rows with brand-new ids, and every one of them was simply absent from the
+map afterward.
+
+**Where:**
+`frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx`,
+`replaceAllCompartments` (no `savedParentByIdRef` write on any path).
+
+**Failure scenario, reproduced live (component test, `git stash` on just
+the fix):** rendered the builder against a vehicle-type template, loaded
+the Engine/Pumper preset (`replaceCompartments` returns freshly-persisted
+rows `saved-0` "Cab & Exterior", `saved-1` "Engine Compartment", …),
+reparented `Engine Compartment` under `Cab & Exterior` via the row menu's
+"Stored inside" select (an unsaved, local-only edit — reparenting has no
+auto-save path, only `handleSave` persists `parent_compartment_id`), then
+deleted `Cab & Exterior`. Pre-fix, the guard's `knownIds` filter dropped
+both new ids (neither was in the map), the mismatch check never ran, no
+toast appeared, and the delete proceeded unblocked.
+
+**Impact:** data integrity — the same shape AP-13 (pass 5) fixed for every
+other persistence path, just reachable through the one path pass 5 didn't
+touch. The backend cascade only removes the still-top-level parent (the
+reparent was never saved), so the child compartment — and any items on
+it — survives in the database with its original parent, while the
+frontend's local-state removal (which does account for the live,
+in-memory subtree) makes it look gone. The department sees the compartment
+disappear from the screen and reappear, unexplained, the next time the
+template is opened.
+
+**Fix:** extracted the load path's inline `id -> parentCompartmentId`
+rebuild into a shared helper, `buildParentByIdMap` (new, in
+`equipmentCheckHierarchy.ts` beside the map's other consumers,
+`descendantIdsFromParentMap`/`descendantCompartmentIds`), and call it from
+both the initial load and `replaceAllCompartments` — the two places that
+receive a **complete, freshly-persisted** compartment list and should
+rebuild the whole map from it, rather than merge into whatever it held
+before (a bulk replace mints new ids for every row, so a merge would also
+leave the old, now-meaningless ids sitting in the map as dead weight). The
+single-row incremental `.set()` calls at `add_compartment`, its
+section-header sibling, `handleSave`'s per-row refresh, and the delete
+path's own pruning (finding 5) are unaffected — none of them were missing
+anything, and none needed the same rebuild-from-a-list shape.
+
+**Centralize vs. patch, and why this one is a small fix, not a
+restructure:** the task that surfaced this finding asked whether it and
+finding 1 were symptomatic of a larger missing-invariant problem worth
+centralizing (the FAC-35 lesson: stop patching pairwise, establish one
+canonical rule). They are not the same problem — finding 1 is about
+quiescing in-flight work before a delete, finding 2 is about repopulating a
+map after a bulk write — and within finding 2 specifically, this is the
+**first** miss of the "rebuild from a persisted list" shape, not a third or
+fourth recurrence: the load path already did it correctly, and
+`replaceAllCompartments` was the only other place with that same shape.
+Extracting the one duplicated rebuild into `buildParentByIdMap` closes
+the gap and removes the duplication without touching the four other,
+correctly-incremental call sites that were never broken.
+
+## Guard tests added (pass 8)
+
+- `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`
+  — `'waits for an in-flight item auto-save before sending the compartment
+DELETE (AP-13 finding 1)'` (leaves the confirmation dialog open past the
+  debounce window, confirms the queued auto-save's PATCH is in flight
+  before confirming the delete, and asserts the DELETE is not sent until
+  that PATCH resolves) and `'keeps the unsaved-reparent delete guard
+covering rows a bulk replace just persisted'` (AP-13 finding 2: loads a
+  vehicle preset, reparents one of the newly-persisted rows under another
+  via the row menu, deletes the parent, and asserts the guard's toast fires
+  and neither the confirmation dialog nor the delete API call happen).
+  Both confirmed failing against pre-fix code (`git stash` on just
+  `EquipmentCheckTemplateBuilder.tsx`/`equipmentCheckHierarchy.ts`) and
+  passing against the fix.
+
+## Completion gate (pass 8)
+
+| Check                                                                               | Result                                               |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `tsc --noEmit`                                                                      | ✅ 0 errors                                          |
+| `eslint .` (full frontend)                                                          | ✅ 0 errors                                          |
+| `vitest run EquipmentCheckTemplateBuilder.test.tsx equipmentCheckHierarchy.test.ts` | ✅ 89 passed                                         |
+| `vitest run src/modules/inventory` (full module)                                    | ✅ 922 passed (69 files)                             |
+| Backend                                                                             | not touched this pass — no backend files in the diff |
 
 ---
 

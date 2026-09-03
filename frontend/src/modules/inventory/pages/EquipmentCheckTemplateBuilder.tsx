@@ -86,7 +86,12 @@ import type { CatalogAddPayload } from '@/modules/inventory/components/CatalogQu
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
-import { descendantCompartmentIds, descendantIdsFromParentMap, storedInsideOptions } from './equipmentCheckHierarchy';
+import {
+  buildParentByIdMap,
+  descendantCompartmentIds,
+  descendantIdsFromParentMap,
+  storedInsideOptions,
+} from './equipmentCheckHierarchy';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -554,7 +559,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const autoSavePendingRef = useRef<
     Map<string, { timer: ReturnType<typeof setTimeout>; patch: Record<string, unknown> }>
   >(new Map());
-  const autoSaveInFlightRef = useRef<Set<Promise<void>>>(new Set());
+  // Keyed by item id, like autoSavePendingRef above -- once a debounce timer
+  // fires, scheduleAutoSaveItem moves the request here so a subtree delete
+  // can find and quiesce a doomed item's in-flight PATCH, not just its
+  // still-pending timer (AP-13 finding 1).
+  const autoSaveInFlightRef = useRef<Map<string, Set<Promise<void>>>>(new Map());
   const autoSaveErrorRef = useRef(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -633,11 +642,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       });
       setCompartments(mapped);
       setExpandedCompartments(expanded);
-      const parentMap = new Map<string, string>();
-      for (const c of mapped) {
-        if (c.id) parentMap.set(c.id, c.parentCompartmentId);
-      }
-      savedParentByIdRef.current = parentMap;
+      savedParentByIdRef.current = buildParentByIdMap(mapped);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load template'));
     } finally {
@@ -902,6 +907,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         capturedAutoSaves.push([itemId, pending.patch]);
       }
     }
+
+    // AP-13 finding 1 (Codex, follow-up): a timer that fired before this
+    // point -- e.g. the user left the confirmation dialog above open past
+    // the debounce window -- has already left autoSavePendingRef; the
+    // capture loop above never sees it. scheduleAutoSaveItem moved it into
+    // autoSaveInFlightRef instead, where its PATCH is already in flight
+    // against the server. Left alone, that PATCH can settle *after* the
+    // DELETE below -- reporting "Save failed" for an item the delete just
+    // removed, or racing the DELETE outright. Waiting for it here keeps the
+    // same ordering guarantee finding 12 established for pending timers:
+    // nothing touching a doomed item can still be running once the DELETE is
+    // sent. The request's own .catch already swallows a failure (it only
+    // flags autoSaveErrorRef), so this can never reject and abort the
+    // delete.
+    const doomedInFlight = doomedItemIds.flatMap((itemId) => [...(autoSaveInFlightRef.current.get(itemId) ?? [])]);
+    if (doomedInFlight.length > 0) await Promise.all(doomedInFlight);
 
     if (comp.id) {
       try {
@@ -1805,10 +1826,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               autoSaveErrorRef.current = true;
             })
             .finally(() => {
-              autoSaveInFlightRef.current.delete(request);
+              const inFlightForItem = autoSaveInFlightRef.current.get(itemId);
+              inFlightForItem?.delete(request);
+              if (inFlightForItem && inFlightForItem.size === 0) autoSaveInFlightRef.current.delete(itemId);
               settleAutoSaveStatus();
             });
-          autoSaveInFlightRef.current.add(request);
+          const inFlightForItem = autoSaveInFlightRef.current.get(itemId);
+          if (inFlightForItem) inFlightForItem.add(request);
+          else autoSaveInFlightRef.current.set(itemId, new Set([request]));
         },
         options?.immediate ? 0 : 1500
       );
@@ -1904,7 +1929,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         return false;
       }
     }
-    if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
+    if (autoSaveInFlightRef.current.size > 0) {
+      await Promise.all([...autoSaveInFlightRef.current.values()].flatMap((requests) => [...requests]));
+    }
     settleAutoSaveStatus();
     return true;
   };
@@ -2178,6 +2205,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     setCompartments(staged);
+    // AP-13 finding 2 (Codex, follow-up): a bulk replace mints brand-new
+    // persisted rows with new ids -- savedParentByIdRef has to be rebuilt
+    // from `staged`, the same way the initial load rebuilds it, or the new
+    // ids are simply absent from the map. The delete guard's `knownIds`
+    // filter treats an id it has no record of as "nothing to compare," so an
+    // unsaved reparent of one of these new rows would silently bypass the
+    // guard instead of blocking the delete -- the backend cascade would then
+    // delete only the still-top-level parent, leaving the reparented child
+    // alive and reappearing on the next reload.
+    savedParentByIdRef.current = buildParentByIdMap(staged);
     // Marked here rather than at each call site: replacing the contents leaves
     // a save outstanding on every path that does it, and the vehicle-preset
     // branch was the one that forgot. On an unsaved template the replacement
