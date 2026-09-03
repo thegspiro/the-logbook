@@ -253,9 +253,36 @@ export function isCacheable(url: string): boolean {
 }
 
 /**
+ * Which "era" of the cache we are in. Bumped by every clearCache().
+ *
+ * SEC: cache keys carry no user identity, so clearCache() on logout is the
+ * only thing standing between one member's responses and the next member to
+ * sign in on the same tab. A request already in flight when logout happens
+ * would otherwise write its result in after the purge. Callers capture this
+ * before issuing a request and hand it back on the write; a write from a
+ * previous era is dropped.
+ */
+let generation = 0;
+
+/** The current cache era. Capture before issuing a request. */
+export function cacheGeneration(): number {
+  return generation;
+}
+
+/**
+ * Cache a response only if the cache has not been purged since the request
+ * that produced it was issued.
+ */
+export function setCacheAtGeneration(key: string, data: unknown, issuedAt: number): void {
+  if (issuedAt !== generation) return;
+  setCache(key, data);
+}
+
+/**
  * Clear the entire cache. Useful on logout or session idle.
  */
 export function clearCache(): void {
   cache.clear();
   pendingRevalidations.clear();
+  generation += 1;
 }

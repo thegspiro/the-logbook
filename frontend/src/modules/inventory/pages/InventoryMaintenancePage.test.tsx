@@ -227,14 +227,27 @@ describe('InventoryMaintenancePage — opened for one named item', () => {
     await waitFor(() => expect(window.location.search).toBe(''));
   });
 
-  it('stays on a working page when the item no longer resolves', async () => {
-    // It may have been retired between the link rendering and being followed.
-    mockGetItem.mockRejectedValue(new Error('gone'));
+  it('stays quiet when the item no longer exists', async () => {
+    // A 404 is the expected case: it may have been retired between the link
+    // rendering and being followed, and a working page beats an error about a
+    // record nobody holds.
+    mockGetItem.mockRejectedValue({ response: { status: 404, data: { detail: 'Not found' } } });
     window.history.pushState({}, '', '/inventory/admin/maintenance?item=gone');
     renderWithRouter(<InventoryMaintenancePage />);
 
     await waitFor(() => expect(mockGetItem).toHaveBeenCalledWith('gone'));
     expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('reports an operational failure rather than pretending the item is gone', async () => {
+    // Offline, a 403, a 500 — the officer is left on a generic page with no
+    // form and, the parameter being unchanged, no retry this visit. Silence
+    // there is indistinguishable from a record that was simply retired.
+    mockGetItem.mockRejectedValue({ response: { status: 500, data: { detail: 'boom' } } });
+    window.history.pushState({}, '', '/inventory/admin/maintenance?item=far-off');
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
   });
 
   it('asks for nothing when no item is named', async () => {

@@ -24,6 +24,31 @@ import type {
   InventoryLotUpdate,
 } from './eventServices';
 
+/**
+ * Options for the read paths this page refreshes on demand.
+ *
+ * `bypassCache` maps to the shared client's `_skipCache` request flag. The
+ * client serves a cached GET for 30s without contacting the server, and serves
+ * a stale one for 90s while revalidating in the background and swallowing that
+ * revalidation's failures -- correct for navigation, wrong for a refresh the
+ * user asked for, which would otherwise report success against old quantities
+ * and never raise the failure the page is meant to surface.
+ */
+export interface MedicalReadOptions {
+  bypassCache?: boolean;
+  /**
+   * Cancels the request. One options object rather than a separate positional
+   * argument: both answer "how should this read be performed", and a caller
+   * that refreshes past the cache usually also wants to be able to abandon it.
+   */
+  signal?: AbortSignal;
+}
+
+const readConfig = (options?: MedicalReadOptions) => ({
+  ...(options?.bypassCache ? { _skipCache: true } : {}),
+  ...(options?.signal ? { signal: options.signal } : {}),
+});
+
 export interface MedicalSupplySummary {
   total_items: number;
   expiring_soon: number;
@@ -80,16 +105,18 @@ export interface MedicalItemFilters {
 }
 
 export const medicalSuppliesService = {
-  async getSummary(expiringWithinDays?: number): Promise<MedicalSupplySummary> {
+  async getSummary(expiringWithinDays?: number, options?: MedicalReadOptions): Promise<MedicalSupplySummary> {
     const response = await api.get<MedicalSupplySummary>('/medical-supplies/summary', {
       params: expiringWithinDays ? { expiring_within_days: expiringWithinDays } : undefined,
+      ...readConfig(options),
     });
     return response.data;
   },
 
-  async getCategories(activeOnly = true): Promise<InventoryCategory[]> {
+  async getCategories(activeOnly = true, options?: MedicalReadOptions): Promise<InventoryCategory[]> {
     const response = await api.get<InventoryCategory[]>('/medical-supplies/categories', {
       params: { active_only: activeOnly },
+      ...readConfig(options),
     });
     return response.data;
   },
@@ -104,9 +131,10 @@ export const medicalSuppliesService = {
     return response.data;
   },
 
-  async getItems(filters?: MedicalItemFilters): Promise<InventoryItemsListResponse> {
+  async getItems(filters?: MedicalItemFilters, options?: MedicalReadOptions): Promise<InventoryItemsListResponse> {
     const response = await api.get<InventoryItemsListResponse>('/medical-supplies/items', {
       params: filters,
+      ...readConfig(options),
     });
     return response.data;
   },
@@ -151,9 +179,10 @@ export const medicalSuppliesService = {
     await api.delete(`/medical-supplies/lots/${lotId}`);
   },
 
-  async getExpiringLots(daysAhead = 30): Promise<ExpiringLot[]> {
+  async getExpiringLots(daysAhead = 30, options?: MedicalReadOptions): Promise<ExpiringLot[]> {
     const response = await api.get<ExpiringLot[]>('/medical-supplies/lots/expiring', {
       params: { days_ahead: daysAhead },
+      ...readConfig(options),
     });
     return response.data;
   },
