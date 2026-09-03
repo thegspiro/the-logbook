@@ -16,7 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 12 (Facilities) is in progress on `claude/security-review-facilities`.
+#2191 (`claude/security-review-facilities`) — Feature 12, Facilities, in
+progress. Bookkeeping-only so far (records #2190's merge, closes out
+feature 11); findings and fixes to follow in subsequent commits on the
+same branch/PR.
 
 ---
 
