@@ -18,7 +18,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ArrowLeft, CalendarClock, Clock3, Loader2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { AdminHubFrame } from '../../../components/admin';
+import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
@@ -448,7 +448,22 @@ const StoreAdminPage: React.FC = () => {
           />
         )}
         {activeTab === 'payments' && <StorePaymentsTab onChanged={handleChanged} />}
-        {activeTab === 'settings' && <StoreSettingsTab onChanged={handleChanged} />}
+        {activeTab === 'settings' && (
+          <div className="space-y-8">
+            <StoreSettingsTab onChanged={handleChanged} />
+            {/* The frame's three open headline slots. The store's registry
+                offers six metrics and defaults to three, so without this an
+                admin could never reach Pending verification, Ready for pickup
+                or Active items — every other module's admin page carries the
+                same control. */}
+            <AdminMetricsSettings
+              moduleKey="storefront"
+              moduleLabel="Department Store"
+              permission="storefront.manage"
+              onSaved={() => setFrameToken((token) => token + 1)}
+            />
+          </div>
+        )}
       </div>
     </AdminHubFrame>
   );

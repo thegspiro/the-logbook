@@ -484,6 +484,26 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     expect(within(medical).queryByText('88')).not.toBeInTheDocument();
   });
 
+  it('names the EMS request in the failure banner rather than swallowing it', async () => {
+    // A silently-dropped stat is indistinguishable from a department with
+    // nothing expiring, and leaves no Retry for the one request that failed.
+    mockGetMedicalSummary.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryAdminHub />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('EMS supplies');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(mockGetMedicalSummary).toHaveBeenCalledTimes(2));
+  });
+
+  it('leaves the EMS card without a stat when its request fails', async () => {
+    mockGetMedicalSummary.mockRejectedValue(new Error('offline'));
+    renderWithRouter(<InventoryAdminHub />);
+    const medical = await screen.findByRole('link', { name: /EMS Supplies/ });
+
+    expect(within(medical).queryByText('7')).not.toBeInTheDocument();
+  });
+
   it('hides the EMS card, and asks nothing of its API, without the medical grant', async () => {
     mockCheckPermission.mockImplementation((permission: unknown) => permission !== 'inventory.view_medical');
     renderWithRouter(<InventoryAdminHub />);

@@ -114,15 +114,20 @@ describe('StorePaymentsTab', () => {
     });
   });
 
-  it('dismisses a payment', async () => {
+  it('dismisses a payment, and tells the page so', async () => {
+    // Dismissing clears the event from the admin frame's unreconciled count
+    // and its attention row, exactly as applying one does. Applying already
+    // reported it; dismissing did not, so the headline stayed stale.
     const user = userEvent.setup();
-    render(<StorePaymentsTab onChanged={vi.fn()} />);
+    const onChanged = vi.fn();
+    render(<StorePaymentsTab onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: /Dismiss/ }));
 
     await waitFor(() => {
       expect(mockIgnorePaymentEvent).toHaveBeenCalledWith('pe1');
     });
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   });
 
   it('offers no actions on an already-applied payment', async () => {

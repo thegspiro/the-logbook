@@ -20,6 +20,11 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../components/StoreCatalogTab', () => ({ StoreCatalogTab: () => null }));
 vi.mock('../components/StorePaymentsTab', () => ({ StorePaymentsTab: () => null }));
 vi.mock('../components/StoreSettingsTab', () => ({ StoreSettingsTab: () => null }));
+vi.mock('../../../components/admin/AdminMetricsSettings', () => ({
+  __esModule: true,
+  default: () => <div>metrics-settings</div>,
+  AdminMetricsSettings: () => <div>metrics-settings</div>,
+}));
 vi.mock('../components/StoreWindowsTab', () => ({ StoreWindowsTab: () => null }));
 vi.mock('../components/StoreOrdersTab', () => ({
   StoreOrdersTab: ({
@@ -212,6 +217,19 @@ describe('StoreAdminPage — tabs in the URL', () => {
     // The frame owns the tab bar; selecting one is what writes ?tab=, which is
     // what makes a deep link possible in the first place.
     expect(screen.getByRole('tab', { name: 'Payments' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('offers the headline-metric picker on the settings tab', async () => {
+    // The store's registry defines six metrics and defaults to three, so
+    // without this control an admin can never reach the other three — every
+    // other module's admin page carries the same one.
+    const user = userEvent.setup();
+    renderAt('/inventory/admin/store');
+    await screen.findByText('Order workflow');
+
+    await user.click(screen.getByRole('tab', { name: 'Settings' }));
+
+    expect(await screen.findByText('metrics-settings')).toBeInTheDocument();
   });
 
   it('keeps the overview hand-off into a pre-filtered Orders tab', async () => {

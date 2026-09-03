@@ -288,22 +288,19 @@ export const InventoryAdminHub: React.FC = () => {
   const loadSummary = useCallback(async () => {
     setLoading(true);
 
-    // Medical stock is its own module with its own grant, so it is fetched
-    // apart from the batch below and only when the card that shows the number
-    // is on screen — folding it in would spend a 403 on every department that
-    // runs no EMS supply line. The count is what expires soon rather than what
-    // is on the shelf: that is the number an EMS officer opens the page for,
-    // and it is what /medical-supplies itself leads with.
-    if (showsMedical) {
-      void medicalSuppliesService
-        .getSummary()
-        .then((medical) => setMedicalExpiring(medical.expiring_soon))
-        // A missing figure leaves the card without its stat rather than
-        // taking the hub down; the card still works as a door.
-        .catch(() => setMedicalExpiring(null));
-    } else {
-      setMedicalExpiring(null);
-    }
+    // Medical stock is its own module with its own grant, so it is requested
+    // separately, and only when the card that shows the number is on screen —
+    // folding it into the tuple below would spend a 403 on every department
+    // that runs no EMS supply line. The count is what expires soon rather than
+    // what is on the shelf: that is the number an EMS officer opens the page
+    // for, and it is what /medical-supplies itself leads with.
+    //
+    // It is settled alongside the batch and reports into the same
+    // `failedSources` banner. Swallowing its rejection would show the card
+    // without a stat, which is indistinguishable from a department that has
+    // nothing expiring — and would leave no Retry for the one request the
+    // banner could not mention.
+    const medicalRequest = showsMedical ? medicalSuppliesService.getSummary() : null;
 
     const sources = [
       ['summary', inventoryService.getSummary()],
@@ -317,11 +314,21 @@ export const InventoryAdminHub: React.FC = () => {
       ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
       ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
     ] as const;
-    const results = await Promise.allSettled(sources.map(([, promise]) => promise));
-    const failed = results.flatMap((result, index) => {
+    const [results, medicalSettled] = await Promise.all([
+      Promise.allSettled(sources.map(([, promise]) => promise)),
+      Promise.allSettled(medicalRequest ? [medicalRequest] : []),
+    ]);
+    // Widened from the `as const` tuple's literal union: the medical request is
+    // not one of its members, and it reports into the same banner.
+    const failed: string[] = results.flatMap((result, index) => {
       const source = sources[index];
       return result.status === 'rejected' && source ? [source[0]] : [];
     });
+
+    const medicalResult = medicalSettled[0];
+    if (medicalResult?.status === 'rejected') failed.push('EMS supplies');
+    setMedicalExpiring(medicalResult?.status === 'fulfilled' ? medicalResult.value.expiring_soon : null);
+
     setFailedSources(failed);
     const value = <T,>(index: number, fallback: T): T => {
       const result = results[index];

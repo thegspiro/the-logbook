@@ -326,7 +326,8 @@ class TestStorefrontAttentionQueue:
                 organization_id=org.id,
                 name="Spring order",
                 status=StoreWindowStatus.CLOSED,
-                closes_at=NOW - timedelta(days=45),
+                closes_at=NOW - timedelta(days=50),
+                closed_at=NOW - timedelta(days=45),
             )
         )
         await db_session.flush()
@@ -351,11 +352,77 @@ class TestStorefrontAttentionQueue:
                 name="Just closed",
                 status=StoreWindowStatus.CLOSED,
                 closes_at=NOW - timedelta(days=2),
+                closed_at=NOW - timedelta(days=2),
             )
         )
         await db_session.flush()
 
         assert "store_unfulfilled_windows" not in await _queue(db_session, admin)
+
+    async def test_dates_a_late_close_from_when_it_actually_closed(self, db_session):
+        """`closed_at`, not `closes_at`.
+
+        A window scheduled to close two months ago but closed today has not
+        stranded anyone yet; dating it from the schedule would file it as
+        60 days stale the moment it closed.
+        """
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+        db_session.add(
+            StoreOrderWindow(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                name="Closed late",
+                status=StoreWindowStatus.CLOSED,
+                closes_at=NOW - timedelta(days=60),
+                closed_at=NOW - timedelta(days=1),
+            )
+        )
+        await db_session.flush()
+
+        assert "store_unfulfilled_windows" not in await _queue(db_session, admin)
+
+    async def test_reports_a_window_that_never_had_a_schedule(self, db_session):
+        """A hand-managed window has no `closes_at` and was never reported."""
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+        db_session.add(
+            StoreOrderWindow(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                name="No schedule",
+                status=StoreWindowStatus.CLOSED,
+                closes_at=None,
+                closed_at=NOW - timedelta(days=40),
+            )
+        )
+        await db_session.flush()
+
+        assert (await _queue(db_session, admin))["store_unfulfilled_windows"].count == 1
+
+    async def test_drops_a_cancelled_order_from_the_verification_queue(
+        self, db_session
+    ):
+        """`cancel_order` leaves `payment_status` alone.
+
+        So an order cancelled while awaiting verification keeps the flag for
+        ever, and recording a payment against a cancelled order is refused —
+        the row would advertise work nobody can do.
+        """
+        org = await _org(db_session)
+        admin = await _admin(db_session, org)
+        await _order(
+            db_session,
+            org,
+            admin,
+            status=StoreOrderStatus.CANCELLED,
+            payment_status=StorePaymentStatus.PENDING_VERIFICATION,
+            reported_at=NOW - timedelta(days=5),
+        )
+
+        assert "store_pending_verification" not in await _queue(db_session, admin)
+        value, _ = await _metric(db_session, admin, "pending_verification")
+        assert value == "0"
 
     async def test_says_nothing_when_the_store_is_running_cleanly(self, db_session):
         org = await _org(db_session)

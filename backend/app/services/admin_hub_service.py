@@ -1294,6 +1294,23 @@ _UNSETTLED_PAYMENT_EVENTS = (
 )
 
 
+def _store_pending_verification_criteria(organization_id: str):
+    """Orders whose reported payment nobody has checked yet.
+
+    Cancelled orders are excluded, and that exclusion is load-bearing rather
+    than tidy: `cancel_order` leaves `payment_status` untouched, so an order
+    cancelled while awaiting verification keeps the flag for ever — and
+    recording a payment against a cancelled order is refused, so the work this
+    would advertise cannot be done. Without it this is a queue row that never
+    clears and never can.
+    """
+    return (
+        StoreOrder.organization_id == organization_id,
+        StoreOrder.status != StoreOrderStatus.CANCELLED,
+        StoreOrder.payment_status == StorePaymentStatus.PENDING_VERIFICATION,
+    )
+
+
 def _store_open_orders_criteria(organization_id: str):
     return (
         StoreOrder.organization_id == organization_id,
@@ -1374,8 +1391,7 @@ async def _store_pending_verification(ctx: MetricContext) -> tuple[str, str]:
     count = await _scalar(
         ctx.db,
         select(func.count(StoreOrder.id)).where(
-            StoreOrder.organization_id == ctx.organization_id,
-            StoreOrder.payment_status == StorePaymentStatus.PENDING_VERIFICATION,
+            *_store_pending_verification_criteria(ctx.organization_id)
         ),
     )
     return _fmt_int(count), "member says they paid"
@@ -1418,8 +1434,7 @@ async def _storefront_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     verify_count, oldest_reported = await _count_and_oldest(
         ctx.db,
         StoreOrder,
-        StoreOrder.organization_id == ctx.organization_id,
-        StoreOrder.payment_status == StorePaymentStatus.PENDING_VERIFICATION,
+        *_store_pending_verification_criteria(ctx.organization_id),
         date_column=StoreOrder.payment_reported_at,
     )
     if verify_count:
@@ -1483,15 +1498,23 @@ async def _storefront_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
 
     # A window that closed and was never fulfilled is an order period nobody
     # finished handing out — the members have paid and are waiting.
+    #
+    # Measured from `closed_at`, the moment it actually closed, not `closes_at`,
+    # the moment it was scheduled to. `close_window` stamps `closed_at` and is
+    # the only writer of the CLOSED status, so the two differ whenever a window
+    # is closed late — and a window scheduled two months ago but closed today
+    # would otherwise arrive already 60 days stale. It also picks up the case
+    # `closes_at` missed entirely: a window managed by hand, with no schedule
+    # on it at all, was never reported however long it sat.
     now = datetime.now(timezone.utc)
     stale_count, oldest_close = await _count_and_oldest(
         ctx.db,
         StoreOrderWindow,
         StoreOrderWindow.organization_id == ctx.organization_id,
         StoreOrderWindow.status == StoreWindowStatus.CLOSED,
-        StoreOrderWindow.closes_at.isnot(None),
-        StoreOrderWindow.closes_at < now - timedelta(days=30),
-        date_column=StoreOrderWindow.closes_at,
+        StoreOrderWindow.closed_at.isnot(None),
+        StoreOrderWindow.closed_at < now - timedelta(days=30),
+        date_column=StoreOrderWindow.closed_at,
     )
     if stale_count:
         age = _age_days(oldest_close, ctx.today)
