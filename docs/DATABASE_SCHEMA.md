@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**263 tables · 4459 columns · 848 foreign keys**
+**264 tables · 4472 columns · 852 foreign keys**
 
 ---
 
@@ -361,6 +361,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`locations`](#locations) | `Location` | 21 | Location model for managing physical spaces |
 
+### Mcp_Service_Key
+
+<sub>`app/models/mcp_service_key.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`mcp_service_keys`](#mcp_service_keys) | `McpServiceKey` | 11 |  |
+
 ### Medical Screening
 
 <sub>`app/models/medical_screening.py`</sub>
@@ -387,7 +395,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 12 | Meeting Action Item model |
+| [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 14 | Meeting Action Item model |
 | [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 10 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 20 | Meeting model |
 
@@ -5551,6 +5559,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_locations_facility_room_id` (`facility_room_id`)
 
+## Mcp_Service_Key
+
+### `mcp_service_keys`
+
+**McpServiceKey** · `app/models/mcp_service_key.py`
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `key_hash` | VARCHAR(64) | no | UQ, UQ-IDX |  |  |
+| `key_prefix` | VARCHAR(24) | no |  |  |  |
+| `name` | VARCHAR(100) | no |  |  |  |
+| `expires_at` | DATETIME | yes |  |  |  |
+| `last_used_at` | DATETIME | yes |  |  |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
+| `revoked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `ix_mcp_service_keys_key_hash` (`key_hash`)
+- `ix_mcp_service_keys_organization_id` (`organization_id`)
+
 ## Medical Screening
 
 ### `screening_records`
@@ -5769,6 +5802,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `priority` | INTEGER | yes |  | `0` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `completion_notes` | TEXT | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `source` | VARCHAR(32) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -9282,7 +9317,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (314 references)
+### → `users` (317 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9460,7 +9495,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `maintenance_records` | `performed_by` | NO ACTION | yes |
 | `manual_ballot_attestations` | `attested_by` | SET NULL | yes |
 | `manual_ballot_batches` | `recorded_by` | SET NULL | yes |
+| `mcp_service_keys` | `created_by` | SET NULL | yes |
+| `mcp_service_keys` | `revoked_by` | SET NULL | yes |
 | `meeting_action_items` | `assigned_to` | NO ACTION | yes |
+| `meeting_action_items` | `created_by` | SET NULL | yes |
 | `meeting_attendees` | `user_id` | CASCADE | no |
 | `meeting_attendees` | `waiver_granted_by` | NO ACTION | yes |
 | `meeting_minutes` | `approved_by` | NO ACTION | yes |
@@ -9601,7 +9639,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (209 references)
+### → `organizations` (210 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9722,6 +9760,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `maintenance_records` | `organization_id` | CASCADE | no |
 | `manual_ballot_attestations` | `organization_id` | CASCADE | no |
 | `manual_ballot_batches` | `organization_id` | CASCADE | no |
+| `mcp_service_keys` | `organization_id` | CASCADE | no |
 | `meeting_action_items` | `organization_id` | CASCADE | no |
 | `meeting_attendees` | `organization_id` | CASCADE | no |
 | `meeting_minutes` | `organization_id` | CASCADE | no |

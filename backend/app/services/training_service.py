@@ -938,6 +938,44 @@ class TrainingService:
         """
         Get progress for all requirements applicable to a user
         """
+        applicable = await self.get_applicable_requirements(
+            user_id, organization_id, year=year
+        )
+        return await self.get_requirements_progress_for(
+            user_id, organization_id, applicable
+        )
+
+    async def get_requirements_progress_for(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        requirements: List[TrainingRequirement],
+    ) -> List[RequirementProgress]:
+        """Progress against the given requirements, waivers fetched once.
+
+        Callers that page a long list resolve the applicable requirements
+        with ``get_applicable_requirements`` and hand over one page, so the
+        per-requirement progress checks are bounded by the page size.
+        """
+        if not requirements:
+            return []
+        user_waivers = await fetch_user_waivers(
+            self.db,
+            str(organization_id),
+            str(user_id),
+        )
+        progress_list = []
+        for req in requirements:
+            progress = await self.check_requirement_progress(
+                user_id, req.id, organization_id, waivers=user_waivers
+            )
+            progress_list.append(progress)
+        return progress_list
+
+    async def get_applicable_requirements(
+        self, user_id: UUID, organization_id: UUID, year: Optional[int] = None
+    ) -> List[TrainingRequirement]:
+        """The active requirements that apply to a user, in a stable order."""
         # NOTE: `year` defaults to None → the year filter below is skipped (all
         # years). A prior no-op `year or <current year>` here was dead code;
         # whether this should default to the current year is a compliance-
@@ -958,11 +996,13 @@ class TrainingService:
 
         user_role_ids = [str(role.id) for role in user.roles]
 
-        # Get all active requirements
+        # Get all active requirements. Ordered so a paged caller sees a
+        # stable sequence across calls.
         query = (
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == str(organization_id))
             .where(TrainingRequirement.active.is_(True))
+            .order_by(TrainingRequirement.name, TrainingRequirement.id)
         )
 
         if year:
@@ -991,22 +1031,7 @@ class TrainingService:
                 if any(role_id in user_role_ids for role_id in req.required_roles):
                     applicable_requirements.append(req)
 
-        # Pre-fetch waivers once for all requirement checks
-        user_waivers = await fetch_user_waivers(
-            self.db,
-            str(organization_id),
-            str(user_id),
-        )
-
-        # Get progress for each requirement
-        progress_list = []
-        for req in applicable_requirements:
-            progress = await self.check_requirement_progress(
-                user_id, req.id, organization_id, waivers=user_waivers
-            )
-            progress_list.append(progress)
-
-        return progress_list
+        return applicable_requirements
 
     async def get_expiring_certifications(
         self,

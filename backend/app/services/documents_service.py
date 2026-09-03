@@ -20,6 +20,7 @@ from sqlalchemy import case
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
 from app.core.permissions import (
@@ -953,6 +954,8 @@ class DocumentsService:
         skip: int = 0,
         limit: int = 100,
         accessible_folder_ids: Optional[Set[str]] = None,
+        defer_content: bool = False,
+        human_authored_only: bool = False,
     ) -> Tuple[List[Document], int]:
         """Get documents with filtering and pagination.
 
@@ -960,8 +963,19 @@ class DocumentsService:
         result is restricted to documents in those folders (or with no folder),
         so an unfiltered listing can't leak documents from restricted folders.
         Pass None to impose no folder restriction (leadership).
+
+        *defer_content* leaves ``content_html`` (a LONGTEXT) unloaded, for a
+        caller that renders metadata only; touching the attribute afterwards
+        would lazy-load it, which an async caller must not do.
+
+        *human_authored_only* excludes every document the system generated
+        (``source_type`` set — property-return reports, filed minutes and
+        the like), whose bodies carry structured member data a text scrub
+        cannot recognise.
         """
         query = select(Document).where(Document.organization_id == str(organization_id))
+        if human_authored_only:
+            query = query.where(Document.source_type.is_(None))
 
         if folder_id:
             query = query.where(Document.folder_id == str(folder_id))
@@ -989,7 +1003,15 @@ class DocumentsService:
         total = total_result.scalar()
 
         # Paginated results
-        query = query.order_by(Document.updated_at.desc()).offset(skip).limit(limit)
+        # The id breaks ties between documents updated at one instant, so
+        # an offset page never repeats or skips one.
+        query = (
+            query.order_by(Document.updated_at.desc(), Document.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        if defer_content:
+            query = query.options(defer(Document.content_html))
         result = await self.db.execute(query)
         documents = result.scalars().all()
 

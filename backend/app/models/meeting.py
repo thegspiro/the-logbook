@@ -236,6 +236,15 @@ class MeetingActionItem(Base):
     completed_at = Column(DateTime(timezone=True))
     completion_notes = Column(Text)
 
+    # Provenance. ``created_by`` is who the item is attributed to and
+    # ``source`` names an automated path that created it ("mcp" for the
+    # Claude connection); both are NULL for an item a person entered in the
+    # app, so existing rows need no backfill.
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    source = Column(String(32), nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -245,6 +254,7 @@ class MeetingActionItem(Base):
     # Relationships
     meeting = relationship("Meeting", back_populates="action_items")
     assignee = relationship("User", foreign_keys=[assigned_to])
+    creator = relationship("User", foreign_keys=[created_by])
 
     __table_args__ = (
         Index("idx_action_items_meeting", "meeting_id"),

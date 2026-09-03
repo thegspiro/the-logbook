@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import IntegrationsPage from './IntegrationsPage';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
 
 // Mock the auth store
 const mockCheckPermission = vi.fn().mockReturnValue(true);
@@ -22,6 +23,9 @@ const mockSalesforceReadiness = vi.fn();
 const mockSalesforcePreviewMembers = vi.fn();
 const mockGetSalesforceOAuthUrl = vi.fn().mockReturnValue('/api/v1/integrations/salesforce/oauth/authorize');
 const mockGetCalcomBookings = vi.fn();
+const mockGetMcpStatus = vi.fn();
+const mockCreateMcpKey = vi.fn();
+const mockRevokeMcpKey = vi.fn();
 
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -38,6 +42,9 @@ vi.mock('../services/api', () => ({
     salesforcePreviewMembers: (...args: unknown[]) => mockSalesforcePreviewMembers(...args) as unknown,
     getSalesforceOAuthUrl: (...args: unknown[]) => mockGetSalesforceOAuthUrl(...args) as unknown,
     getCalcomBookings: (...args: unknown[]) => mockGetCalcomBookings(...args) as unknown,
+    getMcpStatus: (...args: unknown[]) => mockGetMcpStatus(...args) as unknown,
+    createMcpKey: (...args: unknown[]) => mockCreateMcpKey(...args) as unknown,
+    revokeMcpKey: (...args: unknown[]) => mockRevokeMcpKey(...args) as unknown,
   },
 }));
 
@@ -55,7 +62,9 @@ vi.mock('react-hot-toast', () => ({
 const renderPage = () =>
   render(
     <MemoryRouter>
-      <IntegrationsPage />
+      <ConfirmProvider>
+        <IntegrationsPage />
+      </ConfirmProvider>
     </MemoryRouter>
   );
 
@@ -532,6 +541,210 @@ describe('IntegrationsPage', () => {
       // only ever produced an error toast.
       expect(within(card).queryByText('Test')).not.toBeInTheDocument();
       expect(within(card).queryByText('Connected')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Claude (MCP)', () => {
+    const mcpAvailable = {
+      id: 'mcp-1',
+      organization_id: 'org-1',
+      integration_type: 'claude-mcp',
+      name: 'Claude (MCP)',
+      description: 'Let Claude answer questions about the department',
+      category: 'AI Assistants',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const mcpConnected = {
+      ...mcpAvailable,
+      status: 'connected' as const,
+      enabled: true,
+      config: {
+        access_mode: 'read_write',
+        expose_finance: true,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+      },
+    };
+
+    beforeEach(() => {
+      mockGetMcpStatus.mockReset();
+      mockGetMcpStatus.mockResolvedValue({
+        enabled: true,
+        endpoint_path: '/api/mcp',
+        access_mode: 'read_write',
+        expose_finance: true,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+        active_key: null,
+      });
+    });
+
+    it('connects with the defaults: read-only and nothing extra shared', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpAvailable]);
+      mockConnectIntegration.mockResolvedValue(mcpConnected);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      await user.click(within(card).getByText('Connect'));
+      expect(screen.getByLabelText('Access')).toHaveValue('read_only');
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('mcp-1', {
+        access_mode: 'read_only',
+        expose_finance: false,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+      });
+    });
+
+    it('sends the chosen access mode and switches', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpAvailable]);
+      mockConnectIntegration.mockResolvedValue(mcpConnected);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(within(screen.getByTestId('integration-card-claude-mcp')).getByText('Connect'));
+      await user.selectOptions(screen.getByLabelText('Access'), 'read_write');
+      await user.click(screen.getByLabelText(/Share finance totals/));
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('mcp-1', {
+        access_mode: 'read_write',
+        expose_finance: true,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+      });
+    });
+
+    it('shows the service key button to a delegated key manager without integrations.manage', async () => {
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-claude-mcp-delegated');
+      expect(mockGetIntegrations).not.toHaveBeenCalled();
+      expect(within(card).getByText('Service key')).toBeInTheDocument();
+      expect(within(card).queryByText('Disconnect')).not.toBeInTheDocument();
+    });
+
+    it('reaches the service key panel when the integrations list is forbidden', async () => {
+      const user = userEvent.setup();
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
+      mockGetIntegrations.mockRejectedValue(new Error('403'));
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-claude-mcp-delegated');
+      expect(mockGetIntegrations).not.toHaveBeenCalled();
+      expect(screen.queryByText('No integrations match your search')).not.toBeInTheDocument();
+      await user.click(within(card).getByText('Service key'));
+      expect(await screen.findByTestId('mcp-key-panel')).toBeInTheDocument();
+    });
+
+    it('offers a retry when the delegated status request fails', async () => {
+      const user = userEvent.setup();
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
+      mockGetMcpStatus.mockRejectedValueOnce(new Error('offline'));
+
+      renderPage();
+      const alert = await screen.findByTestId('mcp-delegated-error');
+      expect(mockGetIntegrations).not.toHaveBeenCalled();
+      expect(screen.queryByText('No integrations match your search')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('integration-card-claude-mcp-delegated')).not.toBeInTheDocument();
+
+      await user.click(within(alert).getByText('Try again'));
+      expect(await screen.findByTestId('integration-card-claude-mcp-delegated')).toBeInTheDocument();
+      expect(screen.queryByTestId('mcp-delegated-error')).not.toBeInTheDocument();
+      expect(mockGetMcpStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows no delegated card when the integration is not connected', async () => {
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
+      mockGetIntegrations.mockRejectedValue(new Error('403'));
+      mockGetMcpStatus.mockResolvedValue({
+        enabled: false,
+        endpoint_path: '/api/mcp',
+        access_mode: 'read_only',
+        expose_finance: false,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+        active_key: null,
+      });
+
+      renderPage();
+      await screen.findByText('No integrations match your search');
+      expect(screen.queryByTestId('integration-card-claude-mcp-delegated')).not.toBeInTheDocument();
+    });
+
+    it('holds the Service key toggle while the panel is issuing a key', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpConnected]);
+      let finish: (value: unknown) => void = () => undefined;
+      mockCreateMcpKey.mockReturnValue(
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+      );
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      const toggle = within(card).getByRole('button', { name: /Service key/ });
+      await user.click(toggle);
+      await screen.findByTestId('mcp-issue-key');
+      await user.click(screen.getByTestId('mcp-issue-key'));
+
+      // Closing the panel now would unmount the only place the one-time
+      // plaintext can be rendered; so would disconnecting the integration.
+      expect(toggle).toBeDisabled();
+      await user.click(toggle);
+      expect(screen.getByTestId('mcp-key-panel')).toBeInTheDocument();
+      const disconnect = within(card).getByRole('button', { name: /Disconnect/ });
+      expect(disconnect).toBeDisabled();
+      await user.click(disconnect);
+      expect(mockDisconnectIntegration).not.toHaveBeenCalled();
+
+      finish({
+        key: {
+          id: 'key-1',
+          name: 'Claude',
+          key_prefix: 'logbook_mcp_abcdefgh',
+          expires_at: null,
+          last_used_at: null,
+          revoked_at: null,
+          created_at: '2026-09-03T10:00:00Z',
+          created_by: 'admin-1',
+          is_active: true,
+        },
+        plaintext: 'logbook_mcp_abcdefgh_secret',
+        revoked: [],
+        endpoint_path: '/api/mcp',
+      });
+      await screen.findByTestId('mcp-issued-key');
+      // The panel reloads its status after issuing; the hold lifts when that
+      // request settles, not when the plaintext appears.
+      await waitFor(() => expect(toggle).toBeEnabled());
+      expect(within(card).getByRole('button', { name: /Disconnect/ })).toBeEnabled();
+    });
+
+    it('opens the service key panel from a connected card', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpConnected]);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      await user.click(within(card).getByText('Service key'));
+      expect(await screen.findByTestId('mcp-key-panel')).toBeInTheDocument();
+      expect(mockGetMcpStatus).toHaveBeenCalled();
+      const filters = screen.getByRole('group', { name: 'Filter by category' });
+      expect(within(filters).getByText('AI Assistants')).toBeInTheDocument();
     });
   });
 });

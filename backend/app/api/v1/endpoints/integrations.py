@@ -12,9 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
+from app.api.v1.endpoints.mcp_keys import require_audit_entry
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import sanitize_connector_error
+from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
+from app.mcp.keys import McpKeyService
 from app.models.integration import Integration
 from app.models.user import User
 from app.schemas.integration import (
@@ -188,6 +192,23 @@ INTEGRATION_CATALOG = [
             "payment is ever taken on this site."
         ),
         "category": "Payments",
+        "status": "available",
+    },
+    {
+        "integration_type": "claude-mcp",
+        "name": "Claude (MCP)",
+        "description": (
+            "Let Claude answer questions about the department over the Model "
+            "Context Protocol: rosters, schedules, training and certification "
+            "status, inventory, apparatus, facilities, published minutes and "
+            "documents. Member records never carry personal information — "
+            "phone numbers, email, home addresses, dates of birth, emergency "
+            "contacts, medical results — whatever the settings, and free text "
+            "is scrubbed of phone numbers and email addresses; other details "
+            "typed into published content pass through. Off until an IT "
+            "administrator connects it and issues a service key."
+        ),
+        "category": "AI Assistants",
         "status": "available",
     },
     {
@@ -389,6 +410,19 @@ def _validate_urls_in_config(config: dict[str, Any]) -> None:
                 )
 
 
+def _apply_type_specific_flags(integration: Integration) -> None:
+    """Derive per-type row flags from the freshly merged config.
+
+    The Claude MCP add-on is only a PHI surface when the department turns
+    medical-screening status on, so the ``contains_phi`` badge follows that
+    switch rather than being fixed in the catalog.
+    """
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        integration.contains_phi = bool(
+            (integration.config or {}).get("expose_medical_screening")
+        )
+
+
 async def ensure_catalog(db: AsyncSession, organization_id: str) -> None:
     """Ensure all catalog integrations exist for this org."""
     result = await db.execute(
@@ -539,6 +573,7 @@ async def connect_integration(
     integration.status = "connected"
     integration.enabled = True
     integration.config = {**(integration.config or {}), **public_config}
+    _apply_type_specific_flags(integration)
     # Store secrets encrypted
     for key, value in secrets.items():
         integration.set_secret(key, value)
@@ -568,6 +603,11 @@ async def connect_integration(
             "integration_name": integration.name,
             "integration_id": integration.id,
         },
+        # Attribution columns, not only payload keys: the audit endpoints
+        # filter on AuditLog.organization_id, so an entry stamped only inside
+        # event_data never shows in the department's trail.
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
     )
 
     return _integration_to_dict(integration)
@@ -595,6 +635,33 @@ async def disconnect_integration(
 
     integration.status = "available"
     integration.enabled = False
+    # A service key must not outlive the connection it was issued for: left
+    # in place it would work again the moment the integration was
+    # reconnected, before anybody chose to issue a key.
+    revoked_keys = []
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        revoked_keys = await McpKeyService(db).revoke_all(
+            str(current_user.organization_id), revoked_by=str(current_user.id)
+        )
+    for key in revoked_keys:
+        entry = await log_audit_event(
+            db,
+            "mcp.key_revoked",
+            "integrations",
+            "warning",
+            {
+                "key_id": key.id,
+                "key_prefix": key.key_prefix,
+                "name": key.name,
+                "reason": "integration_disconnected",
+            },
+            user_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
+            ip_address=get_client_ip(request),
+        )
+        # Same rule as the key endpoints: a revocation nobody can trace is
+        # refused, and the whole disconnect rolls back with it.
+        await require_audit_entry(db, entry, "revoked on disconnect")
     await db.commit()
 
     # Audit log
@@ -610,6 +677,11 @@ async def disconnect_integration(
             "integration_name": integration.name,
             "integration_id": integration.id,
         },
+        # Attribution columns, not only payload keys: the audit endpoints
+        # filter on AuditLog.organization_id, so an entry stamped only inside
+        # event_data never shows in the department's trail.
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
     )
 
     return {"status": "disconnected"}
@@ -653,6 +725,7 @@ async def update_integration(
     public_config, secrets = _extract_secrets(config)
 
     integration.config = {**(integration.config or {}), **public_config}
+    _apply_type_specific_flags(integration)
     for key, value in secrets.items():
         integration.set_secret(key, value)
     for key in secrets_to_clear:
@@ -660,11 +733,9 @@ async def update_integration(
     if clear_salesforce_refresh_token:
         integration.clear_secret("refresh_token")
         integration.clear_secret("access_token")
-    await db.commit()
-    await db.refresh(integration)
 
-    # Audit log
-    await log_audit_event(
+    # Audit log, in the same transaction as the change.
+    entry = await log_audit_event(
         db,
         "integration.updated",
         "integrations",
@@ -676,9 +747,51 @@ async def update_integration(
             "integration_name": integration.name,
             "integration_id": integration.id,
         },
+        # Attribution columns, not only payload keys: the audit endpoints
+        # filter on AuditLog.organization_id, so an entry stamped only inside
+        # event_data never shows in the department's trail.
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
     )
+    # The Claude (MCP) configuration is what a live service key may read
+    # and write; widening it without a record is refused, the way a key
+    # change is. Other integrations keep the best-effort audit.
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        await require_audit_entry(db, entry, "updated", subject="configuration")
+    await db.commit()
+    await db.refresh(integration)
 
     return _integration_to_dict(integration)
+
+
+async def _test_mcp_connection(
+    db: AsyncSession, integration: Integration
+) -> dict[str, Any]:
+    """There is nothing external to reach; report what a client would find."""
+    if not integration.enabled or integration.status != "connected":
+        return {"success": False, "message": "Connect the integration first"}
+    active = await McpKeyService(db).active_keys(integration.organization_id)
+    if not active:
+        return {
+            "success": False,
+            "message": (
+                "Connected, but no service key has been issued yet — an IT "
+                "administrator can issue one from the Service key panel."
+            ),
+        }
+    key = active[0]
+    expiry = (
+        f"expires {key.expires_at.date().isoformat()}"
+        if key.expires_at
+        else "no expiry"
+    )
+    return {
+        "success": True,
+        "message": (
+            f"MCP endpoint ready at {MCP_MOUNT_PATH}; active key "
+            f"{key.key_prefix}… ({expiry})."
+        ),
+    }
 
 
 @router.post("/{integration_id}/test-connection")
@@ -700,6 +813,9 @@ async def test_connection(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
+
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        return await _test_mcp_connection(db, integration)
 
     # Delegate to the appropriate service
     from app.services.integration_services import test_integration_connection

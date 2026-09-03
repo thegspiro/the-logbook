@@ -555,6 +555,15 @@ INTEGRATIONS_MANAGE = Permission(
     "Manage third-party integrations",
     PermissionCategory.INTEGRATIONS,
 )
+# Deliberately not part of ``integrations.manage``: the MCP service key acts
+# for the whole department, so issuing one is an IT-administrator decision.
+# Only the wildcard-holding ``it_manager`` position has it by default; a chief
+# who wants to delegate it grants it to a position explicitly.
+INTEGRATIONS_MCP_KEYS = Permission(
+    "integrations.mcp_keys",
+    "Issue and revoke Claude MCP service keys",
+    PermissionCategory.INTEGRATIONS,
+)
 
 # Notifications
 NOTIFICATIONS_VIEW = Permission(
@@ -743,6 +752,7 @@ ALL_PERMISSIONS: list[Permission] = [
     ANALYTICS_VIEW,
     # Integrations
     INTEGRATIONS_MANAGE,
+    INTEGRATIONS_MCP_KEYS,
     # Notifications
     NOTIFICATIONS_VIEW,
     NOTIFICATIONS_MANAGE,

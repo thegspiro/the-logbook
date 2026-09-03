@@ -68,6 +68,36 @@ here.
 | **No knowledge-test engine (officer-entered scores only)**             | Open (feature)       | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Skills-test completion does not enforce requirement `max_attempts`** | ✅ Resolved          | `assert_attempts_remaining` (`app/services/skills_testing_service.py`) now guards the cap at both ends of the flow: creating an official test — so an examiner is refused before running an evaluation that could not count — and, **since 2026-08-08, validating one** rather than completing it. Opening the examiner role to every member means completion is no longer the moment a result counts, so the cap is spent where the credit is granted; a submission that is never validated never costs the candidate a chance. An attempt is a completed, official, **validated**, non-voided test against that requirement, pass or fail; voided results and unvalidated submissions do not consume a chance, and practice attempts never do. A requirement already completed, verified, or waived is exempt, matching the knowledge-test path and keeping recertification testing possible. |
 
+## Claude (MCP) — claude.ai Custom Connectors Need an OAuth Server (2026-09-03)
+
+The Claude (MCP) integration authenticates MCP clients with a static bearer
+service key. Claude Code (`claude mcp add --transport http … --header
+"Authorization: Bearer …"`) and the Messages API connector
+(`authorization_token`) accept that directly. The claude.ai custom-connector
+dialog — and Claude Desktop's remote-connector flow — authenticate remote
+servers with OAuth 2.1 plus dynamic client registration instead, and The
+Logbook is currently an OAuth _client_ (Google and Microsoft sign-in), not
+an authorization server: there is no `/authorize`, `/token` or client
+registration endpoint for a connector to talk to.
+
+Until that is built, those clients connect through a local stdio-to-HTTP
+bridge (such as `mcp-remote`) that passes the `Authorization` header. Adding
+the authorization server is a separate change set: it needs a consent screen
+on top of the existing login, token issuance keyed to the same service-key
+gating, protected-resource metadata under `/.well-known/`, and the
+`mcp` SDK's `TokenVerifier` hook in place of the bearer check in
+`app/mcp/transport.py`.
+
+Two smaller ones, both deliberate:
+
+- **Department contact details are withheld along with personal ones.** The
+  redaction boundary matches field _names_ so that a test can prove it
+  holds for every tool at once; a station's public phone number is stripped
+  the same as a member's. Locations and facilities are still listed by name,
+  city and state.
+- **Tool results are point-in-time.** The server exposes no resources or
+  subscriptions; a client re-asks to refresh.
+
 ## ONBOARD-1 — The Setup Wizard's Per-Module Configuration Step Is Inert (2026-08-24)
 
 Fifteen of the setup wizard's module cards point at a per-module

@@ -1093,6 +1093,38 @@ export interface IntegrationStatus {
   enabled: boolean;
 }
 
+// ---- Claude (MCP) service keys ------------------------------------------
+// The plaintext key appears exactly once, in the create response; every
+// other shape carries only the display prefix.
+export interface McpServiceKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string | null;
+  created_by: string | null;
+  is_active: boolean;
+}
+
+export interface McpStatus {
+  enabled: boolean;
+  endpoint_path: string;
+  access_mode: 'read_only' | 'read_write';
+  expose_finance: boolean;
+  expose_medical_screening: boolean;
+  expose_full_schedule: boolean;
+  active_key: McpServiceKey | null;
+}
+
+export interface McpKeyCreateResult {
+  key: McpServiceKey;
+  plaintext: string;
+  revoked: McpServiceKey[];
+  endpoint_path: string;
+}
+
 export const integrationsService = {
   async getIntegrations(): Promise<IntegrationConfig[]> {
     const response = await api.get<IntegrationConfig[]>('/integrations');
@@ -1177,6 +1209,30 @@ export const integrationsService = {
   getSalesforceOAuthUrl(): string {
     const baseUrl = api.defaults.baseURL || '';
     return `${baseUrl}/integrations/salesforce/oauth/authorize`;
+  },
+
+  async getMcpStatus(): Promise<McpStatus> {
+    const response = await api.get<McpStatus>('/integrations/claude-mcp/status');
+    return response.data;
+  },
+
+  async listMcpKeys(): Promise<McpServiceKey[]> {
+    const response = await api.get<{ keys: McpServiceKey[] }>('/integrations/claude-mcp/keys');
+    return asArray(response.data.keys);
+  },
+
+  // ``expiresInDays`` null issues a lifetime key.
+  async createMcpKey(name: string, expiresInDays: number | null): Promise<McpKeyCreateResult> {
+    const response = await api.post<McpKeyCreateResult>('/integrations/claude-mcp/keys', {
+      name,
+      expires_in_days: expiresInDays,
+    });
+    return response.data;
+  },
+
+  async revokeMcpKey(keyId: string): Promise<McpServiceKey> {
+    const response = await api.delete<{ key: McpServiceKey }>(`/integrations/claude-mcp/keys/${keyId}`);
+    return response.data.key;
   },
 };
 
