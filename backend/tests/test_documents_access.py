@@ -1861,6 +1861,101 @@ class TestDeleteFolderRefusesInaccessibleDescendant:
 
 
 @pytest.mark.integration
+class TestDeleteFolderRefusesSystemFolder:
+    """FAC-22 (Codex, on top of FAC-16/20/21): FAC-16 corrected
+    ``DocumentFolder.children``'s self-referential relationship so
+    ``cascade="all, delete-orphan"`` genuinely deletes a folder's subtree
+    instead of merely orphaning it (nulling descendants' ``parent_id``).
+    Before that fix, ``delete_folder`` never checking ``is_system`` was
+    latent -- the pre-fix cascade didn't destroy anything, it just detached
+    the descendants. After FAC-16, the same missing check lets any
+    ``documents.manage`` holder (an org-wide, broadly-held grant) delete a
+    system root such as 'Member Files' outright and cascade-destroy every
+    member's subfolder and document beneath it in one request --
+    unrecoverable, organization-wide data loss, and a direct contradiction
+    of the documented invariant that system folders cannot be deleted
+    (``docs/changelog/2026-02.md``, ``docs/TROUBLESHOOTING.md``: "System
+    folders (the 7 default folders) cannot be deleted").
+    """
+
+    def _caller(self, org_id):
+        user = _user(uid="caller-1", roles=[(["documents.manage"], "admin")])
+        user.organization_id = org_id
+        user.username = "caller"
+        return user
+
+    async def _org_with_system_folder_and_contents(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        system_root = DocumentFolder(
+            organization_id=org.id, name="Member Files", is_system=True
+        )
+        db_session.add(system_root)
+        await db_session.flush()
+        member_folder = DocumentFolder(
+            organization_id=org.id,
+            name="Doe, John",
+            parent_id=system_root.id,
+            is_system=False,
+        )
+        db_session.add(member_folder)
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id,
+            folder_id=member_folder.id,
+            name="Certification",
+            file_name="cert.pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+        return org, system_root, member_folder, document
+
+    async def test_deleting_a_system_folder_is_refused_and_nothing_is_deleted(
+        self, db_session
+    ):
+        org, system_root, member_folder, document = (
+            await self._org_with_system_folder_and_contents(
+                db_session, "fcvfd-system-folder-1"
+            )
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_folder(system_root.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 403
+
+        # The system root, its descendant, and the document beneath it must
+        # all survive -- the cascade must never start.
+        for model, row_id in (
+            (DocumentFolder, system_root.id),
+            (DocumentFolder, member_folder.id),
+            (Document, document.id),
+        ):
+            result = await db_session.execute(select(model).where(model.id == row_id))
+            assert result.scalar_one_or_none() is not None
+
+    async def test_a_non_system_folder_still_deletes_normally(self, db_session):
+        # Positive control: the new check must not block the overwhelmingly
+        # common case of deleting an ordinary, non-system folder.
+        org, _system_root, member_folder, document = (
+            await self._org_with_system_folder_and_contents(
+                db_session, "fcvfd-system-folder-2"
+            )
+        )
+        caller = self._caller(org.id)
+
+        await delete_folder(member_folder.id, db=db_session, current_user=caller)
+
+        for model, row_id in (
+            (DocumentFolder, member_folder.id),
+            (Document, document.id),
+        ):
+            result = await db_session.execute(select(model).where(model.id == row_id))
+            assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.integration
 class TestFolderAndDocumentAuditLogging:
     """DOC-27: folder create/update/delete and a document metadata edit had
     no audit trail at all -- unlike document_uploaded/downloaded/deleted,

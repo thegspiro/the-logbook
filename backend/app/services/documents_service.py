@@ -472,6 +472,19 @@ class DocumentsService:
         if not folder:
             return False
 
+        # FAC-22 (Codex): FAC-16 corrected the self-referential `children`
+        # relationship so `cascade="all, delete-orphan"` genuinely deletes a
+        # folder's subtree instead of merely orphaning it (nulling
+        # descendants' parent_id). Before that fix, an unchecked is_system
+        # here was latent -- the delete didn't destroy anything. Now it does,
+        # so a documents.manage holder (org-wide, broadly held) could delete
+        # a system root like "Member Files" outright and cascade-destroy
+        # every member's subfolder and document beneath it. Documented as
+        # never possible (docs/TROUBLESHOOTING.md, docs/changelog/2026-02.md)
+        # but never actually enforced anywhere in this service.
+        if folder.is_system:
+            raise PermissionError("Cannot delete a system folder")
+
         # Walk the folder subtree (this folder + all descendants via parent_id)
         # to collect backing file paths before the cascade delete removes the
         # document rows.
