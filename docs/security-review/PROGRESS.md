@@ -16,8 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 12 (Facilities) is fully closed; feature 13 (Apparatus & NFC)
-is starting.
+**#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
+Apparatus & NFC, pass 3. AP-8 fixed: `CheckTemplateCompartment.children` had
+the same inverted self-referential `remote_side` shape FAC-16 found and
+fixed on `DocumentFolder.children` (flagged there as a sibling instance,
+out of scope for Facilities) — reproduced live (three-level fixture,
+delete_compartment's own cascade) before fixing. `TrainingCategory.subcategories`
+has the same shape and remains flagged, out of scope for this feature. Also
+corrected a stale `docs/app-review/apparatus.md` entry (AP2-2) that still
+read OPEN though the code has validated all four FKs since before pass 1.
+Rest of the feature re-verified unchanged against pass 2 (near-zero diff).
+See the log entry below for the full writeup once merged.
 
 ---
 
