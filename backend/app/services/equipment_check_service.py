@@ -650,13 +650,17 @@ class EquipmentCheckService:
         sessions, in both directions (reparent-out-then-delete,
         reparent-in-then-delete) -- see
         ``tests/test_apparatus_check_template_compartment_race.py``.
+
+        Raises ``ValueError`` if the locked subtree turns out to contain a
+        compartment belonging to a different template -- see AP-14 on
+        ``_lock_compartment_subtree`` below.
         """
         compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return False
 
         template_id = str(compartment.template_id)
-        subtree_ids = await self._lock_compartment_subtree(compartment_id)
+        subtree_ids = await self._lock_compartment_subtree(compartment_id, template_id)
         await self.db.execute(
             sa_delete(CheckTemplateCompartment).where(
                 CheckTemplateCompartment.id.in_(subtree_ids)
@@ -666,8 +670,11 @@ class EquipmentCheckService:
         await self.db.commit()
         return True
 
-    async def _lock_compartment_subtree(self, compartment_id: str) -> Set[str]:
-        """AP-12: lock a compartment and every descendant, ``FOR UPDATE``.
+    async def _lock_compartment_subtree(
+        self, compartment_id: str, template_id: str
+    ) -> Set[str]:
+        """AP-12: lock a compartment and every descendant, ``FOR UPDATE``,
+        scoped to ``template_id``.
 
         Walks level by level. Each level's read both filters *and* locks on
         ``parent_compartment_id`` in one atomic statement, so a row is only
@@ -679,23 +686,54 @@ class EquipmentCheckService:
         converges on the subtree as it actually is *now*, not as it was when
         ``delete_compartment`` started.
 
+        AP-14 (Codex, on top of AP-12): this walk must stay inside
+        ``template_id``, or it inherits the exact cross-tenant amplification
+        AP-10 already fixed on the *create* path. ``add_compartment``/
+        ``update_compartment``/``create_template`` all validate a new or
+        changed ``parent_compartment_id`` is same-template and same-org
+        (AP-10) -- but that only prevents a cross-template link from being
+        written *from now on*; it does nothing for a row that was already
+        persisted before that validation shipped (or by any future writer
+        that misses it). Left unscoped, a dangling cross-template
+        ``parent_compartment_id`` would let deleting a compartment in
+        template A reach into -- and permanently destroy, via the bulk
+        delete below -- a compartment (and its items) belonging to template
+        B, in this org or another org entirely. Mirrors ``delete_folder``'s
+        cross-org fail-closed check (``documents_service.py``): any row
+        found outside the owning template aborts the whole delete (raising
+        ``ValueError``, which the endpoint turns into a 400) rather than
+        being silently swept in, or silently excluded and left as an
+        unexplained dangling reference.
+
         A standalone method (mirroring ``documents_service._lock_subtree_folders``)
         so tests can assert on its locking behaviour directly.
         """
         subtree_ids: Set[str] = {compartment_id}
         await self.db.execute(
             select(CheckTemplateCompartment.id)
-            .where(CheckTemplateCompartment.id == compartment_id)
+            .where(
+                CheckTemplateCompartment.id == compartment_id,
+                CheckTemplateCompartment.template_id == template_id,
+            )
             .with_for_update()
         )
         frontier = {compartment_id}
         while frontier:
             result = await self.db.execute(
-                select(CheckTemplateCompartment.id)
+                select(
+                    CheckTemplateCompartment.id, CheckTemplateCompartment.template_id
+                )
                 .where(CheckTemplateCompartment.parent_compartment_id.in_(frontier))
                 .with_for_update()
             )
-            found = {row[0] for row in result.all()}
+            rows = result.all()
+            for row_id, row_template_id in rows:
+                if row_template_id != template_id:
+                    raise ValueError(
+                        "Compartment subtree contains a cross-template "
+                        "reference and cannot be deleted"
+                    )
+            found = {row_id for row_id, _row_template_id in rows}
             new_ids = found - subtree_ids
             subtree_ids |= new_ids
             frontier = new_ids
