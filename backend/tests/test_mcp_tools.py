@@ -445,6 +445,24 @@ class TestAttendeeVisibility:
             )
 
 
+class TestDatetimeParsing:
+    def test_offset_values_are_converted_to_utc(self):
+        from app.mcp.tools._common import parse_datetime
+
+        assert parse_datetime("2026-09-03T09:00:00-04:00", "x") == datetime(
+            2026, 9, 3, 13, tzinfo=timezone.utc
+        )
+        assert parse_datetime("2026-09-03T09:00:00Z", "x") == datetime(
+            2026, 9, 3, 9, tzinfo=timezone.utc
+        )
+        assert parse_datetime("2026-09-03T09:00:00", "x") == datetime(
+            2026, 9, 3, 9, tzinfo=timezone.utc
+        )
+        assert parse_datetime(None, "x") is None
+        with pytest.raises(ValueError, match="ISO-8601"):
+            parse_datetime("yesterday", "x")
+
+
 class TestAudit:
     @pytest.mark.usefixtures("_use_test_session")
     async def test_every_call_writes_an_audit_entry(

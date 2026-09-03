@@ -66,9 +66,11 @@ def register(server: Any) -> None:
     async def get_member_training_summary(
         db: AsyncSession, principal: McpPrincipal, member_id: str
     ) -> dict:
-        """A member's training standing: requirements met versus total,
-        certifications active, expiring and expired, hours this year, and
-        the overall compliance status (green, yellow, red or exempt)."""
+        """A member's training figures: total hours and hours this training
+        year, certifications held, active, expiring within 90 days and
+        expired, and courses completed. This does not compute the green /
+        yellow / red compliance standing; for standing against each
+        requirement use get_member_requirements_progress."""
         stats = await TrainingService(db).get_user_training_stats(
             parse_uuid(member_id, "member_id"), org_uuid(principal)
         )

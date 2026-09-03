@@ -329,6 +329,9 @@ const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal', integra
 const IntegrationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('integrations.manage');
+  // A delegated key manager holds the key permission alongside the screen's
+  // own gate, not necessarily integrations.manage; the key panel is theirs too.
+  const canIssueKeys = checkPermission('integrations.mcp_keys');
   const location = useLocation();
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -1464,6 +1467,17 @@ const IntegrationsPage: React.FC = () => {
                   ))}
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
+                  {integration.status === ConnectionStatus.CONNECTED &&
+                    integration.integration_type === 'claude-mcp' &&
+                    (canManage || canIssueKeys) && (
+                      <button
+                        onClick={() => setShowMcpPanel(!showMcpPanel)}
+                        className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        <span>Service key</span>
+                      </button>
+                    )}
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
                       {integration.integration_type === 'salesforce' && (
@@ -1473,15 +1487,6 @@ const IntegrationsPage: React.FC = () => {
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                           <span>Sync</span>
-                        </button>
-                      )}
-                      {integration.integration_type === 'claude-mcp' && (
-                        <button
-                          onClick={() => setShowMcpPanel(!showMcpPanel)}
-                          className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
-                        >
-                          <KeyRound className="h-3.5 w-3.5" />
-                          <span>Service key</span>
                         </button>
                       )}
                       {integration.integration_type === 'calcom' && (

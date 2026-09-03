@@ -1,6 +1,6 @@
 """Small helpers shared by the tool modules: paging, serialization, names."""
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Iterable, Optional
@@ -53,10 +53,11 @@ def parse_datetime(value: Optional[str], label: str) -> Optional[datetime]:
         raise ValueError(f"{label} must be an ISO-8601 date-time")
     if parsed.tzinfo is None:
         # Bare values are taken as UTC, which is what the database stores.
-        from datetime import timezone
-
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed
+        return parsed.replace(tzinfo=timezone.utc)
+    # An offset value is converted, not kept: MySQL's DATETIME binding drops
+    # the offset, so an aware value that is not already UTC would be stored
+    # as its wall-clock reading and shift by the offset.
+    return parsed.astimezone(timezone.utc)
 
 
 def iso(value: Any) -> Any:

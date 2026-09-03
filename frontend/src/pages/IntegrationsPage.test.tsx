@@ -616,6 +616,17 @@ describe('IntegrationsPage', () => {
       });
     });
 
+    it('shows the service key button to a delegated key manager without integrations.manage', async () => {
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
+      mockGetIntegrations.mockResolvedValue([mcpConnected]);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      expect(within(card).getByText('Service key')).toBeInTheDocument();
+      expect(within(card).queryByText('Disconnect')).not.toBeInTheDocument();
+    });
+
     it('opens the service key panel from a connected card', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([mcpConnected]);
