@@ -1829,6 +1829,73 @@ class TestQuartermasterWorkflow:
         )
         assert unpaid_venmo == 1
 
+    async def test_exclude_cancelled_matches_the_verification_queue(self, db_session):
+        """The admin hub's headline and the list it links to must agree.
+
+        `cancel_order` leaves `payment_status` untouched, so an order cancelled
+        while awaiting verification keeps PENDING_VERIFICATION for ever — and
+        recording a payment against a cancelled order is refused, so the row is
+        work nobody can do. The hub's queue leaves it out of the count; without
+        this filter the linked list still showed it.
+
+        Narrower than `open_only`, deliberately: that also hides a *fulfilled*
+        order awaiting verification, which is real money a department handing
+        over before settlement is still owed — and which the queue does count.
+        """
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("20.00"))
+        window = await _make_open_window(db_session, org)
+
+        orders = []
+        for name in ("live", "cancelled", "fulfilled"):
+            member = await _make_member(db_session, org, first=name)
+            order = await service.create_order(
+                org.id,
+                member,
+                {
+                    "items": [{"product_id": product.id, "quantity": 1}],
+                    "fulfillment_method": "pickup",
+                    "payment_method": StorePaymentMethod.VENMO,
+                },
+            )
+            order.payment_status = StorePaymentStatus.PENDING_VERIFICATION
+            orders.append(order)
+        await db_session.flush()
+
+        await service.cancel_order(orders[1].id, org.id, None, reason="withdrew")
+        orders[2].status = StoreOrderStatus.FULFILLED
+        await db_session.flush()
+
+        everything, all_total = await service.list_orders(
+            org.id,
+            window_id=window.id,
+            payment_status=StorePaymentStatus.PENDING_VERIFICATION,
+        )
+        assert all_total == 3
+
+        kept, total = await service.list_orders(
+            org.id,
+            window_id=window.id,
+            payment_status=StorePaymentStatus.PENDING_VERIFICATION,
+            exclude_cancelled=True,
+        )
+        assert total == 2
+        kept_ids = {order.id for order in kept}
+        assert orders[1].id not in kept_ids
+        assert orders[2].id in kept_ids
+        assert len(everything) == 3
+
+        # open_only would have dropped the fulfilled one the queue counts.
+        _, open_total = await service.list_orders(
+            org.id,
+            window_id=window.id,
+            payment_status=StorePaymentStatus.PENDING_VERIFICATION,
+            open_only=True,
+        )
+        assert open_total == 1
+
     # -- Record payment, in the method actually used -----------------------
 
     async def test_payment_can_be_recorded_under_a_different_method(self, db_session):

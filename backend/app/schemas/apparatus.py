@@ -602,6 +602,12 @@ class ApparatusListItem(BaseModel):
 class ApparatusStatusChange(BaseModel):
     """Schema for changing apparatus status"""
 
+    # The frontend types are camelCase and `createApiClient` performs no key
+    # transformation, so a request schema without this rejects everything the
+    # UI sends. `populate_by_name` keeps the snake_case form valid too, so no
+    # existing caller breaks.
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     status_id: str = Field(..., description="New status ID")
     reason: Optional[str] = Field(None, description="Reason for status change")
     current_mileage: Optional[int] = Field(
@@ -614,6 +620,9 @@ class ApparatusStatusChange(BaseModel):
 
 class ApparatusArchive(BaseModel):
     """Schema for archiving apparatus"""
+
+    # See ApparatusStatusChange above: camelCase in, snake_case still accepted.
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     disposal_method: str = Field(
         ..., description="Method of disposal (sold, traded, donated, scrapped)"

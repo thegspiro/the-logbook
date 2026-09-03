@@ -57,6 +57,16 @@ function expiryLabel(days: number | undefined): string {
   return `${days}d left`;
 }
 
+/**
+ * Identity of an item query: what the rendered rows are an answer to.
+ *
+ * NUL separator, because a plain space would let search "a b" with no category
+ * collide with search "a" under category "b".
+ */
+function itemQueryKey(searchTerm: string, category: string, pageIndex: number): string {
+  return `${searchTerm}\u0000${category}\u0000${pageIndex}`;
+}
+
 type Section = 'summary' | 'items' | 'categories' | 'expiring';
 
 const ALL_SECTIONS: Section[] = ['summary', 'items', 'categories', 'expiring'];
@@ -67,16 +77,6 @@ const SECTION_LABELS: Record<Section, string> = {
   categories: 'category list',
   expiring: 'expiring stock',
 };
-
-/**
- * Identity of an item query: what the rendered rows are an answer to.
- *
- * NUL separator, because a plain space would let search "a b" with no category
- * collide with search "a" under category "b".
- */
-function itemQueryKey(searchTerm: string, category: string, pageIndex: number): string {
-  return `${searchTerm}\u0000${category}\u0000${pageIndex}`;
-}
 
 interface SectionErrorProps {
   section: Section;
@@ -147,8 +147,8 @@ const MedicalSuppliesPage: React.FC = () => {
     expiring: true,
   });
   const [errors, setErrors] = useState<Partial<Record<Section, string>>>({});
-  // Whether a section has ever completed a load. Distinct from "has rows":
-  // a section that loaded and came back empty is loaded, and one that has only
+  // Whether a section has ever completed a load. Distinct from "has rows": a
+  // section that loaded and came back empty is loaded, and one that has only
   // ever failed is not -- so an empty state is an answer rather than a guess.
   const [loaded, setLoaded] = useState<Record<Section, boolean>>({
     summary: false,
@@ -157,6 +157,7 @@ const MedicalSuppliesPage: React.FC = () => {
     expiring: false,
   });
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [page, setPage] = useState(0);
   const [itemPage, setItemPage] = useState({ total: 0, skip: 0, limit: PAGE_SIZE });
@@ -164,14 +165,19 @@ const MedicalSuppliesPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
-  // Which item query the rows in `items` answer, and which one the standing
-  // item error belongs to. Both are needed: rows that predate the active
-  // filter must not be presented under it, and neither must the failure of a
-  // query the user has already moved on from.
+  // Which query the rows in `items` actually answer. Rendering the empty state
+  // off `items.length` alone reports "no medical supplies" whenever the list
+  // has not caught up with the controls -- before the first response, and in
+  // the window after a filter or page changes -- which reads as an empty
+  // catalogue rather than as a pending request. null until the first response.
   const [itemsFilterKey, setItemsFilterKey] = useState<string | null>(null);
+
+  // Which query the standing item error belongs to. A failure answers one
+  // query; left unkeyed it reads as the next filter's failure, and its Retry
+  // re-runs the query the user has already moved on from.
   const [itemsErrorKey, setItemsErrorKey] = useState<string | null>(null);
 
-  // Monotonic request id per section. Clicking Next and then editing the
+  // Monotonic request ids, one per section. Clicking Next and then editing the
   // filter starts two item loads; without this both commit, and if the older
   // one lands last the table shows rows that do not match the visible filter
   // while `page` and `itemPage.skip` disagree -- a state the Previous button
@@ -182,36 +188,68 @@ const MedicalSuppliesPage: React.FC = () => {
     categories: 0,
     expiring: 0,
   });
+  const itemsAbortController = useRef<AbortController | null>(null);
 
-  const filterKey = itemQueryKey(search, categoryFilter, page);
+  const filterKey = itemQueryKey(debouncedSearch, categoryFilter, page);
+
+  /**
+   * Shown while the numbers still describe something real: the rows on screen,
+   * or the request that is replacing them. A query that settles without
+   * producing rows for itself has failed, and `itemPage` still holds the
+   * previous response -- so the range would sit above an empty table, under
+   * the error explaining why it is empty.
+   *
+   * Deliberately still shown during an ordinary page change: hiding the pager
+   * on the click that uses it is worse than leaving it in place, disabled.
+   */
+  const pagerDescribesScreen = itemsFilterKey !== null && (itemsFilterKey === filterKey || loading.items);
+
+  /**
+   * Whether the on-screen controls have actually been asked yet.
+   *
+   * During the search debounce no request has started, so nothing is loading
+   * and Next would otherwise stay live. One click there advances the page, and
+   * the typed search is then requested at skip 200 -- past its own first page,
+   * for a range like "Showing 201-5 of 5".
+   */
+  const filtersSettled = search === debouncedSearch;
 
   const loadSections = useCallback(
     async (sections: Section[], { bypassCache = false }: { bypassCache?: boolean } = {}) => {
-      const requestedFilterKey = itemQueryKey(search, categoryFilter, page);
+      const requestedFilterKey = itemQueryKey(debouncedSearch, categoryFilter, page);
       setLoading((current) => ({ ...current, ...Object.fromEntries(sections.map((section) => [section, true])) }));
 
-      const options = bypassCache ? { bypassCache: true } : undefined;
+      let controller: AbortController | undefined;
+      if (sections.includes('items')) {
+        itemsAbortController.current?.abort();
+        controller = new AbortController();
+        itemsAbortController.current = controller;
+      }
+
+      // undefined rather than {} when there is nothing to say: a caller that
+      // passes no options should reach the service the same way it always did.
+      const base = bypassCache ? { bypassCache: true } : undefined;
       const requests: Record<Section, () => Promise<unknown>> = {
-        summary: () => medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS, options),
+        summary: () => medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS, base),
         items: () =>
           medicalSuppliesService.getItems(
             {
-              search: search || undefined,
+              search: debouncedSearch || undefined,
               category_id: categoryFilter || undefined,
               skip: page * PAGE_SIZE,
               limit: PAGE_SIZE,
             },
-            options
+            { ...base, ...(controller ? { signal: controller.signal } : {}) }
           ),
-        categories: () => medicalSuppliesService.getCategories(true, options),
-        expiring: () => medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS, options),
+        categories: () => medicalSuppliesService.getCategories(true, base),
+        expiring: () => medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS, base),
       };
 
-      // Settled per section, not through one Promise.allSettled. That form
-      // waits for the slowest request before any section updates, so a
+      // Settled per section, not through one Promise.all or allSettled. Those
+      // forms wait for the slowest request before any section updates, so a
       // categories call hanging to the API timeout held summary and expiring
-      // stock on their skeletons -- which is precisely the coupling this
-      // per-section split exists to remove.
+      // stock on their skeletons -- which is the coupling this split exists to
+      // remove.
       await Promise.all(
         sections.map(async (section) => {
           const requestId = sectionRequestIds.current[section] + 1;
@@ -228,21 +266,22 @@ const MedicalSuppliesPage: React.FC = () => {
             setLoaded((current) => ({ ...current, [section]: true }));
             if (section === 'summary') setSummary(value as MedicalSupplySummary);
             if (section === 'items') {
-              const itemsData = value as { items: InventoryItem[]; total: number; skip: number; limit: number };
-              setItems(itemsData.items);
-              setItemPage({ total: itemsData.total, skip: itemsData.skip, limit: itemsData.limit });
+              const data = value as { items: InventoryItem[]; total: number; skip: number; limit: number };
+              setItems(data.items);
+              setItemPage({ total: data.total, skip: data.skip, limit: data.limit });
+              // Stamped from this closure's own values, not from the render's
+              // `filterKey`: those are what the request actually asked for.
               setItemsFilterKey(requestedFilterKey);
             }
             if (section === 'categories') setCategories(value as InventoryCategory[]);
             if (section === 'expiring') setExpiring(value as ExpiringLot[]);
           } catch (reason: unknown) {
             if (superseded()) return;
+            if (section === 'items' && controller?.signal.aborted) return;
             setErrors((current) => ({
               ...current,
               [section]: getErrorMessage(reason, `Failed to load the ${SECTION_LABELS[section]}`),
             }));
-            // Stamped with the query that failed, so a filter change retires
-            // the alert instead of presenting A's failure under B's controls.
             if (section === 'items') setItemsErrorKey(requestedFilterKey);
           } finally {
             // Only the newest request clears the flag: an older one finishing
@@ -253,7 +292,7 @@ const MedicalSuppliesPage: React.FC = () => {
         })
       );
     },
-    [search, categoryFilter, page]
+    [debouncedSearch, categoryFilter, page]
   );
 
   const loadSectionsRef = useRef(loadSections);
@@ -272,18 +311,24 @@ const MedicalSuppliesPage: React.FC = () => {
   // and expiring responses land while the refresh's fresh data was discarded.
   useEffect(() => {
     void loadSectionsRef.current(ALL_SECTIONS);
+    return () => itemsAbortController.current?.abort();
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   // Compared by value rather than gated on a "has mounted" ref: the mount
   // effect above runs first, so a flag would let this one fire immediately
   // after it and load the items twice.
   const lastItemQuery = useRef(itemQueryKey('', '', 0));
   useEffect(() => {
-    const key = itemQueryKey(search, categoryFilter, page);
+    const key = itemQueryKey(debouncedSearch, categoryFilter, page);
     if (lastItemQuery.current === key) return;
     lastItemQuery.current = key;
     void loadSectionsRef.current(['items']);
-  }, [search, categoryFilter, page]);
+  }, [debouncedSearch, categoryFilter, page]);
 
   useRegisterPullToRefresh(refresh);
 
@@ -303,11 +348,9 @@ const MedicalSuppliesPage: React.FC = () => {
     if (known) return known;
     // Pending, not absent: '—' is an answer ("no category"), and the page is
     // not entitled to give it while the list that would name the category is
-    // still in flight. This is not only the first load -- a refresh that
-    // returns items before categories misses the lookup for a category another
-    // session just created -- so it keys off the request being in flight. A
-    // *failed* list is a different state: the section error says so, the table
-    // stays usable, and it keeps the dash.
+    // still in flight -- on a refresh as much as on the first load, since
+    // another session can add a category between them. A *failed* list is a
+    // different state: the section error says so, and it keeps the dash.
     return loading.categories ? '…' : '—';
   };
 
@@ -393,6 +436,21 @@ const MedicalSuppliesPage: React.FC = () => {
           isStale={loaded.summary}
           onRetry={() => void loadSections(['summary'], { bypassCache: true })}
         />
+      )}
+      {/*
+       * Its own skeleton, not the expiring section's. The two requests settle
+       * independently now, so a summary still pending after expiring stock
+       * arrives would otherwise leave the stat grid simply absent -- a
+       * half-loaded page that looks complete, with the tiles appearing later
+       * without warning.
+       */}
+      {loading.summary && !loaded.summary && (
+        // Labelled, because SkeletonCard renders no role of its own: without
+        // this the tiles' absence is announced as nothing at all rather than
+        // as something still arriving.
+        <div className="mb-6" role="status" aria-live="polite" aria-label="Loading the overview">
+          <SkeletonCard />
+        </div>
       )}
       {summary && (
         <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -580,10 +638,10 @@ const MedicalSuppliesPage: React.FC = () => {
           {/*
            * Rows are shown only when they answer the query that is on screen.
            * Anything else is a pending request (skeleton) or a failed one -- and
-           * a failed one renders nothing here, because the section alert above
-           * already says what happened and "No medical supplies yet" would
-           * contradict it. The controls above stay mounted throughout: putting
-           * the skeleton over them would unmount the search box mid-keystroke.
+           * a failed one renders nothing here, because the alert above already
+           * says what happened and "No medical supplies yet" would contradict
+           * it. The controls above stay mounted throughout: putting the
+           * skeleton over them would unmount the search box mid-keystroke.
            */}
           {itemsFilterKey !== filterKey ? (
             loading.items ? (
@@ -672,12 +730,12 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
           )}
 
-          {itemPage.total > 0 && (
+          {pagerDescribesScreen && itemPage.total > 0 && (
             <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={loading.items || itemPage.skip === 0}
+                disabled={loading.items || !filtersSettled || itemPage.skip === 0}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
               >
                 Previous
@@ -694,7 +752,7 @@ const MedicalSuppliesPage: React.FC = () => {
                 // response, so a second activation before this one landed
                 // stepped past the last page -- skip=400 on a 201-item catalog,
                 // an empty table and a range reading "Showing 401-201 of 201".
-                disabled={loading.items || itemPage.skip + itemPage.limit >= itemPage.total}
+                disabled={loading.items || !filtersSettled || itemPage.skip + itemPage.limit >= itemPage.total}
                 onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
               >
                 Next

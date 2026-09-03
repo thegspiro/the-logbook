@@ -241,6 +241,32 @@ describe('StoreOrdersTab payment handling', () => {
     expect(screen.queryByText(/ORD-2026-0001/)).not.toBeInTheDocument();
   });
 
+  it('hides cancelled orders while verifying payments', async () => {
+    // `cancel_order` leaves payment_status untouched, so a cancelled order
+    // keeps pending_verification for ever — and recording a payment against a
+    // cancelled order is refused, so the row is work nobody can do. The admin
+    // hub's queue leaves them out of its count, and this is what keeps the
+    // list agreeing with the headline that links to it.
+    renderTab({ initialPaymentFilter: 'pending_verification' });
+
+    await waitFor(() =>
+      expect(mockGetOrders).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentStatus: 'pending_verification', excludeCancelled: true })
+      )
+    );
+  });
+
+  it('leaves cancelled orders in for every other payment filter', async () => {
+    // A refunded or waived cancelled order is a legitimate thing to look up.
+    renderTab({ initialPaymentFilter: 'refunded' });
+
+    await waitFor(() =>
+      expect(mockGetOrders).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentStatus: 'refunded', excludeCancelled: undefined })
+      )
+    );
+  });
+
   it('does not open the order dialog when no order is deep-linked', async () => {
     // StoreAdminPage holds ordersDetailId as '' when nothing is deep-linked and
     // passes it straight down. `'' ?? null` is '', and OrderDetailModal opens on

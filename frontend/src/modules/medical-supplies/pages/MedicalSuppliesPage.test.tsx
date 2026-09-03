@@ -61,6 +61,29 @@ const expiringLot = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const itemResponse = (name: string) => ({
+  items: [{ id: `item-${name}`, name, quantity: 5 }],
+  total: 1,
+  skip: 0,
+  limit: 200,
+});
+
+/**
+ * The cancellation the page passes with every item read.
+ *
+ * Held as `unknown` rather than used inline: `expect.any()` is typed `any`,
+ * and dropping that straight into an object literal is an unsafe assignment.
+ */
+const anyAbortSignal: unknown = expect.any(AbortSignal);
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 const item = (overrides: Record<string, unknown> = {}) => ({
   id: 'item-1',
   name: '4x4 Gauze',
@@ -76,16 +99,14 @@ function assertOrganizationLowStockCount(count: number): void {
 }
 
 describe('MedicalSuppliesPage', () => {
-  const ALL_SERVICE_MOCKS = [mockGetSummary, mockGetItems, mockGetCategories, mockGetExpiringLots, mockCheckPermission];
-
   beforeEach(() => {
-    // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
-    // leaves implementations AND any unconsumed mockRejectedValueOnce still
-    // queued. The stale-data tests below arm four one-shot rejections at once,
-    // so a test that returns before every section request fires hands the
-    // leftover to whichever test calls that mock next. (CLAUDE.md pitfall #28.)
-    ALL_SERVICE_MOCKS.forEach((mock) => mock.mockReset());
-    vi.clearAllMocks();
+    // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls
+    // but leaves implementations and queued *Once values in place, so an
+    // unconsumed rejection from a failure-path test would be handed to
+    // whichever test called the mock next (CLAUDE.md pitfall #28).
+    [mockCheckPermission, mockGetSummary, mockGetItems, mockGetCategories, mockGetExpiringLots].forEach((mock) =>
+      mock.mockReset()
+    );
     mockCheckPermission.mockReturnValue(false);
     mockGetSummary.mockResolvedValue(summary);
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
@@ -176,9 +197,67 @@ describe('MedicalSuppliesPage', () => {
           skip: 0,
           limit: 200,
         },
-        undefined
+        { signal: anyAbortSignal }
       )
     );
+  });
+
+  it('settles rapid search edits into one item request without reloading overview data', async () => {
+    vi.useFakeTimers();
+    try {
+      renderWithRouter(<MedicalSuppliesPage />);
+      await act(async () => Promise.resolve());
+      mockGetItems.mockClear();
+      mockGetSummary.mockClear();
+      mockGetCategories.mockClear();
+      mockGetExpiringLots.mockClear();
+
+      fireEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+      const input = screen.getByRole('searchbox', { name: /Search medical supplies/i });
+      fireEvent.change(input, { target: { value: 'g' } });
+      fireEvent.change(input, { target: { value: 'ga' } });
+      fireEvent.change(input, { target: { value: 'gauze' } });
+
+      await act(async () => vi.advanceTimersByTimeAsync(299));
+      expect(mockGetItems).not.toHaveBeenCalled();
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+
+      expect(mockGetItems).toHaveBeenCalledTimes(1);
+      expect(mockGetItems).toHaveBeenCalledWith(
+        { search: 'gauze', category_id: undefined, skip: 0, limit: 200 },
+        { signal: anyAbortSignal }
+      );
+      expect(mockGetSummary).not.toHaveBeenCalled();
+      expect(mockGetCategories).not.toHaveBeenCalled();
+      expect(mockGetExpiringLots).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let an older item response replace newer search results', async () => {
+    vi.useFakeTimers();
+    const older = deferred<ReturnType<typeof itemResponse>>();
+    const newer = deferred<ReturnType<typeof itemResponse>>();
+    mockGetItems.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+
+    try {
+      renderWithRouter(<MedicalSuppliesPage />);
+      fireEvent.click(screen.getByRole('button', { name: /All supplies/i }));
+      fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+        target: { value: 'new' },
+      });
+      await act(async () => vi.advanceTimersByTimeAsync(300));
+
+      await act(async () => newer.resolve(itemResponse('New result')));
+      expect(screen.getByText('New result')).toBeInTheDocument();
+
+      await act(async () => older.resolve(itemResponse('Older result')));
+      expect(screen.getByText('New result')).toBeInTheDocument();
+      expect(screen.queryByText('Older result')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('names the category from the list it loaded, not the stripped response field', async () => {
@@ -310,7 +389,9 @@ describe('MedicalSuppliesPage', () => {
     });
 
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze' }), undefined)
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze' }), {
+        signal: anyAbortSignal,
+      })
     );
     assertOrganizationLowStockCount(7);
   });
@@ -325,9 +406,100 @@ describe('MedicalSuppliesPage', () => {
     await userEvent.selectOptions(screen.getByRole('combobox', { name: /Filter by category/i }), 'cat-1');
 
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ category_id: 'cat-1' }), undefined)
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ category_id: 'cat-1' }), {
+        signal: anyAbortSignal,
+      })
     );
     assertOrganizationLowStockCount(7);
+  });
+
+  it('does not let Next run ahead of a search that has not been requested yet', async () => {
+    // Typing while already on page 0 makes setPage(0) a no-op, so no request
+    // starts until the debounce expires. Next stayed live in that window, and
+    // one click there meant the search itself was requested at skip 200 --
+    // past its own first page, for a range like "Showing 201-5 of 5".
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: 'Gauze', quantity: 1 }],
+      total: 201,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    expect(await screen.findByRole('button', { name: 'Next' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+      target: { value: 'gauze' },
+    });
+
+    // Still on screen -- hiding the pager mid-type would be its own problem --
+    // but inert until the typed query has actually been asked.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled());
+  });
+
+  it('does not keep a page range on screen for a query that failed', async () => {
+    // itemPage still holds the previous response after a failure, so the range
+    // and total would sit above an empty table, under the error that explains
+    // why there are no rows.
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: 'Gauze', quantity: 1 }],
+      total: 201,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    expect(await screen.findByText(/Showing 1–1 of 201/)).toBeInTheDocument();
+
+    mockGetItems.mockRejectedValue(new Error('Supplies unavailable'));
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+      target: { value: 'gauze' },
+    });
+
+    await waitFor(() => expect(screen.queryByText(/Showing 1–1 of 201/)).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+  });
+
+  it('does not report an empty catalogue while the first item request is still in flight', async () => {
+    // The empty state is keyed off items.length, which is [] both before the
+    // first response and after an empty one. Reporting "No medical supplies
+    // yet" for the first is a false answer about the department's inventory,
+    // and on a slow connection it is the only answer on screen.
+    const pending = deferred<{ items: unknown[]; total: number; skip: number; limit: number }>();
+    mockGetItems.mockReturnValue(pending.promise);
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await screen.findByRole('heading', { name: /Medical Supplies/i });
+    await userEvent.click(screen.getByRole('button', { name: 'All supplies' }));
+
+    expect(screen.queryByText('No medical supplies yet')).not.toBeInTheDocument();
+
+    await act(async () => {
+      pending.resolve({ items: [], total: 0, skip: 0, limit: 200 });
+    });
+
+    // And once the server has actually said the catalogue is empty, it says so.
+    expect(await screen.findByText('No medical supplies yet')).toBeInTheDocument();
+  });
+
+  it('reports a failed category load on the stock tab, where it costs the category names', async () => {
+    // The stock tab still renders rows when the category list fails -- with a
+    // dash for every category and a filter offering nothing -- so a tab that
+    // reported nothing looked like a catalogue with no categories assigned
+    // rather than a page half-loaded. The tab-level sentence this once
+    // asserted is now the category section's own alert, with its own retry.
+    mockGetCategories.mockRejectedValue(new Error('Categories unavailable'));
+    mockGetItems.mockResolvedValue(itemResponse('4x4 Gauze'));
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await screen.findByRole('heading', { name: /Medical Supplies/i });
+    await userEvent.click(screen.getByRole('button', { name: 'All supplies' }));
+
+    expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
+    expect(screen.getByText('Could not load the category list.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry category list' })).toBeInTheDocument();
   });
 
   it('does not derive the organization-wide count from one page of a multi-page catalog', async () => {
@@ -344,87 +516,6 @@ describe('MedicalSuppliesPage', () => {
 
     expect(await screen.findByRole('cell', { name: '3' })).toBeInTheDocument();
     assertOrganizationLowStockCount(23);
-  });
-
-  it('keeps expiring stock usable when the overview fails', async () => {
-    mockGetSummary.mockRejectedValue(new Error('Overview unavailable'));
-
-    renderWithRouter(<MedicalSuppliesPage />);
-
-    expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load the overview');
-    expect(screen.getByRole('button', { name: 'Retry overview' })).toBeInTheDocument();
-  });
-
-  it('keeps the overview and expiring stock usable when the supply table fails', async () => {
-    mockGetItems.mockRejectedValue(new Error('Supplies unavailable'));
-
-    renderWithRouter(<MedicalSuppliesPage />);
-
-    expect(await screen.findByText('Supply items')).toBeInTheDocument();
-    expect(screen.getByText('4x4 Gauze')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /All supplies/i }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load the supply table');
-  });
-
-  it('keeps the supply table usable when the category list fails', async () => {
-    mockGetCategories.mockRejectedValue(new Error('Categories unavailable'));
-    mockGetItems.mockResolvedValue({
-      items: [{ id: 'item-2', name: 'Trauma Shears', quantity: 6 }],
-      total: 1,
-      skip: 0,
-      limit: 200,
-    });
-
-    renderWithRouter(<MedicalSuppliesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
-
-    expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load the category list');
-    expect(screen.getByRole('combobox', { name: 'Filter by category' })).toBeEnabled();
-  });
-
-  it('keeps the overview and supply table usable when expiring stock fails', async () => {
-    mockGetExpiringLots.mockRejectedValue(new Error('Lots unavailable'));
-    mockGetItems.mockResolvedValue({
-      items: [{ id: 'item-2', name: 'Trauma Shears', quantity: 6 }],
-      total: 1,
-      skip: 0,
-      limit: 200,
-    });
-
-    renderWithRouter(<MedicalSuppliesPage />);
-
-    expect(await screen.findByText('Supply items')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Could not load the expiring stock');
-    await userEvent.click(screen.getByRole('button', { name: /All supplies/i }));
-    expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
-  });
-
-  it('marks retained data as stale and explicit refresh retries every section', async () => {
-    mockGetItems.mockResolvedValue({
-      items: [{ id: 'item-2', name: 'Trauma Shears', category_id: 'cat-1', quantity: 6 }],
-      total: 1,
-      skip: 0,
-      limit: 200,
-    });
-    mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Airway' }]);
-    renderWithRouter(<MedicalSuppliesPage />);
-    expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
-
-    mockGetSummary.mockRejectedValueOnce(new Error('Overview unavailable'));
-    mockGetItems.mockRejectedValueOnce(new Error('Supplies unavailable'));
-    mockGetCategories.mockRejectedValueOnce(new Error('Categories unavailable'));
-    mockGetExpiringLots.mockRejectedValueOnce(new Error('Lots unavailable'));
-    await userEvent.click(screen.getByRole('button', { name: 'Refresh medical supplies' }));
-
-    expect(await screen.findAllByText('Showing previously loaded data')).toHaveLength(2);
-    await userEvent.click(screen.getByRole('button', { name: /All supplies/i }));
-    expect(await screen.findAllByText('Showing previously loaded data')).toHaveLength(3);
-    expect(mockGetSummary).toHaveBeenCalledTimes(2);
-    expect(mockGetItems).toHaveBeenCalledTimes(2);
-    expect(mockGetCategories).toHaveBeenCalledTimes(2);
-    expect(mockGetExpiringLots).toHaveBeenCalledTimes(2);
   });
 
   it('navigates beyond the first 200 supplies and reports the visible range', async () => {
@@ -445,7 +536,9 @@ describe('MedicalSuppliesPage', () => {
 
     expect(await screen.findByText('Supply 201')).toBeInTheDocument();
     expect(screen.getByText('Showing 201–201 of 201')).toBeInTheDocument();
-    expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 200, limit: 200 }), undefined);
+    expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 200, limit: 200 }), {
+      signal: anyAbortSignal,
+    });
   });
 
   it('resets to the first page when a search filter changes', async () => {
@@ -457,13 +550,15 @@ describe('MedicalSuppliesPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
     await userEvent.click(await screen.findByRole('button', { name: 'Next' }));
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 200 }), undefined)
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 200 }), { signal: anyAbortSignal })
     );
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search medical supplies' }), 'gauze');
 
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze', skip: 0 }), undefined)
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze', skip: 0 }), {
+        signal: anyAbortSignal,
+      })
     );
   });
 
@@ -552,7 +647,6 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.queryByText('Supply 201')).not.toBeInTheDocument();
     });
   });
-
   describe('a section stands on its own', () => {
     it('shows a section that has settled while another is still hanging', async () => {
       // Promise.allSettled waits for the slowest before any section updates, so
@@ -563,6 +657,21 @@ describe('MedicalSuppliesPage', () => {
       renderWithRouter(<MedicalSuppliesPage />);
 
       expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
+    });
+
+    it('shows the overview as pending rather than simply absent', async () => {
+      // The sections settle independently now, so a summary still in flight
+      // after expiring stock arrives would leave the stat grid missing with
+      // nothing to say it is coming: a half-loaded page that looks complete,
+      // and tiles that appear later without warning.
+      mockGetSummary.mockImplementation(() => new Promise(() => {}));
+
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      // Expiring stock has landed while the summary has not.
+      expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
+      expect(screen.queryByText('Below reorder point')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Loading the overview')).toBeInTheDocument();
     });
 
     it('ignores a superseded request for the same section', async () => {

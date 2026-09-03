@@ -36,9 +36,18 @@ import type {
  */
 export interface MedicalReadOptions {
   bypassCache?: boolean;
+  /**
+   * Cancels the request. One options object rather than a separate positional
+   * argument: both answer "how should this read be performed", and a caller
+   * that refreshes past the cache usually also wants to be able to abandon it.
+   */
+  signal?: AbortSignal;
 }
 
-const cacheConfig = (options?: MedicalReadOptions) => (options?.bypassCache ? { _skipCache: true } : {});
+const readConfig = (options?: MedicalReadOptions) => ({
+  ...(options?.bypassCache ? { _skipCache: true } : {}),
+  ...(options?.signal ? { signal: options.signal } : {}),
+});
 
 export interface MedicalSupplySummary {
   total_items: number;
@@ -99,7 +108,7 @@ export const medicalSuppliesService = {
   async getSummary(expiringWithinDays?: number, options?: MedicalReadOptions): Promise<MedicalSupplySummary> {
     const response = await api.get<MedicalSupplySummary>('/medical-supplies/summary', {
       params: expiringWithinDays ? { expiring_within_days: expiringWithinDays } : undefined,
-      ...cacheConfig(options),
+      ...readConfig(options),
     });
     return response.data;
   },
@@ -107,7 +116,7 @@ export const medicalSuppliesService = {
   async getCategories(activeOnly = true, options?: MedicalReadOptions): Promise<InventoryCategory[]> {
     const response = await api.get<InventoryCategory[]>('/medical-supplies/categories', {
       params: { active_only: activeOnly },
-      ...cacheConfig(options),
+      ...readConfig(options),
     });
     return response.data;
   },
@@ -125,7 +134,7 @@ export const medicalSuppliesService = {
   async getItems(filters?: MedicalItemFilters, options?: MedicalReadOptions): Promise<InventoryItemsListResponse> {
     const response = await api.get<InventoryItemsListResponse>('/medical-supplies/items', {
       params: filters,
-      ...cacheConfig(options),
+      ...readConfig(options),
     });
     return response.data;
   },
@@ -173,7 +182,7 @@ export const medicalSuppliesService = {
   async getExpiringLots(daysAhead = 30, options?: MedicalReadOptions): Promise<ExpiringLot[]> {
     const response = await api.get<ExpiringLot[]>('/medical-supplies/lots/expiring', {
       params: { days_ahead: daysAhead },
-      ...cacheConfig(options),
+      ...readConfig(options),
     });
     return response.data;
   },
