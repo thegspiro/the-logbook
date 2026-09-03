@@ -11,7 +11,7 @@ from app.services.facilities_service import FacilitiesService
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List facilities")
+    @logbook_tool(server, title="List facilities", module="facilities")
     async def list_facilities(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -58,7 +58,7 @@ def register(server: Any) -> None:
         ]
         return page(items, total, limit, offset)
 
-    @logbook_tool(server, title="Facilities counts")
+    @logbook_tool(server, title="Facilities counts", module="facilities")
     async def get_facilities_counts(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Dashboard counts: facilities, open maintenance, upcoming
         inspections and similar totals."""

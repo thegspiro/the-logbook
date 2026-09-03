@@ -9,6 +9,7 @@ screen itself is behind ``settings.manage``, so a delegated key manager
 holds that too — the panel text and the wiki say so.
 """
 
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -38,15 +39,29 @@ class McpKeyCreateRequest(BaseModel):
     expires_in_days: Optional[int] = Field(default=None, ge=1, le=MAX_EXPIRY_DAYS)
 
 
+def _instant(value: Optional[datetime]) -> Optional[str]:
+    """ISO-8601 with an explicit UTC offset.
+
+    Every stored value is UTC, but some MySQL driver configurations hand
+    back naive datetimes for ``DateTime(timezone=True)``; without the offset
+    the browser would read them as local time.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat()
+
+
 def _key_to_dict(key: McpServiceKey) -> dict[str, Any]:
     return {
         "id": key.id,
         "name": key.name,
         "key_prefix": key.key_prefix,
-        "expires_at": key.expires_at.isoformat() if key.expires_at else None,
-        "last_used_at": key.last_used_at.isoformat() if key.last_used_at else None,
-        "revoked_at": key.revoked_at.isoformat() if key.revoked_at else None,
-        "created_at": key.created_at.isoformat() if key.created_at else None,
+        "expires_at": _instant(key.expires_at),
+        "last_used_at": _instant(key.last_used_at),
+        "revoked_at": _instant(key.revoked_at),
+        "created_at": _instant(key.created_at),
         "created_by": key.created_by,
         "is_active": key.is_active,
     }

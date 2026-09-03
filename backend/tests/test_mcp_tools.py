@@ -226,6 +226,225 @@ class TestGating:
             )
 
 
+class TestModuleSwitches:
+    """A module the department switched off is off for Claude as well: its
+    tools are not listed and refuse if called, with the same 403 wording the
+    module's API router uses."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_tool_of_a_disabled_module_refuses(self, server, org_with_members):
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(
+            org_id,
+            admin_id,
+            enabled_modules=frozenset({"members", "events", "integrations"}),
+        )
+        with pytest.raises(ToolError, match="Scheduling module is not enabled"):
+            await _call(server, principal, "list_shifts")
+        roster = await _call(server, principal, "list_members")
+        assert roster["total"] == 2
+
+    async def test_list_tools_hides_disabled_modules(self, server, org_with_members):
+        org_id, admin_id, _ = org_with_members
+        with bind_principal(
+            _principal(
+                org_id,
+                admin_id,
+                access_mode="read_write",
+                enabled_modules=frozenset(
+                    {"members", "events", "integrations", "training"}
+                ),
+            )
+        ):
+            names = {t.name for t in await server.list_tools()}
+        assert {
+            "list_members",
+            "list_events",
+            "list_expiring_certifications",
+            "create_event_draft",
+        } <= names
+        assert (
+            not {
+                "list_shifts",
+                "list_apparatus",
+                "list_minutes",
+                "create_reorder_request",
+            }
+            & names
+        )
+
+    async def test_unresolved_modules_do_not_gate(self, server, org_with_members):
+        """``None`` means the set was not resolved; a principal built without
+        one must not be locked out by it."""
+        org_id, admin_id, _ = org_with_members
+        with bind_principal(_principal(org_id, admin_id)):
+            names = {t.name for t in await server.list_tools()}
+        assert "list_shifts" in names
+
+
+class TestSecondReviewRound:
+    """Regressions for the second review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_writes_refuse_when_the_issuer_is_deactivated(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        await db_session.execute(
+            text("UPDATE users SET status = 'suspended' WHERE id = :id"),
+            {"id": admin_id},
+        )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id, access_mode="read_write")
+        with pytest.raises(ToolError, match="no longer active"):
+            await _call(
+                server,
+                principal,
+                "create_event_draft",
+                title="x",
+                start_datetime="2030-01-01T10:00:00Z",
+                end_datetime="2030-01-01T11:00:00Z",
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_open_shifts_never_advertise_a_continuation(
+        self, server, org_with_members
+    ):
+        org_id, admin_id, _ = org_with_members
+        body = await _call(
+            server,
+            _principal(org_id, admin_id),
+            "list_open_shifts",
+            start_date=date.today().isoformat(),
+            end_date=(date.today() + timedelta(days=7)).isoformat(),
+        )
+        assert body == {"items": [], "total": 0, "has_more": False}
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_expiring_screenings_are_members_only(self, server, org_with_members):
+        from unittest.mock import AsyncMock, patch
+
+        from app.schemas.medical_screening import ExpiringScreening
+
+        org_id, admin_id, _ = org_with_members
+        rows = [
+            ExpiringScreening(
+                record_id="r1",
+                screening_type="physical",
+                user_id="u1",
+                user_name="Sam Rivera",
+                expiration_date=date.today(),
+                days_until_expiration=0,
+            ),
+            ExpiringScreening(
+                record_id="r2",
+                screening_type="physical",
+                prospect_id="p1",
+                prospect_name="Applicant",
+                expiration_date=date.today(),
+                days_until_expiration=0,
+            ),
+        ]
+        with patch(
+            "app.mcp.tools.medical.MedicalScreeningService.get_expiring_soon",
+            AsyncMock(return_value=rows),
+        ):
+            body = await _call(
+                server,
+                _principal(org_id, admin_id, expose_medical_screening=True),
+                "list_expiring_screenings",
+            )
+        assert [i["member_name"] for i in body["items"]] == ["Sam Rivera"]
+        assert all(
+            "prospect_id" not in i and "prospect_name" not in i for i in body["items"]
+        )
+
+
+class TestAttendeeVisibility:
+    """The member-facing attendee gate applies to the service key: a
+    managers-only roster stays closed, a member-visible one lists ``going``
+    responses only."""
+
+    async def _event(self, db_session, org_id, admin_id, member_id, visibility):
+        from app.models.event import (
+            AttendeeVisibility,
+            Event,
+            EventRSVP,
+            EventType,
+            RSVPStatus,
+        )
+
+        event = Event(
+            organization_id=org_id,
+            title="Drill",
+            event_type=EventType.TRAINING,
+            start_datetime=datetime(2030, 1, 1, 10, tzinfo=timezone.utc),
+            end_datetime=datetime(2030, 1, 1, 12, tzinfo=timezone.utc),
+            attendee_visibility=AttendeeVisibility(visibility),
+            created_by=admin_id,
+        )
+        db_session.add(event)
+        await db_session.flush()
+        for uid, status in (
+            (admin_id, RSVPStatus.GOING),
+            (member_id, RSVPStatus.NOT_GOING),
+        ):
+            db_session.add(
+                EventRSVP(
+                    organization_id=org_id,
+                    event_id=event.id,
+                    user_id=uid,
+                    status=status,
+                    guest_count=0,
+                )
+            )
+        await db_session.flush()
+        return event.id
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_managers_only_roster_is_refused(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        event_id = await self._event(
+            db_session, org_id, admin_id, member_id, "managers"
+        )
+        with pytest.raises(ToolError, match="not shared with members"):
+            await _call(
+                server,
+                _principal(org_id, admin_id),
+                "list_event_attendees",
+                event_id=event_id,
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_member_visible_roster_lists_going_only(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        event_id = await self._event(db_session, org_id, admin_id, member_id, "members")
+        body = await _call(
+            server,
+            _principal(org_id, admin_id),
+            "list_event_attendees",
+            event_id=event_id,
+        )
+        assert [(i["member_name"], i["status"]) for i in body["items"]] == [
+            ("Admin User", "going")
+        ]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_unknown_event_is_not_found(self, server, org_with_members):
+        org_id, admin_id, _ = org_with_members
+        with pytest.raises(ToolError, match="Event not found"):
+            await _call(
+                server,
+                _principal(org_id, admin_id),
+                "list_event_attendees",
+                event_id=str(uuid.uuid4()),
+            )
+
+
 class TestAudit:
     @pytest.mark.usefixtures("_use_test_session")
     async def test_every_call_writes_an_audit_entry(

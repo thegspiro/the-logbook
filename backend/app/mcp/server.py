@@ -16,7 +16,7 @@ from mcp_types import Tool as MCPTool
 
 from app.core.config import settings
 from app.mcp.principal import peek_principal
-from app.mcp.registry import META_GATE, gate_allows
+from app.mcp.registry import META_GATE, META_MODULE, gate_allows
 
 SERVER_NAME = "The Logbook"
 
@@ -47,7 +47,11 @@ class LogbookMcpServer(MCPServer):
         return [
             tool
             for tool in tools
-            if gate_allows(principal, (tool.meta or {}).get(META_GATE))
+            if gate_allows(
+                principal,
+                (tool.meta or {}).get(META_GATE),
+                (tool.meta or {}).get(META_MODULE),
+            )
         ]
 
 

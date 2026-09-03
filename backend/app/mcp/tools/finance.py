@@ -16,7 +16,7 @@ def _money(value: Any) -> Optional[float]:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List fiscal years", gate="finance")
+    @logbook_tool(server, title="List fiscal years", gate="finance", module="finance")
     async def list_fiscal_years(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Fiscal years, newest first, with their dates and status."""
         years = await FinanceService(db).list_fiscal_years(
@@ -35,7 +35,7 @@ def register(server: Any) -> None:
         ]
         return {"items": items, "total": len(items)}
 
-    @logbook_tool(server, title="Budget summary", gate="finance")
+    @logbook_tool(server, title="Budget summary", gate="finance", module="finance")
     async def get_budget_summary(
         db: AsyncSession, principal: McpPrincipal, fiscal_year_id: str
     ) -> dict:
@@ -45,7 +45,7 @@ def register(server: Any) -> None:
         )
         return {k: iso(v) for k, v in summary.items()}
 
-    @logbook_tool(server, title="List budgets", gate="finance")
+    @logbook_tool(server, title="List budgets", gate="finance", module="finance")
     async def list_budgets(
         db: AsyncSession, principal: McpPrincipal, fiscal_year_id: Optional[str] = None
     ) -> dict:

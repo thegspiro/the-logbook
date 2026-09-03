@@ -49,13 +49,32 @@ GATE_MESSAGES: dict[str, str] = {
     ),
 }
 
-# The tool metadata key the server's list filter reads.
+# The tool metadata keys the server's list filter reads.
 META_GATE = "logbook_gate"
+META_MODULE = "logbook_module"
 
 ToolHandler = Callable[..., Awaitable[Any]]
 
 
-def gate_allows(principal: McpPrincipal, gate: Optional[str]) -> bool:
+def module_message(module: str) -> str:
+    name = module.replace("_", " ").title()
+    return (
+        f"The {name} module is not enabled for this organization. An "
+        "administrator can turn it on under Settings → Modules."
+    )
+
+
+def gate_allows(
+    principal: McpPrincipal, gate: Optional[str], module: Optional[str] = None
+) -> bool:
+    """Whether ``principal`` may see and call a tool.
+
+    Two independent switches: the department's module enablement (the same
+    flag the module's API router enforces) and the MCP-specific switch the
+    tool sits behind. Both have to say yes.
+    """
+    if not principal.module_enabled(module):
+        return False
     if gate is None:
         return True
     if gate == "write":
@@ -85,12 +104,16 @@ def logbook_tool(
     name: Optional[str] = None,
     title: Optional[str] = None,
     gate: Optional[Gate] = None,
+    module: Optional[str] = None,
     destructive: bool = False,
 ) -> Callable[[ToolHandler], ToolHandler]:
     """Register ``fn`` on ``server`` behind gating, redaction and audit.
 
-    ``gate`` names the department switch the tool needs; ``None`` is a plain
-    read. A ``write`` tool is also marked non-read-only for the client.
+    ``gate`` names the MCP switch the tool needs; ``None`` is a plain read.
+    ``module`` names the Logbook module that owns the data, using the same
+    key the module's API router is gated on; ``None`` is an essential module
+    (members, events, documents) that cannot be switched off. A ``write``
+    tool is also marked non-read-only for the client.
     """
 
     def decorator(fn: ToolHandler) -> ToolHandler:
@@ -100,6 +123,8 @@ def logbook_tool(
         @functools.wraps(fn)
         async def wrapper(**kwargs: Any) -> Any:
             principal = current_principal()
+            if not principal.module_enabled(module):
+                raise ToolError(module_message(module or ""))
             if not gate_allows(principal, gate):
                 raise ToolError(GATE_MESSAGES[gate or ""])
             try:
@@ -138,7 +163,10 @@ def logbook_tool(
                 idempotent_hint=gate != "write",
                 open_world_hint=False,
             ),
-            meta={META_GATE: gate} if gate else None,
+            meta=(
+                {k: v for k, v in ((META_GATE, gate), (META_MODULE, module)) if v}
+                or None
+            ),
         )(wrapper)
         return fn
 

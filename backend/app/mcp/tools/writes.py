@@ -44,6 +44,13 @@ async def _actor(db: AsyncSession, principal: McpPrincipal) -> UUID:
     user = await db.get(User, principal.issued_by_user_id)
     if user is None or user.organization_id != principal.organization_id:
         raise ValueError("The issuing administrator's account was not found")
+    # Deprovisioning is a soft delete or a status change, not a row delete:
+    # an issuer who can no longer sign in must not keep signing writes.
+    if not user.is_active:
+        raise ValueError(
+            "The administrator who issued this service key is no longer active, "
+            "so writes cannot be attributed. Issue a new key."
+        )
     return UUID(user.id)
 
 
@@ -139,7 +146,9 @@ def register(server: Any) -> None:
             "priority": item.priority,
         }
 
-    @logbook_tool(server, title="Create reorder request", gate="write")
+    @logbook_tool(
+        server, title="Create reorder request", gate="write", module="inventory"
+    )
     async def create_reorder_request(
         db: AsyncSession,
         principal: McpPrincipal,

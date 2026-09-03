@@ -122,7 +122,7 @@ def register(server: Any) -> None:
         ]
         return {"items": rendered, "total": len(rendered)}
 
-    @logbook_tool(server, title="List published minutes")
+    @logbook_tool(server, title="List published minutes", module="minutes")
     async def list_minutes(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -145,7 +145,7 @@ def register(server: Any) -> None:
         )
         return page([_minutes_summary(m) for m in rows], None, limit, offset)
 
-    @logbook_tool(server, title="Get published minutes")
+    @logbook_tool(server, title="Get published minutes", module="minutes")
     async def get_minutes(
         db: AsyncSession, principal: McpPrincipal, minutes_id: str
     ) -> dict:

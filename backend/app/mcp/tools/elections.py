@@ -13,7 +13,7 @@ from app.services.election_service import ElectionService
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List elections")
+    @logbook_tool(server, title="List elections", module="elections")
     async def list_elections(
         db: AsyncSession, principal: McpPrincipal, status: Optional[str] = None
     ) -> dict:
@@ -50,7 +50,7 @@ def register(server: Any) -> None:
         ]
         return {"items": items, "total": len(items)}
 
-    @logbook_tool(server, title="Election results")
+    @logbook_tool(server, title="Election results", module="elections")
     async def get_election_results(
         db: AsyncSession, principal: McpPrincipal, election_id: str
     ) -> dict:

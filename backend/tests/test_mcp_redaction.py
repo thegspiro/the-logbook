@@ -119,6 +119,9 @@ class TestScrubText:
             ("555-123-4567", "[phone removed]"),
             ("+1 555 123 4567", "[phone removed]"),
             ("call 5551234567 now", "call [phone removed] now"),
+            ("Call 555-0100", "Call [phone removed]"),
+            ("Dial +44 20 7946 0958", "Dial [phone removed]"),
+            ("+49 30 1234567", "[phone removed]"),
         ],
     )
     def test_contact_shapes_are_replaced(self, text, expected):
@@ -132,6 +135,8 @@ class TestScrubText:
             "PO 202609031234 shipped",
             "Engine 1 pumps 1500 gpm; unit 2024",
             "ext 4567",
+            "range 2024-2025",
+            "ISO 9001-2015",
         ],
     )
     def test_identifiers_and_quantities_survive(self, text):

@@ -21,19 +21,19 @@ station and position.
 
 Read tools, always available once connected:
 
-| Area       | Tools                                                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Department | `get_department_profile` — name, timezone, identifiers, active locations, enabled modules                                         |
-| Roster     | `list_members`, `get_member` — name, rank, station, platoon, class, status, hire date, positions                                  |
-| Events     | `list_events`, `get_event`, `list_event_rsvps` — calendar with RSVP and waitlist counts, who responded                            |
-| Scheduling | `list_shifts`, `list_open_shifts`, `get_scheduling_summary` — seats, assignments, gaps                                            |
-| Training   | `list_expiring_certifications`, `get_member_training_summary`, `get_member_requirements_progress`, `list_member_training_records` |
-| Inventory  | `get_inventory_summary`, `list_low_stock_items`, `list_inventory_items`, `list_overdue_checkouts`                                 |
-| Apparatus  | `list_apparatus`, `get_fleet_summary`, `list_apparatus_maintenance`                                                               |
-| Facilities | `list_facilities`, `get_facilities_counts`                                                                                        |
-| Meetings   | `list_meetings`, `list_open_action_items`, `list_minutes`, `get_minutes` — **approved, non-executive minutes only**               |
-| Documents  | `list_documents`, `get_document` — **active documents in folders every member can read**                                          |
-| Elections  | `list_elections`, `get_election_results` — results only after an election closes                                                  |
+| Area       | Tools                                                                                                                                              |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Department | `get_department_profile` — name, timezone, identifiers, active locations, enabled modules                                                          |
+| Roster     | `list_members`, `get_member` — name, rank, station, platoon, class, status, hire date, positions                                                   |
+| Events     | `list_events`, `get_event`, `list_event_attendees` — calendar with RSVP and waitlist counts; the going list where the event shares it with members |
+| Scheduling | `list_shifts`, `list_open_shifts`, `get_scheduling_summary` — seats, assignments, gaps                                                             |
+| Training   | `list_expiring_certifications`, `get_member_training_summary`, `get_member_requirements_progress`, `list_member_training_records`                  |
+| Inventory  | `get_inventory_summary`, `list_low_stock_items`, `list_inventory_items`, `list_overdue_checkouts`                                                  |
+| Apparatus  | `list_apparatus`, `get_fleet_summary`, `list_apparatus_maintenance`                                                                                |
+| Facilities | `list_facilities`, `get_facilities_counts`                                                                                                         |
+| Meetings   | `list_meetings`, `list_open_action_items`, `list_minutes`, `get_minutes` — **approved, non-executive minutes only**                                |
+| Documents  | `list_documents`, `get_document` — **active documents in folders every member can read**                                                           |
+| Elections  | `list_elections`, `get_election_results` — results only after an election closes                                                                   |
 
 Switched on per department, off by default:
 

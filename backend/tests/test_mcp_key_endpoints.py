@@ -62,6 +62,18 @@ async def _connect(db, org_id, config=None):
     return row
 
 
+class TestInstants:
+    def test_naive_datetimes_are_serialized_as_utc(self):
+        from datetime import datetime, timedelta, timezone
+
+        from app.api.v1.endpoints.mcp_keys import _instant
+
+        assert _instant(None) is None
+        assert _instant(datetime(2026, 9, 3, 10, 0, 0)) == "2026-09-03T10:00:00+00:00"
+        aware = datetime(2026, 9, 3, 6, 0, 0, tzinfo=timezone(timedelta(hours=-4)))
+        assert _instant(aware) == "2026-09-03T10:00:00+00:00"
+
+
 class TestStatus:
     async def test_status_off_before_connecting(self, db_session, setup_org_and_admin):
         org_id, admin_id = setup_org_and_admin

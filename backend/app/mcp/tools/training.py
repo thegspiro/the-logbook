@@ -44,7 +44,7 @@ def _record(record: TrainingRecord, member_name: Optional[str]) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="Expiring certifications")
+    @logbook_tool(server, title="Expiring certifications", module="training")
     async def list_expiring_certifications(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -62,7 +62,7 @@ def register(server: Any) -> None:
         items = [_record(r, names.get(r.user_id)) for r in records]
         return {"days_ahead": days_ahead, "items": items, "total": len(items)}
 
-    @logbook_tool(server, title="Member training summary")
+    @logbook_tool(server, title="Member training summary", module="training")
     async def get_member_training_summary(
         db: AsyncSession, principal: McpPrincipal, member_id: str
     ) -> dict:
@@ -74,7 +74,7 @@ def register(server: Any) -> None:
         )
         return stats.model_dump(mode="json")
 
-    @logbook_tool(server, title="Member requirement progress")
+    @logbook_tool(server, title="Member requirement progress", module="training")
     async def get_member_requirements_progress(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -89,7 +89,7 @@ def register(server: Any) -> None:
         )
         return {"items": [p.model_dump(mode="json") for p in progress]}
 
-    @logbook_tool(server, title="Member training records")
+    @logbook_tool(server, title="Member training records", module="training")
     async def list_member_training_records(
         db: AsyncSession,
         principal: McpPrincipal,

@@ -32,10 +32,21 @@ class McpPrincipal:
     expose_finance: bool
     expose_medical_screening: bool
     client_ip: Optional[str] = None
+    # The department's enabled module keys, resolved when the key was
+    # authenticated. A tool owned by a module not in this set is hidden and
+    # refused, exactly as the module's API router answers 403 — switching a
+    # module off must switch it off for Claude too. ``None`` means the set
+    # was not resolved (tests); ``require_module`` treats that the same way.
+    enabled_modules: Optional[frozenset[str]] = None
 
     @property
     def can_write(self) -> bool:
         return self.access_mode == "read_write"
+
+    def module_enabled(self, module: Optional[str]) -> bool:
+        if module is None or self.enabled_modules is None:
+            return True
+        return module in self.enabled_modules
 
 
 _current: ContextVar[Optional[McpPrincipal]] = ContextVar("mcp_principal", default=None)

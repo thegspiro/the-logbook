@@ -129,7 +129,7 @@ async def _render(
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List shifts")
+    @logbook_tool(server, title="List shifts", module="scheduling")
     async def list_shifts(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -152,7 +152,7 @@ def register(server: Any) -> None:
         )
         return page(await _render(db, principal, list(shifts)), total, limit, offset)
 
-    @logbook_tool(server, title="List open shifts")
+    @logbook_tool(server, title="List open shifts", module="scheduling")
     async def list_open_shifts(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -169,9 +169,11 @@ def register(server: Any) -> None:
             org_uuid(principal), start, end
         )
         items = await _render(db, principal, list(shifts))
-        return page(items, None, len(items), 0)
+        # Not paginated: the whole window comes back at once, so there is
+        # never a continuation to ask for.
+        return {"items": items, "total": len(items), "has_more": False}
 
-    @logbook_tool(server, title="Scheduling summary")
+    @logbook_tool(server, title="Scheduling summary", module="scheduling")
     async def get_scheduling_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Counts of upcoming, open and recent shifts for the department."""
         return await SchedulingService(db).get_summary(org_uuid(principal))

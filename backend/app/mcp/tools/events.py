@@ -16,7 +16,9 @@ from app.mcp.tools._common import (
     parse_datetime,
     parse_uuid,
 )
-from app.services.event_service import EventService
+from app.models.event import AttendeeVisibility
+from app.models.user import Organization
+from app.services.event_service import EventService, resolve_attendee_visibility
 
 
 def _event(event: Any, counts: Optional[dict] = None) -> dict:
@@ -92,27 +94,36 @@ def register(server: Any) -> None:
             raise ValueError("Event not found")
         return _event(event)
 
-    @logbook_tool(server, title="List event RSVPs")
-    async def list_event_rsvps(
+    @logbook_tool(server, title="List event attendees")
+    async def list_event_attendees(
         db: AsyncSession,
         principal: McpPrincipal,
         event_id: str,
-        status: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict:
-        """Who has responded to an event and how: member name, RSVP status
-        (going, not_going, maybe, waitlisted), guest count and whether they
-        checked in. ``status`` filters to one RSVP status."""
+        """Who is going to an event, as a sign-up sheet: member name, guest
+        count and whether they checked in. Only ``going`` responses, and only
+        when the event (or the department's default) shares its attendee
+        list with members; otherwise the list is not available here."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
-        rsvps = await EventService(db).list_event_rsvps(
-            parse_uuid(event_id, "event_id"),
-            org_uuid(principal),
-            status_filter=status or None,
+        event, rsvps = await EventService(db).list_event_attendees_for_member(
+            event_id=parse_uuid(event_id, "event_id"),
+            organization_id=org_uuid(principal),
             skip=offset,
             limit=limit,
         )
+        if event is None:
+            raise ValueError("Event not found")
+        # The same gate the member-facing endpoint applies: a service key is
+        # not an events manager, so a managers-only roster stays closed.
+        org = await db.get(Organization, principal.organization_id)
+        visibility = resolve_attendee_visibility(event, org.settings if org else None)
+        if visibility != AttendeeVisibility.MEMBERS:
+            raise ValueError(
+                "The attendee list for this event is not shared with members"
+            )
         names = await member_names(
             db, principal.organization_id, (r.user_id for r in rsvps)
         )

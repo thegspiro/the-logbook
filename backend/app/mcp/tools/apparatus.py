@@ -44,7 +44,7 @@ def _apparatus(a: Any) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List apparatus")
+    @logbook_tool(server, title="List apparatus", module="apparatus")
     async def list_apparatus(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -66,13 +66,13 @@ def register(server: Any) -> None:
         )
         return page([_apparatus(a) for a in rows], total, limit, offset)
 
-    @logbook_tool(server, title="Fleet summary")
+    @logbook_tool(server, title="Fleet summary", module="apparatus")
     async def get_fleet_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Counts by status, deficiencies, and upcoming maintenance and
         expirations across the fleet."""
         return await ApparatusService(db).get_fleet_summary(principal.organization_id)
 
-    @logbook_tool(server, title="Apparatus maintenance")
+    @logbook_tool(server, title="Apparatus maintenance", module="apparatus")
     async def list_apparatus_maintenance(
         db: AsyncSession,
         principal: McpPrincipal,

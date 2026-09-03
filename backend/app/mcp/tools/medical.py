@@ -16,7 +16,12 @@ from app.services.medical_screening_service import MedicalScreeningService
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="Member medical compliance", gate="medical_screening")
+    @logbook_tool(
+        server,
+        title="Member medical compliance",
+        gate="medical_screening",
+        module="medical_screening",
+    )
     async def get_member_medical_compliance(
         db: AsyncSession, principal: McpPrincipal, member_id: str
     ) -> dict:
@@ -29,7 +34,12 @@ def register(server: Any) -> None:
         )
         return summary.model_dump(mode="json")
 
-    @logbook_tool(server, title="Expiring screenings", gate="medical_screening")
+    @logbook_tool(
+        server,
+        title="Expiring screenings",
+        gate="medical_screening",
+        module="medical_screening",
+    )
     async def list_expiring_screenings(
         db: AsyncSession, principal: McpPrincipal, days: int = 30
     ) -> dict:
@@ -39,5 +49,19 @@ def register(server: Any) -> None:
         rows = await MedicalScreeningService(db).get_expiring_soon(
             principal.organization_id, days=days
         )
-        items = [r.model_dump(mode="json") for r in rows]
+        # Members only: applicants' screenings belong to the prospective-
+        # members module, which this switch does not cover.
+        items = [
+            {
+                "record_id": r.record_id,
+                "member_id": r.user_id,
+                "member_name": r.user_name,
+                "screening_type": r.screening_type,
+                "requirement_name": r.requirement_name,
+                "expiration_date": r.expiration_date.isoformat(),
+                "days_until_expiration": r.days_until_expiration,
+            }
+            for r in rows
+            if r.user_id
+        ]
         return {"days": days, "items": items, "total": len(items)}

@@ -19,20 +19,20 @@ from app.services.inventory_service import InventoryService
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="Inventory summary")
+    @logbook_tool(server, title="Inventory summary", module="inventory")
     async def get_inventory_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Totals for the inventory: items, value, assigned, checked out,
         in maintenance, and low-stock categories."""
         return await InventoryService(db).get_inventory_summary(org_uuid(principal))
 
-    @logbook_tool(server, title="Low stock")
+    @logbook_tool(server, title="Low stock", module="inventory")
     async def list_low_stock_items(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Categories whose stock has fallen below their reorder point, with
         the item names involved."""
         items = await InventoryService(db).get_low_stock_items(org_uuid(principal))
         return {"items": items, "total": len(items)}
 
-    @logbook_tool(server, title="List inventory items")
+    @logbook_tool(server, title="List inventory items", module="inventory")
     async def list_inventory_items(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -90,7 +90,7 @@ def register(server: Any) -> None:
         ]
         return page(rendered, total, limit, offset)
 
-    @logbook_tool(server, title="Overdue checkouts")
+    @logbook_tool(server, title="Overdue checkouts", module="inventory")
     async def list_overdue_checkouts(
         db: AsyncSession, principal: McpPrincipal, limit: int = 100
     ) -> dict:

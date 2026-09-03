@@ -122,16 +122,25 @@ def is_denied_field(name: str) -> bool:
 # written out, a diagnosis) is not detectable and is why only *published*
 # content is exposed at all.
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-# A phone number written the way people write them: groups separated by
-# spaces, dots, dashes or parentheses, optional country code. Requiring the
-# separators is deliberate — a bare run of digits is as likely to be a
-# serial number or an asset tag as a phone number.
+# A phone number written the way people write them: international with a
+# country code, North American with an area code, or a local seven-digit
+# number, with groups separated by spaces, dots, dashes or parentheses.
+# Requiring the separators is deliberate — a bare run of digits is as likely
+# to be a serial number or an asset tag as a phone number.
 _PHONE_FORMATTED_RE = re.compile(
-    r"(?<![\w-])(?:\+?\d{1,3}[\s.-])?(?:\(\d{3}\)\s?|\d{3}[\s.-])\d{3}[\s.-]\d{4}(?![\w-])"
+    r"(?<![\w-])(?:"
+    # International: a country code then two to four separated groups
+    # (+44 20 7946 0958, +1 555 123 4567, +49 30 1234567).
+    r"\+\d{1,3}(?:[\s.-]?\d{2,5}){2,4}"
+    r"|"
+    # North American with area code: (555) 123-4567, 555-123-4567,
+    # 555.123.4567, optional leading 1.
+    r"(?:1[\s.-])?(?:\(\d{3}\)\s?|\d{3}[\s.-])\d{3}[\s.-]\d{4}"
+    r"|"
+    # Local seven-digit: 555-0100, 555.0100 (separator required).
+    r"\d{3}[.-]\d{4}"
+    r")(?![\w-])"
 )
-# A bare ten- or eleven-digit run is scrubbed only inside prose (a string
-# with whitespace), where "call 5551234567" is a phone number and a lone
-# "5551234567" in an asset-tag field is not.
 _PHONE_BARE_RE = re.compile(r"(?<![\w-])\+?\d{10,11}(?![\w-])")
 EMAIL_PLACEHOLDER = "[email removed]"
 PHONE_PLACEHOLDER = "[phone removed]"

@@ -220,6 +220,44 @@ class TestAuthenticate:
             await svc.authenticate(minted.plaintext)
         assert excinfo.value.status == 403
 
+    async def test_principal_carries_the_enabled_modules(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
+        svc = McpKeyService(db_session)
+        minted = await svc.mint(
+            org_id, name="k", expires_in_days=None, created_by=admin_id
+        )
+        principal = await svc.authenticate(minted.plaintext)
+        assert principal.enabled_modules is not None
+        assert {"members", "events", "integrations"} <= principal.enabled_modules
+        assert principal.module_enabled("members")
+
+    async def test_integrations_module_off_is_403(
+        self, db_session, setup_org_and_admin
+    ):
+        """Switching the Integrations module off must switch this off too,
+        the way the integrations routers answer 403 — a key issued earlier
+        does not outlive the department's decision."""
+        from uuid import UUID
+
+        from app.services.organization_service import OrganizationService
+
+        org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
+        svc = McpKeyService(db_session)
+        minted = await svc.mint(
+            org_id, name="k", expires_in_days=None, created_by=admin_id
+        )
+        await OrganizationService(db_session).update_module_settings(
+            UUID(org_id), {"integrations": False}
+        )
+        with pytest.raises(McpAuthError) as excinfo:
+            await svc.authenticate(minted.plaintext)
+        assert excinfo.value.status == 403
+        assert "Integrations module" in str(excinfo.value)
+
     async def test_missing_integration_row_is_403(
         self, db_session, setup_org_and_admin
     ):

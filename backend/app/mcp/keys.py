@@ -11,6 +11,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy import or_, select
@@ -254,6 +255,22 @@ class McpKeyService:
             )
         config = parse_config(row.config)
 
+        # The same module switches the API routers enforce. Integrations is
+        # the module this feature lives under, so a department that switched
+        # it off has switched this off too, key or no key.
+        from app.services.organization_service import OrganizationService
+
+        modules = await OrganizationService(self.db).get_enabled_modules(
+            UUID(key.organization_id)
+        )
+        enabled_modules = frozenset(modules.enabled_modules)
+        if "integrations" not in enabled_modules:
+            raise McpAuthError(
+                "The Integrations module is not enabled for this organization. "
+                "An administrator can turn it on under Settings → Modules.",
+                status=403,
+            )
+
         if _last_used_is_stale(key.last_used_at, now):
             key.last_used_at = now
             await self.db.commit()
@@ -267,6 +284,7 @@ class McpKeyService:
             expose_finance=config.expose_finance,
             expose_medical_screening=config.expose_medical_screening,
             client_ip=client_ip,
+            enabled_modules=enabled_modules,
         )
 
 
