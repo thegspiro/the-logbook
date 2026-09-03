@@ -122,9 +122,10 @@ stdio-to-HTTP bridge (such as `mcp-remote`) that passes the
 - **Key storage.** Only a SHA-256 digest is stored, with a display prefix.
   The key is 32 bytes of CSPRNG output, so a slow hash adds nothing, and
   every tool call verifies the key.
-- **Fail closed.** A revoked or expired key, or an integration row that is
-  missing, disabled or not in the `connected` state, is refused with 401/403
-  before the request reaches the MCP server.
+- **Fail closed.** A revoked or expired key, an integration row that is
+  missing, disabled or not in the `connected` state, or an organization that
+  has been deactivated, is refused with 401/403 before the request reaches
+  the MCP server.
 - **Redaction is enforced in one place.** `app/mcp/redaction.py` strips
   denied field names at every depth of every tool result and scrubs every
   string value of email addresses and phone numbers, so a note or a
