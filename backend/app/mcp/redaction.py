@@ -164,9 +164,12 @@ def _is_national_phone(match: "re.Match[str]") -> bool:
         return False
     if any(shape.fullmatch(raw) for shape in _DATE_SHAPES):
         return False
-    # 10 000 000: a figure grouped in thousands, not a number to dial.
+    # 10 000 000 or 1 500 000: a figure grouped in thousands, not a number
+    # to dial. Only a one- or two-digit leading group counts as a figure —
+    # a nine-digit 612 345 678 is how several countries write a phone
+    # number, and a leading group of three or more is treated as one.
     groups = re.split(r"[\s.-]", raw.strip("()"))
-    if len(groups) > 1 and all(len(g) == 3 for g in groups[1:]):
+    if len(groups) > 1 and len(groups[0]) <= 2 and all(len(g) == 3 for g in groups[1:]):
         return False
     return True
 

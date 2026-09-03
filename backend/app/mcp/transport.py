@@ -21,7 +21,7 @@ configured with the bare path.
 
 import time
 from collections import OrderedDict
-from typing import Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 from loguru import logger
 from starlette.datastructures import Headers
@@ -78,6 +78,19 @@ class _MemoryRateLimiter:
         hits.append(now)
         return False
 
+    def over(
+        self, key: str, now: Optional[float] = None, limit: Optional[int] = None
+    ) -> bool:
+        """Whether ``key`` is at its limit, without recording a hit."""
+        limit = self.limit if limit is None else limit
+        now = time.monotonic() if now is None else now
+        cutoff = now - self.window
+        hits = self._hits.get(key)
+        if hits is None:
+            return False
+        hits[:] = [t for t in hits if t > cutoff]
+        return len(hits) >= limit
+
 
 async def authenticate_with_database(
     presented: str, client_ip: Optional[str]
@@ -126,10 +139,14 @@ class McpEndpoint:
             return
 
         client_ip = _client_ip(scope, receive)
-        # Every token-shaped value costs a database lookup, so attempts are
-        # budgeted per client address before authentication, not only per
-        # key after it; otherwise a stranger could guess keys at line rate.
-        if await self._limited(f"auth:{client_ip or 'unknown'}", self._auth_rate_limit):
+        # Every token-shaped value costs a database lookup, so *failed*
+        # attempts are budgeted per client address and checked before the
+        # lookup; otherwise a stranger could guess keys at line rate. A
+        # successful call never consumes this budget: valid keys behind one
+        # proxy must not throttle each other, and a client's own ceiling is
+        # the per-key limit below.
+        auth_bucket = f"auth:{client_ip or 'unknown'}"
+        if await self._over(auth_bucket, self._auth_rate_limit):
             await _reject(
                 scope,
                 receive,
@@ -142,6 +159,7 @@ class McpEndpoint:
         try:
             principal = await self._authenticate(presented, client_ip)
         except McpAuthError as exc:
+            await self._limited(auth_bucket, self._auth_rate_limit)
             await _reject(scope, receive, send, exc.status, str(exc))
             return
         except Exception:
@@ -168,7 +186,24 @@ class McpEndpoint:
         with bind_principal(principal):
             await manager.handle_request(scope, receive, send)
 
+    async def _over(self, bucket_id: str, limit: int) -> bool:
+        """Whether a bucket is at its limit, without recording a hit."""
+        if not settings.RATE_LIMIT_ENABLED:
+            return False
+        bucket = f"mcp:{bucket_id}"
+        try:
+            from app.core.cache import cache_manager
+
+            if cache_manager.is_connected and cache_manager.redis_client:
+                return await _redis_bucket_full(
+                    cache_manager.redis_client, bucket, limit, self._rate_window
+                )
+        except Exception:
+            logger.warning("Redis rate limit unavailable for MCP; using in-memory")
+        return self._memory_limiter.over(bucket, limit=limit)
+
     async def _limited(self, bucket_id: str, limit: int) -> bool:
+        """Record a hit on a bucket and say whether it was already full."""
         if not settings.RATE_LIMIT_ENABLED:
             return False
         bucket = f"mcp:{bucket_id}"
@@ -186,6 +221,19 @@ class McpEndpoint:
         except Exception:
             logger.warning("Redis rate limit unavailable for MCP; using in-memory")
         return self._memory_limiter.exceeded(bucket, limit=limit)
+
+
+async def _redis_bucket_full(
+    redis_client: Any, key: str, limit: int, window: int
+) -> bool:
+    """The read half of ``is_rate_limited``: prune the window, count, no add."""
+    rate_limit_key = f"rate_limit:{key}"
+    now = time.time()
+    pipe = redis_client.pipeline()
+    pipe.zremrangebyscore(rate_limit_key, 0, now - window)
+    pipe.zcard(rate_limit_key)
+    results = await pipe.execute()
+    return int(results[1]) >= limit
 
 
 def _bearer_token(authorization: Optional[str]) -> Optional[str]:

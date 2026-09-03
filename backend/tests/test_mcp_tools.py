@@ -2615,6 +2615,61 @@ class TestTwentiethRoundFindings:
         assert result["total_in_app_reminders"] > 0
 
 
+class TestTwentySecondRoundFindings:
+    """Regressions for the twenty-second review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_event_descriptions_are_bounded_and_readable_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import events as event_tools
+        from app.models.event import Event, EventType
+
+        org_id, admin_id, _ = org_with_members
+        description = "Bring gear. Call 5551234567. " + "e" * 30
+        event = Event(
+            organization_id=org_id,
+            title="Long drill",
+            event_type=EventType.TRAINING,
+            description=description,
+            start_datetime=datetime(2030, 2, 1, 10, tzinfo=timezone.utc),
+            end_datetime=datetime(2030, 2, 1, 12, tzinfo=timezone.utc),
+            created_by=admin_id,
+        )
+        db_session.add(event)
+        await db_session.flush()
+        monkeypatch.setattr(event_tools, "EVENT_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_events")
+        row = next(e for e in listed["items"] if e["id"] == event.id)
+        assert len(row["description"]) == 12
+        assert row["description_truncated"] is True
+        one = await _call(server, principal, "get_event", event_id=event.id)
+        assert one["description_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_event_description",
+                event_id=event.id,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert joined.endswith("e" * 30)
+        assert chunk["title"] == "Long drill"
+        with pytest.raises(ToolError, match="Event not found"):
+            await _call(
+                server, principal, "get_event_description", event_id=str(uuid.uuid4())
+            )
+
+
 class TestReviewFindings:
     """Regressions for the first review round on #2197."""
 

@@ -5,6 +5,7 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
+from app.mcp.redaction import scrub_text
 from app.mcp.registry import logbook_tool
 from app.mcp.tools._common import (
     clamp_limit,
@@ -20,13 +21,44 @@ from app.models.event import AttendeeVisibility
 from app.models.user import Organization
 from app.services.event_service import EventService, resolve_attendee_visibility
 
+# Characters of an event description returned per call; a longer one is
+# read in pieces through ``get_event_description``. The column is unbounded
+# Text, so a page of events cannot be allowed to carry every word of it.
+EVENT_TEXT_CHARS = 20_000
+
+
+def _clip(value: Any) -> tuple[Any, bool]:
+    """``value`` scrubbed and cut to ``EVENT_TEXT_CHARS``, and whether cut."""
+    if not isinstance(value, str):
+        return value, False
+    value = scrub_text(value)
+    if len(value) <= EVENT_TEXT_CHARS:
+        return value, False
+    return value[:EVENT_TEXT_CHARS], True
+
+
+def _chunk(text: str, offset: int) -> dict:
+    text = scrub_text(text)
+    piece = text[offset : offset + EVENT_TEXT_CHARS]
+    body = {
+        "content": piece,
+        "content_offset": offset,
+        "content_total_chars": len(text),
+        "content_has_more": offset + len(piece) < len(text),
+    }
+    if body["content_has_more"]:
+        body["next_content_offset"] = offset + len(piece)
+    return body
+
 
 def _event(event: Any, counts: Optional[dict] = None) -> dict:
     counts = counts or {}
+    description, cut = _clip(event.description)
     return {
         "id": event.id,
         "title": event.title,
-        "description": event.description,
+        "description": description,
+        "description_truncated": cut,
         "event_type": iso(event.event_type),
         "custom_category": event.custom_category,
         "location": event.location,
@@ -65,7 +97,9 @@ def register(server: Any) -> None:
         """Events in a window, with RSVP and waitlist counts. ``start_after``
         and ``start_before`` are ISO-8601 date-times (UTC); omit both for the
         default of every non-cancelled published event. ``event_type`` is one
-        of the department's event types (training, business_meeting, ...)."""
+        of the department's event types (training, business_meeting, ...).
+        A description is cut at 20,000 characters (``description_truncated``);
+        ``get_event_description`` reads the rest."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         rows = await EventService(db).list_events(
@@ -85,7 +119,8 @@ def register(server: Any) -> None:
     async def get_event(
         db: AsyncSession, principal: McpPrincipal, event_id: str
     ) -> dict:
-        """One event by id, with its full description and RSVP settings."""
+        """One event by id, with its description (cut at 20,000 characters;
+        ``get_event_description`` reads the rest) and RSVP settings."""
         # get_event answers (None, None) for an unknown or foreign id.
         event, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal)
@@ -93,6 +128,26 @@ def register(server: Any) -> None:
         if event is None:
             raise ValueError("Event not found")
         return _event(event)
+
+    @logbook_tool(server, title="Read event description")
+    async def get_event_description(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        event_id: str,
+        content_offset: int = 0,
+    ) -> dict:
+        """An event's description, 20,000 characters at a time. When
+        ``content_has_more`` is true, call again with ``content_offset`` set
+        to ``next_content_offset``."""
+        content_offset = clamp_offset(content_offset)
+        event, _ = await EventService(db).get_event(
+            parse_uuid(event_id, "event_id"), org_uuid(principal)
+        )
+        if event is None:
+            raise ValueError("Event not found")
+        body = _chunk(event.description or "", content_offset)
+        body.update({"event_id": event.id, "title": event.title})
+        return body
 
     @logbook_tool(server, title="List event attendees")
     async def list_event_attendees(

@@ -136,6 +136,9 @@ class TestScrubText:
             ("Ring 912345678", "Ring [phone removed]"),
             ("01 23 45 67 89", "[phone removed]"),
             ("030-1234-5678", "[phone removed]"),
+            ("Ring 612 345 678", "Ring [phone removed]"),
+            ("0412 345 678", "[phone removed]"),
+            ("612.345.678", "[phone removed]"),
         ],
     )
     def test_contact_shapes_are_replaced(self, text, expected):

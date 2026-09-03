@@ -601,6 +601,11 @@ async def connect_integration(
             "integration_name": integration.name,
             "integration_id": integration.id,
         },
+        # Attribution columns, not only payload keys: the audit endpoints
+        # filter on AuditLog.organization_id, so an entry stamped only inside
+        # event_data never shows in the department's trail.
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
     )
 
     return _integration_to_dict(integration)
@@ -643,6 +648,11 @@ async def disconnect_integration(
             "integration_name": integration.name,
             "integration_id": integration.id,
         },
+        # Attribution columns, not only payload keys: the audit endpoints
+        # filter on AuditLog.organization_id, so an entry stamped only inside
+        # event_data never shows in the department's trail.
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
     )
 
     return {"status": "disconnected"}
@@ -710,6 +720,11 @@ async def update_integration(
             "integration_name": integration.name,
             "integration_id": integration.id,
         },
+        # Attribution columns, not only payload keys: the audit endpoints
+        # filter on AuditLog.organization_id, so an entry stamped only inside
+        # event_data never shows in the department's trail.
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
     )
 
     return _integration_to_dict(integration)

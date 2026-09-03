@@ -119,6 +119,43 @@ class TestCreate:
             )
         assert excinfo.value.status_code == 409
 
+    async def test_connecting_the_integration_is_attributed_to_the_tenant(
+        self, db_session, setup_org_and_admin
+    ):
+        """The audit endpoints filter on the organization column, so an
+        entry stamped only inside event_data never shows in the trail."""
+        from sqlalchemy import select
+
+        from app.api.v1.endpoints.integrations import connect_integration
+        from app.schemas.integration import IntegrationConnectRequest
+
+        org_id, admin_id = setup_org_and_admin
+        row = Integration(
+            organization_id=org_id,
+            integration_type=MCP_INTEGRATION_TYPE,
+            name="Claude (MCP)",
+            category="AI Assistants",
+            status="available",
+            config={},
+            enabled=False,
+        )
+        db_session.add(row)
+        await db_session.flush()
+        await connect_integration(
+            row.id,
+            request=_request(),
+            body=IntegrationConnectRequest(config={"access_mode": "read_only"}),
+            db=db_session,
+            current_user=_user(org_id, admin_id),
+        )
+        entry = (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "integration.connected")
+            )
+        ).scalar_one()
+        assert entry.organization_id == org_id
+        assert entry.user_id == admin_id
+
     async def test_rotation_rolls_back_when_the_audit_entry_fails(
         self, db_session, setup_org_and_admin
     ):

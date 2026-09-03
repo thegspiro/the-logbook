@@ -54,7 +54,7 @@ def _server() -> LogbookMcpServer:
 
 
 @contextlib.asynccontextmanager
-async def running_client(rate_limit=None, rate_window_seconds=60):
+async def running_client(rate_limit=None, rate_window_seconds=60, auth_rate_limit=None):
     """A client against a routed endpoint with the SDK session manager running.
 
     A context manager rather than an async fixture: the manager's ``run()``
@@ -66,6 +66,8 @@ async def running_client(rate_limit=None, rate_window_seconds=60):
     kwargs = {"authenticate": fake_authenticate}
     if rate_limit is not None:
         kwargs.update(rate_limit=rate_limit, rate_window_seconds=rate_window_seconds)
+    if auth_rate_limit is not None:
+        kwargs.update(auth_rate_limit=auth_rate_limit)
     endpoint = McpEndpoint(**kwargs)
     app = Starlette(routes=[Route("/api/mcp", endpoint), Route("/api/mcp/", endpoint)])
     app.state.mcp_session_manager = manager
@@ -218,6 +220,41 @@ class TestRateLimit:
                 ]
         assert codes == [401, 401, 429, 429]
         assert len(attempts) == 2
+
+    async def test_valid_calls_never_consume_the_attempt_budget(self, monkeypatch):
+        """The per-address budget is for failed attempts: a client making
+        many valid calls, or several valid keys behind one proxy, must reach
+        the per-key limit, not this smaller one."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+        async with running_client(auth_rate_limit=1) as (client, _):
+            codes = [
+                (
+                    await client.post(
+                        "/api/mcp", json=_call("whoami"), headers=_headers()
+                    )
+                ).status_code
+                for _ in range(3)
+            ]
+            bad = [
+                (
+                    await client.post(
+                        "/api/mcp",
+                        json=_call("whoami"),
+                        headers=_headers(token="logbook_mcp_wrong"),
+                    )
+                ).status_code
+                for _ in range(2)
+            ]
+            after = await client.post(
+                "/api/mcp", json=_call("whoami"), headers=_headers()
+            )
+        assert codes == [200, 200, 200]
+        assert bad == [401, 429]
+        # Once the failures fill the bucket, even a valid key waits it out:
+        # the lookup is what the budget protects.
+        assert after.status_code == 429
 
     async def test_endpoint_returns_429_when_over_budget(self, monkeypatch):
         from app.core.config import settings
