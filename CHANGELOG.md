@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dashboard: acting on a message or notification could be silently undone by a refresh that was already running (2026-09-02)
+
+**Fixed**
+
+- **An acknowledgement could be reverted, and the member asked to acknowledge
+  the same message again.** The Updates card deliberately keeps rows on screen
+  during a refresh, so a member can acknowledge a message while an inbox read
+  is still in flight. That read captured the message _before_ the
+  acknowledgement, so when it landed it replaced the list wholesale and
+  restored the unacknowledged row — with the server having already recorded
+  the acknowledgement. The same race reverted marking a message read, and put
+  a dismissed persistent message back on the card.
+- **A notification marked read could return to the feed**, taking the unread
+  count back up with it, when a notifications read that started before the tap
+  landed after it.
+
+Where the row is meant to disappear (a dismissed persistent message, a read
+notification) the fix is to re-read after the change, so the newest answer
+lands last. Where the row is meant to stay — reading or acknowledging a
+message, which deliberately leaves the text in place rather than yanking it
+out from under the reader — re-reading is not available as a fix, because the
+inbox is fetched with `include_read: false` and would drop the very row the
+design keeps. Those two edits are recorded and re-applied to whatever response
+arrives instead. The unread badge is a number rather than a row, so it is
+re-read from the server in both cases.
+
 ### Inventory: a concurrent return or check-in could double-credit stock or silently overwrite condition notes, and the first fix for it had a lock-ordering bug of its own (2026-09-02)
 
 **Fixed**
