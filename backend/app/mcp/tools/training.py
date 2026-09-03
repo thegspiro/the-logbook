@@ -160,6 +160,7 @@ def register(server: Any) -> None:
             .order_by(
                 *nulls_last_desc(TrainingRecord.completion_date),
                 TrainingRecord.created_at.desc(),
+                TrainingRecord.id.desc(),
             )
             .offset(offset)
             .limit(limit)

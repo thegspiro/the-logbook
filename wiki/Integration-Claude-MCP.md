@@ -73,9 +73,12 @@ meetings."_, _"Which shifts next week still have an open driver seat?"_
    give the key a name and an expiry (30 days to a year, or lifetime) and
    issue it. The key is shown **once**; copy it then. Requires
    `integrations.mcp_keys`, which only the IT Manager position holds by
-   default. A chief who wants to delegate it grants that permission to a
-   position that already has the Integrations screen (`settings.manage`);
-   the key permission on its own reaches nothing.
+   default (through its wildcard). To delegate it, the IT Manager grants
+   that permission to a position that already has the Integrations screen
+   (`integrations.manage`); the key permission on its own reaches nothing.
+   A chief cannot make that grant: a position can only be given
+   permissions its granter already holds, and the seeded chief position
+   has `integrations.manage` but not the key permission.
 3. **Configure the client** with the endpoint URL and the key as a bearer
    token. The endpoint is `https://<your-logbook-host>/api/mcp`.
 
