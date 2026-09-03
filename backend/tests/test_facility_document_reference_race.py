@@ -125,6 +125,29 @@ async def _make_org_folder_document(session, slug):
     return org.id, folder.id, document.id
 
 
+async def _make_org_facility_document_with_folder(session, slug):
+    """Like ``_make_org_facility_document``, but with the facility's own
+    ``DocumentFolder`` pre-created (via ``ensure_facility_folder``, in its
+    own committed transaction first) -- what FAC-34's race needs: an
+    *existing* folder row for a concurrent ``delete_folder`` to target, and
+    for ``_validate_shared_document_reference``'s ``ensure_facility_folder``
+    call to find (and lock) via its "found" path rather than create fresh.
+    """
+    ids = await _make_org_facility_document(session, slug)
+    org_id, facility_id, document_id, facility_type_id, status_id = ids
+    factory = database_manager.session_factory
+    setup_session = factory()
+    try:
+        folder = await DocumentsService(setup_session).ensure_facility_folder(
+            org_id, str(facility_id), "Station 1"
+        )
+        await setup_session.commit()
+        folder_id = folder.id
+    finally:
+        await setup_session.close()
+    return org_id, facility_id, document_id, facility_type_id, status_id, folder_id
+
+
 async def _teardown_org_folder(org_id, folder_id, document_id):
     factory = database_manager.session_factory
     cleanup = factory()
@@ -506,3 +529,120 @@ class TestDeleteFolderLocksDocumentsBeforeTheReferenceTable:
             await creator.rollback()
             await cascade.rollback()
             await _teardown_org_folder(*ids)
+
+
+class TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery:
+    """FAC-34 (Codex, on top of FAC-32): a *third* shared resource, not just
+    the two FAC-32 already orders correctly. Filing a folderless document
+    (facilities.py, ``_validate_shared_document_reference``) locks the
+    ``Document`` row, then -- via ``ensure_facility_folder`` -- the
+    destination ``DocumentFolder``, and only *then* flushes
+    ``document.folder_id`` onto it.
+
+    That flush is an UPDATE against the ``folder_id`` secondary index.
+    FAC-32 made this cascade run a locking ``SELECT`` filtered on that exact
+    column (``_lock_subtree_documents``, below) before the reference-table
+    scan -- correct for FAC-32's own concern (ordering against the reference
+    table), but a locking ``SELECT`` filtered on a column a concurrent
+    transaction is about to write into can block that write regardless of
+    whether the two ultimately conflict on the same row: a gap/next-key lock
+    at the filtered value if it currently matches no rows, or -- depending
+    on which index MySQL/MariaDB's optimizer picks for the query, itself a
+    function of the subtree's size and the table's statistics -- blocking
+    outright on some *other*, unrelated row of the same organization the
+    scan happens to examine first. Verified empirically both ways with two
+    real, independently-committing sessions: a small subtree can produce
+    either behaviour depending on the query plan, and neither this test nor
+    the fix should depend on which one the optimizer picks on a given run.
+
+    Either way, if this cascade's Document-lock query starts running before
+    the creator's flush completes, the flush can block on it -- while the
+    creator is still holding the destination folder's own lock from
+    ``ensure_facility_folder``. This cascade's later, implicit need for that
+    same folder lock (the final ``db.delete(folder)``, at commit) then
+    blocks right back on the creator. Two-way deadlock, and reordering only
+    the Document/reference-table pair (FAC-32's fix) does not touch it,
+    because whatever traps the creator is a side effect of this cascade's
+    Document query itself, taken *before* this cascade ever reaches an
+    explicit folder lock or the reference table.
+
+    Locking the destination folder(s) first closes it regardless of query
+    plan: this cascade then either wins the folder race outright (nothing
+    below has run yet, so it cannot be holding anything the creator needs)
+    or loses it and blocks immediately -- before ever issuing the Document
+    query that would otherwise trap the creator's flush. Proving that
+    control-flow fact -- rather than the specific engine-level mechanism,
+    which is plan-dependent -- is what this test asserts, the same
+    engine-independence rationale as FAC-32's own test:
+    ``_lock_subtree_documents`` (the extracted FAC-32 query) must never be
+    reached while this cascade is still blocked on the FAC-34 folder lock.
+    """
+
+    async def test_delete_folder_blocks_on_the_folder_lock_before_any_document_query(
+        self, two_sessions
+    ):
+        creator, cascade = two_sessions
+        ids = await _make_org_facility_document_with_folder(
+            creator, f"fcvfd-folderlock-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id, folder_id = ids
+        cascade_task = None
+        try:
+            docs_creator = DocumentsService(creator)
+            await docs_creator.get_document_by_id(document_id, org_id, for_update=True)
+            # Locks the destination folder via ensure_facility_folder's
+            # "found" path -- exactly what _validate_shared_document_reference
+            # does before it ever touches document.folder_id.
+            await docs_creator.ensure_facility_folder(
+                org_id, str(facility_id), "Station 1"
+            )
+
+            document_query_reached = asyncio.Event()
+            cascade_service = DocumentsService(cascade)
+            original_lock_documents = cascade_service._lock_subtree_documents
+
+            async def _tracking_lock_documents(*args, **kwargs):
+                document_query_reached.set()
+                return await original_lock_documents(*args, **kwargs)
+
+            with patch.object(
+                cascade_service,
+                "_lock_subtree_documents",
+                _tracking_lock_documents,
+            ):
+                cascade_task = asyncio.create_task(
+                    cascade_service.delete_folder(folder_id, org_id, current_user=None)
+                )
+                await asyncio.sleep(0.5)
+
+                # The fix's whole point: delete_folder is still blocked, and
+                # blocked *before* it ever issued the Document-lock query --
+                # not merely blocked somewhere, which the pre-fix ordering
+                # also produced (just via that query's own locking, whose
+                # mechanism is plan-dependent -- see the class docstring).
+                assert not cascade_task.done(), (
+                    "delete_folder should still be blocked on the "
+                    "already-locked destination DocumentFolder"
+                )
+                assert not document_query_reached.is_set(), (
+                    "delete_folder issued its Document-lock query before "
+                    "locking the destination DocumentFolder -- FAC-34's "
+                    "lock order regressed"
+                )
+
+                # Release the folder lock; delete_folder should now run to
+                # completion without deadlocking.
+                await creator.commit()
+                deleted = await asyncio.wait_for(cascade_task, timeout=10)
+                assert deleted is True
+                assert document_query_reached.is_set()
+        finally:
+            if cascade_task is not None and not cascade_task.done():
+                cascade_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await cascade_task
+            await creator.rollback()
+            await cascade.rollback()
+            await _teardown_org(
+                org_id, facility_id, document_id, facility_type_id, status_id
+            )

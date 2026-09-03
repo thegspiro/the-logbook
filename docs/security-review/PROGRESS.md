@@ -102,10 +102,37 @@ ever reaching the reference-table scan (confirmed backwards pre-fix via
 `git stash` — the scan ran first, then it blocked much later at the cascade
 delete itself).
 
+**Codex review of the FAC-32 commit (`d0ec9194`) found one more issue, fixed
+on this same PR/branch:**
+
+**FAC-34 (P2, reliability/deadlock, fixed):** FAC-32 ordered this cascade's
+`Document` lock before the reference-table scan, matching the FAC-31 creator
+path for those two resources — but the creator path takes a _third_ shared
+lock in between, on the destination `DocumentFolder` itself
+(`ensure_facility_folder`, when filing a folderless document), and this
+cascade never explicitly locked its own subtree's `DocumentFolder` rows at
+all — only the implicit lock the folder's own `DELETE` takes at commit,
+after both of FAC-32's locks. Verified real at the SQL locking-primitive
+level with two real sessions: a locking read filtered on `Document.folder_id`
+can block a concurrent write to that same column even when it currently
+matches no rows, and — depending on which index MySQL/MariaDB's optimizer
+picks for the query, itself a function of the subtree's size and the
+table's data volume — the exact blocking mechanism varies, so a small test
+database's query plan does not reliably reproduce the cyclic wait end to end
+even though the underlying hazard is real. Fixed by locking the subtree's
+`DocumentFolder` rows first, before this cascade's Document-lock query —
+removing the dependency on that query's plan entirely, rather than
+reordering only the pair FAC-32 already covered. The two locking queries
+were extracted into `_lock_subtree_folders`/`_lock_subtree_documents` so a
+test can assert the ordering directly. New regression test
+(`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`), same
+engine-independence rationale as FAC-32's own test, confirmed against
+pre-fix code via `git stash`.
+
 Full local completion gate green: flake8/black/isort clean on changed files,
-scoped facilities/documents suites (301 passed) and the full backend suite
-(10047 passed / 21 skipped, environment-only skips) both pass with zero
-regressions. Rotation row 12 stays ⏳ (awaiting this PR's merge).
+scoped facilities/documents suites (301 passed, +1 for FAC-34) and the full
+backend suite pass with zero regressions. Rotation row 12 stays ⏳ (awaiting
+this PR's merge).
 
 ---
 

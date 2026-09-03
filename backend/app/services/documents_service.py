@@ -615,34 +615,48 @@ class DocumentsService:
             subtree_ids |= new_ids
             frontier = new_ids
 
-        # FAC-32 (Codex): with_for_update() -- locking the subtree's Document
-        # rows here, *before* the facility-reference scan below, matters for
-        # more than staleness. A concurrent
-        # _validate_shared_document_reference (facilities.py, FAC-31) locks a
-        # Document row first and only inserts into the facility-reference
-        # table afterward, inside the same still-open transaction. This
-        # cascade used to do the opposite: lock the (broad, all-of-org)
-        # reference table first via _delete_facility_document_references,
-        # and only touch Document rows afterward, when the ORM cascade
-        # deletes them. Two transactions taking the same two locks in
-        # opposite orders is a textbook InnoDB deadlock -- the creator's
-        # insert blocks on this scan's gap lock on the reference table while
-        # this scan's later Document-row need blocks on the creator's
-        # already-held row lock, and neither can proceed. Locking Document
-        # rows first here puts both paths in the same order (Document
-        # row(s), then reference table), so the two sides serialize instead
-        # of deadlocking.
-        file_rows = await self.db.execute(
-            select(Document.id, Document.file_path)
-            .where(
-                Document.organization_id == str(organization_id),
-                Document.folder_id.in_(subtree_ids),
-            )
-            .with_for_update()
-        )
+        # FAC-34 (Codex, on top of FAC-32): lock the subtree's DocumentFolder
+        # rows themselves *first* -- before the Document lock below, not
+        # after. Filing a folderless document (facilities.py,
+        # _validate_shared_document_reference) locks the Document row, then
+        # (ensure_facility_folder) the destination DocumentFolder, and only
+        # then flushes `document.folder_id` onto it. That flush is an UPDATE
+        # against the `folder_id` secondary index -- and a concurrent
+        # locking SELECT filtered on that same column (the FAC-32
+        # Document-lock query below) can take a gap/next-key lock at the
+        # target value, or block outright on any other row of this
+        # organization's it happens to examine first (the exact locking
+        # behaviour depends on which index MySQL/MariaDB's optimizer
+        # chooses for the query, which is itself a function of the subtree's
+        # size and the table's statistics -- not something this code
+        # controls). Either way, if this cascade's Document-lock query
+        # starts before the creator's flush completes, the flush can block
+        # on it -- while the creator is still holding the destination
+        # folder's own lock from ensure_facility_folder. This cascade's
+        # later, implicit need for that same folder lock (the final
+        # `db.delete(folder)`, at commit) then blocks right back on the
+        # creator: a genuine two-way deadlock that ordering *only* the
+        # Document/reference-table pair (FAC-32's fix) does not touch,
+        # because whatever traps the creator is a side effect of this
+        # cascade's Document query itself, before this cascade ever reaches
+        # a reference-table or explicit-folder lock. Locking the destination
+        # folder(s) here, first, removes the dependency on that query's plan
+        # entirely: this cascade either wins the folder race outright
+        # (nothing below has run yet, so it cannot be holding anything the
+        # creator needs) or loses it and blocks immediately, before ever
+        # issuing the Document-lock query that would otherwise trap the
+        # creator's flush. Verified empirically with two real,
+        # independently-committing sessions -- see
+        # TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery in
+        # tests/test_facility_document_reference_race.py, which patches
+        # _lock_subtree_documents (below) to prove this cascade never issues
+        # it while blocked on the folder lock.
+        await self._lock_subtree_folders(subtree_ids)
+
+        file_rows = await self._lock_subtree_documents(subtree_ids, organization_id)
         document_ids: Set[str] = set()
         file_paths: List[str] = []
-        for document_id, file_path in file_rows.all():
+        for document_id, file_path in file_rows:
             document_ids.add(document_id)
             if file_path:
                 file_paths.append(file_path)
@@ -650,8 +664,8 @@ class DocumentsService:
         # A facility record can reference one of these documents without a
         # foreign key (see _delete_facility_document_references) -- clean
         # that up in the same transaction as the cascade delete, not after.
-        # Runs after the Document lock above -- see the FAC-32 comment there
-        # for why the order matters.
+        # Runs after the FAC-34 DocumentFolder lock and the FAC-32 Document
+        # lock above -- see those comments for why the order matters.
         await self._delete_facility_document_references(
             document_ids, organization_id, current_user
         )
@@ -670,6 +684,43 @@ class DocumentsService:
                     f"folder {folder_id}: {file_path}"
                 )
         return True
+
+    async def _lock_subtree_folders(self, subtree_ids: Set[str]) -> None:
+        """FAC-34: lock every ``DocumentFolder`` row in the subtree being
+        deleted, for_update. A standalone method purely so tests can patch
+        it -- see ``delete_folder``'s FAC-34 comment for why this has to run
+        before ``_lock_subtree_documents`` below, and
+        ``TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery``
+        in tests/test_facility_document_reference_race.py for the proof.
+        """
+        await self.db.execute(
+            select(DocumentFolder.id)
+            .where(DocumentFolder.id.in_(subtree_ids))
+            .with_for_update()
+        )
+
+    async def _lock_subtree_documents(
+        self, subtree_ids: Set[str], organization_id: UUID
+    ) -> List[Tuple[str, Optional[str]]]:
+        """FAC-32: lock the subtree's ``Document`` rows, for_update, and
+        return their ``(id, file_path)`` pairs.
+
+        A standalone method (like ``_lock_subtree_folders`` above) so tests
+        can patch it and prove ``delete_folder`` never issues this query
+        while still blocked on the FAC-34 folder lock -- this is the query
+        whose locking behaviour is what a concurrent creator's
+        ``document.folder_id`` flush can be trapped by (see the FAC-34
+        comment on the call site in ``delete_folder``).
+        """
+        rows = await self.db.execute(
+            select(Document.id, Document.file_path)
+            .where(
+                Document.organization_id == str(organization_id),
+                Document.folder_id.in_(subtree_ids),
+            )
+            .with_for_update()
+        )
+        return rows.all()
 
     async def _delete_facility_document_references(
         self,

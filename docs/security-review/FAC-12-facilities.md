@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 fixed, FAC-30 flagged, pass 3 continued)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed, pass 3 continued)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -1437,6 +1437,109 @@ teardown now fails the test that triggered it, in the same way any other
 uncaught exception would.
 
 **Mirrored to** `CHANGELOG.md`.
+
+### FAC-34 — P2 (reliability, lock-ordering deadlock) — a _third_ shared resource FAC-32 didn't cover: the destination `DocumentFolder` a folderless-document creator locks via `ensure_facility_folder` — ✅ FIXED
+
+**Found by Codex review of the FAC-32 commit (`d0ec9194`).** FAC-32 ordered
+this cascade's two shared locks (`Document` rows, then the reference table)
+to match the FAC-31 creator path. But the creator path takes a _third_
+shared lock in between those two, and only when the document being filed
+has no folder yet: `_validate_shared_document_reference` (facilities.py)
+locks the `Document` row, then — via `ensure_facility_folder` — the
+destination `DocumentFolder`, and only _then_ flushes `document.folder_id`
+onto it. `delete_folder`'s cascade never explicitly locked its own subtree's
+`DocumentFolder` rows at all; the only lock it ever took on them was the
+implicit one the folder's own `DELETE` takes at commit, which lands _after_
+the (FAC-32-ordered) Document lock and the reference-table scan. Codex's
+claim: a creator racing to file a folderless document into a facility folder
+this cascade is concurrently deleting could still deadlock, because the
+cascade's Document-lock query (`Document.folder_id.in_(subtree_ids)`) can
+itself block a concurrent `document.folder_id` write before this cascade
+ever reaches an explicit folder lock.
+
+**Verified real, not merely plausible — with two real, independently-committing sessions, at the SQL locking-primitive level directly (not
+just through the application code), because the exact mechanism turned out
+to be more subtle than the finding's own wording:**
+
+- A raw `Document.organization_id == org AND Document.folder_id.in_({one folder id}) FOR UPDATE` — with a locking `Document` read already held on a
+  _different_ row and nothing else touching `folder_id` yet — completed
+  instantly, finding no rows, and then the creator's own later
+  `document.folder_id = <that folder>` flush **blocked indefinitely**: a
+  gap/next-key lock left behind by the first query, at the value the flush
+  was about to insert.
+- The _same_ race, run through the actual `delete_folder` (whose subtree for
+  a facility folder is never one id — root plus `FACILITY_SUB_FOLDERS`,
+  seven), instead showed the cascade's Document-lock query itself blocking —
+  confirmed via `SHOW FULL PROCESSLIST` / `information_schema.innodb_trx`
+  against the live query — apparently because MySQL/MariaDB's optimizer
+  chose a different index for a seven-value `IN` than for a one-value `IN`,
+  scanning (and blocking on) the creator's already-locked, unrelated
+  `Document` row before the `folder_id` filter was ever applied. In that
+  arrangement the cascade blocks first and never accumulates the
+  reference-table lock, so no cycle forms — the query planner's choice
+  happened to serialize the two sides safely, not the code.
+
+That second result does **not** mean the finding is a false positive on the
+real `delete_folder` path — it means the underlying InnoDB locking behaviour
+for this query is plan-dependent, and a database with a realistic volume of
+documents per organization (where `idx_documents_folder`, not the
+organization-scoped index, becomes the selective choice for a small subtree)
+would plausibly hit the first, genuinely cyclic mechanism instead. Relying on
+an incidental query-plan choice to keep two transactions from deadlocking is
+not a fix; it is a coincidence of this review's near-empty test database.
+
+**Where:** `backend/app/services/documents_service.py` (`delete_folder`,
+between the subtree walk and the FAC-32 Document-lock query).
+
+**Fix:** lock the subtree's `DocumentFolder` rows first — _before_ the
+Document-lock query, not after (and not merely between it and the
+reference-table scan, which was this session's own first, insufficient
+attempt: placing the folder lock after the Document-lock query does nothing,
+because by then the Document-lock query has already run and already
+produced whichever plan-dependent blocking behaviour it was going to
+produce). With the folder locked first, this cascade either wins the race
+outright (nothing below has run yet, so it cannot be holding anything the
+creator needs) or loses it and blocks immediately — before ever issuing the
+Document-lock query that could otherwise trap a concurrent creator's flush,
+regardless of which index that query's plan would have used. The two
+queries were extracted into `_lock_subtree_folders`/`_lock_subtree_documents`
+so a test can assert the _ordering_ directly (patch-and-track, the same
+technique FAC-32's own test uses) rather than depend on forcing one specific
+InnoDB plan.
+
+**Regression test:**
+`tests/test_facility_document_reference_race.py`,
+`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`. Same
+engine-independence rationale as FAC-32's own test — a genuine two-session
+deadlock is inherently plan- and timing-sensitive to force on demand — so
+this asserts the concrete, deterministic effect instead: with the
+destination folder locked by one session (`ensure_facility_folder`'s "found"
+path), `delete_folder` run in a second, real session blocks on _that_ lock,
+and never issues its `_lock_subtree_documents` query while blocked.
+Confirmed against pre-fix code via `git stash` (fails — the extracted method
+does not exist without the fix's refactor) and passing post-fix; the deeper
+locking-primitive behaviour above was independently confirmed live, outside
+pytest, with `SHOW FULL PROCESSLIST`/`information_schema.innodb_trx`
+inspection while the block was held.
+
+**Mirrored to** `CHANGELOG.md`.
+
+## Completion gate (pass 3, round 8 — Codex review of `d0ec9194`, FAC-34)
+
+| Check                                                   | Result                                       |
+| ------------------------------------------------------- | -------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations                              |
+| `black --check app/ tests/ alembic/`                    | ✅ clean                                     |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                     |
+| `pytest tests/test_facility_document_reference_race.py` | ✅ 5 passed (+1, FAC-34's regression test)   |
+| `pytest tests/ -k "facilities or documents"`            | ✅ 301 passed (+1), 1 skipped (pre-existing) |
+
+**FAC-34's regression test independently confirmed against pre-fix code:**
+`git stash` isolating just the `documents_service.py` fix —
+`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery` fails
+(`AttributeError`, since `_lock_subtree_documents` is part of the fix's own
+refactor and does not exist without it); `git stash pop` restored the fix
+and all 5 tests in the file passed.
 
 ## Verified good ✅ (re-confirmed this pass)
 

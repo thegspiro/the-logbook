@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: FAC-32's Document-lock reordering in `delete_folder` covered the reference table but not the destination folder itself (2026-09-03)
+
+**Fixed**
+
+- **FAC-34 — a _third_ shared resource `delete_folder`'s cascade never
+  explicitly locked at all: the destination `DocumentFolder` a folderless
+  document's creator locks via `ensure_facility_folder` before flushing
+  `document.folder_id` onto it.** FAC-32 ordered this cascade's `Document`
+  lock before its reference-table scan, matching the creator's own order for
+  those two resources — but the creator also locks the destination folder in
+  between, and this cascade's only lock on that folder was the implicit one
+  its own `DELETE` takes at commit, after both of FAC-32's locks. A creator
+  racing to file a folderless document into a facility folder this cascade
+  is concurrently deleting could still deadlock: the cascade's Document-lock
+  query can itself block a concurrent `document.folder_id` write (confirmed
+  live, with two real sessions, down to the SQL locking primitive — the
+  exact InnoDB mechanism is plan-dependent, so a small test database's
+  optimizer choice does not reliably reproduce it end-to-end even though the
+  underlying hazard is real) while the cascade is waiting on the folder lock
+  the creator already holds.
+- Fixed by locking the subtree's `DocumentFolder` rows _first_, before this
+  cascade's Document-lock query — removing the dependency on that query's
+  plan entirely, rather than reordering only the pair FAC-32 already
+  covered. The two queries were extracted into
+  `_lock_subtree_folders`/`_lock_subtree_documents` so a regression test can
+  assert the ordering directly.
+- New regression test
+  (`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`): same
+  engine-independence rationale as FAC-32's own test — proves `delete_folder`
+  blocks on the destination folder lock and never issues its Document-lock
+  query while blocked, rather than trying to force one specific InnoDB plan.
+  Confirmed against pre-fix code (`git stash`).
+
 ### Security: FAC-29's locking read protected reference validation, but released the lock before the reference it validated for was ever inserted (2026-09-03)
 
 **Fixed**
