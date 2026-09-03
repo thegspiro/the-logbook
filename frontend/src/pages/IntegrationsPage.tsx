@@ -387,6 +387,7 @@ const IntegrationsPage: React.FC = () => {
   const [mcpAccessMode, setMcpAccessMode] = useState<'read_only' | 'read_write'>('read_only');
   const [mcpExposeFinance, setMcpExposeFinance] = useState(false);
   const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
+  const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
   const [showMcpPanel, setShowMcpPanel] = useState(false);
 
   const loadIntegrations = useCallback(async () => {
@@ -481,6 +482,7 @@ const IntegrationsPage: React.FC = () => {
     setMcpAccessMode(stored['access_mode'] === 'read_write' ? 'read_write' : 'read_only');
     setMcpExposeFinance(stored['expose_finance'] === true);
     setMcpExposeMedical(stored['expose_medical_screening'] === true);
+    setMcpExposeFullSchedule(stored['expose_full_schedule'] === true);
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -525,6 +527,7 @@ const IntegrationsPage: React.FC = () => {
           access_mode: mcpAccessMode,
           expose_finance: mcpExposeFinance,
           expose_medical_screening: mcpExposeMedical,
+          expose_full_schedule: mcpExposeFullSchedule,
         };
       case 'salesforce':
         return {
@@ -1230,6 +1233,21 @@ const IntegrationsPage: React.FC = () => {
                 <span className="text-theme-text-muted block text-xs">
                   Whether a member is current on each screening and when it lapses &mdash; never a result, provider or
                   note. Off by default because it can indicate protected health information.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={mcpExposeFullSchedule}
+                onChange={(e) => setMcpExposeFullSchedule(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Share the full duty schedule</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Every shift and its assignments, as a scheduling manager sees them. Off by default: Claude then sees
+                  only shifts open to all members, which is what any eligible member can see.
                 </span>
               </span>
             </label>

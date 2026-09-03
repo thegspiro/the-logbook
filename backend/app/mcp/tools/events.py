@@ -102,10 +102,10 @@ def register(server: Any) -> None:
         limit: int = 100,
         offset: int = 0,
     ) -> dict:
-        """Who is going to an event, as a sign-up sheet: member name, guest
-        count and whether they checked in. Only ``going`` responses, and only
-        when the event (or the department's default) shares its attendee
-        list with members; otherwise the list is not available here."""
+        """Who is going to an event: member id, name and response. Only
+        ``going`` responses, and only when the event (or the department's
+        default) shares its attendee list with members; otherwise the list
+        is not available here."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         event, rsvps = await EventService(db).list_event_attendees_for_member(
@@ -127,15 +127,14 @@ def register(server: Any) -> None:
         names = await member_names(
             db, principal.organization_id, (r.user_id for r in rsvps)
         )
+        # The same allowlist as EventAttendeeResponse, the member-facing
+        # roster row: guest counts, response times and the check-in block
+        # are organizer-only attendance detail and stay out.
         items = [
             {
                 "member_id": r.user_id,
                 "member_name": names.get(r.user_id),
                 "status": iso(r.status),
-                "guest_count": r.guest_count,
-                "responded_at": iso(r.responded_at),
-                "checked_in": bool(r.checked_in),
-                "checked_in_at": iso(r.checked_in_at),
             }
             for r in rsvps
         ]

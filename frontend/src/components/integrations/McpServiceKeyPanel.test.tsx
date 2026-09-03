@@ -50,6 +50,7 @@ const statusNoKey: McpStatus = {
   access_mode: 'read_only',
   expose_finance: false,
   expose_medical_screening: false,
+  expose_full_schedule: false,
   active_key: null,
 };
 

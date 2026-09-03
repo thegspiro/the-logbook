@@ -32,6 +32,11 @@ class McpPrincipal:
     expose_finance: bool
     expose_medical_screening: bool
     client_ip: Optional[str] = None
+    # Whether the shift tools show the whole roster. Off, they show only
+    # shifts open to all members — the one set every eligible member can
+    # see, since a service key has no rank or qualifications to be
+    # eligible with.
+    expose_full_schedule: bool = False
     # The department's enabled module keys, resolved when the key was
     # authenticated. A tool owned by a module not in this set is hidden and
     # refused, exactly as the module's API router answers 403 — switching a

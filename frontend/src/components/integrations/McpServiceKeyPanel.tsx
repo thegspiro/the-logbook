@@ -180,6 +180,7 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
                 {status.access_mode === 'read_write' ? 'Read and write' : 'Read-only'}
                 {status.expose_finance ? ' · finance totals shared' : ''}
                 {status.expose_medical_screening ? ' · medical screening status shared' : ''}
+                {status.expose_full_schedule ? ' · full duty schedule shared' : ''}
               </p>
             )}
           </div>

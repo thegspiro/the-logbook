@@ -37,7 +37,12 @@ from app.models.inventory import (
     InventoryItem,
     ItemType,
 )
-from app.models.training import TrainingRecord, TrainingStatus, TrainingType
+from app.models.training import (
+    Shift,
+    TrainingRecord,
+    TrainingStatus,
+    TrainingType,
+)
 
 
 @pytest.fixture
@@ -446,6 +451,9 @@ class TestAttendeeVisibility:
         assert [(i["member_name"], i["status"]) for i in body["items"]] == [
             ("Admin User", "going")
         ]
+        # The member-facing roster row is an allowlist of three fields;
+        # guest counts and the check-in block are organizer-only.
+        assert set(body["items"][0]) == {"member_id", "member_name", "status"}
 
     @pytest.mark.usefixtures("_use_test_session")
     async def test_unknown_event_is_not_found(self, server, org_with_members):
@@ -970,6 +978,74 @@ class TestFifthRoundFindings:
             item_id=stock[ItemType.UNIFORM][1].id,
         )
         assert allowed["item_name"] == "Class A coat"
+
+
+class TestScheduleVisibility:
+    """Without the full-schedule switch the shift tools show only shifts
+    open to all members — what any eligible member can see — since a
+    service key has no rank or qualifications to be eligible with."""
+
+    async def _shifts(self, db_session, org_id):
+        day = date.today() + timedelta(days=7)
+        start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        for open_to_all in (True, False):
+            db_session.add(
+                Shift(
+                    organization_id=org_id,
+                    shift_date=day,
+                    start_time=start.replace(hour=8 if open_to_all else 18),
+                    end_time=start.replace(hour=12 if open_to_all else 22),
+                    min_staffing=2,
+                    open_to_all_members=open_to_all,
+                )
+            )
+        await db_session.flush()
+        return day
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_only_open_to_all_shifts_without_the_switch(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        day = await self._shifts(db_session, org_id)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(
+            server, principal, "list_shifts", start_date=day.isoformat()
+        )
+        assert [s["open_to_all_members"] for s in listed["items"]] == [True]
+        assert listed["total"] == 1
+        open_shifts = await _call(
+            server,
+            principal,
+            "list_open_shifts",
+            start_date=day.isoformat(),
+            end_date=day.isoformat(),
+        )
+        assert [s["open_to_all_members"] for s in open_shifts["items"]] == [True]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_full_schedule_with_the_switch(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        day = await self._shifts(db_session, org_id)
+        principal = _principal(org_id, admin_id, expose_full_schedule=True)
+        listed = await _call(
+            server, principal, "list_shifts", start_date=day.isoformat()
+        )
+        assert sorted(s["open_to_all_members"] for s in listed["items"]) == [
+            False,
+            True,
+        ]
+        assert listed["total"] == 2
+        open_shifts = await _call(
+            server,
+            principal,
+            "list_open_shifts",
+            start_date=day.isoformat(),
+            end_date=day.isoformat(),
+        )
+        assert len(open_shifts["items"]) == 2
 
 
 class TestReviewFindings:

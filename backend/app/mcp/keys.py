@@ -283,6 +283,7 @@ class McpKeyService:
             access_mode=config.access_mode,
             expose_finance=config.expose_finance,
             expose_medical_screening=config.expose_medical_screening,
+            expose_full_schedule=config.expose_full_schedule,
             client_ip=client_ip,
             enabled_modules=enabled_modules,
         )

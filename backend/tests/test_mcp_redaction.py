@@ -119,6 +119,9 @@ class TestScrubText:
             ("555-123-4567", "[phone removed]"),
             ("+1 555 123 4567", "[phone removed]"),
             ("call 5551234567 now", "call [phone removed] now"),
+            ("<p>5551234567</p>", "<p>[phone removed]</p>"),
+            ("Reach me: 5551234567.", "Reach me: [phone removed]."),
+            ("5551234567,15551234567", "[phone removed],[phone removed]"),
             ("Call 555-0100", "Call [phone removed]"),
             ("Dial +44 20 7946 0958", "Dial [phone removed]"),
             ("+49 30 1234567", "[phone removed]"),
@@ -132,6 +135,9 @@ class TestScrubText:
         [
             "5551234567",  # a bare digit run alone is an asset tag, not prose
             "SN-1234567890",
+            "0012345678901",  # a 13-digit barcode is longer than any phone number
+            "LOT/2026/1234567890",
+            "#1234567890",
             "PO 202609031234 shipped",
             "Engine 1 pumps 1500 gpm; unit 2024",
             "ext 4567",

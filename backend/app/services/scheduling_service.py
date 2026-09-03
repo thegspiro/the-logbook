@@ -886,14 +886,22 @@ class SchedulingService:
         end_date: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
+        open_to_all_only: bool = False,
     ) -> Tuple[List[Shift], int]:
-        """Get shifts with date filtering and pagination"""
+        """Get shifts with date filtering and pagination.
+
+        ``open_to_all_only`` keeps just the shifts flagged
+        ``open_to_all_members`` — the set every eligible member can see
+        without evaluating their rank or qualifications.
+        """
         query = select(Shift).where(Shift.organization_id == str(organization_id))
 
         if start_date:
             query = query.where(Shift.shift_date >= start_date)
         if end_date:
             query = query.where(Shift.shift_date <= end_date)
+        if open_to_all_only:
+            query = query.where(Shift.open_to_all_members.is_(True))
 
         # Count
         count_query = select(func.count()).select_from(query.subquery())

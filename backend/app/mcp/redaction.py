@@ -142,6 +142,11 @@ _PHONE_FORMATTED_RE = re.compile(
     r")(?![\w-])"
 )
 _PHONE_BARE_RE = re.compile(r"(?<![\w-])\+?\d{10,11}(?![\w-])")
+# A value that is one token — letters, digits and the punctuation found in
+# asset tags, serial numbers and barcodes — is an identifier, not prose.
+# Anything else (spaces, markup, sentence punctuation) is text somebody
+# wrote, and a bare ten- or eleven-digit run inside it is scrubbed.
+_IDENTIFIER_RE = re.compile(r"^[\w.\-/+#:]+$")
 EMAIL_PLACEHOLDER = "[email removed]"
 PHONE_PLACEHOLDER = "[phone removed]"
 
@@ -152,7 +157,7 @@ def scrub_text(text: str) -> str:
         text = _EMAIL_RE.sub(EMAIL_PLACEHOLDER, text)
     if any(ch.isdigit() for ch in text):
         text = _PHONE_FORMATTED_RE.sub(PHONE_PLACEHOLDER, text)
-        if any(ch.isspace() for ch in text):
+        if not _IDENTIFIER_RE.match(text):
             text = _PHONE_BARE_RE.sub(PHONE_PLACEHOLDER, text)
     return text
 

@@ -563,7 +563,12 @@ describe('IntegrationsPage', () => {
       ...mcpAvailable,
       status: 'connected' as const,
       enabled: true,
-      config: { access_mode: 'read_write', expose_finance: true, expose_medical_screening: false },
+      config: {
+        access_mode: 'read_write',
+        expose_finance: true,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+      },
     };
 
     beforeEach(() => {
@@ -574,6 +579,7 @@ describe('IntegrationsPage', () => {
         access_mode: 'read_write',
         expose_finance: true,
         expose_medical_screening: false,
+        expose_full_schedule: false,
         active_key: null,
       });
     });
@@ -594,6 +600,7 @@ describe('IntegrationsPage', () => {
         access_mode: 'read_only',
         expose_finance: false,
         expose_medical_screening: false,
+        expose_full_schedule: false,
       });
     });
 
@@ -613,6 +620,7 @@ describe('IntegrationsPage', () => {
         access_mode: 'read_write',
         expose_finance: true,
         expose_medical_screening: false,
+        expose_full_schedule: false,
       });
     });
 

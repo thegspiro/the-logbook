@@ -1,4 +1,11 @@
-"""Shifts: the duty calendar, open seats and who is assigned."""
+"""Shifts: the duty calendar, open seats and who is assigned.
+
+The member API shows a member only the shifts they are eligible for (by
+rank, positions, training and qualifications); a service key has none of
+those, so without the ``expose_full_schedule`` switch the shift tools show
+the one set every eligible member can see — shifts open to all members.
+With it, they show the roster as a scheduling manager sees it.
+"""
 
 from typing import Any, Optional
 
@@ -140,7 +147,9 @@ def register(server: Any) -> None:
     ) -> dict:
         """Shifts between two dates (YYYY-MM-DD, inclusive), each with its
         apparatus, station, seat list and who is assigned to each seat. Times
-        are the department's local clock times."""
+        are the department's local clock times. Unless the department shares
+        its full schedule with Claude, only shifts open to all members are
+        listed."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         shifts, total = await SchedulingService(db).get_shifts(
@@ -149,6 +158,7 @@ def register(server: Any) -> None:
             end_date=parse_date(end_date, "end_date"),
             skip=offset,
             limit=limit,
+            open_to_all_only=not principal.expose_full_schedule,
         )
         return page(await _render(db, principal, list(shifts)), total, limit, offset)
 
@@ -160,15 +170,19 @@ def register(server: Any) -> None:
         end_date: str,
     ) -> dict:
         """Shifts in the window that still have an unfilled seat, with the
-        seats and current assignments so the gaps can be named."""
+        seats and current assignments so the gaps can be named. Unless the
+        department shares its full schedule with Claude, only shifts open to
+        all members are listed."""
         start = parse_date(start_date, "start_date")
         end = parse_date(end_date, "end_date")
         if start is None or end is None:
             raise ValueError("start_date and end_date are required")
-        shifts = await SchedulingService(db).get_open_shifts(
-            org_uuid(principal), start, end
+        shifts = list(
+            await SchedulingService(db).get_open_shifts(org_uuid(principal), start, end)
         )
-        items = await _render(db, principal, list(shifts))
+        if not principal.expose_full_schedule:
+            shifts = [s for s in shifts if s.open_to_all_members]
+        items = await _render(db, principal, shifts)
         # Not paginated: the whole window comes back at once, so there is
         # never a continuation to ask for.
         return {"items": items, "total": len(items), "has_more": False}

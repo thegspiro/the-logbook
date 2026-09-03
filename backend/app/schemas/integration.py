@@ -238,6 +238,11 @@ class ClaudeMcpConfig(BaseModel):
     # Screening compliance status and expiry dates only — never a result,
     # a provider or a note. Off by default: potential PHI.
     expose_medical_screening: bool = False
+    # The whole duty roster, as a scheduling manager sees it. Off by
+    # default: an ordinary member sees only the shifts they are eligible
+    # for, so without this the shift tools show only shifts open to all
+    # members.
+    expose_full_schedule: bool = False
 
 
 # Map integration_type → config schema for strict validation

@@ -102,6 +102,7 @@ async def get_mcp_status(
         "access_mode": config.access_mode,
         "expose_finance": config.expose_finance,
         "expose_medical_screening": config.expose_medical_screening,
+        "expose_full_schedule": config.expose_full_schedule,
         "active_key": _key_to_dict(active[0]) if active else None,
     }
 

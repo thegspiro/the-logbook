@@ -21,9 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answers any request and no reverse-proxy change is needed for `/api/`.
 - **38 tools** over the roster, events, shifts, training and certifications,
   inventory, apparatus, facilities, meetings and published minutes,
-  documents in unrestricted folders, and elections. Finance totals and
-  medical-screening _status_ are behind two per-department switches, off by
-  default; three write tools (draft event, meeting action item, reorder
+  documents in unrestricted folders, and elections. Finance totals,
+  medical-screening _status_ and the full duty schedule are behind three
+  per-department switches, off by default (without the schedule switch the
+  shift tools list only shifts open to all members, what any eligible
+  member can see); three write tools (draft event, meeting action item, reorder
   request) are behind a read/write switch, also off by default. Tools a
   department has not switched on are not listed to the client.
 - **One redaction boundary** (`app/mcp/redaction.py`) applied to every tool
@@ -38,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   revokes the previous key. Issuing and revoking require the new
   `integrations.mcp_keys` permission, which only the IT Manager position
   holds by default. Every tool call, issue and revocation is audit-logged.
-- Integrations screen: connect form (access mode, finance, medical
-  switches) and a **Service key** panel that shows the plaintext exactly
+- Integrations screen: connect form (access mode, finance, medical and
+  schedule switches) and a **Service key** panel that shows the plaintext exactly
   once. Wiki: `Integration-Claude-MCP`.
 
 **Known limitation** — claude.ai custom connectors authenticate with OAuth
