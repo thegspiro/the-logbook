@@ -26,6 +26,7 @@ from app.mcp.constants import (
 from app.mcp.principal import McpPrincipal
 from app.models.integration import Integration
 from app.models.mcp_service_key import McpServiceKey
+from app.models.user import Organization
 from app.schemas.integration import ClaudeMcpConfig
 
 # Longest expiry the UI offers; anything beyond it is treated as a request
@@ -259,6 +260,22 @@ class McpKeyService:
                 status=403,
             )
         config = parse_config(row.config)
+
+        # A deactivated department is refused the way its members are at
+        # sign-in (auth_service filters on Organization.active): a lifetime
+        # key must not outlive the tenant it was issued for.
+        active = (
+            await self.db.execute(
+                select(Organization.active).where(
+                    Organization.id == key.organization_id
+                )
+            )
+        ).scalar_one_or_none()
+        if not active:
+            raise McpAuthError(
+                "This organization is not active.",
+                status=403,
+            )
 
         # The same module switches the API routers enforce. Integrations is
         # the module this feature lives under, so a department that switched

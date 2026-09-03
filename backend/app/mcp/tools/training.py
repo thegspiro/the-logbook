@@ -114,15 +114,30 @@ def register(server: Any) -> None:
         principal: McpPrincipal,
         member_id: str,
         year: Optional[int] = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> dict:
         """Progress against each training requirement that applies to a member:
         required and completed hours, percentage, due date and days until due
-        (negative when overdue). ``year`` narrows to one training year."""
+        (negative when overdue). ``year`` narrows to one training year.
+        Paged; ``total`` counts every applicable requirement."""
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
         member = await require_member(db, principal.organization_id, member_id)
-        progress = await TrainingService(db).get_all_requirements_progress(
+        service = TrainingService(db)
+        applicable = await service.get_applicable_requirements(
             UUID(member.id), org_uuid(principal), year=year
         )
-        return {"items": [p.model_dump(mode="json") for p in progress]}
+        # Progress is computed per requirement, so only the page is computed.
+        progress = await service.get_requirements_progress_for(
+            UUID(member.id), org_uuid(principal), applicable[offset : offset + limit]
+        )
+        return page(
+            [p.model_dump(mode="json") for p in progress],
+            len(applicable),
+            limit,
+            offset,
+        )
 
     @logbook_tool(server, title="Member training records", module="training")
     async def list_member_training_records(

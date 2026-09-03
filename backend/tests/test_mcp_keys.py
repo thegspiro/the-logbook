@@ -258,6 +258,27 @@ class TestAuthenticate:
         assert excinfo.value.status == 403
         assert "Integrations module" in str(excinfo.value)
 
+    async def test_inactive_organization_is_403(self, db_session, setup_org_and_admin):
+        """A deactivated department is refused the way its members are at
+        sign-in: a lifetime key must not outlive the tenant."""
+        from sqlalchemy import text
+
+        org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
+        svc = McpKeyService(db_session)
+        minted = await svc.mint(
+            org_id, name="k", expires_in_days=None, created_by=admin_id
+        )
+        assert (await svc.authenticate(minted.plaintext)).organization_id == org_id
+        await db_session.execute(
+            text("UPDATE organizations SET active = 0 WHERE id = :id"), {"id": org_id}
+        )
+        await db_session.flush()
+        with pytest.raises(McpAuthError) as excinfo:
+            await svc.authenticate(minted.plaintext)
+        assert excinfo.value.status == 403
+        assert "not active" in str(excinfo.value)
+
     async def test_missing_integration_row_is_403(
         self, db_session, setup_org_and_admin
     ):

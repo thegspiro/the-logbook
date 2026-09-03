@@ -914,6 +914,8 @@ class TestFifthRoundFindings:
         assert [r["item_id"] for r in overdue["items"]] == [
             stock[ItemType.UNIFORM][1].id
         ]
+        assert overdue["items"][0]["item_name"] == stock[ItemType.UNIFORM][1].name
+        assert "asset_tag" in overdue["items"][0]
 
         summary = await _call(server, principal, "get_inventory_summary")
         assert summary["total_items"] == 1
@@ -2228,6 +2230,132 @@ class TestSeventeenthRoundFindings:
             await _call(
                 server, principal, "get_meeting_agenda", meeting_id=str(uuid.uuid4())
             )
+
+
+class TestEighteenthRoundFindings:
+    """Regressions for the eighteenth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_motions_and_action_items_are_paged(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        minutes_id = str(uuid.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, created_by) VALUES (:id, :org, "
+                "'March meeting', 'business', '2027-03-01', 'approved', :by)"
+            ),
+            {"id": minutes_id, "org": org_id, "by": admin_id},
+        )
+        for order in range(3):
+            await db_session.execute(
+                text(
+                    "INSERT INTO meeting_motions (id, minutes_id, `order`, motion_text) "
+                    "VALUES (:id, :minutes, :order, :wording)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "minutes": minutes_id,
+                    "order": order,
+                    "wording": f"Motion {order}",
+                },
+            )
+        for n in range(2):
+            await db_session.execute(
+                text(
+                    "INSERT INTO minutes_action_items (id, minutes_id, description) "
+                    "VALUES (:id, :minutes, :description)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "minutes": minutes_id,
+                    "description": f"Task {n}",
+                },
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        body = await _call(
+            server,
+            principal,
+            "get_minutes",
+            minutes_id=minutes_id,
+            motion_limit=2,
+            action_item_limit=1,
+        )
+        assert body["motion_count"] == 3
+        assert body["motion_total"] == 3
+        assert [mo["motion_text"] for mo in body["motions"]] == [
+            "Motion 0",
+            "Motion 1",
+        ]
+        assert body["motions_has_more"] is True
+        assert body["action_item_count"] == 2
+        assert body["action_item_total"] == 2
+        assert len(body["action_items"]) == 1
+        assert body["action_items_has_more"] is True
+        rest = await _call(
+            server,
+            principal,
+            "get_minutes",
+            minutes_id=minutes_id,
+            motion_offset=2,
+            motion_limit=2,
+            action_item_offset=1,
+            action_item_limit=1,
+        )
+        assert [mo["motion_text"] for mo in rest["motions"]] == ["Motion 2"]
+        assert rest["motions_has_more"] is False
+        assert len(rest["action_items"]) == 1
+        assert rest["action_items_has_more"] is False
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_requirement_progress_is_paged(
+        self, server, org_with_members, db_session
+    ):
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+
+        org_id, admin_id, member_id = org_with_members
+        for name in ("Annual hours", "Driver hours", "EMS hours"):
+            db_session.add(
+                TrainingRequirement(
+                    organization_id=org_id,
+                    name=name,
+                    requirement_type=RequirementType.HOURS,
+                    frequency=RequirementFrequency.ANNUAL,
+                    required_hours=10,
+                    applies_to_all=True,
+                    active=True,
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        first = await _call(
+            server,
+            principal,
+            "get_member_requirements_progress",
+            member_id=member_id,
+            limit=2,
+        )
+        assert first["total"] == 3
+        assert first["has_more"] is True
+        names = [p["requirement_name"] for p in first["items"]]
+        assert names == ["Annual hours", "Driver hours"]
+        rest = await _call(
+            server,
+            principal,
+            "get_member_requirements_progress",
+            member_id=member_id,
+            limit=2,
+            offset=2,
+        )
+        assert [p["requirement_name"] for p in rest["items"]] == ["EMS hours"]
+        assert rest["has_more"] is False
 
 
 class TestReviewFindings:

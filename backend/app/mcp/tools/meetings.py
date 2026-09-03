@@ -343,30 +343,46 @@ def register(server: Any) -> None:
         minutes_id: str,
         section_offset: int = 0,
         section_limit: int = 20,
+        motion_offset: int = 0,
+        motion_limit: int = 20,
+        action_item_offset: int = 0,
+        action_item_limit: int = 20,
     ) -> dict:
         """One set of approved minutes: reports, business, announcements,
-        motions with their votes, action items and the dynamic sections
-        (``section_offset`` / ``section_limit`` page them). Every piece of
-        text is cut at 20,000 characters; ``truncated_fields``, a section's
-        ``content_truncated`` and a motion's ``discussion_truncated`` say
-        which were, and ``get_minutes_text`` reads the rest. The
-        treasurer's report is included only when finance sharing is on."""
+        motions with their votes, action items and the dynamic sections.
+        Sections, motions and action items are each paged by their own
+        ``*_offset`` / ``*_limit`` (``*_total`` and ``*_has_more`` say what
+        is left). Every piece of text is cut at 20,000 characters;
+        ``truncated_fields``, a section's ``content_truncated`` and a
+        motion's ``motion_text_truncated`` / ``discussion_truncated`` say
+        which were, and ``get_minutes_text`` reads the rest. The treasurer's
+        report is included only when finance sharing is on."""
         section_offset = clamp_offset(section_offset)
         section_limit = clamp_limit(section_limit)
+        motion_offset = clamp_offset(motion_offset)
+        motion_limit = clamp_limit(motion_limit)
+        action_item_offset = clamp_offset(action_item_offset)
+        action_item_limit = clamp_limit(action_item_limit)
         m = await MinuteService(db).get_minutes(
             str(minutes_id), org_uuid(principal), restricted=True
         )
         if m is None:
             raise ValueError("Minutes not found or not published")
+        all_motions = list(m.motions or [])
+        motions_page = all_motions[motion_offset : motion_offset + motion_limit]
+        all_action_items = list(m.action_items or [])
+        action_items_page = all_action_items[
+            action_item_offset : action_item_offset + action_item_limit
+        ]
         movers = await member_names(
             db,
             principal.organization_id,
-            [x for mo in (m.motions or []) for x in (mo.moved_by, mo.seconded_by)],
+            [x for mo in motions_page for x in (mo.moved_by, mo.seconded_by)],
         )
         # Finance content needs the switch *and* the Finance module: turning
         # the module off must stop its data reaching Claude by every path.
         share_finance = principal.expose_finance and principal.module_enabled("finance")
-        body = _minutes_summary(m, len(m.motions or []), len(m.action_items or []))
+        body = _minutes_summary(m, len(all_motions), len(all_action_items))
         truncated_fields: list[str] = []
         texts: dict[str, Any] = {}
         for field in _MINUTES_TEXT_FIELDS:
@@ -392,7 +408,11 @@ def register(server: Any) -> None:
                 "section_total": len(visible_sections),
                 "sections_has_more": section_offset + len(sections_page)
                 < len(visible_sections),
-                "motions": [_motion(mo, movers) for mo in (m.motions or [])],
+                "motions": [_motion(mo, movers) for mo in motions_page],
+                "motion_offset": motion_offset,
+                "motion_total": len(all_motions),
+                "motions_has_more": motion_offset + len(motions_page)
+                < len(all_motions),
                 "action_items": [
                     {
                         "description": ai.description,
@@ -401,8 +421,12 @@ def register(server: Any) -> None:
                         "priority": iso(ai.priority),
                         "status": iso(ai.status),
                     }
-                    for ai in (m.action_items or [])
+                    for ai in action_items_page
                 ],
+                "action_item_offset": action_item_offset,
+                "action_item_total": len(all_action_items),
+                "action_items_has_more": action_item_offset + len(action_items_page)
+                < len(all_action_items),
             }
         )
         if share_finance:

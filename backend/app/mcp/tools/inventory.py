@@ -120,8 +120,9 @@ def register(server: Any) -> None:
         db: AsyncSession, principal: McpPrincipal, limit: int = 100, offset: int = 0
     ) -> dict:
         """Items checked out past their expected return date, with who has
-        them and how long they have been out; medical supplies are not
-        included. Page with ``limit`` and ``offset``."""
+        them and how long they have been out, with the item's name and asset
+        tag; medical supplies are not included. Page with ``limit`` and
+        ``offset``."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         records = await InventoryService(db).get_overdue_checkouts(
@@ -137,6 +138,10 @@ def register(server: Any) -> None:
             {
                 "id": r.id,
                 "item_id": r.item_id,
+                # The service eager-loads the item; without its name a client
+                # could not say which piece of equipment is overdue.
+                "item_name": r.item.name if r.item is not None else None,
+                "asset_tag": r.item.asset_tag if r.item is not None else None,
                 "member_id": r.user_id,
                 "member_name": names.get(r.user_id),
                 "checked_out_at": iso(r.checked_out_at),
