@@ -1126,12 +1126,14 @@ export const ElectionDetailPage: React.FC = () => {
               <div className="text-theme-text-primary mt-1 text-sm font-medium">
                 {election.meeting_id ? (
                   <div className="flex items-center gap-2">
-                    <Link
-                      to={`/meetings/${election.meeting_id}`}
-                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      {election.meeting_title || 'View Meeting'} &rarr;
-                    </Link>
+                    {/* Text, not a link: there is no meeting detail screen to
+                        link to. /minutes/:minutesId is not one — it takes a
+                        *minutes* id, and MinutesPage lists meetings without
+                        linking to any. This was a <Link> to /meetings/:id,
+                        which matches no route and fell through App.tsx's
+                        catch-all to the dashboard, so naming the linked
+                        meeting cost the reader their place. */}
+                    <span className="text-theme-text-primary">{election.meeting_title || 'Linked'}</span>
                     {canManage && election.status === ElectionStatus.DRAFT && (
                       <button
                         onClick={() => {
