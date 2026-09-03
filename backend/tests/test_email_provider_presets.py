@@ -8,7 +8,10 @@ that picked Gmail saved successfully and then failed every send with
 sender and the connection test now share.
 """
 
+import io
+import json
 import time
+import urllib.error
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -40,12 +43,22 @@ from app.services.organization_service import OrganizationService
 from app.utils.email_providers import (
     EMAIL_PLATFORMS,
     PROVIDER_SMTP_PRESETS,
+    REDACTED_SECRET,
     connection_identity,
     is_valid_email,
+    microsoft_auth_method,
     missing_for_enabled,
     normalize_app_password,
     normalize_stored_platform,
     resolve_smtp_settings,
+    uses_microsoft_oauth,
+)
+from app.utils.microsoft_oauth import (
+    MicrosoftOAuthError,
+    acquire_access_token,
+    validate_client_id,
+    validate_tenant_id,
+    xoauth2_string,
 )
 
 
@@ -69,6 +82,7 @@ class TestResolveSmtpSettings:
             "user": "chief@example.org",
             "password": "abcdefghijklmnop",
             "encryption": "tls",
+            "oauth": None,
         }
 
     def test_microsoft_uses_office365_host(self):
@@ -130,6 +144,7 @@ class TestResolveSmtpSettings:
             "user": "svc",
             "password": "pw",
             "encryption": "ssl",
+            "oauth": None,
         }
 
     def test_selfhosted_bad_port_falls_back_to_submission_port(self):
@@ -1118,6 +1133,44 @@ class TestSettingsReadVisibility:
         assert not _administers_settings({"events.view", "members.view"})
         assert not _administers_settings(set())
 
+    def test_the_reduced_view_drops_the_app_registration_identifiers(self):
+        # The client secret is already redacted for everyone; the tenant and
+        # client IDs name the directory it authenticates against, which is
+        # the same class of thing as the mail host and Cloudflare account
+        # already stripped here (ORU-8).
+        reduced = EmailServiceSettings(
+            platform="microsoft",
+            microsoft_auth_method="oauth",
+            from_email="alerts@dept.example",
+            microsoft_tenant_id=_TENANT,
+            microsoft_client_id=_CLIENT,
+            microsoft_client_secret="s3cret",
+        ).without_infrastructure()
+
+        assert reduced.microsoft_tenant_id is None
+        assert reduced.microsoft_client_id is None
+        # The department's own address is not infrastructure.
+        assert reduced.from_email == "alerts@dept.example"
+
+    def test_the_client_secret_is_redacted_like_every_other_email_secret(self):
+        redacted = EmailServiceSettings(
+            platform="microsoft",
+            microsoft_auth_method="oauth",
+            microsoft_client_secret="s3cret",
+        ).redacted()
+
+        assert redacted.microsoft_client_secret == REDACTED_SECRET
+
+    def test_an_unset_secret_stays_unset_rather_than_showing_a_marker(self):
+        # A marker for a field that was never set would be echoed back and
+        # resolve to nothing, which reads on screen as a saved credential.
+        assert (
+            EmailServiceSettings(platform="microsoft")
+            .redacted()
+            .microsoft_client_secret
+            is None
+        )
+
 
 def _session_email(platform: str, config: dict) -> dict:
     import json
@@ -1288,3 +1341,846 @@ class TestEveryAttemptIsAudited:
         assert not response.success
         assert "No email platform selected" in response.message
         audit.assert_not_awaited()
+
+
+_TENANT = "11111111-2222-3333-4444-555555555555"
+_CLIENT = "66666666-7777-8888-9999-000000000000"
+
+
+def _oauth_settings(**overrides) -> dict:
+    settings = {
+        "platform": "microsoft",
+        "microsoft_auth_method": "oauth",
+        "from_email": "alerts@dept.example",
+        "microsoft_tenant_id": _TENANT,
+        "microsoft_client_id": _CLIENT,
+        "microsoft_client_secret": "s3cret",
+    }
+    settings.update(overrides)
+    return settings
+
+
+class TestMicrosoftAuthMethodDefaultsToAppPassword:
+    """Absence has to mean the behaviour a stored row already has.
+
+    Every Microsoft row written before OAuth existed carries no method and
+    sends with a password. Reading absence as OAuth would take those
+    departments off the air on upgrade, with nothing in the settings screen
+    to explain it (CLAUDE.md pitfall 19).
+    """
+
+    def test_absent_method_is_app_password(self):
+        assert microsoft_auth_method({"platform": "microsoft"}) == "app_password"
+        assert not uses_microsoft_oauth({"platform": "microsoft"})
+
+    def test_unknown_method_is_app_password(self):
+        assert (
+            microsoft_auth_method(
+                {"platform": "microsoft", "microsoft_auth_method": "graph"}
+            )
+            == "app_password"
+        )
+
+    def test_oauth_only_applies_to_microsoft(self):
+        assert not uses_microsoft_oauth(
+            {"platform": "gmail", "microsoft_auth_method": "oauth"}
+        )
+        assert uses_microsoft_oauth(_oauth_settings())
+
+    def test_stored_app_password_row_still_resolves_to_a_password_login(self):
+        resolved = resolve_smtp_settings(
+            {
+                "platform": "microsoft",
+                "from_email": "alerts@dept.example",
+                "microsoft_app_password": "pw",
+            }
+        )
+
+        assert resolved["password"] == "pw"
+        assert resolved["oauth"] is None
+
+
+class TestMicrosoftOAuthResolution:
+    def test_oauth_replaces_the_password_with_app_registration_credentials(self):
+        resolved = resolve_smtp_settings(_oauth_settings())
+
+        assert resolved["host"] == "smtp.office365.com"
+        assert resolved["port"] == 587
+        assert resolved["user"] == "alerts@dept.example"
+        # A password left over from the App Password method must not travel
+        # with an OAuth configuration: the sender would try Basic auth.
+        assert resolved["password"] is None
+        assert resolved["oauth"] == {
+            "provider": "microsoft",
+            "tenant_id": _TENANT,
+            "client_id": _CLIENT,
+            "client_secret": "s3cret",
+        }
+
+    def test_a_stale_app_password_is_not_carried_into_oauth(self):
+        resolved = resolve_smtp_settings(
+            _oauth_settings(microsoft_app_password="old-pw")
+        )
+
+        assert resolved["password"] is None
+
+
+class TestOAuthSecretIsBoundToTheAppRegistration:
+    """A client secret is issued to one application in one directory."""
+
+    def test_identity_changes_with_the_tenant(self):
+        assert connection_identity(
+            "microsoft", _oauth_settings()
+        ) != connection_identity(
+            "microsoft", _oauth_settings(microsoft_tenant_id=_CLIENT)
+        )
+
+    def test_identity_changes_with_the_client(self):
+        assert connection_identity(
+            "microsoft", _oauth_settings()
+        ) != connection_identity(
+            "microsoft", _oauth_settings(microsoft_client_id=_TENANT)
+        )
+
+    def test_identity_changes_with_the_method(self):
+        # Switching to App Password is a different credential entirely, so a
+        # stored client secret must not be restored behind the marker.
+        app_password_form = _oauth_settings(microsoft_auth_method="app_password")
+        assert connection_identity(
+            "microsoft", _oauth_settings()
+        ) != connection_identity("microsoft", app_password_form)
+
+    def test_identity_is_stable_for_an_unchanged_form(self):
+        assert connection_identity(
+            "microsoft", _oauth_settings()
+        ) == connection_identity("microsoft", _oauth_settings())
+
+
+class TestEnabledOAuthConfigurationMustBeAbleToSend:
+    def test_each_missing_app_registration_field_is_named(self):
+        for field in (
+            "microsoft_tenant_id",
+            "microsoft_client_id",
+            "microsoft_client_secret",
+        ):
+            config = _oauth_settings(enabled=True)
+            config[field] = None
+            assert missing_for_enabled(config) == field
+
+    def test_complete_oauth_configuration_passes(self):
+        assert missing_for_enabled(_oauth_settings(enabled=True)) is None
+
+    def test_oauth_does_not_require_an_app_password(self):
+        config = _oauth_settings(enabled=True, microsoft_app_password=None)
+        assert missing_for_enabled(config) is None
+
+
+class TestMicrosoftOAuthCredentialValidation:
+    """The tenant is interpolated into the authority URL."""
+
+    def test_guid_and_domain_tenants_are_accepted(self):
+        assert validate_tenant_id(_TENANT) == _TENANT
+        assert (
+            validate_tenant_id("contoso.onmicrosoft.com") == "contoso.onmicrosoft.com"
+        )
+
+    def test_a_tenant_carrying_a_path_is_refused(self):
+        with pytest.raises(MicrosoftOAuthError, match="tenant"):
+            validate_tenant_id("evil.example.com/../../attacker")
+
+    def test_a_tenant_carrying_a_scheme_is_refused(self):
+        with pytest.raises(MicrosoftOAuthError, match="tenant"):
+            validate_tenant_id("https://attacker.example")
+
+    def test_client_id_must_be_a_guid(self):
+        assert validate_client_id(_CLIENT) == _CLIENT
+        with pytest.raises(MicrosoftOAuthError, match="Application"):
+            validate_client_id("not-a-guid")
+
+    def test_empty_credentials_are_named(self):
+        with pytest.raises(MicrosoftOAuthError, match="tenant"):
+            validate_tenant_id("")
+        with pytest.raises(MicrosoftOAuthError, match="client secret"):
+            acquire_access_token(_TENANT, _CLIENT, "")
+
+
+class TestXoauth2String:
+    def test_format_matches_the_sasl_mechanism(self):
+        assert (
+            xoauth2_string("alerts@dept.example", "TOKEN")
+            == "user=alerts@dept.example\x01auth=Bearer TOKEN\x01\x01"
+        )
+
+
+class TestAcquireAccessToken:
+    def _app(self, result):
+        app = MagicMock()
+        app.acquire_token_for_client.return_value = result
+        return app
+
+    def test_a_token_is_returned_and_the_scope_is_exchange_online(self):
+        app = self._app({"access_token": "TOKEN"})
+        with patch("app.utils.microsoft_oauth._client_app", return_value=app):
+            assert acquire_access_token(_TENANT, _CLIENT, "s3cret") == "TOKEN"
+
+        assert app.acquire_token_for_client.call_args.kwargs["scopes"] == [
+            "https://outlook.office365.com/.default"
+        ]
+
+    def test_an_expired_secret_is_reported_as_such(self):
+        app = self._app(
+            {
+                "error": "invalid_client",
+                "error_description": "AADSTS7000222: The provided client secret "
+                "keys for app are expired.\r\nTrace ID: abc",
+            }
+        )
+        with patch("app.utils.microsoft_oauth._client_app", return_value=app):
+            with pytest.raises(MicrosoftOAuthError, match="expired"):
+                acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+    def test_an_unknown_tenant_is_reported_as_such(self):
+        app = self._app(
+            {
+                "error": "invalid_request",
+                "error_description": "AADSTS90002: Tenant not found.",
+            }
+        )
+        with patch("app.utils.microsoft_oauth._client_app", return_value=app):
+            with pytest.raises(MicrosoftOAuthError, match="tenant"):
+                acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+    def test_a_correlation_trailer_is_not_shown_to_the_administrator(self):
+        app = self._app(
+            {
+                "error": "interaction_required",
+                "error_description": "AADSTS50076: something\r\nTrace ID: secret-id",
+            }
+        )
+        with patch("app.utils.microsoft_oauth._client_app", return_value=app):
+            with pytest.raises(MicrosoftOAuthError) as excinfo:
+                acquire_access_token(_TENANT, _CLIENT, "s3cret")
+
+        assert "Trace ID" not in str(excinfo.value)
+
+
+class TestMicrosoftOAuthConnectionTest:
+    _CONFIG = {
+        "fromEmail": "alerts@dept.example",
+        "microsoftAuthMethod": "oauth",
+        "microsoftTenantId": _TENANT,
+        "microsoftClientId": _CLIENT,
+        "microsoftClientSecret": "s3cret",
+    }
+
+    def test_the_token_is_presented_over_xoauth2_to_office365(self):
+        with (
+            patch(
+                "app.api.v1.email_test_helper.acquire_access_token",
+                return_value="TOKEN",
+            ),
+            patch(
+                "app.api.v1.email_test_helper.test_smtp_connection",
+                return_value=(True, "ok", {"connected": True}),
+            ) as smtp_test,
+        ):
+            success, _, details = email_test_helper.test_microsoft_connection(
+                dict(self._CONFIG)
+            )
+
+        assert success
+        assert details["token_acquired"] is True
+        config = smtp_test.call_args.args[0]
+        assert config["smtpHost"] == "smtp.office365.com"
+        assert config["smtpUsername"] == "alerts@dept.example"
+        assert config["smtpOAuthToken"] == "TOKEN"
+        # Basic auth must not be offered alongside the token.
+        assert config["smtpPassword"] is None
+
+    def test_a_missing_app_registration_field_fails_before_any_call(self):
+        config = dict(self._CONFIG)
+        config["microsoftClientSecret"] = ""
+        with patch("app.api.v1.email_test_helper.acquire_access_token") as acquire:
+            success, message, details = email_test_helper.test_microsoft_connection(
+                config
+            )
+
+        assert not success
+        assert "client secret" in message
+        assert details["required"] == ["microsoftClientSecret"]
+        acquire.assert_not_called()
+
+    def test_a_refused_token_request_is_reported_without_connecting(self):
+        with (
+            patch(
+                "app.api.v1.email_test_helper.acquire_access_token",
+                side_effect=MicrosoftOAuthError("The client secret has expired."),
+            ),
+            patch("app.api.v1.email_test_helper.test_smtp_connection") as smtp_test,
+        ):
+            success, message, details = email_test_helper.test_microsoft_connection(
+                dict(self._CONFIG)
+            )
+
+        assert not success
+        assert "client secret has expired" in message
+        assert details == {"error": "token_request_failed"}
+        smtp_test.assert_not_called()
+
+    def test_a_token_exchange_online_refuses_points_at_the_mailbox_grant(self):
+        # Entra ID issued a token and the server still said no, so the app
+        # registration is fine and the SendAs grant is what is missing.
+        with (
+            patch(
+                "app.api.v1.email_test_helper.acquire_access_token",
+                return_value="TOKEN",
+            ),
+            patch(
+                "app.api.v1.email_test_helper.test_smtp_connection",
+                return_value=(
+                    False,
+                    "SMTP authentication failed.",
+                    {"connected": True},
+                ),
+            ),
+        ):
+            success, message, _ = email_test_helper.test_microsoft_connection(
+                dict(self._CONFIG)
+            )
+
+        assert not success
+        assert "SendAs" in message
+
+    def test_an_unreachable_server_keeps_the_transport_error(self):
+        with (
+            patch(
+                "app.api.v1.email_test_helper.acquire_access_token",
+                return_value="TOKEN",
+            ),
+            patch(
+                "app.api.v1.email_test_helper.test_smtp_connection",
+                return_value=(False, "Connection error: unreachable", {}),
+            ),
+        ):
+            success, message, _ = email_test_helper.test_microsoft_connection(
+                dict(self._CONFIG)
+            )
+
+        assert not success
+        assert "Connection error" in message
+
+    def test_app_password_configurations_are_untouched(self):
+        with patch(
+            "app.api.v1.email_test_helper.test_smtp_connection",
+            return_value=(True, "ok", {}),
+        ) as smtp_test:
+            email_test_helper.test_microsoft_connection(
+                {"fromEmail": "a@dept.example", "microsoftAppPassword": "pw"}
+            )
+
+        config = smtp_test.call_args.args[0]
+        assert config["smtpPassword"] == "pw"
+        assert "smtpOAuthToken" not in config
+
+
+class TestSmtpAuthenticationStep:
+    def test_a_bearer_token_authenticates_over_xoauth2(self):
+        server = MagicMock()
+        details: dict = {}
+
+        email_test_helper._authenticate(
+            server,
+            {"smtpUsername": "alerts@dept.example", "smtpOAuthToken": "TOKEN"},
+            details,
+        )
+
+        server.login.assert_not_called()
+        mechanism, authobject = server.auth.call_args.args
+        assert mechanism == "XOAUTH2"
+        # smtplib calls the callback with or without the server challenge.
+        assert authobject() == authobject("challenge")
+        assert authobject() == xoauth2_string("alerts@dept.example", "TOKEN")
+        assert details["auth_method"] == "oauth"
+
+    def test_a_password_still_authenticates_over_login(self):
+        server = MagicMock()
+        details: dict = {}
+
+        email_test_helper._authenticate(
+            server, {"smtpUsername": "svc", "smtpPassword": "pw"}, details
+        )
+
+        server.auth.assert_not_called()
+        server.login.assert_called_once_with("svc", "pw")
+        assert details["auth_method"] == "password"
+
+    def test_no_credentials_is_an_unauthenticated_relay(self):
+        server = MagicMock()
+        details: dict = {}
+
+        email_test_helper._authenticate(server, {"smtpHost": "relay"}, details)
+
+        server.auth.assert_not_called()
+        server.login.assert_not_called()
+        assert details["authenticated"] is False
+
+
+_ACCOUNT_ID = "0" * 32
+
+
+class _FakeResponse:
+    def __init__(self, payload: dict):
+        self._payload = json.dumps(payload).encode("utf-8")
+
+    def read(self) -> bytes:
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _cloudflare_urlopen(responses: dict):
+    """Answer each verify URL from ``responses``; anything else 404s.
+
+    A value may be a payload dict (HTTP 200) or an exception to raise, which
+    is how the account endpoint declines a token it does not own.
+    """
+
+    def _open(request, timeout=10):
+        for fragment, outcome in responses.items():
+            if fragment in request.full_url:
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return _FakeResponse(outcome)
+        raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
+
+    return _open
+
+
+def _http_error(code: int, message: str = "no access") -> urllib.error.HTTPError:
+    body = io.BytesIO(json.dumps({"errors": [{"message": message}]}).encode("utf-8"))
+    return urllib.error.HTTPError("https://api.cloudflare.com", code, message, {}, body)
+
+
+_CF_CONFIG = {"cloudflareAccountId": _ACCOUNT_ID, "cloudflareApiToken": "tok"}
+_ACTIVE = {"success": True, "result": {"status": "active"}}
+
+
+class TestCloudflareVerifiesAgainstTheAccount:
+    """The sender posts to /accounts/{id}/email/sending/send.
+
+    Whether the token reaches *that account* is what decides if mail goes
+    out, so the account-scoped endpoint is asked first and its answer is the
+    one reported.
+    """
+
+    def test_an_account_owned_token_is_verified_for_the_account(self):
+        with patch(
+            "app.api.v1.email_test_helper._https_urlopen",
+            _cloudflare_urlopen({f"accounts/{_ACCOUNT_ID}/tokens/verify": _ACTIVE}),
+        ):
+            success, message, details = email_test_helper.test_cloudflare_email(
+                dict(_CF_CONFIG)
+            )
+
+        assert success
+        assert details["account_scope_verified"] is True
+        assert "verified for this account" in message
+
+    def test_the_user_endpoint_is_not_consulted_when_the_account_answers(self):
+        calls = []
+
+        def _open(request, timeout=10):
+            calls.append(request.full_url)
+            return _FakeResponse(_ACTIVE)
+
+        with patch("app.api.v1.email_test_helper._https_urlopen", _open):
+            email_test_helper.test_cloudflare_email(dict(_CF_CONFIG))
+
+        assert len(calls) == 1
+        assert f"accounts/{_ACCOUNT_ID}/tokens/verify" in calls[0]
+
+    def test_an_inactive_account_token_fails_with_its_status(self):
+        with patch(
+            "app.api.v1.email_test_helper._https_urlopen",
+            _cloudflare_urlopen(
+                {
+                    f"accounts/{_ACCOUNT_ID}/tokens/verify": {
+                        "success": True,
+                        "result": {"status": "expired"},
+                    }
+                }
+            ),
+        ):
+            success, message, details = email_test_helper.test_cloudflare_email(
+                dict(_CF_CONFIG)
+            )
+
+        assert not success
+        assert "expired" in message
+        assert details["account_scope_verified"] is True
+
+
+class TestCloudflareUserTokenPassesWithACaveat:
+    """A user-owned token is only verifiable at /user/tokens/verify.
+
+    That endpoint says the token is valid without saying which accounts it
+    reaches. Failing it would turn a currently-green test red for every
+    department sending fine on a user-owned token, so it passes and the
+    message says what was not checked.
+    """
+
+    def test_a_valid_user_token_passes_and_names_what_was_not_checked(self):
+        with patch(
+            "app.api.v1.email_test_helper._https_urlopen",
+            _cloudflare_urlopen(
+                {
+                    f"accounts/{_ACCOUNT_ID}/tokens/verify": _http_error(403),
+                    "user/tokens/verify": _ACTIVE,
+                }
+            ),
+        ):
+            success, message, details = email_test_helper.test_cloudflare_email(
+                dict(_CF_CONFIG)
+            )
+
+        assert success
+        assert details["account_scope_verified"] is False
+        assert details["token_valid"] is True
+        assert _ACCOUNT_ID in message
+        assert "could not be confirmed" in message
+
+    def test_a_token_both_endpoints_reject_fails(self):
+        with patch(
+            "app.api.v1.email_test_helper._https_urlopen",
+            _cloudflare_urlopen(
+                {
+                    f"accounts/{_ACCOUNT_ID}/tokens/verify": _http_error(401),
+                    "user/tokens/verify": _http_error(401, "Invalid API Token"),
+                }
+            ),
+        ):
+            success, message, details = email_test_helper.test_cloudflare_email(
+                dict(_CF_CONFIG)
+            )
+
+        assert not success
+        assert "Invalid API token" in message
+        assert details["account_scope_verified"] is False
+        assert details["token_valid"] is False
+
+    def test_an_inactive_user_token_fails_with_its_status(self):
+        with patch(
+            "app.api.v1.email_test_helper._https_urlopen",
+            _cloudflare_urlopen(
+                {
+                    f"accounts/{_ACCOUNT_ID}/tokens/verify": _http_error(403),
+                    "user/tokens/verify": {
+                        "success": True,
+                        "result": {"status": "disabled"},
+                    },
+                }
+            ),
+        ):
+            success, message, _ = email_test_helper.test_cloudflare_email(
+                dict(_CF_CONFIG)
+            )
+
+        assert not success
+        assert "disabled" in message
+
+    def test_a_network_failure_is_reported_as_one(self):
+        # Not "account scope unconfirmed" — nothing was reachable to confirm
+        # anything, and telling an administrator to check token permissions
+        # would send them after the wrong problem.
+        with patch(
+            "app.api.v1.email_test_helper._https_urlopen",
+            _cloudflare_urlopen(
+                {
+                    f"accounts/{_ACCOUNT_ID}/tokens/verify": urllib.error.URLError(
+                        "unreachable"
+                    ),
+                    "user/tokens/verify": urllib.error.URLError("unreachable"),
+                }
+            ),
+        ):
+            success, message, _ = email_test_helper.test_cloudflare_email(
+                dict(_CF_CONFIG)
+            )
+
+        assert not success
+        assert "Network error" in message
+
+
+class TestCloudflareInputValidation:
+    def test_missing_credentials_are_named(self):
+        success, _, details = email_test_helper.test_cloudflare_email({})
+
+        assert not success
+        assert details["required"] == ["cloudflareAccountId", "cloudflareApiToken"]
+
+    def test_a_malformed_account_id_never_reaches_the_api(self):
+        with patch("app.api.v1.email_test_helper._https_urlopen") as urlopen:
+            success, message, _ = email_test_helper.test_cloudflare_email(
+                {"cloudflareAccountId": "not-hex", "cloudflareApiToken": "tok"}
+            )
+
+        assert not success
+        assert "Account ID" in message
+        urlopen.assert_not_called()
+
+
+class TestSenderAuthenticatesTheWayTheSettingsSay:
+    """The connection test and the sender must not disagree again.
+
+    A Gmail department once passed its connection test and then failed every
+    real send, because the two paths resolved the connection differently.
+    These pin the sender's own handshake for each Microsoft method.
+    """
+
+    def _service(self, email_service: dict) -> EmailService:
+        return EmailService(organization=_org(email_service))
+
+    def test_oauth_settings_present_a_bearer_token_over_xoauth2(self):
+        service = self._service(
+            {
+                "enabled": True,
+                "platform": "microsoft",
+                "microsoft_auth_method": "oauth",
+                "from_email": "alerts@dept.example",
+                "microsoft_tenant_id": _TENANT,
+                "microsoft_client_id": _CLIENT,
+                "microsoft_client_secret": "s3cret",
+            }
+        )
+        server = MagicMock()
+
+        with (
+            patch("app.services.email_service.smtplib") as smtplib_module,
+            patch(
+                "app.services.email_service.acquire_access_token",
+                return_value="TOKEN",
+            ) as acquire,
+        ):
+            smtplib_module.SMTP.return_value = server
+            service._smtp_connect()
+
+        smtplib_module.SMTP.assert_called_once()
+        assert smtplib_module.SMTP.call_args.args[0] == "smtp.office365.com"
+        acquire.assert_called_once_with(_TENANT, _CLIENT, "s3cret")
+        server.login.assert_not_called()
+        mechanism, authobject = server.auth.call_args.args
+        assert mechanism == "XOAUTH2"
+        assert authobject() == xoauth2_string("alerts@dept.example", "TOKEN")
+
+    def test_app_password_settings_still_sign_in_with_a_password(self):
+        service = self._service(
+            {
+                "enabled": True,
+                "platform": "microsoft",
+                "from_email": "alerts@dept.example",
+                "microsoft_app_password": "pw",
+            }
+        )
+        server = MagicMock()
+
+        with (
+            patch("app.services.email_service.smtplib") as smtplib_module,
+            patch("app.services.email_service.acquire_access_token") as acquire,
+        ):
+            smtplib_module.SMTP.return_value = server
+            service._smtp_connect()
+
+        server.auth.assert_not_called()
+        server.login.assert_called_once_with("alerts@dept.example", "pw")
+        acquire.assert_not_called()
+
+    def test_a_refused_token_closes_the_socket_it_opened(self):
+        # The caller only sees the exception, so a connection left open here
+        # would sit until garbage collection — one leaked socket per send
+        # attempt while an expired secret goes unnoticed.
+        service = self._service(
+            {
+                "enabled": True,
+                "platform": "microsoft",
+                "microsoft_auth_method": "oauth",
+                "from_email": "alerts@dept.example",
+                "microsoft_tenant_id": _TENANT,
+                "microsoft_client_id": _CLIENT,
+                "microsoft_client_secret": "s3cret",
+            }
+        )
+        server = MagicMock()
+
+        with (
+            patch("app.services.email_service.smtplib") as smtplib_module,
+            patch(
+                "app.services.email_service.acquire_access_token",
+                side_effect=MicrosoftOAuthError("expired"),
+            ),
+        ):
+            smtplib_module.SMTP.return_value = server
+            with pytest.raises(MicrosoftOAuthError, match="expired"):
+                service._smtp_connect()
+
+        server.close.assert_called_once()
+
+
+class TestSavingAMicrosoftOAuthConfiguration:
+    """The save path is where the three new values meet encryption,
+    the deep merge and the secret-rebinding rule at once."""
+
+    async def _save(self, org, update):
+        service = _service_with(org)
+        with (
+            patch.object(service, "get_organization", AsyncMock(return_value=org)),
+            patch.object(
+                service, "get_organization_settings", AsyncMock(return_value=None)
+            ),
+        ):
+            await service.update_organization_settings("org-id", update)
+
+    async def test_the_client_secret_is_stored_encrypted(self):
+        org = SimpleNamespace(settings={})
+
+        await self._save(
+            org,
+            {
+                "email_service": {
+                    "enabled": True,
+                    "platform": "microsoft",
+                    "microsoft_auth_method": "oauth",
+                    "from_email": "alerts@dept.example",
+                    "microsoft_tenant_id": _TENANT,
+                    "microsoft_client_id": _CLIENT,
+                    "microsoft_client_secret": "s3cret",
+                }
+            },
+        )
+
+        stored = org.settings["email_service"]
+        assert stored["microsoft_client_secret"].startswith("enc:")
+        # The identifiers are not secrets and stay readable.
+        assert stored["microsoft_tenant_id"] == _TENANT
+        assert stored["microsoft_client_id"] == _CLIENT
+        assert stored["microsoft_auth_method"] == "oauth"
+
+    async def test_an_enabled_oauth_config_missing_a_field_is_refused(self):
+        org = SimpleNamespace(settings={})
+
+        with pytest.raises(ValueError, match="client secret"):
+            await self._save(
+                org,
+                {
+                    "email_service": {
+                        "enabled": True,
+                        "platform": "microsoft",
+                        "microsoft_auth_method": "oauth",
+                        "from_email": "alerts@dept.example",
+                        "microsoft_tenant_id": _TENANT,
+                        "microsoft_client_id": _CLIENT,
+                    }
+                },
+            )
+
+    async def test_the_marker_is_restored_for_the_same_app_registration(self):
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": True,
+                    "platform": "microsoft",
+                    "microsoft_auth_method": "oauth",
+                    "from_email": "alerts@dept.example",
+                    "microsoft_tenant_id": _TENANT,
+                    "microsoft_client_id": _CLIENT,
+                    "microsoft_client_secret": "enc:saved",
+                }
+            }
+        )
+
+        await self._save(
+            org,
+            {
+                "email_service": {
+                    "enabled": True,
+                    "platform": "microsoft",
+                    "microsoft_auth_method": "oauth",
+                    "from_email": "alerts@dept.example",
+                    "from_name": "Renamed",
+                    "microsoft_tenant_id": _TENANT,
+                    "microsoft_client_id": _CLIENT,
+                    "microsoft_client_secret": REDACTED_SECRET,
+                }
+            },
+        )
+
+        assert org.settings["email_service"]["microsoft_client_secret"] == "enc:saved"
+        assert org.settings["email_service"]["from_name"] == "Renamed"
+
+    async def test_a_secret_is_not_carried_to_a_different_app_registration(self):
+        # The saved secret was issued to one application. Pairing it with a
+        # different client ID would save green and fail every send, so with
+        # no secret for the new registration the enabled check refuses.
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": True,
+                    "platform": "microsoft",
+                    "microsoft_auth_method": "oauth",
+                    "from_email": "alerts@dept.example",
+                    "microsoft_tenant_id": _TENANT,
+                    "microsoft_client_id": _CLIENT,
+                    "microsoft_client_secret": "enc:saved",
+                }
+            }
+        )
+
+        with pytest.raises(ValueError, match="client secret"):
+            await self._save(
+                org,
+                {
+                    "email_service": {
+                        "enabled": True,
+                        "platform": "microsoft",
+                        "microsoft_auth_method": "oauth",
+                        "from_email": "alerts@dept.example",
+                        "microsoft_tenant_id": _TENANT,
+                        "microsoft_client_id": "99999999-8888-7777-6666-555555555555",
+                        "microsoft_client_secret": REDACTED_SECRET,
+                    }
+                },
+            )
+
+    async def test_switching_to_oauth_clears_the_app_password(self):
+        # Two credentials for one mailbox, with only one of them in use, is
+        # a credential left behind for no reason.
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": True,
+                    "platform": "microsoft",
+                    "from_email": "alerts@dept.example",
+                    "microsoft_app_password": "enc:old-password",
+                }
+            }
+        )
+
+        await self._save(
+            org,
+            {
+                "email_service": {
+                    "enabled": True,
+                    "platform": "microsoft",
+                    "microsoft_auth_method": "oauth",
+                    "from_email": "alerts@dept.example",
+                    "microsoft_tenant_id": _TENANT,
+                    "microsoft_client_id": _CLIENT,
+                    "microsoft_client_secret": "s3cret",
+                }
+            },
+        )
+
+        assert org.settings["email_service"].get("microsoft_app_password") is None

@@ -199,6 +199,10 @@ def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
         "use_tls": raw_config.get("smtpEncryption", "tls") != "none",
         "google_app_password": raw_config.get("googleAppPassword"),
         "microsoft_app_password": raw_config.get("microsoftAppPassword"),
+        "microsoft_auth_method": raw_config.get("microsoftAuthMethod"),
+        "microsoft_tenant_id": raw_config.get("microsoftTenantId"),
+        "microsoft_client_id": raw_config.get("microsoftClientId"),
+        "microsoft_client_secret": raw_config.get("microsoftClientSecret"),
         "cloudflare_account_id": raw_config.get("cloudflareAccountId"),
         "cloudflare_api_token": raw_config.get("cloudflareApiToken"),
     }
@@ -1475,7 +1479,8 @@ async def verify_email_configuration(
             # Gmail: SMTP submission with an App Password
             test_func = partial(test_gmail_connection, config)
         elif platform == "microsoft":
-            # Microsoft 365: SMTP submission with an App Password
+            # Microsoft 365: SMTP submission with an App Password, or an
+            # Entra ID app-registration token over XOAUTH2
             test_func = partial(test_microsoft_connection, config)
         elif platform == "cloudflare":
             # Test Cloudflare Email Service API token

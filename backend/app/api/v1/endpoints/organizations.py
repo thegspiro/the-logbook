@@ -50,6 +50,7 @@ from app.schemas.organization import (
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
 from app.utils.email_providers import (
+    EMAIL_SECRET_FIELDS,
     REDACTED_SECRET,
     connection_identity,
     normalize_stored_platform,
@@ -322,12 +323,10 @@ def _resolve_redacted_secrets(
     ):
         stored = {}
     updates = {}
-    for field in (
-        "google_app_password",
-        "microsoft_app_password",
-        "smtp_password",
-        "cloudflare_api_token",
-    ):
+    # EMAIL_SECRET_FIELDS is the one list of what counts as a secret here; a
+    # second copy is what would silently skip a newly added credential,
+    # leaving its marker to travel to the provider as a literal password.
+    for field in EMAIL_SECRET_FIELDS:
         if getattr(submitted, field) == _REDACTED:
             updates[field] = stored.get(field)
     return submitted.model_copy(update=updates) if updates else submitted
@@ -382,6 +381,10 @@ async def check_email_settings(
         "fromName": resolved.from_name,
         "googleAppPassword": resolved.google_app_password,
         "microsoftAppPassword": resolved.microsoft_app_password,
+        "microsoftAuthMethod": resolved.microsoft_auth_method,
+        "microsoftTenantId": resolved.microsoft_tenant_id,
+        "microsoftClientId": resolved.microsoft_client_id,
+        "microsoftClientSecret": resolved.microsoft_client_secret,
         "smtpHost": resolved.smtp_host,
         "smtpPort": resolved.smtp_port,
         "smtpUsername": resolved.smtp_user,
