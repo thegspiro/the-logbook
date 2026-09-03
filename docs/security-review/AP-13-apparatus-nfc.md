@@ -1,12 +1,211 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–4)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–5)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py` (new),
 `api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 5 (2026-09-03) — two findings surfaced by pass 4's own AP-11 fix, both fixed
+
+**Trigger.** Codex reviewed the commit that fixed AP-9/AP-10/AP-11 (pass 4,
+still on open PR #2199) and found two more issues in the same neighborhood:
+a concurrency bug in `delete_compartment` itself (not new to pass 4 — this
+codebase's own `delete_folder`/FAC-40 precedent is what named it, on
+`DocumentFolder`, months earlier) and a client/server staleness gap in
+AP-11's own new descendant-subtree computation. Both reproduced live before
+being called findings, both have a regression test confirmed failing
+pre-fix (`git stash` on just the fix) and passing post-fix.
+
+### AP-12 — P1 (data integrity, concurrency) — `delete_compartment` cascaded off a stale REPEATABLE READ snapshot, the exact race FAC-40 already fixed once on `DocumentFolder`/`delete_folder` — ✅ FIXED
+
+**What:** `delete_compartment` read the compartment
+(`_get_compartment`, establishing this transaction's REPEATABLE READ
+snapshot), then called `await self.db.delete(compartment)` and let the
+ORM's `cascade="all, delete-orphan"` on `CheckTemplateCompartment.children`
+lazy-load the subtree to delete. That lazy-load is a plain SELECT, so it
+answers from the snapshot taken at the first read, not the latest committed
+state. A concurrent, already-committed reparent of a descendant between the
+snapshot and the delete is invisible to it, in either direction:
+
+- A child moved **out** of the subtree is still in the stale `children`
+  collection and gets destroyed anyway, even though it now belongs to a
+  different, still-live compartment.
+- A child moved **in** is absent from the stale collection, survives the
+  cascade, and — because `parent_compartment_id` is `ondelete="SET NULL"`,
+  not `CASCADE` — is left behind as a live, orphaned root once the database
+  nulls its now-dangling FK.
+
+This is structurally identical to FAC-40
+(`docs/security-review/FAC-12-facilities.md`), fixed on
+`DocumentFolder`/`delete_folder` in the Facilities pass — and worse here,
+because `DocumentFolder.parent_id` is `ondelete="CASCADE"`, so a folder the
+ORM's stale walk missed was still caught by the database when its true
+parent was physically deleted. `parent_compartment_id`'s `ondelete="SET
+NULL"` gives a stale compartment cascade no such backstop: what the ORM
+misses, nothing else catches.
+
+**Where:** `backend/app/services/equipment_check_service.py`,
+`delete_compartment` (~pre-fix line 604–616).
+
+**Failure scenario, reproduced live with two real, independently-committing
+database sessions (not the savepoint-based `db_session` fixture, which
+never truly commits):**
+
+- _Reparent-out:_ built `Cabinet` → `Drawer` (child) and a separate
+  `Other Cabinet`. Session A (the deleter) read `Cabinet`, establishing its
+  snapshot. Session B moved `Drawer` under `Other Cabinet` and committed.
+  Session A then called `delete_compartment('Cabinet', ...)`. Pre-fix,
+  `Drawer` was destroyed anyway — confirmed by an assertion failure, not a
+  code read.
+- _Reparent-in:_ built `Cabinet` and a separate, unrelated `Loose Pouch`.
+  Session A read `Cabinet` (snapshot). Session B reparented `Loose Pouch`
+  under `Cabinet` and committed. Session A deleted `Cabinet`. Pre-fix,
+  `Loose Pouch` survived as a live, orphaned root (`parent_compartment_id`
+  nulled by the database) instead of being deleted with the rest of the
+  subtree it now belonged to.
+
+**Impact:** data integrity — an authorized delete either destroys a
+compartment (and everything nested under it) that a concurrent, legitimate
+edit had just moved to safety, or leaves a moved-in compartment alive when
+the user asked to delete the whole subtree it was just placed in. Requires
+two requests racing within the same transaction window to trigger; not
+attacker-controlled, but a genuine correctness bug reachable by two
+authorized staff editing the same template concurrently.
+
+**Fix:** mirrors FAC-40's three-part pattern, adapted to this model's
+actual FK actions:
+
+1. `_lock_compartment_subtree` (new) walks the subtree level by level, each
+   level's read both filtering _and_ locking on `parent_compartment_id` in
+   one atomic `SELECT ... FOR UPDATE` — a locking read always sees latest
+   committed state (ignores the snapshot) and locks every row it finds, so
+   a concurrent reparent targeting an already-locked row blocks until this
+   transaction commits or rolls back rather than racing it.
+2. `delete_compartment` deletes the subtree as one explicit bulk
+   `DELETE ... WHERE id IN (...)` against that authoritative id set,
+   instead of the ORM's own (possibly stale) `children` cascade.
+3. `CheckTemplateCompartment.children` and `.items` are now
+   `passive_deletes=True`, so the ORM never independently re-derives (and
+   potentially disagrees with) that set. Items fall out of the deleted
+   subtree automatically via `CheckTemplateItem.compartment_id`'s
+   `ondelete="CASCADE"` at the database level — that FK action fires
+   against the database's own current row state, not any session's
+   snapshot, so it stays correct regardless of a concurrent item reparent
+   without any extra locking on items themselves.
+
+`passive_deletes=True` on `children` also means a bare
+`session.delete(compartment)` (e.g. a test exercising the old shape
+directly) no longer cascades to descendants at all — by design, it now
+defers entirely to the database's `SET NULL` action. The pre-existing AP-8
+positive-control test exercised exactly that bare ORM delete; updated it to
+call the actual `delete_compartment` service method instead, since that is
+now the only correct way to remove a compartment subtree.
+
+### AP-13 — P1 (frontend, pending-edit staleness) — `deleteCompartment`'s AP-11 subtree computation trusted the client's hierarchy, which can be ahead of what's persisted — ✅ FIXED
+
+**What:** AP-11 (pass 4) fixed `deleteCompartment`'s confirmation and
+local-state removal to account for the whole descendant subtree — but
+computed that subtree from `compartments`, this screen's _current_ in-memory
+hierarchy. Compartments have no auto-save path: `handleSave` is the only
+code that ever writes `parent_compartment_id` to the backend (indent,
+outdent, and the "stored inside" parent picker are all local-only edits
+until Save). So the client's hierarchy can be ahead of the server's, and
+`deleteCompartment` disagreeing with the server about subtree membership
+cuts both ways:
+
+- A descendant reparented **out** of the subtree in unsaved local state is
+  correctly excluded from the confirmation and local removal — but the
+  backend's cascade, still seeing the old `parent_compartment_id`, destroys
+  it anyway. The user's in-progress edit (and the compartment itself, with
+  whatever items it held) is silently and permanently lost.
+- A descendant reparented **in**, unsaved, is included in the local
+  computation and removed from the screen — but the backend leaves it alive,
+  unaffected, under its old (still-current) parent. Not data loss, but the
+  screen now disagrees with the database until the next reload.
+
+**Where:**
+`frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx`,
+`deleteCompartment` (~pre-fix line 804–826, the code AP-11 added).
+
+**Failure scenario, reproduced live (component test, `git stash` on just
+the fix):** rendered the builder against the fixture template (`Cab` with
+`Medical bag` nested underneath it), clicked "Move Medical bag out one
+level" (an unsaved outdent — `Medical bag` is now top-level in local state
+only), then clicked delete on `Cab`. Pre-fix, the confirmation and delete
+proceeded exactly as AP-11 left them — no mention of `Medical bag`, local
+state left it alone, and `equipmentCheckService.deleteCompartment('cab')`
+was called unconditionally. Against the real backend (not exercised by this
+component test, but established by AP-12's own live reproduction of the
+identical server-side mechanism) that call still cascades off
+`Medical bag`'s actual, unsaved-locally, still-`cab`-parented row.
+
+**Impact:** data loss on the frontend's own admission — a pending structural
+edit (a reparent the user has not yet saved) can be silently destroyed by a
+delete issued moments later on a sibling part of the same tree, with no
+error and no indication anything but the intended compartment was removed.
+
+**Fix:** chosen over having the backend report which ids it actually
+deleted (Codex's alternative direction) because reparenting already has
+exactly one persistence point (`handleSave`) for the frontend to
+synchronize against — requiring that save first is the smaller, more local
+fix, and needs no API contract change. Added `savedParentByIdRef`, a
+last-known-server `id -> parentCompartmentId` map refreshed on every full
+load (initial load and the reload `handleSave` triggers after a successful
+save) and at every other point that persists a compartment's parent outside
+`handleSave` (add compartment, add section header, duplicate/clone — all of
+which the backend assigns a parent to immediately). `deleteCompartment` now
+also computes the descendant set from that server-truth map
+(`descendantIdsFromParentMap`, new in `equipmentCheckHierarchy.ts`, walking
+a flat parent-id map the same way `descendantCompartmentIds` walks the live
+component state) and compares it against the live client computation for
+every id both sides have a record of. Any disagreement blocks the delete
+before the confirmation dialog even opens, with a toast asking the user to
+save first — the pending edit is left completely untouched, ready to be
+saved and retried.
+
+## Guard tests added (pass 5)
+
+- `backend/tests/test_apparatus_check_template_compartment_race.py` (new)
+  — `TestDeleteCompartmentExplicitlyLocksTheSubtree` with
+  `test_child_reparented_out_mid_transaction_survives` and
+  `test_child_reparented_in_mid_transaction_is_deleted_not_orphaned` (AP-12),
+  using two real, independently-committing `AsyncSession`s (mirroring
+  `tests/test_facility_document_reference_race.py`'s pattern). Both
+  confirmed failing against pre-fix `equipment_check_service.py` (`git
+stash` on just the fix) and passing against the fix.
+- `backend/tests/test_apparatus_check_template_compartment_cascade.py`
+  (updated) — the AP-8 positive control now calls
+  `EquipmentCheckService.delete_compartment` instead of a bare
+  `db_session.delete(root)`, since `passive_deletes=True` (AP-12) means the
+  bare ORM delete this test used to exercise no longer cascades to
+  descendants at all.
+- `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`
+  — `'blocks deleting a compartment whose subtree has an unsaved reparent
+(AP-13 finding 2)'`. Confirmed failing pre-fix (`git stash` on just the
+  component/hierarchy-helper files — the delete proceeded unguarded, no
+  toast, dialog opened, `deleteCompartment` API called) and passing against
+  the fix.
+
+## Completion gate (pass 5)
+
+| Check                                                                                                                  | Result                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                          | ✅ 0 violations                                                                         |
+| `black --check app/ tests/ alembic/`                                                                                   | ✅ clean                                                                                |
+| `isort --check-only app/ tests/ alembic/`                                                                              | ✅ clean                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                                                      | ✅ single head, no schema change                                                        |
+| `pytest tests/ -k "apparatus or nfc or evoc or equipment_check or compartment"`                                        | ✅ 574 passed, 1 skipped (pre-existing optional-dependency skip)                        |
+| `pytest tests/` (full backend suite)                                                                                   | ✅ 10066 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed |
+| `tsc --noEmit`                                                                                                         | ✅ 0 errors                                                                             |
+| `eslint src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx(.test.tsx) equipmentCheckHierarchy.ts(.test.ts)` | ✅ 0 errors                                                                             |
+| `npm run lint` (full frontend, i.e. `eslint .`)                                                                        | ✅ 0 errors                                                                             |
+| `vitest run EquipmentCheckTemplateBuilder.test.tsx equipmentCheckHierarchy.test.ts`                                    | ✅ 83 passed                                                                            |
+| `vitest run src/modules/inventory` (full module)                                                                       | ✅ 682 passed (49 files)                                                                |
 
 ---
 

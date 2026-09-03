@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a compartment delete could race a concurrent reparent, on the backend and in the builder UI (2026-09-03)
+
+**Fixed**
+
+- **AP-12 (P1, data integrity, concurrency) — `delete_compartment` cascaded
+  off a stale database snapshot, the exact race this codebase's own
+  `delete_folder`/FAC-40 fix already closed once on `DocumentFolder`**:
+  under MySQL/InnoDB REPEATABLE READ, the ORM's `children` cascade
+  lazy-loaded the subtree from the transaction's snapshot, not latest
+  committed state. A descendant reparented out of the subtree by a
+  concurrent, already-committed edit was destroyed anyway; one reparented
+  in survived, orphaned (`parent_compartment_id` is `ondelete="SET NULL"`,
+  unlike `DocumentFolder.parent_id`'s `CASCADE`, so nothing at the database
+  level caught what the stale ORM walk missed). Fixed with FAC-40's own
+  pattern: a level-by-level `FOR UPDATE` locking walk that always sees
+  latest committed state, an explicit bulk delete against that
+  authoritative id set instead of the ORM's cascade, and
+  `passive_deletes=True` on `children`/`items` so the ORM never
+  independently re-derives a conflicting view. Verified live with two real,
+  independently-committing database sessions in both directions.
+- **AP-13 (P1, frontend, pending-edit staleness) — the compartment delete
+  confirmation's descendant computation (added by AP-11) trusted the
+  browser's own hierarchy, which can be ahead of what's saved**:
+  reparenting (indent/outdent/the parent picker) has no auto-save path, so
+  an unsaved move could leave the confirmation and local-state removal
+  disagreeing with what the backend's cascade would actually delete —
+  destroying a compartment the user just moved out, unsaved, or leaving one
+  moved in alive on the server after it vanished from the screen. Fixed by
+  tracking the last-known-server parent linkage and blocking the delete
+  (with a "save first" prompt) when it disagrees with the live computation,
+  rather than risking either direction.
+- Both reproduced live before being called findings (two real database
+  sessions for AP-12; a component test reproducing the actual pending-edit
+  scenario for AP-13) and confirmed failing pre-fix / passing post-fix via
+  `git stash`. See `docs/security-review/AP-13-apparatus-nfc.md` (pass 5)
+  for the full writeup.
+
 ### Security: making the equipment-check compartment cascade real (AP-8) exposed three dormant bugs in code written against its old no-op behavior (2026-09-03)
 
 **Fixed**
