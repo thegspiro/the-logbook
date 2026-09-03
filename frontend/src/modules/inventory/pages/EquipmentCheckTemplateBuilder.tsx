@@ -873,6 +873,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!(await confirm({ title: 'Delete compartment', message: msg, confirmLabel: 'Delete', cancelLabel: 'Keep it' })))
       return;
 
+    // AP-13 finding 4 (Codex): the backend cascade is about to delete every
+    // item in this subtree too. A descendant item can have a debounced
+    // auto-save still pending (scheduleAutoSaveItem's 1.5s timer) at the
+    // moment its compartment is removed -- left alone, that timer fires
+    // anyway, calls updateCheckItem against an id the delete just removed,
+    // 404s, and flips the global indicator to "Save failed" for an item the
+    // user never touched. Worse, pressing Save inside that same window
+    // flushes the same doomed patch through flushPendingAutoSaves -- the
+    // *first* thing handleSave does, before any other edit is sent -- so one
+    // stale item id aborts saving everything else in the request too.
+    // Cancel (not flush) every pending timer for this subtree's items before
+    // the delete call: their compartment is gone, there is nothing left to
+    // save them into.
+    for (const item of [...comp.items, ...descendantComps.flatMap((c) => c.items)]) {
+      if (!item.id) continue;
+      const pending = autoSavePendingRef.current.get(item.id);
+      if (pending) {
+        clearTimeout(pending.timer);
+        autoSavePendingRef.current.delete(item.id);
+      }
+    }
+    settleAutoSaveStatus();
+
     if (comp.id) {
       try {
         await ensureDraftBeforeStructureEdit();

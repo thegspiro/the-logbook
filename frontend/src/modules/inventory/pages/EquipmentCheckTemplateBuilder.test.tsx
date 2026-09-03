@@ -1983,3 +1983,41 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
     // it tips over and the job fails on a timeout rather than an assertion.
   }, 20_000);
 });
+
+describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree delete', () => {
+  // AP-13 finding 4 (Codex): deleting a compartment removes its items on the
+  // backend too. A debounced auto-save still pending for one of those items
+  // must not fire afterward — left alone, the timer calls updateCheckItem
+  // for an id the delete just removed, 404s, and (per the flushing-suite
+  // above) can abort an unrelated Save pressed inside the same window.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+  });
+
+  it('cancels a pending item auto-save when the item’s compartment is deleted inside the debounce window', async () => {
+    mockViewport('laptop');
+    renderBuilder();
+
+    // Queues a debounced auto-save for Radio (a Cab item) via the same bulk
+    // toolbar path the flushing-suite above uses.
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    // Delete Cab -- Radio's compartment -- inside the same debounce window,
+    // well before the queued auto-save would otherwise fire.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+
+    // Outwait the window the cancelled timer would have fired inside.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+
+    expect(updateCheckItem).not.toHaveBeenCalled();
+  }, 10_000);
+});
