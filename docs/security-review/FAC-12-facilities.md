@@ -45,7 +45,7 @@ ancestor-walk mechanism itself is sound (fail-closed on missing/cross-org/
 cyclic ancestry, `required_permissions` checked before the leadership
 bypass) — not re-derived here. It did.
 
-### FAC-13 — HIGH (correctness/access, not a leak) — every facility folder now requires the sensitive-family permission set, silencing four non-sensitive categories for their intended baseline audience — 🚩 FLAGGED
+### FAC-13 — HIGH (correctness/access, not a leak) — every facility folder now requires the sensitive-family permission set, silencing Photos, Maintenance Records, and Inspection Reports — three established-baseline categories — for their intended audience (Blueprints & Permits' classification is separately undecided, see below) — 🚩 FLAGGED
 
 **What:** `GET /{facility_id}/folders` is gated at `facilities.view`/
 `.manage` (`facilities.py:3714-3716`), and FAC-5's whole design point is
@@ -119,21 +119,37 @@ correctly needs:
 
 1. A new, named permission tier for "any facilities module access" (the
    endpoint's own `facilities.view`/`.manage` OR-set, not the narrower
-   sensitive set) to gate the shared root, the per-facility folder, and the
-   four non-financial sub-folders — `FACILITY_SENSITIVE_PERMISSIONS` stays
-   on `Insurance & Leases` and `Capital Projects` alone.
+   sensitive set) to gate the shared root and the three sub-folders that are
+   unambiguously operational per FAC-5's own text — Photos, Maintenance
+   Records, Inspection Reports. `FACILITY_SENSITIVE_PERMISSIONS` stays on
+   `Insurance & Leases` and `Capital Projects`.
 2. A product/security call on **Blueprints & Permits** specifically: unlike
-   Photos, Maintenance Records, and Inspection Reports (unambiguously
-   operational per FAC-5's own text), a building's floor plans are
-   defensibly security-sensitive (entry points, alarm/utility shutoff
-   locations) even though FAC-5 never named them as one of the five
-   families — an owner call, not one this review should make unilaterally.
-3. A migration correcting every already-stamped row for the categories that
+   the three above, a building's floor plans are defensibly
+   security-sensitive (entry points, alarm/utility shutoff locations) even
+   though FAC-5 never named them as one of the five families — an owner
+   call, not one this review should make unilaterally. Until that call is
+   made, Blueprints & Permits stays on `FACILITY_SENSITIVE_PERMISSIONS`
+   alongside the two financial sub-folders, fail-closed.
+3. Reclassifying existing unfiled documents **before** touching the
+   per-facility folder's own permission. `_validate_shared_document_reference`
+   (`facilities.py:180-189`) files every currently-unfiled photo/document
+   directly into the per-facility folder itself — the parent all six
+   sub-folders hang off, and the very node (1) proposes loosening — not into
+   any of the six sub-folders. Loosening that parent folder's ACL on its own
+   would therefore immediately expose every document sitting there today,
+   sensitive or not, to a baseline viewer, regardless of how the sub-folders
+   underneath it end up classified. Every existing unfiled document must
+   first be classified and moved into the correctly-gated sub-folder (or
+   authorized individually) before the per-facility folder's permission
+   changes — a data-classification pass, not just a permission change.
+4. A migration correcting every already-stamped row for the categories that
    move (the root, the per-facility folders, and the sub-folders chosen in
-   (1)/(2)) — mirroring `a9c4e7b2f631`'s own shape, in the other direction.
+   (1)/(2)), sequenced after the reclassification in (3) — mirroring
+   `a9c4e7b2f631`'s own shape, in the other direction.
 
-That is a genuine design decision plus a migration, squarely the "flag, not
-auto-apply" case this rotation's discipline exists for.
+That is a genuine design decision plus a data-classification pass plus a
+migration, squarely the "flag, not auto-apply" case this rotation's
+discipline exists for.
 
 **Fixed in this pass — the two comments that now claim something false:**
 `facilities.py:3756-3763`'s comment on `get_facility_folders` said "A
