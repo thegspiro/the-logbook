@@ -42,6 +42,28 @@ MAX_OPEN_SHIFT_WINDOW_DAYS = 366
 # pieces through ``get_shift_notes``. The column is unbounded Text, so a
 # page of shifts cannot carry every word of it.
 SHIFT_TEXT_CHARS = 20_000
+# A shift's seat list is unbounded JSON; a row carries at most this many
+# seats, each position name cut to this length.
+SEAT_LIST_ITEMS = 100
+SEAT_NAME_CHARS = 200
+
+
+def _seats(positions: Any) -> tuple[list, bool]:
+    """The seat list as the display normalizer renders it, bounded, and
+    whether anything was cut."""
+    seats = SchedulingService.normalize_positions(positions)
+    cut = len(seats) > SEAT_LIST_ITEMS
+    bounded = []
+    for seat in seats[:SEAT_LIST_ITEMS]:
+        name = seat.get("position")
+        if isinstance(name, str):
+            name = scrub_text(name)
+            if len(name) > SEAT_NAME_CHARS:
+                name = name[:SEAT_NAME_CHARS]
+                cut = True
+            seat = {**seat, "position": name}
+        bounded.append(seat)
+    return bounded, cut
 
 
 def _clip(value: Any) -> tuple[Any, bool]:
@@ -174,6 +196,7 @@ def _shift(
     assignments: list[dict],
 ) -> dict:
     notes, cut = _clip(shift.notes)
+    seats, seats_cut = _seats(shift.positions)
     return {
         "id": shift.id,
         "shift_date": iso(shift.shift_date),
@@ -186,7 +209,8 @@ def _shift(
         "platoon": shift.platoon,
         "shift_officer_id": shift.shift_officer_id,
         "shift_officer": officers.get(shift.shift_officer_id or ""),
-        "positions": SchedulingService.normalize_positions(shift.positions),
+        "positions": seats,
+        "positions_truncated": seats_cut,
         "min_staffing": shift.min_staffing,
         "status": iso(shift.status),
         "is_finalized": bool(shift.is_finalized),

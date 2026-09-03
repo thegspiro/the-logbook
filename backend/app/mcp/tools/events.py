@@ -27,6 +27,26 @@ from app.services.event_service import EventService, resolve_attendee_visibility
 # carry every word of them.
 EVENT_TEXT_CHARS = 20_000
 _EVENT_TEXT_FIELDS = ("description", "location_details")
+# ``mandatory_membership_types`` is an unbounded JSON list of labels; a row
+# carries at most this many, each cut to this length.
+LABEL_LIST_ITEMS = 50
+LABEL_CHARS = 200
+
+
+def _labels(value: Any) -> tuple[Any, bool]:
+    """A list of labels, scrubbed and bounded, and whether anything was cut."""
+    if not isinstance(value, list):
+        return value, False
+    cut = len(value) > LABEL_LIST_ITEMS
+    labels = []
+    for entry in value[:LABEL_LIST_ITEMS]:
+        if isinstance(entry, str):
+            entry = scrub_text(entry)
+            if len(entry) > LABEL_CHARS:
+                entry = entry[:LABEL_CHARS]
+                cut = True
+        labels.append(entry)
+    return labels, cut
 
 
 def _clip(value: Any) -> tuple[Any, bool]:
@@ -57,6 +77,7 @@ def _event(event: Any, counts: Optional[dict] = None) -> dict:
     counts = counts or {}
     description, cut = _clip(event.description)
     location_details, location_cut = _clip(event.location_details)
+    membership_types, membership_cut = _labels(event.mandatory_membership_types)
     return {
         "id": event.id,
         "title": event.title,
@@ -74,7 +95,8 @@ def _event(event: Any, counts: Optional[dict] = None) -> dict:
         "rsvp_deadline": iso(event.rsvp_deadline),
         "max_attendees": event.max_attendees,
         "is_mandatory": bool(event.is_mandatory),
-        "mandatory_membership_types": event.mandatory_membership_types,
+        "mandatory_membership_types": membership_types,
+        "mandatory_membership_types_truncated": membership_cut,
         "is_draft": bool(event.is_draft),
         "is_cancelled": bool(event.is_cancelled),
         "cancellation_reason": event.cancellation_reason,

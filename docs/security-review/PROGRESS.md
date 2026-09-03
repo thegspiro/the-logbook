@@ -16,69 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
-Apparatus & NFC, passes 3–7. Pass 3: AP-8 fixed —
-`CheckTemplateCompartment.children` had the same inverted self-referential
-`remote_side` shape FAC-16 found and fixed on `DocumentFolder.children`
-(flagged there as a sibling instance, out of scope for Facilities) —
-reproduced live (three-level fixture, delete_compartment's own cascade)
-before fixing. `TrainingCategory.subcategories` has the same shape and
-remains flagged, out of scope for this feature. Also corrected a stale
-`docs/app-review/apparatus.md` entry (AP2-2) that still read OPEN though the
-code has validated all four FKs since before pass 1. Pass 4 (same PR, in
-response to a Codex review of the AP-8 fix commit): three more findings, all
-surfaced by AP-8's cascade going from no-op to genuinely effective, exactly
-the pattern the Facilities pass (PR #2198) went through — AP-9 (P1, clone
-endpoint 500s on nested templates, plus a co-discovered duplicate-clone bug
-in the same code), AP-10 (P1, `create_template` had no in-template/in-org
-validation on a client-supplied `parent_compartment_id`, unlike
-`add_compartment`/`update_compartment`), AP-11 (P2, frontend delete
-confirmation and local-state removal didn't account for the descendants
-the backend now cascade-deletes). All three reproduced live against the
-current fixed code before being called findings, and regression-tested
-failing pre-fix / passing post-fix via `git stash`. Pass 5 (same PR, a
-second Codex review of the pass-4 commit): two more findings — AP-12 (P1,
-`delete_compartment` cascaded off a stale REPEATABLE READ snapshot, the
-exact concurrency race FAC-40 already fixed once on `DocumentFolder`/
-`delete_folder`; fixed with FAC-40's own locking-walk + explicit-bulk-delete
+**#2200** (branch `claude/apparatus-nfc-outstanding-write-invariant`) —
+Feature 13, Apparatus & NFC, pass 9. Redirect of #2199 (merged by the repo
+owner mid-round, before this pass's fix landed) per CLAUDE.md Pitfall #24 —
+branched fresh off `origin/main` at `f77cab7f` rather than reusing the dead
+branch. A fifth Codex round on the same `EquipmentCheckTemplateBuilder.tsx`
+autosave/subtree-delete subsystem passes 5–8 had already been through found
+two more gaps in the same shape (AP-13 finding 1: `flushPendingAutoSaves`
+issued PATCHes without registering them anywhere a delete's quiescing step
+could see; AP-13 finding 2: a partial-failure `handleSave` batch skipped the
+`savedParentByIdRef` refresh for a compartment whose own PATCH had already
+succeeded). Rather than a sixth pairwise patch — the same shape as the
+Facilities PR's FAC-32→FAC-34→FAC-35 lock-ordering saga — this pass states
+one canonical invariant (before a subtree delete proceeds, no id in that
+subtree may have an outstanding server write or unresolved local hierarchy
+change) and routes every item-PATCH-issuing write path through one
+registration point (`registerInFlightSave`) rather than three call sites
+each remembering to update the tracking maps themselves. Also trimmed
+review-chronology narration ("AP-13 finding N", "Codex", "three rounds") out
+of the production comments per AGENTS.md/CLAUDE.md comment policy, and fixed
+an unrelated `act()` test-hygiene issue Codex flagged in two pass-7/8 tests
+in the same file. Both new findings reproduced live (pre-fix files restored
+from `origin/main` against the new tests, confirmed failing, then passing
+post-fix) before being called findings. Full writeup:
+`docs/security-review/AP-13-apparatus-nfc.md` pass 9.
 
-- `passive_deletes=True` pattern, adapted to this model's `SET NULL` vs.
-  `CASCADE` FK actions) and AP-13 (P1, frontend — AP-11's own descendant
-  computation trusted the browser's hierarchy, which can be ahead of what's
-  saved since reparenting has no auto-save path; fixed by tracking
-  last-known-server parent linkage and blocking the delete on disagreement).
-  Both reproduced live (two real, independently-committing database sessions
-  for AP-12; a component test reproducing the actual data-loss scenario for
-  AP-13) before being called findings, and regression-tested failing pre-fix /
-  passing post-fix via `git stash`. Pass 6 (same PR, a third Codex review, this
-  time of the pass-5 fix commits): two more findings — AP-14 (P1, multi-tenant
-  isolation — the pass-5 locking subtree walk had no template/org boundary, so
-  a dangling cross-template `parent_compartment_id` from before AP-10's
-  validation shipped could let deleting a compartment in one template destroy
-  a compartment in another; fixed with the same fail-closed pattern
-  `delete_folder` uses for cross-org references) and AP-15 (P2, frontend — the
-  pass-5 `deleteCompartment` fix left descendant items' pending debounced
-  auto-saves running after their compartment was deleted, so a stale timer
-  could 404 against a removed item and, worse, abort an unrelated Save pressed
-  in the same window; fixed by cancelling those timers before the delete
-  call). Both reproduced live before being called findings, and
-  regression-tested failing pre-fix / passing post-fix via `git stash`. Pass
-  7 (same PR, a fourth Codex round on the same chain): AP-16 (P2, data
-  completeness — `clone_template`'s root-down walk silently drops a
-  compartment whose parent lies outside the source template, the same
-  dangling-link shape AP-14 guards delete against; fixed the same way,
-  fail-closed rather than committing an incomplete clone), plus four
-  Codex-caught regressions in this rotation's own pass-6 fixes to
-  `deleteCompartment`'s auto-save cancellation (a stale entry left in the
-  pending-reparent guard's map after a successful delete; a mock not reset
-  between tests; canceling auto-saves before vs. after the delete call each
-  leaving a different failure window open) — the auto-save fix took two
-  more rounds to converge on capturing and cancelling every timer
-  synchronously before the delete request is sent, then discarding or
-  re-arming the captured patches depending on whether the delete succeeded.
-  All reproduced live or via a test failing against the specific prior
-  state, all regression-tested failing pre-fix / passing post-fix. See the
-  log entry below for the full writeup once merged.
+---
+
+### 2026-09-03 — Feature 13 (Apparatus & NFC, passes 3–8) ✅ merged (mid-round) — PR #2199
+
+`21bdf140` merged by the repo owner directly, before pass 9's fix (below)
+landed — the same mid-round-merge shape #2195 and #2191 hit earlier in this
+rotation. Per CLAUDE.md Pitfall #24, pass 9 continued on a fresh branch/PR
+(#2200) rather than reusing the dead branch; see the Open PR entry above.
+
+This PR closed AP-8 (P1, data integrity — `CheckTemplateCompartment.children`
+had the same inverted self-referential `remote_side` shape FAC-16 found and
+fixed on `DocumentFolder.children`, reproduced live with a three-level
+fixture before fixing) through AP-16 (P2, data completeness —
+`clone_template`'s root-down walk silently dropped a compartment whose
+parent lay outside the source template) across six further Codex rounds
+(passes 4–8) on the same `EquipmentCheckTemplateBuilder.tsx`
+autosave/subtree-delete subsystem: AP-9/AP-10/AP-11 (pass 4, surfaced by
+AP-8's cascade going from no-op to genuinely effective), AP-12/AP-13 (pass
+5, `delete_compartment`'s stale-snapshot cascade race and the frontend's
+pending-reparent delete guard), AP-14/AP-15 (pass 6, the pass-5 locking walk's
+missing template/org boundary and a descendant auto-save left running past
+a delete), AP-16 plus four regressions in the rotation's own pass-6 fixes
+(pass 7), and two more gaps in the same guard — in-flight (not just
+pending) auto-saves, and `savedParentByIdRef` never refreshed after a bulk
+replace (pass 8). Every finding reproduced live before being called one,
+and regression-tested failing pre-fix / passing post-fix. Full detail in
+`docs/security-review/AP-13-apparatus-nfc.md` (passes 3–8) and the merged
+PR itself, not duplicated here. Rotation row 13 stays 🔄 — pass 9 (the
+invariant that supersedes this whole pairwise chain) continues under #2200.
 
 ---
 

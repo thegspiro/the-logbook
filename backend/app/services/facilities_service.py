@@ -645,10 +645,12 @@ class FacilitiesService:
         total = count_result.scalar()
 
         # Main query
+        # The id breaks ties between facilities sharing a name, so an
+        # offset page never repeats or skips one.
         query = (
             select(Facility)
             .where(and_(*conditions))
-            .order_by(Facility.name)
+            .order_by(Facility.name, Facility.id)
             .offset(skip)
             .limit(limit)
         )

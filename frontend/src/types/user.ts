@@ -96,20 +96,22 @@ export interface DepartmentEmailSettings {
   format: DepartmentEmailFormat;
 }
 
+export interface EmailConnectionTestResult {
+  success: boolean;
+  message: string;
+  details: Record<string, unknown>;
+}
+
 export interface EmailServiceSettings {
   enabled: boolean;
   platform: string;
   // Cloudflare Email Service
   cloudflare_account_id?: string;
   cloudflare_api_token?: string;
-  // Gmail / Google Workspace
-  google_client_id?: string;
-  google_client_secret?: string;
+  // Gmail / Google Workspace — signs in to smtp.gmail.com as from_email
   google_app_password?: string;
-  // Microsoft 365
-  microsoft_tenant_id?: string;
-  microsoft_client_id?: string;
-  microsoft_client_secret?: string;
+  // Microsoft 365 — signs in to smtp.office365.com as from_email
+  microsoft_app_password?: string;
   // Self-hosted SMTP
   smtp_host?: string;
   smtp_port: number;

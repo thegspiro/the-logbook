@@ -72,6 +72,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already reads `vendor_id`, so a filtered catalogue is a shareable link. An
   unrecognized type degrades to the unfiltered list instead of a 400.
 
+### Security: closes the gap in pass 9's own per-write registration invariant — a save-operation-level lock, not a sixth pairwise patch (2026-09-03)
+
+A Codex review of pass 9's own PR found that per-write registration
+(`registerInFlightSave`) cannot, by itself, close every race between a
+subtree delete and an in-progress Save: `handleSave` is a sequence of
+awaited steps (flush, the template's own PATCH, then the compartment/item
+update batch) with real gaps between them where nothing is on the wire yet —
+so a delete confirmed inside one of those gaps sees both tracking maps
+correctly empty and proceeds, only for the next step to PATCH rows it just
+removed. Fixed with a new `saveOperationActive` flag, set on `handleSave`'s
+very first line and cleared in a `finally` spanning the whole function, that
+`deleteCompartment` checks before anything else. This also closes, as a side
+effect, the compartment-level in-flight tracking gap pass 9 had explicitly
+flagged and left open.
+
+**Fixed**
+
+- **AP-13 finding 1, pass 10 (P2, frontend) — `deleteCompartment` could
+  proceed in the gap between two of `handleSave`'s own awaited steps, where
+  neither `autoSavePendingRef` nor `autoSaveInFlightRef` had anything
+  registered yet**: reproduced live by deferring the template's own PATCH
+  (a real `await` already in `handleSave`) to hold it in the window right
+  after the pre-save flush resolves and before the update batch is even
+  built — a delete confirmed in that window proceeded immediately, and the
+  batch's PATCHes then fired against rows it had just removed. Fixed with a
+  save-operation-level lock (`saveOperationActive`) spanning `handleSave`'s
+  entire async span, checked by `deleteCompartment` before anything else and
+  also used to disable every delete affordance while a save is active.
+
+### Security: one canonical invariant replacing four pairwise rounds on the autosave/subtree-delete interaction (2026-09-03)
+
+A fifth Codex round on the same `EquipmentCheckTemplateBuilder.tsx`
+subsystem found two more gaps in the shape the previous four rounds (below)
+had each closed one instance of and missed the next. Rather than a sixth
+pairwise patch, replaced the ad-hoc tracking with one documented invariant
+and a single registration point every write path goes through.
+
+**Fixed**
+
+- **AP-13 finding 1, pass 9 (P2, frontend) — `flushPendingAutoSaves` (the
+  Save button's pre-save flush of a still-pending debounced edit) issued
+  its PATCH directly, never registering it anywhere a subtree delete's
+  quiescing step could see**: invisible to both tracking maps, in the
+  window before Save marks itself in progress — so a delete triggered while
+  a flush-issued PATCH was on the wire wasn't blocked on it at all. Fixed by
+  routing every item-PATCH-issuing write path (a fired debounce timer, this
+  flush, and Save's own per-item batch) through one new helper,
+  `registerInFlightSave`, rather than three call sites each managing the
+  tracking map by hand.
+- **AP-13 finding 2, pass 9 (P2, frontend) — a partial-failure Save skipped
+  the reparent-guard's server-truth-map refresh for a compartment whose own
+  update had already succeeded**: `handleSave` batched every compartment
+  and item update into one `Promise.all`, which rejects on the first
+  failure regardless of what else in the batch already committed
+  server-side — so if a compartment's reparent PATCH fulfilled while an
+  unrelated item's PATCH in the same batch rejected, the map never learned
+  about the reparent that had, in fact, already reached the server. A later
+  delete could then wrongly block (or, the inverse, wrongly allow) based on
+  a hierarchy comparison against a map that no longer matched the server's
+  actual state. Fixed by switching to two `Promise.allSettled` groups and
+  refreshing the map for every compartment PATCH that fulfilled,
+  unconditionally, before any batch failure is surfaced.
+
+### Email settings: Gmail and Microsoft 365 now actually send; OAuth fields removed (2026-09-03)
+
+**Fixed**
+
+- **Choosing Gmail or Microsoft 365 in Settings → Email (or in onboarding)
+  saved a configuration that could never send.** The form stored the
+  credentials under `google_*` / `microsoft_*` keys and
+  `EmailService._get_smtp_config` read only the `smtp_*` keys, so the sender
+  resolved no host at all and every message for that department failed with
+  "SMTP host and from_email are required" — after a green "Email settings
+  saved" toast, and in preference to a working global `SMTP_*` configuration,
+  because the org section wins whenever `enabled` is true. Reproduced against
+  the real `EmailService` before fixing. Both platforms are ordinary SMTP
+  submission behind an App Password, so the host, port, encryption and login
+  are now fixed by a preset in `app/utils/email_providers.py`
+  (`smtp.gmail.com` / `smtp.office365.com`, 587, STARTTLS, login = From
+  address) and resolved there by **both** the sender and the connection test,
+  which had previously known the Gmail host while the sender did not.
+
+**Removed**
+
+- **Gmail OAuth Client ID / Client Secret and Microsoft Tenant / Client ID /
+  Client Secret** from `EmailServiceSettings`, the settings form and the
+  onboarding form. No refresh token was ever obtained or stored and no
+  XOAUTH2 or Graph send path exists, so the fields were decorative; the
+  onboarding test reported them "valid" on string format alone. Migration
+  `20260903_1300_e3a9c1d5b7f2` prunes the retired keys from every stored row
+  and settles a pre-validation platform label (`sendgrid`, say) onto
+  `selfhosted` / `other`; the read and write paths do the same for any row
+  the migration has not yet reached. It is not reversible: the pruned keys
+  held OAuth secrets nothing reads. `microsoft_app_password` is new; Gmail
+  keeps `google_app_password`.
+
+**Added**
+
+- **Test Connection on Settings → Email** (`POST
+/organization/settings/email/test`, `settings.manage`, rate-limited). Signs
+  in to the provider without saving; a redacted `••••••••` secret is resolved
+  against the stored value so an admin can test what is saved without
+  retyping it. `platform` on the settings PATCH is now validated against the
+  five known values.
+
 ### Security: a fourth round on the delete/autosave interaction, and a bulk-replace path that never refreshed the reparent-guard's server-truth map (2026-09-03)
 
 **Fixed**

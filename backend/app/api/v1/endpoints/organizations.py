@@ -4,6 +4,10 @@ Organizations API Endpoints
 Endpoints for organization settings management.
 """
 
+import asyncio
+from functools import partial
+from typing import Any, Mapping
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from loguru import logger
@@ -16,14 +20,21 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.api.v1.email_test_helper import (
+    test_cloudflare_email,
+    test_gmail_connection,
+    test_microsoft_connection,
+    test_smtp_connection,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.security_middleware import get_client_ip
-from app.core.utils import ensure_found, handle_service_errors
+from app.core.security_middleware import check_rate_limit, get_client_ip
+from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.user import Role, User
 from app.schemas.organization import (
     AuthSettings,
     ContactInfoSettings,
+    EmailConnectionTestResponse,
     EmailServiceSettings,
     EnabledModulesResponse,
     FileStorageSettings,
@@ -34,9 +45,15 @@ from app.schemas.organization import (
     OrganizationSettingsUpdate,
     SetupChecklistItem,
     SetupChecklistResponse,
+    decrypt_settings_secrets,
 )
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
+from app.utils.email_providers import (
+    REDACTED_SECRET,
+    connection_identity,
+    normalize_stored_platform,
+)
 
 router = APIRouter()
 
@@ -45,6 +62,19 @@ router = APIRouter()
 # other item derives completion from entity counts and must not be hand-waved
 # complete, so acknowledgment is restricted to this set.
 REVIEW_CHECKLIST_KEYS = {"org_settings", "modules"}
+
+
+# The two grants that may write settings (see the PATCH routes below). A
+# caller who may write the email section must also read its identifiers, or
+# the form loads with the host / account cleared, the identity comparison
+# refuses the saved secret, and a save from that form wipes the fields.
+_SETTINGS_WRITE_PERMISSIONS = ("settings.manage", "organization.update_settings")
+
+
+def _administers_settings(user_permissions: set) -> bool:
+    return any(
+        _has_permission(p, user_permissions) for p in _SETTINGS_WRITE_PERMISSIONS
+    )
 
 
 @router.get("/settings", response_model=OrganizationSettingsResponse)
@@ -75,7 +105,7 @@ async def get_organization_settings(
     # also strip the infrastructure identifiers those secrets authenticate to
     # (mail host, S3 bucket/endpoint, SSO issuer, OAuth tenant/client IDs)
     # unless the caller actually administers settings.
-    if not _has_permission("settings.manage", _collect_user_permissions(current_user)):
+    if not _administers_settings(_collect_user_permissions(current_user)):
         redacted = redacted.without_infrastructure()
 
     # Return as dict so FastAPI's response_model validation preserves
@@ -216,10 +246,14 @@ async def update_email_settings(
     """
     org_service = OrganizationService(db)
 
+    # OrganizationService.update_organization_settings refuses an enabled
+    # configuration that cannot send (missing App Password, host, ...) with a
+    # ValueError, which handle_service_errors returns as a 400 naming the
+    # field. It lives there so the full settings PATCH enforces it too.
     settings_dict = {"email_service": email_settings.model_dump(exclude_unset=False)}
 
     async with handle_service_errors("Failed to update email settings"):
-        await org_service.update_organization_settings(
+        updated = await org_service.update_organization_settings(
             current_user.organization_id, settings_dict
         )
 
@@ -237,8 +271,188 @@ async def update_email_settings(
             username=current_user.username,
         )
 
-        # SEC: Redact secrets before returning to the client
-        return email_settings.redacted()
+        # SEC: Redact secrets before returning to the client. Return what was
+        # persisted, not what was submitted: the service may have cleared a
+        # secret whose connection identity changed, and the form must show
+        # that rather than a marker for a password that no longer exists.
+        return updated.email_service.redacted()
+
+
+# A connection test opens a socket to whatever host the admin typed. The same
+# admin can already point the saved configuration anywhere, so this is not a
+# new capability, but it is cheap to spam, so it shares the onboarding test's
+# per-IP budget.
+async def _rate_limit_settings_test_email(request: Request) -> None:
+    # lockout_seconds only applies on the in-memory fallback (Redis enforces
+    # the window alone); the default 1800 s is an authentication lockout and
+    # would block an admin for 30 minutes after five troubleshooting attempts
+    # while the UI tells them to wait one. Match the window.
+    await check_rate_limit(
+        request, scope="settings_test_email", window_seconds=60, lockout_seconds=60
+    )
+
+
+EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS = 30
+
+_REDACTED = REDACTED_SECRET
+
+
+def _resolve_redacted_secrets(
+    submitted: EmailServiceSettings, stored: Mapping[str, Any]
+) -> EmailServiceSettings:
+    """Substitute the saved secret for each field the client sent as redacted.
+
+    GET /settings hands the form ``••••••••`` for every stored secret, and the
+    form sends it straight back. Testing what is saved without retyping the
+    password is the whole point of the button, so map the marker back to the
+    stored (already decrypted) value before the test runs.
+
+    SEC: only when the submitted connection is the one the secret was saved
+    for. The caller cannot read the stored password, and this endpoint
+    presents it to whatever server the form names — so a marker paired with a
+    different host (or a different account on a preset platform) would hand
+    the saved credential to that host. In that case the marker resolves to
+    nothing and the test reports the password as missing.
+    """
+    # The stored platform may be a legacy label the read path presents as
+    # selfhosted; compare like with like or an unchanged form never matches.
+    stored = normalize_stored_platform(stored)
+    if connection_identity(submitted.platform, submitted.model_dump()) != (
+        connection_identity(stored.get("platform"), stored)
+    ):
+        stored = {}
+    updates = {}
+    for field in (
+        "google_app_password",
+        "microsoft_app_password",
+        "smtp_password",
+        "cloudflare_api_token",
+    ):
+        if getattr(submitted, field) == _REDACTED:
+            updates[field] = stored.get(field)
+    return submitted.model_copy(update=updates) if updates else submitted
+
+
+def _smtp_login_incomplete(resolved: EmailServiceSettings) -> bool:
+    """A self-hosted username with no password cannot be tested honestly.
+
+    The SMTP helper treats a missing password as "no authentication" and
+    reports any reachable server as a success. That is right for a relay that
+    takes unauthenticated mail, but a username with no password is a
+    credential that could not be restored — the marker was submitted against
+    a different server than it was saved for — and a green result would
+    misreport the saved configuration.
+    """
+    return bool(resolved.smtp_user) and not resolved.smtp_password
+
+
+@router.post("/settings/email/test", response_model=EmailConnectionTestResponse)
+async def check_email_settings(
+    email_settings: EmailServiceSettings,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+    _rate_limited: None = Depends(_rate_limit_settings_test_email),
+):
+    """
+    Test the email configuration shown on the settings screen without saving it.
+
+    Signs in to the provider's SMTP server (Gmail, Microsoft 365, self-hosted)
+    or verifies the Cloudflare API token. Redacted secrets are resolved against
+    the saved configuration, so an admin can test what is stored.
+
+    **Authentication and admin permission required**
+    """
+    org_service = OrganizationService(db)
+    org = await org_service.get_organization(current_user.organization_id)
+    stored_email = {}
+    if org and org.settings:
+        stored_email = decrypt_settings_secrets(org.settings).get("email_service", {})
+    if not isinstance(stored_email, dict):
+        stored_email = {}
+
+    resolved = _resolve_redacted_secrets(email_settings, stored_email)
+    platform = resolved.platform
+
+    # The test helpers read the onboarding form's camelCase keys.
+    config = {
+        "fromEmail": resolved.from_email,
+        "fromName": resolved.from_name,
+        "googleAppPassword": resolved.google_app_password,
+        "microsoftAppPassword": resolved.microsoft_app_password,
+        "smtpHost": resolved.smtp_host,
+        "smtpPort": resolved.smtp_port,
+        "smtpUsername": resolved.smtp_user,
+        "smtpPassword": resolved.smtp_password,
+        "smtpEncryption": resolved.smtp_encryption,
+        "cloudflareAccountId": resolved.cloudflare_account_id,
+        "cloudflareApiToken": resolved.cloudflare_api_token,
+    }
+
+    if platform == "gmail":
+        test_func = partial(test_gmail_connection, config)
+    elif platform == "microsoft":
+        test_func = partial(test_microsoft_connection, config)
+    elif platform == "cloudflare":
+        test_func = partial(test_cloudflare_email, config)
+    elif platform == "selfhosted":
+        if _smtp_login_incomplete(resolved):
+            return EmailConnectionTestResponse(
+                success=False,
+                message=(
+                    "SMTP password is required. A saved password is only "
+                    "reused for the server it was saved for; enter the "
+                    "password for this server and test again."
+                ),
+                details={"required": ["smtp_password"]},
+            )
+        test_func = partial(test_smtp_connection, config)
+    else:
+        return EmailConnectionTestResponse(
+            success=False,
+            message=(
+                "No email platform selected. Choose Gmail, Microsoft 365, "
+                "Self-Hosted SMTP or Cloudflare before testing."
+            ),
+        )
+
+    try:
+        async with asyncio.timeout(EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS):
+            success, message, details = await asyncio.get_event_loop().run_in_executor(
+                None, test_func
+            )
+    except TimeoutError:
+        return EmailConnectionTestResponse(
+            success=False,
+            message=(
+                "Email connection test timed out after "
+                f"{EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS} seconds. The mail "
+                "server may be unreachable or slow to respond."
+            ),
+            details={"error": "timeout"},
+        )
+    except Exception as e:
+        logger.error("Error testing email settings: {}", e)
+        return EmailConnectionTestResponse(
+            success=False,
+            message=safe_error_detail(e, "Failed to test email configuration"),
+            details={"error": "internal_error"},
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="email_settings_tested",
+        event_category="administration",
+        severity="info",
+        event_data={"email_platform": platform, "success": success},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return EmailConnectionTestResponse(
+        success=success, message=message, details=details or {}
+    )
 
 
 @router.patch("/settings/file-storage", response_model=FileStorageSettings)

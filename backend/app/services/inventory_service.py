@@ -3021,7 +3021,9 @@ class InventoryService:
                 selectinload(CheckOutRecord.item),
                 selectinload(CheckOutRecord.user),
             )
-            .order_by(CheckOutRecord.expected_return_at)
+            # The id breaks ties between checkouts due at one instant, so an
+            # offset page never repeats or skips one.
+            .order_by(CheckOutRecord.expected_return_at, CheckOutRecord.id)
             .offset(skip)
             .limit(limit)
         )
@@ -3528,10 +3530,15 @@ class InventoryService:
         )
         active_checkouts = checkout_result.scalar()
 
-        # Overdue checkouts
+        # Overdue checkouts, judged against the deadline now rather than the
+        # stored flag: the flag is refreshed by a daily task, so between the
+        # deadline passing and that run the flag says no while the overdue
+        # listing (which compares the deadline) says yes.
         overdue_result = await self.db.execute(
             select(func.count(CheckOutRecord.id)).where(
-                *checkout_filters, CheckOutRecord.is_overdue.is_(True)
+                *checkout_filters,
+                CheckOutRecord.is_returned.is_(False),
+                CheckOutRecord.expected_return_at < datetime.now(timezone.utc),
             )
         )
         overdue_checkouts = overdue_result.scalar()

@@ -1,12 +1,402 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7), 2026-09-03 (pass 8), 2026-09-03 (pass 9), 2026-09-03 (pass 10) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–8, merged), [#2200](https://github.com/thegspiro/the-logbook/pull/2200) (passes 9–10)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py` (new),
 `api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 10 (2026-09-03) — the gap in pass 9's own invariant: `handleSave` is not atomic, and per-write registration cannot close a race between writes
+
+**Trigger.** Codex reviewed pass 9's commit (PR #2200, opened on a fresh
+branch per CLAUDE.md Pitfall #24 — PR #2199 had been merged mid-round) and
+found a gap in the invariant pass 9 had just stated: `registerInFlightSave`
+makes every individual PATCH visible to `deleteCompartment`'s quiescing step
+the instant it is issued, but says nothing about the time _between_ two
+writes, when neither is on the wire yet. `handleSave` is itself a sequence of
+awaited steps — flush pending edits, `await` the template's own PATCH, then
+build and issue the compartment/item update batch — and a delete confirmed
+in the gap between any two of those steps sees both tracking maps correctly
+empty (nothing is lying) and proceeds, only for the next step to PATCH rows
+the delete just removed. This is not a fourth or fifth instance of the same
+missed-registration shape passes 6–9 each found and fixed; it is a
+structural limit of per-write registration itself, which pass 9's own
+"Considered and left open" note had already flagged from the adjacent angle
+(a delete racing the compartment's own PATCH) without yet connecting it to
+`handleSave`'s non-atomicity as the root cause.
+
+### AP-13 finding 1 (pass 10) — P2 (frontend, stale-save race, root cause of the whole finding 1–12 chain) — `deleteCompartment` could proceed in the gap between two of `handleSave`'s own awaited steps, where neither tracking map has anything registered — ✅ FIXED
+
+**What:** Between `flushPendingAutoSaves()` resolving and `handleSave`'s
+compartment/item update batch actually being built and its requests
+registered, `handleSave` still has at least one more `await` in front of
+it — the template's own `updateEquipmentCheckTemplate` PATCH, and, for a
+publish with warnings, a user-confirmed dialog before that. During any such
+gap, `autoSavePendingRef` and `autoSaveInFlightRef` are both genuinely
+empty — not stale, not lied to, just correctly reporting that nothing is on
+the wire _yet_ — so `deleteCompartment`'s quiescing step (pass 9) finds
+nothing to wait on and sends the DELETE immediately. `handleSave` then
+resumes and issues PATCHes for the compartment (and its items) the DELETE
+just removed.
+
+**Where:**
+`frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx`,
+`handleSave` (the gaps between its own awaited steps) and `deleteCompartment`
+(had no way to see that a save was in progress at all, only that individual
+writes were).
+
+**Failure scenario, reproduced live (component test, restoring pre-fix
+`EquipmentCheckTemplateBuilder.tsx` from this pass's parent commit while
+keeping the new test):** queued a debounced edit on Radio (a Cab item),
+pressed Save (its flush picks up and sends Radio's PATCH, resolving on its
+own), deferred the template's own PATCH to hold `handleSave` right after the
+flush and before the update batch, then — inside that window — clicked
+Delete on Cab and confirmed. Pre-fix, `equipmentCheckService.deleteCompartment('cab')`
+was called immediately, before the update batch had issued (let alone
+registered) a single request; releasing the deferred template PATCH then let
+`handleSave` go on to call `updateCheckItem('flashlight', ...)` — Flashlight
+being a Cab item — against a row the DELETE had already removed.
+
+**Impact:** same class as passes 6–9 — no data-integrity risk on its own (the
+backend cascade this depends on, AP-8/AP-9/AP-12, is correct), but the DELETE
+and the update batch's PATCHes are free to settle in either order against a
+real backend, producing spurious "Save failed" reports (or worse, silent
+success toasts) for rows the user correctly deleted moments earlier.
+
+**Why per-write registration cannot close this on its own, and why this is
+the round that actually closes the class of bug:** each of passes 6, 7, 8 and
+9 found one write path that issued a request without registering it, fixed
+that one path, and the next round found the next one — because the fix was
+always scoped to "does this write register itself," which only ever answers
+for time _while a request is on the wire_. This finding is not a sixth
+instance of that shape; it is a proof that the shape itself has a ceiling.
+No amount of correctly registering individual writes closes a gap that exists
+_because_ nothing is written yet. Closing it needs the whole operation locked,
+not another write registered.
+
+**Fix (and the two options weighed):** the task considered two shapes for the
+lock, per Codex's own suggestion ("hold a lock across the entire save
+operation, or quiesce writers in a way that prevents new requests from being
+enqueued before sending the DELETE"):
+
+- **(a) Disable delete controls while a save is active** (a UI-level fix:
+  every delete button/menu item gets `disabled` while a flag is true).
+- **(b) A save-operation-level lock `deleteCompartment` checks**, in addition
+  to (not instead of) `registerInFlightSave`'s per-write map.
+
+These turned out not to be a real fork: making (a) actually correct requires
+the same underlying change as (b) — a flag that becomes `true` as literally
+the first synchronous line of `handleSave` (before the flush even starts) and
+stays `true`, provably, until every step of that Save has finished. Without
+that, disabling the UI based on the existing `saving` state would still leave
+the pre-flush and inter-step gaps open, since `saving` was previously set
+`true` only _after_ the flush and any publish-warnings confirmation resolved
+— disabling on it would have covered less of the actual race than pass 9's
+per-write registration already did. So the fix is both, built on one new
+piece of state: a new `saveOperationActive` flag (deliberately **not** a
+rename or extension of the existing `saving` state — see below), set at
+`handleSave`'s very first line inside a `try` that spans the function's
+entire body, cleared in the matching `finally` regardless of which of
+`handleSave`'s several early returns or its own inner try/catch is what ends
+it. `deleteCompartment` checks it first, before computing anything else,
+and blocks with a toast if a save is active — the authoritative,
+single-source-of-truth check, matching how the pending-reparent guard (pass 5) already lives inside the function rather than relying on the UI alone.
+All three delete affordances (the section-header button, the row's own
+delete button, and the mobile row-action-menu's Delete item) are also
+disabled while it is true, so the normal click path never reaches the
+function-level check in practice — the check is what a future delete
+affordance that forgets to wire up `disabled` would still be caught by.
+
+**Why a new flag, not reusing `saving`:** `saving` is intentionally
+UI-only and its timing is depended on by an existing test
+(`'keeps a newer edit when the in-flight flush that raced it fails'`) that
+requires the form stay editable — a field re-editable inside the flush's own
+in-flight window — through the flush and warnings-confirmation stages.
+Widening `saving`'s scope to also start before the flush would not have
+broken that test's assertions (nothing there is actually gated on `saving`),
+but it would have made its explanatory comment ("the form is not yet marked
+saving") factually wrong the moment this fix landed, and conflated two
+distinct concerns — a spinner/button-disable flag for UX, and a delete-safety
+invariant with a security consequence — under one name. Keeping them separate
+costs one extra boolean and buys a save-in-progress flag whose only job is
+being provably correct.
+
+**Provably always cleared — the reset path this whole mechanism now depends
+on:** `saveOperationActive` is single-component `useState`, not global or
+persisted, so it cannot outlive the component instance that set it.
+Verified each way in turn:
+
+- **Success** — the outer `finally` runs after the inner try/catch/finally
+  completes normally.
+- **Failure** — every error `handleSave` can throw is already caught by its
+  own inner `catch` (which does not rethrow) before the outer `finally` runs;
+  even if that assumption is ever violated, an uncaught throw still runs a
+  `finally` per language semantics.
+- **A hung request** — every equipment-check API call goes through
+  `createApiClient()` (`frontend/src/utils/createApiClient.ts`), which sets
+  `timeout: API_TIMEOUT_MS` (30s, `constants/config.ts`) — nothing in this
+  path can await forever; the request eventually rejects, the inner catch
+  handles it, and the outer `finally` clears the flag within that bound.
+- **Unmount mid-save** — no `isMountedRef`/`AbortController` pattern exists
+  anywhere else in this file either (verified by search — none of this
+  component's other async operations guard against it), so this fix does not
+  introduce a new gap relative to the rest of the file. React 18+ silently
+  no-ops a `setState` call against an unmounted component (no crash, no
+  warning), and the flag is per-mount state — a remounted instance of this
+  page starts at `false` regardless of what an earlier, now-destroyed
+  instance's flag last held. There is no code path, in this fix or elsewhere
+  in the file, by which `saveOperationActive` can get stuck `true` for a
+  mounted component.
+
+**Resolves pass 9's flagged item.** Pass 9's "Considered and left open" note
+identified that compartment-level in-flight tracking (a delete racing the
+_compartment's own_ PATCH, as distinct from its items') was not covered, and
+named disabling delete controls during `saving` as the fix that would close
+it, while declining to make that call itself ("a UX/product call, not a
+security-pass judgment call"). `saveOperationActive` spans the compartment's
+own PATCH exactly as it spans everything else in `handleSave` — no delete of
+any kind can proceed while it is `true`, so that gap is closed as a direct
+consequence of this fix rather than needing a separate extension of
+`registerInFlightSave`'s map to compartment ids. Pass 9's note is marked
+resolved below rather than left standing beside a fix that already covers it.
+
+## Guard tests added (pass 10)
+
+- `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`
+  — `'does not let a compartment delete proceed in the gap between the Save
+flush and its update batch'` (new describe block, `'EquipmentCheckTemplateBuilder
+blocks a delete for the whole span of a save'`): defers the template's own
+  PATCH (a real `await` already in `handleSave`, not a synthetic one) to hold
+  the function in the gap between the flush resolving and the update batch
+  starting, confirms a delete attempted in that window is blocked (no
+  dialog, no backend call), then confirms the delete works normally once the
+  save has fully completed. Confirmed failing pre-fix (the confirmation
+  dialog opened and the delete proceeded inside the gap) and passing
+  post-fix.
+- The pass-9 test `'waits for the Save button's own flush of a pending item
+auto-save before sending the compartment DELETE'` is updated in place rather
+  than duplicated: pre-fix it asserted the delete dialog opened but the
+  DELETE waited on the flush's own PATCH; post-fix, `saveOperationActive` is
+  already `true` before the flush even starts, so the delete control is
+  simply disabled for that whole window and the dialog never opens. The
+  finding the test guards (a delete must not proceed while the flush's PATCH
+  is outstanding) is unchanged; only the mechanism it asserts is updated to
+  match the stronger fix.
+
+## Completion gate (pass 10)
+
+| Check                                               | Result                                               |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| `tsc --noEmit` (`npm run typecheck`)                | ✅ 0 errors                                          |
+| `eslint .` (full frontend)                          | ✅ 0 errors (see below)                              |
+| `vitest run EquipmentCheckTemplateBuilder.test.tsx` | ✅ 90 passed (89 pre-existing + 1 new)               |
+| `vitest run src/modules/inventory` (full module)    | ✅ 925 passed (69 files)                             |
+| Backend                                             | not touched this pass — no backend files in the diff |
+
+---
+
+## Pass 9 (2026-09-03) — the invariant that supersedes passes 5–8's pairwise rounds
+
+**Why this pass is different from 5, 6, 7 and 8.** Each of the previous four
+passes closed exactly the interleaving Codex reported and missed the next
+one: pass 5 added the pending-reparent guard; pass 6 found it raced a
+pending debounce timer; pass 7 found the fix for _that_ regressed twice and
+missed a disconnected-compartment case in `clone_template`; pass 8 found the
+guard's quiescing step never looked at in-flight (only pending) requests,
+and that a bulk replace never refreshed the guard's server-truth map. A
+fifth Codex round, on the same subsystem, found two more gaps in the same
+shape: `flushPendingAutoSaves` (the Save button's own pre-save flush) issued
+its PATCHes without registering them anywhere a delete could see, and a
+partial-failure `handleSave` batch skipped the server-truth-map refresh for
+a request that had actually succeeded. This is the FAC-35 moment for this
+subsystem: instead of a sixth pairwise patch, this pass replaces the
+ad-hoc-but-locally-correct fixes with one documented, total invariant and a
+single registration point every write path goes through, the same way
+FAC-35 replaced pairwise lock-order fixes with one canonical lock order.
+
+**The invariant**, now stated once at the top of the three tracking refs'
+declarations in `EquipmentCheckTemplateBuilder.tsx` (not scattered across
+per-fix comments the way it was through pass 8): before a subtree delete's
+DELETE request is sent, no id in that subtree — the compartment itself,
+every descendant compartment, every item on any of them — may have an
+outstanding server write or an unresolved local hierarchy change. A write
+path that issues an item PATCH without registering it, or a hierarchy write
+that persists a parent without refreshing the server-truth map for it,
+violates the invariant regardless of how correctly the delete's own
+quiescing step is written — which is exactly how passes 6–8 each closed one
+side of this and missed another.
+
+**Single registration point.** `registerInFlightSave(itemId, request)` is
+now the _only_ way a promise enters `autoSaveInFlightRef`. All three places
+that can issue an item PATCH — a fired debounce timer (`scheduleAutoSaveItem`),
+the Save button's pre-save flush (`flushPendingAutoSaves`), and Save's own
+per-item batch (`handleSave`) — call it. A delete's quiescing step no longer
+has to know which of the three issued a given request; it reads one map that
+every path is now required to populate. This is the "single, obvious place
+to look up which requests are outstanding" the task called for, achieved
+without collapsing `autoSavePendingRef` (still-queued timers, which need
+their own cancellation and patch-capture semantics) and `autoSaveInFlightRef`
+(promises already on the wire) into one structure — they represent genuinely
+different states (not yet sent vs. sent-not-settled) with different
+operations, and unifying their _shapes_ would not have changed which write
+paths populate them, which is what the two new findings were actually about.
+
+### AP-13 finding 1 (pass 9) — P2 (frontend, stale-save race, fifth round on this interleaving) — `flushPendingAutoSaves` issued its PATCHes without registering them anywhere a delete's quiescing step could see — ✅ FIXED
+
+**What:** Pass 8's fix made the delete guard's quiescing step wait on
+`autoSaveInFlightRef` as well as `autoSavePendingRef`, closing the case
+where a debounce timer had already fired. `flushPendingAutoSaves` — the Save
+button's own flush of whatever debounce timer has _not yet_ fired — issues
+its PATCHes with a bare `Promise.all(pendingPatches.map(...))` that never
+touched either map. Those requests are on the wire (`ensureDraftBeforeStructureEdit`
+having already resolved) but invisible to both tracking structures the
+guard reads. `handleSave` calls this flush _before_ `setSaving(true)`, so
+nothing in the UI blocks a delete during this window either — the delete
+button stays enabled the whole time these requests are outstanding.
+
+**Where:** `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx`,
+`flushPendingAutoSaves`.
+
+**Failure scenario, reproduced live (component test, restoring pre-fix
+`EquipmentCheckTemplateBuilder.tsx`/`equipmentCheckHierarchy.ts` from
+`origin/main` against the new test):** queued a debounced edit on Radio (a
+Cab item), pressed Save _inside_ the debounce window (so the flush picks up
+the still-pending patch and sends it directly, with `updateCheckItem`
+deferred so its PATCH stays unresolved), then clicked Delete on Cab and
+confirmed. Pre-fix, `deleteCompartment` sent the compartment DELETE
+immediately — Radio's flush PATCH was still on the wire, with nothing
+having waited on it.
+
+**Impact:** same class as passes 6–8 — no data-integrity risk on its own,
+but the DELETE and the flush's PATCH are free to settle in either order
+against a real backend, and the auto-save indicator can report failure for
+a row the delete just removed.
+
+**Fix:** every PATCH `flushPendingAutoSaves` issues is now registered via
+`registerInFlightSave` before the flush's own `Promise.all` awaits it — the
+tracked copy swallows its own rejection (`registerInFlightSave`'s contract:
+a request that can still reject would make a delete's `Promise.all` over
+doomed items' in-flight work throw and abort the delete), while the
+original, still-rejectable promise is what the flush's own `Promise.all`
+awaits to decide whether to re-arm and show the failure toast — so the
+existing retry/toast behavior for a failed flush is unchanged. This is the
+same registration every other write path now goes through (see the
+invariant above), not a fourth bespoke fix.
+
+### AP-13 finding 2 (pass 9) — P2 (frontend, stale server-truth map, first gap in the reparent guard's _other_ half) — a partial-failure Save skipped the `savedParentByIdRef` refresh for a compartment whose own PATCH had already succeeded — ✅ FIXED
+
+**What:** `handleSave`'s per-compartment and per-item update requests were
+pushed into a single array and awaited with one `Promise.all`. `Promise.all`
+rejects on the _first_ rejection, regardless of whether other requests in
+the same batch already fulfilled — so if an unrelated item's PATCH failed
+while a compartment's reparent PATCH had already committed server-side, the
+`savedParentByIdRef.current.set(...)` refresh loop below the `await` never
+ran at all. The map kept describing the pre-save hierarchy for a compartment
+whose new parent the server already had. A later delete then compares the
+live (correct, post-reparent) hierarchy against that stale map, finds a
+disagreement that no longer exists, and either wrongly blocks a delete the
+guard was never meant to stop, or — the inverse the task flagged — lets a
+_new_ local reparent that happens to match the stale map's value slip past
+the guard even though the server's actual state has already moved past it.
+
+**Where:** `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx`,
+`handleSave` (the compartment/item update batch).
+
+**Failure scenario, reproduced live (component test, same restore-and-run
+method as finding 1):** outdented Medical bag from Cab (a local-only edit —
+compartments have no auto-save path) with `updateCheckItem` mocked to
+reject specifically for Flashlight (another Cab item, unrelated to the
+reparent) and resolve for everything else including the compartment PATCH.
+Pressed Save. Pre-fix, the compartment PATCH for Medical bag fulfilled
+server-side, Flashlight's item PATCH rejected, `Promise.all` threw before
+the `savedParentByIdRef` refresh loop ran, and a subsequent attempt to
+delete Cab was wrongly blocked with the "unsaved changes" toast — the guard
+comparing the live (bag now top-level) hierarchy against a map that still
+said bag belonged to Cab, a disagreement that no longer existed anywhere
+except in the map.
+
+**Impact:** data integrity / false-block, the mirror image of pass 5's
+original finding — that one under-blocked (let a stale-relative-to-server
+delete through); this one can either over-block a legitimate delete, or (the
+three-state case above) under-block one, depending on what the user does
+next. Either way the map is no longer a reliable source of truth the moment
+any Save partially fails, which is every Save that touches more than one
+row and hits a validation error on any of them.
+
+**Fix:** the compartment updates and item updates are now two separate
+`Promise.allSettled` groups rather than one `Promise.all`. Every compartment
+PATCH that actually fulfilled refreshes `savedParentByIdRef` for that
+compartment, unconditionally, before any failure is surfaced. A single
+`firstFailure` check across both settled arrays still throws (preserving the
+existing single-error-toast behavior byte-for-byte) — it only runs _after_
+every succeeded write has already updated the map. Item PATCHes are also now
+registered via `registerInFlightSave` (the same helper finding 1 uses), which
+closes a related, previously-undocumented gap as a side effect: a subtree
+delete triggered while `handleSave`'s own batch is still in flight (the
+delete buttons are not, and are not being made, disabled during `saving`)
+now also waits on this batch's item writes, not only on autosave/flush ones.
+
+**Considered and left open:** compartment-level in-flight tracking (a delete
+racing the _compartment's own_ PATCH, as opposed to its items') is not
+addressed by this pass. `handleSave`'s compartment PATCH commits the row's
+`name`/`description`/`parent_compartment_id` — if a user deletes that exact
+compartment while its own update is still in flight, current behavior is
+unchanged from every prior pass: the DELETE can be sent while the PATCH is
+still outstanding, and the two can settle in either order. This is a
+narrower version of the same class findings 1–2 address, but for compartment
+ids rather than item ids, and closing it would mean either (a) extending
+`registerInFlightSave`'s map to also key on compartment ids alongside item
+ids — a bigger surface than either finding required, or (b) disabling
+compartment delete controls while `saving` is true, which changes Save's UX
+contract and needs a product call, not a security-pass judgment call.
+Flagged for a future pass rather than folded in here.
+
+**✅ RESOLVED (pass 10).** A distinct Codex finding on this pass's own PR
+(a delete proceeding in the gap _between_ two of `handleSave`'s awaited
+steps, not specifically the compartment-PATCH race this note described)
+turned out to need the same fix as option (b) above: a lock spanning the
+whole `handleSave` call that `deleteCompartment` checks. `saveOperationActive`
+covers the compartment's own PATCH exactly as it covers everything else in
+`handleSave`, so this note's gap is closed as a side effect — see pass 10
+below rather than a further extension of `registerInFlightSave`'s map.
+
+## Guard tests added (pass 9)
+
+- `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`
+  — `'waits for the Save button's own flush of a pending item auto-save
+before sending the compartment DELETE'` (finding 1: defers the flush's
+  `updateCheckItem` call, confirms the compartment DELETE is not sent until
+  it resolves) and `'refreshes the map for a compartment whose reparent
+succeeded, even though a sibling item PATCH in the same save failed'`
+  (finding 2: outdents a compartment, fails an unrelated item's PATCH in
+  the same save, and asserts a subsequent delete of the former parent
+  reaches the normal confirmation dialog rather than the false "unsaved
+  changes" block). Both confirmed failing by restoring the pre-fix
+  `EquipmentCheckTemplateBuilder.tsx`/`equipmentCheckHierarchy.ts` from
+  `origin/main` (this pass's parent commit) while keeping the new tests, and
+  passing against the fix.
+- Both act() warnings pre-existing in this file's `'preserves a pending item
+auto-save when the compartment delete itself fails'` and `'waits for an
+in-flight item auto-save before sending the compartment DELETE'` tests
+  (pass 7/8 tests, unrelated to this pass's own findings but touched by the
+  same review) were fixed by wrapping their raw `setTimeout` advances in
+  `act(...)` — mechanical, no behavior change, matching the established
+  pattern in `EquipmentCheckFormDraftSeed.test.tsx` /
+  `ExtendedFacilitySections.test.tsx`.
+
+## Completion gate (pass 9)
+
+| Check                                                                               | Result                                               |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `tsc --noEmit`                                                                      | ✅ 0 errors                                          |
+| `eslint .` (full frontend)                                                          | ✅ 0 errors                                          |
+| `vitest run EquipmentCheckTemplateBuilder.test.tsx equipmentCheckHierarchy.test.ts` | ✅ 91 passed (89 pre-existing + 2 new)               |
+| `vitest run src/modules/inventory` (full module)                                    | ✅ 924 passed (69 files)                             |
+| Backend                                                                             | not touched this pass — no backend files in the diff |
 
 ---
 
