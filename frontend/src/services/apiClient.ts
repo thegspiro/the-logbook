@@ -19,7 +19,8 @@ import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import {
   getCacheKey,
   getCached,
-  setCache,
+  setCacheAtGeneration,
+  cacheGeneration,
   invalidateByPrefix,
   getResourcePrefix,
   isCacheable,
@@ -62,6 +63,9 @@ api.interceptors.request.use(
     const skipCache = (config as unknown as Record<string, unknown>)._skipCache === true;
     if (method === 'GET' && !skipCache && config.url && isCacheable(config.url)) {
       const key = getCacheKey(config.url, config.params as Record<string, unknown> | undefined);
+      // Stamped on issue, checked on the write below: a foreground GET still in
+      // flight when logout purges the cache must not repopulate it either.
+      (config as unknown as Record<string, unknown>)._cacheGeneration = cacheGeneration();
       const cached = getCached(key);
 
       if (cached) {
@@ -89,11 +93,18 @@ api.interceptors.request.use(
           // filter change or unmount, which would otherwise cancel the only
           // thing refreshing this entry and leave the stale body cached until
           // it expires.
+          //
+          // SEC: losing the abort means losing the one thing that stopped this
+          // request from outliving a logout, so the write is gated on the cache
+          // era instead. Without that, a slow revalidation issued under one
+          // member's session could land after clearCache() and be served to
+          // whoever signs in next on a shared terminal.
           const { adapter: _adapter, signal: _signal, cancelToken: _cancelToken, ...restConfig } = config;
           const bgConfig = { ...restConfig, _skipCache: true };
+          const issuedAt = cacheGeneration();
           void api
             .request(bgConfig)
-            .then((res) => setCache(key, res.data))
+            .then((res) => setCacheAtGeneration(key, res.data, issuedAt))
             .catch(() => {
               /* background revalidation failure is non-critical */
             })
@@ -220,7 +231,8 @@ api.interceptors.response.use(
       !(response.config as unknown as Record<string, unknown>)._fromCache
     ) {
       const key = getCacheKey(response.config.url, response.config.params as Record<string, unknown> | undefined);
-      setCache(key, response.data);
+      const issuedAt = (response.config as unknown as Record<string, unknown>)._cacheGeneration;
+      setCacheAtGeneration(key, response.data, typeof issuedAt === 'number' ? issuedAt : cacheGeneration());
     }
 
     // Invalidate related cache entries after mutations

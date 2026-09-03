@@ -39,6 +39,19 @@ const renderSection = (
   return { onEmailSettingsChange, onSave, onTest };
 };
 
+// The change handler reads the input inside the state updater, so the updater
+// has to run during the event — as React's setState does — before the
+// controlled input is reset to its prop value. A bare vi.fn() would hand it
+// back after the reset and see an empty field. The props never change across
+// a render, so each field is typed one character at a time.
+const applyUpdatesTo = (initial: EmailServiceSettings) => {
+  let latest = initial;
+  const onEmailSettingsChange = vi.fn((update: React.SetStateAction<EmailServiceSettings>) => {
+    latest = typeof update === 'function' ? update(latest) : update;
+  });
+  return { onEmailSettingsChange, latest: () => latest };
+};
+
 describe('EmailSettingsSection — hosted platforms are App Password only', () => {
   it('asks Gmail for an App Password and nothing OAuth-shaped', () => {
     renderSection(settings({ platform: 'gmail' }));
@@ -50,25 +63,16 @@ describe('EmailSettingsSection — hosted platforms are App Password only', () =
     expect(screen.getByText(/signs in as/i)).toBeInTheDocument();
   });
 
-  it('asks Microsoft 365 for an App Password, not a tenant or client', () => {
+  // A stored row written before OAuth existed carries no method and signs in
+  // with a password, so the screen has to open on the method that row is
+  // actually using rather than on the one new setups get.
+  it('opens a saved Microsoft config with no method on App Password', () => {
     renderSection(settings({ platform: 'microsoft' }));
 
     expect(screen.getByLabelText('Microsoft 365 App Password')).toBeInTheDocument();
-    expect(screen.queryByText(/tenant id/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/client id/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/directory \(tenant\) id/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/application \(client\) id/i)).not.toBeInTheDocument();
   });
-
-  // The change handler reads the input inside the state updater, so the
-  // updater has to run during the event — as React's setState does — before
-  // the controlled input is reset to its prop value. A bare vi.fn() would
-  // hand it back after the reset and see an empty field.
-  const applyUpdatesTo = (initial: EmailServiceSettings) => {
-    let latest = initial;
-    const onEmailSettingsChange = vi.fn((update: React.SetStateAction<EmailServiceSettings>) => {
-      latest = typeof update === 'function' ? update(latest) : update;
-    });
-    return { onEmailSettingsChange, latest: () => latest };
-  };
 
   it('writes the Gmail password to google_app_password', async () => {
     const state = applyUpdatesTo(settings({ platform: 'gmail' }));
@@ -117,5 +121,95 @@ describe('EmailSettingsSection — test connection', () => {
 
     expect(screen.getByRole('button', { name: 'Testing...' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save Email Settings' })).toBeDisabled();
+  });
+});
+
+describe('EmailSettingsSection — Microsoft 365 authentication method', () => {
+  it('offers a method choice for Microsoft and for no other platform', () => {
+    renderSection(settings({ platform: 'microsoft' }));
+    expect(screen.getByRole('button', { name: /app registration \(oauth\)/i })).toBeInTheDocument();
+  });
+
+  it('offers no method choice for Gmail', () => {
+    renderSection(settings({ platform: 'gmail' }));
+    expect(screen.queryByRole('button', { name: /app registration \(oauth\)/i })).not.toBeInTheDocument();
+  });
+
+  it('asks for the app registration when the method is oauth', () => {
+    renderSection(settings({ platform: 'microsoft', microsoft_auth_method: 'oauth' }));
+
+    expect(screen.getByLabelText(/directory \(tenant\) id/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/application \(client\) id/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Client secret')).toBeInTheDocument();
+    // Offering both credentials at once would leave it ambiguous which one
+    // the sender is going to use.
+    expect(screen.queryByLabelText('Microsoft 365 App Password')).not.toBeInTheDocument();
+  });
+
+  // Exchange Online disables Basic auth by default for existing tenants at
+  // the end of December 2026. A department left on an App Password stops
+  // sending then, so the screen has to say so before that happens.
+  it('warns that the App Password method is being retired', () => {
+    renderSection(settings({ platform: 'microsoft', microsoft_auth_method: 'app_password' }));
+
+    expect(screen.getByText(/December 2026/)).toBeInTheDocument();
+  });
+
+  it('does not carry that warning into the OAuth method', () => {
+    renderSection(settings({ platform: 'microsoft', microsoft_auth_method: 'oauth' }));
+
+    expect(screen.queryByText(/December 2026/)).not.toBeInTheDocument();
+  });
+
+  it('switches the stored method when the admin picks one', async () => {
+    const user = userEvent.setup();
+    const { onEmailSettingsChange } = renderSection(
+      settings({ platform: 'microsoft', microsoft_auth_method: 'app_password' })
+    );
+
+    await user.click(screen.getByRole('button', { name: /app registration \(oauth\)/i }));
+
+    const update = onEmailSettingsChange.mock.calls[0]?.[0] as (s: EmailServiceSettings) => EmailServiceSettings;
+    expect(update(settings({ platform: 'microsoft' })).microsoft_auth_method).toBe('oauth');
+  });
+
+  it('writes each app registration field to its own key', async () => {
+    const oauth = settings({ platform: 'microsoft', microsoft_auth_method: 'oauth' });
+    const state = applyUpdatesTo(oauth);
+    renderSection(oauth, { onEmailSettingsChange: state.onEmailSettingsChange });
+
+    await userEvent.type(screen.getByLabelText(/directory \(tenant\) id/i), 't');
+    await userEvent.type(screen.getByLabelText(/application \(client\) id/i), 'c');
+    await userEvent.type(screen.getByLabelText('Client secret'), 's');
+
+    expect(state.latest()).toMatchObject({
+      microsoft_tenant_id: 't',
+      microsoft_client_id: 'c',
+      microsoft_client_secret: 's',
+    });
+  });
+
+  // Basic auth is on its way out, so a Microsoft configuration being made
+  // now should not start on it. One already carrying a password — the
+  // redacted marker counts — keeps the method it is working with.
+  it('preselects OAuth when Microsoft is chosen with nothing saved', async () => {
+    const user = userEvent.setup();
+    const { onEmailSettingsChange } = renderSection(settings({ platform: 'gmail' }));
+
+    await user.click(screen.getByRole('button', { name: /microsoft 365/i }));
+
+    const update = onEmailSettingsChange.mock.calls[0]?.[0] as (s: EmailServiceSettings) => EmailServiceSettings;
+    expect(update(settings({ platform: 'gmail' })).microsoft_auth_method).toBe('oauth');
+  });
+
+  it('leaves a saved App Password configuration on its own method', async () => {
+    const user = userEvent.setup();
+    const saved = settings({ platform: 'gmail', microsoft_app_password: '••••••••' });
+    const { onEmailSettingsChange } = renderSection(saved);
+
+    await user.click(screen.getByRole('button', { name: /microsoft 365/i }));
+
+    const update = onEmailSettingsChange.mock.calls[0]?.[0] as (s: EmailServiceSettings) => EmailServiceSettings;
+    expect(update(saved).microsoft_auth_method).toBeUndefined();
   });
 });

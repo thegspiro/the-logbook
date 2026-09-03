@@ -230,4 +230,50 @@ describe('apiClient — background revalidation of a stale entry', () => {
     expect(refreshed.data).toEqual({ generation: 2 });
     expect(calls).toBe(2);
   });
+
+  it('does not repopulate the cache with a response issued before logout cleared it', async () => {
+    // SEC: cache keys carry no user identity, so clearCache() on logout is the
+    // only thing between one member's responses and the next member to sign in
+    // on the same tab. Dropping the caller's abort from the revalidation above
+    // removed the one thing that used to stop it outliving that logout, so the
+    // write is gated on the cache era instead.
+    let releaseBackground: (() => void) | undefined;
+    let calls = 0;
+
+    withAdapter((config) => {
+      calls += 1;
+      const ok = (data: unknown) => ({ data, status: 200, statusText: 'OK', headers: {}, config });
+      if (calls === 1) return Promise.resolve(ok({ member: 'first' }));
+      return new Promise((resolve) => {
+        releaseBackground = () => resolve(ok({ member: 'first-late' }));
+      });
+    });
+
+    await api.get('/inventory/items');
+    vi.setSystemTime(Date.now() + 45_000);
+    await api.get('/inventory/items');
+    expect(calls).toBe(2);
+
+    // The first member signs out while that revalidation is still open.
+    clearCache();
+    releaseBackground?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The next member's request must reach the network, not be answered from a
+    // cache the previous session's response quietly refilled.
+    withAdapter((config) => {
+      calls += 1;
+      return Promise.resolve({
+        data: { member: 'second' },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      });
+    });
+
+    const next = await api.get('/inventory/items');
+    expect(next.data).toEqual({ member: 'second' });
+    expect(calls).toBe(3);
+  });
 });

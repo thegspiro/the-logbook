@@ -36,6 +36,7 @@ from app.services.email_theme import (
     colourway_context,
 )
 from app.utils.email_providers import resolve_smtp_settings
+from app.utils.microsoft_oauth import acquire_access_token, xoauth2_string
 
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
@@ -645,17 +646,41 @@ class EmailService:
             )
             server.ehlo()
 
-        if self._smtp_config["user"] and self._smtp_config["password"]:
-            server.login(
-                self._smtp_config["user"],
-                self._smtp_config["password"],
-            )
+        oauth = self._smtp_config.get("oauth")
+        auth_kind = "none"
+        try:
+            if oauth:
+                # Microsoft 365 on the client credentials flow: the mailbox
+                # still identifies itself as the From address, but the
+                # credential is a bearer token presented over SASL XOAUTH2.
+                # smtplib base64-encodes whatever the callback returns, and
+                # calls it with or without the server challenge depending on
+                # whether the mechanism advertises an initial response.
+                token = acquire_access_token(
+                    oauth.get("tenant_id"),
+                    oauth.get("client_id"),
+                    oauth.get("client_secret"),
+                )
+                auth_string = xoauth2_string(self._smtp_config["user"], token)
+                server.auth("XOAUTH2", lambda challenge=None: auth_string)
+                auth_kind = "oauth"
+            elif self._smtp_config["user"] and self._smtp_config["password"]:
+                server.login(
+                    self._smtp_config["user"],
+                    self._smtp_config["password"],
+                )
+                auth_kind = "password"
+        except Exception:
+            # The caller only ever sees the exception, so the socket opened
+            # above would otherwise stay open until garbage collection.
+            server.close()
+            raise
         logger.info(
             "SMTP connected host={} port={} encryption={} auth={}",
             host,
             port,
             encryption,
-            bool(self._smtp_config["user"]),
+            auth_kind,
         )
         return server
 

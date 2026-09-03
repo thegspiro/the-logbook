@@ -41,6 +41,7 @@ import { EXPIRY_WINDOW_DAYS } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
+const PAGE_SIZE = 200;
 
 /** Severity of a dated lot, by how long is left on it. */
 function expiryTone(days: number | undefined): string {
@@ -55,6 +56,16 @@ function expiryLabel(days: number | undefined): string {
   if (days < 0) return `Expired ${Math.abs(days)}d ago`;
   if (days === 0) return 'Expires today';
   return `${days}d left`;
+}
+
+/**
+ * Identity of an item query: what the rendered rows are an answer to.
+ *
+ * NUL separator, because a plain space would let search "a b" with no category
+ * collide with search "a" under category "b".
+ */
+function itemQueryKey(searchTerm: string, category: string, pageIndex: number): string {
+  return `${searchTerm}\u0000${category}\u0000${pageIndex}`;
 }
 
 interface StatTileProps {
@@ -97,24 +108,29 @@ const MedicalSuppliesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const [itemPage, setItemPage] = useState({ total: 0, skip: 0, limit: PAGE_SIZE });
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
-  // Which filter the rows in `items` actually answer. Rendering the empty
-  // state off `items.length` alone reports "no medical supplies" whenever the
-  // list has not caught up with the controls — before the first response, and
-  // in the window after a filter changes — which reads as an empty catalogue
-  // rather than as a pending request. null until the first response lands.
+  // Which query the rows in `items` actually answer. Rendering the empty state
+  // off `items.length` alone reports "no medical supplies" whenever the list
+  // has not caught up with the controls -- before the first response, and in
+  // the window after a filter or page changes -- which reads as an empty
+  // catalogue rather than as a pending request. null until the first response.
   const [itemsFilterKey, setItemsFilterKey] = useState<string | null>(null);
 
+  // Monotonic request ids, one per flow. Clicking Next and then editing the
+  // filter starts two item loads; without this both commit, and if the older
+  // one lands last the table shows rows that do not match the visible filter
+  // while `page` and `itemPage.skip` disagree -- a state the Previous button
+  // cannot recover from, because decrementing page 0 is a no-op.
   const overviewRequestId = useRef(0);
   const itemsRequestId = useRef(0);
   const itemsAbortController = useRef<AbortController | null>(null);
 
-  // NUL separator: a plain space would let search "a b" with no category
-  // collide with search "a" under category "b".
-  const filterKey = `${debouncedSearch}\u0000${categoryFilter}`;
+  const filterKey = itemQueryKey(debouncedSearch, categoryFilter, page);
 
   const loadOverview = useCallback(async () => {
     const requestId = ++overviewRequestId.current;
@@ -152,15 +168,17 @@ const MedicalSuppliesPage: React.FC = () => {
         {
           search: debouncedSearch || undefined,
           category_id: categoryFilter || undefined,
-          limit: 200,
+          skip: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
         },
         controller.signal
       );
       if (requestId !== itemsRequestId.current) return;
       setItems(itemsData.items);
-      // Stamped from this closure's own filter values, not from the render's
+      setItemPage({ total: itemsData.total, skip: itemsData.skip, limit: itemsData.limit });
+      // Stamped from this closure's own values, not from the render's
       // `filterKey`: those are what the request actually asked for.
-      setItemsFilterKey(`${debouncedSearch}\u0000${categoryFilter}`);
+      setItemsFilterKey(itemQueryKey(debouncedSearch, categoryFilter, page));
     } catch (err: unknown) {
       if (controller.signal.aborted || requestId !== itemsRequestId.current) return;
       const message = getErrorMessage(err, 'Failed to load medical supplies');
@@ -169,7 +187,7 @@ const MedicalSuppliesPage: React.FC = () => {
     } finally {
       if (requestId === itemsRequestId.current) setIsItemsLoading(false);
     }
-  }, [debouncedSearch, categoryFilter]);
+  }, [debouncedSearch, categoryFilter, page]);
 
   useEffect(() => {
     void loadOverview();
@@ -417,7 +435,10 @@ const MedicalSuppliesPage: React.FC = () => {
               <input
                 type="search"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(0);
+                }}
                 placeholder="Search supplies"
                 aria-label="Search medical supplies"
                 className="form-input w-full pl-9"
@@ -425,7 +446,10 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(0);
+              }}
               aria-label="Filter by category"
               className="form-input w-auto"
             >
@@ -439,8 +463,8 @@ const MedicalSuppliesPage: React.FC = () => {
           </div>
 
           {/*
-           * Rows are shown only when they answer the filter that is on screen.
-           * Anything else is a pending request (skeleton) or a failed one — and
+           * Rows are shown only when they answer the query that is on screen.
+           * Anything else is a pending request (skeleton) or a failed one -- and
            * a failed one renders nothing here, because the alert above already
            * says what happened and "No medical supplies yet" would contradict
            * it. The controls above stay mounted throughout: putting the
@@ -532,6 +556,36 @@ const MedicalSuppliesPage: React.FC = () => {
               </table>
             </div>
           )}
+
+          {itemPage.total > 0 && (
+            <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isItemsLoading || itemPage.skip === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <p className="text-theme-text-muted text-sm" aria-live="polite">
+                Showing {formatNumber(itemPage.skip + 1)}–
+                {formatNumber(Math.min(itemPage.skip + items.length, itemPage.total))} of {formatNumber(itemPage.total)}
+              </p>
+              <button
+                type="button"
+                className="btn-secondary"
+                // Disabled while a page is in flight, and bounded by the known
+                // total. The enabled state otherwise came from the *previous*
+                // response, so a second activation before this one landed
+                // stepped past the last page -- skip=400 on a 201-item catalog,
+                // an empty table and a range reading "Showing 401-201 of 201".
+                disabled={isItemsLoading || itemPage.skip + itemPage.limit >= itemPage.total}
+                onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </section>
       )}
 
@@ -548,9 +602,7 @@ const MedicalSuppliesPage: React.FC = () => {
         <MedicalItemFormModal categories={categories} onClose={() => setShowItemModal(false)} onSaved={handleSaved} />
       )}
 
-      {showDeliveryModal && (
-        <ReceiveDeliveryModal items={items} onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />
-      )}
+      {showDeliveryModal && <ReceiveDeliveryModal onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />}
     </div>
   );
 };
