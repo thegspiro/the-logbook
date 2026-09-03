@@ -519,6 +519,73 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.queryByText('Nothing expiring')).not.toBeInTheDocument();
     });
 
+    it('keeps the search box mounted while the item list reloads', async () => {
+      // Skeletoning the whole section unmounted the focused input on the first
+      // keystroke, so every character after it was typed into nothing until the
+      // request settled -- a search box that cannot be typed into.
+      mockGetItems
+        .mockResolvedValueOnce({ items: [], total: 0, skip: 0, limit: 200 })
+        .mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+
+      const box = screen.getByRole('searchbox', { name: /Search medical supplies/i });
+      fireEvent.change(box, { target: { value: 'g' } });
+
+      // The reload is in flight; the control the user is typing into survives it.
+      await waitFor(() => expect(mockGetItems).toHaveBeenCalledTimes(2));
+      expect(screen.getByRole('searchbox', { name: /Search medical supplies/i })).toBeInTheDocument();
+    });
+
+    it('reloads only the item list when a filter changes', async () => {
+      // loadSections closes over the filters, so one effect keyed on it
+      // reloaded all four sections per keystroke -- and because the newest
+      // request per section wins, those superseded an explicit refresh's
+      // requests, letting cached data land while the refresh was discarded.
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await waitFor(() => expect(mockGetSummary).toHaveBeenCalledTimes(1));
+      const summaryCalls = mockGetSummary.mock.calls.length;
+      const categoryCalls = mockGetCategories.mock.calls.length;
+      const expiringCalls = mockGetExpiringLots.mock.calls.length;
+      const itemCalls = mockGetItems.mock.calls.length;
+
+      fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+        target: { value: 'gauze' },
+      });
+
+      await waitFor(() => expect(mockGetItems.mock.calls.length).toBeGreaterThan(itemCalls));
+      expect(mockGetSummary.mock.calls.length).toBe(summaryCalls);
+      expect(mockGetCategories.mock.calls.length).toBe(categoryCalls);
+      expect(mockGetExpiringLots.mock.calls.length).toBe(expiringCalls);
+    });
+
+    it('does not call a supply uncategorized while the category list is loading', async () => {
+      // A dash is an answer -- "this supply has no category" -- and the page is
+      // not entitled to give it before the list that would name one arrives.
+      mockGetCategories.mockImplementation(() => new Promise(() => {}));
+      mockGetItems.mockResolvedValue({
+        items: [{ id: 'item-1', name: 'Trauma Shears', quantity: 6, category_id: 'cat-1' }],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await screen.findByText('Trauma Shears');
+
+      // The category reads as pending rather than as "no category", and the
+      // filter says so too instead of offering a complete-looking set of one.
+      expect(screen.getByText('…')).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Filter by category' })).toBeDisabled();
+      expect(screen.getByRole('option', { name: 'Loading categories…' })).toBeInTheDocument();
+    });
+
     it('sends a user-initiated refresh past the response cache', async () => {
       // The shared client answers a GET from cache for 30s and serves a stale
       // one for 90s while swallowing the revalidation's failure -- so without a

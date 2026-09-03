@@ -65,6 +65,8 @@ interface StatTileProps {
 
 type Section = 'summary' | 'items' | 'categories' | 'expiring';
 
+const ALL_SECTIONS: Section[] = ['summary', 'items', 'categories', 'expiring'];
+
 const SECTION_LABELS: Record<Section, string> = {
   summary: 'overview',
   items: 'supply table',
@@ -222,19 +224,36 @@ const MedicalSuppliesPage: React.FC = () => {
     [search, categoryFilter]
   );
 
-  const load = useCallback(() => loadSections(['summary', 'items', 'categories', 'expiring']), [loadSections]);
+  const loadSectionsRef = useRef(loadSections);
+  loadSectionsRef.current = loadSections;
   // A refresh the user asked for goes to the server. The shared client would
   // otherwise answer a GET from cache for 30s, and serve a stale one for 90s
   // while swallowing the revalidation's failure -- so the refresh would report
   // success against old quantities and never raise the error it exists to find.
-  const refresh = useCallback(
-    () => loadSections(['summary', 'items', 'categories', 'expiring'], { bypassCache: true }),
-    [loadSections]
-  );
+  const refresh = useCallback(() => loadSectionsRef.current(ALL_SECTIONS, { bypassCache: true }), []);
 
+  // Two effects, not one. `loadSections` closes over the filters, so a single
+  // effect keyed on it reloaded all four sections on every keystroke -- and
+  // since each section's newest request wins, those filter-driven requests
+  // superseded an explicit refresh's four, letting cached summary, category
+  // and expiring responses land while the refresh's fresh data was discarded.
+  //
+  // A filter says something about the item list and nothing about the other
+  // three, so only the item list reloads for it.
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadSectionsRef.current(ALL_SECTIONS);
+  }, []);
+
+  // Keyed on the filter values themselves, not on a "has mounted" flag: the
+  // mount effect runs first and would set such a flag before this one reads
+  // it, so the initial render loaded the item list twice.
+  const lastItemFilters = useRef(`${search}\u0000${categoryFilter}`);
+  useEffect(() => {
+    const key = `${search}\u0000${categoryFilter}`;
+    if (lastItemFilters.current === key) return;
+    lastItemFilters.current = key;
+    void loadSectionsRef.current(['items']);
+  }, [search, categoryFilter]);
 
   useRegisterPullToRefresh(refresh);
 
@@ -248,13 +267,22 @@ const MedicalSuppliesPage: React.FC = () => {
    * dash. The categories are in hand anyway — one lookup beats widening a
    * response model shared with the gear endpoints.
    */
-  const categoryName = (item: InventoryItem): string => categories.find((c) => c.id === item.category_id)?.name ?? '—';
+  const categoryName = (item: InventoryItem): string => {
+    if (!item.category_id) return '—';
+    const known = categories.find((c) => c.id === item.category_id)?.name;
+    if (known) return known;
+    // Pending, not absent: '—' is an answer ("no category"), and the page is
+    // not entitled to give it while the list that would name the category is
+    // still in flight. A *failed* list is a different state -- the section
+    // error above says so, and the table stays usable -- so it keeps the dash.
+    return loading.categories && !loaded.categories ? '…' : '—';
+  };
 
   const handleSaved = () => {
     setShowItemModal(false);
     setEditingItem(null);
     setShowDeliveryModal(false);
-    void load();
+    void refresh();
   };
 
   return (
@@ -422,62 +450,66 @@ const MedicalSuppliesPage: React.FC = () => {
         />
       )}
 
-      {(tab === 'expiring' ? loading.expiring : loading.items) ? (
-        <SkeletonCard />
-      ) : tab === 'expiring' ? (
-        <section aria-label="Expiring stock">
-          {loaded.expiring && expiring.length === 0 ? (
-            <EmptyState
-              icon={CalendarClock}
-              title="Nothing expiring"
-              description={`No medical stock lot expires within ${EXPIRY_WINDOW_DAYS} days.`}
-            />
-          ) : (
-            <div className="card overflow-x-auto p-0">
-              <table className="rwd-table w-full text-sm">
-                <thead>
-                  <tr className="border-theme-surface-border border-b">
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Item</th>
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Lot</th>
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                      Expires
-                    </th>
-                    <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
-                      On hand
-                    </th>
-                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {expiring.map((lot) => (
-                    <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
-                      <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                        {lot.item_name ?? '—'}
-                      </td>
-                      <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
-                        {lot.lot_number || '—'}
-                      </td>
-                      <td data-label="Expires" className="text-theme-text-muted px-4 py-3">
-                        {lot.expiration_date ? formatDate(lot.expiration_date, tz) : '—'}
-                      </td>
-                      <td data-label="On hand" className="text-theme-text-primary px-4 py-3 text-right tabular-nums">
-                        {formatNumber(lot.quantity)}
-                      </td>
-                      <td
-                        data-label="Status"
-                        className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration)}`}
-                      >
-                        {expiryLabel(lot.days_until_expiration)}
-                      </td>
+      {tab === 'expiring' ? (
+        loading.expiring ? (
+          <SkeletonCard />
+        ) : (
+          <section aria-label="Expiring stock">
+            {loaded.expiring && expiring.length === 0 ? (
+              <EmptyState
+                icon={CalendarClock}
+                title="Nothing expiring"
+                description={`No medical stock lot expires within ${EXPIRY_WINDOW_DAYS} days.`}
+              />
+            ) : (
+              <div className="card overflow-x-auto p-0">
+                <table className="rwd-table w-full text-sm">
+                  <thead>
+                    <tr className="border-theme-surface-border border-b">
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                        Item
+                      </th>
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Lot</th>
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                        Expires
+                      </th>
+                      <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
+                        On hand
+                      </th>
+                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                        Status
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                  </thead>
+                  <tbody>
+                    {expiring.map((lot) => (
+                      <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
+                        <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
+                          {lot.item_name ?? '—'}
+                        </td>
+                        <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
+                          {lot.lot_number || '—'}
+                        </td>
+                        <td data-label="Expires" className="text-theme-text-muted px-4 py-3">
+                          {lot.expiration_date ? formatDate(lot.expiration_date, tz) : '—'}
+                        </td>
+                        <td data-label="On hand" className="text-theme-text-primary px-4 py-3 text-right tabular-nums">
+                          {formatNumber(lot.quantity)}
+                        </td>
+                        <td
+                          data-label="Status"
+                          className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration)}`}
+                        >
+                          {expiryLabel(lot.days_until_expiration)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )
       ) : (
         <section aria-label="All supplies">
           <div className="mb-4 flex flex-wrap gap-2">
@@ -497,8 +529,11 @@ const MedicalSuppliesPage: React.FC = () => {
               onChange={(e) => setCategoryFilter(e.target.value)}
               aria-label="Filter by category"
               className="form-input w-auto"
+              disabled={loading.categories && !loaded.categories}
             >
-              <option value="">All categories</option>
+              <option value="">
+                {loading.categories && !loaded.categories ? 'Loading categories…' : 'All categories'}
+              </option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -507,7 +542,9 @@ const MedicalSuppliesPage: React.FC = () => {
             </select>
           </div>
 
-          {loaded.items && items.length === 0 ? (
+          {loading.items ? (
+            <SkeletonCard />
+          ) : loaded.items && items.length === 0 ? (
             <EmptyState
               icon={Stethoscope}
               title="No medical supplies yet"
