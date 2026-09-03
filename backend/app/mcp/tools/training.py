@@ -1,9 +1,10 @@
 """Training and certifications: records, requirement progress, expiries."""
 
+from datetime import date, timedelta
 from typing import Any, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
@@ -17,7 +18,7 @@ from app.mcp.tools._common import (
     page,
     require_member,
 )
-from app.models.training import TrainingRecord
+from app.models.training import TrainingRecord, TrainingStatus
 from app.services.training_service import TrainingService
 
 
@@ -50,18 +51,46 @@ def register(server: Any) -> None:
         db: AsyncSession,
         principal: McpPrincipal,
         days_ahead: int = 90,
+        limit: int = 50,
+        offset: int = 0,
     ) -> dict:
         """Certifications expiring within ``days_ahead`` days, including ones
-        already expired, oldest expiry first, with the member's name."""
+        already expired, oldest expiry first, with the member's name. Paged:
+        ``total`` counts every matching record, so a long-established
+        department's expired history is read a page at a time."""
         days_ahead = max(1, min(days_ahead, 730))
-        records = await TrainingService(db).get_expiring_certifications(
-            org_uuid(principal), days_ahead=days_ahead
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
+        # The same filter as TrainingService.get_expiring_certifications,
+        # which has no page bounds because its API callers read one member.
+        cutoff = date.today() + timedelta(days=days_ahead)
+        criteria = (
+            TrainingRecord.organization_id == principal.organization_id,
+            TrainingRecord.status == TrainingStatus.COMPLETED,
+            TrainingRecord.expiration_date.isnot(None),
+            TrainingRecord.expiration_date <= cutoff,
         )
+        total = (
+            await db.execute(
+                select(func.count()).select_from(TrainingRecord).where(*criteria)
+            )
+        ).scalar_one()
+        rows = await db.execute(
+            select(TrainingRecord)
+            .where(*criteria)
+            .order_by(TrainingRecord.expiration_date, TrainingRecord.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        records = list(rows.scalars().all())
         names = await member_names(
             db, principal.organization_id, (r.user_id for r in records)
         )
-        items = [_record(r, names.get(r.user_id)) for r in records]
-        return {"days_ahead": days_ahead, "items": items, "total": len(items)}
+        body = page(
+            [_record(r, names.get(r.user_id)) for r in records], total, limit, offset
+        )
+        body["days_ahead"] = days_ahead
+        return body
 
     @logbook_tool(server, title="Member training summary", module="training")
     async def get_member_training_summary(

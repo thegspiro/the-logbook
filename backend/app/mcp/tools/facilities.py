@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
 from app.mcp.registry import logbook_tool
-from app.mcp.tools._common import clamp_limit, clamp_offset, iso, page
+from app.mcp.tools._common import clamp_limit, clamp_offset, page
 from app.services.facilities_service import FacilitiesService
 
 
@@ -21,7 +21,11 @@ def register(server: Any) -> None:
         offset: int = 0,
     ) -> dict:
         """Stations and other buildings: number, type, status, city, size,
-        bays, occupancy and ownership."""
+        bays, occupancy and whether the department owns the building."""
+        # Lease and tax terms (``lease_expiration``, ``property_tax_id``) are
+        # blanked by the facilities API unless the caller holds
+        # ``facilities.view_sensitive``; a service key carries no such grant,
+        # so they are never projected here.
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         rows, total = await FacilitiesService(db).list_facilities(
@@ -48,7 +52,6 @@ def register(server: Any) -> None:
                 "num_floors": f.num_floors,
                 "num_bays": f.num_bays,
                 "is_owned": f.is_owned,
-                "lease_expiration": iso(f.lease_expiration),
                 "max_occupancy": f.max_occupancy,
                 "sleeping_quarters": f.sleeping_quarters,
                 "is_archived": bool(f.is_archived),

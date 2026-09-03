@@ -30,6 +30,8 @@ from app.mcp.server import build_server
 # deselects this marker; the integration job selects it.
 pytestmark = [pytest.mark.integration]
 from app.models.audit import AuditLog
+from app.models.facilities import Facility, FacilityStatus, FacilityType
+from app.models.training import TrainingRecord, TrainingStatus, TrainingType
 
 
 @pytest.fixture
@@ -773,12 +775,93 @@ class TestProfileAndCalendar:
         certs = await _call(
             server, principal, "list_expiring_certifications", days_ahead=30
         )
-        assert certs == {"days_ahead": 30, "items": [], "total": 0}
+        assert certs["days_ahead"] == 30
+        assert certs["items"] == []
+        assert certs["total"] == 0
+        assert certs["has_more"] is False
         shifts = await _call(
             server, principal, "list_shifts", start_date=date.today().isoformat()
         )
         assert shifts["items"] == []
         assert shifts["total"] == 0
+
+
+class TestFifthRoundFindings:
+    """Regressions for the fifth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_expiring_certifications_are_paged_with_a_real_total(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        soon = date.today() + timedelta(days=3)
+        for n in range(3):
+            db_session.add(
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member_id,
+                    course_name=f"Cert {n}",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=date.today() - timedelta(days=365),
+                    expiration_date=soon + timedelta(days=n),
+                    hours_completed=1.0,
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        first = await _call(
+            server, principal, "list_expiring_certifications", days_ahead=30, limit=2
+        )
+        assert [c["course_name"] for c in first["items"]] == ["Cert 0", "Cert 1"]
+        assert first["total"] == 3
+        assert first["has_more"] is True
+        assert first["days_ahead"] == 30
+        assert first["items"][0]["member_name"]
+        assert "certification_number" not in first["items"][0]
+        rest = await _call(
+            server,
+            principal,
+            "list_expiring_certifications",
+            days_ahead=30,
+            limit=2,
+            offset=2,
+        )
+        assert [c["course_name"] for c in rest["items"]] == ["Cert 2"]
+        assert rest["has_more"] is False
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_facilities_never_carry_lease_terms_or_contact_details(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        kind = FacilityType(organization_id=org_id, name="Station")
+        state = FacilityStatus(organization_id=org_id, name="Active")
+        db_session.add_all([kind, state])
+        await db_session.flush()
+        db_session.add(
+            Facility(
+                organization_id=org_id,
+                name="Station 9",
+                facility_type_id=kind.id,
+                status_id=state.id,
+                is_owned=False,
+                lease_expiration=date.today() + timedelta(days=400),
+                property_tax_id="TAX-0001",
+                phone="555-123-4567",
+                email="station9@example.test",
+                city="Springfield",
+            )
+        )
+        await db_session.flush()
+        result = await _call(server, _principal(org_id, admin_id), "list_facilities")
+        assert result["total"] == 1
+        item = result["items"][0]
+        assert item["name"] == "Station 9"
+        assert item["is_owned"] is False
+        assert item["city"] == "Springfield"
+        for denied in ("lease_expiration", "property_tax_id", "phone", "email"):
+            assert denied not in item
 
 
 class TestReviewFindings:
