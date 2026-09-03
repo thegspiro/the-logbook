@@ -17,6 +17,7 @@ const {
   deleteCheckItem,
   replaceCompartments,
   addCompartment,
+  deleteCompartment,
   createEquipmentCheckTemplate,
   updateEquipmentCheckTemplate,
   toastSuccess,
@@ -33,6 +34,7 @@ const {
   deleteCheckItem: vi.fn(),
   replaceCompartments: vi.fn(),
   addCompartment: vi.fn(),
+  deleteCompartment: vi.fn(),
   createEquipmentCheckTemplate: vi.fn(),
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
     replaceCompartments: (...args: unknown[]) => replaceCompartments(...args),
     addCompartment: (...args: unknown[]) => addCompartment(...args),
+    deleteCompartment: (...args: unknown[]) => deleteCompartment(...args),
     createEquipmentCheckTemplate: (...args: unknown[]) => createEquipmentCheckTemplate(...args),
     updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
@@ -990,6 +993,7 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     vi.clearAllMocks();
     getTemplate.mockResolvedValue(structuredClone(template));
     deleteCheckItem.mockResolvedValue(undefined);
+    deleteCompartment.mockResolvedValue(undefined);
     updateEquipmentCheckTemplate.mockImplementation((_id: string, payload: { is_active: boolean }) =>
       Promise.resolve({ ...structuredClone(template), isActive: payload.is_active })
     );
@@ -1034,6 +1038,31 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     await confirm('Delete');
     await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('radio'));
     expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
+  });
+
+  it('deletes the whole nested subtree, in the confirmation and in local state, when a parent compartment is removed', async () => {
+    // AP-13 finding 3: the backend cascade-deletes descendants (AP-8), so
+    // the confirmation must count the whole subtree, not just Cab's own 2
+    // items, and Medical bag -- Cab's nested child -- must not linger as an
+    // orphaned top-level row once Cab is gone.
+    renderBuilder();
+
+    const deleteCab = await screen.findByLabelText('Delete Cab');
+    await userEvent.click(deleteCab);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/1 nested compartment/i)).toBeVisible();
+    expect(within(dialog).getByText(/2 items total/i)).toBeVisible();
+
+    await confirm('Delete');
+
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+    // The backend's own cascade removes Medical bag server-side; the
+    // frontend must not also issue a separate delete for it.
+    expect(deleteCompartment).toHaveBeenCalledTimes(1);
+
+    expect(screen.queryByLabelText('Actions for Cab')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Actions for Medical bag')).not.toBeInTheDocument();
   });
 
   it('sends draft and publish state explicitly', async () => {

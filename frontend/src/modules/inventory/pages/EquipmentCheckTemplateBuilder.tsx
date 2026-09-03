@@ -86,7 +86,7 @@ import type { CatalogAddPayload } from '@/modules/inventory/components/CatalogQu
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
-import { storedInsideOptions } from './equipmentCheckHierarchy';
+import { descendantCompartmentIds, storedInsideOptions } from './equipmentCheckHierarchy';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -805,12 +805,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const comp = compartments[idx];
     if (!comp) return;
 
-    const itemCount = comp.items.length;
+    // The backend cascade-deletes the whole subtree, not just this row
+    // (AP-8/AP-13 finding 3) -- the confirmation and the local-state removal
+    // both have to account for every descendant, or the count undersells
+    // what's being destroyed and deleted descendants linger as orphaned
+    // "top-level" rows whose ids 404 on the next Save.
+    const descendantIds = descendantCompartmentIds(compartments, comp.id);
+    const descendantComps = compartments.filter((c) => c.id !== undefined && descendantIds.has(c.id));
+    const totalItems = comp.items.length + descendantComps.reduce((sum, c) => sum + c.items.length, 0);
     const label = comp.name || 'Untitled Compartment';
+    const subtreeNote =
+      descendantComps.length > 0
+        ? ` and ${descendantComps.length} nested compartment${descendantComps.length !== 1 ? 's' : ''}`
+        : '';
     const msg =
-      itemCount > 0
-        ? `Delete "${label}" and its ${itemCount} item${itemCount !== 1 ? 's' : ''}? This cannot be undone.`
-        : `Delete "${label}"? This cannot be undone.`;
+      totalItems > 0
+        ? `Delete "${label}"${subtreeNote} and ${totalItems} item${totalItems !== 1 ? 's' : ''} total? This cannot be undone.`
+        : `Delete "${label}"${subtreeNote}? This cannot be undone.`;
     if (!(await confirm({ title: 'Delete compartment', message: msg, confirmLabel: 'Delete', cancelLabel: 'Keep it' })))
       return;
 
@@ -824,7 +835,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         return;
       }
     }
-    setCompartments((prev) => prev.filter((_, i) => i !== idx));
+    setCompartments((prev) => prev.filter((c, i) => i !== idx && !(c.id !== undefined && descendantIds.has(c.id))));
     markDirty();
   };
 
