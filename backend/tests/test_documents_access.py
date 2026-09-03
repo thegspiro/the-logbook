@@ -2296,9 +2296,35 @@ class TestDeleteDocumentCleansUpFacilityReference:
         return org, document, facility_document
 
     def _caller(self, org_id):
-        user = _user(uid="admin-1", roles=[(["documents.manage"], "admin")])
+        # Holds facilities.manage alongside documents.manage: the facility
+        # -reference cleanup (FAC-26) requires facilities.delete/.manage
+        # whenever a reference actually exists, so this caller -- meant as
+        # the "can do it all" positive control for these tests -- must carry
+        # that grant or every delete below would now be refused.
+        user = _user(
+            uid="admin-1",
+            roles=[(["documents.manage", "facilities.manage"], "admin")],
+        )
         user.organization_id = org_id
         user.username = "admin"
+        return user
+
+    def _caller_without_facility_delete(self, org_id):
+        """documents.manage + facilities.edit (write-capable) but no
+        facilities.delete/.manage -- the FAC-26 combination that must be
+        refused when a facility reference exists."""
+        user = _user(
+            uid="editor-1",
+            roles=[(["documents.manage", "facilities.edit"], "editor")],
+        )
+        user.organization_id = org_id
+        user.username = "editor"
+        return user
+
+    def _caller_with_no_facility_permission(self, org_id):
+        user = _user(uid="plain-1", roles=[(["documents.manage"], "plain")])
+        user.organization_id = org_id
+        user.username = "plain"
         return user
 
     async def test_deleting_the_document_removes_the_facility_reference(
@@ -2386,6 +2412,81 @@ class TestDeleteDocumentCleansUpFacilityReference:
 
         result = await db_session.execute(
             select(FacilityDocument).where(FacilityDocument.id == facility_document.id)
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_without_facility_delete_permission_the_whole_delete_is_refused(
+        self, db_session
+    ):
+        """FAC-26 (Codex): a caller with documents.manage + facilities.edit
+        (write-capable, but explicitly not facilities.delete/.manage) must
+        not be able to delete a shared document -- and thereby its facility
+        reference -- through the generic Documents endpoint, bypassing the
+        facility API's own delete_facility_document route, which reserves
+        deletion for facilities.delete/.manage specifically. Fails closed:
+        the document itself must survive, not just the reference."""
+        org, document, facility_document = (
+            await self._facility_with_referenced_document(db_session, "fcvfd-fdoc-4")
+        )
+        caller = self._caller_without_facility_delete(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_document(document.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 403
+
+        result = await db_session.execute(
+            select(Document).where(Document.id == document.id)
+        )
+        assert result.scalar_one_or_none() is not None
+        result = await db_session.execute(
+            select(FacilityDocument).where(FacilityDocument.id == facility_document.id)
+        )
+        assert result.scalar_one_or_none() is not None
+
+    async def test_folder_cascade_without_facility_delete_permission_is_refused(
+        self, db_session
+    ):
+        org, document, facility_document = (
+            await self._facility_with_referenced_document(db_session, "fcvfd-fdoc-5")
+        )
+        folder = DocumentFolder(organization_id=org.id, name="Insurance & Leases")
+        db_session.add(folder)
+        await db_session.flush()
+        document.folder_id = folder.id
+        await db_session.flush()
+        caller = self._caller_without_facility_delete(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_folder(folder.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 403
+
+        result = await db_session.execute(
+            select(DocumentFolder).where(DocumentFolder.id == folder.id)
+        )
+        assert result.scalar_one_or_none() is not None
+        result = await db_session.execute(
+            select(FacilityDocument).where(FacilityDocument.id == facility_document.id)
+        )
+        assert result.scalar_one_or_none() is not None
+
+    async def test_no_facility_reference_deletes_regardless_of_the_permission(
+        self, db_session
+    ):
+        """A caller with no facilities permission at all must still be able
+        to delete an ordinary document that no facility references -- the
+        FAC-26 gate only engages when a reference actually exists."""
+        org = Organization(name="Falls Church VFD", slug="fcvfd-fdoc-6")
+        db_session.add(org)
+        await db_session.flush()
+        document = Document(organization_id=org.id, name="Memo", file_name="memo.pdf")
+        db_session.add(document)
+        await db_session.flush()
+        caller = self._caller_with_no_facility_permission(org.id)
+
+        await delete_document(document.id, db=db_session, current_user=caller)
+
+        result = await db_session.execute(
+            select(Document).where(Document.id == document.id)
         )
         assert result.scalar_one_or_none() is None
 

@@ -631,7 +631,9 @@ class DocumentsService:
         # A facility record can reference one of these documents without a
         # foreign key (see _delete_facility_document_references) -- clean
         # that up in the same transaction as the cascade delete, not after.
-        await self._delete_facility_document_references(document_ids, organization_id)
+        await self._delete_facility_document_references(
+            document_ids, organization_id, current_user
+        )
 
         await self.db.delete(folder)
         await self.db.commit()
@@ -649,7 +651,10 @@ class DocumentsService:
         return True
 
     async def _delete_facility_document_references(
-        self, document_ids: Set[str], organization_id: UUID
+        self,
+        document_ids: Set[str],
+        organization_id: UUID,
+        current_user: Optional[User] = None,
     ) -> None:
         """Delete any facility_documents rows pointing at these documents.
 
@@ -659,10 +664,39 @@ class DocumentsService:
         foreign key. Deleting the referenced ``Document`` without this leaves a
         facility document entry that can never be downloaded again -- a
         dangling reference with nothing to surface it.
+
+        FAC-26 (Codex): this used to run unconditionally, so a caller reaching
+        it through the generic ``documents.manage``-gated endpoints (or a
+        folder cascade) could delete a facility's own document reference
+        without holding ``facilities.delete``/``.manage`` -- the permission
+        the facility API's own ``delete_facility_document`` route reserves
+        for exactly this action. ``current_user`` is optional only so this
+        signature doesn't break a caller with no user in scope (there are
+        none client-facing today); every route that lets a caller delete a
+        document or folder must pass it, or this check fails closed below
+        rather than silently skipping.
         """
         if not document_ids:
             return
         references = [f"document:{document_id}" for document_id in document_ids]
+        existing = await self.db.execute(
+            select(FacilityDocument.id).where(
+                FacilityDocument.organization_id == str(organization_id),
+                FacilityDocument.file_path.in_(references),
+            )
+        )
+        if existing.scalars().first() is None:
+            # No facility reference exists -- nothing to protect, so the
+            # delete proceeds regardless of this permission.
+            return
+        granted = _get_user_permissions(current_user) if current_user else set()
+        if not permission_matches_any(
+            ["facilities.delete", "facilities.manage"], granted
+        ):
+            raise PermissionError(
+                "Cannot delete a document referenced by a facility without "
+                "facilities.delete or facilities.manage permission"
+            )
         await self.db.execute(
             sa_delete(FacilityDocument).where(
                 FacilityDocument.organization_id == str(organization_id),
@@ -825,8 +859,20 @@ class DocumentsService:
         await self.db.refresh(document)
         return document
 
-    async def delete_document(self, document_id: UUID, organization_id: UUID) -> bool:
-        """Delete a document. Returns False if not found."""
+    async def delete_document(
+        self,
+        document_id: UUID,
+        organization_id: UUID,
+        current_user: Optional[User] = None,
+    ) -> bool:
+        """Delete a document. Returns False if not found.
+
+        ``current_user`` is optional only so this signature doesn't break a
+        caller with no user in scope (there are none client-facing today);
+        every route that lets a caller delete a document must pass it, or
+        the facility-reference permission check below fails closed rather
+        than silently skipping (FAC-26).
+        """
         document = await self.get_document_by_id(document_id, organization_id)
         if not document:
             return False
@@ -836,7 +882,7 @@ class DocumentsService:
         # key (see _delete_facility_document_references) -- clean that up in
         # the same transaction as the delete, not after.
         await self._delete_facility_document_references(
-            {str(document_id)}, organization_id
+            {str(document_id)}, organization_id, current_user
         )
         await self.db.delete(document)
         await self.db.commit()

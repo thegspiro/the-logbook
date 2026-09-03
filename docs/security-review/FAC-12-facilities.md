@@ -1062,6 +1062,70 @@ the ACL check entirely — and passes post-fix.
 
 **Mirrored to** `CHANGELOG.md`.
 
+### FAC-26 — P1 (access control, permission-tier mismatch) — deleting a shared document cleaned up its facility reference without checking the facility-specific delete permission — ✅ FIXED
+
+**Found by Codex review.** `DocumentsService.delete_document` (and
+`delete_folder`'s cascade) called `_delete_facility_document_references`
+unconditionally before removing the document row(s). The generic endpoints
+reaching it — `DELETE /documents/{document_id}` and
+`DELETE /documents/folders/{folder_id}` — are gated only by
+`documents.manage`. The facility module's own document-delete route,
+`delete_facility_document` (`facilities.py:1006-1017`), deliberately reserves
+deletion for `facilities.delete`/`.manage` specifically — a stricter,
+action-specific grant that FAC-24's `permission_matches_any_write` treats
+`facilities.edit` as satisfying for a folder's own ACL (since a sensitive
+folder's `required_permissions` typically lists both `.edit` and `.manage`),
+but which the facility module's own delete route never accepts.
+
+**Impact:** a caller holding `documents.manage` + `facilities.edit` — write-
+capable by FAC-24's standard, but explicitly not `facilities.delete` — could
+delete a shared document and silently remove its `FacilityDocument`
+reference through the generic Documents endpoint (or a folder cascade),
+bypassing the facility API's own delete-specific permission boundary
+entirely. FAC-24's `require_write` fix stops a read-only-permission holder
+from reaching this path at all, but does not distinguish `facilities.edit`
+from `facilities.delete`/`.manage` once a caller is write-capable — a
+distinction the facility module's own routes already make and the generic
+document-delete path did not honor.
+**Where:** `backend/app/services/documents_service.py`
+(`_delete_facility_document_references`, `delete_document`, `delete_folder`);
+`backend/app/api/v1/endpoints/documents.py` (`delete_document`).
+**Fix:** threaded `current_user` through `delete_document` (mirroring
+`delete_folder`'s existing optional `current_user` param — optional only so
+the signature doesn't break a caller with no user in scope; every
+client-facing route passes it). `_delete_facility_document_references` now
+first checks (org-scoped) whether any `FacilityDocument` row actually
+references the document(s) being deleted. If none does, the delete proceeds
+regardless of this permission — the gate only engages when there is
+something to protect. If a reference exists, the caller must hold
+`facilities.delete` or `facilities.manage` (checked directly, not through
+the folder-ACL's `required_permissions`) or the whole call raises
+`PermissionError`, which the endpoint (wrapped in `handle_service_errors`,
+matching every other mutation in this file) turns into a 403 — the entire
+delete is refused, not just the reference cleanup, so the caller can't still
+walk away with the document's bytes gone and only the facility metadata
+intact.
+**Regression tests:** `TestDeleteDocumentCleansUpFacilityReference` extended
+with `test_without_facility_delete_permission_the_whole_delete_is_refused`
+(a `facilities.edit`-holding, non-`facilities.delete` caller refused with
+403; both the document row and the facility reference survive),
+`test_folder_cascade_without_facility_delete_permission_is_refused` (same
+refusal through a folder cascade delete), and
+`test_no_facility_reference_deletes_regardless_of_the_permission` (a caller
+with no facilities permission at all can still delete a document no
+facility references, proving the gate is conditional on an actual
+reference). The class's three pre-existing tests were updated to grant its
+"can do it all" admin caller `facilities.manage` alongside `documents.manage`
+— the tests were written before this permission existed to check and would
+otherwise now fail with the fix in place, not because they exercise the
+bypass, but because they no longer hold the permission the fix correctly
+requires. Independently confirmed the two new refusal tests fail against
+pre-fix code (`git stash` isolating the source change — the delete + cleanup
+proceeded with no exception raised) and pass post-fix; the four other tests
+in the class are unaffected.
+
+**Mirrored to** `CHANGELOG.md`.
+
 ## Verified good ✅ (re-confirmed this pass)
 
 - **Auth coverage 98/98** — exact grep count unchanged since pass 2

@@ -724,7 +724,13 @@ async def delete_document(
         existing, current_user.organization_id, current_user, require_write=True
     ):
         raise HTTPException(status_code=404, detail="Document not found")
-    success = await service.delete_document(document_id, current_user.organization_id)
+    # A service-layer PermissionError here means the document is referenced
+    # by a facility and the caller lacks facilities.delete/.manage -- the
+    # facility API's own action-specific delete gate (FAC-26).
+    async with handle_service_errors("Unable to delete document"):
+        success = await service.delete_document(
+            document_id, current_user.organization_id, current_user
+        )
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
     await log_audit_event(
