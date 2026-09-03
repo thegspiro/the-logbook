@@ -2385,7 +2385,13 @@ class SchedulingService:
                         template, organization_id, validated_ids
                     )
                     await self.db.flush()
-            except Exception:
+            except IntegrityError:
+                # Only the expected failure mode — the checklist FK a moment
+                # ago validated as in-org and is now gone — is turned into
+                # this message. Anything else (a query failure, a programming
+                # defect) is a different problem and must not be misreported
+                # as a missing checklist; it propagates to the caller's own
+                # handler instead.
                 await self.db.delete(template)
                 await self.db.commit()
                 return None, "Equipment checklist not found"

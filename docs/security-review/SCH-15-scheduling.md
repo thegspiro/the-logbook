@@ -696,9 +696,10 @@ correction for why.
 
 ## Pass 3 (2026-09-03) — 1 fix, 0 flagged, 1 new finding (SCH-12)
 
-**Revision note.** Codex review of this PR's first draft caught two real
-scope gaps and one real correctness gap, all corrected below rather than
-argued with:
+**Revision note.** Two rounds of Codex review corrected this draft.
+
+The first caught two real scope gaps and one real correctness gap, all
+corrected below rather than argued with:
 
 1. The baseline commit (`299a163a`) was itself a scheduling change
    (`shifts.template_id` plus its org-validation in `create_shift` and
@@ -720,6 +721,25 @@ frontend test suite or build — CLAUDE.md's own gate doesn't list them as
 mandatory the way flake8/pytest/tsc/eslint are, but a pass claiming "full
 completion gate green" should not omit checks it has the means to run. Both
 now run; see the gate table.
+
+The second round, against the commit that fixed the first round, caught two
+more real gaps:
+
+4. **The SCH-12 fix's `except Exception` was too broad.** It caught any
+   failure inside the nested savepoint — not just the expected FK
+   violation — and misreported all of them as "Equipment checklist not
+   found," which would hide a genuine bug (a query error, an ORM defect)
+   behind a wrong, misleading message. Narrowed to `except IntegrityError`;
+   anything else now propagates to the app's global unhandled-exception
+   handler (`main.py`, logs to `error_logs` and returns a generic 500)
+   instead of being silently mischaracterized.
+5. **The corrected file count (21) was still short.** The actual
+   added/modified set in `modules/scheduling/`+`pages/scheduling/` against
+   the corrected baseline is 29 files (Codex counted 30 against a
+   marginally later commit that had one more), not 21 — seven test files
+   and one type file were grep-swept but not read, and a third scheduling
+   migration (`20260831_0003_..._drop_equipment_check_settings.py`) was
+   never in scope at all. All now reviewed; see below.
 
 **Baseline:** `299a163a^` (the parent of `299a163a`, 2026-08-31 — the
 correction above), the true last commit before the first post-pass-2 change
@@ -908,6 +928,54 @@ bypasses `_validated_check_ids` (standing in for "valid when checked, gone
 by the time it mattered", since a real concurrent-delete race cannot be made
 deterministic) and asserts both the correct error and that no template row
 survives.
+
+**Revised on second Codex round:** the fix's first version caught bare
+`except Exception`, which would also swallow an unrelated failure inside the
+same savepoint (a query error, an ORM defect) and misreport it as the same
+"Equipment checklist not found" — hiding the real problem behind a
+plausible-sounding wrong one. Narrowed to `except IntegrityError` (already
+imported and used elsewhere in this file, `scheduling_service.py:17,3453`).
+Confirmed the app has a matching safety net for what now propagates instead:
+`main.py`'s `@app.exception_handler(Exception)` catches any unhandled
+exception app-wide, logs it to `error_logs` (visible on the Error Monitoring
+page), and returns a generic 500 — so a non-FK failure here is no longer
+misreported, and is no longer silent either.
+
+### Reviewed on the second Codex round: the remaining 8 files and 1 migration
+
+Second-round Codex review re-ran the file enumeration against a slightly
+later commit and found 30 added/modified files in
+`modules/scheduling/`+`pages/scheduling/`, not the 21 the first-round
+correction had reached — 8 more (7 test files, 1 type file) were still only
+grep-swept, plus a third scheduling migration was never in scope. All now
+reviewed:
+
+- **`types/index.ts`** — removes a dead re-export block for equipment-check
+  types (the same module-move cleanup already reviewed elsewhere). No logic.
+- **`utils/positionLabels.test.ts`** (new) — unit tests for the already-
+  reviewed `positionLabel()` helper; correct `mockReset()`-before-default
+  discipline (Pitfall #28).
+- **`components/ShiftSettingsPanel.test.tsx`,
+  `components/TemplateFormModal.test.tsx`,
+  `pages/scheduling/{OpenShiftsTab,ShiftDetailPanel}.test.tsx`,
+  `pages/scheduling/board/{ShiftBoard,ShiftSeatList}.test.tsx`** — all
+  exercise already-reviewed source changes (the `positionLabel` rollout, the
+  permission-gated Equipment signpost links, `equipment_check_template_ids`
+  round-tripping including the omitted-key-vs-empty-array distinction
+  required by CLAUDE.md Pitfall #1). All use `beforeEach`
+  reset-then-default for their mocks (Pitfall #28); one comment in three
+  files explicitly notes making the `useAuthStore` mock callable-with-
+  `getState` to match the real store's shape used outside React.
+- **`20260831_0003_4e7e125cb00f_drop_equipment_check_settings.py`** — drops
+  `scheduling_module_configs.equipment_check_settings`, the column backing
+  the dead settings field this pass's diff-scoped section already noted was
+  removed from `DEFAULT_SHIFT_SETTINGS`. Guarded on table _and_ column
+  existing (Pitfall #26); `downgrade()` restores the column shape, not its
+  contents, and says so in the docstring rather than implying a round-trip.
+  No security-relevant surface — a dead-code cleanup, not an access or
+  data-integrity change.
+
+No new findings in any of the nine. Verified good.
 
 ### No new findings (all other dimensions)
 
