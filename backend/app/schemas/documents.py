@@ -131,10 +131,12 @@ class DocumentsListResponse(BaseModel):
 
 
 class FoldersListResponse(BaseModel):
-    """Schema for folders list"""
+    """Schema for paginated folders list"""
 
     folders: List[DocumentFolderResponse]
     total: int
+    skip: int
+    limit: int
 
 
 # ============================================

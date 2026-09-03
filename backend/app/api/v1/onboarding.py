@@ -10,7 +10,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from loguru import logger
@@ -30,8 +30,8 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import get_optional_current_user
 from app.api.v1.email_test_helper import (
     test_cloudflare_email,
-    test_gmail_oauth,
-    test_microsoft_oauth,
+    test_gmail_connection,
+    test_microsoft_connection,
     test_smtp_connection,
 )
 from app.core.database import get_db
@@ -49,6 +49,7 @@ from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
     OnboardingService,
 )
+from app.utils.email_providers import missing_for_enabled, required_field_message
 from app.utils.image_validator import validate_logo_image
 from app.utils.onboarding_security import find_system_owner
 
@@ -115,6 +116,94 @@ async def _rate_limit_onboarding_test_email(request: Request) -> None:
 
 async def _rate_limit_onboarding_reset(request: Request) -> None:
     await check_rate_limit(request, scope="onboarding_reset")
+
+
+def _parse_smtp_port(value: Any) -> int:
+    """Return a usable port, or raise ValueError for a malformed one.
+
+    The onboarding config is a free dict, so the port arrives as whatever the
+    client sent. A missing or blank value is the submission default; a value
+    that is not an integer in 1-65535 is a client error that must surface as
+    a 400, not as an unhandled int() inside the request.
+    """
+    if value is None or value == "":
+        return 587
+    if isinstance(value, bool):
+        raise ValueError("SMTP port must be a number between 1 and 65535")
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("SMTP port must be a number between 1 and 65535") from None
+    if not 1 <= port <= 65535:
+        raise ValueError("SMTP port must be a number between 1 and 65535")
+    return port
+
+
+def _incomplete_session_email(session_data: Optional[dict]) -> Optional[str]:
+    """Why the email configuration saved in this session cannot send, or None.
+
+    A session persisted by an earlier release may hold only the OAuth fields
+    that release collected; the mapping drops them and the section would
+    complete as disabled without a word. Checked before completion writes
+    anything, so the admin is sent back to the email step instead. A session
+    with no email data, or one that chose "Other / Skip", is fine.
+    """
+    import json
+
+    from app.core.security import decrypt_data
+
+    email_data = (session_data or {}).get("email")
+    if not email_data or not email_data.get("config_encrypted"):
+        return None
+    try:
+        raw_config = json.loads(decrypt_data(email_data["config_encrypted"]))
+    except Exception:
+        return (
+            "The saved email configuration could not be read. Return to the "
+            "email step and enter it again."
+        )
+    platform = email_data.get("platform", "other")
+    try:
+        mapped = _email_settings_from_onboarding(platform, raw_config)
+    except ValueError as e:
+        return f"{e}. Return to the email step and correct it."
+    missing = missing_for_enabled(mapped)
+    if missing:
+        return (
+            f"{required_field_message(platform, missing)} Return to the email "
+            "step and save it again, or choose Other to configure email later."
+        )
+    return None
+
+
+def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
+    """Map the onboarding form's camelCase config to the org settings shape.
+
+    Shared by the session save (which validates the result) and completion
+    (which persists it), so the two cannot drift. "Other / Skip" records a
+    deliberate configure-later choice with an empty config — it must persist
+    as disabled, or EmailService prefers this hollow org record (enabled, no
+    host, no from address) over the working global SMTP settings and sending
+    breaks until someone finds the empty config in settings.
+    """
+    email_settings = {
+        "enabled": platform != "other" and bool(raw_config),
+        "platform": platform,
+        "smtp_host": raw_config.get("smtpHost"),
+        "smtp_port": _parse_smtp_port(raw_config.get("smtpPort")),
+        "smtp_user": raw_config.get("smtpUsername"),
+        "smtp_password": raw_config.get("smtpPassword"),
+        "smtp_encryption": raw_config.get("smtpEncryption", "tls"),
+        "from_email": raw_config.get("fromEmail"),
+        "from_name": raw_config.get("fromName"),
+        "use_tls": raw_config.get("smtpEncryption", "tls") != "none",
+        "google_app_password": raw_config.get("googleAppPassword"),
+        "microsoft_app_password": raw_config.get("microsoftAppPassword"),
+        "cloudflare_account_id": raw_config.get("cloudflareAccountId"),
+        "cloudflare_api_token": raw_config.get("cloudflareApiToken"),
+    }
+    # Remove None values so only configured fields are stored
+    return {k: v for k, v in email_settings.items() if v is not None}
 
 
 # ============================================
@@ -260,7 +349,8 @@ class EmailTestRequest(BaseModel):
     """Request model for testing email configuration"""
 
     platform: str = Field(
-        ..., description="Email platform: gmail, microsoft, selfhosted, other"
+        ...,
+        description="Email platform: gmail, microsoft, selfhosted, cloudflare, other",
     )
     config: dict[str, Any] = Field(..., description="Email configuration")
 
@@ -313,7 +403,8 @@ class EmailConfigRequest(BaseModel):
     """Request model for saving email configuration"""
 
     platform: str = Field(
-        ..., description="Email platform: gmail, microsoft, selfhosted, other"
+        ...,
+        description="Email platform: gmail, microsoft, selfhosted, cloudflare, other",
     )
     config: dict[str, Any] = Field(..., description="Email configuration")
 
@@ -712,34 +803,19 @@ async def _persist_session_data_to_org(
             raw_config = json.loads(decrypt_data(email_data["config_encrypted"]))
             platform = email_data.get("platform", "other")
 
-            # Map camelCase onboarding keys to snake_case org settings keys.
-            # "Other / Skip" records a deliberate configure-later choice with
-            # an empty config — it must persist as disabled, or EmailService
-            # prefers this hollow org record (enabled, no host, no from
-            # address) over the working global SMTP settings and sending
-            # breaks until someone finds the empty config in settings.
-            email_settings = {
-                "enabled": platform != "other" and bool(raw_config),
-                "platform": platform,
-                "smtp_host": raw_config.get("smtpHost"),
-                "smtp_port": int(raw_config.get("smtpPort", 587)),
-                "smtp_user": raw_config.get("smtpUsername"),
-                "smtp_password": raw_config.get("smtpPassword"),
-                "smtp_encryption": raw_config.get("smtpEncryption", "tls"),
-                "from_email": raw_config.get("fromEmail"),
-                "from_name": raw_config.get("fromName"),
-                "use_tls": raw_config.get("smtpEncryption", "tls") != "none",
-                "google_client_id": raw_config.get("googleClientId"),
-                "google_client_secret": raw_config.get("googleClientSecret"),
-                "google_app_password": raw_config.get("googleAppPassword"),
-                "microsoft_tenant_id": raw_config.get("microsoftTenantId"),
-                "microsoft_client_id": raw_config.get("microsoftClientId"),
-                "microsoft_client_secret": raw_config.get("microsoftClientSecret"),
-                "cloudflare_account_id": raw_config.get("cloudflareAccountId"),
-                "cloudflare_api_token": raw_config.get("cloudflareApiToken"),
-            }
-            # Remove None values so only configured fields are stored
-            email_settings = {k: v for k, v in email_settings.items() if v is not None}
+            email_settings = _email_settings_from_onboarding(platform, raw_config)
+            # The same invariant the settings endpoints enforce with a 400:
+            # an enabled configuration that cannot send must not be stored
+            # enabled. Completion cannot reject, so it stores it disabled and
+            # says so; the admin finishes it in Settings > Email.
+            missing = missing_for_enabled(email_settings)
+            if missing:
+                logger.warning(
+                    "Onboarding email config for {} is missing {}; stored disabled",
+                    platform,
+                    missing,
+                )
+                email_settings["enabled"] = False
             org_settings["email_service"] = email_settings
 
             # Encrypt secret fields before persisting
@@ -1322,6 +1398,15 @@ async def complete_onboarding(
             error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
         )
 
+    # A saved email configuration that cannot send (one persisted by an
+    # earlier release with only OAuth fields, say) is refused here, before
+    # anything is written, rather than stored disabled behind a success.
+    email_problem = _incomplete_session_email(session.data)
+    if email_problem:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=email_problem
+        )
+
     # Persist session-collected data into Organization.settings before completion
     await _persist_session_data_to_org(session, db)
 
@@ -1361,7 +1446,8 @@ async def verify_email_configuration(
     Test email configuration without saving it
 
     Tests SMTP connection, authentication, and validates email settings.
-    Supports Gmail, Microsoft 365, self-hosted SMTP, and other email platforms.
+    Gmail and Microsoft 365 are tested as SMTP submission with an App Password;
+    self-hosted SMTP as entered; Cloudflare through its API.
 
     Requires a valid onboarding session to prevent unauthenticated SSRF.
 
@@ -1386,11 +1472,11 @@ async def verify_email_configuration(
 
     try:
         if platform == "gmail":
-            # Test Gmail configuration (OAuth or app password)
-            test_func = partial(test_gmail_oauth, config)
+            # Gmail: SMTP submission with an App Password
+            test_func = partial(test_gmail_connection, config)
         elif platform == "microsoft":
-            # Test Microsoft 365 configuration (OAuth)
-            test_func = partial(test_microsoft_oauth, config)
+            # Microsoft 365: SMTP submission with an App Password
+            test_func = partial(test_microsoft_connection, config)
         elif platform == "cloudflare":
             # Test Cloudflare Email Service API token
             test_func = partial(test_cloudflare_email, config)
@@ -1508,6 +1594,21 @@ async def save_email_config(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid platform. Must be one of: {', '.join(valid_platforms)}",
+        )
+
+    # The same invariant the settings endpoints enforce: a configuration
+    # that would be enabled but cannot send is refused here, naming the
+    # field, rather than accepted and then quietly stored disabled at
+    # completion — which the admin would only discover from missing mail.
+    try:
+        mapped = _email_settings_from_onboarding(data.platform, data.config)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    missing = missing_for_enabled(mapped)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=required_field_message(data.platform, missing),
         )
 
     # Encrypt sensitive config data (contains passwords, API keys, etc.)

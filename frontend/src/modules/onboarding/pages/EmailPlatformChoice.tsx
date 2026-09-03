@@ -61,8 +61,8 @@ const EmailPlatformChoice: React.FC = () => {
       description: 'Google Workspace or Gmail',
       icon: <GmailIcon />,
       color: 'from-red-500 to-yellow-500',
-      features: ['OAuth 2.0 authentication', 'Easy integration', 'Calendar sync available'],
-      setupInfo: "You'll need a Google Workspace admin account or app password.",
+      features: ['App Password sign-in', 'Easy integration', 'Calendar sync available'],
+      setupInfo: "You'll need a Google account with 2-Step Verification and an App Password.",
     },
     {
       id: 'microsoft',
@@ -70,8 +70,8 @@ const EmailPlatformChoice: React.FC = () => {
       description: 'Outlook, Exchange, or Microsoft 365',
       icon: <MicrosoftIcon />,
       color: 'from-blue-500 to-cyan-500',
-      features: ['Azure AD integration', 'Exchange support', 'Teams integration'],
-      setupInfo: "You'll need your Microsoft 365 tenant information.",
+      features: ['Authenticated SMTP', 'Exchange support', 'Teams integration'],
+      setupInfo: "You'll need a mailbox with Authenticated SMTP enabled and, with MFA, an App Password.",
     },
     {
       id: 'selfhosted',

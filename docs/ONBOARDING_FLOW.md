@@ -361,18 +361,15 @@ history and inventory on top of these.
 
 **Form Fields** (varies by platform):
 
-**Google Workspace**:
+**Google Workspace / Gmail**:
 
-- Client ID
-- Client Secret
-- OAuth Redirect URI
-- App Password (alternative to OAuth)
+- From Email (the Google account that signs in to smtp.gmail.com)
+- Google App Password (2-Step Verification required)
 
 **Microsoft 365**:
 
-- Tenant ID
-- Client ID
-- Client Secret
+- From Email (the mailbox that signs in to smtp.office365.com)
+- Microsoft 365 App Password (Authenticated SMTP must be enabled for the mailbox)
 
 **SMTP (Self-Hosted)**:
 

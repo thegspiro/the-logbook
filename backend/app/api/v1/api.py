@@ -41,6 +41,7 @@ from app.api.v1.endpoints import (
     labels,
     legal_documents,
     locations,
+    mcp_keys,
     medical_screening,
     medical_supplies,
     meetings,
@@ -363,6 +364,12 @@ api_router.include_router(
     calcom_sync.router,
     prefix="/integrations/calcom",
     tags=["calcom"],
+    dependencies=module_gate("integrations", "Integrations"),
+)
+api_router.include_router(
+    mcp_keys.router,
+    prefix="/integrations/claude-mcp",
+    tags=["claude-mcp"],
     dependencies=module_gate("integrations", "Integrations"),
 )
 api_router.include_router(

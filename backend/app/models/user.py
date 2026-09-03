@@ -343,6 +343,16 @@ class User(Base):
     # app/services/notification_channels.
     notification_preferences = Column(JSON, default=dict)
 
+    # What of the member's own contact block other members may see. Canonical
+    # shape is the five booleans in
+    # ``app.schemas.user.PROFILE_VISIBILITY_DEFAULTS``; NULL means the member
+    # has never chosen, which resolves to those defaults. Only the member
+    # writes it (``PUT /users/me/profile-visibility``), and always as a whole
+    # new dict — there is no nested-key mutation path (pitfall #12). No
+    # ``default=``: ``{}`` and NULL would otherwise be two spellings of "never
+    # chosen".
+    profile_visibility = Column(JSON, nullable=True)
+
     # Department Membership (one per member, no permissions – purely classification)
     #
     # Three columns, two facts. ``member_class`` (operational / administrative

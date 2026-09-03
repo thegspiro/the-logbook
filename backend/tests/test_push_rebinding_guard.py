@@ -1,16 +1,6 @@
-"""
-NOTIF2-3 (app-review B11 pass 4): the DNS-rebinding residual on Web Push.
+"""Send-time Web Push DNS pinning and legacy-subscription tests."""
 
-`validate_push_endpoint` screens the endpoint host at subscribe time, but a
-public hostname can be re-pointed at an internal IP afterward, so `_send_one`
-now re-resolves the host immediately before dispatch (via the shared
-`assert_outbound_url_safe`) and fails closed on a private/internal address. The
-re-check is gated to production/staging so the loopback push emulator used by the
-wire-format tests (and local dev) still works.
-
-DB-free: exercises `_send_one` directly with `webpush` and the resolver stubbed.
-"""
-
+import socket
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,9 +9,14 @@ import app.services.push_service as push_module
 from app.services.push_service import PushService
 
 _SUB = {
-    "endpoint": "https://push.example.com/abc",
+    "endpoint": "https://fcm.googleapis.com/fcm/send/abc",
     "keys": {"p256dh": "k", "auth": "a"},
 }
+
+
+def _answer(address):
+    family = socket.AF_INET6 if ":" in address else socket.AF_INET
+    return (family, socket.SOCK_STREAM, 6, "", (address, 443))
 
 
 @pytest.fixture
@@ -29,53 +24,57 @@ def service():
     return PushService(MagicMock())
 
 
-class TestSendTimeRebindingGuard:
-    def test_production_blocks_endpoint_resolving_to_private_ip(
-        self, service, monkeypatch
-    ):
-        monkeypatch.setattr(push_module.settings, "ENVIRONMENT", "production")
-        webpush = MagicMock()
-        monkeypatch.setattr(push_module, "webpush", webpush)
-        # Resolver reports the host now points at an internal IP.
-        guard = MagicMock(side_effect=ValueError("resolves to a private IP"))
-        monkeypatch.setattr(push_module, "assert_outbound_url_safe", guard)
+@pytest.mark.parametrize(
+    "answers",
+    [
+        [_answer("127.0.0.1")],
+        [_answer("169.254.169.254")],
+        [_answer("2606:4700:4700::1111"), _answer("::1")],
+        [_answer("8.8.8.8"), _answer("10.0.0.1")],
+    ],
+)
+def test_rebinding_or_mixed_dns_never_reaches_webpush(service, monkeypatch, answers):
+    monkeypatch.setattr(push_module.settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(push_module.socket, "getaddrinfo", lambda *args, **kw: answers)
+    outbound = MagicMock()
+    monkeypatch.setattr(push_module, "webpush", outbound)
 
-        with pytest.raises(ValueError, match="private IP"):
-            service._send_one(_SUB, "{}")
-
-        guard.assert_called_once_with(_SUB["endpoint"])
-        webpush.assert_not_called()  # never dispatched to the internal target
-
-    def test_production_allows_public_endpoint(self, service, monkeypatch):
-        monkeypatch.setattr(push_module.settings, "ENVIRONMENT", "production")
-        webpush = MagicMock()
-        monkeypatch.setattr(push_module, "webpush", webpush)
-        monkeypatch.setattr(
-            push_module, "assert_outbound_url_safe", MagicMock()  # resolves public
-        )
-
+    with pytest.raises(ValueError, match="public IPs"):
         service._send_one(_SUB, "{}")
-        webpush.assert_called_once()
 
-    def test_staging_also_guards(self, service, monkeypatch):
-        monkeypatch.setattr(push_module.settings, "ENVIRONMENT", "staging")
-        monkeypatch.setattr(push_module, "webpush", MagicMock())
-        guard = MagicMock()
-        monkeypatch.setattr(push_module, "assert_outbound_url_safe", guard)
+    outbound.assert_not_called()
 
-        service._send_one(_SUB, "{}")
-        guard.assert_called_once_with(_SUB["endpoint"])
 
-    def test_development_skips_guard(self, service, monkeypatch):
-        # Local dev / the loopback wire-format tests must not re-resolve, so a
-        # http://127.0.0.1 emulator endpoint still reaches webpush.
-        monkeypatch.setattr(push_module.settings, "ENVIRONMENT", "development")
-        webpush = MagicMock()
-        monkeypatch.setattr(push_module, "webpush", webpush)
-        guard = MagicMock(side_effect=AssertionError("must not run in development"))
-        monkeypatch.setattr(push_module, "assert_outbound_url_safe", guard)
+def test_validated_address_is_bound_to_transport_and_tls_name(service, monkeypatch):
+    monkeypatch.setattr(push_module.settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        push_module.socket,
+        "getaddrinfo",
+        lambda *args, **kw: [_answer("8.8.8.8"), _answer("1.1.1.1")],
+    )
+    outbound = MagicMock()
+    monkeypatch.setattr(push_module, "webpush", outbound)
 
-        loopback = {"endpoint": "http://127.0.0.1:9/x", "keys": _SUB["keys"]}
-        service._send_one(loopback, "{}")
-        guard.assert_not_called()
-        webpush.assert_called_once()
+    service._send_one(_SUB, "{}")
+
+    session = outbound.call_args.kwargs["requests_session"]
+    adapter = session.adapters["https://"]
+    assert adapter.address == "1.1.1.1"
+    assert adapter.hostname == "fcm.googleapis.com"
+    assert adapter.poolmanager.connection_pool_kw["assert_hostname"] == adapter.hostname
+    assert adapter.poolmanager.connection_pool_kw["server_hostname"] == adapter.hostname
+
+
+def test_redirects_are_disabled_on_hardened_session(monkeypatch):
+    monkeypatch.setattr(
+        push_module.socket,
+        "getaddrinfo",
+        lambda *args, **kw: [_answer("1.1.1.1")],
+    )
+    session = push_module._pinned_session(_SUB["endpoint"])
+    send = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr(push_module.requests.Session, "request", send)
+
+    session.post(_SUB["endpoint"], data=b"payload")
+
+    assert send.call_args.kwargs["allow_redirects"] is False

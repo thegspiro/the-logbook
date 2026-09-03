@@ -70,12 +70,16 @@ from app.models.user import (
     UserStatus,
     user_positions,
 )
+from app.schemas.user import resolve_profile_visibility
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels, sanitize_barcode_value
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# How many of a low-stock category's items a report names.
+LOW_STOCK_ITEMS_PER_CATEGORY = 5
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -1608,6 +1612,34 @@ class InventoryService:
             InventoryCategory.item_type.in_(list(item_types)),
         )
 
+    @classmethod
+    def _outside_domains(
+        cls, organization_id: UUID, exclude_item_types: Iterable[ItemType]
+    ):
+        """Filter keeping items not filed under any of ``exclude_item_types``.
+
+        An uncategorized item has no domain, so it is not the excluded one —
+        NOT IN would drop it along with the excluded rows because
+        NULL NOT IN (...) is NULL, and the gear page would quietly lose every
+        item nobody has filed yet.
+        """
+        return or_(
+            InventoryItem.category_id.is_(None),
+            InventoryItem.category_id.notin_(
+                cls._category_ids_of_type(organization_id, set(exclude_item_types))
+            ),
+        )
+
+    @classmethod
+    def _item_ids_outside_domains(
+        cls, organization_id: UUID, exclude_item_types: Iterable[ItemType]
+    ) -> "Select":
+        """Org-scoped select of item ids not filed under the excluded domains."""
+        return select(InventoryItem.id).where(
+            InventoryItem.organization_id == str(organization_id),
+            cls._outside_domains(organization_id, exclude_item_types),
+        )
+
     async def get_items(
         self,
         organization_id: UUID,
@@ -1670,19 +1702,8 @@ class InventoryService:
             )
 
         if exclude_item_types:
-            # An uncategorized item has no domain, so it is not the excluded
-            # one — NOT IN would drop it along with the excluded rows because
-            # NULL NOT IN (...) is NULL, and the gear page would quietly lose
-            # every item nobody has filed yet.
             query = query.where(
-                or_(
-                    InventoryItem.category_id.is_(None),
-                    InventoryItem.category_id.notin_(
-                        self._category_ids_of_type(
-                            organization_id, set(exclude_item_types)
-                        )
-                    ),
-                )
+                self._outside_domains(organization_id, exclude_item_types)
             )
 
         if assigned_to:
@@ -1749,11 +1770,13 @@ class InventoryService:
         total = total_result.scalar()
 
         # Apply sorting
+        # The id breaks ties (repeated uniforms share a name), so an offset
+        # page never repeats or skips a row between calls.
         col = self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
         if sort_order == "desc":
-            query = query.order_by(col.desc())
+            query = query.order_by(col.desc(), InventoryItem.id.desc())
         else:
-            query = query.order_by(col.asc())
+            query = query.order_by(col.asc(), InventoryItem.id.asc())
 
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
@@ -1815,12 +1838,28 @@ class InventoryService:
         Use this instead of get_item_by_id when the caller intends to
         mutate the item's status, condition, quantity, or assignment
         fields, to prevent concurrent-modification races.
+
+        populate_existing=True is required, not cosmetic: several callers
+        (batch_return's per-scan candidate lookup, via _lookup_by_item_id /
+        lookup_by_code) already loaded this same InventoryItem, unlocked,
+        earlier in the same session/transaction. SQLAlchemy's identity map
+        returns that cached Python object for a second SELECT on the same
+        primary key and, by default, does NOT overwrite its already-loaded
+        attributes with the row this locking SELECT just fetched -- even
+        though the locking SELECT itself does see the latest committed data
+        at the SQL level (InnoDB locking reads bypass the REPEATABLE READ
+        snapshot). Without populate_existing, the lock is acquired but the
+        in-memory item.quantity / quantity_issued / status / condition the
+        caller then reads and mutates is the stale pre-lock copy, silently
+        defeating the whole point of locking. Confirmed empirically against
+        this app's own AsyncSession/model setup (SQLAlchemy 2.0.52).
         """
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.id == str(item_id))
             .where(InventoryItem.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
@@ -2559,13 +2598,59 @@ class InventoryService:
     ) -> Tuple[bool, Optional[str]]:
         """Return issued units back to the pool."""
         try:
+            # item_id is immutable on an issuance once created, so a plain,
+            # unlocked read of it is safe -- it exists only to say which item
+            # to lock first. review_return_request, transfer_item_holding and
+            # unassign_item all lock the InventoryItem row before locking the
+            # holding record; locking the ItemIssuance row first here instead
+            # would put this method's lock order backwards relative to those,
+            # which is a real InnoDB deadlock risk when two such methods race
+            # on the same item + holding pair (one method waiting on the lock
+            # the other already holds, in both directions at once).
+            peek = await self.db.execute(
+                select(ItemIssuance.item_id)
+                .where(ItemIssuance.id == str(issuance_id))
+                .where(ItemIssuance.organization_id == str(organization_id))
+            )
+            peek_item_id = peek.scalar_one_or_none()
+            if not peek_item_id:
+                return False, "Issuance record not found"
+
+            # Lock the item row before modifying pool counts to prevent
+            # concurrent returns from losing updates via read-modify-write
+            item = await self._get_item_locked(
+                UUID(str(peek_item_id)), UUID(str(organization_id))
+            )
+            if not item:
+                return False, "Associated pool item not found"
+
+            # Now lock and re-read the issuance itself, with the item already
+            # held: two concurrent returns of the same issuance (a double-tap
+            # submit, or two officers processing the same physical return)
+            # must not both pass the is_returned/quantity check before either
+            # commits, or the second proceeds on a stale in-memory copy and
+            # double-credits item.quantity for units returned only once
+            # (Pitfall #27 -- the same shape review_return_request's INV-10
+            # fix closed on its own request row).
+            #
+            # populate_existing=True is required here specifically because
+            # batch_return names this same issuance row with an earlier,
+            # unlocked SELECT before delegating to this method (see its
+            # comment) -- without it, this locking SELECT still acquires the
+            # lock but the identity map hands back that earlier, stale
+            # ItemIssuance object instead of refreshing it from the row this
+            # query just fetched, so is_returned can read False even though
+            # the row was returned (and committed) by another transaction
+            # while this one waited on the lock. Confirmed empirically; see
+            # _get_item_locked's docstring for the mechanism.
             result = await self.db.execute(
                 select(ItemIssuance)
                 .where(ItemIssuance.id == str(issuance_id))
                 .where(ItemIssuance.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             issuance = result.scalar_one_or_none()
-
             if not issuance:
                 return False, "Issuance record not found"
 
@@ -2581,14 +2666,6 @@ class InventoryService:
 
             # Capture user_id for auto-archive check
             issuance_user_id = str(issuance.user_id)
-
-            # Lock the item row before modifying pool counts to prevent
-            # concurrent returns from losing updates via read-modify-write
-            item = await self._get_item_locked(
-                UUID(str(issuance.item_id)), UUID(str(organization_id))
-            )
-            if not item:
-                return False, "Associated pool item not found"
 
             await self._return_units_to_stock(
                 issuance,
@@ -2778,13 +2855,60 @@ class InventoryService:
     ) -> Tuple[bool, Optional[str]]:
         """Check in an item"""
         try:
+            # item_id is immutable on a checkout once created, so a plain,
+            # unlocked read of it is safe -- it exists only to say which item
+            # to lock first. review_return_request, transfer_item_holding and
+            # unassign_item all lock the InventoryItem row before locking the
+            # holding record; locking the CheckOutRecord row first here
+            # instead would put this method's lock order backwards relative
+            # to those, which is a real InnoDB deadlock risk when two such
+            # methods race on the same item + holding pair (one method
+            # waiting on the lock the other already holds, in both
+            # directions at once).
+            peek = await self.db.execute(
+                select(CheckOutRecord.item_id)
+                .where(CheckOutRecord.id == str(checkout_id))
+                .where(CheckOutRecord.organization_id == str(organization_id))
+            )
+            peek_item_id = peek.scalar_one_or_none()
+            if not peek_item_id:
+                return False, "Checkout record not found"
+
+            # Lock the item row before mutating status/condition to prevent
+            # concurrent checkout/checkin from creating inconsistent state
+            item = await self._get_item_locked(UUID(str(peek_item_id)), organization_id)
+            if not item:
+                return False, "Associated item not found"
+
+            # Now lock and re-read the checkout itself, with the item already
+            # held: two concurrent check-ins of the same checkout (a
+            # double-tap submit, or two officers processing the same
+            # physical return) must not both pass the is_returned check
+            # before either commits, or the second silently re-records a
+            # check-in -- with its own condition and damage_notes -- over
+            # the first's already-committed result instead of being
+            # rejected (Pitfall #27, same shape as return_to_pool's
+            # INV-10-style fix).
+            #
+            # populate_existing=True is required here specifically because
+            # batch_return names this same checkout row with an earlier,
+            # unlocked SELECT before delegating to this method (see its
+            # comment) -- without it, this locking SELECT still acquires the
+            # lock but the identity map hands back that earlier, stale
+            # CheckOutRecord object instead of refreshing it from the row
+            # this query just fetched, so is_returned can read False even
+            # though the row was checked in (and committed) by another
+            # transaction while this one waited on the lock. Confirmed
+            # empirically; see _get_item_locked's docstring for the
+            # mechanism.
             result = await self.db.execute(
                 select(CheckOutRecord)
                 .where(CheckOutRecord.id == str(checkout_id))
                 .where(CheckOutRecord.organization_id == str(organization_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
             checkout = result.scalar_one_or_none()
-
             if not checkout:
                 return False, "Checkout record not found"
 
@@ -2802,13 +2926,6 @@ class InventoryService:
             checkout.is_returned = True
             checkout.is_overdue = False
 
-            # Lock the item row before mutating status/condition to prevent
-            # concurrent checkout/checkin from creating inconsistent state
-            item = await self._get_item_locked(
-                UUID(str(checkout.item_id)), organization_id
-            )
-            if not item:
-                return False, "Associated item not found"
             item.condition = return_condition
 
             item.status = self._status_from_condition(item.condition)
@@ -2876,26 +2993,36 @@ class InventoryService:
         organization_id: UUID,
         skip: int = 0,
         limit: int = 200,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[CheckOutRecord]:
         """Get all overdue checkouts with pagination.
 
         Computes overdue status at read time using the expected_return_at
         date instead of performing a bulk UPDATE on every call.
+        ``exclude_item_types`` carves a domain out, as it does in
+        :meth:`get_items`.
         """
         now = datetime.now(timezone.utc)
 
-        result = await self.db.execute(
-            select(CheckOutRecord)
-            .where(
-                CheckOutRecord.organization_id == str(organization_id),
-                CheckOutRecord.is_returned.is_(False),
-                CheckOutRecord.expected_return_at < now,
+        query = select(CheckOutRecord).where(
+            CheckOutRecord.organization_id == str(organization_id),
+            CheckOutRecord.is_returned.is_(False),
+            CheckOutRecord.expected_return_at < now,
+        )
+        if exclude_item_types:
+            query = query.where(
+                CheckOutRecord.item_id.in_(
+                    self._item_ids_outside_domains(organization_id, exclude_item_types)
+                )
             )
-            .options(
+        result = await self.db.execute(
+            query.options(
                 selectinload(CheckOutRecord.item),
                 selectinload(CheckOutRecord.user),
             )
-            .order_by(CheckOutRecord.expected_return_at)
+            # The id breaks ties between checkouts due at one instant, so an
+            # offset page never repeats or skips one.
+            .order_by(CheckOutRecord.expected_return_at, CheckOutRecord.id)
             .offset(skip)
             .limit(limit)
         )
@@ -3183,13 +3310,22 @@ class InventoryService:
     # Reporting & Analytics
     # ============================================
 
-    async def get_low_stock_items(self, organization_id: UUID) -> List[Dict[str, Any]]:
+    async def get_low_stock_items(
+        self,
+        organization_id: UUID,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         """Get categories with low stock, using the sum of item quantities
-        rather than a simple row count, and include the names of low-stock items."""
+        rather than a simple row count, and include the names of low-stock items.
+        ``exclude_item_types`` leaves out categories of those domains;
+        ``skip`` / ``limit`` page the categories (by name) — the default is
+        every category, as the dashboard reads it."""
         org_id = str(organization_id)
 
         # Sum the quantity field per category (handles pool items correctly)
-        result = await self.db.execute(
+        query = (
             select(
                 InventoryCategory,
                 func.coalesce(func.sum(InventoryItem.quantity), 0).label(
@@ -3201,47 +3337,118 @@ class InventoryService:
             .where(InventoryCategory.active.is_(True))
             .where(InventoryItem.active.is_(True))
             .where(InventoryCategory.low_stock_threshold.isnot(None))
-            .group_by(InventoryCategory.id)
+        )
+        if exclude_item_types:
+            query = query.where(
+                InventoryCategory.item_type.notin_(list(exclude_item_types))
+            )
+        query = (
+            query.group_by(InventoryCategory.id)
             .having(
                 func.coalesce(func.sum(InventoryItem.quantity), 0)
                 <= InventoryCategory.low_stock_threshold
             )
+            .order_by(InventoryCategory.name, InventoryCategory.id)
         )
+        if skip:
+            query = query.offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
+        result = await self.db.execute(query)
+        categories = result.all()
 
-        low_stock_items = []
-        for category, current_stock in result.all():
-            # Fetch item names in this low-stock category
-            items_result = await self.db.execute(
-                select(InventoryItem.name, InventoryItem.quantity)
-                .where(InventoryItem.category_id == category.id)
+        # The lowest items of every category on the page in one query rather
+        # than one query per category: the page can be every category the
+        # department has.
+        item_details: Dict[str, List[Dict[str, Any]]] = {}
+        if categories:
+            rank = (
+                func.row_number()
+                .over(
+                    partition_by=InventoryItem.category_id,
+                    order_by=(InventoryItem.quantity.asc(), InventoryItem.id.asc()),
+                )
+                .label("rank")
+            )
+            ranked = (
+                select(
+                    InventoryItem.category_id,
+                    InventoryItem.name,
+                    InventoryItem.quantity,
+                    rank,
+                )
+                .where(
+                    InventoryItem.category_id.in_(
+                        [category.id for category, _ in categories]
+                    )
+                )
                 .where(InventoryItem.active.is_(True))
-                .order_by(InventoryItem.quantity.asc())
-                .limit(5)
+                .subquery()
             )
-            item_details = [
-                {"name": row.name, "quantity": row.quantity}
-                for row in items_result.all()
-            ]
-            low_stock_items.append(
-                {
-                    "category_id": category.id,
-                    "category_name": category.name,
-                    "item_type": category.item_type,
-                    "current_stock": int(current_stock),
-                    "threshold": category.low_stock_threshold,
-                    "items": item_details,
-                }
+            items_result = await self.db.execute(
+                select(ranked.c.category_id, ranked.c.name, ranked.c.quantity)
+                .where(ranked.c.rank <= LOW_STOCK_ITEMS_PER_CATEGORY)
+                .order_by(ranked.c.category_id, ranked.c.rank)
+            )
+            for row in items_result.all():
+                item_details.setdefault(row.category_id, []).append(
+                    {"name": row.name, "quantity": row.quantity}
+                )
+
+        return [
+            {
+                "category_id": category.id,
+                "category_name": category.name,
+                "item_type": category.item_type,
+                "current_stock": int(current_stock),
+                "threshold": category.low_stock_threshold,
+                "items": item_details.get(category.id, []),
+            }
+            for category, current_stock in categories
+        ]
+
+    async def get_inventory_summary(
+        self,
+        organization_id: UUID,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
+    ) -> Dict[str, Any]:
+        """Get overall inventory summary statistics.
+
+        ``exclude_item_types`` leaves a domain out of every figure, items and
+        checkouts alike, the way :meth:`get_items` carves it out of a listing.
+        """
+        item_filters = [
+            InventoryItem.organization_id == str(organization_id),
+            InventoryItem.active.is_(True),
+        ]
+        checkout_filters = [CheckOutRecord.organization_id == str(organization_id)]
+        excluded_category_ids: Set[str] = set()
+        if exclude_item_types:
+            item_filters.append(
+                self._outside_domains(organization_id, exclude_item_types)
+            )
+            checkout_filters.append(
+                CheckOutRecord.item_id.in_(
+                    self._item_ids_outside_domains(organization_id, exclude_item_types)
+                )
+            )
+            excluded_category_ids = set(
+                (
+                    await self.db.execute(
+                        self._category_ids_of_type(
+                            organization_id, set(exclude_item_types)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
             )
 
-        return low_stock_items
-
-    async def get_inventory_summary(self, organization_id: UUID) -> Dict[str, Any]:
-        """Get overall inventory summary statistics"""
         # Total items (sum quantities so pool items with quantity > 1 are counted correctly)
         total_result = await self.db.execute(
-            select(func.coalesce(func.sum(InventoryItem.quantity), 0))
-            .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active.is_(True))
+            select(func.coalesce(func.sum(InventoryItem.quantity), 0)).where(
+                *item_filters
+            )
         )
         total_items = total_result.scalar()
 
@@ -3251,8 +3458,7 @@ class InventoryService:
                 InventoryItem.status,
                 func.count(InventoryItem.id).label("count"),
             )
-            .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active.is_(True))
+            .where(*item_filters)
             .group_by(InventoryItem.status)
         )
         items_by_status = {row.status.value: row.count for row in status_result.all()}
@@ -3263,8 +3469,7 @@ class InventoryService:
                 InventoryItem.condition,
                 func.count(InventoryItem.id).label("count"),
             )
-            .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active.is_(True))
+            .where(*item_filters)
             .group_by(InventoryItem.condition)
         )
         items_by_condition = {
@@ -3277,30 +3482,37 @@ class InventoryService:
                 func.coalesce(
                     func.sum(InventoryItem.current_value * InventoryItem.quantity), 0
                 )
-            )
-            .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active.is_(True))
+            ).where(*item_filters)
         )
         total_value = value_result.scalar() or Decimal("0.00")
 
         # Active checkouts
         checkout_result = await self.db.execute(
-            select(func.count(CheckOutRecord.id))
-            .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_returned.is_(False))
+            select(func.count(CheckOutRecord.id)).where(
+                *checkout_filters, CheckOutRecord.is_returned.is_(False)
+            )
         )
         active_checkouts = checkout_result.scalar()
 
-        # Overdue checkouts
+        # Overdue checkouts, judged against the deadline now rather than the
+        # stored flag: the flag is refreshed by a daily task, so between the
+        # deadline passing and that run the flag says no while the overdue
+        # listing (which compares the deadline) says yes.
         overdue_result = await self.db.execute(
-            select(func.count(CheckOutRecord.id))
-            .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_overdue.is_(True))
+            select(func.count(CheckOutRecord.id)).where(
+                *checkout_filters,
+                CheckOutRecord.is_returned.is_(False),
+                CheckOutRecord.expected_return_at < datetime.now(timezone.utc),
+            )
         )
         overdue_checkouts = overdue_result.scalar()
 
         # Maintenance due
-        maintenance_due = await self.get_maintenance_due(organization_id, days_ahead=7)
+        maintenance_due = [
+            item
+            for item in await self.get_maintenance_due(organization_id, days_ahead=7)
+            if item.category_id not in excluded_category_ids
+        ]
 
         # Use the larger of checkout records vs items with checked_out status
         # to ensure the dashboard reflects reality regardless of sync state
@@ -4266,7 +4478,16 @@ class InventoryService:
                     )
                     continue
 
-                # Check if checked out to this user
+                # Check if checked out to this user. Deliberately not locked
+                # here: checkin_item now locks the item first and only then
+                # locks+re-validates this checkout row itself, which is the
+                # correct order relative to review_return_request/
+                # transfer_item_holding/unassign_item (item before holding
+                # record). Locking it here first, before item, would put
+                # this branch's lock order backwards again -- the very
+                # inconsistency fixed on checkin_item itself. This read only
+                # has to name which checkout row to hand off; a stale id
+                # here is caught by checkin_item's own locked re-check.
                 checkout_result = await self.db.execute(
                     select(CheckOutRecord)
                     .where(
@@ -4277,7 +4498,6 @@ class InventoryService:
                     )
                     .order_by(CheckOutRecord.checked_out_at.desc())
                     .limit(1)
-                    .with_for_update()
                 )
                 checkout = checkout_result.scalar_one_or_none()
                 if checkout:
@@ -4298,7 +4518,12 @@ class InventoryService:
                     )
                     continue
 
-                # Check for pool issuance to this user
+                # Check for pool issuance to this user. Not locked here for
+                # the same reason as the checkout lookup above: return_to_pool
+                # locks the item first and then locks+re-validates this
+                # issuance row itself, and locking it here first would put
+                # the order backwards. A stale id is caught by
+                # return_to_pool's own locked re-check.
                 if item.tracking_type == TrackingType.POOL:
                     issuance_result = await self.db.execute(
                         select(ItemIssuance)
@@ -4310,7 +4535,6 @@ class InventoryService:
                         )
                         .order_by(ItemIssuance.issued_at.desc())
                         .limit(1)
-                        .with_for_update()
                     )
                     issuance = issuance_result.scalar_one_or_none()
                     if issuance:
@@ -6049,6 +6273,48 @@ class InventoryService:
             )
         )
         return found is not None
+
+    async def name_in_domain(
+        self,
+        name: str,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Does ``name`` match an item or a category filed under ``item_types``?
+
+        Compared through ``normalize_name`` — case, punctuation and spacing
+        aside — the way the catalog reconciles hand-typed supply names, so
+        "gauze pads 4x4" is the box filed as "Gauze Pads, 4x4". Used where a
+        record is named rather than linked, so that naming a medical supply
+        without its id is refused the way linking it is.
+        """
+        wanted = normalize_name(name or "")
+        if not wanted:
+            return False
+        types = list(item_types)
+        # Normalization is not expressible in SQL, so the domain's names are
+        # read and compared here; the domain is one department's catalog.
+        item_names = await self.db.execute(
+            select(InventoryItem.name)
+            .join(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .where(
+                InventoryItem.organization_id == organization_id,
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(types),
+            )
+        )
+        if any(normalize_name(n) == wanted for n in item_names.scalars()):
+            return True
+        category_names = await self.db.execute(
+            select(InventoryCategory.name).where(
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(types),
+            )
+        )
+        return any(normalize_name(n) == wanted for n in category_names.scalars())
 
     async def item_in_domain(
         self,
@@ -8118,6 +8384,14 @@ class InventoryService:
             if over_allowance:
                 over_allowance_count += 1
 
+            # The org setting is the ceiling; within it the member's own
+            # profile-visibility choice decides. Without this the planner was
+            # a way round a preference the directory and profile honour.
+            member_choice = resolve_profile_visibility(u)
+            show_email = contact_visibility.get("show_email") and member_choice.email
+            show_phone = contact_visibility.get("show_phone") and member_choice.phone
+            show_mobile = contact_visibility.get("show_mobile") and member_choice.mobile
+
             members.append(
                 {
                     "user_id": u.id,
@@ -8129,17 +8403,11 @@ class InventoryService:
                         u.status.value if hasattr(u.status, "value") else u.status
                     ),
                     "membership_type": u.membership_type,
-                    "email": (
-                        u.email if contact_visibility.get("show_email") else None
-                    ),
+                    "email": u.email if show_email else None,
                     "phone": (
                         u.phone
-                        if contact_visibility.get("show_phone") and u.phone
-                        else (
-                            u.mobile
-                            if contact_visibility.get("show_mobile") and u.mobile
-                            else None
-                        )
+                        if show_phone and u.phone
+                        else (u.mobile if show_mobile and u.mobile else None)
                     ),
                     "needed_size": needed_size,
                     "has_size_on_file": has_size,

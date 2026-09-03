@@ -9,13 +9,34 @@ the duration serializes concurrent creates.
 FAC-9: the folder list's `document_count` crosses into the generic Documents
 module's own permission boundary — a `facilities.view` holder without
 `documents.view` should see the folders (a fixed part of the facility
-record) but not how many documents are inside them.
+record) but not how many documents are inside them. This class below mocks
+`get_facility_sub_folders` entirely, so it tests only the count-redaction
+logic in `get_facility_folders` -- not whether the folders themselves reach
+that caller. As of FAC-13 (docs/security-review/FAC-12-facilities.md) they
+usually do not: every facility folder is now stamped with the sensitive
+permission set, so a plain `facilities.view` holder gets an empty folder
+list from the real `get_facility_sub_folders`, not the populated one this
+mock hands it.
+
+FAC-17: the classes above call the plain Python handler directly and assert
+on the returned dict, which bypasses FastAPI's response-model validation
+entirely. `TestFolderRouteResponseValidation` below instead drives the route
+through a real ASGI request, because the returned dict was missing the
+`skip`/`limit` keys `FoldersListResponse` requires -- invisible to a
+direct-call test, and a 500 on every real HTTP call.
 """
 
 import inspect
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+from app.api.dependencies import get_current_user
+from app.core.database import get_db
 from app.models.document import DocumentFolder
 from app.services.documents_service import DocumentsService
 
@@ -54,14 +75,129 @@ class TestFolderCreationIsLocked:
         already created and committed one while this one waited for the
         lock -- the exact shape demonstrated in CLAUDE.md Pitfall #27's own
         two-transaction trace. Both existence checks must be locking reads
-        too, not just the organization row."""
-        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        too, not just the organization row.
+
+        FAC-42 (Codex): the two existence checks were extracted into
+        ``_lock_facilities_root``/``_lock_facility_folder`` so
+        ``ensure_facility_folder`` could call them from a fast path that
+        skips the organization lock entirely when both already exist (the
+        organization lock is needed only while something might still need
+        creating -- see that method's own FAC-42 docstring paragraph).
+        ``inspect.getsource`` on ``ensure_facility_folder`` alone no longer
+        sees the extracted calls' own ``with_for_update()`` text, so this
+        checks the combined source of the method and both helpers, which is
+        what actually runs during a genuine get-or-create -- the underlying
+        invariant this test protects (three locking reads before any
+        creation, so two concurrent first-accesses cannot both decide
+        nothing exists) is unchanged, only which function's source contains
+        each locking read.
+        """
+        source = "".join(
+            inspect.getsource(fn)
+            for fn in (
+                DocumentsService.ensure_facility_folder,
+                DocumentsService._lock_facilities_root,
+                DocumentsService._lock_facility_folder,
+            )
+        )
         assert source.count("with_for_update()") >= 3, (
-            "ensure_facility_folder locks fewer than 3 reads (organization + "
+            "ensure_facility_folder (plus the two locking-read helpers it "
+            "calls) has fewer than 3 locking reads (organization + "
             "facilities_root + facility_folder) -- the organization lock "
             "alone does not make the facility-folder existence checks see "
             "latest-committed data, so two concurrent first-accesses can "
             "still both decide no folder exists and both create one"
+        )
+
+    def test_ensure_facility_folder_fast_path_skips_the_organization_lock(self):
+        """FAC-42 (Codex): the organization lock is genuinely needed only
+        while something might still need creating. Every call after a
+        facility's folder already exists -- the overwhelming majority,
+        since this only creates once per facility ever -- must not take an
+        *exclusive* lock on the org's single row regardless: per FAC-31,
+        the caller holds whatever this method returns/locks until its own
+        reference insert commits, so an unconditional org lock here would
+        serialize every facility document/photo upload in an organization
+        behind one row, even for completely unrelated facilities.
+        """
+        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        fast_path, _, slow_path = source.partition("org = await self.db.scalar(")
+        assert slow_path, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        assert "with_for_update()" not in fast_path, (
+            "ensure_facility_folder's fast path (before the organization "
+            "lock is acquired) must not itself take the organization lock "
+            "-- FAC-42 regressed"
+        )
+
+    def test_ensure_facility_folder_fast_path_does_not_lock_the_facilities_root(
+        self,
+    ):
+        """FAC-43 (Codex, on top of FAC-42): FAC-42's fast path still called
+        ``_lock_facilities_root`` -- an exclusive lock on the org's single
+        "Facility Files" root row -- unconditionally, so two concurrent
+        reference creations for two *different* facilities in the same
+        organization still serialized on that one shared row before either
+        could reach its own, genuinely distinct, facility folder.
+
+        The fast path must use ``_peek_facilities_root`` (a plain read --
+        see that method's own docstring for why this is safe: a system
+        folder can be neither moved nor deleted, so a stale peek can only
+        under-report existence, never hand back a wrong id) instead. This
+        test only guards the root; see
+        ``test_ensure_facility_folder_fast_path_does_not_take_a_locking_read_on_a_missing_facility_folder``
+        below for the analogous guard on the per-facility check (FAC-45,
+        which changed it too, for a different reason).
+        """
+        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        fast_path, _, _slow_path = source.partition("org = await self.db.scalar(")
+        assert "_peek_facilities_root(" in fast_path, (
+            "ensure_facility_folder's fast path must resolve the facilities "
+            "root with the non-locking _peek_facilities_root, not a locking "
+            "read -- FAC-43 regressed"
+        )
+        assert "_lock_facilities_root(" not in fast_path, (
+            "ensure_facility_folder's fast path must not take an exclusive "
+            "lock on the shared facilities-root row -- FAC-43 regressed "
+            "(this serializes unrelated facilities' uploads on one row)"
+        )
+
+    def test_ensure_facility_folder_fast_path_does_not_take_a_locking_read_on_a_missing_facility_folder(
+        self,
+    ):
+        """FAC-45 (Codex, on top of FAC-43): the fast path's per-facility
+        check still called ``_lock_facility_folder`` -- a locking
+        (``FOR UPDATE``) lookup -- unconditionally, including when nothing
+        matches yet. A locking read that matches nothing takes an InnoDB
+        *gap* lock, and gap locks are mutually compatible -- so two requests
+        racing to create the *same* brand-new facility's folder could both
+        take that gap lock on the fast path, before either reached the
+        organization lock below, then deadlock (one insert's
+        insert-intention lock against the other's still-held gap lock,
+        while that other transaction waits on the organization lock the
+        first one holds). Confirmed live with real concurrent sessions.
+
+        Fixed the same way FAC-43 fixed the root: peek first
+        (``_peek_facility_folder``, no lock), and only take an actual lock
+        (``_lock_folder_by_id``, a point lookup by an id the peek already
+        confirmed) once existence is known -- so the fast path never issues
+        a locking lookup that could match nothing before the organization
+        lock is acquired.
+        """
+        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        fast_path, _, _slow_path = source.partition("org = await self.db.scalar(")
+        assert "_peek_facility_folder(" in fast_path, (
+            "ensure_facility_folder's fast path must confirm the facility "
+            "folder's existence with the non-locking _peek_facility_folder "
+            "before ever taking a lock on it -- FAC-45 regressed"
+        )
+        assert "_lock_facility_folder(" not in fast_path, (
+            "ensure_facility_folder's fast path must not call "
+            "_lock_facility_folder (a locking read that can match nothing "
+            "and take a gap lock) -- FAC-45 regressed, reopening the "
+            "same-facility concurrent-creation deadlock"
         )
 
 
@@ -107,3 +243,93 @@ class TestFacilityFolderDocumentCountRedaction:
             _user(permissions=["facilities.manage", "documents.manage"])
         )
         assert result["folders"][0]["document_count"] == 3
+
+
+class TestFolderRouteResponseValidation:
+    """Codex review (PR #2191): the handler once returned a dict with only
+    ``folders``/``total``, omitting the ``skip``/``limit`` fields
+    ``FoldersListResponse`` requires. ``TestFacilityFolderDocumentCountRedaction``
+    above calls ``get_facility_folders`` as a plain Python function and reads
+    the returned dict directly -- that bypasses FastAPI's response-model
+    validation entirely, so it could not have caught a shape that only fails
+    once real request/response serialization runs. These issue a real ASGI
+    request through the actual router instead, which is what turned the
+    missing fields into a 500 in production.
+    """
+
+    def _app(self, user):
+        from app.api.v1.endpoints.facilities import router
+
+        app = FastAPI()
+        app.include_router(router, prefix="/facilities")
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+        return app
+
+    async def _get(self, user, sub_folders):
+        app = self._app(user)
+        facility = SimpleNamespace(id="fac-1", display_name="Station 1")
+
+        with (
+            patch("app.api.v1.endpoints.facilities.FacilitiesService") as mock_fac_svc,
+            patch("app.api.v1.endpoints.facilities.DocumentsService") as mock_doc_svc,
+        ):
+            mock_fac_svc.return_value.get_facility = AsyncMock(return_value=facility)
+            mock_doc_svc.return_value.ensure_facility_folder = AsyncMock()
+            mock_doc_svc.return_value.get_facility_sub_folders = AsyncMock(
+                return_value=sub_folders
+            )
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                return await client.get("/facilities/fac-1/folders")
+
+    async def test_empty_folder_list_passes_response_validation(self):
+        """The facilities.view-only caller FAC-13 describes: every sub-folder
+        is sensitive-gated, so get_facility_sub_folders legitimately returns
+        nothing. This must come back as a real 200 with an empty list -- not
+        a 500 from FastAPI's own response-model validation, which is exactly
+        what happened before this fix (skip/limit were missing on every
+        return path, not just this one).
+        """
+        response = await self._get(
+            _user(permissions=["facilities.view"]), sub_folders=[]
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["folders"] == []
+        assert body["total"] == 0
+        assert body["skip"] == 0
+        assert body["limit"] == 0
+
+    async def test_populated_folder_list_passes_response_validation(self):
+        now = datetime.now(timezone.utc)
+        sub_folder = DocumentFolder(
+            id=str(uuid4()),
+            organization_id=str(uuid4()),
+            name="Photos",
+            slug="facility-fac-1-photos",
+            parent_id=str(uuid4()),
+            color="#3B82F6",
+            icon="folder",
+            is_system=False,
+            sort_order=0,
+            visibility="organization",
+            created_at=now,
+            updated_at=now,
+        )
+        sub_folder.document_count = 2
+
+        response = await self._get(
+            _user(permissions=["facilities.manage", "documents.manage"]),
+            sub_folders=[sub_folder],
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["folders"]) == 1
+        assert body["folders"][0]["document_count"] == 2
+        assert body["total"] == 1
+        assert body["skip"] == 0
+        assert body["limit"] == 1

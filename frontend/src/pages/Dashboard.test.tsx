@@ -1,10 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import Dashboard from './Dashboard';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
 import { getTodayLocalDate, addCalendarDays } from '../utils/dateFormatting';
+
+// Capture the pull-to-refresh handler the page registers, so a test can drive
+// the gesture without mounting the layout provider.
+let registeredPullToRefresh: (() => Promise<void>) | undefined;
+vi.mock('../hooks/useRegisterPullToRefresh', () => ({
+  useRegisterPullToRefresh: (onRefresh: () => Promise<void>) => {
+    registeredPullToRefresh = onRefresh;
+  },
+}));
 
 // Mock react-hot-toast
 vi.mock('react-hot-toast', () => ({
@@ -43,6 +52,12 @@ const {
   mockGetInventorySummary,
   mockGetEligiblePositions,
   mockGetMyCompliance,
+  mockGetSchedulingSummary,
+  mockGetTrainingEnrollments,
+  mockGetEnrollmentProgress,
+  mockGetAdminHoursSummary,
+  mockGetEnabledModules,
+  mockMarkNotificationRead,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -61,15 +76,19 @@ const {
   mockGetInventorySummary: vi.fn(),
   mockGetEligiblePositions: vi.fn(),
   mockGetMyCompliance: vi.fn(),
+  mockGetSchedulingSummary: vi.fn(),
+  mockGetTrainingEnrollments: vi.fn(),
+  mockGetEnrollmentProgress: vi.fn(),
+  mockMarkNotificationRead: vi.fn(),
+  mockGetAdminHoursSummary: vi.fn(),
+  mockGetEnabledModules: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getMyShifts: mockGetMyShifts,
     getOpenShifts: mockGetOpenShifts,
-    getSummary: vi
-      .fn()
-      .mockResolvedValue({ total_shifts: 0, shifts_this_week: 0, shifts_this_month: 0, total_hours_this_month: 0 }),
+    getSummary: mockGetSchedulingSummary,
     signupForShift: mockSignupForShift,
     getEligiblePositions: mockGetEligiblePositions,
   },
@@ -78,7 +97,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
 vi.mock('../services/api', () => ({
   notificationsService: {
     getMyNotifications: mockGetMyNotifications,
-    markMyNotificationRead: vi.fn().mockResolvedValue(undefined),
+    markMyNotificationRead: mockMarkNotificationRead,
   },
   messagesService: {
     getInbox: mockGetInbox,
@@ -88,8 +107,8 @@ vi.mock('../services/api', () => ({
     updateMessage: vi.fn().mockResolvedValue({}),
   },
   trainingProgramService: {
-    getMyEnrollments: vi.fn().mockResolvedValue([]),
-    getEnrollmentProgress: vi.fn().mockResolvedValue({}),
+    getMyEnrollments: mockGetTrainingEnrollments,
+    getEnrollmentProgress: mockGetEnrollmentProgress,
   },
   trainingModuleConfigService: {
     getMyTraining: mockGetMyTraining,
@@ -98,7 +117,7 @@ vi.mock('../services/api', () => ({
     getSetupChecklist: mockGetSetupChecklist,
     // Reached via DashboardOrientation -> useEnabledModules, which decides
     // which learning lessons count toward the orientation prompt.
-    getEnabledModules: vi.fn().mockResolvedValue({ enabled_modules: [] }),
+    getEnabledModules: mockGetEnabledModules,
   },
   inventoryService: {
     getUserInventory: mockGetUserInventory,
@@ -123,7 +142,7 @@ vi.mock('../services/api', () => ({
 
 vi.mock('../modules/admin-hours/services/api', () => ({
   adminHoursEntryService: {
-    getSummary: vi.fn().mockResolvedValue({ totalHours: 0 }),
+    getSummary: mockGetAdminHoursSummary,
   },
 }));
 
@@ -190,8 +209,44 @@ const makeShift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   ...overrides,
 });
 
+// Every hoisted service mock, so beforeEach can reset them all rather than
+// tracking which ones a given test happened to arm.
+const ALL_SERVICE_MOCKS = [
+  mockGetMyShifts,
+  mockGetOpenShifts,
+  mockSignupForShift,
+  mockGetInbox,
+  mockGetUnreadCount,
+  mockGetMyNotifications,
+  mockAcknowledge,
+  mockGetMyTraining,
+  mockGetEvents,
+  mockCreateOrUpdateRSVP,
+  mockCheckPermission,
+  mockGetAdminSummary,
+  mockGetSetupChecklist,
+  mockGetUserInventory,
+  mockGetInventorySummary,
+  mockGetEligiblePositions,
+  mockGetMyCompliance,
+  mockGetSchedulingSummary,
+  mockGetAdminHoursSummary,
+  mockGetEnabledModules,
+  mockGetTrainingEnrollments,
+  mockGetEnrollmentProgress,
+  mockMarkNotificationRead,
+];
+
 describe('Dashboard', () => {
   beforeEach(() => {
+    registeredPullToRefresh = undefined;
+    // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
+    // leaves implementations AND any unconsumed mockRejectedValueOnce still
+    // queued, so a test that arms a one-shot rejection and then returns early
+    // hands it to whichever test calls that mock next. The failure-path tests
+    // below arm those constantly, so the queue is never idle here.
+    // (CLAUDE.md pitfall #28.)
+    ALL_SERVICE_MOCKS.forEach((mock) => mock.mockReset());
     vi.clearAllMocks();
     window.history.replaceState({}, '', '/');
     mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
@@ -200,6 +255,7 @@ describe('Dashboard', () => {
     mockGetInbox.mockResolvedValue([]);
     mockGetUnreadCount.mockResolvedValue({ unread_count: 0 });
     mockGetMyNotifications.mockResolvedValue({ logs: [], total: 0 });
+    mockMarkNotificationRead.mockResolvedValue(undefined);
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
@@ -213,7 +269,17 @@ describe('Dashboard', () => {
       is_fully_compliant: true,
       days_until_next_expiration: null,
     });
-    mockCheckPermission.mockReturnValue(false);
+    mockCheckPermission.mockImplementation((permission: string) =>
+      ['scheduling.view', 'training.view', 'admin_hours.view'].includes(permission)
+    );
+    mockGetEnabledModules.mockResolvedValue({
+      configured: true,
+      enabled_modules: ['inventory', 'medical_screening', 'notifications', 'scheduling', 'training'],
+    });
+    mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 0 });
+    mockGetTrainingEnrollments.mockResolvedValue([]);
+    mockGetEnrollmentProgress.mockResolvedValue({});
+    mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 0 });
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
     mockGetUserInventory.mockResolvedValue({ permanent_assignments: [], active_checkouts: [], issued_items: [] });
@@ -224,6 +290,1134 @@ describe('Dashboard', () => {
       overdue_checkouts: 0,
       maintenance_due_count: 0,
     });
+  });
+
+  describe('section errors', () => {
+    it('shows explicit errors instead of successful-empty claims when initial personal data loads fail', async () => {
+      mockGetMyShifts.mockRejectedValue(new Error('offline'));
+      mockGetOpenShifts.mockRejectedValue(new Error('offline'));
+      mockGetEvents.mockRejectedValue(new Error('offline'));
+      mockGetInbox.mockRejectedValue(new Error('offline'));
+      mockGetMyNotifications.mockRejectedValue(new Error('offline'));
+      mockGetTrainingEnrollments.mockRejectedValue(new Error('offline'));
+      mockGetUserInventory.mockRejectedValue(new Error('offline'));
+      mockGetSchedulingSummary.mockRejectedValue(new Error('offline'));
+      mockGetMyTraining.mockRejectedValue(new Error('offline'));
+      mockGetAdminHoursSummary.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Some schedule information could not be verified.')).toBeInTheDocument();
+      expect(await screen.findByText('Updates could not be fully verified.')).toBeInTheDocument();
+      expect(await screen.findByText('Training progress could not be verified.')).toBeInTheDocument();
+      expect(await screen.findByText('Issued gear could not be verified.')).toBeInTheDocument();
+      expect(await screen.findByText('Hours could not be fully verified.')).toBeInTheDocument();
+      expect(screen.getByText('Readiness could not be fully verified.')).toBeInTheDocument();
+      expect(screen.queryByText(/Nothing scheduled through/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Nothing new')).not.toBeInTheDocument();
+    });
+
+    it('clears an updates error after a successful retry', async () => {
+      mockGetInbox.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Updates could not be fully verified.');
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+
+      await waitFor(() => expect(within(updates).getByText('Nothing new')).toBeInTheDocument());
+      expect(within(updates).queryByRole('alert')).not.toBeInTheDocument();
+      expect(mockGetInbox).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps successful timeline sources when open shifts fail, then fills them in on retry', async () => {
+      mockGetMyShifts.mockResolvedValue({
+        shifts: [makeShift({ id: 'mine', apparatus_name: 'Engine 7' })],
+        total: 1,
+      });
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'event-1',
+          title: 'Live Fire Drill',
+          event_type: 'training',
+          start_datetime: `${inWindow(3)}T14:00:00Z`,
+          end_datetime: `${inWindow(3)}T17:00:00Z`,
+          requires_rsvp: false,
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+      mockGetOpenShifts
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValueOnce([makeShift({ id: 'open-after-retry', shift_date: inWindow(4) })]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const timeline = await screen.findByRole('region', { name: 'Next 30 Days' });
+      expect(await within(timeline).findByText('Shift · Engine 7')).toBeInTheDocument();
+      expect(await within(timeline).findByText('Live Fire Drill')).toBeInTheDocument();
+      expect(within(timeline).queryByText(/Nothing scheduled/)).not.toBeInTheDocument();
+
+      await user.click(within(timeline).getByRole('button', { name: 'Retry schedule' }));
+
+      expect(await within(timeline).findByText('Open Shift')).toBeInTheDocument();
+      await waitFor(() => expect(within(timeline).queryByRole('alert')).not.toBeInTheDocument());
+      expect(within(timeline).getByText('Shift · Engine 7')).toBeInTheDocument();
+      expect(within(timeline).getByText('Live Fire Drill')).toBeInTheDocument();
+    });
+  });
+
+  describe('hours summary gates', () => {
+    it('does not call summary endpoints owned by disabled modules', async () => {
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: [] });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(mockGetAdminHoursSummary).toHaveBeenCalledTimes(1);
+      });
+      expect(mockGetSchedulingSummary).not.toHaveBeenCalled();
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(within(card).getAllByText('Unavailable')).toHaveLength(2);
+      expect(within(card).getAllByText('0')).toHaveLength(2);
+    });
+
+    it('loads authorized sources independently when another source fails', async () => {
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyTraining.mockRejectedValue(new Error('training unavailable'));
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      // The rows that loaded still show their real figures.
+      await waitFor(() => {
+        expect(within(card).getByText('3')).toBeInTheDocument();
+      });
+      expect(within(card).getByText('2')).toBeInTheDocument();
+      expect(within(card).getByText('Unavailable')).toBeInTheDocument();
+    });
+
+    it('does not present a partial sum as the month total', async () => {
+      // 3 + 2 = 5 is arithmetic, not the member's month: training failed, so
+      // its hours are missing from the sum. "5 total" is a precise wrong
+      // number, and a precise number reads more trustworthy than a missing
+      // one -- the error banner alongside it does not undo that.
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyTraining.mockRejectedValue(new Error('training unavailable'));
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      expect(await within(card).findByText('Total unavailable')).toBeInTheDocument();
+      expect(within(card).queryByText('5')).not.toBeInTheDocument();
+    });
+
+    it('still totals the month when a source is only gated off', async () => {
+      // The counterpart: Training disabled is not a failure, so the sum over
+      // the sources that do apply is the department's real month total.
+      mockGetEnabledModules.mockResolvedValue({
+        configured: true,
+        enabled_modules: ['scheduling'],
+      });
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      expect(await within(card).findByText('5')).toBeInTheDocument();
+      expect(within(card).queryByText('Total unavailable')).not.toBeInTheDocument();
+    });
+
+    it('does not report an error for a source it never attempted', async () => {
+      // A member without training.view is not looking at a broken card. If a
+      // gated-off source counted as a failure the banner would be permanent
+      // and its Retry would re-run the same gate, so this pins the direction:
+      // only an attempted-and-rejected source raises the error.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'admin_hours.view');
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: [] });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      // Administrative hours is the only source that loads, so it is both the
+      // row figure and the headline total.
+      await waitFor(() => {
+        expect(within(card).getAllByText('2')).toHaveLength(2);
+      });
+      expect(mockGetSchedulingSummary).not.toHaveBeenCalled();
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(screen.queryByText('Hours could not be fully verified.')).not.toBeInTheDocument();
+    });
+
+    it('does not call enabled sources without their view permissions', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'scheduling.view');
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 4 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(within(card).getAllByText('4')).toHaveLength(2);
+      });
+      expect(mockGetSchedulingSummary).toHaveBeenCalledTimes(1);
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(mockGetAdminHoursSummary).not.toHaveBeenCalled();
+      expect(mockCheckPermission).toHaveBeenCalledWith('admin_hours.view');
+    });
+  });
+
+  describe('retry scope', () => {
+    it('keeps the loaded timeline rows visible while a failed source retries', async () => {
+      // timelineLoading is the OR of three flags, so a retry that raises its
+      // own flag swaps the preserved rows for a skeleton -- and a hanging
+      // retry then hides them for as long as it hangs.
+      mockGetMyShifts.mockResolvedValue({
+        shifts: [makeShift({ id: 'mine', apparatus_name: 'Engine 7' })],
+        total: 1,
+      });
+      mockGetOpenShifts.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const timeline = await screen.findByRole('region', { name: 'Next 30 Days' });
+      expect(await within(timeline).findByText('Shift · Engine 7')).toBeInTheDocument();
+
+      await user.click(within(timeline).getByRole('button', { name: 'Retry schedule' }));
+
+      // The retry never settles; the row must still be there.
+      expect(within(timeline).getByText('Shift · Engine 7')).toBeInTheDocument();
+    });
+
+    it('does not claim zero open shifts when the open-shift load failed', async () => {
+      // On desktop this quick action sits above the timeline warning, so "0
+      // open" is the first thing read and reads as "no coverage needed".
+      mockGetOpenShifts.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Open shifts unavailable')).toBeInTheDocument();
+    });
+
+    it('retries only the readiness sources that failed', async () => {
+      mockGetMyCompliance.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({
+        total_requirements: 0,
+        compliant_count: 0,
+        non_compliant_count: 0,
+        expiring_soon_count: 0,
+        is_fully_compliant: true,
+        days_until_next_expiration: null,
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Readiness could not be fully verified.');
+      const hoursCallsBefore = mockGetAdminHoursSummary.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: 'Retry readiness' }));
+
+      await waitFor(() => {
+        expect(mockGetMyCompliance.mock.calls.length).toBeGreaterThan(1);
+      });
+      // Hours succeeded, so the readiness retry must leave it alone rather
+      // than risk replacing good figures with an unavailable state.
+      expect(mockGetAdminHoursSummary.mock.calls.length).toBe(hoursCallsBefore);
+    });
+
+    it('retries only the message subrequest that failed', async () => {
+      mockGetUnreadCount.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ unread_count: 0 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Updates could not be fully verified.');
+      const inboxCallsBefore = mockGetInbox.mock.calls.length;
+
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+
+      await waitFor(() => {
+        expect(mockGetUnreadCount.mock.calls.length).toBeGreaterThan(1);
+      });
+      // The inbox request succeeded; re-running it can only lose the rows.
+      expect(mockGetInbox.mock.calls.length).toBe(inboxCallsBefore);
+    });
+
+    it('does not surface a failure from a training row it never renders', async () => {
+      // The card shows two programs; asking about a third lets an invisible
+      // row raise the error banner over two that loaded fine.
+      mockGetTrainingEnrollments.mockResolvedValue([
+        { id: 'e1', program_name: 'Program 1', status: 'active' },
+        { id: 'e2', program_name: 'Program 2', status: 'active' },
+        { id: 'e3', program_name: 'Program 3', status: 'active' },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('region', { name: 'Next 30 Days' });
+      await waitFor(() => {
+        expect(mockGetEnrollmentProgress).toHaveBeenCalled();
+      });
+      const requested = mockGetEnrollmentProgress.mock.calls.map((call) => call[0] as string);
+      expect(requested).not.toContain('e3');
+    });
+  });
+
+  describe('retry preserves what is already known', () => {
+    it('keeps the open-shift failure showing while the retry is still in flight', async () => {
+      // Clearing the error before the replacement arrives puts "0 open" back on
+      // screen -- a confident wrong number -- for as long as the retry takes.
+      mockGetOpenShifts.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Open shifts unavailable')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Retry schedule' }));
+
+      // The retry never settles, so the failure state must still stand.
+      expect(screen.getByText('Open shifts unavailable')).toBeInTheDocument();
+    });
+
+    it('keeps loaded messages visible while a notification retry is in flight', async () => {
+      mockGetInbox.mockResolvedValue([
+        { id: 'm1', title: 'Station meeting', body: 'Tuesday', is_read: false, requires_acknowledgment: false },
+      ]);
+      mockGetMyNotifications
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      expect(await within(updates).findByText('Station meeting')).toBeInTheDocument();
+
+      await user.click(within(updates).getByRole('button', { name: 'Retry notifications' }));
+
+      expect(within(updates).getByText('Station meeting')).toBeInTheDocument();
+    });
+
+    it('keeps training progress that already loaded when a retry rejects it', async () => {
+      mockGetTrainingEnrollments.mockResolvedValue([
+        { id: 'e1', program: { name: 'Program 1' }, progress_percentage: 40, status: 'active' },
+        { id: 'e2', program: { name: 'Program 2' }, progress_percentage: 10, status: 'active' },
+      ]);
+      // e1 loads, e2 fails. On the retry e1 now fails too -- its known answer
+      // must survive rather than be replaced by the retry's results alone.
+      mockGetEnrollmentProgress.mockImplementation((id: string) => {
+        const call = mockGetEnrollmentProgress.mock.calls.filter((c) => c[0] === id).length;
+        if (id === 'e1' && call === 1) {
+          return Promise.resolve({
+            requirement_progress: [{ status: 'in_progress', requirement: { name: 'Pump Ops' } }],
+          });
+        }
+        return Promise.reject(new Error('offline'));
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText(/Next requirement: Pump Ops/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Retry training' }));
+
+      await waitFor(() => {
+        expect(mockGetEnrollmentProgress.mock.calls.length).toBeGreaterThan(2);
+      });
+      expect(screen.getByText(/Next requirement: Pump Ops/)).toBeInTheDocument();
+    });
+
+    it('names the partial Updates retry for the source that actually failed', async () => {
+      // The feed still has a notification row, so the card takes its
+      // non-empty branch -- which used to hard-code "notifications" even when
+      // only the message request had failed.
+      mockGetMyNotifications.mockResolvedValue({
+        logs: [{ id: 'n1', subject: 'Drill reminder', message: 'Tuesday', sent_at: '2026-09-01T12:00:00Z' }],
+        total: 1,
+      });
+      mockGetInbox.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: 'Retry updates' })).toBeInTheDocument();
+    });
+  });
+
+  describe('a successful retry clears the failure it was shown for', () => {
+    // The counterpart to "retry preserves what is already known", and the half
+    // that was missing when the preserve rule was first added: moving the
+    // error clear off the eager pre-await path is only correct if the success
+    // path picks it up. Skipping both leaves the banner on screen forever
+    // after the data has actually arrived, which is worse than the bug it
+    // replaced. Every retryable section is listed so a new one cannot be added
+    // with only one half.
+    const cases: {
+      name: string;
+      arm: () => void;
+      region: string;
+      retry: string;
+      banner: string;
+      recovered: () => Promise<HTMLElement>;
+    }[] = [
+      {
+        name: 'schedule (events)',
+        arm: () => {
+          mockGetEvents.mockRejectedValueOnce(new Error('offline')).mockResolvedValue([
+            {
+              id: 'ev1',
+              title: 'Live Fire Drill',
+              event_type: 'training',
+              start_datetime: `${inWindow(3)}T14:00:00Z`,
+              end_datetime: `${inWindow(3)}T17:00:00Z`,
+              requires_rsvp: false,
+              is_mandatory: false,
+              is_cancelled: false,
+            },
+          ]);
+        },
+        region: 'Next 30 Days',
+        retry: 'Retry schedule',
+        banner: 'Some schedule information could not be verified.',
+        recovered: () => screen.findByText('Live Fire Drill'),
+      },
+      {
+        name: 'issued gear',
+        arm: () => {
+          mockGetUserInventory.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({
+            permanent_assignments: [{ id: 'a1' }],
+            active_checkouts: [],
+            issued_items: [],
+          });
+        },
+        region: 'Next 30 Days',
+        retry: 'Retry issued gear',
+        banner: 'Issued gear could not be verified.',
+        recovered: () => screen.findByText('1'),
+      },
+    ];
+
+    cases.forEach(({ name, arm, retry, banner, recovered }) => {
+      it(`clears the ${name} banner once the retry succeeds`, async () => {
+        arm();
+        const user = userEvent.setup();
+        renderWithRouter(<Dashboard />);
+
+        expect(await screen.findByText(banner)).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: retry }));
+
+        await recovered();
+        await waitFor(() => {
+          expect(screen.queryByText(banner)).not.toBeInTheDocument();
+        });
+      });
+    });
+
+    it('clears the hours banner and the stale header total once the retry succeeds', async () => {
+      mockGetMyTraining
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ hours_summary: { total_hours: 4, hours_this_month: 4 }, certifications: [] });
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      expect(await within(card).findByText('Total unavailable')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      // 3 + 2 + 4, now that every attempted source has answered.
+      expect(await within(card).findByText('9')).toBeInTheDocument();
+      expect(within(card).queryByText('Total unavailable')).not.toBeInTheDocument();
+      expect(screen.queryByText('Hours could not be fully verified.')).not.toBeInTheDocument();
+    });
+
+    it('clears the readiness banner once the certification retry succeeds', async () => {
+      // certificationsError is raised inside loadHours' training catch. A flag
+      // that only a failure ever sets, and only the eager pre-await reset ever
+      // clears, can never come down on a retry -- which skips that reset.
+      mockGetMyTraining
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValue({ hours_summary: { total_hours: 1, hours_this_month: 1 }, certifications: [] });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Readiness could not be fully verified.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Retry readiness' }));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Readiness could not be fully verified.')).not.toBeInTheDocument();
+      });
+    });
+
+    it('keeps the stale hours total off the header while the retry is in flight', async () => {
+      // The header reads hoursError directly and never consults loadingHours,
+      // so clearing the flag up front would put the partial sum back as an
+      // exact figure for as long as the retry takes.
+      mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await within(card).findByText('Total unavailable');
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      expect(within(card).getByText('Total unavailable')).toBeInTheDocument();
+      expect(screen.queryByText(/5 hrs in/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('a retry cannot make things worse', () => {
+    it('keeps an hours figure that loaded when a later retry loses its source', async () => {
+      // The three summaries are independent requests. Rewriting all three from
+      // one call means a retry that recovers scheduling while training
+      // transiently fails wipes training's known figure -- recovery from one
+      // outage manufacturing a second.
+      mockGetSchedulingSummary.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({
+        hours_worked_this_month: 3,
+      });
+      mockGetMyTraining
+        .mockResolvedValueOnce({ hours_summary: { total_hours: 4, hours_this_month: 4 }, certifications: [] })
+        .mockRejectedValue(new Error('offline'));
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      expect(await within(card).findByText('4')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      // Scheduling recovered; training's 4 must survive its retry rejection.
+      expect(await within(card).findByText('3')).toBeInTheDocument();
+      expect(within(card).getByText('4')).toBeInTheDocument();
+    });
+
+    it('does not claim a program is on track when its progress never loaded', async () => {
+      // No progressDetails entry means the request rejected. "All requirements
+      // in progress" is an affirmative claim about that program, and the
+      // section warning above it does not make the claim true.
+      mockGetTrainingEnrollments.mockResolvedValue([
+        { id: 'e1', program: { name: 'Program 1' }, progress_percentage: 40, status: 'active' },
+      ]);
+      mockGetEnrollmentProgress.mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Progress unavailable.')).toBeInTheDocument();
+      expect(screen.queryByText('All requirements in progress.')).not.toBeInTheDocument();
+    });
+
+    it('coalesces a second Retry click while the first is still running', async () => {
+      // Without the guard the second request can settle first, leaving the
+      // older failure to land last and put the warning back over recovered
+      // data.
+      mockGetOpenShifts.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Some schedule information could not be verified.');
+      const retry = screen.getByRole('button', { name: 'Retry schedule' });
+      await user.click(retry);
+
+      expect(retry).toBeDisabled();
+      const callsAfterFirst = mockGetOpenShifts.mock.calls.length;
+      await user.click(retry);
+      expect(mockGetOpenShifts.mock.calls.length).toBe(callsAfterFirst);
+    });
+
+    it('keeps notification rows visible when both message calls are retried', async () => {
+      // Both message subrequests failed, notifications did not. Retrying both
+      // must not read as an initial load: the Updates card's loading branch
+      // covers the notification rows too, so it would skeleton over content
+      // that is fine -- indefinitely if either retry hangs.
+      mockGetInbox.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+      mockGetUnreadCount.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+      mockGetMyNotifications.mockResolvedValue({
+        logs: [{ id: 'n1', subject: 'Drill reminder', message: 'Tuesday', sent_at: '2026-09-01T12:00:00Z' }],
+        total: 1,
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      expect(await within(updates).findByText('Drill reminder')).toBeInTheDocument();
+
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+
+      expect(within(updates).getByText('Drill reminder')).toBeInTheDocument();
+    });
+
+    it('shares the retry guard between the two controls over the same loader', async () => {
+      // A training-summary failure renders a Retry on both the hours card and
+      // the readiness card, and both call loadHours. A guard held per rendered
+      // control lets those two start concurrent loads -- and if the later one
+      // settles first, the earlier lands last and restores the error over data
+      // that had just recovered.
+      mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Hours could not be fully verified.');
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      // The readiness control sits over the same loader, so it is guarded too.
+      expect(screen.getByRole('button', { name: 'Retry readiness' })).toBeDisabled();
+      const callsAfterFirst = mockGetMyTraining.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: 'Retry readiness' }));
+      expect(mockGetMyTraining.mock.calls.length).toBe(callsAfterFirst);
+    });
+
+    it('keeps the hours failure showing through a pull-to-refresh', async () => {
+      // Pull-to-refresh runs with the page already on screen, so it is a
+      // refresh, not a first load. The header ignores loadingHours, so an
+      // eager clear here would revert "Total unavailable" to an exact stale
+      // partial total for as long as the refresh takes.
+      mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await within(card).findByText('Total unavailable');
+
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      expect(within(card).getByText('Total unavailable')).toBeInTheDocument();
+      expect(screen.queryByText(/5 hrs in/)).not.toBeInTheDocument();
+    });
+
+    it('drops stale certifications from the readiness verdict when a refresh fails', async () => {
+      // The safety case. Certifications are an input to "Clear to respond",
+      // not a figure on a card: keeping the last good snapshot means a
+      // credential that expired or was revoked since then still clears the
+      // member, with only a banner saying readiness was "not fully verified".
+      mockGetMyTraining
+        .mockResolvedValueOnce({
+          hours_summary: { total_hours: 1, hours_this_month: 1 },
+          certifications: [
+            {
+              id: 'c1',
+              course_name: 'EMT-B',
+              expiration_date: '2030-01-01',
+              is_expired: false,
+              days_until_expiry: 900,
+            },
+          ],
+        })
+        .mockRejectedValue(new Error('offline'));
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByText('Clear to respond')).toBeInTheDocument();
+
+      // The first load succeeded, so the failure has to arrive on a later
+      // refresh -- which is exactly the case the verdict must not survive.
+      await act(async () => {
+        await registeredPullToRefresh?.();
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByText('Clear to respond')).not.toBeInTheDocument();
+      });
+    });
+
+    it('does not disable the readiness Retry for a loader it would not call', async () => {
+      // Readiness failed on seats only, so its handler retries seats only. A
+      // busy predicate naming every possible source lets a slow hours retry
+      // block recovery of a source this button owns.
+      mockGetEligiblePositions.mockRejectedValue(new Error('offline'));
+      mockGetSchedulingSummary
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Hours could not be fully verified.');
+      await user.click(screen.getByRole('button', { name: 'Retry hours' }));
+
+      // certificationsError is false -- training loaded -- so readiness never
+      // calls loadHours and must stay live.
+      expect(screen.getByRole('button', { name: 'Retry readiness' })).not.toBeDisabled();
+    });
+
+    it('joins a pull-to-refresh to a section retry already in flight', async () => {
+      // The gesture is not blocked during a section retry, so calling the
+      // loaders directly would start a second request for the same source.
+      mockGetOpenShifts.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Some schedule information could not be verified.');
+      await user.click(screen.getByRole('button', { name: 'Retry schedule' }));
+      const callsAfterRetry = mockGetOpenShifts.mock.calls.length;
+
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      expect(mockGetOpenShifts.mock.calls.length).toBe(callsAfterRetry);
+    });
+
+    it('honours module gates that landed after the first render on a pull-to-refresh', async () => {
+      // useEnabledModules answers permissively until the configuration lands,
+      // so a refresh closure frozen at first render calls gated endpoints for
+      // modules the organisation has disabled -- taking a 403 and raising an
+      // error the module-aware initial load correctly avoided.
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: ['scheduling'] });
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('region', { name: 'Next 30 Days' });
+      // Wait for the config to have actually landed. The region renders on the
+      // timeline's loading flag, which says nothing about modulesLoading -- so
+      // this used to be able to run the whole assertion inside the permissive
+      // window, where a zero count means "not settled yet", not "gated". It
+      // failed on CI for exactly that reason and passed everywhere else.
+      // Scheduling is enabled here, so its loader running is the signal.
+      await waitFor(() => expect(mockGetMyShifts).toHaveBeenCalled());
+      const screeningCallsBefore = mockGetMyCompliance.mock.calls.length;
+
+      await act(async () => {
+        await registeredPullToRefresh?.();
+      });
+
+      // Medical screening is disabled, so the refresh must not call it.
+      expect(mockGetMyCompliance.mock.calls.length).toBe(screeningCallsBefore);
+    });
+
+    it('does not fire gated endpoints when refreshed before the module config lands', async () => {
+      // isModuleOn answers permissively until the configuration arrives, so a
+      // refresh inside that window calls every gated endpoint and takes a 403
+      // per disabled module -- exactly what the mount effect's modulesLoading
+      // guard exists to prevent. Making the refresh closure *current* rather
+      // than frozen was necessary and not sufficient: current here is still
+      // permissive.
+      // Every call, not just the first: the hook's effect can run more than
+      // once, and a single mockImplementationOnce leaves the next call falling
+      // through to the resolved default -- which settles the config and defeats
+      // the window this test is about.
+      type ModuleConfig = { configured: boolean; enabled_modules: string[] };
+      const releaseModules: Array<(value: ModuleConfig) => void> = [];
+      mockGetEnabledModules.mockImplementation(
+        () => new Promise<ModuleConfig>((resolve) => releaseModules.push(resolve))
+      );
+
+      renderWithRouter(<Dashboard />);
+      await waitFor(() => expect(releaseModules.length).toBeGreaterThan(0), { timeout: 5000 });
+
+      // The config has not landed, so no module-owned loader may run.
+      await act(async () => {
+        await registeredPullToRefresh?.();
+      });
+      expect(mockGetMyCompliance).not.toHaveBeenCalled();
+      expect(mockGetMyShifts).not.toHaveBeenCalled();
+
+      // Once it lands with medical screening off, the mount effect runs the
+      // module-owned loaders and still honours the gate.
+      await act(async () => {
+        releaseModules.forEach((resolve) => resolve({ configured: true, enabled_modules: ['scheduling'] }));
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(mockGetMyShifts).toHaveBeenCalled());
+      expect(mockGetMyCompliance).not.toHaveBeenCalled();
+    });
+
+    it('refreshes the unread count even when an inbox retry is already running', async () => {
+      // One key for both message subrequests made the refresh return the
+      // in-flight inbox promise and skip the unread half entirely, leaving the
+      // badge stale.
+      mockGetInbox.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Updates could not be fully verified.');
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+      const unreadCallsBefore = mockGetUnreadCount.mock.calls.length;
+
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(mockGetUnreadCount.mock.calls.length).toBeGreaterThan(unreadCallsBefore);
+      });
+    });
+
+    it('queues the post-signup read behind an older one rather than joining it', async () => {
+      // Coalescing is right for idempotent refreshes and wrong after a
+      // mutation: a read that started before the signup answers from before
+      // it, so joining it can repopulate the shift the member just took -- and
+      // nothing later corrects it, because the guard counts that refresh as
+      // done. The post-signup read queues instead.
+      let releaseOlder: ((value: ShiftRecord[]) => void) | undefined;
+      mockGetOpenShifts
+        .mockResolvedValueOnce([makeShift({ id: 'open-1' })])
+        .mockImplementationOnce(() => new Promise<ShiftRecord[]>((resolve) => (releaseOlder = resolve)))
+        .mockResolvedValue([]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /sign up/i }));
+
+      // An older read is left in flight before the mutation.
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      const callsBeforeSignup = mockGetOpenShifts.mock.calls.length;
+
+      await user.click(await screen.findByRole('button', { name: /confirm/i }));
+      await waitFor(() => {
+        expect(mockSignupForShift).toHaveBeenCalledWith('open-1', { position: 'firefighter' });
+      });
+
+      // While the older read is still running, the fresh one has not started.
+      expect(mockGetOpenShifts.mock.calls.length).toBe(callsBeforeSignup);
+
+      await act(async () => {
+        releaseOlder?.([makeShift({ id: 'open-1' })]);
+        await Promise.resolve();
+      });
+
+      // Once it settles, the post-signup read runs -- so the stale row the
+      // older response carried is corrected rather than left standing.
+      await waitFor(() => {
+        expect(mockGetOpenShifts.mock.calls.length).toBeGreaterThan(callsBeforeSignup);
+      });
+    });
+
+    it('keeps a queued read registered when the one it waited on settles', async () => {
+      // The predecessor's completion must not deregister its successor. If it
+      // does, the key reads idle while the queued read is still running, and
+      // the next mutation starts a competing request instead of queueing --
+      // undoing the serialisation one step later.
+      let releaseFirst: ((value: ShiftRecord[]) => void) | undefined;
+      let releaseSecond: ((value: ShiftRecord[]) => void) | undefined;
+      mockGetOpenShifts
+        .mockResolvedValueOnce([makeShift({ id: 'open-1' })])
+        .mockImplementationOnce(() => new Promise<ShiftRecord[]>((resolve) => (releaseFirst = resolve)))
+        .mockImplementationOnce(() => new Promise<ShiftRecord[]>((resolve) => (releaseSecond = resolve)))
+        .mockResolvedValue([]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /sign up/i }));
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      await user.click(await screen.findByRole('button', { name: /confirm/i }));
+      await waitFor(() => expect(mockSignupForShift).toHaveBeenCalled());
+
+      // Release the older read; the queued post-signup read now starts and
+      // hangs in turn.
+      await act(async () => {
+        releaseFirst?.([makeShift({ id: 'open-1' })]);
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(mockGetOpenShifts.mock.calls.length).toBe(3));
+
+      // A second signup must queue behind that still-running read, not race it.
+      await user.click(await screen.findByRole('button', { name: /sign up/i }));
+      await user.click(await screen.findByRole('button', { name: /confirm/i }));
+      await waitFor(() => expect(mockSignupForShift).toHaveBeenCalledTimes(2));
+
+      expect(mockGetOpenShifts.mock.calls.length).toBe(3);
+      expect(releaseSecond).toBeDefined();
+    });
+
+    it('re-enables the Retry control once its request settles', async () => {
+      // The guard must not be a one-way door: a retry that fails has to be
+      // retryable again.
+      mockGetOpenShifts.mockRejectedValue(new Error('offline'));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Some schedule information could not be verified.');
+      const retry = screen.getByRole('button', { name: 'Retry schedule' });
+      await user.click(retry);
+
+      await waitFor(() => expect(retry).not.toBeDisabled());
+    });
+
+    it('stays pressable while only one of the sources it covers is running', async () => {
+      // A control covering more than one source was disabled the moment any
+      // one of them was in flight, so a slow retry of one blocked recovery of
+      // the other. Pressing it is safe: the busy half is joined, the idle half
+      // is the only one that starts.
+      let releaseShifts: ((value: { shifts: ShiftRecord[]; total: number }) => void) | undefined;
+      mockGetMyShifts
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockImplementationOnce(
+          () => new Promise<{ shifts: ShiftRecord[]; total: number }>((resolve) => (releaseShifts = resolve))
+        );
+      mockGetOpenShifts.mockRejectedValue(new Error('offline'));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByText('Some schedule information could not be verified.');
+      const retry = screen.getByRole('button', { name: 'Retry schedule' });
+      await user.click(retry);
+
+      // myShifts is hanging; openShifts settled and failed again, so it is
+      // idle and still broken. The control must remain usable for it.
+      await waitFor(() => expect(retry).not.toBeDisabled());
+
+      const openCallsBefore = mockGetOpenShifts.mock.calls.length;
+      const myCallsBefore = mockGetMyShifts.mock.calls.length;
+      await user.click(retry);
+
+      await waitFor(() => {
+        expect(mockGetOpenShifts.mock.calls.length).toBeGreaterThan(openCallsBefore);
+      });
+      // The hanging half is joined, not reissued.
+      expect(mockGetMyShifts.mock.calls.length).toBe(myCallsBefore);
+      expect(releaseShifts).toBeDefined();
+    });
+
+    it('queues the post-RSVP events read behind an older one', async () => {
+      // handleEventRSVP writes the server-confirmed status into one row. An
+      // events read that started before the mutation still replaces the whole
+      // array when it lands, taking that status with it -- so the row offers
+      // RSVP buttons again until something else refreshes. The post-mutation
+      // read is queued behind it, like the signup path's.
+      const rsvpEvent = {
+        id: 'evt-1',
+        title: 'Ladder Ops Drill',
+        event_type: 'training',
+        start_datetime: `${inWindow(3)}T14:00:00Z`,
+        end_datetime: `${inWindow(3)}T17:00:00Z`,
+        requires_rsvp: true,
+        is_mandatory: false,
+        is_cancelled: false,
+      };
+      mockGetEvents.mockResolvedValue([rsvpEvent]);
+      mockCreateOrUpdateRSVP.mockResolvedValue({ status: 'going' });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+      await screen.findByRole('button', { name: /^going$/i });
+
+      // Leave an older events read in flight.
+      let releaseOlder: ((value: unknown[]) => void) | undefined;
+      mockGetEvents.mockImplementationOnce(() => new Promise<unknown[]>((resolve) => (releaseOlder = resolve)));
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(releaseOlder).toBeDefined(), { timeout: 5000 });
+      const callsBefore = mockGetEvents.mock.calls.length;
+
+      await user.click(screen.getByRole('button', { name: /^going$/i }));
+      await waitFor(() => expect(mockCreateOrUpdateRSVP).toHaveBeenCalled());
+
+      // Queued, not racing.
+      expect(mockGetEvents.mock.calls.length).toBe(callsBefore);
+
+      await act(async () => {
+        releaseOlder?.([rsvpEvent]);
+        await Promise.resolve();
+      });
+
+      // Once the older read settles, the post-RSVP read runs and lands last.
+      await waitFor(() => {
+        expect(mockGetEvents.mock.calls.length).toBeGreaterThan(callsBefore);
+      });
+    });
+
+    it('queues a read after marking a notification read', async () => {
+      // The row is removed locally. A notifications read that started before
+      // the mutation still carries it, so it puts the row back -- and the
+      // unread count with it -- when it lands. Same shape as the RSVP and
+      // signup paths, so it queues behind whatever is running.
+      const log = { id: 'n1', subject: 'Drill reminder', message: 'Tuesday', sent_at: '2026-09-01T12:00:00Z' };
+      mockGetMyNotifications.mockResolvedValue({ logs: [log], total: 1 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Drill reminder');
+
+      // Leave an older notifications read in flight.
+      let releaseOlder: ((value: { logs: unknown[]; total: number }) => void) | undefined;
+      mockGetMyNotifications.mockImplementationOnce(
+        () => new Promise<{ logs: unknown[]; total: number }>((resolve) => (releaseOlder = resolve))
+      );
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(releaseOlder).toBeDefined(), { timeout: 5000 });
+      const callsBefore = mockGetMyNotifications.mock.calls.length;
+
+      await user.click(within(updates).getByText('Drill reminder'));
+      await waitFor(() => expect(mockMarkNotificationRead).toHaveBeenCalledWith('n1'));
+
+      // Queued, not racing.
+      expect(mockGetMyNotifications.mock.calls.length).toBe(callsBefore);
+
+      await act(async () => {
+        releaseOlder?.({ logs: [log], total: 1 });
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(mockGetMyNotifications.mock.calls.length).toBeGreaterThan(callsBefore);
+      });
+    });
+
+    it('keeps an acknowledgement when a pre-mutation inbox read lands after it', async () => {
+      // The Updates card deliberately keeps rows mounted during an inbox
+      // retry, so a member can acknowledge while getInbox is in flight. That
+      // read captured the pre-mutation row, so assigning its result whole puts
+      // the unacknowledged row back -- asking the member to acknowledge again
+      // something the server has already recorded. A refetch is not the fix
+      // here: getInbox asks for include_read: false, so it would drop the row
+      // the design keeps. The local edit is re-applied to whatever lands.
+      const pending = {
+        id: 'msg-ack',
+        title: 'Hydrant flow testing Saturday',
+        body: 'Crews report to Station 2.',
+        priority: 'normal',
+        target_type: 'all',
+        is_pinned: false,
+        is_persistent: false,
+        requires_acknowledgment: true,
+        posted_by: 'officer-1',
+        author_name: 'Chief Test',
+        created_at: '2026-08-01T12:00:00Z',
+        expires_at: null,
+        is_read: false,
+        read_at: null,
+        is_acknowledged: false,
+        acknowledged_at: null,
+      };
+      mockGetInbox.mockResolvedValue([pending]);
+      mockGetUnreadCount.mockResolvedValue({ unread_count: 1 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+      await screen.findByRole('button', { name: 'Acknowledge' });
+
+      // An inbox read carrying the pre-mutation row is left in flight.
+      let releaseStale: ((value: unknown[]) => void) | undefined;
+      mockGetInbox.mockImplementationOnce(() => new Promise<unknown[]>((resolve) => (releaseStale = resolve)));
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(releaseStale).toBeDefined(), { timeout: 5000 });
+
+      await user.click(screen.getByRole('button', { name: 'Acknowledge' }));
+      await waitFor(() => expect(mockAcknowledge).toHaveBeenCalledWith('msg-ack'));
+
+      // The stale read lands, still carrying the unacknowledged row.
+      await act(async () => {
+        releaseStale?.([pending]);
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
+      });
+    });
+
+    it('joins a pull-to-refresh to a first load still in flight', async () => {
+      // Unregistered, the first load let a gesture start a second request for
+      // the same source; if the older one settled last it restored its result
+      // over the newer one.
+      let releaseInitial: ((value: ShiftRecord[]) => void) | undefined;
+      mockGetOpenShifts
+        .mockImplementationOnce(() => new Promise<ShiftRecord[]>((resolve) => (releaseInitial = resolve)))
+        .mockResolvedValue([]);
+
+      renderWithRouter(<Dashboard />);
+      await waitFor(() => expect(releaseInitial).toBeDefined(), { timeout: 5000 });
+      const callsBefore = mockGetOpenShifts.mock.calls.length;
+
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+
+      expect(mockGetOpenShifts.mock.calls.length).toBe(callsBefore);
+    });
+
+    it('retries a message half that failed after an earlier press', async () => {
+      // The Updates retry must read the error state current at the press. An
+      // outer key over both halves coalesced on the first press's snapshot, so
+      // a second press returned that promise and the half which had failed
+      // since was never retried.
+      mockGetInbox.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Updates could not be fully verified.');
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+
+      // The unread count breaks while that inbox retry is still hanging.
+      mockGetUnreadCount.mockRejectedValue(new Error('offline'));
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(mockGetUnreadCount).toHaveBeenCalledTimes(2));
+      const unreadCallsBefore = mockGetUnreadCount.mock.calls.length;
+
+      await user.click(within(updates).getByRole('button', { name: 'Retry updates' }));
+
+      await waitFor(() => {
+        expect(mockGetUnreadCount.mock.calls.length).toBeGreaterThan(unreadCallsBefore);
+      });
+    });
+  });
+
+  it('names each Retry control by the source it retries', async () => {
+    // Several of these render together when the dashboard is half-broken, and
+    // a screen reader reads only the button's own name.
+    mockGetOpenShifts.mockRejectedValue(new Error('offline'));
+    mockGetInbox.mockRejectedValue(new Error('offline'));
+
+    renderWithRouter(<Dashboard />);
+
+    expect(await screen.findByRole('button', { name: 'Retry schedule' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry updates' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
   });
 
   describe('Next 30 Days', () => {

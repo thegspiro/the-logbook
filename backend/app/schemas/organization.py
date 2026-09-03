@@ -75,11 +75,25 @@ def _redact(value: Optional[str]) -> Optional[str]:
 # Used by encrypt_settings_secrets / decrypt_settings_secrets in the service layer.
 _EMAIL_SECRET_FIELDS = frozenset(
     {
-        "google_client_secret",
         "google_app_password",
-        "microsoft_client_secret",
+        "microsoft_app_password",
         "smtp_password",
         "cloudflare_api_token",
+    }
+)
+
+# Gmail / Microsoft OAuth client credentials collected by earlier versions.
+# Nothing ever sent through them — the sender only speaks SMTP — so they were
+# dropped from EmailServiceSettings (2026-09-03). Rows written before then
+# still carry the keys, encrypted; they are ignored on read and pruned on the
+# next write so a dead client secret does not sit in the database forever.
+_LEGACY_EMAIL_OAUTH_FIELDS = frozenset(
+    {
+        "google_client_id",
+        "google_client_secret",
+        "microsoft_tenant_id",
+        "microsoft_client_id",
+        "microsoft_client_secret",
     }
 )
 
@@ -177,7 +191,13 @@ def decrypt_settings_secrets(settings_dict: dict) -> dict:
 
 
 class EmailServiceSettings(BaseModel):
-    """Settings for organization email service configuration"""
+    """Settings for organization email service configuration.
+
+    Gmail and Microsoft 365 are plain SMTP submission behind an App Password:
+    the account address is ``from_email`` and the provider's host, port and
+    encryption are fixed (``app.utils.email_providers``), so those two
+    platforms store only the password. ``smtp_*`` is for self-hosted servers.
+    """
 
     enabled: bool = Field(
         default=False,
@@ -194,21 +214,13 @@ class EmailServiceSettings(BaseModel):
     cloudflare_api_token: Optional[str] = Field(
         None, description="Cloudflare API token with email sending permission"
     )
-    # Gmail / Google Workspace
-    google_client_id: Optional[str] = Field(None, description="Google OAuth Client ID")
-    google_client_secret: Optional[str] = Field(
-        None, description="Google OAuth Client Secret"
+    # Gmail / Google Workspace — signs in to smtp.gmail.com as from_email
+    google_app_password: Optional[str] = Field(
+        None, description="Google App Password for the sending account"
     )
-    google_app_password: Optional[str] = Field(None, description="Google App Password")
-    # Microsoft 365
-    microsoft_tenant_id: Optional[str] = Field(
-        None, description="Microsoft 365 Tenant ID"
-    )
-    microsoft_client_id: Optional[str] = Field(
-        None, description="Microsoft 365 Client ID"
-    )
-    microsoft_client_secret: Optional[str] = Field(
-        None, description="Microsoft 365 Client Secret"
+    # Microsoft 365 — signs in to smtp.office365.com as from_email
+    microsoft_app_password: Optional[str] = Field(
+        None, description="Microsoft 365 App Password for the sending mailbox"
     )
     # Self-hosted SMTP
     smtp_host: Optional[str] = Field(None, description="SMTP server hostname")
@@ -223,13 +235,21 @@ class EmailServiceSettings(BaseModel):
     from_name: Optional[str] = Field(None, description="From name")
     use_tls: bool = Field(default=True, description="Use TLS encryption")
 
+    @field_validator("platform")
+    @classmethod
+    def _validate_platform(cls, value: str) -> str:
+        from app.utils.email_providers import EMAIL_PLATFORMS
+
+        if value not in EMAIL_PLATFORMS:
+            raise ValueError(f"platform must be one of: {', '.join(EMAIL_PLATFORMS)}")
+        return value
+
     def redacted(self) -> "EmailServiceSettings":
         """Return a copy with secret fields replaced by redaction markers."""
         return self.model_copy(
             update={
-                "google_client_secret": _redact(self.google_client_secret),
                 "google_app_password": _redact(self.google_app_password),
-                "microsoft_client_secret": _redact(self.microsoft_client_secret),
+                "microsoft_app_password": _redact(self.microsoft_app_password),
                 "smtp_password": _redact(self.smtp_password),
                 "cloudflare_api_token": _redact(self.cloudflare_api_token),
             }
@@ -242,14 +262,19 @@ class EmailServiceSettings(BaseModel):
                 (
                     "smtp_host",
                     "smtp_user",
-                    "google_client_id",
-                    "microsoft_tenant_id",
-                    "microsoft_client_id",
                     "cloudflare_account_id",
                 ),
                 None,
             )
         )
+
+
+class EmailConnectionTestResponse(BaseModel):
+    """Outcome of an email connection test run from the settings screen."""
+
+    success: bool
+    message: str
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class FileStorageSettings(BaseModel):

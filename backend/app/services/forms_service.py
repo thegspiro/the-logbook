@@ -31,6 +31,7 @@ from app.models.forms import (
     IntegrationType,
 )
 from app.models.user import Organization, User, UserStatus
+from app.utils.contact_visibility import ContactPolicy
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -2495,25 +2496,45 @@ class FormsService:
     # ============================================
 
     async def search_members(
-        self, organization_id: UUID, query: str, limit: int = 20
+        self,
+        organization_id: UUID,
+        query: str,
+        limit: int = 20,
+        contact_policy: Optional[ContactPolicy] = None,
     ) -> List[Dict[str, Any]]:
-        """Search members by name, membership number, or email for member_lookup fields"""
+        """Search members by name, membership number, or email for member_lookup fields.
+
+        The email column is disclosed only as *contact_policy* allows — the
+        organisation's ceiling and the member's own profile-visibility choice.
+        Without a policy the email is withheld: a caller that has not decided
+        who may see it must not show it by default.
+
+        Matching on email is allowed only when the policy discloses email
+        unconditionally (a members-manager under a ceiling that allows it).
+        Otherwise a hit on a hidden address would confirm it to the caller
+        even with the column blanked, and the lookup would be an oracle for
+        exactly what the member chose to keep from colleagues.
+        """
         search_term = like_pattern(query)
+        matchers = [
+            User.first_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+            User.last_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+            User.membership_number.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+            func.concat(User.first_name, " ", User.last_name).ilike(
+                search_term, escape=LIKE_ESCAPE_CHAR
+            ),
+        ]
+        if (
+            contact_policy is not None
+            and contact_policy.show_email
+            and not contact_policy.honor_member_choice
+        ):
+            matchers.append(User.email.ilike(search_term, escape=LIKE_ESCAPE_CHAR))
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
-            .where(
-                or_(
-                    User.first_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
-                    User.last_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
-                    User.email.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
-                    User.membership_number.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
-                    func.concat(User.first_name, " ", User.last_name).ilike(
-                        search_term, escape=LIKE_ESCAPE_CHAR
-                    ),
-                )
-            )
+            .where(or_(*matchers))
             .order_by(User.last_name, User.first_name)
             .limit(limit)
         )
@@ -2528,7 +2549,7 @@ class FormsService:
                 "membership_number": u.membership_number,
                 "rank": u.rank,
                 "station": u.station,
-                "email": u.email,
+                "email": contact_policy.email_for(u) if contact_policy else None,
             }
             for u in users
         ]

@@ -12,7 +12,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -128,7 +130,7 @@ class EquipmentCheckService:
         await self.db.flush()
 
         for comp_data in compartments_data:
-            await self._create_compartment(template.id, comp_data)
+            await self._create_compartment(template.id, organization_id, comp_data)
 
         await self.db.commit()
         return await self.get_template(template.id, organization_id)
@@ -489,8 +491,53 @@ class EquipmentCheckService:
         self.db.add(new_template)
         await self.db.flush()
 
+        # ``source.compartments`` is already loaded flat (get_template only
+        # selectin-loads ``.items``, not the self-referential ``.children``
+        # hierarchy). Walking ``.children`` here -- as this used to -- lazy-
+        # loads outside this awaited context and raises MissingGreenlet under
+        # AsyncSession the moment ``children`` is real (AP-13 finding 1; it
+        # became real when AP-8 fixed the relationship's inverted
+        # ``remote_side``). Group the already-loaded flat collection by
+        # parent instead, and clone root-down from that -- this also avoids
+        # double-cloning each nested compartment, which the old
+        # every-compartment-as-a-root loop combined with
+        # ``_clone_compartment``'s own children walk would otherwise do.
+        children_by_parent: Dict[Optional[str], List[CheckTemplateCompartment]] = {}
         for compartment in source.compartments:
-            await self._clone_compartment(new_template.id, compartment, parent_id=None)
+            children_by_parent.setdefault(compartment.parent_compartment_id, []).append(
+                compartment
+            )
+
+        visited_ids: Set[str] = set()
+
+        async def _clone_subtree(
+            source_parent_id: Optional[str], new_parent_id: Optional[str]
+        ) -> None:
+            for compartment in children_by_parent.get(source_parent_id, []):
+                visited_ids.add(str(compartment.id))
+                new_compartment = await self._clone_compartment(
+                    new_template.id, compartment, parent_id=new_parent_id
+                )
+                await _clone_subtree(str(compartment.id), str(new_compartment.id))
+
+        await _clone_subtree(None, None)
+
+        # AP-16 (Codex, on top of AP-14): a compartment whose
+        # parent_compartment_id points outside this template -- a dangling
+        # cross-template reference from before AP-10's create-time
+        # validation shipped, the same legacy-data shape AP-14 guards the
+        # delete path against -- is grouped under a children_by_parent key
+        # the walk above never reaches, since that key names a compartment
+        # that isn't part of this template at all. Left unchecked, it is
+        # silently omitted from the clone: no error, no indication the
+        # resulting checklist is missing a compartment (and whatever items
+        # it held). Fail closed instead of committing an incomplete clone --
+        # the same choice AP-14 made for delete, applied here to create.
+        if len(visited_ids) != len(source.compartments):
+            raise ValueError(
+                "Template contains a disconnected compartment (a parent "
+                "reference outside this template) and cannot be cloned"
+            )
 
         await self.db.commit()
         return await self.get_template(new_template.id, organization_id)
@@ -579,16 +626,138 @@ class EquipmentCheckService:
     async def delete_compartment(
         self, compartment_id: str, organization_id: str
     ) -> bool:
-        """Delete a compartment and all its items."""
+        """Delete a compartment, its descendant compartments, and their items.
+
+        AP-12 (Codex, on top of AP-8): this used to be a plain
+        ``await self.db.delete(compartment)``, trusting the ORM's own
+        ``cascade="all, delete-orphan"`` on ``children`` to remove every
+        descendant. That cascade lazy-loads ``compartment.children`` via a
+        *plain* SELECT, which -- under this app's MySQL/InnoDB REPEATABLE
+        READ isolation -- answers from this transaction's snapshot,
+        established at ``_get_compartment`` above (this method's first
+        read), not the latest committed state. This is structurally
+        identical to FAC-40 (docs/security-review/FAC-12-facilities.md),
+        fixed on ``DocumentFolder``/``delete_folder`` -- and worse here,
+        because ``parent_compartment_id`` is ``ondelete="SET NULL"``
+        (``DocumentFolder.parent_id`` is ``ondelete="CASCADE"``), so nothing
+        at the database level catches what a stale ORM walk misses: a
+        descendant reparented OUT of this subtree between the snapshot and
+        the delete is still in the stale ``children`` collection and gets
+        destroyed even though it now belongs elsewhere; a descendant
+        reparented IN is absent from the stale collection, survives the
+        cascade, and is left behind, orphaned, by the SET NULL.
+
+        Fixed the same way FAC-40 fixed it: ``_lock_compartment_subtree``
+        below re-derives the subtree with a locking (``FOR UPDATE``) walk,
+        which always sees latest committed state and locks every row it
+        finds -- so a concurrent reparent targeting an already-locked row
+        blocks until this transaction commits or rolls back, rather than
+        racing it. The subtree is then deleted explicitly, as a single bulk
+        statement against that authoritative id set, rather than through the
+        ORM's own (possibly stale) ``children`` cascade -- see
+        ``CheckTemplateCompartment.children``'s ``passive_deletes=True``
+        (models/apparatus.py) for the other half: without it, the ORM's own
+        cascade could still independently re-derive (and disagree with) this
+        set. Items fall out of the subtree's compartment rows automatically,
+        via ``CheckTemplateItem.compartment_id``'s ``ondelete="CASCADE"`` at
+        the database level -- unlike compartments-under-compartments, that FK
+        action fires against the database's own current row state, not any
+        session's snapshot, so it is correct regardless of a concurrent item
+        reparent (see ``CheckTemplateItem.compartment_id`` and
+        ``CheckTemplateCompartment.items``'s ``passive_deletes=True``).
+
+        Verified live with two real, independently-committing database
+        sessions, in both directions (reparent-out-then-delete,
+        reparent-in-then-delete) -- see
+        ``tests/test_apparatus_check_template_compartment_race.py``.
+
+        Raises ``ValueError`` if the locked subtree turns out to contain a
+        compartment belonging to a different template -- see AP-14 on
+        ``_lock_compartment_subtree`` below.
+        """
         compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return False
 
         template_id = str(compartment.template_id)
-        await self.db.delete(compartment)
+        subtree_ids = await self._lock_compartment_subtree(compartment_id, template_id)
+        await self.db.execute(
+            sa_delete(CheckTemplateCompartment).where(
+                CheckTemplateCompartment.id.in_(subtree_ids)
+            )
+        )
         await self._advance_content_revision(template_id)
         await self.db.commit()
         return True
+
+    async def _lock_compartment_subtree(
+        self, compartment_id: str, template_id: str
+    ) -> Set[str]:
+        """AP-12: lock a compartment and every descendant, ``FOR UPDATE``,
+        scoped to ``template_id``.
+
+        Walks level by level. Each level's read both filters *and* locks on
+        ``parent_compartment_id`` in one atomic statement, so a row is only
+        ever included after being locked against the database's latest
+        committed state -- there is no separate "discover, then lock" step
+        for a concurrent reparent to land inside. A locking read ignores this
+        transaction's REPEATABLE READ snapshot (unlike a plain SELECT, which
+        would still answer from ``_get_compartment``'s snapshot), so this
+        converges on the subtree as it actually is *now*, not as it was when
+        ``delete_compartment`` started.
+
+        AP-14 (Codex, on top of AP-12): this walk must stay inside
+        ``template_id``, or it inherits the exact cross-tenant amplification
+        AP-10 already fixed on the *create* path. ``add_compartment``/
+        ``update_compartment``/``create_template`` all validate a new or
+        changed ``parent_compartment_id`` is same-template and same-org
+        (AP-10) -- but that only prevents a cross-template link from being
+        written *from now on*; it does nothing for a row that was already
+        persisted before that validation shipped (or by any future writer
+        that misses it). Left unscoped, a dangling cross-template
+        ``parent_compartment_id`` would let deleting a compartment in
+        template A reach into -- and permanently destroy, via the bulk
+        delete below -- a compartment (and its items) belonging to template
+        B, in this org or another org entirely. Mirrors ``delete_folder``'s
+        cross-org fail-closed check (``documents_service.py``): any row
+        found outside the owning template aborts the whole delete (raising
+        ``ValueError``, which the endpoint turns into a 400) rather than
+        being silently swept in, or silently excluded and left as an
+        unexplained dangling reference.
+
+        A standalone method (mirroring ``documents_service._lock_subtree_folders``)
+        so tests can assert on its locking behaviour directly.
+        """
+        subtree_ids: Set[str] = {compartment_id}
+        await self.db.execute(
+            select(CheckTemplateCompartment.id)
+            .where(
+                CheckTemplateCompartment.id == compartment_id,
+                CheckTemplateCompartment.template_id == template_id,
+            )
+            .with_for_update()
+        )
+        frontier = {compartment_id}
+        while frontier:
+            result = await self.db.execute(
+                select(
+                    CheckTemplateCompartment.id, CheckTemplateCompartment.template_id
+                )
+                .where(CheckTemplateCompartment.parent_compartment_id.in_(frontier))
+                .with_for_update()
+            )
+            rows = result.all()
+            for row_id, row_template_id in rows:
+                if row_template_id != template_id:
+                    raise ValueError(
+                        "Compartment subtree contains a cross-template "
+                        "reference and cannot be deleted"
+                    )
+            found = {row_id for row_id, _row_template_id in rows}
+            new_ids = found - subtree_ids
+            subtree_ids |= new_ids
+            frontier = new_ids
+        return subtree_ids
 
     async def replace_compartments(
         self,
@@ -4276,10 +4445,28 @@ class EquipmentCheckService:
         return templates
 
     async def _create_compartment(
-        self, template_id: str, data: Dict[str, Any]
+        self, template_id: str, organization_id: str, data: Dict[str, Any]
     ) -> CheckTemplateCompartment:
         """Create a compartment with its items."""
         items_data = data.pop("items", None) or []
+
+        # AP-13 finding 2: a client-supplied ``parent_compartment_id`` was
+        # forwarded to the model with no validation, unlike add_compartment /
+        # update_compartment. With CheckTemplateCompartment.children's cascade
+        # now genuinely effective (AP-8), an unvalidated cross-template (or
+        # cross-org) parent link is not just a dangling reference -- deleting
+        # the parent cascade-deletes the other template's/org's compartment
+        # and all its items. A brand-new template never has existing
+        # compartments of its own yet, so any non-null parent here can only
+        # ever point outside this template; the frontend's builder agrees --
+        # it never sends parent_compartment_id on initial create, only via
+        # add_compartment once the template (and a real parent id) exist.
+        parent_id = data.get("parent_compartment_id")
+        if parent_id:
+            parent = await self._get_compartment(parent_id, organization_id)
+            if not parent or parent.template_id != template_id:
+                raise ValueError("Parent compartment must belong to the same template")
+
         compartment = CheckTemplateCompartment(
             id=generate_uuid(),
             template_id=template_id,
@@ -4355,10 +4542,11 @@ class EquipmentCheckService:
             )
             self.db.add(new_item)
 
-        # Clone children
-        for child in getattr(source, "children", []) or []:
-            await self._clone_compartment(template_id, child, compartment.id)
-
+        # Children are cloned by the caller (``clone_template``'s
+        # ``_clone_subtree``), which walks the already flat-loaded
+        # ``source.compartments`` grouped by parent -- not this compartment's
+        # own ``.children``, which is not eager-loaded by ``get_template``
+        # and would lazy-load outside the awaited context (AP-13 finding 1).
         return compartment
 
     async def _validate_compartment_parent(

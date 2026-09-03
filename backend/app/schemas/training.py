@@ -18,6 +18,7 @@ from app.schemas.base import UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.enum_validation import validate_enum_value
 from app.services.qualification_service import QUALIFICATIONS
+from app.utils.ssrf_transport import relative_endpoint
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -693,6 +694,15 @@ class ExternalProviderConfig(BaseModel):
     )
     additional_headers: Optional[dict] = None
     date_format: Optional[str] = None  # Date format used by the API
+
+    @field_validator(
+        "records_endpoint", "users_endpoint", "categories_endpoint", "test_endpoint"
+    )
+    @classmethod
+    def validate_endpoint_path(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None:
+            relative_endpoint(value)
+        return value
 
 
 class ExternalTrainingProviderBase(BaseModel):

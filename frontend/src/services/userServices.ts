@@ -9,6 +9,7 @@ import type {
   AuthSettings,
   ContactInfoSettings,
   ContactInfoUpdate,
+  EmailConnectionTestResult,
   EmailServiceSettings,
   FileStorageSettings,
   User,
@@ -242,6 +243,30 @@ export const userService = {
   },
 
   /**
+   * Which of the caller's own contact fields other members may see, defaults
+   * applied. Self-scoped: there is no by-id counterpart, because what a
+   * member shares of their own details is their decision alone.
+   */
+  async getMyProfileVisibility(): Promise<import('../types/user').ProfileVisibility> {
+    const response = await api.get<import('../types/user').ProfileVisibility>('/users/me/profile-visibility');
+    return response.data;
+  },
+
+  /**
+   * Replace the whole choice. Every key is required by the backend — a
+   * partial object is a 422 — so callers always send all five fields.
+   */
+  async setMyProfileVisibility(
+    visibility: import('../types/user').ProfileVisibility
+  ): Promise<import('../types/user').ProfileVisibility> {
+    const response = await api.put<import('../types/user').ProfileVisibility>(
+      '/users/me/profile-visibility',
+      visibility
+    );
+    return response.data;
+  },
+
+  /**
    * Another member's consents, for staff editing that member's contact and
    * notification settings. Read-only on purpose — there is no admin write
    * counterpart, because consent recorded by somebody else is not consent.
@@ -431,6 +456,15 @@ export const organizationService = {
    */
   async updateEmailSettings(settings: EmailServiceSettings): Promise<EmailServiceSettings> {
     const response = await api.patch<EmailServiceSettings>('/organization/settings/email', settings);
+    return response.data;
+  },
+
+  /**
+   * Test the email configuration on the form without saving it. Redacted
+   * secrets are resolved server-side against what is already stored.
+   */
+  async testEmailSettings(settings: EmailServiceSettings): Promise<EmailConnectionTestResult> {
+    const response = await api.post<EmailConnectionTestResult>('/organization/settings/email/test', settings);
     return response.data;
   },
 

@@ -68,6 +68,36 @@ here.
 | **No knowledge-test engine (officer-entered scores only)**             | Open (feature)       | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Skills-test completion does not enforce requirement `max_attempts`** | ✅ Resolved          | `assert_attempts_remaining` (`app/services/skills_testing_service.py`) now guards the cap at both ends of the flow: creating an official test — so an examiner is refused before running an evaluation that could not count — and, **since 2026-08-08, validating one** rather than completing it. Opening the examiner role to every member means completion is no longer the moment a result counts, so the cap is spent where the credit is granted; a submission that is never validated never costs the candidate a chance. An attempt is a completed, official, **validated**, non-voided test against that requirement, pass or fail; voided results and unvalidated submissions do not consume a chance, and practice attempts never do. A requirement already completed, verified, or waived is exempt, matching the knowledge-test path and keeping recertification testing possible. |
 
+## Claude (MCP) — claude.ai Custom Connectors Need an OAuth Server (2026-09-03)
+
+The Claude (MCP) integration authenticates MCP clients with a static bearer
+service key. Claude Code (`claude mcp add --transport http … --header
+"Authorization: Bearer …"`) and the Messages API connector
+(`authorization_token`) accept that directly. The claude.ai custom-connector
+dialog — and Claude Desktop's remote-connector flow — authenticate remote
+servers with OAuth 2.1 plus dynamic client registration instead, and The
+Logbook is currently an OAuth _client_ (Google and Microsoft sign-in), not
+an authorization server: there is no `/authorize`, `/token` or client
+registration endpoint for a connector to talk to.
+
+Until that is built, those clients connect through a local stdio-to-HTTP
+bridge (such as `mcp-remote`) that passes the `Authorization` header. Adding
+the authorization server is a separate change set: it needs a consent screen
+on top of the existing login, token issuance keyed to the same service-key
+gating, protected-resource metadata under `/.well-known/`, and the
+`mcp` SDK's `TokenVerifier` hook in place of the bearer check in
+`app/mcp/transport.py`.
+
+Two smaller ones, both deliberate:
+
+- **Department contact details are withheld along with personal ones.** The
+  redaction boundary matches field _names_ so that a test can prove it
+  holds for every tool at once; a station's public phone number is stripped
+  the same as a member's. Locations and facilities are still listed by name,
+  city and state.
+- **Tool results are point-in-time.** The server exposes no resources or
+  subscriptions; a client re-asks to refresh.
+
 ## ONBOARD-1 — The Setup Wizard's Per-Module Configuration Step Is Inert (2026-08-24)
 
 Fifteen of the setup wizard's module cards point at a per-module
@@ -308,7 +338,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Elections: voting tokens stored/compared in plaintext**                                                     | ✅ Resolved                                                                                                                   | Tokens are now stored as SHA-256 (migration `20260731_0001` hashes existing rows in place with an idempotent hex guard); the raw token exists only in the emailed ballot link and lookups hash the presented value, so DB read access no longer yields live credentials. In-flight links keep working. (ELEC-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Elections: anonymous ballots de-anonymizable via DB read until close**                                      | ✅ Resolved (with residual)                                                                                                   | Closing an anonymous election now **purges per-vote IP/user-agent** at the same moment the anonymity salt is destroyed (live ballot-stuffing detection is unaffected while voting is open), and forensics no longer returns the full per-IP vote map — only the thresholded `suspicious_ips` set plus `unique_ip_count`/`ip_metadata_purged`. **Residual closed forward (2026-07-29):** voter-action audit events no longer record an IP for anonymous elections; audit rows written before that change keep their IPs permanently because `ip_address` is part of the tamper-evident hash chain and cannot be scrubbed without breaking `verify_integrity`. (ELEC-6)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Elections: pre-meeting package attachment dropped on Cloudflare email backend**                             | ✅ Resolved                                                                                                                   | The Cloudflare Email Sending API supports base64 attachments (5 MiB total-message cap) — `EmailService` now encodes and sends them on that backend instead of dropping them. Attachments that would exceed the cap are skipped with a warning (the send still succeeds without them).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Documents: summary ignores folder ACL; ACL not hierarchical**                                               | Partially resolved (LOW/design)                                                                                               | **Fixed:** `delete_folder` now walks the folder subtree, collects the backing file paths, and removes them after the cascade delete, so a folder delete no longer orphans (potentially sensitive) uploads on disk — matching the single-document delete. **Still flagged (design/behavior):** `get_summary` aggregates span the whole org past the folder ACL (counts only, no names/content — scoping the stats endpoint is a behavior change); `can_access_folder` checks only the folder's own visibility, not its ancestor chain (apparatus/facility child folders are org-visible under leadership-only parents — confirm intent). (DOC-4/5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Documents: summary ignores folder ACL**                                                                     | ✅ Resolved (2026-09-02, security review DOC-10 pass 3)                                                                       | **DOC-5** (folder authorization not hierarchical): fixed by PR #2160 — `can_access_folder` now walks every ancestor and fails closed on missing/cross-org/cyclic ancestry. **DOC-4** (`get_summary` aggregated past folder ACLs): also fixed, by a separate same-day PR (#2171, "Scope document summaries to caller folder access") that neither DOC-5's PR nor this rotation's own pass-2 review knew about at the time — `get_summary` now takes the caller and applies `accessible_folder_ids`/`_document_access_predicate` to every aggregate (document count, size, this-month count, folder count). Both re-verified against current code (not the PR diffs) by security review DOC-10 pass 3; DOC-4's fix is covered by `test_summary_matches_each_caller_access_scope` (5 caller tiers, exact expected counts per tier). (DOC-4/5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Equipment-check: read endpoints bypass `equipment_check.view`; compliance metrics stubbed**                 | Partially resolved (LOW)                                                                                                      | **Fixed:** `complete_incomplete_check` now re-applies the expired/under-min auto-fail rule before computing counts (matching initial submit — EC-10); `create_report` validates a client-supplied `trainee_id` is in-org when no shift links it (EC-6); `get_report` takes an org filter and all callers pass it (EC-9). **Still flagged:** the detail/read endpoints use bare `get_current_user` (org-scoped but looser than the `.view`-gated list routes — tightening is a deferred behavior decision, EC-7); a few by-id reads used only for changelog text lack an org filter (harmless, EC-8); `get_compliance_report` returns hardcoded `0` for expected/overdue counts (needs a check-cadence model — incomplete feature, EC-11).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Roles: no ceiling on editing an already-privileged role, and no last-admin lockout guard**                  | ✅ Resolved (2026-08-07)                                                                                                      | Closed in two parts. The escalation direction and the last-admin guard already existed: `_enforce_permission_grant_ceiling` blocks granting a role permissions beyond the caller's own (wildcard-aware, CRITICAL alert on a blocked attempt), and `assert_not_last_administrator` prevents stripping the final administrator. The **sabotage** direction was still open exactly as described — the ceiling inspects only the incoming list and early-returns on `[]`, so a `roles.edit` holder who is not a `*` holder could PUT the sole System Owner role with `permissions: []` and wipe it, or with a small in-ceiling set and downgrade it. `_enforce_role_edit_ceiling` now gates on the role's **current** permissions: you may only edit a role already within your own authority. It runs when `role_update.permissions is not None` — i.e. when the permission set is actually being changed — so renaming or re-prioritising a higher role is still permitted; that is a deliberate scoping choice, not an oversight. `delete_role` already refused system roles. Covered by `tests/test_role_edit_ceiling.py`. (ORU-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Users/Orgs: PII and infra config exposed broader than the privacy gate intends**                            | ✅ Resolved (2026-08-02)                                                                                                      | Closed in two passes, and the second is worth recording. The roster endpoint was fixed first; `GET /users/{id}/with-roles` was left returning the raw record, so the `contact_info_visibility` setting stayed advisory — anything withheld on the roster was one request away. Both now redact through shared helpers (`_clear_hidden_contact_fields` / `_load_contact_visibility`) that fail closed, with `members.manage` holders **and the subject** exempt — the settings page loads a member's own profile through that endpoint and writes the fields back, so redacting for self would have blanked their own address on the next save. **Date of birth and emergency contacts** are now leadership-only with no setting able to publish them, and disclosure is recorded on the `user_viewed` audit event. On the settings side, `without_infrastructure()` also strips the `it_team` block (names/emails/phones + free-form `backup_access`), which the original identifier strip missed. (ORU-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -346,7 +376,7 @@ Owner-decision items from the feature-by-feature review under
 
 | Limitation                                                                                                                           | Status                                                                    | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Documents: folder ACL is per-folder, not hierarchical**                                                                            | Open (LOW, needs product decision)                                        | `can_access_folder` checks only a folder's own `visibility`/`allowed_roles`, never its ancestors. Apparatus/facility per-item child folders are created `ORGANIZATION`-visibility with no `allowed_roles` even though their parent roots are `LEADERSHIP`, so any `documents.view` holder can read those child folders directly — and the apparatus docstring's "allowed_roles restricted" claim is not actually coded. May be intended (crews seeing their rig's manuals is reasonable); if leadership-only was meant, the fix is a hierarchical ACL that walks the parent chain (perf implications on every folder check). Member personal folders are unaffected (`OWNER`-visibility). Decide intent, then fix either the code or the docstring. **Confirmed (security review DOC-10, 2026-08-25):** `ensure_facility_folder` was added since this was first flagged and creates its own sub-folders the identical way — same gap, same shape, not a new one. (DOC-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Documents: hierarchical folder authorization**                                                                                     | ✅ Resolved (2026-09-02)                                                  | Folder access now evaluates the requested folder and every ancestor with logical AND. Missing, cross-organization, and cyclic ancestry fails closed; `required_permissions` remains mandatory despite leadership. System roots are normalized so member owners and facility-sensitive permission holders remain admitted while apparatus stays leadership-only. (DOC-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Money disbursement: separation of duties**                                                                                         | ✅ Resolved (owner decision, option (a), 2026-08-09)                      | The owner chose the cheap `assert_different_person` guard over a new disburse permission tier. A `storefront.manage` holder can no longer mark their _own_ order paid / waive / refund it, and a `finance.manage` holder can no longer mark their _own_ purchase request or expense report paid, issue a check for their own request, or waive their own dues — each compares the actor against the order's member / the request's `requested_by` / the dues member and refuses on a match (mirrors AH-4). The out-of-band reconciliation path (`actor_id=None`) is exempt. Not the broader requester≠disburser tier of option (b); a dedicated `finance.disburse`/`storefront.disburse` permission remains a future enhancement if the department wants to separate the roles generally rather than just block self-dealing. (`storefront_service.py`, `finance_service.py`; `test_money_separation_of_duties.py`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Admin hours: no per-org self-approval override; a resync can grow an already-approved entry past its threshold without re-review** | Open (LOW, product/design decisions; security review AH-21, both passes)  | Two distinct items, both re-confirmed unchanged on pass 2 (2026-08-30) against the current code. (1) The AH-4 self-approval guard (`assert_different_person` in `approve_or_reject`/`bulk_approve`) is unconditional — a genuine sole-officer department has no way to approve their own admin-hours entries and would need a second `admin_hours.manage` holder. A per-org toggle to relax this is a deliberate policy trade-off, not a bug. (2) `credit_event_attendance`'s resync path (`resync=True`, used when a reopened event's corrected check-out time lengthens an attendee's session) updates `duration_minutes` in place on an entry that may already be `APPROVED`, without re-running `_determine_post_clockout_status` — by design, so a correction cannot silently revoke an officer's already-made review decision, but the flip side is the same mechanism never re-evaluates whether the now-longer session should have required review. Closing it needs a product decision (re-queue for review above some growth threshold, vs. leave as-is and rely on the officer noticing) before it can be coded. (`admin_hours_service.py`; `docs/security-review/AH-21-admin-hours.md`.)                                                                                                                                                                                                                                  |
 | **Storefront: `auto_apply_payments` defaults on**                                                                                    | Open (LOW, product decision)                                              | When a PayPal integration's config omits `auto_apply_payments`, it defaults to `True`, so an exact-amount capture settles an order with no human in the loop. Well-guarded (amount must equal the balance exactly; anything else is recorded `AMBIGUOUS`), but it is an implicit default on a money path and should be an explicit choice in the integration setup UI. (SF future-dev #4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1661,6 +1691,26 @@ position model to the ballot-item model the public page already uses, including
 its submission shape. Needs an owner decision on whether to converge the two
 ballots or retire one of them. This loop does not make that call.
 
+**Update (2026-09-02, security review ELEC-28):** the backend-side half of
+this gap is now closed for eligibility purposes — `send_ballot_emails`
+correctly snapshots `eligible_positions` on the token for a mixed election
+(ELEC-23, ELEC-26 in `docs/security-review/ELEC-06-elections-ballots.md`),
+and `/ballot/lookup` correctly returns the eligible positions and their
+candidates to that token. But this UI gap means it doesn't matter: a member
+eligible **only** for a plain position in a mixed election (ineligible for
+every structured ballot item) now correctly receives a live token, opens
+`BallotVotingPage`, and sees an **empty ballot** — no positions render, so
+there is nothing to vote on. A member eligible for both a position and an
+item sees only the item, and submitting it spends the single-use token with
+no way back to the position vote. Confirmed the backend's single-vote token
+route (`POST /elections/ballot/vote`, `cast_vote_with_token`) that could in
+principle carry a positional vote is not called from any current frontend
+code — there is no wiring to repurpose, only a route to design a UI and
+submission contract around. Through the product today, a plain-position
+contest inside a mixed election cannot be voted on by an emailed-token
+recipient at all. Not fixed for the same reason as the original finding: it
+is a UI/submission-contract design decision, not a mechanical fix.
+
 ## Training — The Student View of a Cohort Has No Frontend (2026-08-12)
 
 The API implements it. `GET /training/cohorts/{id}` served to a member on the
@@ -1734,6 +1784,118 @@ an owner decision elsewhere (FIN-7's export cap, the various CS-config
 thresholds). (Security review ELEC-12,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
+## Elections — Vote Receipt Verification Takes Its Credential as a GET Query Parameter (2026-09-02)
+
+`GET /elections/{id}/verify-receipt?receipt=...` (`verify_vote_receipt`)
+binds `receipt` as a bare scalar parameter on a `GET` route, so it travels
+in the URL query string rather than a request body — unlike the other three
+public token routes (`/ballot/lookup`, `/ballot/vote`, `/ballot/vote/bulk`),
+which all carry their credential in a POST body specifically so it never
+lands in server/proxy access logs or browser network history (R-D3). A
+receipt hash cannot cast, change, or reveal the content of a vote — it only
+confirms a matching vote was recorded, plus its timestamp and position — but
+it is still a value tied to one specific voter's one specific ballot, and a
+query-string value is more exposed than a body value to logging
+infrastructure the application doesn't control.
+
+Not fixed: converting this endpoint to `POST` with the receipt in the body
+would be a public API **shape** change, not a mechanical one. This exact
+`GET .../verify-receipt?receipt=` contract is documented as a stable,
+external-facing endpoint in `wiki/API-Reference.md`, `ARCHITECTURE.md`,
+`BALLOT_FORENSICS_GUIDE.md`, and the training materials — any of which may
+already have a caller depending on the GET shape — so changing it needs an
+owner decision about that external contract, not a guess made during a
+security-review pass. (Security review ELEC-14,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Elections — Manual Ballot Batch Listing Has No Bound (2026-09-02)
+
+`list_manual_ballot_batches` (`GET .../manual-ballots`) returns every
+paper-tally batch recorded for an election with `scalars().all()`, eagerly
+loads every batch's attestations, and aggregates every associated vote —
+with no pagination or per-election cap. Access control is sound
+(`elections.manage`-gated, org- and election-scoped, the same trust boundary
+as `SavedBallotTemplate` below), so this is a scaling concern rather than a
+leak: an election that accumulates many paper-tally sessions over a long
+voting window pays a growing, uncapped cost on every load of this listing.
+
+Not fixed for the same reason as the saved-ballot-templates item below:
+pagination changes the response envelope (a frontend-affecting contract
+change for the manual-ballots admin screen), and a per-election batch cap
+needs an actual number picked by a human. (Security review ELEC-16,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Elections — Two Ballot Items Sharing an Alias String Can't Be Fully Disambiguated Without a Schema Change (2026-09-02)
+
+A legacy ballot item (one persisted without its own `position` field) is
+matched by its `title` _or_ its `id` — `ballot_item_candidate_positions()`
+needs both, because a real candidate/vote for that item can be stored under
+either convention depending on which code wrote it, and matching only one
+would silently empty a legitimate item's candidate list. The schema
+(`BallotItemInput.unique_item_ids`) enforces only unique **ids** across an
+election's ballot items — nothing stops a _different_ item's `title` (or
+explicit `position` override) from equaling this item's `id`.
+
+When that collision happens, a stored `Candidate`/`Vote` row carrying that
+exact string is genuinely ambiguous: `Vote` has no `ballot_item_id` column,
+only `position` (a string) and `candidate_id`, and `Candidate.position`
+carries the identical ambiguity — which item a candidate was originally
+created "for" is not persisted anywhere once its position string is
+stored. Neither table can be joined back to a specific item's identity to
+settle the question.
+
+The one instance of this that was concretely reported (security review
+ELEC-38) — the duplicate-vote pre-check treating a different item's stored
+vote as a re-vote on this item — **is** fixed for votes written after
+ELEC-34 (round 7): that check only needs to decide "would this read as a
+re-vote," where under-matching is safe as long as a genuine repeat vote is
+dedup-hashed against the item's own canonical id, never its title, so the
+database's `vote_dedup_hash` UNIQUE constraint still catches an actual
+duplicate on that exact item even after a colliding alias is excluded from
+the pre-check. `_dedup_scoped_item_aliases()` drops a fallback alias from
+the pre-check whenever another item in the same election already claims
+that exact string as its own canonical key.
+
+**Correction (security review ELEC-40, round 10):** that "still caught by
+the UNIQUE constraint" guarantee does not reach a vote row whose
+`vote_dedup_hash` predates the id-based convention itself — i.e. a vote
+`cast_vote_with_token` wrote for a legacy item before ELEC-34 landed, back
+when the hash was computed against the title (`Vote.position`'s own value
+for that route, which ELEC-34 never changed — only the hash input was
+redirected to the item's id). For such a row, dropping its title alias
+from the pre-check removes the only mechanism that could have caught a
+second vote on it: the new vote hashes against the item's id, the old row
+against its title, and the two never collide. Genuinely rare in practice —
+it additionally requires the same election to already have a title/id
+alias collision between two ballot items — but real, and not fixable by
+adjusting the pre-check alone without reopening ELEC-38 (there is no way
+to keep both fixed with string matching, since the schema still cannot
+disambiguate the two colliding items apart from the string itself, per
+above). Flagged rather than guessed at; a full fix needs one of: reverting
+the pre-check narrowing (accepting ELEC-38's false-positive back) or a
+backfill migration re-hashing existing legacy-item votes to the id-based
+convention — both are product/data-migration decisions for an owner, not
+something to pick during a review pass.
+
+What is **not** fixed, and cannot be with today's schema: full
+disambiguation of candidate/vote _ownership_ when two items collide this
+way. If both colliding items happen to have real, legitimately
+title-keyed/id-keyed candidates stored under the exact same string, there
+is currently no way — for candidate-list rendering, eligibility, tallying,
+or any other consumer of `ballot_item_candidate_positions()` — to tell
+which item a given stored row actually belongs to; the function
+necessarily returns the union of both, and the broader (unscoped) alias
+matching it produces is deliberately left in place at those other call
+sites for exactly that reason. Fixing this fully would need a schema
+change — e.g. an explicit `ballot_item_id` column on `Candidate` and/or
+`Vote`, populated going forward and backfilled for existing rows where
+resolvable — which is a data-model decision for an owner, not something to
+guess at during a security-review pass. In practice this requires an
+admin to deliberately configure two ballot items whose alias sets collide
+in the same election; nothing else in the ballot-authoring UI encourages
+or warns against it today. (Security review ELEC-38,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
 
 `list_users_with_roles` (`users.py:601`) and `get_archived_members`
@@ -1758,6 +1920,33 @@ the full list (the Members admin page, the leave dashboard widget), which is
 a frontend-affecting decision, not a drop-in. (Security review USR-5,
 `docs/security-review/USR-07-users-organizations.md`.)
 
+## Users: `GET /users` Sends the Full Admin Roster Record to Every `members.view` Holder (2026-09-02)
+
+`members.view` — held by every default position, per the route's own
+docstring — is enough to receive the same `UserListResponse` shape
+`members.manage` gets: `username`, `hire_date`, `membership_number`, `rank`,
+and `station` for every member in the org
+(`app/services/user_service.py:24-91`, `app/schemas/user.py:271-298`). A
+2026-09-01/02 frontend change (`frontend/src/pages/Members.tsx`) now presents
+a visibly reduced "Member Directory" for callers without `members.manage` —
+no username, no Hire Date column, no export/bulk actions — framed as "a
+member without the grant gets a directory; a coordinator gets the management
+table." That framing implies an access-control boundary that does not exist
+server-side: every field the directory view hides is still in the JSON `GET
+/users` response reaching that caller's own browser, readable via devtools'
+Network tab or a direct authenticated call to the endpoint. Not a
+cross-tenant leak (org-scoped throughout) and not on the leadership-only PII
+list (DOB, emergency contacts) enforced elsewhere in this module — but a real
+mismatch between the UI's implied tiering and the actual wire payload.
+
+Not fixed: `GET /users` is consumed by 25+ frontend files beyond the roster
+page (scheduling, messaging, elections, meetings, waivers, shift reports),
+several of which need `rank`/`station`/`platoon` at the `members.view` tier
+for legitimate, non-directory purposes. Trimming the response naively would
+break those callers; the fix needs a decision on whether `GET /users` should
+serve two shapes by permission or a narrower directory endpoint should be
+split out. (Security review USR-8, `docs/security-review/USR-07-users-organizations.md`.)
+
 ## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
 
 `GET /prospective-members/election-packages` (`list_election_packages`) runs
@@ -1777,6 +1966,113 @@ package per prospect is a behavior change that could break an intended
 "regenerate before the vote" workflow, and pagination on the list endpoint is
 a response-envelope/frontend-contract change, not a drop-in. (Security review
 MP-10, `docs/security-review/MP-08-membership-pipeline.md`.)
+
+## Membership Pipeline — `/widget-summary` Loads Every Prospect Row to Count Them (2026-09-02)
+
+`GET /prospective-members/widget-summary` (`pipeline_widget_summary`,
+`membership_pipeline.py:118-168`) loads every full `ProspectiveMember` row in
+the organization — every column, unbounded — into Python just to compute
+`by_status` counts, three aging buckets, and (for a caller holding
+`prospective_members.manage`) a `details` list of every applicant's id/name/
+status. Same class as MP-10 above and the medical-screening/finance entries
+elsewhere on this page: access control is sound (org-scoped,
+permission-gated, and the manager-only `details` field is already withheld
+from view-only callers), so this is a scaling concern, not a leak — but a
+department with years of applicant history materializes its entire prospect
+table, full PII columns included, on every render of this dashboard widget.
+
+Not fixed: the aggregate counts (`by_status`/`aging`/`total`) could be
+computed with `GROUP BY`/`CASE` SQL instead of a full row scan without
+changing the response shape, but the `details` list itself has no natural
+cap in the current contract — capping it silently truncates what a manager
+sees, and paginating it is a response-envelope change for the frontend
+widget, the same class of decision MP-10 already declined to make
+unilaterally. (Security review MP-08 pass 3, PR #2176,
+`docs/security-review/MP-08-membership-pipeline.md`.) The sibling read in
+this same finding — `GET /pipelines`'s `selectinload(...prospects)` used
+only to `len()` the collection — **was** fixed in the same pass: it now
+counts prospects per pipeline with one aggregate query instead of
+eager-loading every row, with no response-shape change.
+
+## Membership Pipeline — A Document Delete Can Lose the File If the Commit Fails After `os.remove` Succeeds (2026-09-02)
+
+`delete_prospect_document` (`membership_pipeline_service.py`) removes the
+prospect document's file from disk, then deletes the `ProspectDocument` row
+and commits. That ordering is deliberate (pass 3, MP-18): a failed
+`os.remove` now raises instead of being swallowed, and the metadata row
+survives specifically so it remains the one record an operator can retry
+cleanup against. But if `_log_activity`, `db.delete`, or the commit itself
+fails **after** a successful `os.remove`, the transaction rolls back while
+the file is already irrecoverably gone — the DB row survives (untouched by
+the failed transaction) pointing at a file that no longer exists.
+
+Not fixed: this is a genuine reliability tradeoff between two failure modes,
+not a one-sided gap. Reverting to commit-DB-first (this codebase's more
+common pattern elsewhere, e.g. `documents_service.delete_folder`) would
+reopen MP-18 — an untracked orphaned PII file with no row left to explain it
+— which is strictly worse than the residual risk here: a row surviving a
+failed commit is retry-safe, since a retry's `os.path.exists` check is
+already false and proceeds straight to a clean metadata delete. A
+rename-to-trash/restore-on-rollback scheme would close this gap without
+reopening MP-18, but is meaningfully more machinery (a new trash-file
+convention, restore-on-any-exception handling, a cleanup job for anything
+left behind if the restore itself fails) than a rare compound failure — an
+`os.remove` succeeding immediately followed by a DB commit failing —
+justifies as a same-day fix. (Security review MP-08 pass 4, PR #2177,
+`docs/security-review/MP-08-membership-pipeline.md`.)
+
+## Membership Pipeline — A Pipeline With Multiple `election_vote` Stages Has No Single "Current Stage" Once Neither `current_step` Nor a Supplied `step_id` Identifies One (2026-09-02, narrowed 2026-09-02)
+
+`create_election_package` (`membership_pipeline_service.py`) resolves its
+PII-minimization `package_fields` policy from `prospect.current_step` when
+that step is itself an `election_vote` step in the governing pipeline — this
+is server-only state (`current_step_id` is set exclusively by
+`create_prospect`/`advance_prospect`/`regress_prospect`, and is excluded from
+the generic update path), so it correctly identifies the applicant's actual
+stage even when a pipeline has more than one `election_vote` step (`add_step`
+has no uniqueness constraint on `step_type`, so this is a reachable
+configuration; fixed in security review MP-08 pass 4 round 2, MP-23).
+
+When `current_step` is **not** an `election_vote` step at all — e.g. a
+package is requested (or re-requested) after the applicant has already
+advanced past every vote stage in the pipeline, or a caller overrides
+`pipeline_id` to one the prospect was never actually on — the code next
+checks a caller-supplied `step_id`, once it is confirmed (unlike the
+pre-existing MP-5 in-pipeline check, which never looked at `step_type`) to
+actually name an `election_vote` step of the governing pipeline: `step_id`
+is server-validated to belong to the pipeline either way, but only a
+type-checked one is trusted as a policy source, so a `step_id` naming a
+real, non-election step still falls through to the guess below rather than
+being trusted (fixed in security review MP-08 pass 4 round 4, MP-26).
+
+**Narrowed, not closed:** when _neither_ `current_step` _nor_ a
+type-checked `step_id` identifies an `election_vote` step — `step_id`
+omitted, or naming a real step of the wrong type — the code still falls
+back to the first `election_vote` step found in the pipeline's
+`sort_order`. With more than one such stage configured and no current or
+step_id match, that fallback remains a best-effort guess, not a resolution
+of "the" stage the package is for; an earlier stage's `package_fields`
+(more permissive, or unconfigured — meaning capture-everything) can still
+govern a package that conceptually belongs to a later, stricter stage the
+applicant already passed through. This is now a strictly smaller case than
+originally documented — it no longer includes the (now-fixed) situation
+where a caller supplies the correct stage's `step_id` — but it is not
+eliminated: nothing today requires a caller to supply `step_id` at all, or
+guarantees it identifies an election stage when supplied.
+
+This needs a product decision, not a drive-by fix: should a pipeline be
+allowed multiple `election_vote` stages at all, and if so, what does "the
+applicant's stage" mean once none of them is the applicant's _current_ one
+and no `step_id` names one either — the highest-`sort_order` stage they
+ever reached (would need step-progress history, not just
+`current_step_id`)? Should `step_id` become required rather than optional on
+`ElectionPackageCreate`, closing the gap by making the ambiguous case
+unreachable instead of merely rarer? Until that is decided, a pipeline with
+multiple `election_vote` stages, requested with no disambiguating `step_id`
+and no current match, remains an edge case with no fully-correct backend
+resolution in this fallback path. (Security review MP-08 pass 4 round 2,
+PR #2177, narrowed pass 4 round 4, MP-26, same PR,
+`docs/security-review/MP-08-membership-pipeline.md`.)
 
 ## Medical Screening — Requirement and Record Lists Are Unbounded (2026-08-06, mirrored 2026-08-25)
 
@@ -2767,6 +3063,184 @@ path this rotation's own standing rule warns against. Found in
 `docs/security-review/FE3-34-frontend-shared.md` (feature 34, pass 3,
 FE3-34-5) — Codex caught this reviewing the very commit that fixed
 FE3-34-1.
+
+## MS-7 — A Medical Screening Record Can Be Self-Created and Self-Cleared, With No Reviewer Distinct From the Subject (2026-09-02)
+
+`medical_screening_service.py`'s `create_record`/`update_record` place no
+constraint on the relationship between the caller (anyone holding
+`medical_screening.manage`) and `data.user_id` (the record's subject). A
+`.manage` holder can `POST /medical-screening/records` with `user_id` equal
+to their own id and `status="passed"` directly — no review step, no second
+approver, nothing comparable to `MeetingMinutes`' `assert_different_person`
+(MM-9's sibling `Meeting` gap, above, is the closest existing precedent in
+this codebase). `update_record` does set `reviewed_by`/`reviewed_at` to the
+caller/now() when the new status is `passed`/`failed`/`waived`, which reads
+like a review-tracking mechanic but gates nothing:
+`get_compliance_status` — the only place `status` is consulted for
+compliance — checks membership in `{PASSED, COMPLETED, WAIVED}` and never
+looks at `reviewed_by` at all, so a self-administered `PASSED` set on
+**create** (never touching `update_record`) counts identically to a
+genuinely reviewed one.
+
+Not a cross-tenant or unauthenticated exposure — the permission is not
+baseline-granted to any position or rank (an administrator must explicitly
+assign it), and every write is audit-logged, so self-certification is
+discoverable after the fact, not silent. It is an integrity/trust-boundary
+gap on fitness-for-duty and drug-screening PHI: an EMS coordinator or
+officer who also holds `.manage` and is themselves a line member can clear
+their own screening with no independent check.
+
+Not fixed because both remedies are behavior changes needing a product
+decision: blocking `data.user_id == current_user.id` outright would break
+the legitimate small-department case where the same person is both the only
+one authorized to log screenings and a line member needing their own result
+recorded (the exam happened externally; the app is just where the result is
+typed in), and a full second-approver workflow is a feature, not a same-day
+fix. Found in `docs/security-review/MS-09-medical-screening.md` (feature 09,
+pass 3, MS-7).
+
+## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Three Established-Baseline Categories for Their Intended Audience (2026-09-03)
+
+`GET /{facility_id}/folders` is gated at baseline `facilities.view`/
+`.manage`, and FAC-5's design deliberately splits facility data into five
+**sensitive** families (access keys, utility accounts, capital projects,
+insurance policies, occupants — gated `facilities.view_sensitive`/`.edit`/
+`.manage`) and everything else — including a facility's photos and
+maintenance/inspection records — which stays readable at the **baseline**
+`facilities.view` grant held by the `secretary`, `quartermaster`,
+`safety_officer`, and `training_officer` positions by design.
+
+The facility file tree built by `DocumentsService.ensure_facility_folder`
+does not honor that split: the shared `facilities` system root, each
+per-facility folder, and **all six** of its sub-folders (Photos, Blueprints
+& Permits, Maintenance Records, Inspection Reports, Insurance & Leases,
+Capital Projects) are stamped with the identical
+`required_permissions = FACILITY_SENSITIVE_PERMISSIONS` (`facilities.view_sensitive`/
+`.edit`/`.manage`). That stamping existed since 2026-08-27 but was inert —
+`get_facility_sub_folders` never checked it — until PR #2160
+("Enforce document folder ancestor authorization", 2026-09-02, the DOC-5
+fix from the Documents & Legal feature) wired `can_access_folder` into it.
+Because `can_access_folder` ANDs every ancestor, a caller who is not
+admitted at the shared root is now refused a facility's **entire** folder
+tree, sensitive or not — so a secretary, quartermaster, safety officer, or
+training officer gets an empty folder list for every facility, including
+the Photos, Maintenance Records, and Inspection Reports categories that are
+supposed to be visible at their baseline grant (Blueprints & Permits'
+classification is separately undecided — see below). `GET /photos`
+(baseline `.view`) still returns the photo's metadata; only the file behind
+it, filed into this tree, is unreachable to them.
+
+Verified empirically against the real `DocumentsService.can_access_folder`
+(not a reimplementation): a `facilities.view`-only caller is refused a
+`required_permissions`-stamped Photos sub-folder; a `facilities.manage`
+caller is admitted.
+
+Fail-closed throughout — not a data-exposure bug, a functional regression.
+Not fixed because a correct narrowing needs: (1) a new permission tier for
+"any facilities module access" to gate the root/per-facility folder and the
+three sub-folders unambiguously operational per FAC-5's own text (Photos,
+Maintenance Records, Inspection Reports), distinct from both the generic
+`documents.view` (much broader — the default `member` position holds it, so
+simply clearing `required_permissions` would let any member browse these
+folders through the generic Documents module with no facilities grant at
+all) and the narrower sensitive set (which must stay on Insurance & Leases
+and Capital Projects); (2) an owner call on whether **Blueprints & Permits**
+specifically should stay sensitive (floor plans can be defensibly
+security-sensitive even though FAC-5 never named them as one of the five
+families) or move with the other three — until decided it stays sensitive,
+fail-closed; (3) reclassifying existing document references before
+loosening the per-facility folder's own permission — this covers two
+cases, not just unfiled documents: `_validate_shared_document_reference`
+files every currently-unfiled photo/document directly into that parent
+folder, not into any of the six sub-folders, so loosening it first would
+expose every document sitting there today regardless of how the sub-folders
+are classified — **and** the same function only relocates when
+`folder_id is None`, so an already-org-shared document already sitting in
+an unrestricted or otherwise weakly-protected folder is left exactly there
+and stays downloadable via `GET /documents/{id}/download` (which authorizes
+on that folder's own ACL alone, no facility-specific check) to any
+`documents.view` holder — a gap that is live today independent of whether
+this permission tier is ever loosened; (4) a migration correcting every
+already-stamped row for whichever categories move, sequenced after (3).
+Found in `docs/security-review/FAC-12-facilities.md` (feature 12, pass 3,
+FAC-13; the already-filed sub-case surfaced in a later Codex review round
+of the same pass). A related but distinct gap — `documents.manage` alone
+bypassing a document's own folder ACL through the _generic_ update/delete
+routes, independent of this facility-specific over-restriction — was found
+in the same review round and fixed (FAC-14, same doc). Two further Codex
+follow-ups found and fixed in the next round: the same bypass on a document
+_move_'s destination folder (FAC-15) and on the folder-mutation routes
+themselves — rename/reparent/delete of the target folder (FAC-16), the
+latter of which also uncovered and fixed a pre-existing bug where deleting a
+folder with descendants silently orphaned them instead of cascading (see
+FAC-16 and the entry below). A further round of Codex review fixed an
+unrelated response-model bug that turned every successful call to
+`GET /{facility_id}/folders` into a 500 (FAC-17). A final round of Codex
+review on the same commit, plus a systematic sweep of every remaining
+folder/document route in the file, found and fixed the identical
+destination-not-checked shape on folder reparenting (`update_folder`'s
+`parent_id`, FAC-18) and folder creation (`create_folder`'s `parent_id`,
+FAC-19), and added a defense-in-depth guard so the now-working
+folder-delete cascade cannot follow a cross-organization `parent_id` even
+if one is ever written outside the two guarded write paths (FAC-20). A
+further round found the delete cascade checked only the folder named in
+the request, never any descendant's own `required_permissions` (FAC-21).
+And, after PR #2191 (carrying FAC-14 through FAC-21) had already merged,
+a Codex finding on its final commit caught the most severe instance of
+this family: `delete_folder` never checked `is_system`, so — now that
+FAC-16 made the cascade genuinely destructive — any `documents.manage`
+holder could delete a system root such as "Member Files" outright and
+destroy every member's subfolder and document beneath it in one request,
+contradicting the documented invariant that system folders cannot be
+deleted; fixed on a dedicated follow-up branch/PR per CLAUDE.md Pitfall
+#24 (FAC-22). A further Codex review of that same fix commit, still on the
+same PR before it merged, found a two-step bypass of FAC-22 itself:
+`update_folder` never checked `is_system` before applying a reparent, so a
+system folder could be moved underneath an ordinary, freely deletable
+folder and destroyed by deleting that folder instead — the delete
+cascade's subtree walk checked cross-organization membership and each
+descendant's own ACL but never a descendant's `is_system`. Fixed with two
+independent changes: `update_folder` now refuses to reparent a system
+folder, and `delete_folder`'s subtree walk now refuses if any descendant is
+a system folder regardless of how it got there (FAC-23). None of FAC-14
+through FAC-23 are listed here because they are resolved, not open
+limitations. The already-filed sub-case in item (3) above and the
+Blueprints & Permits classification question in item (2) remain open,
+unresolved by any of these rounds.
+
+## FAC-16-adjacent — `TrainingCategory.subcategories` Likely Shares the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` / `CheckTemplateCompartment.children` (2026-09-03, updated 2026-09-03)
+
+While diagnosing why `DocumentFolder.delete_folder`'s cascade did not
+actually remove descendant folders (see FAC-16,
+`docs/security-review/FAC-12-facilities.md`), a grep of every `remote_side`
+usage in `app/models/` found two other self-referential relationships
+declared with the same inverted shape — `remote_side` placed on the plural
+collection attribute instead of on its singular backref, unlike the correct
+pattern used elsewhere (`FacilityRoom.parent_room`, `BudgetCategory.parent`,
+`StorageArea.parent`, `Event.recurrence_parent`, and now `DocumentFolder.children`
+and `CheckTemplateCompartment.children` after their fixes):
+
+- `CheckTemplateCompartment.children` (`app/models/apparatus.py`, backref
+  `"parent"`, `cascade="all, delete-orphan"`) — **fixed**, feature 13
+  (Apparatus & NFC), see `docs/security-review/AP-13-apparatus-nfc.md`.
+  Empirically confirmed the same failure mode as `DocumentFolder.children`
+  with a three-level fixture
+  (`test_apparatus_check_template_compartment_cascade.py`): deleting a
+  compartment with nested children (a bag inside a pack inside a
+  compartment, or any two-level nesting) left the descendants behind,
+  orphaned with a `NULL` `parent_compartment_id`, instead of removing them —
+  exactly the shape `EquipmentCheckService.delete_compartment`'s
+  `db.delete()` call relies on the relationship's own cascade to prevent.
+- `TrainingCategory.subcategories` (`app/models/training.py`, backref
+  `"parent_category"` — no cascade configured, so the practical effect here
+  is more likely a `parent_category_id` silently nulled to `None` on a
+  parent-category delete than a failed delete, though this has not been
+  empirically confirmed). **Still open** — belongs to the Training rotation
+  features (17/18), out of scope for feature 13. Needs the same empirical
+  multi-level-fixture check the other two used before being called a
+  confirmed finding (a plain code read is not sufficient; that is exactly
+  what missed the `DocumentFolder` and `CheckTemplateCompartment` instances
+  of this bug for as long as they existed).
 
 ## Process
 
