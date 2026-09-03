@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Fixed**
 
-- **FAC-22 — `can_access_folder`/`can_access_document` admitted a caller who
+- **FAC-24 — `can_access_folder`/`can_access_document` admitted a caller who
   held only a folder's read-only `required_permissions` entry, letting every
   mutation-gating check added by prior rounds (FAC-14 through FAC-21) be
   satisfied by a read-only grant.** A sensitive facility folder's
@@ -33,21 +33,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   applying it at every mutation-gating site: document update/delete and its
   destination, folder rename/delete and its destination, and the
   descendant-ACL check inside a folder-delete cascade.
-- **The same review also surfaced a dangling reference: deleting a shared
-  document (directly, or via a folder cascade) left a facility's own
-  reference to it pointing at nothing.** A facility record references a
-  shared document by a plain `"document:<uuid>"` string, not a foreign key —
-  deleting the generic document left that reference behind, so the facility
-  record kept listing a document entry that could never be downloaded again.
-  Fixed by cleaning up the org-scoped reference in the same transaction as
-  the delete, on both paths.
+- **FAC-25 — `POST /documents/upload`'s folder-destination check still used
+  read-admission, not write.** Every other folder mutation FAC-24 touched was
+  updated to pass `require_write=True`; the upload endpoint's own
+  `can_access_folder` call was missed, so the treasurer-shaped caller FAC-24
+  closed everywhere else could still upload directly into a sensitive
+  facility folder. Fixed by passing `require_write=True` there too.
+- **FAC-26 — deleting a shared document (directly, or via a folder cascade)
+  cleaned up its `FacilityDocument` reference without checking the
+  facility-specific delete permission, bypassing the facility API's own
+  stricter delete gate.** The generic `DELETE /documents/{document_id}` (and
+  the folder-cascade delete) require only `documents.manage`, but the
+  facility module's own document-delete route deliberately reserves deletion
+  for `facilities.delete`/`.manage` — a stricter, action-specific grant.
+  Since `permission_matches_any_write` treats `facilities.edit` as
+  write-capable (a folder's `required_permissions` typically lists both
+  `.edit` and `.manage`), a caller with `documents.manage` + `facilities.edit`
+  but not `facilities.delete` could delete a shared document and its
+  facility reference through the generic endpoint, bypassing the
+  facility-specific boundary entirely. Fixed by threading `current_user`
+  through `delete_document` (mirroring `delete_folder`'s existing optional
+  `current_user`) and gating `_delete_facility_document_references`'s actual
+  deletion on the caller holding `facilities.delete`/`.manage` — fails closed
+  (`PermissionError` → 403) when a reference exists and the caller lacks the
+  grant, so the whole delete is blocked rather than leaving a dangling
+  reference; succeeds normally when the document has no facility reference
+  regardless of this permission.
 - New regression tests: `TestFolderWriteTierPermission` (9 tests,
   reproducing the treasurer-shaped bypass across every affected mutation and
   positive-controlling a caller who genuinely holds the write-tier
-  permission), `TestDeleteDocumentCleansUpFacilityReference` (3 tests) — all
-  12 independently confirmed to fail against the pre-fix code and pass
-  against the fix. See `docs/security-review/FAC-12-facilities.md` (FAC-22)
-  for the full writeup.
+  permission), `TestDeleteDocumentCleansUpFacilityReference` (3 tests, now
+  also covering the facility-delete-permission gate), and new upload/delete
+  bypass regression tests for FAC-25/FAC-26 — all independently confirmed to
+  fail against the pre-fix code and pass against the fix. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-24, FAC-25, FAC-26) for
+  the full writeup.
+
+### Security: a system folder could be reparented under an ordinary folder, then destroyed via that folder's delete (2026-09-03)
+
+**CRITICAL — a two-step bypass of the FAC-22 fix directly below, same
+unrecoverable, organization-wide data loss.** Found by Codex review of the
+FAC-22 fix commit, on the same PR before it merged.
+
+**Fixed**
+
+- **FAC-23 — `update_folder` never checked `is_system` before applying a
+  reparent, and `delete_folder`'s subtree walk never checked a descendant's
+  `is_system` either.** FAC-22 (below) closed the direct route — deleting a
+  system folder outright — but left this two-step route open: `PATCH` a
+  system folder's `parent_id` to point at an ordinary, freely deletable
+  folder, then delete that ordinary folder. The root-level `is_system` check
+  FAC-22 added only inspects the folder named in the delete request; the
+  subtree walk (which already checks cross-org membership and each
+  descendant's own access-control list) found the system folder as a
+  descendant and cascaded through it like any other row. Reproduced against
+  pre-fix code before fixing: the two-step sequence succeeded silently and
+  destroyed a system folder, its descendant, and its document. Fixed with two
+  independent changes in `DocumentsService`: `update_folder` now refuses
+  (400) to reparent a folder with `is_system == True`, and `delete_folder`'s
+  subtree walk now refuses (400) the moment any descendant it visits is a
+  system folder, regardless of how it got there. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-23) for the full writeup
+  and regression tests.
+
+### Security: any `documents.manage` holder could delete a system folder outright, cascade-destroying an entire tree such as every member's files (2026-09-03)
+
+**CRITICAL — the most severe finding in this cascade-delete investigation:
+unrecoverable, organization-wide data loss from a single request, by a
+permission held broadly across the org.** Fixed on a dedicated, urgent
+follow-up PR after Codex flagged it on the merged commit that shipped the
+other fixes below.
+
+**Fixed**
+
+- **FAC-22 — `DELETE /documents/folders/{folder_id}` checked the caller's
+  folder ACL but never checked whether the target was a system folder.**
+  FAC-16 (below) corrected `DocumentFolder.children`'s self-referential
+  relationship so the folder-delete cascade genuinely deletes a folder's
+  subtree instead of merely orphaning it. Before that fix, the missing
+  `is_system` check was latent — a delete on a folder with descendants
+  didn't destroy anything. After it, any `documents.manage` holder — an
+  org-wide, broadly-held permission — could delete a system root such as
+  "Member Files" outright and cascade-destroy every member's subfolder and
+  document beneath it in one request, directly contradicting the
+  documented invariant that system folders cannot be deleted
+  (`docs/TROUBLESHOOTING.md`, `docs/changelog/2026-02.md`). Reproduced
+  against pre-fix code before fixing: the delete succeeded silently and
+  destroyed a system folder, its descendant, and its document. Fixed in
+  `DocumentsService.delete_folder`, which now refuses (403) the moment it
+  loads a folder with `is_system == True`, before any subtree walk or
+  delete begins. See `docs/security-review/FAC-12-facilities.md` (FAC-22)
+  for the full writeup and regression tests.
 
 ### Security: a folder delete could cascade-destroy a more-restricted descendant the caller could never access directly (2026-09-03)
 

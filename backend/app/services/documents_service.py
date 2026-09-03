@@ -441,6 +441,17 @@ class DocumentsService:
         if not folder:
             return None
 
+        # FAC-23 (Codex, on top of FAC-22): a system folder's location is a
+        # documented invariant ("system folders cannot be deleted",
+        # docs/TROUBLESHOOTING.md, docs/changelog/2026-02.md) that a bare
+        # is_system check on delete_folder doesn't fully protect --
+        # reparenting a system folder underneath an ordinary, freely
+        # deletable folder and then deleting that folder reaches the same
+        # cascade FAC-22 closed, one step removed. Refuse the move itself,
+        # at the same layer as the other folder-specific validation below.
+        if folder.is_system and "parent_id" in update_data:
+            raise ValueError("Cannot move a system folder")
+
         # DOC-6 (XC-1): validate re-pointed FKs are in-org before applying.
         if "parent_id" in update_data:
             new_parent_id = update_data["parent_id"]
@@ -513,6 +524,19 @@ class DocumentsService:
         if not folder:
             return False
 
+        # FAC-22 (Codex): FAC-16 corrected the self-referential `children`
+        # relationship so `cascade="all, delete-orphan"` genuinely deletes a
+        # folder's subtree instead of merely orphaning it (nulling
+        # descendants' parent_id). Before that fix, an unchecked is_system
+        # here was latent -- the delete didn't destroy anything. Now it does,
+        # so a documents.manage holder (org-wide, broadly held) could delete
+        # a system root like "Member Files" outright and cascade-destroy
+        # every member's subfolder and document beneath it. Documented as
+        # never possible (docs/TROUBLESHOOTING.md, docs/changelog/2026-02.md)
+        # but never actually enforced anywhere in this service.
+        if folder.is_system:
+            raise PermissionError("Cannot delete a system folder")
+
         # Walk the folder subtree (this folder + all descendants via
         # parent_id) *without* an organization_id filter, then check each row
         # found. The ORM's ``children`` cascade (``cascade="all,
@@ -555,6 +579,22 @@ class DocumentsService:
                     raise ValueError(
                         "Folder subtree contains a cross-organization "
                         "reference and cannot be deleted"
+                    )
+                # FAC-23 (Codex, on top of FAC-22): the root-level is_system
+                # check above only inspects the folder passed in. A system
+                # folder reparented beneath an ordinary, freely deletable
+                # folder (update_folder now refuses this move, but a row
+                # could already carry one from before that fix, or from a
+                # future writer that misses it) would reach this loop as a
+                # descendant and be cascade-deleted with everything above
+                # it -- the same catastrophic, unrecoverable data loss
+                # FAC-22 closed at the root, just one hop down. Failing
+                # closed here holds regardless of how the descendant got
+                # there.
+                if child.is_system:
+                    raise ValueError(
+                        "Folder subtree contains a system folder and "
+                        "cannot be deleted"
                     )
                 # require_write=True: a delete is a write, so a descendant
                 # folder whose required_permissions admit this caller only at
