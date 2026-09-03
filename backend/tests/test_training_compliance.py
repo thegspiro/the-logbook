@@ -1088,26 +1088,6 @@ def _scalar(val):
     return MagicMock(scalar=MagicMock(return_value=val))
 
 
-def _records(rows):
-    """A records query result: the hours path reads the member's completed
-    records and sums them in memory."""
-    from unittest.mock import MagicMock
-
-    return MagicMock(scalars=MagicMock(return_value=MagicMock(all=lambda: rows)))
-
-
-def _completed(hours):
-    from datetime import date
-
-    return SimpleNamespace(
-        hours_completed=hours,
-        completion_date=date.today(),
-        training_type=None,
-        course_id=None,
-        expiration_date=None,
-    )
-
-
 class TestCheckRequirementProgressZeroTarget:
     """A requirement with no positive target must not read as compliant for a
     member with nothing on file — the reported annual-renewal false-compliance."""
@@ -1116,7 +1096,7 @@ class TestCheckRequirementProgressZeroTarget:
         from uuid import uuid4
 
         req = _make_requirement(id=str(uuid4()), required_hours=0)
-        db = _MockSession([_one(req), _records([])])  # requirement, then records
+        db = _MockSession([_one(req), _scalar(0)])  # requirement, then hours sum
         svc = TrainingService(db)
 
         progress = await svc.check_requirement_progress(
@@ -1130,7 +1110,7 @@ class TestCheckRequirementProgressZeroTarget:
         from uuid import uuid4
 
         req = _make_requirement(id=str(uuid4()), required_hours=0)
-        db = _MockSession([_one(req), _records([_completed(3.0)])])  # 3 hours
+        db = _MockSession([_one(req), _scalar(3.0)])  # 3 matching hours on file
         svc = TrainingService(db)
 
         progress = await svc.check_requirement_progress(

@@ -4324,27 +4324,53 @@ class TestThirtiethRoundFindings:
         assert len(listed["items"]) == 1
 
     @pytest.mark.usefixtures("_use_test_session")
-    async def test_expiring_screenings_include_waivers(
+    async def test_expiring_screenings_include_current_waivers_only(
         self, server, org_with_members, db_session
     ):
+        """A waiver that is the member's current record for the requirement
+        is listed; one a later screening superseded is not, however soon it
+        expires, matching what the compliance summary counts."""
         org_id, admin_id, member_id = org_with_members
-        requirement = ScreeningRequirement(
+        physical = ScreeningRequirement(
             organization_id=org_id,
             name="Annual physical",
             screening_type=ScreeningType.PHYSICAL_EXAM,
         )
-        db_session.add(requirement)
-        await db_session.flush()
-        db_session.add(
-            ScreeningRecord(
-                organization_id=org_id,
-                user_id=member_id,
-                requirement_id=requirement.id,
-                screening_type=ScreeningType.PHYSICAL_EXAM,
-                status=ScreeningStatus.WAIVED,
-                expiration_date=date.today() + timedelta(days=10),
-            )
+        fitness = ScreeningRequirement(
+            organization_id=org_id,
+            name="Fitness",
+            screening_type=ScreeningType.FITNESS_ASSESSMENT,
         )
+        db_session.add_all([physical, fitness])
+        await db_session.flush()
+        current_waiver = ScreeningRecord(
+            organization_id=org_id,
+            user_id=member_id,
+            requirement_id=physical.id,
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            status=ScreeningStatus.WAIVED,
+            completed_date=date.today() - timedelta(days=100),
+            expiration_date=date.today() + timedelta(days=10),
+        )
+        old_waiver = ScreeningRecord(
+            organization_id=org_id,
+            user_id=member_id,
+            requirement_id=fitness.id,
+            screening_type=ScreeningType.FITNESS_ASSESSMENT,
+            status=ScreeningStatus.WAIVED,
+            completed_date=date.today() - timedelta(days=300),
+            expiration_date=date.today() + timedelta(days=5),
+        )
+        later_pass = ScreeningRecord(
+            organization_id=org_id,
+            user_id=member_id,
+            requirement_id=fitness.id,
+            screening_type=ScreeningType.FITNESS_ASSESSMENT,
+            status=ScreeningStatus.PASSED,
+            completed_date=date.today() - timedelta(days=20),
+            expiration_date=date.today() + timedelta(days=345),
+        )
+        db_session.add_all([current_waiver, old_waiver, later_pass])
         await db_session.flush()
         body = await _call(
             server,
@@ -4352,8 +4378,61 @@ class TestThirtiethRoundFindings:
             "list_expiring_screenings",
             days=30,
         )
-        assert [r["member_id"] for r in body["items"]] == [member_id]
+        assert [r["record_id"] for r in body["items"]] == [current_waiver.id]
+        assert body["total"] == 1
         assert "waived" not in json.dumps(body)
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_standalone_hours_check_stays_aggregated_in_sql(
+        self, org_with_members, db_session, monkeypatch
+    ):
+        """Without a preload, an hours check sums in SQL rather than loading
+        the member's records, as it did before the page preload existed."""
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+        from app.services.training_service import TrainingService
+
+        org_id, admin_id, member_id = org_with_members
+        req = TrainingRequirement(
+            organization_id=org_id,
+            name="Annual hours",
+            requirement_type=RequirementType.HOURS,
+            frequency=RequirementFrequency.BIANNUAL,
+            required_hours=2,
+            applies_to_all=True,
+            active=True,
+        )
+        db_session.add(req)
+        db_session.add(
+            TrainingRecord(
+                organization_id=org_id,
+                user_id=member_id,
+                course_name="Drill",
+                training_type=TrainingType.CERTIFICATION,
+                status=TrainingStatus.COMPLETED,
+                completion_date=date.today(),
+                hours_completed=3.0,
+            )
+        )
+        await db_session.flush()
+        original_execute = db_session.execute
+        statements = []
+
+        async def counting_execute(*args, **kwargs):
+            statements.append(str(args[0]))
+            return await original_execute(*args, **kwargs)
+
+        monkeypatch.setattr(db_session, "execute", counting_execute)
+        progress = await TrainingService(db_session).check_requirement_progress(
+            uuid.UUID(member_id), uuid.UUID(req.id), uuid.UUID(org_id), waivers=[]
+        )
+        assert progress.is_complete is True
+        record_reads = [s for s in statements if "training_records" in s]
+        assert any("sum(training_records.hours_completed)" in s for s in record_reads)
+        assert all("training_records.notes" not in s for s in record_reads)
 
     @pytest.mark.usefixtures("_use_test_session")
     async def test_scheduling_summary_uses_the_department_timezone(

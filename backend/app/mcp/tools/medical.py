@@ -8,8 +8,9 @@ current on each screening requirement and when it lapses.
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.mcp.principal import McpPrincipal
 from app.mcp.registry import logbook_tool
@@ -96,6 +97,36 @@ def register(server: Any) -> None:
         # loads the whole window for a dashboard; here it is paged, and
         # restricted to members in SQL: applicants' screenings belong to the
         # prospective-members module, which this switch does not cover.
+        current_statuses = [
+            ScreeningStatus.PASSED.value,
+            ScreeningStatus.COMPLETED.value,
+            ScreeningStatus.WAIVED.value,
+        ]
+        # The compliance summary judges each requirement by the member's
+        # most recent qualifying record (latest completed_date, an undated
+        # record ranking lowest). A record something later supersedes is not
+        # an impending lapse, however soon it expires, so only the current
+        # record for its member and requirement is listed here.
+        later = aliased(ScreeningRecord)
+        floor = date.min
+        superseded = exists(
+            select(later.id).where(
+                later.organization_id == ScreeningRecord.organization_id,
+                later.user_id == ScreeningRecord.user_id,
+                later.requirement_id == ScreeningRecord.requirement_id,
+                later.status.in_(current_statuses),
+                later.id != ScreeningRecord.id,
+                or_(
+                    func.coalesce(later.completed_date, floor)
+                    > func.coalesce(ScreeningRecord.completed_date, floor),
+                    and_(
+                        func.coalesce(later.completed_date, floor)
+                        == func.coalesce(ScreeningRecord.completed_date, floor),
+                        later.id > ScreeningRecord.id,
+                    ),
+                ),
+            )
+        )
         criteria = (
             ScreeningRecord.organization_id == principal.organization_id,
             ScreeningRecord.user_id.isnot(None),
@@ -105,13 +136,8 @@ def register(server: Any) -> None:
             # The same statuses the compliance summary treats as current: a
             # waiver expires too, and an expiring count the listing does not
             # name is one nobody can act on.
-            ScreeningRecord.status.in_(
-                [
-                    ScreeningStatus.PASSED.value,
-                    ScreeningStatus.COMPLETED.value,
-                    ScreeningStatus.WAIVED.value,
-                ]
-            ),
+            ScreeningRecord.status.in_(current_statuses),
+            ~superseded,
         )
         total = (
             await db.execute(

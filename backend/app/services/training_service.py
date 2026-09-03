@@ -728,23 +728,47 @@ class TrainingService:
 
         # ---- HOURS requirements ----
         if req_type == RequirementType.HOURS.value:
-            hours_records = await _windowed()
-            if requirement.training_type:
-                hours_records = [
-                    r
-                    for r in hours_records
-                    if r.training_type == requirement.training_type
-                ]
-            if requirement.required_courses:
-                wanted_courses = {str(c) for c in requirement.required_courses}
-                hours_records = [
-                    r
-                    for r in hours_records
-                    if r.course_id and str(r.course_id) in wanted_courses
-                ]
-            completed_value = float(
-                sum(float(r.hours_completed or 0) for r in hours_records)
-            )
+            if completed_records is None:
+                # No preload: the sum stays in SQL, so a standalone check
+                # never materializes the member's records.
+                hours_q = (
+                    select(func.sum(TrainingRecord.hours_completed))
+                    .where(TrainingRecord.user_id == str(user_id))
+                    .where(TrainingRecord.organization_id == str(organization_id))
+                    .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+                )
+                if start_date and end_date:
+                    hours_q = hours_q.where(
+                        TrainingRecord.completion_date >= start_date,
+                        TrainingRecord.completion_date <= end_date,
+                    )
+                if requirement.training_type:
+                    hours_q = hours_q.where(
+                        TrainingRecord.training_type == requirement.training_type
+                    )
+                if requirement.required_courses:
+                    hours_q = hours_q.where(
+                        TrainingRecord.course_id.in_(requirement.required_courses)
+                    )
+                completed_value = float((await self.db.execute(hours_q)).scalar() or 0)
+            else:
+                hours_records = [r for r in completed_records if _in_window(r)]
+                if requirement.training_type:
+                    hours_records = [
+                        r
+                        for r in hours_records
+                        if r.training_type == requirement.training_type
+                    ]
+                if requirement.required_courses:
+                    wanted_courses = {str(c) for c in requirement.required_courses}
+                    hours_records = [
+                        r
+                        for r in hours_records
+                        if r.course_id and str(r.course_id) in wanted_courses
+                    ]
+                completed_value = float(
+                    sum(float(r.hours_completed or 0) for r in hours_records)
+                )
             required_value = requirement.required_hours or 0
 
             # Adjust for waivers
@@ -760,16 +784,36 @@ class TrainingService:
 
             # Biannual: expired cert overrides hours
             if freq == RequirementFrequency.BIANNUAL.value:
-                dated = [
-                    r
-                    for r in await _all_completed()
-                    if r.expiration_date is not None
-                    and (
-                        not requirement.training_type
-                        or r.training_type == requirement.training_type
+                if completed_records is None:
+                    cert_q = (
+                        select(TrainingRecord.expiration_date)
+                        .where(
+                            TrainingRecord.user_id == str(user_id),
+                            TrainingRecord.organization_id == str(organization_id),
+                            TrainingRecord.status == TrainingStatus.COMPLETED,
+                            TrainingRecord.expiration_date.isnot(None),
+                        )
+                        .order_by(TrainingRecord.expiration_date.desc())
+                        .limit(1)
                     )
-                ]
-                latest_exp = max(r.expiration_date for r in dated) if dated else None
+                    if requirement.training_type:
+                        cert_q = cert_q.where(
+                            TrainingRecord.training_type == requirement.training_type
+                        )
+                    latest_exp = (await self.db.execute(cert_q)).scalar_one_or_none()
+                else:
+                    dated = [
+                        r
+                        for r in completed_records
+                        if r.expiration_date is not None
+                        and (
+                            not requirement.training_type
+                            or r.training_type == requirement.training_type
+                        )
+                    ]
+                    latest_exp = (
+                        max(r.expiration_date for r in dated) if dated else None
+                    )
                 if latest_exp and latest_exp < today:
                     # Expired cert — requirement is not met
                     is_complete = False
