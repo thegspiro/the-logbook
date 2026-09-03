@@ -1174,6 +1174,7 @@ class TestUpdateAndDeleteDocumentRespectFolderAcl:
         assert result.scalar_one_or_none() is None
 
 
+@pytest.mark.integration
 class TestUpdateDocumentRespectsDestinationFolderAcl:
     """FAC-15 (Codex follow-up on FAC-14, round 3): the FAC-14 fix above
     authorizes only the document's *current* folder via ``can_access_document``.
@@ -1285,6 +1286,7 @@ class TestUpdateDocumentRespectsDestinationFolderAcl:
         assert result.folder_id == source.id
 
 
+@pytest.mark.integration
 class TestFolderMutationRespectsOwnFolderAcl:
     """FAC-16 (Codex follow-up on FAC-14, round 3): ``update_folder`` and
     ``delete_folder`` require only ``documents.manage`` and never checked
