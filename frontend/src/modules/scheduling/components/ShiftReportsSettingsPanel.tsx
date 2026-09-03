@@ -9,7 +9,7 @@
  * Training defaults are read from the TrainingModuleConfig API.
  *
  * The sibling `checklist_timing` block under that same key is edited in
- * Inventory (Gear Admin → Checklist Settings) and is deliberately not loaded or
+ * Inventory (Inventory Admin → Checklist Settings) and is deliberately not loaded or
  * saved here. The settings endpoint deep-merges, so sending only
  * `post_shift_validation` leaves it alone — sending the whole `shift_reports`
  * object from both screens is what would let whichever saved last revert the

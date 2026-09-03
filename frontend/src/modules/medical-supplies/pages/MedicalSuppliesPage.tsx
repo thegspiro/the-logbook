@@ -168,13 +168,13 @@ const MedicalSuppliesPage: React.FC = () => {
               Medical Supplies
             </h1>
             <p className="text-theme-text-muted mt-1 text-sm">
-              EMS stock with lot numbers and expiration dates. Gear and uniforms are tracked separately
+              EMS stock with lot numbers and expiration dates, run on the same catalog as gear and uniforms
               {canManageGear && (
                 <>
                   {' '}
                   under{' '}
                   <Link to="/inventory" className="underline">
-                    Gear &amp; Uniforms
+                    Inventory
                   </Link>
                 </>
               )}

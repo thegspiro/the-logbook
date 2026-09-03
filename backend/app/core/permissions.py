@@ -294,12 +294,14 @@ SCHEDULING_REPORT = Permission(
     PermissionCategory.SCHEDULING,
 )
 
-# Inventory — gear and uniforms
+# Inventory — gear, uniforms and everything else on the one catalog
 INVENTORY_VIEW = Permission(
-    "inventory.view", "View gear and uniforms", PermissionCategory.INVENTORY
+    "inventory.view", "View gear, uniforms and equipment", PermissionCategory.INVENTORY
 )
 INVENTORY_MANAGE = Permission(
-    "inventory.manage", "Manage gear and uniforms", PermissionCategory.INVENTORY
+    "inventory.manage",
+    "Manage gear, uniforms and equipment",
+    PermissionCategory.INVENTORY,
 )
 
 # Inventory — medical supplies.
