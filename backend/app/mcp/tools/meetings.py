@@ -117,6 +117,19 @@ def _motion(mo: Any, movers: dict[str, str]) -> dict:
     }
 
 
+def _action_item(ai: Any) -> dict:
+    description, cut = _clip(ai.description)
+    return {
+        "id": ai.id,
+        "description": description,
+        "description_truncated": cut,
+        "assignee_name": ai.assignee_name,
+        "due_date": iso(ai.due_date),
+        "priority": iso(ai.priority),
+        "status": iso(ai.status),
+    }
+
+
 def _chunk(text: str, offset: int) -> dict:
     text = scrub_text(text)
     piece = text[offset : offset + MINUTES_TEXT_CHARS]
@@ -261,7 +274,9 @@ def register(server: Any) -> None:
     ) -> dict:
         """Action items still open or in progress across all meetings, soonest
         due first (undated last), with assignee name, due date and priority.
-        Paged; ``total`` counts every open item."""
+        Paged; ``total`` counts every open item. A description is cut at
+        20,000 characters (``description_truncated``);
+        ``get_action_item_description`` reads the rest."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         criteria = (
@@ -290,20 +305,49 @@ def register(server: Any) -> None:
         names = await member_names(
             db, principal.organization_id, (i.assigned_to for i in items)
         )
-        rendered = [
-            {
-                "id": i.id,
-                "meeting_id": i.meeting_id,
-                "description": i.description,
-                "assigned_to_member_id": i.assigned_to,
-                "assigned_to": names.get(i.assigned_to or ""),
-                "due_date": iso(i.due_date),
-                "status": iso(i.status),
-                "priority": iso(i.priority),
-            }
-            for i in items
-        ]
+        rendered = []
+        for i in items:
+            description, cut = _clip(i.description)
+            rendered.append(
+                {
+                    "id": i.id,
+                    "meeting_id": i.meeting_id,
+                    "description": description,
+                    "description_truncated": cut,
+                    "assigned_to_member_id": i.assigned_to,
+                    "assigned_to": names.get(i.assigned_to or ""),
+                    "due_date": iso(i.due_date),
+                    "status": iso(i.status),
+                    "priority": iso(i.priority),
+                }
+            )
         return page(rendered, total, limit, offset)
+
+    @logbook_tool(server, title="Read action item description", module="minutes")
+    async def get_action_item_description(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        action_item_id: str,
+        content_offset: int = 0,
+    ) -> dict:
+        """A meeting action item's full description, 20,000 characters at a
+        time (``action_item_id`` is the ``id`` from ``list_open_action_items``).
+        When ``content_has_more`` is true, call again with ``content_offset``
+        set to ``next_content_offset``."""
+        content_offset = clamp_offset(content_offset)
+        result = await db.execute(
+            select(MeetingActionItem).where(
+                MeetingActionItem.id
+                == str(parse_uuid(action_item_id, "action_item_id")),
+                MeetingActionItem.organization_id == principal.organization_id,
+            )
+        )
+        item = result.scalar_one_or_none()
+        if item is None:
+            raise ValueError("Action item not found")
+        body = _chunk(item.description or "", content_offset)
+        body.update({"action_item_id": item.id, "meeting_id": item.meeting_id})
+        return body
 
     @logbook_tool(server, title="List published minutes", module="minutes")
     async def list_minutes(
@@ -347,22 +391,28 @@ def register(server: Any) -> None:
         motion_limit: int = 20,
         action_item_offset: int = 0,
         action_item_limit: int = 20,
+        attendee_offset: int = 0,
+        attendee_limit: int = 50,
     ) -> dict:
         """One set of approved minutes: reports, business, announcements,
-        motions with their votes, action items and the dynamic sections.
-        Sections, motions and action items are each paged by their own
-        ``*_offset`` / ``*_limit`` (``*_total`` and ``*_has_more`` say what
-        is left). Every piece of text is cut at 20,000 characters;
-        ``truncated_fields``, a section's ``content_truncated`` and a
-        motion's ``motion_text_truncated`` / ``discussion_truncated`` say
-        which were, and ``get_minutes_text`` reads the rest. The treasurer's
-        report is included only when finance sharing is on."""
+        motions with their votes, action items, attendees and the dynamic
+        sections. Sections, motions, action items and attendees are each
+        paged by their own ``*_offset`` / ``*_limit`` (``*_total`` and
+        ``*_has_more`` say what is left). Every piece of text is cut at
+        20,000 characters; ``truncated_fields``, a section's
+        ``content_truncated``, a motion's ``motion_text_truncated`` /
+        ``discussion_truncated`` and an action item's
+        ``description_truncated`` say which were, and ``get_minutes_text``
+        reads the rest. The treasurer's report is included only when
+        finance sharing is on."""
         section_offset = clamp_offset(section_offset)
         section_limit = clamp_limit(section_limit)
         motion_offset = clamp_offset(motion_offset)
         motion_limit = clamp_limit(motion_limit)
         action_item_offset = clamp_offset(action_item_offset)
         action_item_limit = clamp_limit(action_item_limit)
+        attendee_offset = clamp_offset(attendee_offset)
+        attendee_limit = clamp_limit(attendee_limit)
         m = await MinuteService(db).get_minutes(
             str(minutes_id), org_uuid(principal), restricted=True
         )
@@ -373,6 +423,16 @@ def register(server: Any) -> None:
         all_action_items = list(m.action_items or [])
         action_items_page = all_action_items[
             action_item_offset : action_item_offset + action_item_limit
+        ]
+        # ``attendees`` is untyped JSON: a list on every write path, but a
+        # stray scalar is shown rather than dropped.
+        all_attendees = (
+            list(m.attendees)
+            if isinstance(m.attendees, list)
+            else ([m.attendees] if m.attendees else [])
+        )
+        attendees_page = all_attendees[
+            attendee_offset : attendee_offset + attendee_limit
         ]
         movers = await member_names(
             db,
@@ -400,7 +460,11 @@ def register(server: Any) -> None:
             {
                 "called_to_order_at": iso(m.called_to_order_at),
                 "adjourned_at": iso(m.adjourned_at),
-                "attendees": m.attendees,
+                "attendees": attendees_page,
+                "attendee_offset": attendee_offset,
+                "attendee_total": len(all_attendees),
+                "attendees_has_more": attendee_offset + len(attendees_page)
+                < len(all_attendees),
                 "quorum_count": m.quorum_count,
                 **texts,
                 "sections": sections_page,
@@ -413,16 +477,7 @@ def register(server: Any) -> None:
                 "motion_total": len(all_motions),
                 "motions_has_more": motion_offset + len(motions_page)
                 < len(all_motions),
-                "action_items": [
-                    {
-                        "description": ai.description,
-                        "assignee_name": ai.assignee_name,
-                        "due_date": iso(ai.due_date),
-                        "priority": iso(ai.priority),
-                        "status": iso(ai.status),
-                    }
-                    for ai in action_items_page
-                ],
+                "action_items": [_action_item(ai) for ai in action_items_page],
                 "action_item_offset": action_item_offset,
                 "action_item_total": len(all_action_items),
                 "action_items_has_more": action_item_offset + len(action_items_page)
@@ -448,8 +503,9 @@ def register(server: Any) -> None:
         time: ``field`` is a report or business field named by ``get_minutes``
         (old_business, chief_report, treasurer_report, ...),
         ``section:<key>`` for a dynamic section, ``motion:<id>`` for a
-        motion's discussion notes or ``motion_text:<id>`` for its wording
-        (the ``id`` on each motion). When ``content_has_more`` is true, call
+        motion's discussion notes, ``motion_text:<id>`` for its wording or
+        ``action_item:<id>`` for an action item's description (the ``id``
+        on each motion or action item). When ``content_has_more`` is true, call
         again with ``content_offset`` set to ``next_content_offset``."""
         content_offset = clamp_offset(content_offset)
         m = await MinuteService(db).get_minutes(
@@ -485,6 +541,12 @@ def register(server: Any) -> None:
                 if prefix == "motion_text"
                 else motion.discussion_notes
             )
+        elif field.startswith("action_item:"):
+            item_id = field[len("action_item:") :]
+            matches = [ai for ai in (m.action_items or []) if ai.id == item_id]
+            if not matches:
+                raise ValueError(f"No action item with id {item_id!r}")
+            text = matches[0].description
         elif field in _MINUTES_TEXT_FIELDS:
             text = getattr(m, field)
         else:
@@ -497,6 +559,7 @@ def register(server: Any) -> None:
                         "section:<key>",
                         "motion:<id>",
                         "motion_text:<id>",
+                        "action_item:<id>",
                     )
                 )
             )

@@ -2358,6 +2358,135 @@ class TestEighteenthRoundFindings:
         assert rest["has_more"] is False
 
 
+class TestNineteenthRoundFindings:
+    """Regressions for the nineteenth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_open_action_item_descriptions_are_bounded_and_readable(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import meetings as meeting_tools
+
+        org_id, admin_id, _ = org_with_members
+        meeting = Meeting(
+            organization_id=org_id,
+            title="Task meeting",
+            meeting_type=MeetingType.BUSINESS,
+            meeting_date=date.today(),
+        )
+        db_session.add(meeting)
+        await db_session.flush()
+        description = "Call 5551234567 and " + "t" * 30
+        item = MeetingActionItem(
+            organization_id=org_id,
+            meeting_id=meeting.id,
+            description=description,
+            status=ActionItemStatus.OPEN,
+        )
+        db_session.add(item)
+        await db_session.flush()
+        monkeypatch.setattr(meeting_tools, "MINUTES_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_open_action_items")
+        row = next(i for i in listed["items"] if i["id"] == item.id)
+        assert len(row["description"]) == 12
+        assert row["description_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_action_item_description",
+                action_item_id=item.id,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert joined.endswith("t" * 30)
+        assert chunk["meeting_id"] == meeting.id
+        with pytest.raises(ToolError, match="Action item not found"):
+            await _call(
+                server,
+                principal,
+                "get_action_item_description",
+                action_item_id=str(uuid.uuid4()),
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_minutes_attendees_and_action_item_text_are_bounded(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import meetings as meeting_tools
+
+        org_id, admin_id, _ = org_with_members
+        minutes_id, item_id = str(uuid.uuid4()), str(uuid.uuid4())
+        attendees = [f"Member {n}" for n in range(5)]
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, attendees, created_by) VALUES (:id, :org, "
+                "'April meeting', 'business', '2027-04-01', 'approved', :attendees, :by)"
+            ),
+            {
+                "id": minutes_id,
+                "org": org_id,
+                "attendees": json.dumps(attendees),
+                "by": admin_id,
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO minutes_action_items (id, minutes_id, description) "
+                "VALUES (:id, :minutes, :description)"
+            ),
+            {"id": item_id, "minutes": minutes_id, "description": "d" * 25},
+        )
+        await db_session.flush()
+        monkeypatch.setattr(meeting_tools, "MINUTES_TEXT_CHARS", 10)
+        principal = _principal(org_id, admin_id)
+        body = await _call(
+            server, principal, "get_minutes", minutes_id=minutes_id, attendee_limit=2
+        )
+        assert body["attendees"] == ["Member 0", "Member 1"]
+        assert body["attendee_total"] == 5
+        assert body["attendees_has_more"] is True
+        rest = await _call(
+            server,
+            principal,
+            "get_minutes",
+            minutes_id=minutes_id,
+            attendee_offset=4,
+            attendee_limit=2,
+        )
+        assert rest["attendees"] == ["Member 4"]
+        assert rest["attendees_has_more"] is False
+        item = body["action_items"][0]
+        assert item["id"] == item_id
+        assert item["description"] == "d" * 10
+        assert item["description_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field=f"action_item:{item_id}",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        assert "".join(pieces) == "d" * 25
+
+
 class TestReviewFindings:
     """Regressions for the first review round on #2197."""
 
