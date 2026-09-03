@@ -817,6 +817,27 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.queryByText(/No medical supply categories exist yet/i)).not.toBeInTheDocument();
     });
 
+    it('warns the add-supply flow that retained categories are out of date', async () => {
+      // Options surviving a failed refresh is not the same as them being
+      // current: one added since is missing, and one removed since is still
+      // offered -- selectable right up to the save that rejects it.
+      mockCheckPermission.mockReturnValue(true);
+      mockGetCategories.mockResolvedValueOnce([{ id: 'cat-1', name: 'Airway' }]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await screen.findByRole('option', { name: 'Airway' });
+
+      mockGetCategories.mockRejectedValue(new Error('Categories unavailable'));
+      await user.click(screen.getByRole('button', { name: 'Refresh medical supplies' }));
+      await screen.findByText('Could not load the category list.');
+
+      await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+      expect(await screen.findByText(/Showing previously loaded categories/i)).toBeInTheDocument();
+    });
+
     it('still tells the add-supply flow to create a category when none exist', async () => {
       mockCheckPermission.mockReturnValue(true);
       mockGetCategories.mockResolvedValue([]);
