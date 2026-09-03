@@ -244,7 +244,9 @@ describe('McpServiceKeyPanel', () => {
 
     finish({ key: activeKey, plaintext: 'logbook_mcp_abcdefgh_secret', revoked: [] });
     await screen.findByTestId('mcp-issued-key');
-    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+    // The plaintext renders before the status refresh settles; busy clears
+    // only once that refresh has finished.
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
   });
 
   it('shows the new key when the status refresh after issuing fails', async () => {
