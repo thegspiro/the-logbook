@@ -323,6 +323,8 @@ and the SMTP connection entries (#1–#6).
 
 ---
 
+## Form Validation Errors
+
 ### Department Information
 
 #### 12. Department Name Required
