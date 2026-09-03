@@ -415,6 +415,50 @@ class TestLinkManagement:
         )
         assert remaining.scalars().all() == []
 
+    async def test_a_checklist_deleted_after_validation_leaves_no_orphan_template(
+        self, db_session, monkeypatch
+    ):
+        """A race, not a client error: the id was valid when checked.
+
+        ``_validated_check_ids`` runs one query before any write. If the
+        checklist it approved is gone by the time the link is written — two
+        officers acting on the same org's checklists concurrently — the FK
+        insert fails. Without cleanup the template from the first, already
+        -committed write would survive that failure as a checklist-less
+        orphan, for a retry to duplicate. Simulated by bypassing validation
+        (standing in for "valid when checked, gone by the time it mattered")
+        rather than a real race, which cannot be made deterministic.
+        """
+        org = await _org(db_session)
+        ghost_id = str(uuid.uuid4())
+
+        async def _validated_but_actually_gone(check_template_ids, organization_id):
+            return list(check_template_ids), None
+
+        service = SchedulingService(db_session)
+        monkeypatch.setattr(
+            service, "_validated_check_ids", _validated_but_actually_gone
+        )
+
+        created, error = await service.create_template(
+            org.id,
+            {
+                "name": "Day Shift",
+                "start_time_of_day": "07:00",
+                "end_time_of_day": "19:00",
+                "duration_hours": 12.0,
+                "equipment_check_template_ids": [ghost_id],
+            },
+            None,
+        )
+        assert created is None
+        assert error == "Equipment checklist not found"
+
+        remaining = await db_session.execute(
+            select(ShiftTemplate).where(ShiftTemplate.organization_id == org.id)
+        )
+        assert remaining.scalars().all() == []
+
     async def test_update_omitting_the_key_leaves_links_alone(self, db_session):
         """An omitted key means "leave this alone" (pitfall #1)."""
         org = await _org(db_session)
