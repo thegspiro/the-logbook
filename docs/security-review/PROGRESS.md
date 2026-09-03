@@ -17,18 +17,22 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **[#2210](https://github.com/thegspiro/the-logbook/pull/2210)** (branch
-`claude/security-review-scheduling`) — Feature 15, Scheduling, pass 3. No
-fixes, no findings — diff-scoped against a
-2026-08-31 baseline (five days of `main`), dominated by the equipment-check
-module move (already reviewed under EC-14 pass 3) and a new Claude MCP
-integration. New `equipment_check_template_ids` client-supplied FK list
+`claude/security-review-scheduling`) — Feature 15, Scheduling, pass 3. 1
+fix, 1 finding (SCH-12, LOW). Codex review of the first draft caught two
+real scope gaps (the baseline commit excluded its own scheduling content;
+17 frontend files were grep-swept, not read) and one real correctness gap
+(SCH-12: `create_template` could leave a checklist-less orphan template if
+the checklist it validated is deleted before the link write lands — fixed
+with a nested-savepoint write + cleanup, guard test added) — all corrected
+in the same PR. New `equipment_check_template_ids` client-supplied FK list
 verified correctly org-validated before write; two new migrations verified
 schema-safe; the one scheduling-relevant MCP tool file
 (`app/mcp/tools/scheduling.py`) read in full and confirmed org-scoped,
 visibility-gated and bounded (the wider MCP surface is out of this
 feature's scope and already tracked in `KNOWN_LIMITATIONS.md`). Full
-completion gate green. Rotation row 15 → ⏳ awaiting PR merge. Next: 16
-Events & requests, once this PR merges.
+completion gate green, including frontend vitest + build (run this
+revision after Codex noted they were missing). Rotation row 15 → ⏳
+awaiting PR merge. Next: 16 Events & requests, once this PR merges.
 
 ---
 
@@ -74,6 +78,56 @@ revisions, single head), 803/803 scheduling-scoped and 10485/10485 full
 backend suite pass, 0 frontend type/lint errors. Findings doc:
 `docs/security-review/SCH-15-scheduling.md` (pass 3 section appended). PR
 opening next. Next: 16 Events & requests, once this PR merges.
+
+### 2026-09-03 — Feature 15 (Scheduling, pass 3) — Codex follow-up (same PR, same day): 1 fix, 1 finding
+
+Codex review of PR #2210's first draft caught three real gaps, all verified
+and corrected rather than argued with:
+
+- **Baseline excluded its own content.** `299a163a` was used as the diff's
+  exclusive lower bound, but the commit itself adds `Shift.template_id` and
+  its org-validation in `create_shift` — genuinely scheduling-relevant
+  content the draft's scope silently dropped. Re-reviewed against
+  `299a163a` directly: `ondelete="SET NULL"` + `nullable=True` holds
+  (Pitfall #2), and the client-supplied `template_id` is org-validated
+  before storage (XC-1/Pitfall #14c). Clean, no finding — the gap was in
+  scope, not in the code.
+- **17 frontend files grep-swept, not read.** The draft claimed "five
+  frontend files changed, all read in full" when 21 had real (non-deletion)
+  diffs. All 17 missed ones now read in full: the same mechanical
+  `POSITION_LABELS[token]` → `positionLabel()` rollout and two Inventory
+  route-target updates already described for the four originally-read
+  files. Clean, no finding, but the "read in full" claim in the first draft
+  was false for these and is corrected in the findings doc.
+- **SCH-12 (LOW, fixed)** — `create_template`'s first draft claimed its
+  validate-before-create ordering meant "a bad id never leaves an orphan
+  template row." True only for an id bad _at request time_. If the
+  checklist is deleted between `_validated_check_ids` and the later link
+  write, the FK insert fails and the already-committed template survives as
+  a checklist-less orphan. Fixed: the link write now runs inside
+  `self.db.begin_nested()` (a SAVEPOINT) with an explicit `flush()`, so a
+  failure rolls back only that write; on failure the orphan template is
+  deleted in the same outer transaction and the caller gets the same
+  "Equipment checklist not found" either direction of the race would have
+  produced. (A plain `session.rollback()` was tried first and does not
+  compose with this repo's `join_transaction_mode="create_savepoint"` test
+  fixture — see the finding for why the nested-savepoint form is also the
+  more correct production behavior, not just the test-compatible one.)
+  Guard test added: `test_shift_template_equipment_checks.py::
+TestLinkManagement::test_a_checklist_deleted_after_validation_leaves_no_orphan_template`.
+
+The stale `check_run.completed` failure the PR also received (for the
+first-push commit, superseded moments later by a second push) was addressed
+with a PR comment rather than a fix — not this PR's failure, see the PR
+thread. Completion gate re-run in full after these changes, now including
+frontend vitest (375/375, 26 files) and `npm run build` (Codex separately
+noted these were missing from the recorded gate — CLAUDE.md's own gate list
+doesn't mandate them for a backend-only fix, but a "full completion gate
+green" claim shouldn't omit a check there's a means to run): flake8/black
+/isort clean, migrations still single-head, 804/804 scheduling-scoped and
+10486/10486 full backend suite pass (+1 each, the new guard test), 0
+frontend type/lint errors. Findings doc and Open PR row both updated.
+Pushed to PR #2210. Next: 16 Events & requests, once this PR merges.
 
 ### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) — no new findings, PR pending
 

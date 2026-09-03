@@ -694,26 +694,51 @@ correction for why.
 | `tsc --noEmit`                                      | ✅ 0 errors (no frontend file changed this follow-up)                                                                                                                  |
 | `eslint .`                                          | ✅ 0 errors, 10 warnings (pre-existing, same set as SEC-00)                                                                                                            |
 
-## Pass 3 (2026-09-03) — 0 fixes, 0 flagged, 0 new findings
+## Pass 3 (2026-09-03) — 1 fix, 0 flagged, 1 new finding (SCH-12)
 
-**Baseline:** `299a163a` (2026-08-31, the last commit before the first
-post-pass-2 change to any declared file — pass 2's own merge commit is no
-longer reachable in this worktree's shallow history, the same gap EC-14 pass
-3 hit; the shallow clone was deepened to reach this point). Five days of
-`main` sit between it and this pass, dominated by the 2026-08-31 move of
-equipment-checklist ownership from Scheduling to Inventory (already reviewed
-under EC-14 pass 3) and a new Claude MCP integration (`app/mcp/`, not a
-declared file of this feature — see below).
+**Revision note.** Codex review of this PR's first draft caught two real
+scope gaps and one real correctness gap, all corrected below rather than
+argued with:
 
-**Diff-scoped, not re-read whole.** `git diff --stat` against the six
-declared backend files and their frontend module shows real churn in only
-four: `scheduling_service.py` (+250/-38), `scheduling_module_config_service.py`
-(-6, a dead settings field removed), plus four frontend files
-(`TemplateFormModal.tsx`, `positionLabels.ts` [new],
-`EligibilitySettingsCard.tsx`, `ShiftSettingsPanel.tsx`,
-`ShiftReportsSettingsPanel.tsx`). `scheduling.py`, `scheduling_module_config.py`,
-`calcom_sync.py`, `standing_shift_service.py`, `calcom_service.py` are
-byte-identical to pass 2. All changed files read in full, not sampled.
+1. The baseline commit (`299a163a`) was itself a scheduling change
+   (`shifts.template_id` plus its org-validation in `create_shift` and
+   pattern generation) — using it as the diff's exclusive lower bound
+   silently excluded its own content. Re-reviewed against `299a163a` itself
+   (see "Reviewed on the Codex-caught baseline gap" below); clean, no
+   finding.
+2. "Four frontend files" undercounted the real diff — 17 more files in
+   `modules/scheduling/` and `pages/scheduling/` had genuine (non-deletion)
+   changes and were not read, only grep-swept for banned patterns. All 17
+   now read in full (see below); clean, no finding, but the draft's "read in
+   full" claim was false for them and is corrected here.
+3. **SCH-12 (LOW, fixed)** — a real TOCTOU gap in `create_template`'s
+   two-write structure that the draft's own "a bad id never leaves an orphan
+   template row" claim overstated. See the finding below.
+
+The draft also recorded the completion gate as green without having run the
+frontend test suite or build — CLAUDE.md's own gate doesn't list them as
+mandatory the way flake8/pytest/tsc/eslint are, but a pass claiming "full
+completion gate green" should not omit checks it has the means to run. Both
+now run; see the gate table.
+
+**Baseline:** `299a163a^` (the parent of `299a163a`, 2026-08-31 — the
+correction above), the true last commit before the first post-pass-2 change
+to any declared file. Pass 2's own merge commit is no longer reachable in
+this worktree's shallow history, the same gap EC-14 pass 3 hit; the shallow
+clone was deepened to reach this point. Five-plus days of `main` sit between
+it and this pass, dominated by the 2026-08-31 move of equipment-checklist
+ownership from Scheduling to Inventory (already reviewed under EC-14 pass 3)
+and a new Claude MCP integration (`app/mcp/`, not a declared file of this
+feature — see below).
+
+**Diff-scoped, not re-read whole.** Against the corrected baseline, real
+churn is in: `scheduling_service.py` (+269/-38, including `299a163a`'s own
+`template_id` addition), `scheduling_module_config_service.py` (-6, a dead
+settings field removed), the two new migrations, and 21 frontend files
+(`modules/scheduling/` and `pages/scheduling/` combined) — up from the four
+originally read. `scheduling.py`, `scheduling_module_config.py`,
+`calcom_sync.py`, `standing_shift_service.py`, `calcom_service.py` remain
+byte-identical to pass 2. All changed files now read in full, not sampled.
 
 ### Reviewed this pass
 
@@ -726,7 +751,10 @@ byte-identical to pass 2. All changed files read in full, not sampled.
   **before** `_crud_create`/`_crud_update` writes anything — deliberately
   ordered that way per an in-code comment, because the create path commits
   the template first and validating after it left an orphan row behind on a
-  bad id. `_replace_equipment_check_links` writes
+  bad id **known at request time**. A bad id that only becomes bad _after_
+  validation (deleted concurrently) is a distinct gap — see SCH-12 below;
+  the ordering here does not cover that case, and this pass's first draft
+  overstated that it did. `_replace_equipment_check_links` writes
   `ShiftTemplateEquipmentCheck` rows with a server-set `organization_id`
   (never client-supplied) and replaces the set atomically (unticked links
   deleted, not merely left). Frontend (`TemplateFormModal.tsx`) sends the
@@ -799,7 +827,89 @@ principal.organization_id` (the MCP principal's own org, not
   `dangerouslySetInnerHTML`, banned `.toLocale*`, and `date-fns` imports: zero
   hits.
 
-### No new findings
+### Reviewed on the Codex-caught baseline gap
+
+`299a163a` itself (excluded by the draft's baseline choice — correction
+above) adds `Shift.template_id` (`models/training.py`, `ondelete="SET NULL"`
+
+- `nullable=True`, Pitfall #2 holds), the matching `ShiftCreate.template_id`
+  / `ShiftResponse.template_id` schema fields, and the org-validation in
+  `create_shift`: a client-supplied `template_id` is checked against
+  `ShiftTemplate.id == template_id, ShiftTemplate.organization_id ==
+organization_id` before being stored (XC-1/Pitfall #14c) — not merely a
+  dangling-FK risk, since this id decides which checklists a crew is shown.
+  Pattern-generation's own stamp (`template_id=getattr(template, "id", None)`)
+  uses a template object already resolved through an org-scoped path, not a
+  second client input. The migration itself
+  (`20260831_0001_fab0ab7897d3_...`) was already reviewed above (it was in the
+  originally-declared diff, just its source-file counterpart was not) —
+  correctly guarded on `shifts` and `shift_templates` both existing first
+  (Pitfall #26). Verified good, no finding — the gap was in this pass's scope,
+  not in the code.
+
+### Reviewed: the 17 frontend files the first draft grep-swept but did not read
+
+All read in full this revision. Every one is the same mechanical rollout
+already described above for the four originally-read files: a
+`POSITION_LABELS[token]` raw lookup replaced with the new `positionLabel()`
+helper (`modules/scheduling/components/TemplatesOverviewCard.tsx`,
+`pages/scheduling/{CrewBoardSlot,MyShiftsTab,OpenShiftsTab,PositionEditor,
+PositionRosterPage,ShiftDetailPanel,ShiftReportsTab}.tsx`,
+`pages/scheduling/board/{GiveUpShiftModal,PhoneDaySheet,ShiftSeatList}.tsx`)
+— every call site interpolates the result as plain JSX text, never
+`dangerouslySetInnerHTML`, so no injection surface moved with the rename;
+two static navigation-target updates from the old in-scheduling equipment-
+check route to the new Inventory one (`ShiftCheckInPage.tsx`,
+`ShiftDetailPanel.tsx`), consistent with the module move EC-14 pass 3
+covered; and type/export housekeeping for the same move
+(`modules/scheduling/index.ts`, `services/api.ts`,
+`types/shiftSettings.ts`, `components/shiftTemplateTypes.ts`,
+`components/schedulingSettingsSections.ts` — the last two also carry the new
+`equipment_check_template_ids` field already reviewed on the backend side).
+No new API call, no new user-input sink, no privilege-escalation shape.
+Verified good, no finding.
+
+### SCH-12 — LOW (fixed) — `create_template` could leave a checklist-less orphan template if a checklist is deleted between validation and the link write
+
+**What:** `_validated_check_ids` runs one read-only query to confirm every
+`equipment_check_template_id` is in-org, _before_ `_crud_create` commits the
+new `ShiftTemplate` row. That ordering closes the case this pass's first
+draft credited it with (a bad id known at request time never reaches a
+write) but not a distinct one: if the referenced `EquipmentCheckTemplate` is
+deleted in the gap between that validation and the subsequent
+`_replace_equipment_check_links` write — two officers acting on the same
+org's checklists concurrently, not a hypothetical — the link insert violates
+its FK constraint and raises. The `ShiftTemplate` row from the _first_,
+already-committed write survives that failure: the caller sees an error, but
+a checklist-less template now exists for a retry to duplicate.
+
+**Where:** `app/services/scheduling_service.py` — `create_template`
+(around what was line 2367 before this fix).
+
+**Impact:** LOW. Requires a real race (concurrent delete of the specific
+checklist within the same request's short write window) with no cross-tenant
+or privilege component — the worst case is a stray, checklist-less template
+an officer would need to notice and delete, or duplicate on a naive retry.
+Not exploitable for unauthorized access or data exposure.
+
+**Fix:** the link write now runs inside `self.db.begin_nested()` (a
+SAVEPOINT) with an explicit `flush()`, so a failure there rolls back only
+the link write, not the whole session. On that exception, the orphan
+template is deleted and the deletion committed in the same outer
+transaction, and the caller gets the same `"Equipment checklist not found"`
+it would have seen had the race lost the other way — no session-level
+`rollback()` call, which would have unwound work the outer request still
+needs (and, incidentally, does not compose with this repo's
+`join_transaction_mode="create_savepoint"` test-isolation fixture; the
+nested-savepoint form does, in both production and tests). Guard test:
+`test_shift_template_equipment_checks.py::TestLinkManagement::
+test_a_checklist_deleted_after_validation_leaves_no_orphan_template` —
+bypasses `_validated_check_ids` (standing in for "valid when checked, gone
+by the time it mattered", since a real concurrent-delete race cannot be made
+deterministic) and asserts both the correct error and that no template row
+survives.
+
+### No new findings (all other dimensions)
 
 SCH-9 and SCH-11's fixes were not touched by this pass's diff (both live in
 `scheduling_service.py` regions this diff didn't reach) and are not re-cited
@@ -817,13 +927,15 @@ of a loaded JSON value), no new capacity/count-then-insert pattern.
 
 ## Completion gate (pass 3)
 
-| Check                                                         | Result                                                                  |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                 | ✅ 0 violations                                                         |
-| `black --check app/ tests/ alembic/`                          | ✅ 1451 files unchanged                                                 |
-| `isort --check-only app/ tests/ alembic/`                     | ✅ clean                                                                |
-| `python3 scripts/validate_migrations.py --strict`             | ✅ single head, 414 revisions                                           |
-| `pytest tests/ -q -k "scheduling or shift or swap or calcom"` | ✅ 803 passed, 1 skipped (pre-existing optional-dep skip)               |
-| `pytest tests/` (full backend suite)                          | ✅ 10485 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) |
-| `tsc --noEmit`                                                | ✅ 0 errors                                                             |
-| `eslint .`                                                    | ✅ 0 errors                                                             |
+| Check                                                         | Result                                                                                                                                                                  |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                 | ✅ 0 violations                                                                                                                                                         |
+| `black --check app/ tests/ alembic/`                          | ✅ 1451 files unchanged                                                                                                                                                 |
+| `isort --check-only app/ tests/ alembic/`                     | ✅ clean                                                                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`             | ✅ single head, 414 revisions                                                                                                                                           |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom"` | ✅ 804 passed, 1 skipped (pre-existing optional-dep skip) — +1 (SCH-12 guard test)                                                                                      |
+| `pytest tests/` (full backend suite)                          | ✅ 10486 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — +1                                                                                            |
+| `tsc --noEmit`                                                | ✅ 0 errors                                                                                                                                                             |
+| `eslint .`                                                    | ✅ 0 errors                                                                                                                                                             |
+| `npx vitest run src/modules/scheduling src/pages/scheduling`  | ✅ 375 passed (26 files) — not in CLAUDE.md's mandatory gate list, run anyway since a "full completion gate green" claim should not omit a check there's a means to run |
+| `npm run build` (frontend)                                    | ✅ built in 6.62s, PWA precache generated — pre-existing chunk-size warning only                                                                                        |

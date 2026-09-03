@@ -2365,9 +2365,30 @@ class SchedulingService:
         if error or template is None:
             return template, error
         if validated_ids is not None:
-            await self._replace_equipment_check_links(
-                template, organization_id, validated_ids
-            )
+            # The template from _crud_create above is already committed, so a
+            # failure here can't be rolled back into it not existing — only
+            # into the link write not landing. If a checklist referenced by
+            # `validated_ids` is deleted in the gap between the validation
+            # above and this write (a real, if narrow, race: two officers
+            # acting on the same org's checklists concurrently), the FK
+            # insert fails and would otherwise leave a checklist-less orphan
+            # template for a retry to duplicate. Deleting it here instead
+            # turns that into the same "Equipment checklist not found" the
+            # caller would have seen had the race lost the other way.
+            try:
+                # A SAVEPOINT, not the outer commit: a failure here must roll
+                # back only the link write, so the outer session is still
+                # usable for the cleanup delete below rather than needing a
+                # full session-level rollback.
+                async with self.db.begin_nested():
+                    await self._replace_equipment_check_links(
+                        template, organization_id, validated_ids
+                    )
+                    await self.db.flush()
+            except Exception:
+                await self.db.delete(template)
+                await self.db.commit()
+                return None, "Equipment checklist not found"
             await self.db.commit()
             await self.db.refresh(template)
         return template, None
