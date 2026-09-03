@@ -24,7 +24,7 @@ from app.mcp.tools._common import (
     parse_uuid,
 )
 from app.models.event import EventType
-from app.models.inventory import ReorderUrgency
+from app.models.inventory import MEDICAL_ITEM_TYPES, ReorderUrgency
 from app.models.user import User
 from app.schemas.event import EventCreate
 from app.services.event_service import EventService
@@ -32,6 +32,13 @@ from app.services.inventory_service import InventoryService
 from app.services.meetings_service import MeetingsService
 
 _PRIORITIES = {"normal": 0, "high": 1, "urgent": 2}
+
+# Medical stock has its own module and officer; the inventory tools never
+# show it, so a reorder must not be able to reach it either.
+_MEDICAL_REORDER_REFUSED = (
+    "Medical supplies are managed separately and cannot be reordered through "
+    "this connection"
+)
 
 
 async def _actor(db: AsyncSession, principal: McpPrincipal) -> UUID:
@@ -161,7 +168,8 @@ def register(server: Any) -> None:
     ) -> dict:
         """Open a pending inventory reorder request for the quartermaster to
         approve. ``urgency`` is low, normal, high or critical. Link an
-        existing item or category by id when known."""
+        existing item or category by id when known. Medical supplies cannot
+        be reordered through this connection."""
         try:
             urgency_value = ReorderUrgency(urgency.lower())
         except ValueError:
@@ -177,11 +185,20 @@ def register(server: Any) -> None:
         }
         if not data["item_name"]:
             raise ValueError("item_name is required")
+        service = InventoryService(db)
         if item_id:
             data["item_id"] = str(parse_uuid(item_id, "item_id"))
+            if await service.item_in_domain(
+                data["item_id"], principal.organization_id, MEDICAL_ITEM_TYPES
+            ):
+                raise ValueError(_MEDICAL_REORDER_REFUSED)
         if category_id:
             data["category_id"] = str(parse_uuid(category_id, "category_id"))
-        reorder, error = await InventoryService(db).create_reorder_request(
+            if await service.category_in_domain(
+                data["category_id"], principal.organization_id, MEDICAL_ITEM_TYPES
+            ):
+                raise ValueError(_MEDICAL_REORDER_REFUSED)
+        reorder, error = await service.create_reorder_request(
             org_uuid(principal), data, str(actor)
         )
         if reorder is None:

@@ -31,6 +31,12 @@ from app.mcp.server import build_server
 pytestmark = [pytest.mark.integration]
 from app.models.audit import AuditLog
 from app.models.facilities import Facility, FacilityStatus, FacilityType
+from app.models.inventory import (
+    CheckOutRecord,
+    InventoryCategory,
+    InventoryItem,
+    ItemType,
+)
 from app.models.training import TrainingRecord, TrainingStatus, TrainingType
 
 
@@ -862,6 +868,108 @@ class TestFifthRoundFindings:
         assert item["city"] == "Springfield"
         for denied in ("lease_expiration", "property_tax_id", "phone", "email"):
             assert denied not in item
+
+    async def _stock(self, db_session, org_id, admin_id, member_id):
+        """A uniform category and a medical category, each with one item
+        at low stock and one overdue checkout."""
+        items = {}
+        for kind, name in (
+            (ItemType.UNIFORM, "Class A coat"),
+            (ItemType.MEDICAL, "Epinephrine"),
+        ):
+            category = InventoryCategory(
+                organization_id=org_id,
+                name=f"{kind.value} category",
+                item_type=kind,
+                low_stock_threshold=5,
+            )
+            db_session.add(category)
+            await db_session.flush()
+            item = InventoryItem(
+                organization_id=org_id,
+                category_id=category.id,
+                name=name,
+                quantity=1,
+            )
+            db_session.add(item)
+            await db_session.flush()
+            db_session.add(
+                CheckOutRecord(
+                    organization_id=org_id,
+                    item_id=item.id,
+                    user_id=member_id,
+                    checked_out_by=admin_id,
+                    checked_out_at=datetime.now(timezone.utc) - timedelta(days=5),
+                    expected_return_at=datetime.now(timezone.utc) - timedelta(days=2),
+                    is_returned=False,
+                )
+            )
+            items[kind] = (category, item)
+        await db_session.flush()
+        return items
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_inventory_tools_never_show_medical_supplies(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        stock = await self._stock(db_session, org_id, admin_id, member_id)
+        principal = _principal(org_id, admin_id)
+
+        listed = await _call(server, principal, "list_inventory_items")
+        assert [i["name"] for i in listed["items"]] == ["Class A coat"]
+        assert listed["total"] == 1
+
+        searched = await _call(server, principal, "list_inventory_items", search="Epi")
+        assert searched["items"] == []
+
+        low = await _call(server, principal, "list_low_stock_items")
+        assert [c["category_name"] for c in low["items"]] == ["uniform category"]
+
+        overdue = await _call(server, principal, "list_overdue_checkouts")
+        assert [r["item_id"] for r in overdue["items"]] == [
+            stock[ItemType.UNIFORM][1].id
+        ]
+
+        summary = await _call(server, principal, "get_inventory_summary")
+        assert summary["total_items"] == 1
+        assert summary["active_checkouts"] == 1
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_reorder_request_refuses_medical_supplies(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        stock = await self._stock(db_session, org_id, admin_id, member_id)
+        principal = _principal(org_id, admin_id, access_mode="read_write")
+        medical_category, medical_item = stock[ItemType.MEDICAL]
+        with pytest.raises(ToolError, match="Medical supplies"):
+            await _call(
+                server,
+                principal,
+                "create_reorder_request",
+                item_name="Epinephrine",
+                quantity=2,
+                item_id=medical_item.id,
+            )
+        with pytest.raises(ToolError, match="Medical supplies"):
+            await _call(
+                server,
+                principal,
+                "create_reorder_request",
+                item_name="Epinephrine",
+                quantity=2,
+                category_id=medical_category.id,
+            )
+        allowed = await _call(
+            server,
+            principal,
+            "create_reorder_request",
+            item_name="Class A coat",
+            quantity=2,
+            item_id=stock[ItemType.UNIFORM][1].id,
+        )
+        assert allowed["item_name"] == "Class A coat"
 
 
 class TestReviewFindings:

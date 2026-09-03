@@ -1,4 +1,10 @@
-"""Inventory: what the department owns, what is low, what is overdue."""
+"""Inventory: what the department owns, what is low, what is overdue.
+
+Medical supplies are a separate domain with their own module, page and
+officer (``medical_supplies``); the inventory API carves them out of the
+gear-and-uniforms listing, and every tool here does the same. They are not
+exposed through this connection at all.
+"""
 
 from typing import Any, Optional
 
@@ -14,7 +20,7 @@ from app.mcp.tools._common import (
     org_uuid,
     page,
 )
-from app.models.inventory import ItemStatus
+from app.models.inventory import MEDICAL_ITEM_TYPES, ItemStatus
 from app.services.inventory_service import InventoryService
 
 
@@ -22,14 +28,19 @@ def register(server: Any) -> None:
     @logbook_tool(server, title="Inventory summary", module="inventory")
     async def get_inventory_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Totals for the inventory: items, value, assigned, checked out,
-        in maintenance, and low-stock categories."""
-        return await InventoryService(db).get_inventory_summary(org_uuid(principal))
+        in maintenance, and low-stock categories. Medical supplies are not
+        counted."""
+        return await InventoryService(db).get_inventory_summary(
+            org_uuid(principal), exclude_item_types=MEDICAL_ITEM_TYPES
+        )
 
     @logbook_tool(server, title="Low stock", module="inventory")
     async def list_low_stock_items(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Categories whose stock has fallen below their reorder point, with
-        the item names involved."""
-        items = await InventoryService(db).get_low_stock_items(org_uuid(principal))
+        the item names involved. Medical supplies are not included."""
+        items = await InventoryService(db).get_low_stock_items(
+            org_uuid(principal), exclude_item_types=MEDICAL_ITEM_TYPES
+        )
         return {"items": items, "total": len(items)}
 
     @logbook_tool(server, title="List inventory items", module="inventory")
@@ -41,8 +52,9 @@ def register(server: Any) -> None:
         limit: int = 50,
         offset: int = 0,
     ) -> dict:
-        """Inventory items with quantity, condition, status, location and who
-        they are assigned to. ``status`` is available, assigned, checked_out,
+        """Gear, uniforms and equipment with quantity, condition, status,
+        location and who they are assigned to; medical supplies are not
+        listed. ``status`` is available, assigned, checked_out,
         in_maintenance, lost or stolen."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
@@ -55,6 +67,7 @@ def register(server: Any) -> None:
         items, total = await InventoryService(db).get_items(
             org_uuid(principal),
             status=status_enum,
+            exclude_item_types=MEDICAL_ITEM_TYPES,
             search=search or None,
             skip=offset,
             limit=limit,
@@ -95,12 +108,15 @@ def register(server: Any) -> None:
         db: AsyncSession, principal: McpPrincipal, limit: int = 100, offset: int = 0
     ) -> dict:
         """Items checked out past their expected return date, with who has
-        them and how long they have been out. Page with ``limit`` and
-        ``offset``."""
+        them and how long they have been out; medical supplies are not
+        included. Page with ``limit`` and ``offset``."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         records = await InventoryService(db).get_overdue_checkouts(
-            org_uuid(principal), skip=offset, limit=limit
+            org_uuid(principal),
+            skip=offset,
+            limit=limit,
+            exclude_item_types=MEDICAL_ITEM_TYPES,
         )
         names = await member_names(
             db, principal.organization_id, (r.user_id for r in records)

@@ -1609,6 +1609,34 @@ class InventoryService:
             InventoryCategory.item_type.in_(list(item_types)),
         )
 
+    @classmethod
+    def _outside_domains(
+        cls, organization_id: UUID, exclude_item_types: Iterable[ItemType]
+    ):
+        """Filter keeping items not filed under any of ``exclude_item_types``.
+
+        An uncategorized item has no domain, so it is not the excluded one —
+        NOT IN would drop it along with the excluded rows because
+        NULL NOT IN (...) is NULL, and the gear page would quietly lose every
+        item nobody has filed yet.
+        """
+        return or_(
+            InventoryItem.category_id.is_(None),
+            InventoryItem.category_id.notin_(
+                cls._category_ids_of_type(organization_id, set(exclude_item_types))
+            ),
+        )
+
+    @classmethod
+    def _item_ids_outside_domains(
+        cls, organization_id: UUID, exclude_item_types: Iterable[ItemType]
+    ) -> "Select":
+        """Org-scoped select of item ids not filed under the excluded domains."""
+        return select(InventoryItem.id).where(
+            InventoryItem.organization_id == str(organization_id),
+            cls._outside_domains(organization_id, exclude_item_types),
+        )
+
     async def get_items(
         self,
         organization_id: UUID,
@@ -1671,19 +1699,8 @@ class InventoryService:
             )
 
         if exclude_item_types:
-            # An uncategorized item has no domain, so it is not the excluded
-            # one — NOT IN would drop it along with the excluded rows because
-            # NULL NOT IN (...) is NULL, and the gear page would quietly lose
-            # every item nobody has filed yet.
             query = query.where(
-                or_(
-                    InventoryItem.category_id.is_(None),
-                    InventoryItem.category_id.notin_(
-                        self._category_ids_of_type(
-                            organization_id, set(exclude_item_types)
-                        )
-                    ),
-                )
+                self._outside_domains(organization_id, exclude_item_types)
             )
 
         if assigned_to:
@@ -2971,22 +2988,30 @@ class InventoryService:
         organization_id: UUID,
         skip: int = 0,
         limit: int = 200,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[CheckOutRecord]:
         """Get all overdue checkouts with pagination.
 
         Computes overdue status at read time using the expected_return_at
         date instead of performing a bulk UPDATE on every call.
+        ``exclude_item_types`` carves a domain out, as it does in
+        :meth:`get_items`.
         """
         now = datetime.now(timezone.utc)
 
-        result = await self.db.execute(
-            select(CheckOutRecord)
-            .where(
-                CheckOutRecord.organization_id == str(organization_id),
-                CheckOutRecord.is_returned.is_(False),
-                CheckOutRecord.expected_return_at < now,
+        query = select(CheckOutRecord).where(
+            CheckOutRecord.organization_id == str(organization_id),
+            CheckOutRecord.is_returned.is_(False),
+            CheckOutRecord.expected_return_at < now,
+        )
+        if exclude_item_types:
+            query = query.where(
+                CheckOutRecord.item_id.in_(
+                    self._item_ids_outside_domains(organization_id, exclude_item_types)
+                )
             )
-            .options(
+        result = await self.db.execute(
+            query.options(
                 selectinload(CheckOutRecord.item),
                 selectinload(CheckOutRecord.user),
             )
@@ -3278,13 +3303,18 @@ class InventoryService:
     # Reporting & Analytics
     # ============================================
 
-    async def get_low_stock_items(self, organization_id: UUID) -> List[Dict[str, Any]]:
+    async def get_low_stock_items(
+        self,
+        organization_id: UUID,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
+    ) -> List[Dict[str, Any]]:
         """Get categories with low stock, using the sum of item quantities
-        rather than a simple row count, and include the names of low-stock items."""
+        rather than a simple row count, and include the names of low-stock items.
+        ``exclude_item_types`` leaves out categories of those domains."""
         org_id = str(organization_id)
 
         # Sum the quantity field per category (handles pool items correctly)
-        result = await self.db.execute(
+        query = (
             select(
                 InventoryCategory,
                 func.coalesce(func.sum(InventoryItem.quantity), 0).label(
@@ -3296,8 +3326,13 @@ class InventoryService:
             .where(InventoryCategory.active.is_(True))
             .where(InventoryItem.active.is_(True))
             .where(InventoryCategory.low_stock_threshold.isnot(None))
-            .group_by(InventoryCategory.id)
-            .having(
+        )
+        if exclude_item_types:
+            query = query.where(
+                InventoryCategory.item_type.notin_(list(exclude_item_types))
+            )
+        result = await self.db.execute(
+            query.group_by(InventoryCategory.id).having(
                 func.coalesce(func.sum(InventoryItem.quantity), 0)
                 <= InventoryCategory.low_stock_threshold
             )
@@ -3330,13 +3365,48 @@ class InventoryService:
 
         return low_stock_items
 
-    async def get_inventory_summary(self, organization_id: UUID) -> Dict[str, Any]:
-        """Get overall inventory summary statistics"""
+    async def get_inventory_summary(
+        self,
+        organization_id: UUID,
+        exclude_item_types: Optional[Iterable[ItemType]] = None,
+    ) -> Dict[str, Any]:
+        """Get overall inventory summary statistics.
+
+        ``exclude_item_types`` leaves a domain out of every figure, items and
+        checkouts alike, the way :meth:`get_items` carves it out of a listing.
+        """
+        item_filters = [
+            InventoryItem.organization_id == str(organization_id),
+            InventoryItem.active.is_(True),
+        ]
+        checkout_filters = [CheckOutRecord.organization_id == str(organization_id)]
+        excluded_category_ids: Set[str] = set()
+        if exclude_item_types:
+            item_filters.append(
+                self._outside_domains(organization_id, exclude_item_types)
+            )
+            checkout_filters.append(
+                CheckOutRecord.item_id.in_(
+                    self._item_ids_outside_domains(organization_id, exclude_item_types)
+                )
+            )
+            excluded_category_ids = set(
+                (
+                    await self.db.execute(
+                        self._category_ids_of_type(
+                            organization_id, set(exclude_item_types)
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
         # Total items (sum quantities so pool items with quantity > 1 are counted correctly)
         total_result = await self.db.execute(
-            select(func.coalesce(func.sum(InventoryItem.quantity), 0))
-            .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active.is_(True))
+            select(func.coalesce(func.sum(InventoryItem.quantity), 0)).where(
+                *item_filters
+            )
         )
         total_items = total_result.scalar()
 
@@ -3346,8 +3416,7 @@ class InventoryService:
                 InventoryItem.status,
                 func.count(InventoryItem.id).label("count"),
             )
-            .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active.is_(True))
+            .where(*item_filters)
             .group_by(InventoryItem.status)
         )
         items_by_status = {row.status.value: row.count for row in status_result.all()}
@@ -3358,8 +3427,7 @@ class InventoryService:
                 InventoryItem.condition,
                 func.count(InventoryItem.id).label("count"),
             )
-            .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active.is_(True))
+            .where(*item_filters)
             .group_by(InventoryItem.condition)
         )
         items_by_condition = {
@@ -3372,30 +3440,32 @@ class InventoryService:
                 func.coalesce(
                     func.sum(InventoryItem.current_value * InventoryItem.quantity), 0
                 )
-            )
-            .where(InventoryItem.organization_id == str(organization_id))
-            .where(InventoryItem.active.is_(True))
+            ).where(*item_filters)
         )
         total_value = value_result.scalar() or Decimal("0.00")
 
         # Active checkouts
         checkout_result = await self.db.execute(
-            select(func.count(CheckOutRecord.id))
-            .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_returned.is_(False))
+            select(func.count(CheckOutRecord.id)).where(
+                *checkout_filters, CheckOutRecord.is_returned.is_(False)
+            )
         )
         active_checkouts = checkout_result.scalar()
 
         # Overdue checkouts
         overdue_result = await self.db.execute(
-            select(func.count(CheckOutRecord.id))
-            .where(CheckOutRecord.organization_id == str(organization_id))
-            .where(CheckOutRecord.is_overdue.is_(True))
+            select(func.count(CheckOutRecord.id)).where(
+                *checkout_filters, CheckOutRecord.is_overdue.is_(True)
+            )
         )
         overdue_checkouts = overdue_result.scalar()
 
         # Maintenance due
-        maintenance_due = await self.get_maintenance_due(organization_id, days_ahead=7)
+        maintenance_due = [
+            item
+            for item in await self.get_maintenance_due(organization_id, days_ahead=7)
+            if item.category_id not in excluded_category_ids
+        ]
 
         # Use the larger of checkout records vs items with checked_out status
         # to ensure the dashboard reflects reality regardless of sync state
