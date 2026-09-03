@@ -124,18 +124,19 @@ def is_denied_field(name: str) -> bool:
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 # A phone number written the way people write them: international with a
 # country code, North American with an area code, or a local seven-digit
-# number, with groups separated by spaces, dots, dashes or parentheses.
+# number, with groups separated by spaces, dots, dashes, slashes or
+# parentheses (020/7946/0958 is a common European spelling).
 # Requiring the separators is deliberate — a bare run of digits is as likely
 # to be a serial number or an asset tag as a phone number.
 _PHONE_FORMATTED_RE = re.compile(
     r"(?<![\w-])(?:"
     # International: a country code then two to four separated groups
     # (+44 20 7946 0958, +1 555 123 4567, +49 30 1234567).
-    r"\+\d{1,3}(?:[\s.-]?\d{2,5}){2,4}"
+    r"\+\d{1,3}(?:[\s./-]?\d{2,5}){2,4}"
     r"|"
     # North American with area code: (555) 123-4567, 555-123-4567,
     # 555.123.4567, optional leading 1.
-    r"(?:1[\s.-])?(?:\(\d{3}\)\s?|\d{3}[\s.-])\d{3}[\s.-]\d{4}"
+    r"(?:1[\s./-])?(?:\(\d{3}\)\s?|\d{3}[\s./-])\d{3}[\s./-]\d{4}"
     r"|"
     # Local seven-digit: 555-0100, 555.0100 (separator required).
     r"\d{3}[.-]\d{4}"
@@ -148,12 +149,12 @@ _PHONE_FORMATTED_RE = re.compile(
 # ``_is_national_phone`` so that a date written with separators or a figure
 # grouped in thousands is left alone.
 _PHONE_NATIONAL_GROUPED_RE = re.compile(
-    r"(?<![\w-])\(?\d{2,5}\)?(?:[\s.-]\d{2,5}){2,4}(?![\w-])"
+    r"(?<![\w-])\(?\d{2,5}\)?(?:[\s./-]\d{2,5}){2,4}(?![\w-])"
 )
-_PHONE_NATIONAL_TRUNK_RE = re.compile(r"(?<![\w-])0\d{1,4}[\s.-]\d{6,9}(?![\w-])")
+_PHONE_NATIONAL_TRUNK_RE = re.compile(r"(?<![\w-])0\d{1,4}[\s./-]\d{6,9}(?![\w-])")
 _DATE_SHAPES = (
-    re.compile(r"\d{1,2}[\s.-]\d{1,2}[\s.-]\d{4}"),
-    re.compile(r"\d{4}[\s.-]\d{1,2}[\s.-]\d{1,2}"),
+    re.compile(r"\d{1,2}[\s./-]\d{1,2}[\s./-]\d{4}"),
+    re.compile(r"\d{4}[\s./-]\d{1,2}[\s./-]\d{1,2}"),
 )
 
 
@@ -168,7 +169,7 @@ def _is_national_phone(match: "re.Match[str]") -> bool:
     # to dial. Only a one- or two-digit leading group counts as a figure —
     # a nine-digit 612 345 678 is how several countries write a phone
     # number, and a leading group of three or more is treated as one.
-    groups = re.split(r"[\s.-]", raw.strip("()"))
+    groups = re.split(r"[\s./-]", raw.strip("()"))
     if len(groups) > 1 and len(groups[0]) <= 2 and all(len(g) == 3 for g in groups[1:]):
         return False
     return True
