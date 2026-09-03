@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The gear admin hub is now Inventory Administration (2026-09-03)
+
+**Changed**
+
+- **The area is named for what it holds.** It had four names — "Gear &
+  Uniforms Administration" on the hub, "Gear Admin" in the navigation, "Gear &
+  Uniforms" in the module registry, "Inventory" in the command palette, and
+  "Back to Logistics Admin" on the store's back-link. It is **Inventory**
+  throughout now, administered from **Inventory Admin**. Screens that really
+  are about gear keep the quartermaster's vocabulary — My Issued Gear, Gear
+  Requests, Gear Kits. Labels only: no route, permission key, module key or API
+  value changed, so no link, bookmark or integration breaks.
+- **The hub opens on the three supply lines a department staffs.** PPE &
+  Turnout Gear and Uniforms open the catalogue filtered to that item type;
+  **EMS Supplies** opens Medical Supplies, which the hub previously did not
+  link to at all — despite gear, uniforms and EMS stock sharing one catalog,
+  partitioned by `inventory_categories.item_type`. Below them the cards are
+  regrouped by what the officer is doing: Catalog, Issuance & Members, Requests
+  & Approvals, Readiness & Compliance, Department Store, Setup & Tools.
+- **`GET /inventory/summary` gained `items_by_type`.** Additive and defaulted,
+  so the member-scoped branch of that route keeps validating. Counted as rows
+  rather than summed quantities, deliberately unlike `total_items`, so the
+  number on a supply-line card matches the list it opens.
+- **The Department Store admin console moved inside Inventory
+  Administration**, at `/inventory/admin/store`; `/store/admin` redirects there
+  for bookmarks. It also stopped being the one administration page outside the
+  shared frame — it now renders the same header, metrics row and attention
+  queue as Members, Training, Events and Inventory, which meant giving the
+  store a spec in the admin-hub registry (six metrics, plus a queue for a
+  reported payment nobody verified, money the matcher could not settle, and an
+  order window closed but never handed out). Its six tabs are now selected by
+  `?tab=`, so the hub can link at Catalog, Orders or Payments directly. No
+  migration.
+
+**Fixed**
+
+- **Cards on the hub no longer promise pages the viewer cannot open.** Every
+  card now carries the gate of the route it targets, and a section with no
+  visible cards is not rendered. `checkPermission` is exact match plus module
+  wildcard, so `inventory.manage` implies neither `inventory.view_medical` nor
+  `inventory.check_*` — which means the seeded Quartermaster, who holds
+  `inventory.manage` and no check grant, was being shown Equipment Checklists
+  and Check Reports and refused by both. A test resolves each route's real gate
+  out of the route source and fails on any card that advertises more than its
+  route accepts.
+- **Two links in the hub's "Needs attention" queue went to the dashboard.**
+  `/inventory/admin/items/{id}` and `/inventory/admin/reorder/{id}` matched no
+  route, so the catch-all swallowed them. The maintenance row now opens the
+  item on its inspections tab and the overdue delivery opens its own request.
+- **"Review" and "Check in" now open the record they name.** None of the six
+  pages that queue linked to read the id it passed them, so every action landed
+  on an unfiltered list to be searched by eye. An id naming a record nobody
+  still holds is a no-op rather than an error — somebody else may have resolved
+  it between the queue rendering and the click.
+- **The route-integrity check now reads interpolated link targets.** It skipped
+  every template literal, which is why the two dead links above shipped. It now
+  substitutes a placeholder per interpolation and judges the resulting shape,
+  which surfaced three more: `/inventory/maintenance` (fixed here), and
+  `/apparatus/{id}/archive` and `/meetings/{id}`, both screens that were never
+  built — recorded in the checker's known-missing list with the reasoning
+  rather than silently tolerated.
+- **`/inventory/admin/items` reads `item_type` from the URL**, mirroring how it
+  already reads `vendor_id`, so a filtered catalogue is a shareable link. An
+  unrecognized type degrades to the unfiltered list instead of a 400.
+
 ### Security: a fourth round on the delete/autosave interaction, and a bulk-replace path that never refreshed the reparent-guard's server-truth map (2026-09-03)
 
 **Fixed**
