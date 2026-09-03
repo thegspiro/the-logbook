@@ -55,6 +55,46 @@ FACILITY_SENSITIVE_PERMISSIONS = [
     "facilities.manage",
 ]
 
+# ============================================================================
+# FAC-35: canonical lock order for facility document/photo references
+# ============================================================================
+# Three independent code paths mutate the same three resources concurrently
+# -- facilities.py's ``_validate_shared_document_reference`` (the creator
+# path, reached from ``create_facility_document``/``create_facility_photo``),
+# this file's ``delete_folder`` (the deletion cascade), and this file's
+# ``update_document`` (the generic ``PATCH /documents/{id}`` move, FAC-36).
+# Any path that needs more than one of these locked at once MUST acquire
+# them in exactly this order -- a total order across all three, not just the
+# pair a given change happens to touch:
+#
+#   1. DocumentFolder   -- e.g. ``ensure_facility_folder``,
+#                           ``_lock_subtree_folders``,
+#                           ``_lock_destination_folder``
+#   2. Document          -- e.g. ``get_document_by_id(for_update=True)``,
+#                           ``_lock_subtree_documents``
+#   3. FacilityDocument / FacilityPhoto reference table -- e.g. the caller's
+#                           insert after ``_validate_shared_document_reference``
+#                           returns, or ``_match_facility_document_references``/
+#                           ``_delete_facility_document_references``
+#
+# FAC-29/31/32/34/36 each closed one *pairwise* conflict between two of these
+# three resources without checking the fix against every other path that
+# touches the same state, and each reordering opened a new conflict with the
+# pair it hadn't considered (FAC-32 vs FAC-34: Document/reference-table vs
+# Document/DocumentFolder; FAC-34 vs the creator path: DocumentFolder/Document
+# ordered oppositely by the two sides; FAC-35's fixed creator path vs
+# ``update_document``: the same DocumentFolder/Document pair, ordered
+# oppositely yet again by a third site nobody had touched). FAC-35
+# (docs/security-review/FAC-12-facilities.md) is the total-order fix that
+# supersedes the pairwise ones above it; FAC-36 is the third call site that
+# fix's own write-up flagged as needing a revisit "if a third site...
+# appears." A new call site touching two or more of these three resources
+# follows this order, it does not invent its own -- and does not assume the
+# two documented here are exhaustive; grep this file and facilities.py for
+# ``with_for_update``/``for_update=True`` against these three models before
+# trusting this comment's site list over the code.
+# ============================================================================
+
 
 def _get_user_permissions(user: User) -> Set[str]:
     """Collect a user's effective permissions.
@@ -616,15 +656,55 @@ class DocumentsService:
             subtree_ids |= new_ids
             frontier = new_ids
 
-        file_rows = await self.db.execute(
-            select(Document.id, Document.file_path).where(
-                Document.organization_id == str(organization_id),
-                Document.folder_id.in_(subtree_ids),
-            )
-        )
+        # FAC-34 (Codex, on top of FAC-32): lock the subtree's DocumentFolder
+        # rows themselves *first* -- before the Document lock below, not
+        # after. At the time this was fixed, filing a folderless document
+        # (facilities.py, _validate_shared_document_reference) locked the
+        # Document row, then (ensure_facility_folder) the destination
+        # DocumentFolder, and only then flushed `document.folder_id` onto it
+        # -- the opposite order from this cascade, below. FAC-35 (see the
+        # module-level "canonical lock order" note above) reordered that
+        # creator path to match this one -- DocumentFolder, then Document,
+        # then the reference table -- rather than reordering this cascade
+        # again; this comment keeps the original mechanism explanation
+        # because the *reason* the folder has to come first is unchanged,
+        # only which side conformed to it. That flush is an UPDATE
+        # against the `folder_id` secondary index -- and a concurrent
+        # locking SELECT filtered on that same column (the FAC-32
+        # Document-lock query below) can take a gap/next-key lock at the
+        # target value, or block outright on any other row of this
+        # organization's it happens to examine first (the exact locking
+        # behaviour depends on which index MySQL/MariaDB's optimizer
+        # chooses for the query, which is itself a function of the subtree's
+        # size and the table's statistics -- not something this code
+        # controls). Either way, if this cascade's Document-lock query
+        # starts before the creator's flush completes, the flush can block
+        # on it -- while the creator is still holding the destination
+        # folder's own lock from ensure_facility_folder. This cascade's
+        # later, implicit need for that same folder lock (the final
+        # `db.delete(folder)`, at commit) then blocks right back on the
+        # creator: a genuine two-way deadlock that ordering *only* the
+        # Document/reference-table pair (FAC-32's fix) does not touch,
+        # because whatever traps the creator is a side effect of this
+        # cascade's Document query itself, before this cascade ever reaches
+        # a reference-table or explicit-folder lock. Locking the destination
+        # folder(s) here, first, removes the dependency on that query's plan
+        # entirely: this cascade either wins the folder race outright
+        # (nothing below has run yet, so it cannot be holding anything the
+        # creator needs) or loses it and blocks immediately, before ever
+        # issuing the Document-lock query that would otherwise trap the
+        # creator's flush. Verified empirically with two real,
+        # independently-committing sessions -- see
+        # TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery in
+        # tests/test_facility_document_reference_race.py, which patches
+        # _lock_subtree_documents (below) to prove this cascade never issues
+        # it while blocked on the folder lock.
+        await self._lock_subtree_folders(subtree_ids)
+
+        file_rows = await self._lock_subtree_documents(subtree_ids, organization_id)
         document_ids: Set[str] = set()
         file_paths: List[str] = []
-        for document_id, file_path in file_rows.all():
+        for document_id, file_path in file_rows:
             document_ids.add(document_id)
             if file_path:
                 file_paths.append(file_path)
@@ -632,9 +712,48 @@ class DocumentsService:
         # A facility record can reference one of these documents without a
         # foreign key (see _delete_facility_document_references) -- clean
         # that up in the same transaction as the cascade delete, not after.
+        # Runs after the FAC-34 DocumentFolder lock and the FAC-32 Document
+        # lock above -- see those comments for why the order matters.
         await self._delete_facility_document_references(
             document_ids, organization_id, current_user
         )
+
+        # FAC-40 (Codex): explicitly delete exactly the Document rows the
+        # locking scan above found, rather than relying on the ORM's
+        # ``documents`` cascade (triggered by ``db.delete(folder)`` below) to
+        # independently rediscover the same set. That cascade lazy-loads
+        # ``folder.documents`` via a *plain* SELECT, which -- unlike
+        # ``_lock_subtree_documents`` above -- answers from this
+        # transaction's REPEATABLE READ snapshot (established at
+        # ``get_folder_by_id``, this method's first read), not the latest
+        # committed state. A document moved into this folder by a
+        # concurrent, already-committed transaction after that snapshot was
+        # taken is invisible to the ORM's lazy-load, so it is never queued
+        # for cascade deletion -- yet it *is* visible to the locking scan
+        # (locking reads always see latest committed), so its file was
+        # already removed and its facility reference already stripped
+        # above. ``Document.folder_id`` is ``ondelete="SET NULL"`` at the DB
+        # level (not CASCADE), so once the folder row itself is deleted,
+        # that orphaned survivor's ``folder_id`` is simply set to NULL by
+        # the database -- a live, unreferenced, file-less "document" row
+        # left behind. Reproduced live with two real, independently
+        # -committing sessions (move a document into the folder between the
+        # deleter's first read and its locking scan): the row survived,
+        # `folder_id` NULL, exactly this defect. Deleting explicitly here,
+        # from the same authoritative set the file/reference cleanup above
+        # already used, closes it regardless of what the ORM's own
+        # (possibly stale) view of ``folder.documents`` contains -- see
+        # ``DocumentFolder.documents``'s ``passive_deletes=True`` (models/
+        # document.py) for the other half: without it, that same staleness
+        # can cut the other way too (a document that *moved out* of this
+        # folder after the snapshot, and so is correctly absent from
+        # ``document_ids`` here, would otherwise still be cascade-deleted by
+        # the ORM's own stale collection -- deleting a live document that no
+        # longer belongs to this folder at all).
+        if document_ids:
+            await self.db.execute(
+                sa_delete(Document).where(Document.id.in_(document_ids))
+            )
 
         await self.db.delete(folder)
         await self.db.commit()
@@ -650,6 +769,43 @@ class DocumentsService:
                     f"folder {folder_id}: {file_path}"
                 )
         return True
+
+    async def _lock_subtree_folders(self, subtree_ids: Set[str]) -> None:
+        """FAC-34: lock every ``DocumentFolder`` row in the subtree being
+        deleted, for_update. A standalone method purely so tests can patch
+        it -- see ``delete_folder``'s FAC-34 comment for why this has to run
+        before ``_lock_subtree_documents`` below, and
+        ``TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery``
+        in tests/test_facility_document_reference_race.py for the proof.
+        """
+        await self.db.execute(
+            select(DocumentFolder.id)
+            .where(DocumentFolder.id.in_(subtree_ids))
+            .with_for_update()
+        )
+
+    async def _lock_subtree_documents(
+        self, subtree_ids: Set[str], organization_id: UUID
+    ) -> List[Tuple[str, Optional[str]]]:
+        """FAC-32: lock the subtree's ``Document`` rows, for_update, and
+        return their ``(id, file_path)`` pairs.
+
+        A standalone method (like ``_lock_subtree_folders`` above) so tests
+        can patch it and prove ``delete_folder`` never issues this query
+        while still blocked on the FAC-34 folder lock -- this is the query
+        whose locking behaviour is what a concurrent creator's
+        ``document.folder_id`` flush can be trapped by (see the FAC-34
+        comment on the call site in ``delete_folder``).
+        """
+        rows = await self.db.execute(
+            select(Document.id, Document.file_path)
+            .where(
+                Document.organization_id == str(organization_id),
+                Document.folder_id.in_(subtree_ids),
+            )
+            .with_for_update()
+        )
+        return rows.all()
 
     async def _delete_facility_document_references(
         self,
@@ -740,12 +896,24 @@ class DocumentsService:
         ``"document:<uuid>"`` reference validates as long as ``UUID(...)``
         accepts the suffix, which is looser than the single canonical
         lowercase, unbraced form an exact-string match would require.
+
+        FAC-29 (Codex): ``with_for_update()`` -- a plain SELECT answers from
+        the snapshot taken at this transaction's *first* read (InnoDB
+        REPEATABLE READ), and the caller of ``delete_document`` (the
+        endpoint) already reads the document once before this ever runs, so
+        that snapshot can predate a reference someone else just committed.
+        A locking read always reads the latest committed version regardless
+        of when the snapshot was taken -- the same fix this codebase already
+        applies to every capacity check (CLAUDE.md Pitfall #27) -- so a
+        reference filed a moment ago is never missed here.
         """
         rows = await self.db.execute(
-            select(model.id, model.file_path).where(
+            select(model.id, model.file_path)
+            .where(
                 model.organization_id == str(organization_id),
                 model.file_path.like("document:%", escape=LIKE_ESCAPE_CHAR),
             )
+            .with_for_update()
         )
         matched_ids: List[str] = []
         for row_id, file_path in rows.all():
@@ -844,14 +1012,29 @@ class DocumentsService:
         return documents, total
 
     async def get_document_by_id(
-        self, document_id: UUID, organization_id: UUID
+        self,
+        document_id: UUID,
+        organization_id: UUID,
+        for_update: bool = False,
     ) -> Optional[Document]:
-        """Get a document by ID"""
-        result = await self.db.execute(
+        """Get a document by ID.
+
+        ``for_update`` locks the row for the caller's transaction (FAC-29):
+        deleting a document and filing a facility reference to it
+        (``_validate_shared_document_reference``, facilities.py) are a
+        read-then-write racing on the same row from two directions, and
+        acquiring the lock here is what serializes them -- see
+        ``delete_document`` and ``_validate_shared_document_reference`` for
+        the two call sites that need it.
+        """
+        query = (
             select(Document)
             .where(Document.id == str(document_id))
             .where(Document.organization_id == str(organization_id))
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def attach_document_names(
@@ -913,20 +1096,51 @@ class DocumentsService:
         # is in-org so a document can't be moved into another org's folder.
         # None is allowed (moves the document to org level).
         if "folder_id" in update_data:
+            new_folder_id = update_data["folder_id"]
             await assert_in_org(
                 self.db,
                 DocumentFolder,
-                update_data["folder_id"],
+                new_folder_id,
                 organization_id,
                 allow_none=True,
                 label="folder",
             )
+            if new_folder_id:
+                # FAC-36 (Codex, on top of FAC-35): moving a document into a
+                # folder writes an FK onto the Document row -- a "canonical
+                # lock order" resource pair, see the module-level note above.
+                # Lock the destination DocumentFolder first, or this flush
+                # can deadlock against _validate_shared_document_reference
+                # (facilities.py), which always locks the destination folder
+                # before it ever locks the Document row.
+                await self._lock_destination_folder(new_folder_id)
+                # Re-fetch under lock now that the folder is locked first --
+                # the plain read above is stale for locking purposes.
+                document = await self.get_document_by_id(
+                    document_id, organization_id, for_update=True
+                )
+                if not document:
+                    return None
 
         apply_updates(document, update_data)
 
         await self.db.commit()
         await self.db.refresh(document)
         return document
+
+    async def _lock_destination_folder(self, folder_id: UUID) -> None:
+        """FAC-36: lock a single ``DocumentFolder`` row, for_update.
+
+        A standalone method -- like ``_lock_subtree_folders`` above -- purely
+        so a test can patch-and-track it. See ``update_document``'s FAC-36
+        comment for why this has to run before the Document row is ever
+        locked.
+        """
+        await self.db.execute(
+            select(DocumentFolder.id)
+            .where(DocumentFolder.id == str(folder_id))
+            .with_for_update()
+        )
 
     async def delete_document(
         self,
@@ -941,8 +1155,15 @@ class DocumentsService:
         every route that lets a caller delete a document must pass it, or
         the facility-reference permission check below fails closed rather
         than silently skipping (FAC-26).
+
+        FAC-29 (Codex): locks the document row (``for_update=True``) so a
+        concurrent ``_validate_shared_document_reference`` (facilities.py)
+        filing a reference to this same document -- which takes the same
+        lock -- serializes against this delete rather than racing it.
         """
-        document = await self.get_document_by_id(document_id, organization_id)
+        document = await self.get_document_by_id(
+            document_id, organization_id, for_update=True
+        )
         if not document:
             return False
 
@@ -1199,6 +1420,136 @@ class DocumentsService:
     # Per-Facility Folder Management
     # ============================================
 
+    async def _lock_facilities_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Locking read for the org's 'Facility Files' system folder.
+
+        A standalone method purely so ``ensure_facility_folder`` can call it
+        from both its fast (no creation needed) and slow (creation-guarded)
+        paths without duplicating the query, and so a test can
+        patch-and-track it.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == FOLDER_FACILITIES)
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_facility_folder(
+        self, facilities_root_id: str, facility_id_str: str
+    ) -> Optional[DocumentFolder]:
+        """Locking read for one facility's own folder, under the root above.
+
+        Same reuse/testability rationale as ``_lock_facilities_root``. Used
+        by ``ensure_facility_folder``'s slow path only (FAC-45) -- the fast
+        path's own existence check goes through ``_peek_facility_folder`` /
+        ``_lock_folder_by_id`` instead, specifically because this method's
+        ``.with_for_update()`` takes a gap lock when nothing matches, and
+        the slow path is the only place that gap lock is safe to take (see
+        FAC-45's docstring on ``ensure_facility_folder``).
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == facilities_root_id)
+            .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _peek_facility_folder(
+        self, facilities_root_id: str, facility_id_str: str
+    ) -> Optional[DocumentFolder]:
+        """Non-locking existence check for one facility's own folder.
+
+        FAC-45 (Codex, on top of FAC-43): used only by
+        ``ensure_facility_folder``'s fast path, paired with
+        ``_lock_folder_by_id`` below. Unlike ``_peek_facilities_root``, a
+        stale "not found" here is not automatically harmless on its own --
+        a facility folder is an ordinary (``is_system=False``) folder, and
+        can in principle be deleted -- but this method is never the thing
+        deciding whether to create one: a "not found" here always falls
+        through to the slow path's own locking, double-checked re-read
+        (``_lock_facility_folder``, under the organization lock), which is
+        unaffected by this method's staleness. What this peek exists to
+        avoid is calling a ``.with_for_update()`` lookup that might match
+        nothing (and therefore take a gap lock) before that organization
+        lock is acquired -- see the docstring on ``ensure_facility_folder``
+        for the deadlock that creates.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == facilities_root_id)
+            .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_folder_by_id(self, folder_id: str) -> Optional[DocumentFolder]:
+        """Locking read for one already-known folder row, by primary key.
+
+        FAC-45: a point lookup on the clustered index, used by
+        ``ensure_facility_folder``'s fast path once ``_peek_facility_folder``
+        has already confirmed a specific row's id -- as opposed to
+        ``_lock_facility_folder``'s (parent_id, slug) lookup, which can take
+        a gap lock when nothing matches. Locking by an id already known to
+        (recently) exist all but eliminates that risk: a nonexistent,
+        freshly-generated UUID has nothing else contending for its specific
+        gap, unlike the (parent_id, slug) scan, where every concurrent
+        first-time creator under the same root is scanning and potentially
+        gap-locking the same shared range.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.id == folder_id)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _peek_facilities_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Non-locking read for the org's 'Facility Files' system folder.
+
+        FAC-43 (Codex, on top of FAC-42): used only by
+        ``ensure_facility_folder``'s fast path, in place of
+        ``_lock_facilities_root``. Safe as a plain read specifically because
+        the root is a system folder: ``update_folder`` refuses to move one
+        (``"Cannot move a system folder"``) and ``delete_folder`` refuses to
+        delete one (``"Cannot delete a system folder"``) -- so once this row
+        is visible to any snapshot, it stays visible, at the same id,
+        forever. There is no "moved" or "deleted" state for a later locking
+        read to catch that this peek could miss.
+
+        The only thing this method's caller reads off the result is
+        ``.id`` -- a facility folder's ``parent_id`` -- which never changes
+        once assigned. A stale peek can therefore only under-report
+        existence (the root was created and committed by another
+        transaction after this one's snapshot was taken, not yet visible
+        here), never return a wrong id for one that does exist. An
+        under-report just falls through to the slow path below, which
+        re-resolves the root with a genuine locking read under the
+        organization lock -- so this cannot admit a false "no folder yet"
+        past the point where that would matter (a create).
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == FOLDER_FACILITIES)
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def ensure_facility_folder(
         self, organization_id: UUID, facility_id: str, facility_display_name: str
     ) -> DocumentFolder:
@@ -1235,7 +1586,93 @@ class DocumentsService:
         even though a concurrent transaction already created and committed
         one while this one waited for the lock. Both existence checks below
         are therefore locking reads too, not just the organization row.
+
+        FAC-42 (Codex): the organization lock above is genuinely needed only
+        while something might still need creating -- every call after a
+        facility's folder already exists (the overwhelming majority, since
+        this only creates once per facility ever) does not touch a single
+        new row, yet used to take an *exclusive* lock on the org's one
+        ``Organization`` row regardless, unconditionally, before ever
+        checking whether creation was needed. Per FAC-31, the caller
+        (``_validate_shared_document_reference``) holds whatever this method
+        returns/locks until its own reference insert commits -- so every
+        facility document/photo upload in an organization was briefly
+        serializing on that single row, even for completely unrelated
+        facilities and documents, a real lock-wait risk under concurrent
+        bulk uploads.
+
+        Fixed with a fast/slow split: the fast path takes the same *folder*
+        locking reads as before (still required -- see the paragraph above;
+        this is not new locking, it is the pre-existing per-folder lock),
+        without ever touching the organization row, and returns immediately
+        if both already exist. Only when something is actually missing does
+        this fall through to the slow path, which locks the organization row
+        and re-checks both folders *again* under that lock (double-checked
+        locking) before creating -- a concurrent transaction may have
+        created what was missing while this one computed the fast path.
+        That re-check is why the org lock's own safety property is
+        unchanged: any two callers that could actually race on a *create*
+        still serialize on it exactly as before; only callers who need
+        nothing built at all now skip it entirely.
+
+        FAC-43 (Codex, on top of FAC-42): the fast path above still called
+        ``_lock_facilities_root`` -- an exclusive lock on the org's single
+        "Facility Files" root row -- unconditionally, even though the fast
+        path never writes to it. Two concurrent reference creations for two
+        *different* facilities in the same organization therefore still
+        serialized on that one shared row before either could reach its own,
+        genuinely distinct, facility folder. The fast path now peeks at the
+        root with a plain read (``_peek_facilities_root``) instead: that
+        method's own docstring is the safety argument (a system folder can
+        be neither moved nor deleted, so a stale peek can only under-report
+        existence, never hand back a wrong id, and an under-report safely
+        falls through to the slow path's locking re-check).
+
+        FAC-45 (Codex, on top of FAC-43): the fast path's *per-facility*
+        lock (immediately below) still called ``_lock_facility_folder`` --
+        a locking (``FOR UPDATE``) lookup -- unconditionally too, even when
+        nothing matches. When nothing matches, InnoDB takes a **gap lock**
+        to guard the range instead of a record lock, and unlike a record
+        lock, a gap lock is compatible with another transaction's gap lock
+        on the same range. That opened a genuine deadlock, not just a
+        contention window, the first time two requests raced to create the
+        *same* brand-new facility's folder: both take a (mutually
+        compatible) gap lock here on the fast path before either reaches
+        the organization lock below; the first to reach it wins, re-locks
+        (this same query, now a real INSERT target) and tries to insert --
+        which needs an *insert-intention* lock that **does** conflict with
+        the other transaction's still-held gap lock; that other transaction
+        is itself blocked waiting for the organization lock the first one
+        holds. Classic deadlock cycle, reliably reproduced live (five runs)
+        with two real sessions racing to create the same never-before-seen
+        facility's folder -- InnoDB kills one side outright
+        (``OperationalError`` 1213), an unhandled 500 for one of two
+        legitimate concurrent requests.
+
+        Fixed the same way as FAC-43 fixed the root: peek first
+        (``_peek_facility_folder``, no lock, so nothing here can ever take a
+        gap lock before the organization mutex), and only take an actual
+        lock (``_lock_folder_by_id``, a point lookup by the id the peek just
+        found) once existence is confirmed. A stale "not found" here isn't
+        the safety argument FAC-43's root peek relies on -- a facility
+        folder genuinely can be deleted, unlike the root -- but it doesn't
+        need to be: "not found" simply falls through to the slow path,
+        exactly like every other missing-folder case already does, where
+        the double-checked, organization-locked re-read is authoritative
+        regardless of what this peek saw.
         """
+        facility_id_str = str(facility_id)
+
+        facilities_root = await self._peek_facilities_root(organization_id)
+        if facilities_root is not None:
+            peeked_folder = await self._peek_facility_folder(
+                facilities_root.id, facility_id_str
+            )
+            if peeked_folder is not None:
+                facility_folder = await self._lock_folder_by_id(peeked_folder.id)
+                if facility_folder is not None:
+                    return facility_folder
+
         org = await self.db.scalar(
             select(Organization)
             .where(Organization.id == str(organization_id))
@@ -1244,17 +1681,9 @@ class DocumentsService:
         if org is None:
             raise ValueError("Organization not found")
 
-        # Find the 'facilities' system folder
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.slug == FOLDER_FACILITIES)
-            .where(DocumentFolder.is_system.is_(True))
-            .order_by(DocumentFolder.id)
-            .limit(1)
-            .with_for_update()
-        )
-        facilities_root = result.scalar_one_or_none()
+        # Re-check under the org lock -- a concurrent transaction may have
+        # created either row between the fast-path check above and here.
+        facilities_root = await self._lock_facilities_root(organization_id)
 
         if not facilities_root:
             from app.models.document import SYSTEM_FOLDERS
@@ -1278,17 +1707,9 @@ class DocumentsService:
             await self.db.flush()
             await self.db.refresh(facilities_root)
 
-        # Check if this facility already has a folder
-        facility_id_str = str(facility_id)
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.parent_id == facilities_root.id)
-            .where(DocumentFolder.slug == f"facility-{facility_id_str}")
-            .order_by(DocumentFolder.id)
-            .limit(1)
-            .with_for_update()
+        facility_folder = await self._lock_facility_folder(
+            facilities_root.id, facility_id_str
         )
-        facility_folder = result.scalar_one_or_none()
 
         if not facility_folder:
             facility_folder = DocumentFolder(

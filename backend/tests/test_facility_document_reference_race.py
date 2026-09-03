@@ -1,0 +1,1796 @@
+"""FAC-29 (Codex, on top of FAC-26/27/28): the facility-document-reference
+cleanup and the reference-filing validation are a read-then-write racing on
+the same ``Document`` row from two directions, and a plain SELECT is not
+enough to serialize either one.
+
+Under InnoDB's default REPEATABLE READ, a plain SELECT answers from the
+snapshot taken at the transaction's *first* read -- and every request here
+already reads something before the check that matters runs (the endpoint's
+own document fetch, or an auth/permission dependency's user lookup), so that
+snapshot predates a concurrent commit on the other side:
+
+* ``_delete_facility_document_references``'s existence check could miss a
+  ``FacilityDocument``/``FacilityPhoto`` reference committed *after* the
+  deleting transaction's snapshot was taken, letting the delete proceed
+  unconditionally and leaving the just-created reference permanently
+  dangling.
+* ``_validate_shared_document_reference`` (facilities.py) could resolve a
+  document a concurrent transaction already deleted and committed, filing a
+  reference to nothing the moment both transactions finish.
+
+The fix in both places is a *locking* read (``with_for_update()``/
+``for_update=True``): unlike a plain SELECT, a locking read always reads the
+latest committed version regardless of when the transaction's snapshot was
+taken -- the same pattern this codebase's capacity checks already use
+(CLAUDE.md Pitfall #27).
+
+These tests use two REAL, independently-committing sessions (not the
+savepoint-based ``db_session`` fixture, which never truly commits and so
+can never demonstrate cross-transaction visibility) to force the exact
+interleaving. Every row created is torn down explicitly at the end.
+"""
+
+import asyncio
+import uuid
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import pytest
+from sqlalchemy import select
+
+from app.api.v1.endpoints.facilities import _validate_shared_document_reference
+from app.core.database import database_manager
+from app.models.document import Document, DocumentFolder
+from app.models.facilities import (
+    Facility,
+    FacilityDocument,
+    FacilityStatus,
+    FacilityType,
+)
+from app.models.user import Organization
+from app.services.documents_service import DocumentsService
+
+pytestmark = pytest.mark.integration
+
+
+@pytest.fixture
+async def two_sessions(_initialize_database):
+    """Two independent AsyncSessions, each its own real connection and
+    transaction -- required to demonstrate cross-transaction visibility,
+    which the shared savepoint-based ``db_session`` fixture cannot do.
+
+    FAC-33 (Codex): teardown used to swallow every rollback failure with a
+    blanket ``except Exception: pass``. Verified empirically (both against a
+    clean session and one whose connection was already closed) that
+    ``rollback()`` raises nothing in either case against this backend --
+    there is no known-benign exception to narrow the catch to. Per
+    CLAUDE.md's "Fix All Errors" policy, a rollback failure here means a
+    broken connection or an unreleased transaction from the test itself, and
+    must surface as a test failure rather than be hidden until some later,
+    unrelated test fails or hangs.
+    """
+    factory = database_manager.session_factory
+    sessions = [factory(), factory()]
+    try:
+        yield sessions
+    finally:
+        for session in sessions:
+            await session.rollback()
+            await session.close()
+
+
+async def _make_org_facility_document(session, slug):
+    org = Organization(name="Race Test VFD", slug=slug)
+    session.add(org)
+    await session.flush()
+    facility_type = FacilityType(organization_id=None, name="Station", is_system=True)
+    facility_status = FacilityStatus(
+        organization_id=None, name="In service", is_system=True
+    )
+    session.add_all([facility_type, facility_status])
+    await session.flush()
+    facility = Facility(
+        organization_id=org.id,
+        name="Station 1",
+        facility_type_id=facility_type.id,
+        status_id=facility_status.id,
+    )
+    session.add(facility)
+    await session.flush()
+    document = Document(organization_id=org.id, name="Policy", file_name="policy.pdf")
+    session.add(document)
+    await session.commit()
+    return org.id, facility.id, document.id, facility_type.id, facility_status.id
+
+
+async def _make_org_folder_document(session, slug):
+    """A plain (non-facility) folder with one document in it -- what
+    ``delete_folder``'s cascade needs, with no facility scaffolding."""
+    org = Organization(name="Race Test VFD", slug=slug)
+    session.add(org)
+    await session.flush()
+    folder = DocumentFolder(
+        organization_id=org.id, name="Cascade Test", is_system=False
+    )
+    session.add(folder)
+    await session.flush()
+    document = Document(
+        organization_id=org.id,
+        name="Policy",
+        file_name="policy.pdf",
+        folder_id=folder.id,
+    )
+    session.add(document)
+    await session.commit()
+    return org.id, folder.id, document.id
+
+
+async def _make_org_facility_document_with_folder(session, slug):
+    """Like ``_make_org_facility_document``, but with the facility's own
+    ``DocumentFolder`` pre-created (via ``ensure_facility_folder``, in its
+    own committed transaction first) -- what FAC-34's race needs: an
+    *existing* folder row for a concurrent ``delete_folder`` to target, and
+    for ``_validate_shared_document_reference``'s ``ensure_facility_folder``
+    call to find (and lock) via its "found" path rather than create fresh.
+    """
+    ids = await _make_org_facility_document(session, slug)
+    org_id, facility_id, document_id, facility_type_id, status_id = ids
+    factory = database_manager.session_factory
+    setup_session = factory()
+    try:
+        folder = await DocumentsService(setup_session).ensure_facility_folder(
+            org_id, str(facility_id), "Station 1"
+        )
+        await setup_session.commit()
+        folder_id = folder.id
+    finally:
+        await setup_session.close()
+    return org_id, facility_id, document_id, facility_type_id, status_id, folder_id
+
+
+async def _teardown_org_folder(org_id, folder_id, document_id):
+    factory = database_manager.session_factory
+    cleanup = factory()
+    try:
+        await cleanup.execute(
+            FacilityDocument.__table__.delete().where(
+                FacilityDocument.organization_id == org_id
+            )
+        )
+        await cleanup.execute(
+            Document.__table__.delete().where(Document.id == document_id)
+        )
+        await cleanup.execute(
+            DocumentFolder.__table__.delete().where(DocumentFolder.id == folder_id)
+        )
+        await cleanup.execute(
+            Organization.__table__.delete().where(Organization.id == org_id)
+        )
+        await cleanup.commit()
+    finally:
+        await cleanup.close()
+
+
+async def _teardown_org(org_id, facility_id, document_id, facility_type_id, status_id):
+    factory = database_manager.session_factory
+    cleanup = factory()
+    try:
+        await cleanup.execute(
+            FacilityDocument.__table__.delete().where(
+                FacilityDocument.organization_id == org_id
+            )
+        )
+        await cleanup.execute(
+            Document.__table__.delete().where(Document.id == document_id)
+        )
+        await cleanup.execute(
+            Facility.__table__.delete().where(Facility.id == facility_id)
+        )
+        await cleanup.execute(
+            FacilityType.__table__.delete().where(FacilityType.id == facility_type_id)
+        )
+        await cleanup.execute(
+            FacilityStatus.__table__.delete().where(FacilityStatus.id == status_id)
+        )
+        await cleanup.execute(
+            Organization.__table__.delete().where(Organization.id == org_id)
+        )
+        await cleanup.commit()
+    finally:
+        await cleanup.close()
+
+
+class TestFacilityReferenceExistenceCheckIsALockingRead:
+    """The delete side (FAC-26's existence check): a reference committed
+    after the deleting transaction's snapshot was taken must still be seen.
+    """
+
+    async def test_a_reference_committed_after_the_snapshot_is_still_seen(
+        self, two_sessions
+    ):
+        deleter, creator = two_sessions
+        ids = await _make_org_facility_document(
+            deleter, f"fcvfd-race-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id = ids
+        try:
+            # Simulates the endpoint's own `existing = await
+            # service.get_document_by_id(...)` fetch, which already runs
+            # before delete_document (and its facility-reference check)
+            # ever executes -- establishing the deleting transaction's
+            # REPEATABLE READ snapshot for plain reads before any
+            # reference exists.
+            result = await deleter.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            result.scalar_one()
+
+            # A second, real, independently-committing transaction files a
+            # facility reference to the same document.
+            facility_document = FacilityDocument(
+                organization_id=org_id,
+                facility_id=facility_id,
+                file_path=f"document:{document_id}",
+                file_name="policy.pdf",
+            )
+            creator.add(facility_document)
+            await creator.commit()
+
+            # The deleting transaction's existence check must see the
+            # reference despite its snapshot predating the commit above --
+            # a plain SELECT here would not (FAC-29).
+            matches = await DocumentsService(
+                deleter
+            )._match_facility_document_references(
+                FacilityDocument, {str(document_id)}, org_id
+            )
+            assert matches == [facility_document.id]
+        finally:
+            # Release the locking read's row lock before a third session
+            # tries to delete the same rows -- otherwise cleanup deadlocks
+            # against this test's own still-open transaction.
+            await deleter.rollback()
+            await _teardown_org(*ids)
+
+
+class TestCreateReferenceValidationIsALockingRead:
+    """The create side (facilities.py's ``_validate_shared_document_reference``):
+    a document a concurrent transaction already deleted and committed must
+    not resolve as existing, even against a stale snapshot.
+    """
+
+    async def test_a_document_deleted_after_the_snapshot_no_longer_resolves(
+        self, two_sessions
+    ):
+        creator, deleter = two_sessions
+        ids = await _make_org_facility_document(
+            creator, f"fcvfd-race-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id = ids
+        try:
+            # An unrelated first read establishes the creating transaction's
+            # snapshot while the document still exists -- models a request's
+            # own earlier reads (e.g. the auth dependency's user/position
+            # lookup) that run before validation ever touches the document.
+            result = await creator.execute(
+                select(Organization).where(Organization.id == org_id)
+            )
+            result.scalar_one()
+
+            # A second, real, independently-committing transaction deletes
+            # the document.
+            result = await deleter.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            doc = result.scalar_one()
+            await deleter.delete(doc)
+            await deleter.commit()
+
+            # A plain read on the creating side would still resolve the
+            # document from its stale snapshot -- demonstrating the race
+            # this fixture reproduces.
+            plain = await DocumentsService(creator).get_document_by_id(
+                document_id, org_id, for_update=False
+            )
+            assert plain is not None, (
+                "expected the plain read to reproduce the stale-snapshot "
+                "read (this assertion documents the race, not the fix)"
+            )
+            await creator.rollback()
+
+            # The actual validation path (for_update=True) must not resolve
+            # the deleted document, regardless of the snapshot (FAC-29).
+            result = await creator.execute(
+                select(Organization).where(Organization.id == org_id)
+            )
+            result.scalar_one()
+            locked = await DocumentsService(creator).get_document_by_id(
+                document_id, org_id, for_update=True
+            )
+            assert locked is None
+        finally:
+            # Both sessions still hold open transactions (creator's last
+            # read, deleter's commit started a fresh implicit one) --
+            # release them before a third session tears the rows down, or
+            # cleanup deadlocks against this test's own connections.
+            await creator.rollback()
+            await deleter.rollback()
+            await _teardown_org(*ids)
+
+
+class TestReferenceInsertStaysUnderTheDocumentLock:
+    """FAC-31 (Codex, on top of FAC-29): validating a reference and actually
+    filing it are two separate steps -- ``_validate_shared_document_reference``
+    locks and (for a folderless document) assigns a folder, but the
+    ``FacilityDocument``/``FacilityPhoto`` row that records the reference is
+    only inserted afterward, by the caller
+    (``create_facility_document``/``create_facility_photo``). FAC-29's lock
+    protects the validation step; if that step commits on its own, the lock
+    is released before the reference the caller is about to file even
+    exists, and a concurrent delete can land in exactly that gap.
+
+    Proving the fix needs one session to actually *block* on the other's row
+    lock while it is held, not just resolve a stale value -- a plain
+    sequential ``await`` between two independent sessions cannot observe a
+    block (nothing else could be running for it to block against). This test
+    runs the deleting session's ``delete_document`` as a background task
+    while the creator's transaction is still open, and inspects whether it
+    has completed after a short pause -- long enough to observe a lock wait,
+    short enough not to be mistaken for one. Whichever path is taken, the
+    single invariant asserted at the end is the one FAC-31 exists to
+    protect: a ``FacilityDocument``/``FacilityPhoto`` row is never left
+    pointing at a document that no longer exists.
+
+    FAC-37 (Codex): a fixed sleep between starting ``delete_task`` and
+    checking ``delete_task.done()`` is a race against the deleter's own
+    query latency, not just against the lock -- on a slow CI database, the
+    deleter's preliminary (non-locking) query can still be in flight, or not
+    yet even issued, when the sleep expires. The test would then take the
+    "not yet done" branch for the wrong reason and still pass (a delayed
+    pre-fix delete raises the same ``PermissionError`` once it eventually
+    runs), without ever actually having proven the lock held. Synchronizing
+    on an event set the moment the deleter issues its locking read
+    (``get_document_by_id(..., for_update=True)``) removes that ambiguity:
+    once the event fires, the deleter has genuinely reached the point where
+    a held lock -- not query latency -- is the only thing that can still be
+    blocking it.
+    """
+
+    async def test_a_concurrent_delete_cannot_land_between_validate_and_insert(
+        self, two_sessions
+    ):
+        creator, deleter = two_sessions
+        ids = await _make_org_facility_document(
+            creator, f"fcvfd-race-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id = ids
+        try:
+            creator_user = SimpleNamespace(organization_id=org_id)
+
+            # Step 1: exactly what create_facility_document/create_facility_photo
+            # do before they insert the reference row -- validate, and (this
+            # document has no folder yet) assign one.
+            await _validate_shared_document_reference(
+                creator, f"document:{document_id}", creator_user, str(facility_id)
+            )
+
+            # Step 2: a second, real session races the gap between that
+            # validation and the reference the creator is about to file.
+            # current_user=None means the deleter's own facility-reference
+            # permission check (FAC-26) fails closed if it ever sees a
+            # reference -- it should not need that check to matter here,
+            # because at this instant no reference has been filed yet.
+            document_lock_attempted = asyncio.Event()
+            deleter_service = DocumentsService(deleter)
+            original_get_document_by_id = deleter_service.get_document_by_id
+
+            async def _tracking_get_document_by_id(*args, **kwargs):
+                if kwargs.get("for_update"):
+                    document_lock_attempted.set()
+                return await original_get_document_by_id(*args, **kwargs)
+
+            with patch.object(
+                deleter_service,
+                "get_document_by_id",
+                _tracking_get_document_by_id,
+            ):
+                delete_task = asyncio.create_task(
+                    deleter_service.delete_document(document_id, org_id)
+                )
+                # FAC-37: wait for the deleter to actually reach its locking
+                # read -- not a fixed sleep from task creation -- then give
+                # it a brief moment to either resolve (pre-fix, nothing was
+                # holding the lock) or genuinely block on it (post-fix).
+                await asyncio.wait_for(document_lock_attempted.wait(), timeout=10)
+                await asyncio.sleep(0.2)
+
+            if not delete_task.done():
+                # Fixed behaviour: the creator's transaction never committed
+                # inside validation (FAC-31), so the FOR UPDATE lock taken
+                # there is still held -- the deleter is genuinely blocked on
+                # it. Finish the creator's flow (file the reference, then
+                # commit once) to release the lock, exactly as
+                # create_facility_document does.
+                creator.add(
+                    FacilityDocument(
+                        organization_id=org_id,
+                        facility_id=facility_id,
+                        file_path=f"document:{document_id}",
+                        file_name="policy.pdf",
+                    )
+                )
+                await creator.commit()
+                # The deleter unblocks, now sees the just-filed reference,
+                # and (current_user=None) is refused by FAC-26 rather than
+                # being allowed to delete a referenced document.
+                with pytest.raises(PermissionError):
+                    await asyncio.wait_for(delete_task, timeout=10)
+                # The deleter's transaction is left open on its own
+                # PermissionError -- release it before teardown.
+                await deleter.rollback()
+            else:
+                # Pre-fix behaviour: validation's own commit already
+                # released the lock, so the deleter proceeded immediately.
+                # With no reference on file yet, FAC-26 never even
+                # triggers -- the delete succeeds unconditionally, out from
+                # under the request that is about to file a reference to
+                # this document.
+                assert delete_task.result() is True
+                creator.add(
+                    FacilityDocument(
+                        organization_id=org_id,
+                        facility_id=facility_id,
+                        file_path=f"document:{document_id}",
+                        file_name="policy.pdf",
+                    )
+                )
+                await creator.commit()
+
+            # The invariant, regardless of which path was taken above: any
+            # surviving facility_document reference must point at a document
+            # that still exists.
+            verifier = database_manager.session_factory()
+            try:
+                remaining = await verifier.execute(
+                    select(FacilityDocument).where(
+                        FacilityDocument.organization_id == org_id
+                    )
+                )
+                reference = remaining.scalar_one_or_none()
+                if reference is not None:
+                    still_there = await verifier.get(Document, str(document_id))
+                    assert still_there is not None, (
+                        "a facility_document row references a document that "
+                        "no longer exists -- FAC-31's race reopened"
+                    )
+            finally:
+                await verifier.close()
+        finally:
+            await creator.rollback()
+            await deleter.rollback()
+            await _teardown_org(*ids)
+
+
+class TestDeleteFolderLocksDocumentsBeforeTheReferenceTable:
+    """FAC-32 (Codex, on top of FAC-29/31): FAC-31 makes the creator path
+    lock a ``Document`` row first, then -- still holding it -- insert into
+    the ``FacilityDocument``/``FacilityPhoto`` reference table.
+    ``delete_folder``'s cascade used to do the opposite: it scanned (and
+    locked) the reference table first, via
+    ``_match_facility_document_references``, and only reached the subtree's
+    ``Document`` rows afterward, implicitly, through the ORM's cascade
+    delete. Two transactions taking the same two locks in opposite orders is
+    a textbook InnoDB deadlock: the creator's reference-table insert can
+    block on this scan's gap lock while this scan's later Document need
+    blocks on the creator's already-held row lock, and neither can proceed.
+
+    A true deadlock needs both sides genuinely blocked on each other at the
+    same instant, which is inherently timing-sensitive to force on demand in
+    a way that is reliable across both this project's MySQL 8.0 and MariaDB
+    10.11 test matrices. Rather than chase that, this test verifies the
+    concrete, engine-independent effect the reordering fix guarantees: with
+    a ``Document`` row already locked by one session, ``delete_folder`` run
+    in a second, real session must block on *that* row before it ever
+    reaches the reference-table scan -- not merely block *somewhere*
+    eventually, which the old, wrong order also did (just later, at the
+    cascade delete itself, by which point the reference-table lock had
+    already been taken in the wrong order). ``_match_facility_document_references``
+    is instrumented, on this one cascade-only ``DocumentsService`` instance,
+    to record whether it has been reached yet -- ``patch.object`` on an
+    object built for, and used by, only this one coroutine is the case
+    CLAUDE.md pitfall #22 carves out; nothing else concurrently patches the
+    same target.
+
+    FAC-38 (Codex): the same fixed-sleep risk FAC-37 fixed on the
+    document-delete test applied here too -- on a slow MySQL/MariaDB
+    runner, ``delete_folder`` can still be doing its preliminary folder
+    subtree walk or the (uncontended, here) FAC-34 folder lock when a fixed
+    delay expires, so both assertions below would pass without ever having
+    proven the intended ordering. Synchronized on an event emitted by
+    ``_lock_subtree_documents`` (extracted by FAC-34, so already a natural
+    instrumentation point) the moment the cascade actually attempts its
+    ``Document`` lock -- the point genuinely contended by the creator's own
+    lock in this test -- instead of a fixed sleep from task creation.
+    """
+
+    async def test_delete_folder_blocks_on_the_document_lock_before_scanning_references(
+        self, two_sessions
+    ):
+        creator, cascade = two_sessions
+        ids = await _make_org_folder_document(
+            creator, f"fcvfd-lockorder-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, folder_id, document_id = ids
+        cascade_task = None
+        try:
+            # Creator side: lock the Document first, exactly as the
+            # FAC-31-fixed create path does.
+            await DocumentsService(creator).get_document_by_id(
+                document_id, org_id, for_update=True
+            )
+
+            document_lock_attempted = asyncio.Event()
+            reference_scan_reached = asyncio.Event()
+            cascade_service = DocumentsService(cascade)
+            original_lock_documents = cascade_service._lock_subtree_documents
+            original_scan = cascade_service._match_facility_document_references
+
+            async def _tracking_lock_documents(*args, **kwargs):
+                document_lock_attempted.set()
+                return await original_lock_documents(*args, **kwargs)
+
+            async def _tracking_scan(*args, **kwargs):
+                reference_scan_reached.set()
+                return await original_scan(*args, **kwargs)
+
+            with patch.object(
+                cascade_service, "_lock_subtree_documents", _tracking_lock_documents
+            ), patch.object(
+                cascade_service, "_match_facility_document_references", _tracking_scan
+            ):
+                cascade_task = asyncio.create_task(
+                    cascade_service.delete_folder(folder_id, org_id, current_user=None)
+                )
+                # FAC-38: wait for the cascade to actually reach (and
+                # attempt) its Document lock -- not a fixed sleep from task
+                # creation -- then give it a brief moment to either resolve
+                # or genuinely block.
+                await asyncio.wait_for(document_lock_attempted.wait(), timeout=10)
+                await asyncio.sleep(0.2)
+
+                # The reordering fix's whole point: delete_folder is still
+                # blocked, and blocked *before* it ever reached the
+                # reference-table scan -- not merely blocked somewhere,
+                # which the wrong order produced too (just later).
+                assert not cascade_task.done(), (
+                    "delete_folder should still be blocked on the "
+                    "already-locked Document row"
+                )
+                assert not reference_scan_reached.is_set(), (
+                    "delete_folder reached the reference-table scan before "
+                    "locking the subtree's Document rows -- FAC-32's lock "
+                    "order regressed"
+                )
+
+                # Release the Document lock; delete_folder should now run
+                # to completion without deadlocking.
+                await creator.commit()
+                deleted = await asyncio.wait_for(cascade_task, timeout=10)
+                assert deleted is True
+                assert reference_scan_reached.is_set()
+        finally:
+            if cascade_task is not None and not cascade_task.done():
+                cascade_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await cascade_task
+            await creator.rollback()
+            await cascade.rollback()
+            await _teardown_org_folder(*ids)
+
+
+class TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery:
+    """FAC-34 (Codex, on top of FAC-32): a *third* shared resource, not just
+    the two FAC-32 already orders correctly. Filing a folderless document
+    (facilities.py, ``_validate_shared_document_reference``) locks the
+    ``Document`` row, then -- via ``ensure_facility_folder`` -- the
+    destination ``DocumentFolder``, and only *then* flushes
+    ``document.folder_id`` onto it.
+
+    That flush is an UPDATE against the ``folder_id`` secondary index.
+    FAC-32 made this cascade run a locking ``SELECT`` filtered on that exact
+    column (``_lock_subtree_documents``, below) before the reference-table
+    scan -- correct for FAC-32's own concern (ordering against the reference
+    table), but a locking ``SELECT`` filtered on a column a concurrent
+    transaction is about to write into can block that write regardless of
+    whether the two ultimately conflict on the same row: a gap/next-key lock
+    at the filtered value if it currently matches no rows, or -- depending
+    on which index MySQL/MariaDB's optimizer picks for the query, itself a
+    function of the subtree's size and the table's statistics -- blocking
+    outright on some *other*, unrelated row of the same organization the
+    scan happens to examine first. Verified empirically both ways with two
+    real, independently-committing sessions: a small subtree can produce
+    either behaviour depending on the query plan, and neither this test nor
+    the fix should depend on which one the optimizer picks on a given run.
+
+    Either way, if this cascade's Document-lock query starts running before
+    the creator's flush completes, the flush can block on it -- while the
+    creator is still holding the destination folder's own lock from
+    ``ensure_facility_folder``. This cascade's later, implicit need for that
+    same folder lock (the final ``db.delete(folder)``, at commit) then
+    blocks right back on the creator. Two-way deadlock, and reordering only
+    the Document/reference-table pair (FAC-32's fix) does not touch it,
+    because whatever traps the creator is a side effect of this cascade's
+    Document query itself, taken *before* this cascade ever reaches an
+    explicit folder lock or the reference table.
+
+    Locking the destination folder(s) first closes it regardless of query
+    plan: this cascade then either wins the folder race outright (nothing
+    below has run yet, so it cannot be holding anything the creator needs)
+    or loses it and blocks immediately -- before ever issuing the Document
+    query that would otherwise trap the creator's flush. Proving that
+    control-flow fact -- rather than the specific engine-level mechanism,
+    which is plan-dependent -- is what this test asserts, the same
+    engine-independence rationale as FAC-32's own test:
+    ``_lock_subtree_documents`` (the extracted FAC-32 query) must never be
+    reached while this cascade is still blocked on the FAC-34 folder lock.
+
+    FAC-35 note: this test manually replicates the *pre-FAC-35* creator's
+    lock sequence (Document, then DocumentFolder) by driving
+    ``get_document_by_id``/``ensure_facility_folder`` directly rather than
+    calling ``_validate_shared_document_reference`` -- the real function no
+    longer takes locks in that order (it now locks the folder first, like
+    this cascade). That does not make this test stale: it still proves
+    ``delete_folder``'s own behaviour -- blocking on a folder any other
+    session holds, before ever issuing a Document query -- independent of
+    which order that other session acquired its own locks in.
+    ``TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`` below proves
+    the same thing driven through the real, now-fixed creator function.
+
+    FAC-39 (Codex, full-file sweep): the checkpoint below now waits for an
+    event set the instant ``_lock_subtree_folders`` -- the actual contended
+    call -- is attempted, instead of a fixed sleep; see the FAC-39 write-up
+    in ``docs/security-review/FAC-12-facilities.md`` for why a fixed sleep
+    here specifically risked a false pass.
+    """
+
+    async def test_delete_folder_blocks_on_the_folder_lock_before_any_document_query(
+        self, two_sessions
+    ):
+        creator, cascade = two_sessions
+        ids = await _make_org_facility_document_with_folder(
+            creator, f"fcvfd-folderlock-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id, folder_id = ids
+        cascade_task = None
+        try:
+            docs_creator = DocumentsService(creator)
+            await docs_creator.get_document_by_id(document_id, org_id, for_update=True)
+            # Locks the destination folder via ensure_facility_folder's
+            # "found" path -- exactly what _validate_shared_document_reference
+            # does before it ever touches document.folder_id.
+            await docs_creator.ensure_facility_folder(
+                org_id, str(facility_id), "Station 1"
+            )
+
+            document_query_reached = asyncio.Event()
+            folder_lock_attempted = asyncio.Event()
+            cascade_service = DocumentsService(cascade)
+            original_lock_documents = cascade_service._lock_subtree_documents
+            original_lock_folders = cascade_service._lock_subtree_folders
+
+            async def _tracking_lock_documents(*args, **kwargs):
+                document_query_reached.set()
+                return await original_lock_documents(*args, **kwargs)
+
+            async def _tracking_lock_folders(*args, **kwargs):
+                folder_lock_attempted.set()
+                return await original_lock_folders(*args, **kwargs)
+
+            with patch.object(
+                cascade_service,
+                "_lock_subtree_documents",
+                _tracking_lock_documents,
+            ), patch.object(
+                cascade_service,
+                "_lock_subtree_folders",
+                _tracking_lock_folders,
+            ):
+                cascade_task = asyncio.create_task(
+                    cascade_service.delete_folder(folder_id, org_id, current_user=None)
+                )
+                # FAC-39: wait for the cascade to have actually attempted
+                # its folder-lock query (the contended resource here) rather
+                # than guessing how long the preliminary folder lookup and
+                # subtree walk take on a given runner.
+                await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
+
+                # The fix's whole point: delete_folder is still blocked, and
+                # blocked *before* it ever issued the Document-lock query --
+                # not merely blocked somewhere, which the pre-fix ordering
+                # also produced (just via that query's own locking, whose
+                # mechanism is plan-dependent -- see the class docstring).
+                assert not cascade_task.done(), (
+                    "delete_folder should still be blocked on the "
+                    "already-locked destination DocumentFolder"
+                )
+                assert not document_query_reached.is_set(), (
+                    "delete_folder issued its Document-lock query before "
+                    "locking the destination DocumentFolder -- FAC-34's "
+                    "lock order regressed"
+                )
+
+                # Release the folder lock; delete_folder should now run to
+                # completion without deadlocking.
+                await creator.commit()
+                deleted = await asyncio.wait_for(cascade_task, timeout=10)
+                assert deleted is True
+                assert document_query_reached.is_set()
+        finally:
+            if cascade_task is not None and not cascade_task.done():
+                cascade_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await cascade_task
+            await creator.rollback()
+            await cascade.rollback()
+            await _teardown_org(
+                org_id, facility_id, document_id, facility_type_id, status_id
+            )
+
+
+class TestCreatorLocksTheFolderBeforeTheDocument:
+    """FAC-35: the total-order fix that supersedes FAC-32/34's pairwise
+    reorderings. FAC-34 fixed ``delete_folder``'s cascade to lock
+    ``DocumentFolder`` before ``Document`` -- but never touched the creator
+    path, which (at the time) locked ``Document`` first and
+    ``DocumentFolder`` second, via ``ensure_facility_folder``. Two paths
+    taking the same two locks in opposite orders is exactly the deadlock
+    FAC-32 closed for the Document/reference-table pair, reopened here for
+    the Document/DocumentFolder pair: a cascade that has already locked the
+    destination folder, and a creator that has already locked the document
+    being filed into it, can each be waiting on the resource the other
+    holds.
+
+    This class proves the creator side of the fix directly, driving the
+    real ``_validate_shared_document_reference`` (not a manually
+    reconstructed lock sequence) and asserting it blocks on a
+    cascade-held ``DocumentFolder`` lock *before* it ever issues its
+    ``Document`` lock query -- the mirror image of
+    ``TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery``
+    above, which proves the same thing for the cascade side.
+
+    FAC-39 (Codex, full-file sweep): see that class's own FAC-39 note --
+    the same fixed-sleep risk applied here, against ``ensure_facility_folder``
+    instead of ``_lock_subtree_folders``.
+    """
+
+    async def test_creator_blocks_on_a_cascade_held_folder_before_locking_the_document(
+        self, two_sessions
+    ):
+        cascade, creator = two_sessions
+        ids = await _make_org_facility_document_with_folder(
+            cascade, f"fcvfd-fac35-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id, folder_id = ids
+        creator_task = None
+        try:
+            # Cascade side: lock the destination folder, exactly as
+            # delete_folder's own _lock_subtree_folders does for a subtree
+            # that includes it.
+            await DocumentsService(cascade)._lock_subtree_folders({str(folder_id)})
+
+            document_lock_reached = asyncio.Event()
+            original_get_document_by_id = DocumentsService.get_document_by_id
+
+            async def _tracking_get_document_by_id(self, *args, **kwargs):
+                if kwargs.get("for_update"):
+                    document_lock_reached.set()
+                return await original_get_document_by_id(self, *args, **kwargs)
+
+            # FAC-39: also track the moment the creator actually attempts
+            # ensure_facility_folder -- the call whose "found" path takes
+            # the contended folder lock -- rather than guessing how long
+            # the (fast, uncontended) preceding facility lookup takes.
+            folder_lock_attempted = asyncio.Event()
+            original_ensure_facility_folder = DocumentsService.ensure_facility_folder
+
+            async def _tracking_ensure_facility_folder(self, *args, **kwargs):
+                folder_lock_attempted.set()
+                return await original_ensure_facility_folder(self, *args, **kwargs)
+
+            creator_user = SimpleNamespace(organization_id=org_id)
+
+            # Patched at the class level -- _validate_shared_document_reference
+            # builds its own DocumentsService(db) internally, so there is no
+            # instance to patch.object() before it exists. Only the creator
+            # coroutine below ever calls this method while the patch is
+            # active (the cascade side already finished its own locking
+            # call above), so this does not run afoul of CLAUDE.md pitfall
+            # #22 (two coroutines concurrently entering the same patch).
+            with patch.object(
+                DocumentsService, "get_document_by_id", _tracking_get_document_by_id
+            ), patch.object(
+                DocumentsService,
+                "ensure_facility_folder",
+                _tracking_ensure_facility_folder,
+            ):
+                creator_task = asyncio.create_task(
+                    _validate_shared_document_reference(
+                        creator,
+                        f"document:{document_id}",
+                        creator_user,
+                        str(facility_id),
+                    )
+                )
+                await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
+
+                # The fix's whole point: the creator path is still blocked,
+                # and blocked *before* it ever issued the Document lock
+                # query -- not merely blocked somewhere, which the pre-fix
+                # order also produced (just later, after the Document lock
+                # had already been taken).
+                assert not creator_task.done(), (
+                    "_validate_shared_document_reference should still be "
+                    "blocked on the cascade-held destination DocumentFolder"
+                )
+                assert not document_lock_reached.is_set(), (
+                    "_validate_shared_document_reference locked the "
+                    "Document row before the destination DocumentFolder -- "
+                    "FAC-35's lock order regressed"
+                )
+
+                # Release the folder lock; the creator path should now run
+                # to completion without deadlocking.
+                await cascade.commit()
+                await asyncio.wait_for(creator_task, timeout=10)
+                assert document_lock_reached.is_set()
+        finally:
+            if creator_task is not None and not creator_task.done():
+                creator_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await creator_task
+            await cascade.rollback()
+            await creator.rollback()
+            await _teardown_org(
+                org_id, facility_id, document_id, facility_type_id, status_id
+            )
+
+
+class TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar:
+    """FAC-35, the other direction -- and the one that has to be built as a
+    genuinely paused interleaving, not a sequential "let the creator finish,
+    then start the cascade" setup. A creator that has *already fully run*
+    holds both locks by the time the cascade starts, regardless of which
+    order it acquired them in -- so a test shaped that way cannot tell the
+    fixed ordering apart from the broken one (confirmed empirically: an
+    earlier version of this test, built that way and driven through the
+    real pre-fix creator, passed against pre-fix code too, because
+    ``delete_folder``'s own FAC-34 ordering was never in question here).
+
+    What actually needs proving is the state that only exists *during* the
+    post-fix creator's sequence and never during the pre-fix one: the
+    creator holding the destination ``DocumentFolder`` lock while it has
+    not yet even issued its own ``Document`` lock query. Pre-fix, the
+    creator locks the ``Document`` row first, so this state never occurs --
+    by the time it would hold the folder, it already holds the document
+    too, at which point ``delete_folder`` racing in can be trapped by the
+    Document lock while never having reached its own folder lock (the exact
+    mechanism FAC-34 identified, from the other side). Post-fix, this state
+    always exists, briefly, between ``ensure_facility_folder`` returning and
+    ``get_document_by_id(for_update=True)`` being called -- paused here with
+    a patched, event-gated ``get_document_by_id`` so the window is
+    deterministic instead of a race against real query latency.
+
+    FAC-39 (Codex, full-file sweep): the *second* checkpoint below (the
+    cascade's own blocking check) also used a fixed sleep, tracking only
+    ``_lock_subtree_documents`` -- reached after the actually-contended
+    ``_lock_subtree_folders`` call, the same gap
+    ``TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery``
+    had. Now waits for that call to be attempted instead.
+    """
+
+    async def test_cascade_blocks_on_the_folder_while_the_creator_has_not_yet_locked_its_document(
+        self, two_sessions
+    ):
+        creator, cascade = two_sessions
+        ids = await _make_org_facility_document_with_folder(
+            creator, f"fcvfd-fac35-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id, folder_id = ids
+        creator_task = None
+        cascade_task = None
+        try:
+            creator_user = SimpleNamespace(organization_id=org_id)
+
+            # Pause the creator path the moment it is about to lock the
+            # Document row (for_update=True) -- post-fix, this is strictly
+            # after ensure_facility_folder has already locked the
+            # destination DocumentFolder; pre-fix, this is the creator's
+            # very first locking call, before it has touched any folder.
+            about_to_lock_document = asyncio.Event()
+            proceed_to_document_lock = asyncio.Event()
+            original_get_document_by_id = DocumentsService.get_document_by_id
+
+            async def _paused_get_document_by_id(self, *args, **kwargs):
+                if kwargs.get("for_update"):
+                    about_to_lock_document.set()
+                    await proceed_to_document_lock.wait()
+                return await original_get_document_by_id(self, *args, **kwargs)
+
+            with patch.object(
+                DocumentsService, "get_document_by_id", _paused_get_document_by_id
+            ):
+                creator_task = asyncio.create_task(
+                    _validate_shared_document_reference(
+                        creator,
+                        f"document:{document_id}",
+                        creator_user,
+                        str(facility_id),
+                    )
+                )
+                await asyncio.wait_for(about_to_lock_document.wait(), timeout=10)
+
+                document_query_reached = asyncio.Event()
+                folder_lock_attempted = asyncio.Event()
+                cascade_service = DocumentsService(cascade)
+                original_lock_documents = cascade_service._lock_subtree_documents
+                original_lock_folders = cascade_service._lock_subtree_folders
+
+                async def _tracking_lock_documents(*args, **kwargs):
+                    document_query_reached.set()
+                    return await original_lock_documents(*args, **kwargs)
+
+                async def _tracking_lock_folders(*args, **kwargs):
+                    folder_lock_attempted.set()
+                    return await original_lock_folders(*args, **kwargs)
+
+                with patch.object(
+                    cascade_service,
+                    "_lock_subtree_documents",
+                    _tracking_lock_documents,
+                ), patch.object(
+                    cascade_service,
+                    "_lock_subtree_folders",
+                    _tracking_lock_folders,
+                ):
+                    cascade_task = asyncio.create_task(
+                        cascade_service.delete_folder(
+                            folder_id, org_id, current_user=None
+                        )
+                    )
+                    # FAC-39: wait for the cascade to have actually
+                    # attempted its folder-lock query, rather than guessing
+                    # how long the preliminary folder lookup and subtree
+                    # walk take. Unlike this file's other lock-order tests,
+                    # this alone is not enough here: whether that call
+                    # actually *blocks* depends on which order the creator
+                    # (paused above) has used -- pre-fix, it holds nothing
+                    # yet at its pause point, so this call succeeds
+                    # uncontended and the cascade runs to completion on its
+                    # own. A short bounded wait on the task itself (as
+                    # FAC-37 uses for its own fast-path/blocked-path
+                    # ambiguity) gives that uncontested run enough real time
+                    # to actually finish -- proving the pre-fix branch by
+                    # letting it complete, rather than by finding the
+                    # assertions trivially true before it has had the
+                    # chance to.
+                    await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.shield(cascade_task), timeout=2.0
+                        )
+                    except asyncio.TimeoutError:
+                        pass
+
+                    # Post-fix: the creator holds only the destination
+                    # DocumentFolder so far (paused before its own Document
+                    # lock) -- delete_folder must still block on that folder
+                    # and never reach its Document-lock query. Pre-fix, the
+                    # creator holds no folder lock yet at this pause point
+                    # (it pauses on its *first* locking call, before
+                    # ensure_facility_folder ever runs) -- nothing blocks
+                    # delete_folder here, and it runs straight through to
+                    # (and past) the Document-lock query, which is exactly
+                    # the assertion below catching the pre-fix order.
+                    assert not cascade_task.done(), (
+                        "delete_folder should still be blocked on the "
+                        "creator-held destination DocumentFolder, even "
+                        "though the creator has not yet locked its own "
+                        "Document row"
+                    )
+                    assert not document_query_reached.is_set(), (
+                        "delete_folder issued its Document-lock query while "
+                        "racing a creator that -- post-fix -- holds only "
+                        "the destination DocumentFolder lock so far -- "
+                        "FAC-35's lock order regressed"
+                    )
+
+                    # Let the creator proceed to lock (and file) its
+                    # document, then commit -- releasing both locks so the
+                    # cascade can complete.
+                    proceed_to_document_lock.set()
+                    await asyncio.wait_for(creator_task, timeout=10)
+                    await creator.commit()
+
+                    deleted = await asyncio.wait_for(cascade_task, timeout=10)
+                    assert deleted is True
+                    assert document_query_reached.is_set()
+        finally:
+            if cascade_task is not None and not cascade_task.done():
+                cascade_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await cascade_task
+            if creator_task is not None and not creator_task.done():
+                creator_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await creator_task
+            await creator.rollback()
+            await cascade.rollback()
+            await _teardown_org(
+                org_id, facility_id, document_id, facility_type_id, status_id
+            )
+
+
+class TestUpdateDocumentLocksTheFolderBeforeTheDocument:
+    """FAC-36 (Codex, on top of FAC-35): the generic ``PATCH /documents/{id}``
+    move path (``update_document``) writes ``folder_id`` directly onto the
+    ``Document`` row. Pre-fix, it never explicitly locked the destination
+    ``DocumentFolder`` at all -- the only lock it took on that folder was the
+    implicit one InnoDB's own row-then-FK-check order takes for the ``UPDATE``
+    at commit, which lands *after* this transaction has already (implicitly)
+    locked the ``Document`` row being written. Document-then-Folder is the
+    opposite of the canonical order documented at the top of this module
+    (DocumentFolder, then Document, then the reference table) and the
+    opposite of what ``_validate_shared_document_reference`` (facilities.py)
+    always does now, per FAC-35 -- the same two-way-deadlock shape FAC-35
+    fixed on that call site, reopened here on this one.
+
+    Proving the fix needs the destination folder already locked by another
+    session and confirming ``update_document`` blocks on it -- genuinely,
+    and *before* it ever explicitly locks the Document row for the write --
+    rather than merely completing eventually (which the old ordering also
+    does, just via InnoDB's implicit FK-check lock at commit, a step this
+    test cannot instrument directly).
+
+    FAC-39 (Codex, full-file sweep): the checkpoint below now waits for an
+    event set the instant ``update_document`` actually attempts
+    ``_lock_destination_folder`` (its own contended call), rather than a
+    fixed sleep.
+    """
+
+    async def test_update_document_locks_the_folder_before_the_document(
+        self, two_sessions
+    ):
+        cascade, updater = two_sessions
+        ids = await _make_org_facility_document_with_folder(
+            cascade, f"fcvfd-fac36-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id, folder_id = ids
+        updater_task = None
+        try:
+            # What _validate_shared_document_reference's ensure_facility_folder
+            # call (or delete_folder's _lock_subtree_folders) takes on this
+            # exact row before either of those ever locks a Document.
+            await cascade.execute(
+                select(DocumentFolder.id)
+                .where(DocumentFolder.id == folder_id)
+                .with_for_update()
+            )
+
+            document_lock_reached = asyncio.Event()
+            updater_service = DocumentsService(updater)
+            original_get_document_by_id = updater_service.get_document_by_id
+
+            async def _tracking_get_document_by_id(*args, **kwargs):
+                if kwargs.get("for_update"):
+                    document_lock_reached.set()
+                return await original_get_document_by_id(*args, **kwargs)
+
+            # FAC-39: also track the moment update_document actually
+            # attempts its folder lock -- the contended call -- rather than
+            # guessing how long it takes to get there.
+            folder_lock_attempted = asyncio.Event()
+            original_lock_folder = updater_service._lock_destination_folder
+
+            async def _tracking_lock_folder(*args, **kwargs):
+                folder_lock_attempted.set()
+                return await original_lock_folder(*args, **kwargs)
+
+            with patch.object(
+                updater_service,
+                "get_document_by_id",
+                _tracking_get_document_by_id,
+            ), patch.object(
+                updater_service,
+                "_lock_destination_folder",
+                _tracking_lock_folder,
+            ):
+                updater_task = asyncio.create_task(
+                    updater_service.update_document(
+                        document_id, org_id, {"folder_id": str(folder_id)}
+                    )
+                )
+                await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
+
+                # Still blocked, and -- the fix's whole point -- not yet
+                # having issued its own Document-lock query. Pre-fix, this
+                # assertion is vacuous (that query is never issued at all
+                # from this path), which is exactly why the *post*-release
+                # assertion below is the one that actually distinguishes
+                # the two: pre-fix, it never fires, whether blocked or not.
+                assert not updater_task.done(), (
+                    "update_document should still be blocked on the "
+                    "already-locked destination DocumentFolder"
+                )
+                assert not document_lock_reached.is_set(), (
+                    "update_document locked the Document row before the "
+                    "destination DocumentFolder -- FAC-36's lock order "
+                    "regressed"
+                )
+
+                # Release the folder lock; the update should now run to
+                # completion without deadlocking.
+                await cascade.commit()
+                result = await asyncio.wait_for(updater_task, timeout=10)
+                assert result is not None
+                assert str(result.folder_id) == str(folder_id)
+                assert document_lock_reached.is_set(), (
+                    "update_document never explicitly locked the "
+                    "destination-folder-then-Document pair -- FAC-36's fix "
+                    "is missing"
+                )
+
+            await updater.commit()
+        finally:
+            if updater_task is not None and not updater_task.done():
+                updater_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await updater_task
+            await cascade.rollback()
+            await updater.rollback()
+            await _teardown_org(
+                org_id, facility_id, document_id, facility_type_id, status_id
+            )
+
+
+class TestDeleteFolderExplicitlyDeletesTheLockedDocuments:
+    """FAC-40 (Codex, on top of FAC-32/34): ``delete_folder``'s own
+    ``_lock_subtree_documents`` -- a locking read -- always sees the latest
+    committed state of the subtree, which is why FAC-32's file/reference
+    cleanup, driven from its result, is correct. The actual removal of the
+    ``Document`` rows themselves, though, used to rely entirely on the
+    ORM's own ``cascade="all, delete-orphan"`` on ``DocumentFolder.documents``,
+    triggered by ``db.delete(folder)``. That cascade lazy-loads
+    ``folder.documents`` via a *plain* SELECT -- unlike the locking scan, a
+    plain SELECT answers from this transaction's REPEATABLE READ snapshot,
+    established at ``get_folder_by_id``, this method's first read -- not
+    the latest committed state.
+
+    That staleness cuts both ways:
+
+    - A document moved *into* the folder by a concurrent, already-committed
+      transaction after the snapshot was taken is invisible to the ORM's
+      lazy-load, so it is never queued for cascade deletion. It *is*
+      visible to the locking scan, though, so its file was already removed
+      from disk and its facility reference already stripped by the time
+      the folder itself is deleted -- and since ``Document.folder_id`` is
+      ``ondelete="SET NULL"`` at the DB level (not CASCADE), the database
+      just nulls that survivor's ``folder_id`` rather than deleting it: a
+      live, file-less, unreferenced "document" row left behind.
+    - A document moved *out* of the folder before the delete is still
+      visible in the ORM's stale collection (which still reflects the old,
+      pre-move ``folder_id``) and could be cascade-deleted by it anyway --
+      destroying a document that, by the time of the actual delete, belongs
+      to a completely different, still-live folder.
+
+    Fixed by deleting the subtree's ``Document`` rows explicitly, from the
+    locking scan's own authoritative result -- the same set FAC-32's
+    reference cleanup already trusts -- and by marking
+    ``DocumentFolder.documents`` ``passive_deletes=True`` (models/
+    document.py) so the ORM's own, snapshot-stale cascade never
+    independently re-derives (and potentially disagrees with) that set at
+    all. Verified empirically that both correctness directions actually
+    depended on both halves of the fix: reverting just the explicit delete
+    reproduces the first bullet; reverting just ``passive_deletes=True``
+    (with the explicit delete still in place) reproduces the second.
+    """
+
+    async def test_document_moved_into_the_folder_mid_transaction_is_deleted_not_orphaned(
+        self, two_sessions
+    ):
+        deleter, mover = two_sessions
+        slug = f"fcvfd-fac40-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        deleter.add(org)
+        await deleter.flush()
+        target_folder = DocumentFolder(
+            organization_id=org.id, name="Target Folder", is_system=False
+        )
+        other_folder = DocumentFolder(
+            organization_id=org.id, name="Other Folder", is_system=False
+        )
+        deleter.add_all([target_folder, other_folder])
+        await deleter.flush()
+        document = Document(
+            organization_id=org.id,
+            name="Moved In",
+            file_name="moved-in.pdf",
+            file_path="/tmp/fac40-moved-in-does-not-need-to-exist.pdf",
+            folder_id=other_folder.id,
+        )
+        deleter.add(document)
+        await deleter.commit()
+        org_id, target_folder_id, other_folder_id, document_id = (
+            org.id,
+            target_folder.id,
+            other_folder.id,
+            document.id,
+        )
+        try:
+            docs_deleter = DocumentsService(deleter)
+            # Establishes the deleter's REPEATABLE READ snapshot -- exactly
+            # what delete_folder's own first read (get_folder_by_id) does --
+            # *before* the document is moved into the target folder.
+            folder = await docs_deleter.get_folder_by_id(target_folder_id, org_id)
+            assert folder is not None
+
+            # A second, real, independently-committing session moves the
+            # document into the target folder after that snapshot.
+            result = await mover.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            doc = result.scalar_one()
+            doc.folder_id = target_folder_id
+            await mover.commit()
+
+            deleted = await docs_deleter.delete_folder(
+                target_folder_id, org_id, current_user=None
+            )
+            assert deleted is True
+
+            verifier = database_manager.session_factory()
+            try:
+                still_there = await verifier.get(Document, str(document_id))
+                assert still_there is None, (
+                    "a document moved into the folder mid-transaction "
+                    "survived the delete as an orphaned, folder_id=NULL "
+                    "row -- FAC-40 regressed"
+                )
+            finally:
+                await verifier.close()
+        finally:
+            await deleter.rollback()
+            await mover.rollback()
+            await _teardown_org_folder(*[org_id, target_folder_id, document_id])
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.id == other_folder_id
+                    )
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()
+
+    async def test_document_moved_out_of_the_folder_mid_transaction_survives(
+        self, two_sessions
+    ):
+        deleter, mover = two_sessions
+        slug = f"fcvfd-fac40b-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        deleter.add(org)
+        await deleter.flush()
+        target_folder = DocumentFolder(
+            organization_id=org.id, name="Target Folder", is_system=False
+        )
+        other_folder = DocumentFolder(
+            organization_id=org.id, name="Other Folder", is_system=False
+        )
+        deleter.add_all([target_folder, other_folder])
+        await deleter.flush()
+        document = Document(
+            organization_id=org.id,
+            name="Moved Out",
+            file_name="moved-out.pdf",
+            file_path="/tmp/fac40-moved-out-does-not-need-to-exist.pdf",
+            folder_id=target_folder.id,
+        )
+        deleter.add(document)
+        await deleter.commit()
+        org_id, target_folder_id, other_folder_id, document_id = (
+            org.id,
+            target_folder.id,
+            other_folder.id,
+            document.id,
+        )
+        try:
+            docs_deleter = DocumentsService(deleter)
+            folder = await docs_deleter.get_folder_by_id(target_folder_id, org_id)
+            assert folder is not None
+
+            # A second, real, independently-committing session moves the
+            # document OUT of the target folder after that snapshot -- it
+            # now belongs to a different, still-live folder.
+            result = await mover.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            doc = result.scalar_one()
+            doc.folder_id = other_folder_id
+            await mover.commit()
+
+            deleted = await docs_deleter.delete_folder(
+                target_folder_id, org_id, current_user=None
+            )
+            assert deleted is True
+
+            verifier = database_manager.session_factory()
+            try:
+                still_there = await verifier.get(Document, str(document_id))
+                assert still_there is not None, (
+                    "a document that moved to a different, live folder "
+                    "before the delete was destroyed anyway -- the ORM's "
+                    "own stale cascade re-deleted it -- FAC-40 regressed"
+                )
+                assert str(still_there.folder_id) == str(other_folder_id)
+            finally:
+                await verifier.close()
+        finally:
+            await deleter.rollback()
+            await mover.rollback()
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    Document.__table__.delete().where(Document.id == document_id)
+                )
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.id.in_([target_folder_id, other_folder_id])
+                    )
+                )
+                await cleanup.execute(
+                    Organization.__table__.delete().where(Organization.id == org_id)
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()
+
+
+class TestEnsureFacilityFolderFastPathSkipsTheOrganizationLock:
+    """FAC-42 (Codex, on top of FAC-31): ``ensure_facility_folder`` used to
+    take an *exclusive* lock on the organization's single row
+    unconditionally, before ever checking whether a facility's folder
+    already existed -- even though creation only ever happens once per
+    facility, ever. Per FAC-31, the caller
+    (``_validate_shared_document_reference``) holds whatever this method
+    locks until its own reference insert commits, so every facility
+    document/photo upload in an organization was briefly serializing on
+    that one row, even for completely unrelated facilities and documents --
+    a real lock-wait risk under concurrent bulk uploads.
+
+    Fixed with a fast path that takes the same (pre-existing) folder-level
+    locking reads, but never touches the organization row at all when both
+    already exist; only a genuinely missing folder falls through to the
+    organization-locked, double-checked-locking create path.
+    """
+
+    async def test_fast_path_completes_without_the_organization_lock(
+        self, two_sessions
+    ):
+        locker, caller = two_sessions
+        slug = f"fcvfd-fac42-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        locker.add(org)
+        await locker.flush()
+        facility_type = FacilityType(
+            organization_id=None, name="Station", is_system=True
+        )
+        facility_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        locker.add_all([facility_type, facility_status])
+        await locker.flush()
+        facility = Facility(
+            organization_id=org.id,
+            name="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        locker.add(facility)
+        await locker.commit()
+        org_id, facility_id, facility_type_id, status_id = (
+            org.id,
+            facility.id,
+            facility_type.id,
+            facility_status.id,
+        )
+        call_task = None
+        try:
+            # Pre-create the facility folder, in its own committed
+            # transaction, so the call under test takes the fast path.
+            setup = database_manager.session_factory()
+            try:
+                await DocumentsService(setup).ensure_facility_folder(
+                    org_id, str(facility_id), "Station 1"
+                )
+                await setup.commit()
+            finally:
+                await setup.close()
+
+            # Locker holds the Organization row's exclusive lock,
+            # uncommitted -- exactly what a genuinely-creating call would
+            # hold for the rest of its own transaction.
+            await locker.execute(
+                select(Organization).where(Organization.id == org_id).with_for_update()
+            )
+
+            # The caller's own call, for the SAME already-existing facility
+            # folder, must complete despite locker's still-open lock -- if
+            # it still took the organization lock unconditionally, this
+            # would time out.
+            call_task = asyncio.create_task(
+                DocumentsService(caller).ensure_facility_folder(
+                    org_id, str(facility_id), "Station 1"
+                )
+            )
+            result = await asyncio.wait_for(call_task, timeout=5)
+            assert result is not None
+            assert result.slug == f"facility-{facility_id}"
+        finally:
+            if call_task is not None and not call_task.done():
+                call_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await call_task
+            await locker.rollback()
+            await caller.rollback()
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.organization_id == org_id
+                    )
+                )
+                await cleanup.execute(
+                    Facility.__table__.delete().where(Facility.id == facility_id)
+                )
+                await cleanup.execute(
+                    FacilityType.__table__.delete().where(
+                        FacilityType.id == facility_type_id
+                    )
+                )
+                await cleanup.execute(
+                    FacilityStatus.__table__.delete().where(
+                        FacilityStatus.id == status_id
+                    )
+                )
+                await cleanup.execute(
+                    Organization.__table__.delete().where(Organization.id == org_id)
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()
+
+
+class TestConcurrentFirstTimeFacilityFolderCreationDoesNotDeadlock:
+    """FAC-45 (Codex, on top of FAC-43): FAC-43's fast path stopped locking
+    the shared root, but still called ``_lock_facility_folder`` --
+    ``.with_for_update()`` -- unconditionally on the per-facility check, even
+    when nothing matches. A ``FOR UPDATE`` lookup that matches nothing takes
+    a *gap* lock, and unlike a record lock, a gap lock is compatible with
+    another transaction's gap lock on the same range. That opened a genuine
+    deadlock the first time two requests raced to create the *same*
+    brand-new facility's folder: both take a (mutually compatible) gap lock
+    on the fast path before either reaches the organization lock below;
+    whichever reaches the organization lock first re-locks (now for real,
+    as an INSERT target) and tries to insert -- which needs an
+    insert-intention lock that *does* conflict with the other transaction's
+    still-held gap lock, and that other transaction is itself blocked
+    waiting for the organization lock the first one holds. InnoDB detects
+    the cycle and kills one side with an unhandled ``OperationalError``
+    (1213) -- a 500 for one of two entirely legitimate concurrent requests.
+
+    Fixed the same way FAC-43 fixed the root: peek first
+    (``_peek_facility_folder``, no lock), and only take an actual lock
+    (``_lock_folder_by_id``, a point lookup by the id the peek just found)
+    once existence is confirmed -- so the fast path never takes a
+    ``.with_for_update()`` lookup that could match nothing before the
+    organization lock is acquired.
+
+    Relying on natural ``asyncio.gather`` scheduling alone to force the two
+    calls into the exact interleaving that deadlocks was found, in ad hoc
+    testing against pre-fix code, to reproduce it only intermittently (~60%
+    of runs) -- asyncio's own scheduling sometimes lets one call finish and
+    commit before the other has issued its first query at all, which isn't
+    a race. So this test forces the interleaving explicitly: both calls are
+    held at the point where each has just confirmed the target facility's
+    folder does not exist yet (``_peek_facility_folder``, patched once,
+    hoisted above the ``gather`` per CLAUDE.md Pitfall #22) until *both*
+    have reached it, then released together -- guaranteeing they contend for
+    the organization lock, and whatever comes after it, simultaneously,
+    every run.
+    """
+
+    async def test_two_concurrent_first_creations_both_succeed(self, two_sessions):
+        locker, caller = two_sessions
+        slug = f"fcvfd-fac45-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        locker.add(org)
+        await locker.flush()
+        facility_type = FacilityType(
+            organization_id=None, name="Station", is_system=True
+        )
+        facility_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        locker.add_all([facility_type, facility_status])
+        await locker.flush()
+        # A decoy facility, whose folder is created (and committed) up
+        # front purely to bring the shared root into existence -- the
+        # target facility's own folder is deliberately left uncreated, so
+        # both concurrent calls below race to create it for the first time.
+        decoy_facility = Facility(
+            organization_id=org.id,
+            name="Decoy Station",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        target_facility = Facility(
+            organization_id=org.id,
+            name="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        locker.add_all([decoy_facility, target_facility])
+        await locker.commit()
+        org_id, decoy_id, target_id, facility_type_id, status_id = (
+            org.id,
+            decoy_facility.id,
+            target_facility.id,
+            facility_type.id,
+            facility_status.id,
+        )
+        try:
+            setup = database_manager.session_factory()
+            try:
+                await DocumentsService(setup).ensure_facility_folder(
+                    org_id, str(decoy_id), "Decoy Station"
+                )
+                await setup.commit()
+            finally:
+                await setup.close()
+
+            async def create(session):
+                docs = DocumentsService(session)
+                folder = await docs.ensure_facility_folder(
+                    org_id, str(target_id), "Station 1"
+                )
+                await session.commit()
+                return folder
+
+            # Two-party barrier: hold each call at the instant it has
+            # confirmed (via the real, unmodified _peek_facility_folder)
+            # that the target facility's folder does not exist yet, until
+            # both have arrived -- then release both together, forcing them
+            # to contend for the organization lock (and, pre-fix, the gap
+            # lock this bug was about) at the same moment, every run.
+            reached = 0
+            reached_lock = asyncio.Lock()
+            both_reached = asyncio.Event()
+            original_peek = DocumentsService._peek_facility_folder
+
+            async def barriered_peek(self, facilities_root_id, facility_id_str):
+                nonlocal reached
+                result = await original_peek(self, facilities_root_id, facility_id_str)
+                async with reached_lock:
+                    reached += 1
+                    if reached >= 2:
+                        both_reached.set()
+                await both_reached.wait()
+                return result
+
+            # Patched once, hoisted above the gather -- both concurrently
+            # running calls share this single active patch (CLAUDE.md
+            # Pitfall #22: never enter the same patch() from two
+            # concurrently running coroutines).
+            with patch.object(
+                DocumentsService, "_peek_facility_folder", barriered_peek
+            ):
+                folder_1, folder_2 = await asyncio.wait_for(
+                    asyncio.gather(create(locker), create(caller)), timeout=15
+                )
+            assert folder_1 is not None
+            assert folder_2 is not None
+            # Both callers must resolve to the SAME row -- not just "no
+            # exception" but the actual get-or-create invariant this method
+            # exists to guarantee (FAC-6): no duplicate facility folder.
+            assert folder_1.id == folder_2.id
+            assert folder_1.slug == f"facility-{target_id}"
+        finally:
+            await locker.rollback()
+            await caller.rollback()
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.organization_id == org_id
+                    )
+                )
+                await cleanup.execute(
+                    Facility.__table__.delete().where(
+                        Facility.id.in_([decoy_id, target_id])
+                    )
+                )
+                await cleanup.execute(
+                    FacilityType.__table__.delete().where(
+                        FacilityType.id == facility_type_id
+                    )
+                )
+                await cleanup.execute(
+                    FacilityStatus.__table__.delete().where(
+                        FacilityStatus.id == status_id
+                    )
+                )
+                await cleanup.execute(
+                    Organization.__table__.delete().where(Organization.id == org_id)
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()
+
+
+class TestEnsureFacilityFolderFastPathDoesNotLockTheSharedRoot:
+    """FAC-43 (Codex, on top of FAC-42): FAC-42's fast path stopped taking
+    the organization-row lock once a facility's folder already existed, but
+    it still called ``_lock_facilities_root`` unconditionally -- an
+    exclusive lock on the org's single "Facility Files" root row, shared by
+    every facility in the organization. Two concurrent reference creations
+    for two *different* facilities therefore still serialized on that one
+    row before either could reach its own, genuinely distinct, facility
+    folder -- the same class of bug FAC-42 fixed, one row up.
+
+    Fixed by resolving the root with a non-locking read
+    (``_peek_facilities_root``) on the fast path instead; only the
+    per-facility folder lock (needed to serialize two callers for the *same*
+    facility, and to satisfy FAC-31/FAC-35's hold-until-commit and
+    total-lock-order requirements) remains.
+
+    The locker below takes its lock on the root by primary key
+    (``id == root_id``), not by calling ``_lock_facilities_root`` itself.
+    That method's own WHERE clause (``organization_id`` + ``slug`` +
+    ``is_system``, only the first of which is indexed) has to scan every
+    org-scoped ``document_folders`` row in ascending id order until it finds
+    one matching all three -- and since these ids are random UUIDs, not
+    monotonic, "ascending id order" has no relationship to "the root was
+    created first". A first version of this test called
+    ``_lock_facilities_root`` directly for the lock and was flaky depending
+    on the generated UUIDs: whenever facility B's own folder id happened to
+    sort below the root's, the scan locked (and released only at commit) B's
+    row too, on its way to finding and locking the root -- which then made
+    *this test's own caller* time out for a reason that has nothing to do
+    with FAC-43, and would have been unrelated to whichever facility a real
+    concurrent create happened to race against. A primary-key lock is an
+    InnoDB point lookup against the clustered index -- deterministic,
+    independent of what else is in the table -- so it isolates exactly the
+    one thing FAC-43 is about: whether the fast path itself still takes a
+    lock on that row. The scan behavior above is real on its own terms (it
+    can happen during a genuine slow-path creation, which still calls
+    ``_lock_facilities_root``) -- tracked separately as FAC-44, not fixed
+    here; see docs/security-review/FAC-12-facilities.md.
+    """
+
+    async def test_fast_path_for_a_different_facility_skips_the_root_lock(
+        self, two_sessions
+    ):
+        locker, caller = two_sessions
+        slug = f"fcvfd-fac43-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        locker.add(org)
+        await locker.flush()
+        facility_type = FacilityType(
+            organization_id=None, name="Station", is_system=True
+        )
+        facility_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        locker.add_all([facility_type, facility_status])
+        await locker.flush()
+        facility_a = Facility(
+            organization_id=org.id,
+            name="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        facility_b = Facility(
+            organization_id=org.id,
+            name="Station 2",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        locker.add_all([facility_a, facility_b])
+        await locker.commit()
+        org_id, facility_a_id, facility_b_id, facility_type_id, status_id = (
+            org.id,
+            facility_a.id,
+            facility_b.id,
+            facility_type.id,
+            facility_status.id,
+        )
+        call_task = None
+        try:
+            # Pre-create both facilities' folders (and the shared root), in
+            # their own committed transaction, so the call under test takes
+            # the fast path for facility B.
+            setup = database_manager.session_factory()
+            try:
+                docs = DocumentsService(setup)
+                await docs.ensure_facility_folder(
+                    org_id, str(facility_a_id), "Station 1"
+                )
+                folder_b = await docs.ensure_facility_folder(
+                    org_id, str(facility_b_id), "Station 2"
+                )
+                root_id = folder_b.parent_id
+                await setup.commit()
+            finally:
+                await setup.close()
+
+            # Locker holds the shared "Facility Files" root row's exclusive
+            # lock, uncommitted, by primary key -- see the class docstring
+            # for why this is the deterministic way to hold exactly (and
+            # only) the resource FAC-43 is about, rather than calling
+            # _lock_facilities_root itself.
+            locked_root = (
+                await locker.execute(
+                    select(DocumentFolder)
+                    .where(DocumentFolder.id == root_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            assert locked_root is not None
+
+            # The caller's own call, for a DIFFERENT, already-existing
+            # facility folder, must complete despite locker's still-open
+            # lock on the shared root -- if the fast path still locked that
+            # row, this would time out.
+            call_task = asyncio.create_task(
+                DocumentsService(caller).ensure_facility_folder(
+                    org_id, str(facility_b_id), "Station 2"
+                )
+            )
+            result = await asyncio.wait_for(call_task, timeout=5)
+            assert result is not None
+            assert result.slug == f"facility-{facility_b_id}"
+        finally:
+            if call_task is not None and not call_task.done():
+                call_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await call_task
+            await locker.rollback()
+            await caller.rollback()
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.organization_id == org_id
+                    )
+                )
+                await cleanup.execute(
+                    Facility.__table__.delete().where(
+                        Facility.id.in_([facility_a_id, facility_b_id])
+                    )
+                )
+                await cleanup.execute(
+                    FacilityType.__table__.delete().where(
+                        FacilityType.id == facility_type_id
+                    )
+                )
+                await cleanup.execute(
+                    FacilityStatus.__table__.delete().where(
+                        FacilityStatus.id == status_id
+                    )
+                )
+                await cleanup.execute(
+                    Organization.__table__.delete().where(Organization.id == org_id)
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()
