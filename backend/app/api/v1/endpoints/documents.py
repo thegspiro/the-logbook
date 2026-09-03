@@ -384,7 +384,7 @@ async def upload_document(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
             )
         if not await service.can_access_folder(
-            folder, current_user.organization_id, current_user
+            folder, current_user.organization_id, current_user, require_write=True
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

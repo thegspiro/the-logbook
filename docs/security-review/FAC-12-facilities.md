@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24, FAC-25, FAC-26, pass 3 continued)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -1027,6 +1027,38 @@ grant `facilities.edit` rather than the now-insufficient
 every one of those positive controls unsatisfiable by any permission, since
 their fixture's `required_permissions` listed only the one, now-filtered-out,
 read-only entry.
+
+**Mirrored to** `CHANGELOG.md`.
+
+### FAC-25 — P1 (access control, write-vs-read permission tier) — `POST /documents/upload`'s folder-destination check was the one mutation site FAC-24 missed — ✅ FIXED
+
+**Found by Codex review of the FAC-24 commit itself.** FAC-24 added
+`require_write=True` to every folder-mutation call site it enumerated in its
+sweep table, but `upload_document`'s own folder-destination check
+(`documents.py`, `POST /documents/upload`) was not one of the rows that
+sweep walked — it still called `can_access_folder(folder,
+current_user.organization_id, current_user)` with the keyword's default
+(`require_write=False`), left on the read-admission path FAC-24 was written
+to close everywhere else.
+
+**Impact:** the exact treasurer-shaped combination FAC-24 restricts
+everywhere else — `documents.manage` + `facilities.view_sensitive`, no
+facilities write grant — could still upload a file directly into a sensitive
+facility folder via this one endpoint, bypassing the write-tier restriction
+FAC-24 otherwise applies uniformly.
+**Where:** `backend/app/api/v1/endpoints/documents.py`, `upload_document`
+(the `can_access_folder` call gating the `folder_id` destination).
+**Fix:** pass `require_write=True`, matching every other folder-destination
+check in the file.
+**Regression tests:**
+`tests/test_documents_access.py::TestFolderWriteTierPermission::test_view_sensitive_alone_cannot_upload_into_the_folder`
+(treasurer-shaped caller, real DB user so the FK `uploaded_by` constraint
+doesn't mask the permission check, refused with 403) plus
+`test_write_permission_can_upload_into_the_folder` (a `facilities.edit`
+holder still succeeds). Independently confirmed the first test fails against
+pre-fix code (`git stash` isolating the source change) — the upload
+proceeded far enough to fail on an unrelated FK constraint after bypassing
+the ACL check entirely — and passes post-fix.
 
 **Mirrored to** `CHANGELOG.md`.
 

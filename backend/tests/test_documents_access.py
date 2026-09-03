@@ -8,6 +8,7 @@ visibility, and the allowed-roles restriction, plus the permission/role
 collection helpers. Pure logic; no DB.
 """
 
+import io
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -15,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from sqlalchemy import select, text
 from sqlalchemy.orm import selectinload
 
@@ -28,6 +29,7 @@ from app.api.v1.endpoints.documents import (
     download_document,
     update_document,
     update_folder,
+    upload_document,
 )
 from app.models.audit import AuditLog
 from app.models.document import Document, DocumentFolder, FolderVisibility
@@ -2010,16 +2012,31 @@ class TestFolderWriteTierPermission:
     async def _real_write_capable_user(self, db_session, org_id):
         # A real row, not a SimpleNamespace stand-in: create_folder inserts
         # `created_by` as an FK to `users.id`, which a synthetic id violates.
-        user = User(
-            organization_id=org_id, username="editor", email="editor@example.com"
+        return await self._real_user_with_permissions(
+            db_session, org_id, ["documents.manage", "facilities.edit"], "editor"
         )
+
+    async def _real_treasurer_shaped_user(self, db_session, org_id):
+        # Same rationale as `_real_write_capable_user`: `upload_document`
+        # inserts `uploaded_by` as an FK to `users.id`, so a
+        # SimpleNamespace-stand-in treasurer fails on that FK before the
+        # write-tier check under test ever runs.
+        return await self._real_user_with_permissions(
+            db_session,
+            org_id,
+            ["documents.manage", "facilities.view_sensitive"],
+            "treasurer",
+        )
+
+    async def _real_user_with_permissions(self, db_session, org_id, permissions, name):
+        user = User(organization_id=org_id, username=name, email=f"{name}@example.com")
         db_session.add(user)
         await db_session.flush()
         position = Position(
             organization_id=org_id,
-            name="Facilities Editor",
-            slug=f"fac-editor-{user.id[:8]}",
-            permissions=["documents.manage", "facilities.edit"],
+            name=name,
+            slug=f"{name}-{user.id[:8]}",
+            permissions=permissions,
         )
         db_session.add(position)
         await db_session.flush()
@@ -2179,6 +2196,56 @@ class TestFolderWriteTierPermission:
             current_user=caller,
         )
         assert str(result.parent_id) == str(root.id)
+
+    async def test_view_sensitive_alone_cannot_upload_into_the_folder(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        """Codex round: ``upload_document`` (documents.py) called
+        ``can_access_folder`` with no ``require_write=True``, so the upload
+        destination check alone stayed on the read-admission path even after
+        every other folder mutation was switched over. A treasurer-shaped
+        caller (``documents.manage`` + ``facilities.view_sensitive``, no
+        facilities write grant) could still upload straight into a sensitive
+        facility folder."""
+        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        org, root, _other, _document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-10"
+        )
+        caller = await self._real_treasurer_shaped_user(db_session, org.id)
+        upload = UploadFile(file=io.BytesIO(b"%PDF-1.4 test"), filename="policy.pdf")
+
+        with pytest.raises(HTTPException) as exc:
+            await upload_document(
+                file=upload,
+                name="Policy",
+                description=None,
+                folder_id=str(root.id),
+                tags=None,
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 403
+
+    async def test_write_permission_can_upload_into_the_folder(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        org, root, _other, _document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-11"
+        )
+        caller = await self._real_write_capable_user(db_session, org.id)
+        upload = UploadFile(file=io.BytesIO(b"%PDF-1.4 test"), filename="policy.pdf")
+
+        result = await upload_document(
+            file=upload,
+            name="Policy",
+            description=None,
+            folder_id=str(root.id),
+            tags=None,
+            db=db_session,
+            current_user=caller,
+        )
+        assert str(result.folder_id) == str(root.id)
 
 
 @pytest.mark.integration
