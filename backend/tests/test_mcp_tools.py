@@ -4093,3 +4093,369 @@ class TestTwentyNinthRoundFindings:
             quantity=2,
         )
         assert created["item_name"] == "Gauze tape"
+
+
+class TestThirtiethRoundFindings:
+    """Regressions for the thirtieth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_event_membership_types_and_shift_seats_are_bounded(
+        self, server, org_with_members, db_session
+    ):
+        from app.mcp.tools import events as event_tools
+        from app.mcp.tools import scheduling as scheduling_tools
+        from app.models.event import Event
+
+        org_id, admin_id, _ = org_with_members
+        now = datetime.now(timezone.utc)
+        event = Event(
+            organization_id=org_id,
+            title="Mandatory drill",
+            event_type="training",
+            start_datetime=now + timedelta(days=2),
+            end_datetime=now + timedelta(days=2, hours=2),
+            mandatory_membership_types=["active", "M" * 400]
+            + [f"type {n}" for n in range(event_tools.LABEL_LIST_ITEMS)],
+            created_by=admin_id,
+        )
+        db_session.add(event)
+        day = date.today() + timedelta(days=4)
+        start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        shift = Shift(
+            organization_id=org_id,
+            shift_date=day,
+            start_time=start.replace(hour=8),
+            end_time=start.replace(hour=12),
+            min_staffing=2,
+            open_to_all_members=True,
+            positions=["Driver (555-123-4567)", "S" * 400]
+            + [f"seat {n}" for n in range(scheduling_tools.SEAT_LIST_ITEMS)],
+        )
+        db_session.add(shift)
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        one = await _call(server, principal, "get_event", event_id=event.id)
+        assert len(one["mandatory_membership_types"]) == event_tools.LABEL_LIST_ITEMS
+        assert one["mandatory_membership_types"][1] == "M" * event_tools.LABEL_CHARS
+        assert one["mandatory_membership_types_truncated"] is True
+        listed = await _call(
+            server, principal, "list_shifts", start_date=day.isoformat()
+        )
+        row = next(s for s in listed["items"] if s["id"] == shift.id)
+        assert len(row["positions"]) == scheduling_tools.SEAT_LIST_ITEMS
+        assert row["positions"][0]["position"] == "Driver ([phone removed])"
+        assert row["positions"][1]["position"] == "S" * scheduling_tools.SEAT_NAME_CHARS
+        assert row["positions_truncated"] is True
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_tied_rows_page_without_repeats_everywhere(
+        self, server, org_with_members, db_session
+    ):
+        """Minutes on one day, training records completed and created at
+        one instant, checkouts due at one instant, facilities sharing a
+        name and maintenance records created in one tick each page by id."""
+        from app.models.apparatus import (
+            Apparatus,
+            ApparatusMaintenance,
+            ApparatusMaintenanceType,
+            ApparatusStatus,
+            ApparatusType,
+            MaintenanceCategory,
+        )
+
+        org_id, admin_id, member_id = org_with_members
+        principal = _principal(org_id, admin_id)
+        stamp = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+
+        minutes_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for mid in minutes_ids:
+            await db_session.execute(
+                text(
+                    "INSERT INTO meeting_minutes (id, organization_id, title, "
+                    "meeting_type, meeting_date, status, created_by) VALUES "
+                    "(:id, :org, 'Same day', 'business', '2027-05-01', 'approved', :by)"
+                ),
+                {"id": mid, "org": org_id, "by": admin_id},
+            )
+        record_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for rid in record_ids:
+            db_session.add(
+                TrainingRecord(
+                    id=rid,
+                    organization_id=org_id,
+                    user_id=member_id,
+                    course_name="Bulk import",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=date(2026, 8, 1),
+                    created_at=stamp,
+                    hours_completed=1.0,
+                )
+            )
+        category = InventoryCategory(
+            organization_id=org_id, name="Radios", item_type=ItemType.EQUIPMENT
+        )
+        db_session.add(category)
+        await db_session.flush()
+        checkout_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for cid in checkout_ids:
+            item = InventoryItem(
+                organization_id=org_id,
+                category_id=category.id,
+                name="Portable radio",
+                quantity=1,
+            )
+            db_session.add(item)
+            await db_session.flush()
+            db_session.add(
+                CheckOutRecord(
+                    id=cid,
+                    organization_id=org_id,
+                    item_id=item.id,
+                    user_id=member_id,
+                    checked_out_by=admin_id,
+                    checked_out_at=stamp - timedelta(days=10),
+                    expected_return_at=stamp,
+                    is_returned=False,
+                )
+            )
+        kind = FacilityType(organization_id=org_id, name="Station")
+        state = FacilityStatus(organization_id=org_id, name="Active")
+        db_session.add_all([kind, state])
+        await db_session.flush()
+        facility_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for fid in facility_ids:
+            db_session.add(
+                Facility(
+                    id=fid,
+                    organization_id=org_id,
+                    name="Station 1",
+                    facility_type_id=kind.id,
+                    status_id=state.id,
+                )
+            )
+        atype = ApparatusType(organization_id=org_id, name="Engine", code="ENG")
+        astatus = ApparatusStatus(organization_id=org_id, name="In Service", code="IS")
+        db_session.add_all([atype, astatus])
+        await db_session.flush()
+        # A unit number is unique per organization (idx_apparatus_org_unit),
+        # so apparatus cannot tie on it; one unit carries the maintenance.
+        unit = Apparatus(
+            organization_id=org_id,
+            unit_number="E1",
+            name="Engine 1",
+            apparatus_type_id=atype.id,
+            status_id=astatus.id,
+        )
+        db_session.add(unit)
+        await db_session.flush()
+        mtype = ApparatusMaintenanceType(
+            organization_id=org_id,
+            name="Pump test",
+            code="PUMP",
+            category=MaintenanceCategory.INSPECTION,
+        )
+        db_session.add(mtype)
+        await db_session.flush()
+        maintenance_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for rid in maintenance_ids:
+            db_session.add(
+                ApparatusMaintenance(
+                    id=rid,
+                    organization_id=org_id,
+                    apparatus_id=unit.id,
+                    maintenance_type_id=mtype.id,
+                    created_at=stamp,
+                )
+            )
+        await db_session.flush()
+
+        async def walk(tool, key, **kwargs):
+            seen = []
+            for offset in range(3):
+                body = await _call(
+                    server, principal, tool, limit=1, offset=offset, **kwargs
+                )
+                seen.extend(row[key] for row in body["items"])
+            return seen
+
+        assert await walk("list_minutes", "id") == sorted(minutes_ids, reverse=True)
+        assert await walk(
+            "list_member_training_records", "id", member_id=member_id
+        ) == sorted(record_ids, reverse=True)
+        assert await walk("list_overdue_checkouts", "id") == checkout_ids
+        assert await walk("list_facilities", "id") == facility_ids
+        assert await walk("list_apparatus_maintenance", "id") == sorted(
+            maintenance_ids, reverse=True
+        )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_overdue_total_follows_the_deadline_not_the_flag(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        category = InventoryCategory(
+            organization_id=org_id, name="Tools", item_type=ItemType.EQUIPMENT
+        )
+        db_session.add(category)
+        await db_session.flush()
+        item = InventoryItem(
+            organization_id=org_id, category_id=category.id, name="Halligan", quantity=1
+        )
+        db_session.add(item)
+        await db_session.flush()
+        db_session.add(
+            CheckOutRecord(
+                organization_id=org_id,
+                item_id=item.id,
+                user_id=member_id,
+                checked_out_by=admin_id,
+                checked_out_at=datetime.now(timezone.utc) - timedelta(days=3),
+                expected_return_at=datetime.now(timezone.utc) - timedelta(hours=1),
+                is_returned=False,
+                is_overdue=False,
+            )
+        )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        summary = await _call(server, principal, "get_inventory_summary")
+        listed = await _call(server, principal, "list_overdue_checkouts")
+        assert summary["overdue_checkouts"] == 1
+        assert len(listed["items"]) == 1
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_expiring_screenings_include_waivers(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        requirement = ScreeningRequirement(
+            organization_id=org_id,
+            name="Annual physical",
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+        )
+        db_session.add(requirement)
+        await db_session.flush()
+        db_session.add(
+            ScreeningRecord(
+                organization_id=org_id,
+                user_id=member_id,
+                requirement_id=requirement.id,
+                screening_type=ScreeningType.PHYSICAL_EXAM,
+                status=ScreeningStatus.WAIVED,
+                expiration_date=date.today() + timedelta(days=10),
+            )
+        )
+        await db_session.flush()
+        body = await _call(
+            server,
+            _principal(org_id, admin_id, expose_medical_screening=True),
+            "list_expiring_screenings",
+            days=30,
+        )
+        assert [r["member_id"] for r in body["items"]] == [member_id]
+        assert "waived" not in json.dumps(body)
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_scheduling_summary_uses_the_department_timezone(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        """At 02:00 UTC on 1 March it is still 28 February in New York, so
+        the department's "this month" is February."""
+        from app.services import scheduling_service
+
+        org_id, admin_id, _ = org_with_members
+        await db_session.execute(
+            text(
+                "UPDATE organizations SET timezone = 'America/New_York' WHERE id = :id"
+            ),
+            {"id": org_id},
+        )
+        instant = datetime(2027, 3, 1, 2, 0, tzinfo=timezone.utc)
+
+        class _Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+        monkeypatch.setattr(scheduling_service, "datetime", _Clock)
+        for day in (date(2027, 2, 28), date(2027, 3, 1)):
+            start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+            db_session.add(
+                Shift(
+                    organization_id=org_id,
+                    shift_date=day,
+                    start_time=start.replace(hour=8),
+                    end_time=start.replace(hour=12),
+                    min_staffing=1,
+                    open_to_all_members=True,
+                )
+            )
+        await db_session.flush()
+        summary = await _call(
+            server, _principal(org_id, admin_id), "get_scheduling_summary"
+        )
+        assert summary["shifts_scheduled_this_month"] == 1
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_requirement_progress_reads_a_page_in_a_fixed_number_of_queries(
+        self, org_with_members, db_session, monkeypatch
+    ):
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+        from app.services.training_service import TrainingService
+
+        org_id, admin_id, member_id = org_with_members
+        requirements = []
+        for n in range(6):
+            req = TrainingRequirement(
+                organization_id=org_id,
+                name=f"Requirement {n}",
+                requirement_type=(
+                    RequirementType.HOURS if n % 2 else RequirementType.SHIFTS
+                ),
+                frequency=RequirementFrequency.ANNUAL,
+                required_hours=2,
+                required_shifts=1,
+                applies_to_all=True,
+                active=True,
+            )
+            db_session.add(req)
+            requirements.append(req)
+        db_session.add(
+            TrainingRecord(
+                organization_id=org_id,
+                user_id=member_id,
+                course_name="Drill",
+                training_type=TrainingType.CERTIFICATION,
+                status=TrainingStatus.COMPLETED,
+                completion_date=date.today(),
+                hours_completed=3.0,
+            )
+        )
+        await db_session.flush()
+        service = TrainingService(db_session)
+        original_execute = db_session.execute
+        statements = []
+
+        async def counting_execute(*args, **kwargs):
+            statements.append(args[0])
+            return await original_execute(*args, **kwargs)
+
+        monkeypatch.setattr(db_session, "execute", counting_execute)
+        progress = await service.get_requirements_progress_for(
+            uuid.UUID(member_id), uuid.UUID(org_id), requirements[:2]
+        )
+        assert [p.is_complete for p in progress] == [True] * 2
+        short_page = len(statements)
+        statements.clear()
+        progress = await service.get_requirements_progress_for(
+            uuid.UUID(member_id), uuid.UUID(org_id), requirements
+        )
+        assert [p.is_complete for p in progress] == [True] * 6
+        # The waivers and the member's completed records are read once for
+        # the page, however many requirements are on it.
+        assert len(statements) == short_page
+        assert short_page <= 3

@@ -600,6 +600,8 @@ class TrainingService:
         requirement_id: UUID,
         organization_id: UUID,
         waivers: Optional[List[WaiverPeriod]] = None,
+        requirement: Optional[TrainingRequirement] = None,
+        completed_records: Optional[List[TrainingRecord]] = None,
     ) -> RequirementProgress:
         """
         Check a user's progress towards a specific requirement.
@@ -610,6 +612,12 @@ class TrainingService:
         When *waivers* is provided the required hours/shifts/calls are
         adjusted proportionally for waived months.  If *waivers* is None
         the service will fetch them automatically.
+
+        *requirement* is the already-loaded row for *requirement_id*, and
+        *completed_records* the member's completed records in this
+        organization; a caller checking a page of requirements passes both
+        so the check reads nothing further. Without them the check queries
+        for what it needs, as it always has.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
@@ -618,13 +626,13 @@ class TrainingService:
             recency_cutoff,
         )
 
-        # Get the requirement
-        result = await self.db.execute(
-            select(TrainingRequirement)
-            .where(TrainingRequirement.id == str(requirement_id))
-            .where(TrainingRequirement.organization_id == str(organization_id))
-        )
-        requirement = result.scalar_one_or_none()
+        if requirement is None or str(requirement.id) != str(requirement_id):
+            result = await self.db.execute(
+                select(TrainingRequirement)
+                .where(TrainingRequirement.id == str(requirement_id))
+                .where(TrainingRequirement.organization_id == str(organization_id))
+            )
+            requirement = result.scalar_one_or_none()
 
         if not requirement:
             raise ValueError("Requirement not found")
@@ -657,8 +665,32 @@ class TrainingService:
                 str(user_id),
             )
 
-        # Base query for completed records in the evaluation window
-        def _base_query():
+        def _in_window(record: TrainingRecord) -> bool:
+            if not (start_date and end_date):
+                return True
+            return (
+                record.completion_date is not None
+                and start_date <= record.completion_date <= end_date
+            )
+
+        async def _all_completed() -> List[TrainingRecord]:
+            """The member's completed records, from the preloaded set or a
+            query; the frequency window is not applied here."""
+            if completed_records is not None:
+                return list(completed_records)
+            result = await self.db.execute(
+                select(TrainingRecord).where(
+                    TrainingRecord.user_id == str(user_id),
+                    TrainingRecord.organization_id == str(organization_id),
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                )
+            )
+            return list(result.scalars().all())
+
+        async def _windowed() -> List[TrainingRecord]:
+            """Completed records in the evaluation window."""
+            if completed_records is not None:
+                return [r for r in completed_records if _in_window(r)]
             q = (
                 select(TrainingRecord)
                 .where(TrainingRecord.user_id == str(user_id))
@@ -670,7 +702,8 @@ class TrainingService:
                     TrainingRecord.completion_date >= start_date,
                     TrainingRecord.completion_date <= end_date,
                 )
-            return q
+            result = await self.db.execute(q)
+            return list(result.scalars().all())
 
         completed_value: float = 0
         required_value: float = 0
@@ -678,28 +711,23 @@ class TrainingService:
 
         # ---- HOURS requirements ----
         if req_type == RequirementType.HOURS.value:
-            hours_q = (
-                select(func.sum(TrainingRecord.hours_completed))
-                .where(TrainingRecord.user_id == str(user_id))
-                .where(TrainingRecord.organization_id == str(organization_id))
-                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-            )
-            if start_date and end_date:
-                hours_q = hours_q.where(
-                    TrainingRecord.completion_date >= start_date,
-                    TrainingRecord.completion_date <= end_date,
-                )
+            hours_records = await _windowed()
             if requirement.training_type:
-                hours_q = hours_q.where(
-                    TrainingRecord.training_type == requirement.training_type
-                )
+                hours_records = [
+                    r
+                    for r in hours_records
+                    if r.training_type == requirement.training_type
+                ]
             if requirement.required_courses:
-                hours_q = hours_q.where(
-                    TrainingRecord.course_id.in_(requirement.required_courses)
-                )
-
-            result = await self.db.execute(hours_q)
-            completed_value = float(result.scalar() or 0)
+                wanted_courses = {str(c) for c in requirement.required_courses}
+                hours_records = [
+                    r
+                    for r in hours_records
+                    if r.course_id and str(r.course_id) in wanted_courses
+                ]
+            completed_value = float(
+                sum(float(r.hours_completed or 0) for r in hours_records)
+            )
             required_value = requirement.required_hours or 0
 
             # Adjust for waivers
@@ -715,23 +743,16 @@ class TrainingService:
 
             # Biannual: expired cert overrides hours
             if freq == RequirementFrequency.BIANNUAL.value:
-                cert_q = (
-                    select(TrainingRecord.expiration_date)
-                    .where(
-                        TrainingRecord.user_id == str(user_id),
-                        TrainingRecord.organization_id == str(organization_id),
-                        TrainingRecord.status == TrainingStatus.COMPLETED,
-                        TrainingRecord.expiration_date.isnot(None),
+                dated = [
+                    r
+                    for r in await _all_completed()
+                    if r.expiration_date is not None
+                    and (
+                        not requirement.training_type
+                        or r.training_type == requirement.training_type
                     )
-                    .order_by(TrainingRecord.expiration_date.desc())
-                    .limit(1)
-                )
-                if requirement.training_type:
-                    cert_q = cert_q.where(
-                        TrainingRecord.training_type == requirement.training_type
-                    )
-                cert_result = await self.db.execute(cert_q)
-                latest_exp = cert_result.scalar_one_or_none()
+                ]
+                latest_exp = max(r.expiration_date for r in dated) if dated else None
                 if latest_exp and latest_exp < today:
                     # Expired cert — requirement is not met
                     is_complete = False
@@ -775,8 +796,7 @@ class TrainingService:
                     due_date=requirement.due_date,
                 )
 
-            records_result = await self.db.execute(_base_query())
-            records = records_result.scalars().all()
+            records = await _windowed()
             completed_course_ids = {str(r.course_id) for r in records if r.course_id}
             matched = sum(1 for cid in course_ids if cid in completed_course_ids)
 
@@ -786,18 +806,10 @@ class TrainingService:
 
         # ---- CERTIFICATION requirements ----
         elif req_type == RequirementType.CERTIFICATION.value:
-            cert_q = select(TrainingRecord).where(
-                TrainingRecord.user_id == str(user_id),
-                TrainingRecord.organization_id == str(organization_id),
-                TrainingRecord.status == TrainingStatus.COMPLETED,
-            )
-            cert_result = await self.db.execute(cert_q)
-            # This query deliberately ignores the frequency window (a cert is
-            # valid until it expires, not per period), so the freshness window
-            # has to be applied here rather than inherited from start/end.
-            all_completed = apply_recency(
-                requirement, cert_result.scalars().all(), today
-            )
+            # The frequency window is deliberately not applied (a cert is
+            # valid until it expires, not per period), so the freshness
+            # window is applied here rather than inherited from start/end.
+            all_completed = apply_recency(requirement, await _all_completed(), today)
 
             # Match by linked catalog course, training_type, name substring, or
             # registry_code (see certification_record_matches)
@@ -823,8 +835,7 @@ class TrainingService:
 
         # ---- SHIFTS requirements ----
         elif req_type == RequirementType.SHIFTS.value:
-            records_result = await self.db.execute(_base_query())
-            records = records_result.scalars().all()
+            records = await _windowed()
             type_matched = records
             if requirement.training_type:
                 type_matched = [
@@ -853,8 +864,7 @@ class TrainingService:
 
         # ---- CALLS requirements ----
         elif req_type == RequirementType.CALLS.value:
-            records_result = await self.db.execute(_base_query())
-            records = records_result.scalars().all()
+            records = await _windowed()
             type_matched = records
             if requirement.training_type:
                 type_matched = [
@@ -883,8 +893,7 @@ class TrainingService:
 
         # ---- Fallback (skills_evaluation, checklist, etc.) ----
         else:
-            records_result = await self.db.execute(_base_query())
-            records = records_result.scalars().all()
+            records = await _windowed()
             matching = []
             if requirement.training_type:
                 matching = [
@@ -964,10 +973,26 @@ class TrainingService:
             str(organization_id),
             str(user_id),
         )
+        # One read of the member's completed records serves every
+        # requirement on the page; each check then filters in memory
+        # instead of issuing its own queries.
+        records_result = await self.db.execute(
+            select(TrainingRecord).where(
+                TrainingRecord.user_id == str(user_id),
+                TrainingRecord.organization_id == str(organization_id),
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+            )
+        )
+        completed = list(records_result.scalars().all())
         progress_list = []
         for req in requirements:
             progress = await self.check_requirement_progress(
-                user_id, req.id, organization_id, waivers=user_waivers
+                user_id,
+                req.id,
+                organization_id,
+                waivers=user_waivers,
+                requirement=req,
+                completed_records=completed,
             )
             progress_list.append(progress)
         return progress_list

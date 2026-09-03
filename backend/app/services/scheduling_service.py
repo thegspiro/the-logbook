@@ -2136,8 +2136,15 @@ class SchedulingService:
         ``open_to_all_only`` counts only shifts flagged ``open_to_all_members``
         — the set every eligible member can see — so a caller confined to
         that view gets figures for it rather than for the whole roster.
+
+        "This week" and "this month" are the department's local periods:
+        near a boundary the server's UTC date is the wrong day for a
+        department in another timezone.
         """
-        today = date.today()
+        from app.utils.org_timezone import resolve_scheduling_timezone
+
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = datetime.now(tz).date()
         scope = [Shift.organization_id == str(organization_id)]
         if open_to_all_only:
             scope.append(Shift.open_to_all_members.is_(True))

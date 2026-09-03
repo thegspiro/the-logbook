@@ -337,8 +337,12 @@ class MinuteService:
                 )
             )
 
+        # The id breaks ties between minutes of one day, so an offset page
+        # never repeats or skips one.
         query = (
-            query.order_by(MeetingMinutes.meeting_date.desc()).offset(skip).limit(limit)
+            query.order_by(MeetingMinutes.meeting_date.desc(), MeetingMinutes.id.desc())
+            .offset(skip)
+            .limit(limit)
         )
 
         result = await self.db.execute(query)

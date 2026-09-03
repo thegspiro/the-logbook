@@ -102,8 +102,15 @@ def register(server: Any) -> None:
             ScreeningRecord.expiration_date.isnot(None),
             ScreeningRecord.expiration_date >= today,
             ScreeningRecord.expiration_date <= today + timedelta(days=days),
+            # The same statuses the compliance summary treats as current: a
+            # waiver expires too, and an expiring count the listing does not
+            # name is one nobody can act on.
             ScreeningRecord.status.in_(
-                [ScreeningStatus.PASSED.value, ScreeningStatus.COMPLETED.value]
+                [
+                    ScreeningStatus.PASSED.value,
+                    ScreeningStatus.COMPLETED.value,
+                    ScreeningStatus.WAIVED.value,
+                ]
             ),
         )
         total = (
