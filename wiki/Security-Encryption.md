@@ -77,7 +77,7 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 > rather than being returned as ciphertext or silently as empty — the same rule
 > applied to external-training credentials on the same day.
 
-> **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256-GCM encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
+> **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_app_password`, `microsoft_app_password`, and `cloudflare_api_token` — are AES-256-GCM encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
 
 ### Key Rotation _(2026-07-31)_
 

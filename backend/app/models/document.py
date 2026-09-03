@@ -21,7 +21,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects import mysql
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -115,6 +115,9 @@ SYSTEM_FOLDERS = [
         "sort_order": 7,
         "icon": "users",
         "color": "text-emerald-400",
+        # Personal descendants enforce OWNER access. Keeping the navigation
+        # root organization-visible lets each owner satisfy every ancestor.
+        "visibility": FolderVisibility.ORGANIZATION,
     },
     {
         "slug": "apparatus",
@@ -123,6 +126,7 @@ SYSTEM_FOLDERS = [
         "sort_order": 8,
         "icon": "truck",
         "color": "text-orange-400",
+        "visibility": FolderVisibility.LEADERSHIP,
     },
     {
         "slug": "facilities",
@@ -131,6 +135,14 @@ SYSTEM_FOLDERS = [
         "sort_order": 9,
         "icon": "building",
         "color": "text-indigo-400",
+        # Facility permissions, rather than document leadership, are the
+        # sensitive-record contract for this entire tree.
+        "visibility": FolderVisibility.ORGANIZATION,
+        "required_permissions": [
+            "facilities.view_sensitive",
+            "facilities.edit",
+            "facilities.manage",
+        ],
     },
     {
         "slug": "events",
@@ -301,13 +313,41 @@ class DocumentFolder(Base):
     created_by = Column(String(36), ForeignKey("users.id"))
 
     # Relationships
+    # FAC-40 (Codex): passive_deletes=True stops SQLAlchemy from lazy-loading
+    # this collection itself when the folder is deleted. Without it, that
+    # lazy-load is a *plain* SELECT and answers from the deleting
+    # transaction's REPEATABLE READ snapshot -- stale relative to
+    # DocumentsService.delete_folder's own locking scan
+    # (_lock_subtree_documents), which always sees latest committed state.
+    # That staleness cuts both ways: a document moved into the folder after
+    # the snapshot is invisible to this collection and so never queued for
+    # cascade deletion (surviving as an orphaned row once the DB's own
+    # ondelete="SET NULL" on Document.folder_id fires for the deleted
+    # parent); a document moved *out* before the delete is still visible in
+    # this stale collection and could be cascade-deleted from here even
+    # though it now belongs to a different, live folder. delete_folder now
+    # deletes the subtree's Document rows explicitly, from the locking
+    # scan's own authoritative result -- this relationship's cascade must
+    # stay out of that decision entirely rather than separately, and
+    # unreliably, re-deriving the same set.
     documents = relationship(
-        "Document", back_populates="folder", cascade="all, delete-orphan"
+        "Document",
+        back_populates="folder",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
+    # ``remote_side`` belongs on the *singular* backref (``parent``), not on
+    # ``children`` itself. Placed on ``children`` (as this was before) it
+    # inverts the self-referential join, so ``folder.children`` resolves to
+    # nothing usable and -- because SQLAlchemy no longer sees any cascaded
+    # relationship pointing at a deleted parent's descendants -- deleting a
+    # folder with ``passive_deletes`` off proactively NULLs every child's
+    # ``parent_id`` before the DELETE even runs, silently orphaning the
+    # entire subtree as detached root folders instead of removing it (FAC-16:
+    # this is what the folder-delete cascade regression test caught).
     children = relationship(
         "DocumentFolder",
-        backref="parent",
-        remote_side=[id],
+        backref=backref("parent", remote_side=[id]),
         cascade="all, delete-orphan",
         single_parent=True,
     )

@@ -1,11 +1,21 @@
 import React from 'react';
-import type { ContactInfoUpdate, NotificationPreferences } from '../../types/user';
+import type {
+  ContactInfoSettings,
+  ContactInfoUpdate,
+  NotificationPreferences,
+  ProfileVisibility,
+  ProfileVisibilityField,
+} from '../../types/user';
+import { VisibilityControl } from './VisibilityControl';
+import { SaveStatusPill, type SaveState } from '../settings/SaveStatusPill';
+import { orgHidesField } from '../../utils/profileVisibility';
 
 interface ContactInfoSectionProps {
   user: {
     email?: string | undefined;
     phone?: string | undefined;
     mobile?: string | undefined;
+    personal_email?: string | undefined;
   };
   canEdit: boolean;
   isEditing: boolean;
@@ -23,6 +33,36 @@ interface ContactInfoSectionProps {
    * `null` while it is still loading or could not be read.
    */
   smsConsentGranted: boolean | null;
+  /**
+   * Who-can-see-this markers. `toggle` for the member on their own profile,
+   * `badge` for a members-manager reading someone else's, `none` (default)
+   * for everyone else and for callers that predate the control.
+   */
+  visibilityMode?: 'toggle' | 'badge' | 'none' | undefined;
+  visibility?: ProfileVisibility | null | undefined;
+  /**
+   * False until the stored choice is on hand. Switches stay disabled until
+   * then: a save built on the defaults would overwrite a hidden field.
+   */
+  visibilityReady?: boolean | undefined;
+  /** The stored choice could not be read; shown with a retry in toggle mode. */
+  visibilityLoadError?: boolean | undefined;
+  /** The field whose save is in flight, so only its switch is disabled. */
+  visibilitySaving?: ProfileVisibilityField | null | undefined;
+  visibilitySaveState?: SaveState | undefined;
+  /**
+   * The department's contact-visibility ceiling over the three work fields.
+   * `null` when unknown; the markers then show the member's choice alone.
+   */
+  orgVisibility?: ContactInfoSettings | null | undefined;
+  onVisibilityChange?: ((field: ProfileVisibilityField, next: boolean) => void) | undefined;
+  onVisibilityRetry?: (() => void) | undefined;
+}
+
+interface ContactRow {
+  field: ProfileVisibilityField;
+  label: string;
+  value: string | undefined;
 }
 
 const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
@@ -38,40 +78,79 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
   onFormChange,
   onNotificationToggle,
   smsConsentGranted,
+  visibilityMode = 'none',
+  visibility,
+  visibilityReady = true,
+  visibilityLoadError = false,
+  visibilitySaving,
+  visibilitySaveState,
+  orgVisibility,
+  onVisibilityChange,
+  onVisibilityRetry,
 }) => {
+  const rows: ContactRow[] = [
+    { field: 'email', label: 'Email', value: user.email },
+    { field: 'personal_email', label: 'Personal email', value: user.personal_email },
+    { field: 'phone', label: 'Phone', value: user.phone },
+    { field: 'mobile', label: 'Mobile', value: user.mobile },
+  ];
+  const showMarkers = visibilityMode !== 'none' && Boolean(visibility);
+  const visibleRows = rows.filter((row) => row.value);
+
   return (
-    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="card p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-theme-text-primary text-lg font-semibold">Contact Information</h2>
-        {canEdit && !isEditing && (
-          <button
-            onClick={onEditClick}
-            className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            Edit
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {visibilityMode === 'toggle' && visibilitySaveState && <SaveStatusPill state={visibilitySaveState} />}
+          {canEdit && !isEditing && (
+            <button
+              onClick={onEditClick}
+              className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Edit
+            </button>
+          )}
+        </div>
       </div>
 
       {!isEditing ? (
         <div className="space-y-3">
-          {user.email && (
-            <div>
-              <p className="text-theme-text-muted text-xs font-medium uppercase">Email</p>
-              <p className="text-theme-text-primary mt-1 text-sm">{user.email}</p>
+          {visibleRows.length === 0 && <p className="text-theme-text-muted text-sm">No contact details shared.</p>}
+          {visibleRows.map((row) => (
+            <div key={row.field} className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-theme-text-muted text-xs font-medium uppercase">{row.label}</p>
+                <p className="text-theme-text-primary mt-1 text-sm break-words">{row.value}</p>
+              </div>
+              {showMarkers && visibility && (
+                <VisibilityControl
+                  field={row.field}
+                  label={row.label}
+                  visible={visibility[row.field]}
+                  mode={visibilityMode === 'badge' ? 'badge' : 'toggle'}
+                  orgHidden={orgHidesField(row.field, orgVisibility)}
+                  disabled={!visibilityReady || visibilitySaving === row.field}
+                  onChange={(next) => onVisibilityChange?.(row.field, next)}
+                />
+              )}
             </div>
+          ))}
+          {visibilityMode === 'toggle' && visibilityLoadError && (
+            <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+              Couldn&apos;t load what you currently share, so the switches are off until it loads.{' '}
+              {onVisibilityRetry && (
+                <button type="button" onClick={onVisibilityRetry} className="font-medium underline underline-offset-2">
+                  Try again
+                </button>
+              )}
+            </p>
           )}
-          {user.phone && (
-            <div>
-              <p className="text-theme-text-muted text-xs font-medium uppercase">Phone</p>
-              <p className="text-theme-text-primary mt-1 text-sm">{user.phone}</p>
-            </div>
-          )}
-          {user.mobile && (
-            <div>
-              <p className="text-theme-text-muted text-xs font-medium uppercase">Mobile</p>
-              <p className="text-theme-text-primary mt-1 text-sm">{user.mobile}</p>
-            </div>
+          {visibilityMode === 'toggle' && (
+            <p className="text-theme-text-muted pt-1 text-xs">
+              Leadership can always see everything. The department can also turn email, phone and mobile off for
+              everyone.
+            </p>
           )}
         </div>
       ) : (

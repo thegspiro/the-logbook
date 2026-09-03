@@ -44,6 +44,7 @@ import {
   Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '../utils/errorHandling';
 import { HelpLink } from '../components/HelpLink';
 import { organizationService, ranksService } from '../services/api';
 import type {
@@ -434,6 +435,7 @@ export const SettingsPage: React.FC = () => {
     use_tls: true,
   });
   const [savingEmail, setSavingEmail] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
   const [emailPasswordVisible, setEmailPasswordVisible] = useState(false);
 
   // File storage state
@@ -696,9 +698,40 @@ export const SettingsPage: React.FC = () => {
       toast.success('Email settings saved');
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      toast.error(status === 403 ? 'Permission denied.' : 'Failed to save email settings.');
+      // A 400 names the field an enabled platform still needs; show it
+      // rather than a generic failure the admin cannot act on.
+      toast.error(
+        status === 403
+          ? 'Permission denied.'
+          : status === 400
+            ? getErrorMessage(err, 'Failed to save email settings.')
+            : 'Failed to save email settings.'
+      );
     } finally {
       setSavingEmail(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      const result = await organizationService.testEmailSettings(emailSettings);
+      if (result.success) {
+        toast.success(result.message || 'Email connection test successful');
+      } else {
+        toast.error(result.message || 'Email connection test failed');
+      }
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast.error(
+        status === 403
+          ? 'Permission denied.'
+          : status === 429
+            ? 'Too many connection tests. Wait a minute and try again.'
+            : getErrorMessage(err, 'Failed to test email connection.')
+      );
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -1356,10 +1389,14 @@ export const SettingsPage: React.FC = () => {
             emailSettings={emailSettings}
             onEmailSettingsChange={setEmailSettings}
             savingEmail={savingEmail}
+            testingEmail={testingEmail}
             emailPasswordVisible={emailPasswordVisible}
             onTogglePasswordVisible={() => setEmailPasswordVisible(!emailPasswordVisible)}
             onSave={() => {
               void handleSaveEmail();
+            }}
+            onTest={() => {
+              void handleTestEmail();
             }}
             profileName={profile?.name}
           />

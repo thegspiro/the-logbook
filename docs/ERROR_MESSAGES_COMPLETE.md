@@ -241,156 +241,85 @@ See separate document: [`docs/ERROR_MESSAGES_LOGO_UPLOAD.md`](./ERROR_MESSAGES_L
 
 ---
 
-### Gmail OAuth Errors
+### Gmail / Microsoft 365 App Password Errors
 
-#### 7. Missing Google Client ID/Secret
+Gmail and Microsoft 365 send through the provider's SMTP server with an App
+Password (`smtp.gmail.com` / `smtp.office365.com`, port 587, STARTTLS, login =
+From address). The OAuth client-credential path documented here before
+2026-09-03 was removed: no refresh token was ever obtained and nothing could
+send through it.
 
-**Message**: `"Google OAuth is not configured. Missing required credentials."`
+#### 7. Missing App Password
 
-**Quality**: ⚠️ **NEEDS IMPROVEMENT** - Should link to setup guide
+**Message**: `"Gmail App Password is required"` / `"Microsoft 365 App Password is required"`
 
-**Current Behavior**:
-
-- Location: `backend/app/api/v1/test_email_helper.py:177`
-- Triggered when: OAuth environment variables not set
-- User sees: Generic "not configured" message
-
-**Should Say**:
-
-```
-"Google OAuth credentials missing. Set up OAuth in Google Cloud Console and add credentials to your .env file. See: [documentation link]"
-```
-
-**Troubleshooting**:
-
-1. **Create OAuth credentials**:
-   - Go to [Google Cloud Console](https://console.cloud.google.com)
-   - Create OAuth 2.0 Client ID
-   - Set redirect URI to your app URL
-2. **Add to .env file**:
-   ```
-   GOOGLE_CLIENT_ID=your_client_id
-   GOOGLE_CLIENT_SECRET=your_client_secret
-   ```
-3. **Restart backend** to load new environment variables
-4. **Enable Gmail API** in Google Cloud Console
-
-**Fix Priority**: MEDIUM - Add documentation link
-
----
-
-#### 8. Invalid Google Client ID Format
-
-**Message**: `"Invalid Google Client ID format"`
-
-**Quality**: ✅ **GOOD** - Specific validation failure
+**Quality**: ✅ **GOOD** - Names the one field that is missing
 
 **Current Behavior**:
 
-- Location: `backend/app/api/v1/test_email_helper.py:192`
-- Triggered when: Client ID doesn't match Google's format
-- User sees: Clear validation message
+- Location: `backend/app/api/v1/email_test_helper.py` (`_test_provider_connection`)
+- Triggered when: the platform is Gmail or Microsoft 365 and no App Password was entered
+- User sees: Which platform's password is missing; `details.required` lists the fields
 
 **Troubleshooting**:
 
-1. **Verify format**: Google Client IDs end with `.apps.googleusercontent.com`
-2. **Check copy/paste**: Ensure no extra spaces or characters
-3. **Regenerate**: Create new OAuth credentials if corrupted
-4. **Environment variable**: Verify correct variable name in .env
+1. **Gmail**: turn on 2-Step Verification for the account, then create an App Password for "Mail" at myaccount.google.com/apppasswords
+2. **Microsoft 365**: enable Authenticated SMTP for the mailbox in Exchange Online; with multi-factor sign-in, create an App Password from the account's security settings
+3. **Paste the generated password** — not the account's normal password
 
 **Fix Priority**: NONE - Already good
 
 ---
 
-#### 9. Google OAuth Token Exchange Failed
+#### 8. Missing Account Email
 
-**Message**: `"Failed to exchange authorization code for tokens: {error}"`
+**Message**: `"Gmail account email address is required"` / `"Microsoft 365 account email address is required"`
 
-**Quality**: ⚠️ **NEEDS IMPROVEMENT** - Raw error details
+**Quality**: ✅ **GOOD**
 
 **Current Behavior**:
 
-- Location: `backend/app/api/v1/test_email_helper.py:204`
-- Triggered when: OAuth token exchange fails
-- User sees: Raw API error response
-
-**Should Say**:
-
-```
-"Google authentication failed. The authorization code may have expired. Try reconnecting your Google account."
-```
+- Location: `backend/app/api/v1/email_test_helper.py` (`_test_provider_connection`)
+- Triggered when: the From Email field is blank
+- User sees: Which platform needs the address
 
 **Troubleshooting**:
 
-1. **Authorization code expired**: Valid for ~10 minutes - start over
-2. **Redirect URI mismatch**: Verify redirect URI in Google Console matches app
-3. **Invalid client credentials**: Double-check Client ID and Secret
-4. **Revoked access**: User may have revoked app access in Google Account settings
-5. **Try again**: Click "Connect with Google" to restart OAuth flow
+1. The From address doubles as the SMTP login for these platforms — enter the account that owns the App Password
 
-**Fix Priority**: MEDIUM
+**Fix Priority**: NONE - Already good
+
+---
+
+#### 9. App Password Rejected
+
+**Message**: `"SMTP authentication failed. Verify your username and password are correct. For Gmail or Outlook, you may need an app-specific password."`
+
+**Quality**: ✅ **GOOD** - Points at the usual cause
+
+**Current Behavior**:
+
+- Location: `backend/app/api/v1/email_test_helper.py` (`test_smtp_connection`, `535` handling)
+- Triggered when: the provider rejects the login
+- User sees: The generic SMTP authentication message
+
+**Troubleshooting**:
+
+1. **Gmail**: the account's normal password never works here; only an App Password does, and only with 2-Step Verification on
+2. **Microsoft 365**: Authenticated SMTP is off by default for new tenants — enable it for the mailbox, and check Security Defaults / Conditional Access are not blocking legacy SMTP
+3. **Wrong account**: the From address must be the account the App Password was generated for
+
+**Fix Priority**: NONE - Already good
 
 ---
 
 ### Microsoft OAuth Errors
 
-#### 10. Missing Microsoft Credentials
-
-**Message**: `"Microsoft OAuth is not configured. Missing required credentials (client_id, client_secret, tenant_id)."`
-
-**Quality**: ✅ **GOOD** - Lists specific missing fields
-
-**Current Behavior**:
-
-- Location: `backend/app/api/v1/test_email_helper.py:309`
-- Triggered when: Microsoft OAuth env vars not set
-- User sees: Clear list of required credentials
-
-**Troubleshooting**:
-
-1. **Register app in Azure**:
-   - Go to [Azure Portal](https://portal.azure.com)
-   - Navigate to Azure Active Directory → App registrations
-   - Create new registration
-2. **Get credentials**:
-   - **Client ID**: From app overview
-   - **Client Secret**: Create in Certificates & secrets
-   - **Tenant ID**: From app overview
-3. **Add to .env**:
-   ```
-   MICROSOFT_CLIENT_ID=your_client_id
-   MICROSOFT_CLIENT_SECRET=your_secret
-   MICROSOFT_TENANT_ID=your_tenant_id
-   ```
-4. **Set redirect URI**: Add to app registration
-5. **Grant permissions**: Add Mail.Send API permission
-
-**Fix Priority**: NONE - Already good
-
----
-
-#### 11. Microsoft OAuth Error Codes
-
-**Message**: Maps specific error codes to readable messages
-
-**Quality**: ✅ **GOOD** - Detailed error code mapping
-
-**Current Behavior**:
-
-- Location: `backend/app/api/v1/test_email_helper.py:408-415`
-- Provides specific guidance for each error code
-
-**Error Code Mappings**:
-
-| Code                     | Message                                   | Troubleshooting                 |
-| ------------------------ | ----------------------------------------- | ------------------------------- |
-| `invalid_client`         | Client authentication failed              | Verify Client ID and Secret     |
-| `invalid_grant`          | Authorization code expired or revoked     | Restart OAuth flow              |
-| `invalid_request`        | Request is missing a required parameter   | Check OAuth configuration       |
-| `unauthorized_client`    | Client not authorized for this grant type | Verify app permissions in Azure |
-| `unsupported_grant_type` | Grant type not supported                  | Use authorization_code grant    |
-
-**Fix Priority**: NONE - Already good
+Removed 2026-09-03. Microsoft 365 is now tested and used as SMTP submission
+with an App Password, so the tenant / client ID / client secret checks and the
+`AADSTS*` error-code mapping that lived here no longer exist. The messages a
+Microsoft 365 mailbox can produce are the App Password entries (#7–#9) above
+and the SMTP connection entries (#1–#6).
 
 ---
 

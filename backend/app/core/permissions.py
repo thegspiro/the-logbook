@@ -555,6 +555,15 @@ INTEGRATIONS_MANAGE = Permission(
     "Manage third-party integrations",
     PermissionCategory.INTEGRATIONS,
 )
+# Deliberately not part of ``integrations.manage``: the MCP service key acts
+# for the whole department, so issuing one is an IT-administrator decision.
+# Only the wildcard-holding ``it_manager`` position has it by default; a chief
+# who wants to delegate it grants it to a position explicitly.
+INTEGRATIONS_MCP_KEYS = Permission(
+    "integrations.mcp_keys",
+    "Issue and revoke Claude MCP service keys",
+    PermissionCategory.INTEGRATIONS,
+)
 
 # Notifications
 NOTIFICATIONS_VIEW = Permission(
@@ -743,6 +752,7 @@ ALL_PERMISSIONS: list[Permission] = [
     ANALYTICS_VIEW,
     # Integrations
     INTEGRATIONS_MANAGE,
+    INTEGRATIONS_MCP_KEYS,
     # Notifications
     NOTIFICATIONS_VIEW,
     NOTIFICATIONS_MANAGE,
@@ -805,6 +815,33 @@ def permission_matches(required: str, granted: set[str]) -> bool:
 def permission_matches_any(required: Iterable[str], granted: set[str]) -> bool:
     """True if any one of the required permissions is satisfied (OR logic)."""
     return any(permission_matches(p, granted) for p in required)
+
+
+def is_read_only_permission(name: str) -> bool:
+    """True if a permission's action names a read, not a write.
+
+    The naming convention every permission family in this file follows:
+    ``<module>.view`` / ``<module>.view_<detail>`` (e.g. ``users.view_contact``,
+    ``facilities.view_sensitive``) read a resource; every other action
+    (``create``, ``edit``, ``update``, ``delete``, ``manage``, ...) writes it.
+    """
+    action = name.rsplit(".", 1)[-1] if "." in name else name
+    return action == "view" or action.startswith("view_")
+
+
+def permission_matches_any_write(required: Iterable[str], granted: set[str]) -> bool:
+    """Like ``permission_matches_any``, restricted to write-tier permissions.
+
+    A caller can be *read*-admitted into a resource by holding any one of its
+    required permissions, including a view-only one -- that is what
+    ``permission_matches_any`` answers. Authorizing a *mutation* on that same
+    resource is a different question: holding only the view-only permission
+    must not be enough. Filtering ``required`` down to its non-view-only
+    entries before matching turns the same required-permissions list into a
+    write-authorization check without duplicating it.
+    """
+    write_tier = [p for p in required if not is_read_only_permission(p)]
+    return permission_matches_any(write_tier, granted)
 
 
 def get_permissions_by_category() -> dict[str, list[Permission]]:

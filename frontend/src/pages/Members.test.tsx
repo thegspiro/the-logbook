@@ -147,7 +147,7 @@ describe('Members roster — regular member (no members.manage)', () => {
     expect(columnLabels()).toEqual(expect.arrayContaining(['Member', 'Member #', 'Contact', 'Status']));
     expect(columnLabels()).not.toContain('Hire Date');
     expect(columnLabels()).not.toContain('Actions');
-    expect(screen.queryByText('12/5/2020')).not.toBeInTheDocument();
+    expect(screen.queryByText('12/6/2020')).not.toBeInTheDocument();
   });
 
   it('hides bulk selection and the CSV export', async () => {
@@ -235,10 +235,10 @@ describe('Members roster — membership coordinator (members.manage)', () => {
     expect(within(table()).getByText('@ladams')).toBeInTheDocument();
     expect(columnLabels()).toContain('Hire Date');
     expect(columnLabels()).toContain('Actions');
-    // hire_date is a bare DATE ("2020-12-06"); formatDate parses that as UTC
-    // midnight and renders it in the org timezone, which lands on the 5th in
-    // America/New_York. Pinned to what the app actually shows.
-    expect(within(table()).getByText('12/5/2020')).toBeInTheDocument();
+    // hire_date is a bare DATE ("2020-12-06"). It is a calendar date, so it
+    // reads as the 6th here and in every other timezone -- this assertion said
+    // 12/5/2020 until formatDate stopped shifting calendar dates.
+    expect(within(table()).getByText('12/6/2020')).toBeInTheDocument();
   });
 
   it('keeps bulk selection, the CSV export and the management title', async () => {

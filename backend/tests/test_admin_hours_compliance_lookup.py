@@ -202,3 +202,57 @@ class TestComplianceForAnotherMember:
 
         assert len(results) == 1
         assert results[0]["required_hours"] == 12
+
+
+class TestRequirementProgressArithmetic:
+    """`func.sum` returns Decimal on MySQL; the profile's JSON returns float.
+
+    Dividing one by the other raised TypeError, and only for a member who had
+    logged something: with no approved rows `or 0` substitutes an int and every
+    value below is float, so the endpoint answered fine for anyone it had
+    nothing to report about and 500ed for everyone it did.
+    """
+
+    async def test_a_member_with_logged_hours_gets_progress(self, db_session):
+        org = await _org(db_session)
+        user, _ = await _member_with_position(db_session, org)
+        category = await _category(db_session, org)
+        # 8.0, not 8. The trigger is Decimal / **float**: func.sum gives a
+        # Decimal and the profile's stored JSON gives a float, because the API
+        # schema coerces required_hours on the way in. An int here divides a
+        # Decimal quite happily and reproduces nothing.
+        await _profile_requiring(db_session, org, category, required_hours=8.0)
+        # 240 minutes, so func.sum returns a Decimal rather than the int `or 0`
+        # fallback -- the other half of the trigger.
+        await _approved_hours(db_session, org, user, category, minutes=240)
+        user_id = user.id
+        db_session.expunge_all()
+
+        service = AdminHoursService(db_session)
+        results = await service.get_user_hours_compliance(
+            organization_id=org.id, user_id=user_id, year=datetime.now().year
+        )
+
+        assert len(results) == 1
+        assert results[0]["logged_hours"] == 4.0
+        assert results[0]["required_hours"] == 8.0
+        # 4 of 8 is 50%, which clears the default at-risk threshold of 75 only
+        # if the arithmetic ran at all.
+        assert results[0]["status"] in {"at_risk", "non_compliant"}
+
+    async def test_meeting_the_requirement_reads_compliant(self, db_session):
+        org = await _org(db_session)
+        user, _ = await _member_with_position(db_session, org)
+        category = await _category(db_session, org)
+        await _profile_requiring(db_session, org, category, required_hours=2.0)
+        await _approved_hours(db_session, org, user, category, minutes=180)
+        user_id = user.id
+        db_session.expunge_all()
+
+        service = AdminHoursService(db_session)
+        results = await service.get_user_hours_compliance(
+            organization_id=org.id, user_id=user_id, year=datetime.now().year
+        )
+
+        assert results[0]["logged_hours"] == 3.0
+        assert results[0]["status"] == "compliant"

@@ -86,7 +86,12 @@ import type { CatalogAddPayload } from '@/modules/inventory/components/CatalogQu
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
-import { storedInsideOptions } from './equipmentCheckHierarchy';
+import {
+  buildParentByIdMap,
+  descendantCompartmentIds,
+  descendantIdsFromParentMap,
+  storedInsideOptions,
+} from './equipmentCheckHierarchy';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -479,6 +484,46 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
   const compartmentsRef = useRef(compartments);
   compartmentsRef.current = compartments;
+  // ---------------------------------------------------------------------------
+  // Outstanding-write tracking for compartments and items
+  //
+  // Invariant a subtree delete depends on: before its DELETE request is sent,
+  // no id in that subtree (the compartment, every descendant compartment,
+  // every item on any of them) may have an outstanding server write or an
+  // unresolved local hierarchy change. Getting this wrong either loses an
+  // edit the delete's cascade was never told about, or races a write against
+  // a row the delete has already removed.
+  //
+  // "Outstanding server write" means present in autoSavePendingRef (a
+  // debounce timer that has not fired yet) or autoSaveInFlightRef (a PATCH
+  // already sent, not yet settled). A PATCH for an item is issued from
+  // exactly three places -- a debounce timer firing on its own
+  // (scheduleAutoSaveItem), the Save button's pre-save flush of whatever is
+  // still pending (flushPendingAutoSaves), and Save's own per-item batch
+  // (handleSave) -- and all three register the request into
+  // autoSaveInFlightRef via registerInFlightSave before it goes out. A write
+  // path that issues a PATCH without going through that helper is invisible
+  // to a delete's quiescing step, no matter how carefully that step reads
+  // the maps.
+  //
+  // "Unresolved local hierarchy change" means an id whose live
+  // parentCompartmentId disagrees with savedParentByIdRef, the last-known-
+  // server `id -> parentCompartmentId` shape. Compartments have no auto-save
+  // path -- Save (and a bulk replace) are the only writers of
+  // parent_compartment_id -- so a reparent (indent/outdent/the parent
+  // picker) sits in exactly this kind of gap until one of them persists it.
+  // savedParentByIdRef is refreshed by every path that persists a parent:
+  // add/duplicate a compartment (immediately -- the backend assigns the
+  // parent as part of that call), Save's own per-compartment batch (per
+  // request that actually succeeded, even when a sibling request in the same
+  // batch fails), and a bulk replace (rebuilt wholesale from the response,
+  // since every id is new).
+  //
+  // A future write path for an item's fields or a compartment's parent must
+  // register into these same maps rather than inventing its own tracking --
+  // a second, uncoordinated map is how this invariant gets checked in one
+  // place and violated in another.
+  const savedParentByIdRef = useRef<Map<string, string>>(new Map());
   const itemMoveQueue = useRef<Promise<void>>(Promise.resolve());
   // Two guards, not one: adding a compartment and adding a section header are
   // separate buttons, and a shared flag would gray out one because the other
@@ -488,6 +533,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [expandedCompartments, setExpandedCompartments] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Distinct from `saving`, which is UI-only (it starts *after* the pending-
+  // edit flush and any publish-warnings confirmation, purely to drive the
+  // Save/Publish buttons' spinner) and stays that way -- an existing test
+  // depends on the field staying editable through that window. This flag
+  // spans handleSave's entire async span, from its very first line to its
+  // very last, and is the one deleteCompartment checks: see the invariant
+  // comment on savedParentByIdRef above for why per-write registration alone
+  // (registerInFlightSave) cannot close every gap on its own -- handleSave
+  // itself is a sequence of awaited steps (flush, then, for a publish with
+  // warnings, a user confirmation, then the update batch) with real gaps
+  // between them where nothing has been registered into either tracking map
+  // yet. A delete confirmed inside one of those gaps would see both maps
+  // empty and proceed, only for handleSave's later batch to PATCH rows the
+  // delete just removed. This flag is a superset of every one of those gaps
+  // by construction, since it covers the whole function.
+  const [saveOperationActive, setSaveOperationActive] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   // Template metadata moved off the canvas into a right-side drawer: the
@@ -535,14 +596,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [inlineEditValue, setInlineEditValue] = useState('');
   const inlineInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-save debounce timer for item edits
-  // Keyed by item id, not a single shared timer: a bulk action schedules one
-  // save per selected row, and a shared timer made each row cancel the one
-  // before it.
+  // Debounced item edits not yet sent. Keyed by item id, not a single shared
+  // timer: a bulk action schedules one save per selected row, and a shared
+  // timer made each row cancel the one before it. See the invariant comment
+  // on savedParentByIdRef above for how this map and the one below are used
+  // together.
   const autoSavePendingRef = useRef<
     Map<string, { timer: ReturnType<typeof setTimeout>; patch: Record<string, unknown> }>
   >(new Map());
-  const autoSaveInFlightRef = useRef<Set<Promise<void>>>(new Set());
+  // Item PATCHes currently on the wire, keyed by item id. Populated only
+  // through registerInFlightSave (below), never set directly, so every
+  // write path stays visible to a subtree delete's quiescing step.
+  const autoSaveInFlightRef = useRef<Map<string, Set<Promise<void>>>>(new Map());
   const autoSaveErrorRef = useRef(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -621,6 +686,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       });
       setCompartments(mapped);
       setExpandedCompartments(expanded);
+      savedParentByIdRef.current = buildParentByIdMap(mapped);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load template'));
     } finally {
@@ -743,6 +809,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
+        savedParentByIdRef.current.set(created.id, comp.parentCompartmentId);
         setCompartments((prev) => [...prev, comp]);
         setExpandedCompartments((prev) => new Set(prev).add(created.id));
         toast.success('Compartment added');
@@ -783,6 +850,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
+        savedParentByIdRef.current.set(created.id, comp.parentCompartmentId);
         setCompartments((prev) => [...prev, comp]);
         toast.success('Section header added');
       } catch (err: unknown) {
@@ -805,14 +873,109 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const comp = compartments[idx];
     if (!comp) return;
 
-    const itemCount = comp.items.length;
+    // Blocks for the whole span of a Save, not just the moments this file's
+    // per-write registration (registerInFlightSave) can see. handleSave is
+    // itself a sequence of awaited steps -- flush pending edits, possibly wait
+    // on a publish-warnings confirmation, then a Promise.allSettled batch of
+    // compartment/item PATCHes -- with real gaps between them where a request
+    // has resolved (or hasn't been issued yet) and so is invisible to both
+    // autoSavePendingRef and autoSaveInFlightRef. A delete confirmed inside
+    // one of those gaps would see both maps empty and proceed immediately,
+    // only for handleSave's later steps to PATCH rows the delete just
+    // removed. saveOperationActive spans the entire handleSave call by
+    // construction (see its declaration above), so checking it here closes
+    // every such gap at once rather than needing a fifth per-step
+    // registration point. The delete buttons are also disabled while this is
+    // true (belt-and-suspenders for the normal click path); this check is the
+    // one thing every path -- including a future delete affordance that
+    // forgets to wire up `disabled` -- actually depends on.
+    if (saveOperationActive) {
+      toast.error('A save is in progress. Wait for it to finish, then try deleting again.');
+      return;
+    }
+
+    // The backend cascade-deletes the whole subtree, not just this row -- the
+    // confirmation and the local-state removal both have to account for
+    // every descendant, or the count undersells what's being destroyed and
+    // deleted descendants linger as orphaned "top-level" rows whose ids 404
+    // on the next Save.
+    const descendantIds = descendantCompartmentIds(compartments, comp.id);
+
+    // descendantIds above is computed from *this screen's* current
+    // hierarchy, which can disagree with what the backend still has --
+    // reparenting (indent/outdent/the parent picker) has no auto-save path;
+    // Save is the only writer of parent_compartment_id. If a descendant was
+    // reparented OUT of this subtree in unsaved local state, the
+    // confirmation and local removal below would correctly leave it alone --
+    // but the backend's cascade, still seeing the old parent_compartment_id,
+    // destroys it anyway, silently losing whatever the user was in the
+    // middle of saving. The inverse (reparented IN, unsaved) would remove it
+    // from this screen while the backend leaves it alive elsewhere,
+    // untouched. Comparing the live computation against the last-known-
+    // server subtree (savedParentByIdRef) catches both directions and blocks
+    // rather than risks either.
+    if (comp.id) {
+      const serverDescendantIds = descendantIdsFromParentMap(savedParentByIdRef.current, comp.id);
+      const knownIds = new Set(
+        [...serverDescendantIds, ...descendantIds].filter((id) => savedParentByIdRef.current.has(id))
+      );
+      const hasPendingReparent = [...knownIds].some((id) => serverDescendantIds.has(id) !== descendantIds.has(id));
+      if (hasPendingReparent) {
+        toast.error(
+          'This compartment’s hierarchy has unsaved changes that would affect what gets deleted. Save the template, then delete this compartment.'
+        );
+        return;
+      }
+    }
+
+    const descendantComps = compartments.filter((c) => c.id !== undefined && descendantIds.has(c.id));
+    const totalItems = comp.items.length + descendantComps.reduce((sum, c) => sum + c.items.length, 0);
     const label = comp.name || 'Untitled Compartment';
+    const subtreeNote =
+      descendantComps.length > 0
+        ? ` and ${descendantComps.length} nested compartment${descendantComps.length !== 1 ? 's' : ''}`
+        : '';
     const msg =
-      itemCount > 0
-        ? `Delete "${label}" and its ${itemCount} item${itemCount !== 1 ? 's' : ''}? This cannot be undone.`
-        : `Delete "${label}"? This cannot be undone.`;
+      totalItems > 0
+        ? `Delete "${label}"${subtreeNote} and ${totalItems} item${totalItems !== 1 ? 's' : ''} total? This cannot be undone.`
+        : `Delete "${label}"${subtreeNote}? This cannot be undone.`;
     if (!(await confirm({ title: 'Delete compartment', message: msg, confirmLabel: 'Delete', cancelLabel: 'Keep it' })))
       return;
+
+    // The backend delete is about to remove every item in this subtree too,
+    // and nothing touching a doomed item may still be running once the
+    // DELETE is sent -- a write that settles after it would either report
+    // "Save failed" for a row already gone, or race the DELETE to the
+    // server outright. That means quiescing both halves of the outstanding-
+    // write invariant (see the comment on savedParentByIdRef above), and
+    // quiescing the pending half *synchronously, before the delete request
+    // is even created*: awaiting anything between the capture and the
+    // request leaves a window for a timer to fire mid-flight and start a
+    // PATCH the capture loop already considers cancelled.
+    const doomedItemIds = [...comp.items, ...descendantComps.flatMap((c) => c.items)]
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id));
+    const capturedAutoSaves: Array<[string, Record<string, unknown>]> = [];
+    for (const itemId of doomedItemIds) {
+      const pending = autoSavePendingRef.current.get(itemId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        autoSavePendingRef.current.delete(itemId);
+        capturedAutoSaves.push([itemId, pending.patch]);
+      }
+    }
+
+    // A timer that fired before this point -- e.g. the user left the
+    // confirmation dialog above open past the debounce window -- has
+    // already left autoSavePendingRef and moved into autoSaveInFlightRef,
+    // where its PATCH (or the Save button's own flush of it) is already on
+    // the wire. Every write path registers there through
+    // registerInFlightSave, so waiting on it here covers all of them
+    // uniformly. The request's own error handling already swallows a
+    // rejection (it only flags autoSaveErrorRef), so this can never itself
+    // reject and abort the delete.
+    const doomedInFlight = doomedItemIds.flatMap((itemId) => [...(autoSaveInFlightRef.current.get(itemId) ?? [])]);
+    if (doomedInFlight.length > 0) await Promise.all(doomedInFlight);
 
     if (comp.id) {
       try {
@@ -820,11 +983,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         await equipmentCheckService.deleteCompartment(comp.id);
         toast.success('Compartment deleted');
       } catch (err: unknown) {
+        // The compartment (and these items) are still live -- re-arm rather
+        // than let the captured edits vanish.
+        for (const [itemId, patch] of capturedAutoSaves) {
+          scheduleAutoSaveItem(itemId, patch, { asFallback: true });
+        }
         toast.error(getErrorMessage(err, 'Failed to delete compartment'));
         return;
       }
     }
-    setCompartments((prev) => prev.filter((_, i) => i !== idx));
+    settleAutoSaveStatus();
+
+    // savedParentByIdRef must drop every id this delete just removed, or a
+    // *second* delete of a still-surviving ancestor -- in the same session,
+    // no reload in between -- compares its live subtree against a
+    // server-truth map that still lists the already-deleted rows as
+    // descendants. That permanent mismatch trips the pending-reparent guard
+    // above for a delete with nothing pending at all, blocking every further
+    // compartment delete until the page reloads.
+    if (comp.id) savedParentByIdRef.current.delete(comp.id);
+    for (const id of descendantIds) savedParentByIdRef.current.delete(id);
+
+    setCompartments((prev) => prev.filter((c, i) => i !== idx && !(c.id !== undefined && descendantIds.has(c.id))));
     markDirty();
   };
 
@@ -847,6 +1027,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       try {
         await ensureDraftBeforeStructureEdit();
         copy = compartmentFormFromResponse(await equipmentCheckService.cloneCompartment(comp.id, idx + 1));
+        if (copy.id) savedParentByIdRef.current.set(copy.id, copy.parentCompartmentId);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to duplicate compartment'));
         return;
@@ -1664,6 +1845,32 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
   }, []);
 
+  /**
+   * Registers `request` as outstanding for `itemId` and removes it again
+   * once it settles -- the only place a PATCH becomes visible to a subtree
+   * delete's quiescing step (see the invariant comment on savedParentByIdRef
+   * above). Every write path that issues an item PATCH -- a fired debounce
+   * timer, the Save button's pre-save flush, and Save's own per-item batch
+   * -- routes it through here rather than touching autoSaveInFlightRef
+   * directly, so a delete's quiescing step never has to know which of the
+   * three issued a given request.
+   *
+   * `request` must already swallow its own rejection: a request that can
+   * still reject would make a delete's `Promise.all` over doomed items'
+   * in-flight work throw and abort the delete over a save failure that has
+   * nothing to do with it.
+   */
+  const registerInFlightSave = useCallback((itemId: string, request: Promise<void>): Promise<void> => {
+    const existing = autoSaveInFlightRef.current.get(itemId);
+    if (existing) existing.add(request);
+    else autoSaveInFlightRef.current.set(itemId, new Set([request]));
+    return request.finally(() => {
+      const inFlightForItem = autoSaveInFlightRef.current.get(itemId);
+      inFlightForItem?.delete(request);
+      if (inFlightForItem && inFlightForItem.size === 0) autoSaveInFlightRef.current.delete(itemId);
+    });
+  }, []);
+
   const scheduleAutoSaveItem = useCallback(
     (itemId: string, patch: Record<string, unknown>, options?: { immediate?: boolean; asFallback?: boolean }) => {
       if (!isEditing || !itemId) return;
@@ -1696,19 +1903,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             .then(() => undefined)
             .catch(() => {
               autoSaveErrorRef.current = true;
-            })
-            .finally(() => {
-              autoSaveInFlightRef.current.delete(request);
-              settleAutoSaveStatus();
             });
-          autoSaveInFlightRef.current.add(request);
+          void registerInFlightSave(itemId, request).finally(() => settleAutoSaveStatus());
         },
         options?.immediate ? 0 : 1500
       );
 
       autoSavePendingRef.current.set(itemId, { timer, patch: merged });
     },
-    [ensureDraftBeforeStructureEdit, isEditing, settleAutoSaveStatus]
+    [ensureDraftBeforeStructureEdit, isEditing, registerInFlightSave, settleAutoSaveStatus]
   );
 
   // Enhanced updateItemField that triggers auto-save for persisted items
@@ -1783,8 +1986,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (pendingPatches.length > 0) {
       try {
         await ensureDraftBeforeStructureEdit();
+        // Each PATCH is registered for visibility to a subtree delete's
+        // quiescing step the same way a fired debounce timer's is -- this
+        // runs before handleSave sets `saving`, so a delete is otherwise
+        // free to fire while these are still on the wire. The tracked copy
+        // swallows its own rejection (registerInFlightSave's contract); the
+        // original promise below is what this flush's own Promise.all
+        // still fails on, so a failed flush keeps re-arming and reporting
+        // exactly as before.
         await Promise.all(
-          pendingPatches.map(([itemId, { patch }]) => equipmentCheckService.updateCheckItem(itemId, patch))
+          pendingPatches.map(([itemId, { patch }]) => {
+            const request = equipmentCheckService.updateCheckItem(itemId, patch).then(() => undefined);
+            void registerInFlightSave(
+              itemId,
+              request.catch(() => undefined)
+            );
+            return request;
+          })
         );
       } catch (err: unknown) {
         // asFallback: these were captured before the member could edit again,
@@ -1797,162 +2015,219 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         return false;
       }
     }
-    if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
+    if (autoSaveInFlightRef.current.size > 0) {
+      await Promise.all([...autoSaveInFlightRef.current.values()].flatMap((requests) => [...requests]));
+    }
     settleAutoSaveStatus();
     return true;
   };
 
   const handleSave = async (publish: boolean) => {
-    if (!(await flushPendingAutoSaves())) return;
-    // Drafts deliberately bypass readiness checks; publication never does.
-    // Keep the blocking rules aligned with the backend instead of putting them
-    // in the overridable warning dialog below.
-    if (publish && !publishReady) return;
-    const warnings: string[] = [];
-    for (const comp of compartments) {
-      if (comp.isHeader) continue;
-      for (const item of comp.items) {
-        if (item.hasExpiration && !item.expirationDate.trim()) {
-          warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
-        }
-        if (
-          item.checkType === 'count' &&
-          item.criticalMinimumQuantity &&
-          item.expectedQuantity &&
-          Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
-        ) {
-          warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
-        }
-        if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
-          warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
+    // saveOperationActive has to become true before anything below can await
+    // -- including the flush, which is the very thing the pass-9 gap slipped
+    // through: it registers each of its own PATCHes individually, but there
+    // was nothing marking the *operation* itself as active before that
+    // registration happened. This flag is unconditionally cleared in the
+    // outer finally below regardless of which of this function's several
+    // early returns or its inner try/catch is what ends it, so
+    // deleteCompartment's read of it can never observe a stuck `true` from a
+    // prior save.
+    setSaveOperationActive(true);
+    try {
+      if (!(await flushPendingAutoSaves())) return;
+      // Drafts deliberately bypass readiness checks; publication never does.
+      // Keep the blocking rules aligned with the backend instead of putting them
+      // in the overridable warning dialog below.
+      if (publish && !publishReady) return;
+      const warnings: string[] = [];
+      for (const comp of compartments) {
+        if (comp.isHeader) continue;
+        for (const item of comp.items) {
+          if (item.hasExpiration && !item.expirationDate.trim()) {
+            warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
+          }
+          if (
+            item.checkType === 'count' &&
+            item.criticalMinimumQuantity &&
+            item.expectedQuantity &&
+            Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
+          ) {
+            warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
+          }
+          if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
+            warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
+          }
         }
       }
-    }
-    if (publish && warnings.length > 0) {
-      const proceed = await confirm({
-        title: 'Save with warnings?',
-        message: `${warnings.join('\n\n')}\n\nYou can save anyway and fix these later.`,
-        confirmLabel: 'Save anyway',
-        cancelLabel: 'Go back',
-        variant: 'warning',
-      });
-      if (!proceed) return;
-    }
-
-    setSaving(true);
-    try {
-      const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
-        .filter((c) => !c.id) // Only include unsaved compartments in create payload
-        .map(compartmentCreateFromForm);
-
-      if (isEditing && templateId) {
-        await equipmentCheckService.updateEquipmentCheckTemplate(templateId, {
-          name: form.name.trim(),
-          // Explicit nulls, not omissions: this is an update, and the backend
-          // dumps it with exclude_unset. Omitting a cleared field left the old
-          // value in place behind a success toast — un-pinning a template from
-          // an apparatus, or removing its position restriction, did nothing.
-          description: blankToNull(form.description),
-          check_timing: form.checkTiming,
-          template_type: form.templateType,
-          // An empty array is a meaningful value here: it means "no position
-          // restriction", which is exactly what the user just asked for.
-          assigned_positions: form.assignedPositions,
-          apparatus_type: form.apparatusType || null,
-          apparatus_id: form.apparatusId || null,
-          is_active: false,
+      if (publish && warnings.length > 0) {
+        const proceed = await confirm({
+          title: 'Save with warnings?',
+          message: `${warnings.join('\n\n')}\n\nYou can save anyway and fix these later.`,
+          confirmLabel: 'Save anyway',
+          cancelLabel: 'Go back',
+          variant: 'warning',
         });
+        if (!proceed) return;
+      }
 
-        // Save any new compartments that haven't been persisted yet
-        for (const payload of compartmentPayloads) {
-          await ensureDraftBeforeStructureEdit();
-          await equipmentCheckService.addCompartment(templateId, payload);
-        }
+      setSaving(true);
+      try {
+        const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
+          .filter((c) => !c.id) // Only include unsaved compartments in create payload
+          .map(compartmentCreateFromForm);
 
-        // Update existing compartments and items in parallel
-        const updatePromises: Promise<unknown>[] = [];
-        for (const comp of compartments) {
-          if (comp.id) {
-            updatePromises.push(
-              equipmentCheckService.updateCompartment(comp.id, {
-                name: comp.name,
-                description: blankToNull(comp.description),
-                image_url: blankToNull(comp.imageUrl),
-                is_header: comp.isHeader,
-                container_type: comp.containerType || null,
-                is_sealed: comp.isSealed,
-                // Compartments have no auto-save path, so this is the only
-                // writer: re-parenting one to the top level is expressible
-                // only as an explicit null.
-                parent_compartment_id: comp.parentCompartmentId || null,
-              })
-            );
+        if (isEditing && templateId) {
+          await equipmentCheckService.updateEquipmentCheckTemplate(templateId, {
+            name: form.name.trim(),
+            // Explicit nulls, not omissions: this is an update, and the backend
+            // dumps it with exclude_unset. Omitting a cleared field left the old
+            // value in place behind a success toast — un-pinning a template from
+            // an apparatus, or removing its position restriction, did nothing.
+            description: blankToNull(form.description),
+            check_timing: form.checkTiming,
+            template_type: form.templateType,
+            // An empty array is a meaningful value here: it means "no position
+            // restriction", which is exactly what the user just asked for.
+            assigned_positions: form.assignedPositions,
+            apparatus_type: form.apparatusType || null,
+            apparatus_id: form.apparatusId || null,
+            is_active: false,
+          });
 
-            for (const item of comp.items) {
-              if (item.id) {
-                updatePromises.push(
-                  equipmentCheckService.updateCheckItem(item.id, {
-                    name: item.name,
-                    // Same coercions the auto-save path in this file already
-                    // uses (updateItemFieldWithAutoSave); handleSave was the
-                    // one writer still omitting cleared fields.
-                    description: blankToNull(item.description),
-                    check_type: item.checkType,
-                    is_required: item.isRequired,
-                    required_quantity: numberOrNull(item.requiredQuantity),
-                    expected_quantity: numberOrNull(item.expectedQuantity),
-                    critical_minimum_quantity: numberOrNull(item.criticalMinimumQuantity),
-                    min_level: numberOrNull(item.minLevel),
-                    level_unit: blankToNull(item.levelUnit),
-                    serial_number: blankToNull(item.serialNumber),
-                    lot_number: blankToNull(item.lotNumber),
-                    inventory_item_id: item.inventoryItemId || null,
-                    image_url: blankToNull(item.imageUrl),
-                    has_expiration: item.hasExpiration,
-                    expiration_date: blankToNull(item.expirationDate),
-                    expiration_warning_days: numberOrNull(item.expirationWarningDays),
-                  })
-                );
+          // Save any new compartments that haven't been persisted yet
+          for (const payload of compartmentPayloads) {
+            await ensureDraftBeforeStructureEdit();
+            await equipmentCheckService.addCompartment(templateId, payload);
+          }
+
+          // Update existing compartments and items in parallel. Compartment
+          // and item requests are tracked as two separate settlements rather
+          // than one Promise.all: a compartment's PATCH can commit
+          // server-side while an unrelated item PATCH in the same batch
+          // rejects, and Promise.all's fail-fast rejection would skip the
+          // savedParentByIdRef refresh below entirely -- leaving that map
+          // describing the pre-save hierarchy even though the reparent it
+          // disagrees with already reached the server. allSettled lets every
+          // compartment that actually succeeded update the map regardless of
+          // what else in the batch failed, and a save failure still surfaces
+          // exactly as before (below).
+          const compartmentUpdates: Array<{ comp: CompartmentFormState; promise: Promise<unknown> }> = [];
+          const itemUpdatePromises: Promise<unknown>[] = [];
+          for (const comp of compartments) {
+            if (comp.id) {
+              compartmentUpdates.push({
+                comp,
+                promise: equipmentCheckService.updateCompartment(comp.id, {
+                  name: comp.name,
+                  description: blankToNull(comp.description),
+                  image_url: blankToNull(comp.imageUrl),
+                  is_header: comp.isHeader,
+                  container_type: comp.containerType || null,
+                  is_sealed: comp.isSealed,
+                  // Compartments have no auto-save path, so this is the only
+                  // writer: re-parenting one to the top level is expressible
+                  // only as an explicit null.
+                  parent_compartment_id: comp.parentCompartmentId || null,
+                }),
+              });
+
+              for (const item of comp.items) {
+                if (item.id) {
+                  // Registered the same way a debounced auto-save or the
+                  // pre-save flush is, so a compartment delete triggered while
+                  // this batch is still in flight waits it out too -- see the
+                  // invariant comment on savedParentByIdRef above.
+                  const request = equipmentCheckService
+                    .updateCheckItem(item.id, {
+                      name: item.name,
+                      // Same coercions the auto-save path in this file already
+                      // uses (updateItemFieldWithAutoSave); handleSave was the
+                      // one writer still omitting cleared fields.
+                      description: blankToNull(item.description),
+                      check_type: item.checkType,
+                      is_required: item.isRequired,
+                      required_quantity: numberOrNull(item.requiredQuantity),
+                      expected_quantity: numberOrNull(item.expectedQuantity),
+                      critical_minimum_quantity: numberOrNull(item.criticalMinimumQuantity),
+                      min_level: numberOrNull(item.minLevel),
+                      level_unit: blankToNull(item.levelUnit),
+                      serial_number: blankToNull(item.serialNumber),
+                      lot_number: blankToNull(item.lotNumber),
+                      inventory_item_id: item.inventoryItemId || null,
+                      image_url: blankToNull(item.imageUrl),
+                      has_expiration: item.hasExpiration,
+                      expiration_date: blankToNull(item.expirationDate),
+                      expiration_warning_days: numberOrNull(item.expirationWarningDays),
+                    })
+                    .then(() => undefined);
+                  void registerInFlightSave(
+                    item.id,
+                    request.catch(() => undefined)
+                  );
+                  itemUpdatePromises.push(request);
+                }
               }
             }
           }
-        }
-        await Promise.all(updatePromises);
 
-        if (publish) {
-          await equipmentCheckService.updateEquipmentCheckTemplate(templateId, { is_active: true });
-        }
-        setForm((current) => ({ ...current, isActive: publish }));
-        setIsDirty(false);
-        toast.success(publish ? 'Template published' : 'Draft saved');
-      } else {
-        const createPayload: EquipmentCheckTemplateCreate = {
-          name: form.name.trim(),
-          description: form.description.trim() || undefined,
-          check_timing: form.checkTiming,
-          template_type: form.templateType,
-          assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
-          apparatus_type: form.apparatusType || undefined,
-          apparatus_id: form.apparatusId || undefined,
-          is_active: publish,
-          compartments: compartments.map(compartmentCreateFromForm),
-        };
-        const created = await equipmentCheckService.createEquipmentCheckTemplate(createPayload);
-        setIsDirty(false);
-        toast.success(publish ? 'Template published' : 'Draft saved');
-        // Navigate to edit mode so subsequent saves work as updates
-        void navigate(`/inventory/admin/checklists/templates/${created.id}`, { replace: true });
-        return;
-      }
+          const compartmentResults = await Promise.allSettled(compartmentUpdates.map((update) => update.promise));
+          // Every compartment PATCH that actually settled fulfilled persisted
+          // parent_compartment_id exactly as sent (handleSave is the only
+          // writer -- see the comment on the update above) -- refresh the
+          // server-truth map for exactly those, immediately, rather than
+          // waiting on loadTemplate's reload below, which is a separate,
+          // unawaited round trip and skipped entirely if this save goes on to
+          // fail.
+          compartmentResults.forEach((result, index) => {
+            const comp = compartmentUpdates[index]?.comp;
+            if (comp?.id && result.status === 'fulfilled') {
+              savedParentByIdRef.current.set(comp.id, comp.parentCompartmentId);
+            }
+          });
 
-      // Re-fetch the template to sync local state with server
-      if (isEditing && templateId) {
-        void loadTemplate(templateId);
+          const itemResults = await Promise.allSettled(itemUpdatePromises);
+          const firstFailure = [...compartmentResults, ...itemResults].find(
+            (result): result is PromiseRejectedResult => result.status === 'rejected'
+          );
+          if (firstFailure) throw firstFailure.reason;
+
+          if (publish) {
+            await equipmentCheckService.updateEquipmentCheckTemplate(templateId, { is_active: true });
+          }
+          setForm((current) => ({ ...current, isActive: publish }));
+          setIsDirty(false);
+          toast.success(publish ? 'Template published' : 'Draft saved');
+        } else {
+          const createPayload: EquipmentCheckTemplateCreate = {
+            name: form.name.trim(),
+            description: form.description.trim() || undefined,
+            check_timing: form.checkTiming,
+            template_type: form.templateType,
+            assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
+            apparatus_type: form.apparatusType || undefined,
+            apparatus_id: form.apparatusId || undefined,
+            is_active: publish,
+            compartments: compartments.map(compartmentCreateFromForm),
+          };
+          const created = await equipmentCheckService.createEquipmentCheckTemplate(createPayload);
+          setIsDirty(false);
+          toast.success(publish ? 'Template published' : 'Draft saved');
+          // Navigate to edit mode so subsequent saves work as updates
+          void navigate(`/inventory/admin/checklists/templates/${created.id}`, { replace: true });
+          return;
+        }
+
+        // Re-fetch the template to sync local state with server
+        if (isEditing && templateId) {
+          void loadTemplate(templateId);
+        }
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to save template'));
+      } finally {
+        setSaving(false);
       }
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save template'));
     } finally {
-      setSaving(false);
+      setSaveOperationActive(false);
     }
   };
 
@@ -2063,6 +2338,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     setCompartments(staged);
+    // A bulk replace mints brand-new persisted rows with new ids --
+    // savedParentByIdRef has to be rebuilt from `staged`, the same way the
+    // initial load rebuilds it, or the new ids are simply absent from the
+    // map. The delete guard's `knownIds` filter treats an id it has no
+    // record of as "nothing to compare," so an unsaved reparent of one of
+    // these new rows would silently bypass the guard instead of blocking
+    // the delete -- the backend cascade would then delete only the
+    // still-top-level parent, leaving the reparented child alive and
+    // reappearing on the next reload.
+    savedParentByIdRef.current = buildParentByIdMap(staged);
     // Marked here rather than at each call site: replacing the contents leaves
     // a save outstanding on every path that does it, and the vehicle-preset
     // branch was the one that forgot. On an unsaved template the replacement
@@ -3714,7 +3999,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => void deleteCompartment(idx)}
-              className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 sm:min-h-0 sm:min-w-0"
+              disabled={saveOperationActive}
+              className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
               aria-label="Delete section header"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -3915,7 +4201,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void deleteCompartment(idx)}
-                className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 sm:min-h-0 sm:min-w-0"
+                disabled={saveOperationActive}
+                className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
                 aria-label={`Delete ${comp.name || 'compartment'}`}
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -4032,8 +4319,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </label>
               <button
                 type="button"
-                className={mobileDestructiveMenuItemClass}
+                className={`${mobileDestructiveMenuItemClass} disabled:opacity-40`}
                 onClick={() => void deleteCompartment(idx)}
+                disabled={saveOperationActive}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
               </button>

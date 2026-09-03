@@ -43,6 +43,10 @@ from app.core.error_reporting import build_error_type, persist_error_log
 from app.core.logging import setup_logging, setup_sentry
 from app.core.startup_diagnostics import env_presence_report
 from app.core.utils import sanitize_error_message
+from app.mcp.constants import MCP_MOUNT_PATH
+from app.mcp.server import build_server as build_mcp_server
+from app.mcp.server import create_session_manager as create_mcp_session_manager
+from app.mcp.transport import McpEndpoint
 
 # Create rate limiter instance (uses Redis if available, falls back to in-memory)
 # SEC: Use settings.REDIS_URL which respects REDIS_SSL (rediss:// scheme).
@@ -1802,7 +1806,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"API Documentation: http://localhost:{settings.PORT}/docs")
     logger.info(f"Health Check: http://localhost:{settings.PORT}/health")
 
-    yield
+    # The MCP session manager is created per lifespan rather than once at
+    # import: the SDK allows run() once per instance, and the test-suite
+    # enters this lifespan more than once in a process. The endpoint reads
+    # it from app.state on every request.
+    mcp_session_manager = create_mcp_session_manager(mcp_server)
+    app.state.mcp_session_manager = mcp_session_manager
+    try:
+        async with mcp_session_manager.run():
+            yield
+    finally:
+        app.state.mcp_session_manager = None
 
     # Shutdown
     logger.info(f"Shutting down gracefully (worker PID {_worker_pid})...")
@@ -2263,6 +2277,17 @@ app.include_router(
 # prefix) because the spec fixes the path at /.well-known/security.txt;
 # nginx routes that exact path to the backend.
 app.include_router(security_txt_router)
+
+# Claude MCP endpoint (bearer service key, per-organization opt-in). Routed
+# under /api/ so existing reverse-proxy rules reach it; the endpoint itself
+# refuses everything until an organization connects the integration and
+# issues a key. The server object is built once; see the lifespan for the
+# per-start session manager.
+mcp_server = build_mcp_server()
+app.state.mcp_session_manager = None
+_mcp_endpoint = McpEndpoint()
+for _mcp_path in (MCP_MOUNT_PATH, MCP_MOUNT_PATH + "/"):
+    app.add_route(_mcp_path, _mcp_endpoint, include_in_schema=False)
 
 
 # Health check endpoint

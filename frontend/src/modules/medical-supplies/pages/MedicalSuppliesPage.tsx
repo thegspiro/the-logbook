@@ -9,7 +9,7 @@
  * know what is about to lapse before they want an inventory count.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
 import {
   AlertTriangle,
@@ -200,11 +200,6 @@ const MedicalSuppliesPage: React.FC = () => {
    * response model shared with the gear endpoints.
    */
   const categoryName = (item: InventoryItem): string => categories.find((c) => c.id === item.category_id)?.name ?? '—';
-
-  const lowStockItems = useMemo(
-    () => items.filter((i) => i.reorder_point !== undefined && onHandQuantity(i) <= (i.reorder_point ?? 0)),
-    [items]
-  );
 
   const handleSaved = () => {
     setShowItemModal(false);
@@ -544,12 +539,6 @@ const MedicalSuppliesPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-          )}
-
-          {lowStockItems.length > 0 && (
-            <p className="text-theme-text-muted mt-3 text-xs">
-              {formatNumber(lowStockItems.length)} item(s) at or below their reorder point.
-            </p>
           )}
         </section>
       )}

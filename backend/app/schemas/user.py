@@ -16,6 +16,84 @@ from app.utils.membership import MemberClass, MemberStatus
 _response_config = ConfigDict(from_attributes=True)
 
 
+# --- Member-chosen profile visibility ---------------------------------------
+#
+# What of a member's own contact block other members may see. Two things decide
+# whether a colleague sees a field: the organisation's ``contact_info_visibility``
+# ceiling (work email, phone, mobile only) and the member's own choice here.
+# Personal email and the home address have no organisation flag — they were
+# leadership-only unconditionally until 2026-09, and are now the member's call.
+#
+# Defaults preserve exactly the pre-2026-09 behaviour, so a NULL column on an
+# existing installation changes nothing: email/phone/mobile shown where the
+# department allows, personal email and address hidden until the member opts in.
+PROFILE_VISIBILITY_FIELDS: tuple[str, ...] = (
+    "email",
+    "personal_email",
+    "phone",
+    "mobile",
+    "address",
+)
+PROFILE_VISIBILITY_DEFAULTS: dict[str, bool] = {
+    "email": True,
+    "personal_email": False,
+    "phone": True,
+    "mobile": True,
+    "address": False,
+}
+
+
+class ProfileVisibility(BaseModel):
+    """Which of a member's own contact fields other members may see.
+
+    Written only as a whole object (``PUT /users/me/profile-visibility``), so
+    every key is required and unknown keys are refused: a partial write would
+    leave the stored shape ambiguous, and a misspelt key would silently do
+    nothing while the member believed they had hidden something.
+    """
+
+    email: bool
+    personal_email: bool
+    phone: bool
+    mobile: bool
+    address: bool
+
+    # strict: a JSON "true" or 1 is refused rather than coerced, matching
+    # `normalize_profile_visibility`, which honours only genuine booleans.
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+def normalize_profile_visibility(stored: object) -> dict[str, bool]:
+    """Turn whatever the JSON column holds into the complete canonical dict.
+
+    ``None`` (never chosen) and any malformed value resolve to the defaults,
+    key by key: only a genuine ``bool`` is honoured — ``type(v) is bool``
+    rather than ``isinstance``, because ``isinstance(1, bool)`` is False but
+    ``isinstance(True, int)`` is True, and a ``1`` written by some future
+    client must not read as "show". A bad value inside free-form JSON must
+    degrade to the safe default rather than raise (pitfall #19).
+    """
+    result = dict(PROFILE_VISIBILITY_DEFAULTS)
+    if isinstance(stored, dict):
+        for key in PROFILE_VISIBILITY_FIELDS:
+            value = stored.get(key)
+            if type(value) is bool:
+                result[key] = value
+    return result
+
+
+def resolve_profile_visibility(user: object) -> ProfileVisibility:
+    """The member's effective choice, defaults applied.
+
+    ``getattr`` rather than attribute access so the lightweight stand-ins the
+    endpoint tests pass as ``current_user`` resolve to the defaults instead of
+    raising.
+    """
+    return ProfileVisibility(
+        **normalize_profile_visibility(getattr(user, "profile_visibility", None))
+    )
+
+
 class EmergencyContact(BaseModel):
     """Emergency contact schema"""
 
@@ -373,6 +451,23 @@ class UserProfileResponse(UserResponse):
     updated_at: Optional[datetime] = None
     roles: List[RoleResponse] = []
     notification_preferences: Optional[dict] = None
+    # Resolved (defaults applied) for the member themselves and for
+    # members.manage holders; cleared to None for anyone else — what a
+    # colleague chose to hide is itself private. See `get_user_with_roles`.
+    profile_visibility: Optional[ProfileVisibility] = None
+
+    @field_validator("profile_visibility", mode="before")
+    @classmethod
+    def _resolve_profile_visibility(cls, v: object) -> object:
+        """A NULL column is "never chosen", not "no visibility object".
+
+        Resolving here means every payload built from the ORM carries the
+        complete five-key object, so no reader has to know the defaults. An
+        already-built ``ProfileVisibility`` passes through untouched.
+        """
+        if isinstance(v, ProfileVisibility):
+            return v
+        return normalize_profile_visibility(v)
 
     model_config = _response_config
 

@@ -11,8 +11,9 @@ import hashlib
 import ipaddress
 import json
 import logging
+import socket
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit, urlunsplit
 from uuid import UUID
 
 import requests
@@ -21,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.notification import PushSubscription
-from app.utils.url_validator import assert_outbound_url_safe
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,21 @@ def hash_endpoint(endpoint: str) -> str:
 # endpoint pointed at one, would turn every push into a request to an internal
 # target.
 _BLOCKED_HOST_SUFFIXES = (".localhost", ".local", ".internal")
+_PUSH_SERVICE_HOSTS = frozenset(
+    {
+        "fcm.googleapis.com",
+        "android.googleapis.com",
+        "updates.push.services.mozilla.com",
+        "updates-autopush.stage.mozaws.net",
+        "web.push.apple.com",
+        "webpush.push.apple.com",
+        "wns.notify.windows.com",
+    }
+)
+
+
+class PermanentPushEndpointError(ValueError):
+    """A stored endpoint can never be a valid browser push endpoint."""
 
 
 def validate_push_endpoint(endpoint: str) -> None:
@@ -64,23 +79,104 @@ def validate_push_endpoint(endpoint: str) -> None:
     neither an IP literal nor a loopback/internal name. Raises ValueError
     (→ 400 at the endpoint) on anything else.
 
-    (Residual: a public hostname that resolves to a private IP — DNS
-    rebinding — is not caught here; that needs a resolve-time IP check and is
-    recorded as a hardening follow-up.)
+    Delivery performs a second validation and binds its TLS connection to the
+    public address returned by that send-time resolution.
     """
-    parsed = urlparse(endpoint)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise ValueError("Invalid push endpoint")
+    try:
+        parsed = urlparse(endpoint)
+        port = parsed.port
+    except ValueError as exc:
+        raise PermanentPushEndpointError("Invalid push endpoint") from exc
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+        or port not in (None, 443)
+    ):
+        raise PermanentPushEndpointError("Invalid push endpoint")
     host = parsed.hostname.lower()
+    try:
+        host = host.encode("idna").decode("ascii")
+    except UnicodeError as exc:
+        raise PermanentPushEndpointError("Invalid push endpoint") from exc
+    if "%" in host or host.endswith("."):
+        raise PermanentPushEndpointError("Invalid push endpoint")
     if host == "localhost" or host.endswith(_BLOCKED_HOST_SUFFIXES):
-        raise ValueError("Invalid push endpoint")
+        raise PermanentPushEndpointError("Invalid push endpoint")
     try:
         ipaddress.ip_address(host)
     except ValueError:
-        return  # a normal DNS hostname — allowed
+        # Exact comparison is intentional: suffix matching would admit names
+        # such as fcm.googleapis.com.attacker.example. Browser subscriptions
+        # are issued only by these vendor-operated push services.
+        if host not in _PUSH_SERVICE_HOSTS:
+            raise PermanentPushEndpointError("Invalid push endpoint")
+        return
     # A bare IP literal (169.254.x metadata, 127.x, 10.x, ::1, and even public
     # IPs) is never a legitimate push endpoint — reject it.
-    raise ValueError("Invalid push endpoint")
+    raise PermanentPushEndpointError("Invalid push endpoint")
+
+
+def _resolve_public_address(endpoint: str) -> tuple[str, str]:
+    """Resolve once and return an address that was checked for this delivery.
+
+    Every answer must be globally routable. Rejecting a mixed answer prevents
+    an attacker from relying on address-selection differences between this
+    check and the HTTP client.
+    """
+    validate_push_endpoint(endpoint)
+    hostname = urlsplit(endpoint).hostname
+    if hostname is None:  # validate_push_endpoint has already rejected this
+        raise PermanentPushEndpointError("Invalid push endpoint")
+    answers = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM)
+    addresses = {answer[4][0] for answer in answers}
+    if not addresses or any(not ipaddress.ip_address(ip).is_global for ip in addresses):
+        raise ValueError("Push endpoint does not resolve exclusively to public IPs")
+    return hostname, sorted(addresses)[0]
+
+
+class _NoRedirectSession(requests.Session):
+    def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
+        kwargs["allow_redirects"] = False
+        return super().request(method, url, **kwargs)
+
+
+class _PinnedHTTPSAdapter(requests.adapters.HTTPAdapter):
+    """Connect to one validated IP while authenticating the endpoint name."""
+
+    def __init__(self, address: str, hostname: str) -> None:
+        self.address = address
+        self.hostname = hostname
+        super().__init__()
+
+    def init_poolmanager(
+        self,
+        connections: int,
+        maxsize: int,
+        block: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        kwargs.update(assert_hostname=self.hostname, server_hostname=self.hostname)
+        super().init_poolmanager(connections, maxsize, block=block, **kwargs)
+
+    def send(
+        self, request: requests.PreparedRequest, **kwargs: Any
+    ) -> requests.Response:
+        parsed = urlsplit(request.url)
+        address = f"[{self.address}]" if ":" in self.address else self.address
+        request.url = urlunsplit(("https", address, parsed.path, parsed.query, ""))
+        request.headers["Host"] = self.hostname
+        return super().send(request, **kwargs)
+
+
+def _pinned_session(endpoint: str) -> requests.Session:
+    hostname, address = _resolve_public_address(endpoint)
+    session = _NoRedirectSession()
+    session.trust_env = False
+    session.mount("https://", _PinnedHTTPSAdapter(address, hostname))
+    return session
 
 
 class PushService:
@@ -170,26 +266,24 @@ class PushService:
 
     def _send_one(self, sub_info: Dict[str, Any], payload: str) -> None:
         """Blocking pywebpush call, run off the event loop by the caller."""
-        # NOTIF2-3 (DNS-rebinding guard): validate_push_endpoint screened the
-        # host at subscribe time, but a public hostname can be re-pointed at an
-        # internal IP afterward (169.254.169.254, 127.x, an intranet host), so a
-        # push would fire a server-side request at that target. Re-resolve
-        # immediately before dispatch and fail closed if the host now resolves
-        # to a private/internal IP — the same send-time SSRF re-check the
-        # outbound integrations use. Runs here, inside the to_thread worker, so
-        # the blocking DNS lookup stays off the event loop. Gated to
-        # production/staging so the loopback push emulator the wire-format tests
-        # (and local dev) point at still works — mirroring the HTTP-in-dev
-        # allowance already baked into the URL validator.
+        session = None
         if settings.ENVIRONMENT in ("production", "staging"):
-            assert_outbound_url_safe(sub_info["endpoint"])
-        webpush(
-            subscription_info=sub_info,
-            data=payload,
-            vapid_private_key=settings.VAPID_PRIVATE_KEY,
-            vapid_claims={"sub": settings.VAPID_SUBJECT},
-            timeout=10,
-        )
+            # pywebpush accepts a requests session. Its adapter pins the socket
+            # to the address validated above while preserving SNI and hostname
+            # verification, closing the check/use DNS-rebinding window.
+            session = _pinned_session(sub_info["endpoint"])
+        try:
+            webpush(
+                subscription_info=sub_info,
+                data=payload,
+                vapid_private_key=settings.VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": settings.VAPID_SUBJECT},
+                timeout=10,
+                requests_session=session,
+            )
+        finally:
+            if session is not None:
+                session.close()
 
     async def send_to_user(
         self,
@@ -241,11 +335,17 @@ class PushService:
                 # inline would block the event loop for every device.
                 await asyncio.to_thread(self._send_one, sub_info, payload)
                 sent += 1
+            except PermanentPushEndpointError as e:
+                # Legacy rows predate endpoint validation. Their immutable URL
+                # is structurally invalid, so retrying can never recover.
+                stale.append(sub.endpoint_hash)
+                logger.warning("Removing invalid push subscription %s: %s", sub.id, e)
             except ValueError as e:
                 # NOTIF2-3: the endpoint now resolves to a non-public host
                 # (DNS rebinding, or a subscription that has gone bad). Skip it
-                # — never dispatch to an internal target — but keep the row: a
-                # transient mis-resolution shouldn't permanently drop a device.
+                # — never dispatch to an internal target — but quarantine it
+                # in place: a transient DNS/provider incident can recover and
+                # must not silently unsubscribe the member.
                 logger.warning(
                     "Skipping web push to a non-public endpoint (subscription %s): %s",
                     sub.id,

@@ -154,7 +154,13 @@ class MeetingsService:
         total = total_result.scalar()
 
         # Paginated results
-        query = query.order_by(Meeting.meeting_date.desc()).offset(skip).limit(limit)
+        # The id breaks ties between meetings on one day, so an offset page
+        # never repeats or skips one.
+        query = (
+            query.order_by(Meeting.meeting_date.desc(), Meeting.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self.db.execute(query)
         meetings = result.scalars().all()
 

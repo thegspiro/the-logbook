@@ -192,9 +192,15 @@ export function withDisplayCode(routeFor) {
  * reached positionally rather than by label.
  */
 export async function expandFirstReportCard(page) {
+  // Matched on what the row *says*, not on its wrapper. This anchored on
+  // `div.rounded-xl > button` until the card moved to the shared `card`
+  // utility, at which point it matched nothing and took four shots with it.
+  // A report row is the only visible button on this screen whose label
+  // carries a duration, so the duration is the durable handle; the wrapper
+  // class has already changed once and is nobody's contract.
   const header = page
-    .locator("div.rounded-xl > button:visible")
-    .filter({ hasText: /\d+(\.\d+)?h/ })
+    .locator("button:visible")
+    .filter({ hasText: /\d+(\.\d+)?h\b/ })
     .first();
   await header.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
   await header.click({ timeout: 10_000 });
@@ -1068,6 +1074,228 @@ function openPartStaffedShift(shotId) {
  * Same `?shift=` entry the other shift shots use; the drawer is state on the
  * scheduling page rather than a route of its own.
  */
+/**
+ * Arm the check-in station and record one successful tap.
+ *
+ * The marker wants the armed state *with* a tap already in the recent list, and
+ * both halves have to be driven: arming is a button, and the tap is the manual
+ * serial entry, which is the same `submitSerial` path a USB reader's keystrokes
+ * reach. Nothing here fakes a card read — the serial is the one
+ * `seed_id_cards` issued to the demo member, and the row that appears is the
+ * server's own answer.
+ */
+/**
+ * Select a board day that has something to act on.
+ *
+ * The marker wants "the crew panel and the claim button both in frame", and a
+ * day whose shifts are all full or all closed shows the panel with no claim
+ * control at all. Walks the month for a day carrying a claimable shift rather
+ * than picking a date, which would expire with the seed.
+ */
+async function selectClaimableBoardDay(page) {
+  // Two labels, both real: a sized shift offers "Take a seat on this shift"
+  // and an unsized one "Join this shift" — which is the grey fixture, so a
+  // matcher that missed it would skip the very day this shot is about.
+  const claim = page
+    .locator("button", {
+      hasText: /^(Take a seat on this shift|Join this shift)$/,
+    })
+    .first();
+  // Visible cells only. The board renders its month twice -- PhoneMonth under
+  // `md:hidden` and MonthGrid under `md:grid` -- and the phone copy comes
+  // first in the DOM, so `.first()` is a hidden element and waitFor(), which
+  // waits for visibility by default, waits for something that never becomes
+  // visible. 62 gridcells on the page, 31 of them visible. Same trap
+  // clickByName documents for the duplicated nav.
+  // Open the month that holds the unsized shift, rather than whichever month
+  // today falls in. The board opens on the current month, and in the last week
+  // of one almost every shift in it has already run -- closed shifts render
+  // struck through and offer nothing, so the month reads as a wall of grey
+  // with none of the four states the marker is about, and the seeded unsized
+  // shift is next month anyway. Its date is discovered rather than hardcoded,
+  // because the seeder places it a few days out from whenever it ran.
+  const greyDate = await page.evaluate(async () => {
+    const res = await fetch("/api/v1/scheduling/shifts?limit=200", {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const rows = Array.isArray(body) ? body : (body.shifts ?? []);
+    const unsized = rows.find(
+      (s) =>
+        !(s.positions ?? s.apparatus_positions ?? []).length && !s.min_staffing,
+    );
+    return unsized?.shift_date ?? null;
+  });
+  if (greyDate) {
+    const url = new URL(page.url());
+    url.searchParams.set("date", greyDate);
+    await page.goto(url.toString(), { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+  }
+
+  const days = page.locator("[role='gridcell']").locator("visible=true");
+  await days.first().waitFor({ timeout: 25_000 });
+  // Select the day carrying the unsized shift, so the grey chip and the crew
+  // panel are pictured together.
+  //
+  // The marker also asks for the claim button in frame, and that half cannot
+  // be honoured from this data: no account -- not the demo member, not the
+  // administrator -- is eligible for a single open seat anywhere in the month,
+  // so every crew renders "these seats need a qualification you do not hold
+  // yet" where the button would be. Selecting a day on the strength of a
+  // claim button that is merely *present* put the shot on a day whose visible
+  // panel said exactly that, under a caption promising the opposite. Better to
+  // picture the panel honestly and say so in the guide than to hunt for a
+  // frame that does not exist.
+  const total = await days.count();
+  for (let i = 0; i < total; i += 1) {
+    const cell = days.nth(i);
+    const text = (await cell.innerText().catch(() => "")) ?? "";
+    if (!/\bon\b/.test(text)) continue;
+    await cell.click({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(250);
+    if (await claim.count()) return;
+  }
+  // Nothing claimable anywhere: settle on the first day that has any shift, so
+  // the crew panel still has something to show.
+  for (let i = 0; i < total; i += 1) {
+    const cell = days.nth(i);
+    const text = (await cell.innerText().catch(() => "")) ?? "";
+    if (!/open|on\b/.test(text)) continue;
+    await cell.click({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(250);
+    return;
+  }
+  throw new Error("no day in this month carries a shift at all");
+}
+
+/**
+ * Clear one metric slot, leaving the swap mid-flight.
+ *
+ * Removal is local state until Save, so nothing is written and the shot needs
+ * no mutatesSeedData flag. The remove controls are labelled per slot, which is
+ * what makes this addressable without depending on which metrics the
+ * department happens to have chosen.
+ */
+async function clearOneMetricSlot(page) {
+  const remove = page
+    .locator("button[aria-label^='Remove '][aria-label*=' from slot ']")
+    .first();
+  await remove.waitFor({ timeout: 25_000 });
+  await remove.click();
+  await page.waitForTimeout(400);
+}
+
+/** The demo member's profile — the one `seed_id_cards` issues cards to. */
+async function openIdCardsProfile(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/users?limit=200", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const users = Array.isArray(body) ? body : body.users || body.items || [];
+    const target = users.find((u) => u.username === "nbelhaj");
+    return target ? target.id : null;
+  });
+  if (!id) throw new Error("the demo member is not in the roster");
+  await page.goto(`${new URL(page.url()).origin}/members/${id}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page
+    .locator("h2", { hasText: /^ID Cards$/ })
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Open a Medic 3 check and leave the two sealed bags in opposite states.
+ *
+ * The first panel is left alone: it prefills from the last count, so it
+ * already reads "matches" and offers the clearing shortcut. The second is
+ * given a different number, which is the only way to reach "Record seal" —
+ * the mismatch is a tag the crew read, not a value anything stores.
+ */
+async function openSealPanels(page) {
+  await clickByName("Unscheduled checklist")(page);
+  await clickByName("Medic 3 Supply Check")(page);
+  const matching = page.locator("#seal-drug-bag");
+  await matching.waitFor({ timeout: 25_000 });
+  // The prefill lands only once /last-seals answers, and an empty field shows
+  // neither state the marker is about.
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector("#seal-drug-bag");
+      return el instanceof HTMLInputElement && el.value.trim() !== "";
+    },
+    { timeout: 20_000 },
+  );
+  await page.locator("#seal-trauma-bag").fill("M3-41190");
+  // Both panels in one frame, which is what the marker requires. They sit
+  // about 1300px apart, so the shot uses a tall viewport rather than fullPage:
+  // this form has a sticky submit bar, and a stitched full-page capture paints
+  // it at the scroll offset in force -- landing "Overall Notes" and "Submit
+  // Report" across the middle of the checklist, which reads as a broken page.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(500);
+}
+
+async function armStationAndTap(page) {
+  // Pick something to check into first: Start is disabled until a target is
+  // chosen, so pressing it before this is a silent no-op. "Event or meeting"
+  // is the drill night the marker names; the target itself is a native
+  // <select>, so it is driven with selectOption rather than a click — its
+  // popup is drawn by the OS and cannot be photographed either way.
+  await clickByName(/^Event or meeting$/)(page);
+  const target = page.locator("#station-target");
+  await target.waitFor({ timeout: 15_000 });
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector("#station-target");
+      return el instanceof HTMLSelectElement && !el.disabled && el.options.length > 0;
+    },
+    { timeout: 20_000 },
+  );
+  await target.selectOption({ index: 0 });
+  await clickByName(/^Start the reader$/)(page);
+  await page.waitForTimeout(400);
+  await page.locator("#station-manual").fill("04A2245B7C1180");
+  await clickByName(/^Check in$/)(page);
+  // The result card and the "This session" list both render off the response,
+  // so wait for the list rather than a fixed pause.
+  await page
+    .locator("h2", { hasText: "This session" })
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Open the standing-shift dialog from a Tuesday night shift.
+ *
+ * The control lives on the day panel, not the shift card, and only renders on
+ * a shift somebody could still sign up for — `isShiftOpen`. Selecting the day
+ * is therefore a precondition, not decoration.
+ */
+async function openStandingShiftDialog(page) {
+  const tuesday = page
+    .locator("button", { hasText: /Make this every Tuesday night/i })
+    .first();
+  // Walk the month's days until one carries the control. Which Tuesday is open
+  // depends on the seeded roster, and hardcoding a date makes the shot expire.
+  // Visible cells only -- see selectClaimableBoardDay. This loop swallowed the
+  // click failures on the hidden phone copy and worked by accident.
+  const days = page.locator("[role='gridcell']").locator("visible=true");
+  const total = await days.count();
+  for (let i = 0; i < total && !(await tuesday.count()); i += 1) {
+    await days.nth(i).click({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(200);
+  }
+  await tuesday.click({ timeout: 15_000 });
+  await page.locator("div[role='dialog']").waitFor({ timeout: 15_000 });
+  await page.waitForTimeout(500);
+}
+
 async function openPlatoonShift(page) {
   const id = await page.evaluate(async () => {
     const response = await fetch("/api/v1/scheduling/shifts?limit=400", {
@@ -1671,10 +1899,17 @@ export const SHOTS = [
       );
       await page.waitForTimeout(2500);
     },
-    // The letter-width sheet, not the browser tab around it. The page opens in
-    // the app shell — the print stylesheet drops the navigation, but on screen
-    // it is still there, and the sheet is what the placeholder is about.
-    selector: "div.max-w-\\[8\\.5in\\]",
+    // The sheet, not the browser tab around it. The page opens in the app
+    // shell — the print stylesheet drops the navigation, but on screen it is
+    // still there, and the sheet is what the placeholder is about.
+    //
+    // `article.shift-report-print` rather than the old `max-w-[8.5in]`: this
+    // page was rewritten onto named print classes, and the arbitrary width
+    // value it used to carry is gone. The other print pages
+    // (ProgramPrintPage, SkillSheetPrintPage, SkillTestScorecardPrintPage)
+    // still use the Tailwind form, so this is a per-page fact and not a
+    // sweep.
+    selector: "article.shift-report-print",
   },
   {
     id: "03-65-review-modal-full",
@@ -1692,7 +1927,8 @@ export const SHOTS = [
       // The Review Report button is inside the opened card, not on the
       // collapsed one — the card header is the disclosure control.
       await page
-        .locator("div.rounded-xl > button")
+        .locator("button:visible")
+        .filter({ hasText: /\d+(\.\d+)?h\b/ })
         .first()
         .click({ timeout: 15_000 });
       await page.waitForTimeout(1200);
@@ -1707,7 +1943,9 @@ export const SHOTS = [
       // itself to its end: the controls are what this shot is for, and the
       // report content above them is already pictured on the flagged card.
       await page.evaluate(() => {
-        const dialog = document.querySelector("div.fixed.inset-0");
+        const dialog =
+          document.querySelector("div[role='dialog']") ??
+          document.querySelector("div.fixed.inset-0");
         if (!dialog) return;
         const scroller = [...dialog.querySelectorAll("*")].find(
           (el) => el.scrollHeight > el.clientHeight + 40,
@@ -1716,7 +1954,11 @@ export const SHOTS = [
       });
       await page.waitForTimeout(700);
     },
-    selector: "div.fixed.inset-0 > div",
+    // `div.fixed.inset-0 > div` until the review modal moved onto the shared
+    // Modal, which exposes role="dialog". The structural form matched nothing
+    // and the shot failed at the clip rather than at any click, so the error
+    // pointed at the screenshot and not at the cause.
+    selector: "div[role='dialog']",
   },
   {
     // The scheduler's half of the pair. Framed on the drawer, not the page:
@@ -1978,7 +2220,11 @@ export const SHOTS = [
         .first()
         .waitFor({ timeout: 20_000 })
         .catch(async () => {
-          await page.locator("div.rounded-xl > button").first().click();
+          await page
+            .locator("button:visible")
+            .filter({ hasText: /\d+(\.\d+)?h\b/ })
+            .first()
+            .click();
           await page.waitForTimeout(1200);
         });
       await page.waitForTimeout(800);
@@ -2208,7 +2454,14 @@ export const SHOTS = [
         .first()
         .click({ timeout: 15_000 });
       await page.waitForTimeout(900);
-      const dialog = page.locator("div.fixed.inset-0");
+      // Union, because this codebase now has three dialog shapes: the shared
+      // `modal-overlay` utility (which carries its own fixed positioning),
+      // role="dialog" from the shared Modal, and the older hand-rolled
+      // `fixed inset-0`. Safe as a container -- every lookup below takes
+      // .first() -- where it would fail strict mode as a clip selector.
+      const dialog = page
+        .locator("div.modal-overlay, div[role='dialog'], div.fixed.inset-0")
+        .first();
       await dialog
         .getByPlaceholder(/e\.g\.|name/i)
         .first()
@@ -2382,7 +2635,14 @@ export const SHOTS = [
       await page.waitForTimeout(800);
       // Filled in, so the shot shows what a group is rather than an empty
       // form: a turnout coat carried in sizes S–4XL.
-      const dialog = page.locator("div.fixed.inset-0");
+      // Union, because this codebase now has three dialog shapes: the shared
+      // `modal-overlay` utility (which carries its own fixed positioning),
+      // role="dialog" from the shared Modal, and the older hand-rolled
+      // `fixed inset-0`. Safe as a container -- every lookup below takes
+      // .first() -- where it would fail strict mode as a clip selector.
+      const dialog = page
+        .locator("div.modal-overlay, div[role='dialog'], div.fixed.inset-0")
+        .first();
       await dialog
         .getByPlaceholder("e.g. Class A Dress Uniform")
         .fill("Structural Coat");
@@ -2520,7 +2780,7 @@ export const SHOTS = [
     // Clipped to the panel, on a viewport tall enough to hold every class:
     // at 900px the fifth row falls below the fold and the course library
     // shows through above and below the modal.
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
     viewport: { width: 1440, height: 1400 },
   },
   {
@@ -2687,10 +2947,11 @@ export const SHOTS = [
     auth: "member",
     route: "/training/submit",
     prepare: async (page) => {
-      const picker = page
-        .locator("select")
-        .filter({ hasText: "Select a category" })
-        .first();
+      // Addressed by id. This matched on the placeholder option's text
+      // ("Select a category"), which now reads "Select..." -- so the filter
+      // found nothing and the wait timed out. The id is the stable handle;
+      // placeholder copy is not.
+      const picker = page.locator("#training-category");
       await picker.waitFor({ timeout: 15_000 });
       await picker.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
       const options = await picker
@@ -2755,8 +3016,11 @@ export const SHOTS = [
     route: "/training/my-training",
     // Clipped to the toolbar. It is one bar on a long page, and a page shot
     // renders the helper text too small to read.
+    // Anchored on the label, with the wrapper matched by the shared `card`
+    // utility rather than the raw `rounded-lg border` it used to carry -- the
+    // same migration that moved the shift-report cards.
     selector:
-      "div.rounded-lg.border:has(label:text-is('Training records date range'))",
+      "div.card:has(label:text-is('Training records date range'))",
   },
   {
     id: "04-37-hour-tracking-mapping",
@@ -2874,7 +3138,9 @@ export const SHOTS = [
         .click({ timeout: 10_000 });
       await page.waitForTimeout(500);
     },
-    selector: "div.bg-theme-surface-modal.relative",
+    // As 03-98: the panel class this drilled to is gone with the move onto
+    // the shared Modal.
+    selector: "div[role='dialog']",
   },
   {
     id: "04-40-end-event",
@@ -2992,7 +3258,9 @@ export const SHOTS = [
         .first()
         .click();
       await page.waitForTimeout(1200);
-      const dialog = page.locator("div.fixed.inset-0").first();
+      const dialog = page
+        .locator("div.modal-overlay, div[role='dialog'], div.fixed.inset-0")
+        .first();
       // The eligible members sort first, so the first three rows are a
       // selection the Enroll button will count. Selecting mutates nothing —
       // only the button does, and it is deliberately not pressed.
@@ -3014,7 +3282,7 @@ export const SHOTS = [
       });
       await page.waitForTimeout(600);
     },
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "02-102-shift-report-crew-form",
@@ -3042,7 +3310,7 @@ export const SHOTS = [
     // Stops short of pressing Submit: filing the batch is finite, and the
     // shift's reports would exist on the next run.
     selector:
-      "div.bg-theme-surface.rounded-xl:has(h3:text-is('New Shift Completion Report'))",
+      "div.card:has(h3:text-is('New Shift Completion Report')), div.bg-theme-surface.rounded-xl:has(h3:text-is('New Shift Completion Report'))",
   },
   {
     id: "02-103-shift-report-drafts",
@@ -3133,7 +3401,7 @@ export const SHOTS = [
     },
     // Stops short of pressing Reopen: doing so would clear the one expired
     // enrollment the demo has.
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "02-98-requirement-prerequisite",
@@ -3327,7 +3595,7 @@ export const SHOTS = [
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(600);
     },
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "02-94-officer-progress-detail",
@@ -3455,21 +3723,25 @@ export const SHOTS = [
     // its list open, and the control clipped on its own is three lines of text
     // with nothing to say which form they belong to — the three options are
     // enumerated in the prose above.
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "05-66-my-equipment",
     doc: "05-inventory.md",
     line: 1357,
     anchor: "Screenshot of My Equipment as an ordinary member",
-    alt: "My Equipment as an ordinary member — the count tiles and their permanent assignments",
-    // My Equipment rather than the inventory page: the item list on the latter
-    // is the department catalogue by design, and only its figures are scoped.
+    alt: "My Issued Gear as an ordinary member — the count tiles and their permanent assignments",
+    // This page rather than the inventory list: the item list on the latter is
+    // the department catalogue by design, and only its figures are scoped.
+    //
+    // The heading reads "My Issued Gear"; it was "My Equipment" when this shot
+    // was written, and the route still says my-equipment. Waiting on the old
+    // wording is what broke it.
     auth: "member",
     route: "/inventory/my-equipment",
     prepare: async (page) => {
       await page
-        .getByRole("heading", { name: /My Equipment/i })
+        .getByRole("heading", { name: /My Issued Gear/i })
         .first()
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(1500);
@@ -3670,8 +3942,8 @@ export const SHOTS = [
       // Scroll the card's own header to the top of the viewport: expanding it
       // leaves the summary table above still filling most of the screen.
       await page
-        .locator("div.rounded-xl > button:visible")
-        .filter({ hasText: /\d+(\.\d+)?h/ })
+        .locator("button:visible")
+        .filter({ hasText: /\d+(\.\d+)?h\b/ })
         .first()
         .evaluate((el) => el.scrollIntoView({ block: "start" }))
         .catch(() => {});
@@ -4311,8 +4583,41 @@ export const SHOTS = [
       // The applicant on the final stage: the action bar's last button reads
       // Convert rather than Advance there, which is the whole point of the
       // shot, and the documents seeded onto this same applicant are below it.
+      // Whoever is in the pipeline's *last* stage, discovered rather than
+      // named. This clicked Riley Bishop, who was final when the shot was
+      // written; the pipeline has since gained an "Onboarding" stage after
+      // "Membership Vote", so Bishop is mid-pipeline now and the drawer offers
+      // Advance where this caption promises Convert. A name is not the
+      // property this shot is about -- being last in the pipeline is.
+      const finalName = await page.evaluate(async () => {
+        const pipes = await (
+          await fetch("/api/v1/prospective-members/pipelines", {
+            credentials: "include",
+          })
+        ).json();
+        const first = (pipes.items ?? pipes)[0];
+        const detail = await (
+          await fetch(`/api/v1/prospective-members/pipelines/${first.id}`, {
+            credentials: "include",
+          })
+        ).json();
+        const steps = detail.steps ?? detail.stages ?? [];
+        const last = steps[steps.length - 1]?.name;
+        const people = await (
+          await fetch("/api/v1/prospective-members/prospects?limit=100", {
+            credentials: "include",
+          })
+        ).json();
+        const who = (people.items ?? people).find(
+          (x) => x.current_step_name === last,
+        );
+        return who ? `${who.first_name} ${who.last_name}` : null;
+      });
+      if (!finalName) {
+        throw new Error("01-35: no applicant sits in the final pipeline stage");
+      }
       await page
-        .locator("[role='button'][aria-label*='Bishop']")
+        .locator(`[role='button'][aria-label*='${finalName.split(" ").pop()}']`)
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(2500);
@@ -4487,7 +4792,11 @@ export const SHOTS = [
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1200);
-      const modal = page.locator("div.fixed.inset-0 > div").first();
+      const modal = page
+        .locator(
+          "div.modal-overlay > div, div[role='dialog'], div.fixed.inset-0 > div",
+        )
+        .first();
       // A serving member's own name and address, which is what makes the check
       // fire. The dialog is raised *before* anything is written, so this stops
       // one click short of creating the duplicate it is warning about.
@@ -4709,7 +5018,11 @@ export const SHOTS = [
     },
     // Clipped to the dialog: the profile behind it is a different section's
     // subject, and the panel it happens to sit over is an empty table.
-    selector: "div.fixed.inset-0 > div",
+    // `modal-overlay`, not role="dialog": this one is still a hand-rolled
+    // panel inside the shared overlay utility rather than a shared Modal.
+    // Three shapes, and which one a given dialog uses has to be checked
+    // rather than assumed -- 03-98 and 04-39 next door are role="dialog".
+    selector: "div.modal-overlay > div",
   },
   {
     id: "01-30-evoc-operator-modal",
@@ -5321,18 +5634,19 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 1358,
     anchor: 'Screenshot of the "Send Test Email to Me" button',
-    alt: "Send Test Email to Me, under the rendered preview it sends",
+    alt: "Send Test to Me, under the rendered preview it sends",
     route: "/communications/email-templates",
-    // The button lives under the Preview tab, not in the toolbar, and stays
-    // disabled until a preview has been rendered — clicking Preview is what
-    // renders one. Deliberately not clicked: sending needs a working mail
-    // transport, and a staged success toast would be a picture of something
-    // that did not happen.
+    // The preview is now a pane of the editor rather than a tab behind a
+    // Preview button, and the control reads "Send Test to Me" -- it was
+    // "Send Test Email to Me" under a Preview tab that no longer exists, which
+    // is what broke this shot. Deliberately not clicked: sending needs a
+    // working mail transport, and a staged success toast would be a picture of
+    // something that did not happen.
     prepare: async (page) => {
-      await clickByName(/^Preview$/)(page);
       await page.waitForTimeout(1500);
       await page
-        .getByRole("button", { name: /Send Test Email to Me/i })
+        .getByRole("button", { name: /Send Test to Me/i })
+        .first()
         .scrollIntoViewIfNeeded({ timeout: 10_000 })
         .catch(() => {});
     },
@@ -5523,7 +5837,9 @@ export const SHOTS = [
       // would picture the design without the closing block the guide points at.
       await page.getByText("Shift Assignment", { exact: true }).first().click();
       await page.waitForTimeout(1_000);
-      await clickByName(/^Preview$/)(page);
+      // The preview renders beside the editor now; "Desktop preview" selects
+      // the rendering this caption is about. The old `Preview` tab is gone.
+      await clickByName(/^Desktop preview$/)(page);
       await page.waitForTimeout(2_000);
       await page
         .getByText(/automated message from|Sent by/i)
@@ -6119,7 +6435,12 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     // The phone frame itself, not the dimmed page behind it.
-    selector: "div.fixed.inset-0.z-50 > div",
+    //
+    // Third distinct dialog shape in this file: this one is the shared
+    // `modal-overlay` utility, which carries the fixed positioning itself, so
+    // it matches neither `fixed.inset-0` nor role="dialog". Anchored on the
+    // utility, which is the thing the design system actually guarantees.
+    selector: "div.modal-overlay > div",
     viewport: { width: 1440, height: 1300 },
   },
   {
@@ -6567,6 +6888,14 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // Matched on `isRsvpOpen`, not `isUpcoming`. The caption is about the RSVP
+    // controls, and the soonest upcoming event is now always the early
+    // check-in fixture -- seeded 90 minutes out, with `requires_rsvp: false`
+    // and its RSVP cleared on every run by design. `isUpcoming` handed this
+    // shot that event: a detail page reading "Attendance (0)", every statistic
+    // zero and an empty Event Information card, which is a demo artifact
+    // rather than a picture of the feature. `isRsvpOpen` requires the RSVP
+    // flag and a start two days out, which the fixture can never satisfy.
     id: "04-02-event-detail",
     doc: "04-events-meetings.md",
     line: 73,
@@ -6578,7 +6907,7 @@ export const SHOTS = [
       "/events?limit=100",
       (id) => `/events/${id}`,
       "events",
-      isUpcoming,
+      isRsvpOpen,
     ),
     fullPage: true,
   },
@@ -8326,7 +8655,10 @@ export const SHOTS = [
       await page.waitForTimeout(1500);
     },
     // The panel, not the full-screen overlay that carries role="dialog".
-    selector: "div[role='dialog'] div.bg-theme-surface-modal.relative",
+    // The dialog panel itself. This drilled to
+    // `div.bg-theme-surface-modal.relative` inside it, which the shared Modal
+    // no longer renders.
+    selector: "div[role='dialog']",
   },
   {
     id: "05-72-setup-prompt",
@@ -11722,6 +12054,11 @@ export const SHOTS = [
     prepare: async (page) => {
       await page
         .getByText(/Action Required: Validate attendance/)
+        // .first(): the seeder's validation fixture slides an event forward on
+        // every run, and the post-event task raises a notice for each event
+        // that ended unfinalized, so the inbox accumulates them -- 15 by the
+        // time this broke. A bare waitFor is strict and fails on the second.
+        .first()
         .waitFor({ state: "visible", timeout: 20_000 });
     },
     fullPage: true,
@@ -11839,6 +12176,144 @@ export const SHOTS = [
       await page.waitForTimeout(400);
     },
     selector: "div[role='dialog']",
+  },
+  {
+    // Desktop board. August already carries red, green and blue for the demo
+    // member; `seed_unsized_shift` supplies the grey one, which is the only
+    // state a department cannot produce by configuring things properly.
+    // Shot as the member, because "one blue with the demo member on it" is a
+    // statement about whose board this is.
+    id: "19-34-schedule-board-desktop",
+    doc: "19-august-2026-release-changes.md",
+    line: 1150,
+    anchor: "the Schedule board, desktop",
+    alt: "The month board with all four chip states: a red shift with open seats, a green full one, a blue one the member is already on, and a grey one that names neither positions nor a minimum",
+    // `view=month` is not decoration: SchedulingPage defaults viewMode to
+    // "week", so MonthGrid -- and with it every gridcell this shot's prepare
+    // walks, and the four chip states the marker is about -- is not rendered
+    // at all without it.
+    route: "/scheduling?tab=schedule&view=month",
+    auth: "member",
+    // Shot as the member: "You're on it" is a statement about the viewer, so
+    // the blue chips are hers, and the shifts she is not on keep their own
+    // colours -- the administrator's board turned the one green "Full 3/3"
+    // into a blue "You + 2/3" and cost the frame a state.
+    //
+    // The claim button the marker also asks for is not in this picture and
+    // cannot be: no account, member or administrator, is eligible for a single
+    // open seat anywhere in the month, so every crew renders "these seats need
+    // a qualification you do not hold yet" where the button would be. Guide 19
+    // says so beside the image rather than the image implying otherwise.
+    viewport: { width: 1440, height: 1200 },
+    prepare: selectClaimableBoardDay,
+    fullPage: false,
+  },
+  {
+    // The phone half of the pair. The marker's "bottom navigation should be
+    // absent" is not a styling note: the day sheet registers as an overlay
+    // surface, which hides the bar so its 56px cannot paint over the sheet.
+    id: "19-35-schedule-board-phone",
+    doc: "19-august-2026-release-changes.md",
+    line: 1156,
+    anchor: "the Schedule board, phone",
+    alt: "The same month on a phone: the bar grid with a day sheet open over it, and no bottom navigation while the sheet is up",
+    route: "/scheduling?tab=schedule&view=month",
+    auth: "member",
+    viewport: { width: 390, height: 844 },
+    prepare: selectClaimableBoardDay,
+    fullPage: false,
+  },
+  {
+    id: "19-36-standing-shift-dialog",
+    doc: "19-august-2026-release-changes.md",
+    line: 1189,
+    anchor: "the standing shift dialog",
+    alt: "The standing-shift dialog on a Tuesday night shift: a biweekly pattern with the horizon left at its default a year out, and the dialog's own action row in frame",
+    route: "/scheduling?tab=schedule&view=month",
+    auth: "member",
+    prepare: openStandingShiftDialog,
+    selector: "div[role='dialog']",
+  },
+  {
+    // Officers only -- a member cannot issue, relabel or revoke a card, not
+    // even their own -- so this is the administrator's session by default.
+    id: "19-37-member-id-cards",
+    doc: "19-august-2026-release-changes.md",
+    line: 1272,
+    anchor: "member profile → ID Cards panel",
+    alt: "The ID Cards panel on a demo member's profile: one active card and one revoked, each showing only the last four characters of its serial",
+    route: "/members",
+    prepare: openIdCardsProfile,
+    selector: "div.card:has(h2:text-is('ID Cards'))",
+  },
+  {
+    // Tablet width, which is how a door station is actually used, and the
+    // shared half of a pair with guide 10.
+    id: "19-38-check-in-station-armed",
+    doc: "19-august-2026-release-changes.md",
+    line: 1315,
+    anchor: "the check-in station, armed",
+    alt: "The check-in station armed against a drill night on a tablet, with one successful tap already in the session list",
+    route: "/members/check-in-station",
+    viewport: { width: 1024, height: 768 },
+    prepare: armStationAndTap,
+    fullPage: true,
+  },
+  {
+    id: "10-21-check-in-station-tablet",
+    doc: "10-mobile-pwa.md",
+    line: 873,
+    anchor: "the check-in station on a tablet-width viewport, armed",
+    alt: "The station left running on a tablet: armed, waiting for the next card, with the previous tap recorded beneath it",
+    route: "/members/check-in-station",
+    viewport: { width: 1024, height: 768 },
+    prepare: armStationAndTap,
+    fullPage: true,
+  },
+  {
+    // No seeding: the settings tab renders from the metric registry, and the
+    // controls are buttons and a switch rather than a native select, so the
+    // swap is photographable in place.
+    id: "19-39-admin-metrics-settings",
+    doc: "19-august-2026-release-changes.md",
+    line: 1397,
+    anchor: "the metrics settings screen",
+    alt: "Members metrics settings at department scope: three chooseable slots with one cleared for a swap, the applies-to-everyone switch, and slot four shown as fixed",
+    route: "/members/admin?tab=settings",
+    prepare: clearOneMetricSlot,
+    fullPage: true,
+  },
+  {
+    id: "19-40-seal-panel",
+    doc: "19-august-2026-release-changes.md",
+    line: 1478,
+    anchor: "the seal panel on a check",
+    alt: "Two sealed bags in one frame: the Drug Bag's tag matches the last count and offers Seal intact — clear 1 check, while the Trauma Bag's differs and offers only Record seal with a hand count",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    viewport: { width: 1440, height: 2200 },
+    prepare: openSealPanels,
+    fullPage: false,
+  },
+  {
+    // The member's own page, necessarily: the administrator has hours in all
+    // six categories, which satisfies "at least three" and makes "one category
+    // with none" impossible.
+    id: "19-41-my-admin-hours",
+    doc: "19-august-2026-release-changes.md",
+    line: 1552,
+    anchor: "the rebuilt My Admin Hours page",
+    alt: "My Admin Hours over all time: the category breakdown with share bars, the requirement-progress section, and the muted line naming the categories with nothing logged",
+    route: "/admin-hours",
+    auth: "member",
+    fullPage: true,
+    allowEmptyState:
+      'The empty-state text here IS the feature. "No hours yet for: ' +
+      'Administrative Work, Volunteer Hours" is the muted line the marker asks ' +
+      "for by name -- the page naming the categories with nothing in the period " +
+      "instead of rendering a tile reading zero for each. The member has hours " +
+      "in four of the six categories, which is what the four ranked share bars " +
+      "above that line are.",
   },
   {
     // The healthy status line the marker asked for cannot be produced here,

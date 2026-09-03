@@ -848,6 +848,31 @@
   }
 }
 
+/*
+ * Opt-in: the first cell of a reflowed row reads as the card's TITLE rather
+ * than as another `label: value` line.
+ *
+ * The stacked view above is right for attribute cells and wrong for the one
+ * that identifies the row — a member's name rendered right-aligned after the
+ * word "Member" gives the card nothing to be scanned by. Marking that cell
+ * suppresses its `data-label` prefix and lets it span the card.
+ *
+ * The `data-label` attribute stays on the cell: it is what the desktop table
+ * and the rest of the reflow contract expect, and removing it would instead
+ * hide the cell (see the `:not([data-label])` rule above).
+ */
+@utility rwd-table-lead {
+  @media (max-width: 767px) {
+    display: block;
+    text-align: left;
+    padding-bottom: 0.125rem;
+
+    &::before {
+      content: none;
+    }
+  }
+}
+
 /* Comparison matrices intentionally scroll instead of reflowing. Keeping the
  * region focusable gives keyboard users the same access as touch users. */
 .responsive-matrix {

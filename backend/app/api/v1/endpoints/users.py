@@ -53,10 +53,12 @@ from app.schemas.user import (
     DeletionImpactResponse,
     MemberAuditLogEntry,
     NotificationPreferences,
+    ProfileVisibility,
     UserListResponse,
     UserProfileResponse,
     UserUpdate,
     UserWithRolesResponse,
+    resolve_profile_visibility,
 )
 from app.services.admin_continuity_service import (
     LastAdministratorError,
@@ -145,11 +147,19 @@ async def list_users(
             f"Failed to load organization settings, returning users without contact info: {e}"
         )
 
-    # Get users with conditional contact info
+    # Get users with conditional contact info. Members-managers are exempt
+    # from the subject's own choice, as they are on the profile endpoint: they
+    # maintain these records, and the choice governs what the *roster* shows
+    # the general membership. The organisation ceiling still applies here as
+    # it always has for this list.
+    is_manager = _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    )
     users = await user_service.get_users_for_organization(
         organization_id=current_user.organization_id,
         include_contact_info=include_contact_info,
         contact_settings=contact_settings,
+        honor_member_choice=not is_manager,
     )
 
     return users
@@ -583,10 +593,60 @@ def _clear_directory_only_profile_metadata(payload: UserProfileResponse) -> None
         role.permissions = []
 
 
+def _withhold_profile_visibility(
+    payload: UserProfileResponse, current_user: User, is_self: bool
+) -> None:
+    """Blank the subject's visibility choice for anyone but them and leadership.
+
+    What a member chose to hide is itself private: the contact nulls say
+    nothing about whether a field is empty or withheld, and the choice object
+    would say exactly that. Applied on every route that serialises
+    ``UserProfileResponse`` — the profile read and both profile writes — so a
+    ``users.edit`` holder editing a colleague's phone does not learn what that
+    colleague hides from the roster.
+    """
+    if is_self:
+        return
+    if _has_permission("members.manage", _collect_user_permissions(current_user)):
+        return
+    payload.profile_visibility = None
+
+
+def _profile_response(
+    user: User, current_user: User, is_self: bool
+) -> User | UserProfileResponse:
+    """What a profile write returns.
+
+    The subject and members-managers get the row itself, which FastAPI
+    serialises through ``UserProfileResponse`` exactly as before. Anyone else
+    — a ``users.edit`` holder editing a colleague — gets a payload with the
+    subject's visibility choice withheld, on the same terms as the read.
+    Serialising only on that path keeps the write handlers indifferent to how
+    complete the row object is, which their unit tests rely on.
+    """
+    if is_self or _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    ):
+        return user
+    payload = UserProfileResponse.model_validate(user)
+    payload.profile_visibility = None
+    return payload
+
+
 def _clear_hidden_contact_fields(
-    payload: UserWithRolesResponse | UserProfileResponse, visibility: dict[str, bool]
+    payload: UserWithRolesResponse | UserProfileResponse,
+    visibility: dict[str, bool],
+    member: ProfileVisibility,
 ) -> None:
     """Blank, in place, the contact details an unprivileged caller may not see.
+
+    Two decisions combine. ``visibility`` is the organisation's
+    ``contact_info_visibility`` ceiling (work email, phone, mobile); ``member``
+    is the subject's own ``profile_visibility`` choice. A work-contact field
+    shows only when both allow it. Personal email and the home address have
+    no organisation flag: they were leadership-only unconditionally until
+    2026-09 and are now the member's call alone, hidden until opted in
+    (``PROFILE_VISIBILITY_DEFAULTS``).
 
     Shared by the roster and the single-member profile so the two cannot drift:
     ORU-8 was exactly that drift — the roster redacted, the detail endpoint
@@ -594,21 +654,23 @@ def _clear_hidden_contact_fields(
     on the roster could read it (plus personal_email and the home address) by
     requesting the detail URL instead.
     """
-    if not visibility.get("show_email", False):
+    if not (visibility.get("show_email", False) and member.email):
         payload.email = None
-    if not visibility.get("show_phone", False):
+    if not (visibility.get("show_phone", False) and member.phone):
         payload.phone = None
-    if not visibility.get("show_mobile", False):
+    if not (visibility.get("show_mobile", False) and member.mobile):
         payload.mobile = None
 
-    # Never surfaced to the general membership at any visibility setting, so the
-    # setting has no "show" flag for them — they are admin-only by definition.
-    payload.personal_email = None
-    payload.address_street = None
-    payload.address_city = None
-    payload.address_state = None
-    payload.address_zip = None
-    payload.address_country = None
+    if not member.personal_email:
+        payload.personal_email = None
+    # The five address columns are one fact and one toggle: a street without a
+    # town is not "less" disclosure, it is a broken address.
+    if not member.address:
+        payload.address_street = None
+        payload.address_city = None
+        payload.address_state = None
+        payload.address_zip = None
+        payload.address_country = None
 
 
 def _redact_contact_fields(
@@ -629,7 +691,7 @@ def _redact_contact_fields(
     if is_admin:
         return payload
 
-    _clear_hidden_contact_fields(payload, visibility)
+    _clear_hidden_contact_fields(payload, visibility, resolve_profile_visibility(user))
     _clear_leadership_only_fields(payload)
     return payload
 
@@ -670,8 +732,8 @@ async def list_users_with_roles(
     # contact_info_visibility setting. Both are reachable with plain
     # `users.view`, so a member who was refused an email address on the roster
     # could read it — plus home address and personal email, which the roster
-    # never exposes at all — by requesting this URL instead. Redact here too,
-    # or the setting is advisory.
+    # only exposes when the member opted in — by requesting this URL instead.
+    # Redact here too, or the setting is advisory.
     return [_redact_contact_fields(user, visibility, is_admin) for user in users]
 
 
@@ -1216,12 +1278,14 @@ async def get_user_with_roles(
     department member can open a colleague's (redacted) profile.
 
     Contact information is redacted against the organization's
-    `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
-    see `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
-    leadership-only regardless of that setting — see
-    `_clear_leadership_only_fields`. A caller relying only on `members.view`
-    also receives no account-security, notification, or role-permission
-    metadata. Members-managers and the subject themselves are exempt.
+    `contact_info_visibility` setting and the subject's own
+    `profile_visibility` choice exactly as `GET /users/with-roles` does — see
+    `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
+    leadership-only regardless of either — see `_clear_leadership_only_fields`.
+    A caller relying only on `members.view` also receives no account-security,
+    notification, or role-permission metadata, and nobody but the subject and
+    members-managers receives the `profile_visibility` object itself.
+    Members-managers and the subject themselves are exempt from redaction.
 
     **Authentication required**
     """
@@ -1287,10 +1351,13 @@ async def get_user_with_roles(
     payload = UserProfileResponse.model_validate(user)
     if not (is_admin or is_self):
         visibility = await _load_contact_visibility(db, current_user, is_admin)
-        _clear_hidden_contact_fields(payload, visibility)
+        _clear_hidden_contact_fields(
+            payload, visibility, resolve_profile_visibility(user)
+        )
         _clear_leadership_only_fields(payload)
         if not _has_permission("users.view", user_permissions):
             _clear_directory_only_profile_metadata(payload)
+    _withhold_profile_visibility(payload, current_user, is_self)
 
     return payload
 
@@ -1419,7 +1486,9 @@ async def update_contact_info(
         username=current_user.username,
     )
 
-    return user
+    return _profile_response(
+        user, current_user, is_self=str(current_user.id) == str(user_id)
+    )
 
 
 @router.patch("/{user_id}/profile", response_model=UserProfileResponse)
@@ -1714,7 +1783,7 @@ async def update_user_profile(
         username=current_user.username,
     )
 
-    return user
+    return _profile_response(user, current_user, is_self)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -2621,6 +2690,60 @@ async def get_my_consents(
     from app.services.consent_service import ConsentService
 
     return await ConsentService(db).list_for_user(current_user)
+
+
+# Self-scoped by construction, like the consent routes: there is no user id in
+# the path, so there is nothing for one member to point at another with, and
+# deliberately no admin write counterpart — what a member shares of their own
+# contact details is their decision. Any future ``/{user_id}/profile-visibility``
+# route must be declared *below* these two: FastAPI matches in declaration
+# order and parses ``user_id: UUID`` only after choosing the route, so a
+# by-id route declared above would capture ``me`` and answer 422.
+@router.get("/me/profile-visibility", response_model=ProfileVisibility)
+async def get_my_profile_visibility(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Which of the calling member's own contact details other members may see,
+    defaults applied — a member who has never chosen gets the defaults, not an
+    empty object.
+    """
+    return resolve_profile_visibility(current_user)
+
+
+@router.put("/me/profile-visibility", response_model=ProfileVisibility)
+async def set_my_profile_visibility(
+    body: ProfileVisibility,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Replace the calling member's profile-visibility choice as a whole. Every
+    key is required (see ``ProfileVisibility``), so a save can never leave one
+    field's standing ambiguous. Recorded in the audit log with the previous
+    and new values, so the ledger answers "when did this member stop hiding
+    their phone" as it does for consents.
+    """
+    previous = resolve_profile_visibility(current_user).model_dump()
+    current = body.model_dump()
+    # Whole-object reassignment, never a nested mutation: a fresh dict is what
+    # makes SQLAlchemy see the change on a plain JSON column (pitfall #12).
+    current_user.profile_visibility = current
+
+    await log_audit_event(
+        db=db,
+        event_type="profile_visibility_updated",
+        event_category="security",
+        severity="info",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        event_data={"previous": previous, "current": current},
+    )
+    await db.commit()
+
+    return body
 
 
 @router.get("/consents/photo-use")

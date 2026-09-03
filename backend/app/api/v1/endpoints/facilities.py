@@ -159,6 +159,45 @@ async def _validate_shared_document_reference(
     somewhere else keeps that placement; re-parenting another module's document
     because a facility happens to reference it would be the more surprising
     behaviour, and the reference is still validated either way.
+
+    FAC-31 (Codex, on top of FAC-29): this function does not itself file the
+    reference -- it only validates and, for a folderless document, assigns a
+    folder. The caller (``create_facility_document``/``create_facility_photo``)
+    inserts the actual ``FacilityDocument``/``FacilityPhoto`` row *after* this
+    returns. FAC-29's lock only protects a step that ends before the row it
+    protects even exists: committing here (as this used to) releases the
+    document's ``FOR UPDATE`` lock immediately, and a concurrent
+    ``delete_document`` can then land in the gap before the caller's insert,
+    see no reference yet (because it truly does not exist yet), delete the
+    document, and let the caller file a reference to nothing the moment both
+    finish. Not committing keeps the lock held across the whole sequence: it
+    is released only when the caller's own create commits (or the request
+    fails and the session rolls back), by which point the reference row has
+    either been inserted in the same transaction or never will be.
+
+    FAC-35 (Codex, on top of FAC-34): lock order. This function, and
+    ``delete_folder``'s deletion cascade in ``documents_service.py``, both
+    touch the same three resources -- a ``Document`` row, its destination
+    ``DocumentFolder``, and the ``FacilityDocument``/``FacilityPhoto``
+    reference table -- and FAC-29/31/32/34 each closed one *pairwise*
+    ordering conflict between two of those three without checking it against
+    the third. This function now resolves and locks the destination
+    ``DocumentFolder`` (via ``ensure_facility_folder``) *before* it ever
+    locks the ``Document`` row, matching the canonical order documented at
+    the top of ``documents_service.py`` (DocumentFolder, then Document, then
+    the reference table) -- the same order ``delete_folder`` already used
+    after FAC-34. Resolving the folder unconditionally, rather than only
+    when a preliminary read says the document is folderless, is deliberate:
+    a document's ``folder_id`` is client-writable through the generic
+    ``PATCH /documents/{id}`` endpoint (including back to ``NULL``), so an
+    unlocked peek taken before the document is locked could go stale in the
+    gap and this function would decide "no folder needed" from a value that
+    changed under it -- reopening the exact defect ``FACILITY_SENSITIVE_PERMISSIONS``
+    exists to close (a facility reference left pointing at an org-level,
+    unfiled document). Locking the destination folder unconditionally
+    removes that window entirely: the later "assign or not" decision is
+    still made from the ``Document`` row's own locked, authoritative read,
+    exactly as before.
     """
     if not file_path.startswith("document:"):
         raise HTTPException(
@@ -172,22 +211,47 @@ async def _validate_shared_document_reference(
         ) from exc
     organization_id = UUID(str(current_user.organization_id))
     documents = DocumentsService(db)
-    document = await documents.get_document_by_id(document_id, organization_id)
+
+    # FAC-35: DocumentFolder locked first -- see this function's own
+    # docstring and the canonical-order note atop documents_service.py.
+    # get_facility is itself a plain (non-locking) read, but that's fine: the
+    # only decision that hangs on the facility resolving is "does this
+    # request get to reference it at all", which service.create_document/
+    # create_photo re-validates (assert_in_org) before the reference row is
+    # ever inserted -- this lookup is not the security boundary, ensure_facility_folder's
+    # own locking is (Pitfall #27 shape, documented on that method).
+    facility = await FacilitiesService(db).get_facility(
+        facility_id, str(organization_id), include_relations=False
+    )
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    folder = await documents.ensure_facility_folder(
+        organization_id, str(facility.id), facility.name
+    )
+
+    # FAC-29 (Codex): for_update=True locks the same row DocumentsService
+    # .delete_document locks before it deletes -- filing a reference here and
+    # deleting the document there are a read-then-write racing on this one
+    # row from two directions. Without the lock, this read can resolve
+    # against a document a concurrent delete has already committed away (its
+    # own snapshot predating that commit), filing a reference to nothing the
+    # moment both transactions finish.
+    document = await documents.get_document_by_id(
+        document_id, organization_id, for_update=True
+    )
     if document is None:
         # Deliberately indistinguishable from a missing same-org document.
         raise HTTPException(status_code=404, detail="Document not found")
 
     if document.folder_id is None:
-        facility = await FacilitiesService(db).get_facility(
-            facility_id, str(organization_id), include_relations=False
-        )
-        if facility is None:
-            raise HTTPException(status_code=404, detail="Facility not found")
-        folder = await documents.ensure_facility_folder(
-            organization_id, str(facility.id), facility.name
-        )
         document.folder_id = folder.id
-        await db.commit()
+        # FAC-31: flush, never commit -- a commit here would release the
+        # document's FOR UPDATE lock before the caller has actually filed
+        # the reference, reopening the exact race FAC-29 closed. The
+        # caller's own create_document/create_photo commits once, after
+        # both this folder assignment and the reference insert are pending
+        # in the same transaction.
+        await db.flush()
 
 
 def _facility_response_for(facility, current_user: User) -> FacilityResponse:
@@ -3750,17 +3814,29 @@ async def get_facility_folders(
     sub_folders = await docs_service.get_facility_sub_folders(
         organization_id=current_user.organization_id,
         facility_id=facility_id,
+        current_user=current_user,
     )
 
     # Every generic folder/document/summary read in the Documents module
     # requires documents.view; a document_count here is the same aggregate
     # disclosure DOC-4 already flags for that module's own summary endpoint.
-    # A facilities.view-only caller sees the folders (they're a fixed part
-    # of the facility record) but not how many documents are inside them.
+    #
+    # A facilities.view-only caller currently gets an empty folder list here
+    # (not just redacted counts), because every facility folder's
+    # required_permissions is FACILITY_SENSITIVE_PERMISSIONS. See FAC-13
+    # (docs/security-review/FAC-12-facilities.md) for why this is flagged
+    # rather than fixed.
     can_see_counts = user_has_permission(
         current_user, "documents.view"
     ) or user_has_permission(current_user, "documents.manage")
 
+    # This route has no pagination params of its own -- a facility's folder
+    # tree is a fixed, small set (the six sub-folders) -- so skip/limit are
+    # not request-echoed the way list_folders' are; they report the whole
+    # unpaginated result, which is what FoldersListResponse's required
+    # skip/limit fields need to validate on every return path, including the
+    # empty-list one (Codex review, PR #2191: the prior return omitted them
+    # entirely, so response-model validation 500'd on every real HTTP call).
     return {
         "folders": [
             {
@@ -3772,6 +3848,8 @@ async def get_facility_folders(
             for f in sub_folders
         ],
         "total": len(sub_folders),
+        "skip": 0,
+        "limit": len(sub_folders),
     }
 
 
