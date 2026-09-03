@@ -1850,6 +1850,43 @@ point is a held lock.
 
 **Mirrored to** `CHANGELOG.md`.
 
+### FAC-38 — LOW, test-only (Codex, flaky-test risk) — the same fixed-sleep risk FAC-37 fixed on one test was still live on the sibling FAC-32 test — ✅ FIXED
+
+**Found by Codex review of the FAC-36/FAC-37 commit (`53de6d0e`).**
+`TestDeleteFolderLocksDocumentsBeforeTheReferenceTable` (FAC-32's regression
+test) had the identical shape FAC-37 just fixed elsewhere in this file: a
+fixed 0.5s sleep between starting `delete_folder` as a background task and
+asserting it was still blocked. On a slow MySQL/MariaDB runner,
+`delete_folder` can still be doing its preliminary folder-subtree walk or
+its (uncontended, in this test) FAC-34 folder lock when that delay expires
+— both assertions would then pass without the test ever having actually
+proven the intended Document-before-reference-table ordering.
+
+**Where:** `backend/tests/test_facility_document_reference_race.py`
+(`TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`).
+
+**Fix:** same technique as FAC-37, applied to the resource this test
+actually contends on. `_lock_subtree_documents` (already extracted by
+FAC-34, so already a natural instrumentation point) is patched-and-tracked
+to set an event the moment the cascade attempts its `Document` lock — the
+point genuinely contended by the creator's own lock in this test — and the
+test now waits on that event, plus a short fixed grace period, instead of a
+sleep timed from task creation.
+
+**Mirrored to** `CHANGELOG.md`.
+
+## Completion gate (pass 3, round 11 — Codex review of `53de6d0e`, FAC-38)
+
+| Check                                                   | Result          |
+| ------------------------------------------------------- | --------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations |
+| `black --check app/ tests/ alembic/`                    | ✅ clean        |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean        |
+| `pytest tests/test_facility_document_reference_race.py` | ✅ 8 passed     |
+
+No source change this round — test-only. `TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`
+and the rest of the file re-run clean with the synchronized version.
+
 ## Completion gate (pass 3, round 10 — Codex review of `5a1420f4`, FAC-36/FAC-37)
 
 | Check                                                   | Result                                     |

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a second regression test carried the same flaky fixed-sleep pattern FAC-37 had just fixed elsewhere (2026-09-03)
+
+**Fixed (test-only)**
+
+- **FAC-38 — `TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`
+  (FAC-32's regression test) used a fixed 0.5s sleep, the identical shape
+  FAC-37 fixed on a sibling test in the same review round.** On a slow
+  MySQL/MariaDB runner, `delete_folder` could still be doing its preliminary
+  folder-subtree walk when the delay expired, letting the test's assertions
+  pass without ever having proven the intended lock ordering. Replaced with
+  an event set the moment the cascade actually attempts its `Document` lock
+  (via `_lock_subtree_documents`, already extracted by FAC-34), the same
+  technique FAC-37 used.
+
 ### Security: the generic document-move endpoint was the third call site FAC-35's total lock order missed (2026-09-03)
 
 **Fixed**

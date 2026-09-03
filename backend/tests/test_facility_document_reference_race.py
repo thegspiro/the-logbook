@@ -500,6 +500,17 @@ class TestDeleteFolderLocksDocumentsBeforeTheReferenceTable:
     object built for, and used by, only this one coroutine is the case
     CLAUDE.md pitfall #22 carves out; nothing else concurrently patches the
     same target.
+
+    FAC-38 (Codex): the same fixed-sleep risk FAC-37 fixed on the
+    document-delete test applied here too -- on a slow MySQL/MariaDB
+    runner, ``delete_folder`` can still be doing its preliminary folder
+    subtree walk or the (uncontended, here) FAC-34 folder lock when a fixed
+    delay expires, so both assertions below would pass without ever having
+    proven the intended ordering. Synchronized on an event emitted by
+    ``_lock_subtree_documents`` (extracted by FAC-34, so already a natural
+    instrumentation point) the moment the cascade actually attempts its
+    ``Document`` lock -- the point genuinely contended by the creator's own
+    lock in this test -- instead of a fixed sleep from task creation.
     """
 
     async def test_delete_folder_blocks_on_the_document_lock_before_scanning_references(
@@ -518,21 +529,34 @@ class TestDeleteFolderLocksDocumentsBeforeTheReferenceTable:
                 document_id, org_id, for_update=True
             )
 
+            document_lock_attempted = asyncio.Event()
             reference_scan_reached = asyncio.Event()
             cascade_service = DocumentsService(cascade)
+            original_lock_documents = cascade_service._lock_subtree_documents
             original_scan = cascade_service._match_facility_document_references
+
+            async def _tracking_lock_documents(*args, **kwargs):
+                document_lock_attempted.set()
+                return await original_lock_documents(*args, **kwargs)
 
             async def _tracking_scan(*args, **kwargs):
                 reference_scan_reached.set()
                 return await original_scan(*args, **kwargs)
 
             with patch.object(
+                cascade_service, "_lock_subtree_documents", _tracking_lock_documents
+            ), patch.object(
                 cascade_service, "_match_facility_document_references", _tracking_scan
             ):
                 cascade_task = asyncio.create_task(
                     cascade_service.delete_folder(folder_id, org_id, current_user=None)
                 )
-                await asyncio.sleep(0.5)
+                # FAC-38: wait for the cascade to actually reach (and
+                # attempt) its Document lock -- not a fixed sleep from task
+                # creation -- then give it a brief moment to either resolve
+                # or genuinely block.
+                await asyncio.wait_for(document_lock_attempted.wait(), timeout=10)
+                await asyncio.sleep(0.2)
 
                 # The reordering fix's whole point: delete_folder is still
                 # blocked, and blocked *before* it ever reached the
