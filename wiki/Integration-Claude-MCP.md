@@ -124,7 +124,12 @@ stdio-to-HTTP bridge (such as `mcp-remote`) that passes the
   documents in unrestricted folders are exposed at all.
 - **Audit.** Every tool call, key issue and key revocation is written to the
   audit log (`mcp.tool_call`, `mcp.key_created`, `mcp.key_revoked`) with the
-  key id, the tool, its arguments (redacted) and the client IP.
+  key id, the tool, its arguments (redacted, and cut to 200 characters per
+  value so the audit table cannot grow by the size of every payload a
+  client sends) and the client IP.
+- **Input bounds.** No tool accepts a string argument longer than 4,000
+  characters; a larger search term or draft body is refused before the
+  handler runs.
 - **Rate limit.** 240 requests per minute per key, Redis-backed with an
   in-memory fallback.
 

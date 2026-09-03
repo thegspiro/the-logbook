@@ -6,11 +6,13 @@ registered with ``logbook_tool``. The wrapper the SDK actually sees:
 
 1. reads the bound principal and refuses if the tool needs a switch the
    department has not turned on (write access, finance, medical screening);
-2. opens a database session for the handler;
-3. passes the result through the personal-information boundary;
-4. records an audit entry naming the tool, its arguments and the key.
+2. bounds the size of every string argument;
+3. opens a database session for the handler;
+4. passes the result through the personal-information boundary;
+5. records an audit entry naming the tool, its (bounded) arguments and the
+   key.
 
-Doing all four here rather than in each tool is what lets the test-suite
+Doing all five here rather than in each tool is what lets the test-suite
 prove the boundary holds for every tool at once.
 """
 
@@ -25,6 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
 from app.core.utils import safe_error_detail
+from app.mcp.constants import (
+    AUDIT_ARGUMENT_CHARS,
+    AUDIT_ARGUMENT_ITEMS,
+    MAX_ARGUMENT_CHARS,
+)
 from app.mcp.db import open_session
 from app.mcp.principal import McpPrincipal, current_principal
 from app.mcp.redaction import redact
@@ -127,6 +134,7 @@ def logbook_tool(
                 raise ToolError(module_message(module or ""))
             if not gate_allows(principal, gate):
                 raise ToolError(GATE_MESSAGES[gate or ""])
+            check_argument_sizes(kwargs)
             try:
                 async with open_session() as db:
                     result = await fn(db, principal, **kwargs)
@@ -173,6 +181,58 @@ def logbook_tool(
     return decorator
 
 
+def check_argument_sizes(arguments: dict[str, Any]) -> None:
+    """Refuse a call whose string arguments exceed ``MAX_ARGUMENT_CHARS``.
+
+    Every tool gets this for free, so a new free-text input cannot arrive
+    without a bound. Strings inside lists are checked too; the SDK has
+    already rejected anything the schema does not allow.
+    """
+    for name, value in arguments.items():
+        for text in _strings_in(value):
+            if len(text) > MAX_ARGUMENT_CHARS:
+                raise ToolError(
+                    f"{name} is too long: at most {MAX_ARGUMENT_CHARS} "
+                    "characters are accepted"
+                )
+
+
+def _strings_in(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [s for inner in value.values() for s in _strings_in(inner)]
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [s for inner in value for s in _strings_in(inner)]
+    return []
+
+
+def bound_for_audit(value: Any) -> Any:
+    """Shrink ``value`` to what an audit row should carry.
+
+    Strings are cut to ``AUDIT_ARGUMENT_CHARS`` with a marker, and lists and
+    dicts keep their first ``AUDIT_ARGUMENT_ITEMS`` entries, recursively. The
+    row then has a size bound independent of what the client sent.
+    """
+    if isinstance(value, str):
+        if len(value) <= AUDIT_ARGUMENT_CHARS:
+            return value
+        return f"{value[:AUDIT_ARGUMENT_CHARS]}… [{len(value)} chars]"
+    if isinstance(value, dict):
+        items = list(value.items())
+        bounded = {k: bound_for_audit(v) for k, v in items[:AUDIT_ARGUMENT_ITEMS]}
+        if len(items) > AUDIT_ARGUMENT_ITEMS:
+            bounded["…"] = f"[{len(items)} keys]"
+        return bounded
+    if isinstance(value, (list, tuple, set, frozenset)):
+        items = list(value)
+        bounded = [bound_for_audit(v) for v in items[:AUDIT_ARGUMENT_ITEMS]]
+        if len(items) > AUDIT_ARGUMENT_ITEMS:
+            bounded.append(f"… [{len(items)} items]")
+        return bounded
+    return value
+
+
 async def _audit(
     db: AsyncSession, principal: McpPrincipal, tool: str, arguments: dict[str, Any]
 ) -> None:
@@ -186,7 +246,7 @@ async def _audit(
             "info",
             {
                 "tool": tool,
-                "arguments": redact(arguments),
+                "arguments": bound_for_audit(redact(arguments)),
                 "key_id": principal.key_id,
                 "key_prefix": principal.key_prefix,
                 "access_mode": principal.access_mode,

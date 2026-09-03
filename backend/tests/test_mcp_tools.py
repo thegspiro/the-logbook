@@ -17,7 +17,13 @@ from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy import select, text
 
 from app.mcp import db as mcp_db
+from app.mcp.constants import (
+    AUDIT_ARGUMENT_CHARS,
+    AUDIT_ARGUMENT_ITEMS,
+    MAX_ARGUMENT_CHARS,
+)
 from app.mcp.principal import McpPrincipal, bind_principal
+from app.mcp.registry import bound_for_audit, check_argument_sizes
 from app.mcp.server import build_server
 
 # Every test here needs the database: CI's unit job runs without one and
@@ -660,6 +666,78 @@ class TestAudit:
         assert rows[0].event_data["tool"] == "get_department_profile"
         assert rows[0].event_data["key_id"] == principal.key_id
         assert rows[0].ip_address == "127.0.0.1"
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_audit_row_keeps_only_a_bounded_copy_of_arguments(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id)
+        search = "x" * (AUDIT_ARGUMENT_CHARS * 10)
+        await _call(server, principal, "list_members", search=search)
+        row = (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.event_type == "mcp.tool_call",
+                    AuditLog.organization_id == org_id,
+                )
+            )
+        ).scalar_one()
+        audited = row.event_data["arguments"]["search"]
+        assert audited.startswith("x" * AUDIT_ARGUMENT_CHARS)
+        assert audited.endswith(f"[{len(search)} chars]")
+        assert len(audited) < AUDIT_ARGUMENT_CHARS + 40
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_oversized_argument_is_refused_before_the_handler_runs(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id)
+        with pytest.raises(ToolError, match="search is too long"):
+            await _call(
+                server, principal, "list_members", search="x" * (MAX_ARGUMENT_CHARS + 1)
+            )
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog).where(
+                        AuditLog.event_type == "mcp.tool_call",
+                        AuditLog.organization_id == org_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert rows == []
+
+
+class TestAuditBounding:
+    def test_strings_lists_and_dicts_are_cut_recursively(self):
+        value = {
+            "text": "a" * (AUDIT_ARGUMENT_CHARS + 1),
+            "items": [str(i) for i in range(AUDIT_ARGUMENT_ITEMS + 5)],
+            "nested": {"deep": ["b" * (AUDIT_ARGUMENT_CHARS * 2)]},
+            "number": 7,
+        }
+        bounded = bound_for_audit(value)
+        assert bounded["text"].endswith(f"[{AUDIT_ARGUMENT_CHARS + 1} chars]")
+        assert len(bounded["items"]) == AUDIT_ARGUMENT_ITEMS + 1
+        assert bounded["items"][-1] == f"… [{AUDIT_ARGUMENT_ITEMS + 5} items]"
+        assert bounded["nested"]["deep"][0].endswith(
+            f"[{AUDIT_ARGUMENT_CHARS * 2} chars]"
+        )
+        assert bounded["number"] == 7
+
+    def test_small_values_pass_through_unchanged(self):
+        value = {"search": "engine 3", "limit": 10, "tags": ["a", "b"]}
+        assert bound_for_audit(value) == value
+
+    def test_argument_size_check_walks_nested_values(self):
+        check_argument_sizes({"ok": "x" * MAX_ARGUMENT_CHARS, "n": 3})
+        with pytest.raises(ToolError, match="tags is too long"):
+            check_argument_sizes({"tags": ["fine", "y" * (MAX_ARGUMENT_CHARS + 1)]})
 
 
 class TestProfileAndCalendar:

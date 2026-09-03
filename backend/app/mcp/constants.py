@@ -33,3 +33,17 @@ LAST_USED_THROTTLE_SECONDS = 60
 # more than this in one call, and it bounds the response size.
 MAX_PAGE_SIZE = 200
 DEFAULT_PAGE_SIZE = 50
+
+# Longest string any tool accepts in one argument. A search term, a title or
+# a draft's description fits in a fraction of this; anything larger is not a
+# request a model makes while doing its job, and the bound is what keeps a
+# runaway client from pushing a megabyte through a search filter or into a
+# stored draft.
+MAX_ARGUMENT_CHARS = 4000
+
+# How much of each argument the audit row keeps. The audit trail answers
+# "which tool, with what, by which key"; it does not need the full text of a
+# draft, and an unbounded copy would let a client grow the audit table by
+# the size of every payload it sends.
+AUDIT_ARGUMENT_CHARS = 200
+AUDIT_ARGUMENT_ITEMS = 20
