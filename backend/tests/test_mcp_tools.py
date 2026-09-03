@@ -2555,6 +2555,66 @@ class TestNineteenthRoundFindings:
         assert "".join(pieces) == "d" * 25
 
 
+class TestTwentiethRoundFindings:
+    """Regressions for the twentieth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_a_draft_created_by_claude_does_not_send_reminders(
+        self, server, org_with_members, db_session
+    ):
+        from app.models.event import Event
+
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id, access_mode="read_write")
+        start = datetime.now(timezone.utc) + timedelta(hours=12)
+        created = await _call(
+            server,
+            principal,
+            "create_event_draft",
+            title="Mandatory drill",
+            start_datetime=start.isoformat(),
+            end_datetime=(start + timedelta(hours=2)).isoformat(),
+            is_mandatory=True,
+        )
+        event = (
+            await db_session.execute(select(Event).where(Event.id == created["id"]))
+        ).scalar_one()
+        assert event.is_draft is True
+        assert event.send_reminders is False
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_the_reminder_scheduler_skips_drafts(
+        self, org_with_members, db_session
+    ):
+        """A draft is unpublished, so the department is not paged about it
+        even when its reminder settings say otherwise."""
+        from app.models.event import Event, EventType
+        from app.services.scheduled_tasks import run_event_reminders
+
+        org_id, admin_id, _ = org_with_members
+        start = datetime.now(timezone.utc) + timedelta(hours=12)
+        event = Event(
+            organization_id=org_id,
+            title="Draft drill",
+            event_type=EventType.TRAINING,
+            start_datetime=start,
+            end_datetime=start + timedelta(hours=2),
+            is_draft=True,
+            send_reminders=True,
+            reminder_target="all",
+            created_by=admin_id,
+        )
+        db_session.add(event)
+        await db_session.flush()
+        result = await run_event_reminders(db_session)
+        assert result["total_in_app_reminders"] == 0
+        # The same event, published, is what the scheduler exists to send.
+        event.is_draft = False
+        await db_session.flush()
+        result = await run_event_reminders(db_session)
+        assert result["total_in_app_reminders"] > 0
+
+
 class TestReviewFindings:
     """Regressions for the first review round on #2197."""
 

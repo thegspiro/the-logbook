@@ -112,6 +112,9 @@ def register(server: Any) -> None:
             requires_rsvp=requires_rsvp,
             is_mandatory=is_mandatory,
             is_draft=True,
+            # A draft must not page the department: the officer who publishes
+            # it turns reminders on, the way the events screen does.
+            send_reminders=False,
         )
         event = await EventService(db).create_event(payload, org_uuid(principal), actor)
         return {
