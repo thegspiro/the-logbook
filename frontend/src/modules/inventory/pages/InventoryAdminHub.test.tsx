@@ -61,6 +61,14 @@ vi.mock('../../../hooks/useEnabledModules', () => ({
   }),
 }));
 
+vi.mock('./ChecklistsAdminPage', () => ({
+  ChecklistsAdminPage: () => <div>Checklist administration summary</div>,
+}));
+
+vi.mock('../../storefront/pages/StoreAdminPage', () => ({
+  default: () => <div>Store administration summary</div>,
+}));
+
 import { InventoryAdminHub } from './InventoryAdminHub';
 
 const mockSummary = {
@@ -79,6 +87,7 @@ const mockLowStockAlerts = [
 
 describe('InventoryAdminHub', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/inventory/admin');
     vi.clearAllMocks();
     mockGetSummary.mockResolvedValue(mockSummary);
     mockGetLowStockItems.mockResolvedValue(mockLowStockAlerts);
@@ -259,7 +268,7 @@ describe('InventoryAdminHub', () => {
     // an empty body rather than a wall of links that all refuse them.
     mockCheckPermission.mockReturnValue(false);
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByRole('region', { name: 'Needs attention' });
+    await screen.findByText('No enabled administrator view is available for your grants.');
 
     expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
     expect(screen.queryByText('All Items')).not.toBeInTheDocument();
@@ -290,11 +299,9 @@ describe('InventoryAdminHub', () => {
   });
 
   it('shows the store section with the module on and the grant held', async () => {
+    window.history.replaceState({}, '', '/inventory/admin?view=storefront');
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('All Items')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Department Store')).toBeInTheDocument();
+    await screen.findByText('Store administration summary');
     expect(screen.getByRole('link', { name: /Store Overview/ })).toHaveAttribute('href', '/inventory/admin/store');
   });
 
@@ -407,6 +414,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
   const grantAll = () => mockCheckPermission.mockReturnValue(true);
 
   beforeEach(() => {
+    window.history.replaceState({}, '', '/inventory/admin');
     mockGetSummary.mockReset();
     mockGetSummary.mockResolvedValue(mockSummary);
     mockGetLowStockItems.mockReset();
@@ -516,13 +524,13 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
 
     expect(screen.queryByText('Equipment Checklists')).not.toBeInTheDocument();
     expect(screen.queryByText('Check Reports')).not.toBeInTheDocument();
-    // Still shown: its route accepts `inventory.manage` too.
-    expect(screen.getByText('Expiring on Apparatus')).toBeInTheDocument();
+    expect(screen.queryByText('Expiring on Apparatus')).not.toBeInTheDocument();
   });
 
   it('shows the checklist cards once the check grants are held', async () => {
+    window.history.replaceState({}, '', '/inventory/admin?view=checklists');
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByText('All Items');
+    await screen.findByText('Checklist administration summary');
 
     expect(screen.getByRole('link', { name: /Equipment Checklists/ })).toHaveAttribute(
       'href',
@@ -571,5 +579,127 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       'href',
       '/inventory/admin/reorder?request=ro-1'
     );
+  });
+});
+
+describe('InventoryAdminHub — grant-derived administrator views', () => {
+  const grantOnly = (...grants: string[]) =>
+    mockCheckPermission.mockImplementation((permission: unknown) => grants.includes(String(permission)));
+
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/inventory/admin');
+    vi.clearAllMocks();
+    mockIsModuleOn.mockReturnValue(true);
+    mockGetSummary.mockResolvedValue(mockSummary);
+    mockGetLowStockItems.mockResolvedValue([]);
+    mockGetReturnRequests.mockResolvedValue([]);
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [], total: 0 });
+    mockGetSetupStatus.mockResolvedValue({ rooms: 1, storage_areas: 1, categories: 1, items: 1, is_complete: true });
+    mockGetOverdueCheckouts.mockResolvedValue({ checkouts: [], total: 0 });
+    mockGetMaintenanceDueItems.mockResolvedValue([]);
+    mockGetWriteOffRequests.mockResolvedValue([]);
+    mockGetReorderRequests.mockResolvedValue([]);
+    mockGetDepartureClearances.mockResolvedValue({ clearances: [], total: 0 });
+    mockGetAdminHubSummary.mockResolvedValue({
+      moduleKey: 'inventory',
+      generatedAt: '2026-09-03T00:00:00Z',
+      timezone: 'UTC',
+      metrics: [],
+      attention: [],
+    });
+  });
+
+  it('automatically selects and persists the sole inventory view', async () => {
+    grantOnly('inventory.manage');
+    renderWithRouter(<InventoryAdminHub />);
+
+    await screen.findByText('All Items');
+    expect(screen.queryByRole('navigation', { name: 'Administrator view' })).not.toBeInTheDocument();
+    expect(window.location.search).toBe('?view=inventory');
+    expect(mockGetSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows only checklist tasks for a checklist-only administrator without inventory requests', async () => {
+    grantOnly('inventory.check_manage');
+    renderWithRouter(<InventoryAdminHub />);
+
+    await screen.findByText('Checklist administration summary');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /Equipment Checklists/ })).toBeInTheDocument();
+    expect(screen.queryByText('All Items')).not.toBeInTheDocument();
+    expect(mockGetSummary).not.toHaveBeenCalled();
+    expect(mockGetLowStockItems).not.toHaveBeenCalled();
+    expect(mockGetSetupStatus).not.toHaveBeenCalled();
+  });
+
+  it('supports a report-only checklist administrator', async () => {
+    grantOnly('inventory.check_view');
+    renderWithRouter(<InventoryAdminHub />);
+
+    expect(await screen.findAllByRole('link')).toHaveLength(2);
+    expect(screen.getByRole('link', { name: /Check Reports/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Expiring on Apparatus/ })).toBeInTheDocument();
+    expect(screen.queryByText('Checklist administration summary')).not.toBeInTheDocument();
+    expect(mockGetSummary).not.toHaveBeenCalled();
+  });
+
+  it('shows four store tasks for a store-only administrator without inventory requests', async () => {
+    grantOnly('storefront.manage');
+    renderWithRouter(<InventoryAdminHub />);
+
+    await screen.findByText('Store administration summary');
+    expect(screen.getAllByRole('link')).toHaveLength(4);
+    expect(screen.getByRole('link', { name: /Store Payments/ })).toBeInTheDocument();
+    expect(screen.queryByText('All Items')).not.toBeInTheDocument();
+    expect(mockGetSummary).not.toHaveBeenCalled();
+    expect(mockGetLowStockItems).not.toHaveBeenCalled();
+  });
+
+  it('restores a permitted query view and switches views while preserving it in the URL', async () => {
+    grantOnly('inventory.manage', 'storefront.manage');
+    window.history.replaceState({}, '', '/inventory/admin?view=storefront');
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryAdminHub />);
+
+    await screen.findByText('Store administration summary');
+    expect(mockGetSummary).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Inventory' }));
+    await screen.findByText('All Items');
+    expect(window.location.search).toBe('?view=inventory');
+    expect(mockGetSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces a stale or unauthorized query with the first permitted view', async () => {
+    grantOnly('storefront.manage');
+    window.history.replaceState({}, '', '/inventory/admin?view=inventory');
+    renderWithRouter(<InventoryAdminHub />);
+
+    await screen.findByText('Store administration summary');
+    expect(window.location.search).toBe('?view=storefront');
+    expect(mockGetSummary).not.toHaveBeenCalled();
+  });
+
+  it('removes a view whose module is disabled', async () => {
+    grantOnly('storefront.manage');
+    mockIsModuleOn.mockImplementation((module: unknown) => module !== 'storefront');
+    renderWithRouter(<InventoryAdminHub />);
+
+    await screen.findByText('No enabled administrator view is available for your grants.');
+    expect(screen.queryByText('Store administration summary')).not.toBeInTheDocument();
+    expect(mockGetSummary).not.toHaveBeenCalled();
+  });
+
+  it('gives global-wildcard behavior all three views in the intentional order', async () => {
+    mockCheckPermission.mockReturnValue(true);
+    renderWithRouter(<InventoryAdminHub />);
+
+    await screen.findByText('All Items');
+    const selector = screen.getByRole('navigation', { name: 'Administrator view' });
+    expect(
+      within(selector)
+        .getAllByRole('button')
+        .map((button) => button.textContent)
+    ).toEqual(['Inventory', 'Equipment Checklists', 'Department Store']);
+    expect(window.location.search).toBe('?view=inventory');
   });
 });

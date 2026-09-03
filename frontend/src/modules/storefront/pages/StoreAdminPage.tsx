@@ -103,9 +103,12 @@ const StoreAdminPage: React.FC = () => {
   const activeTab: TabId = isTabId(tabParam) ? tabParam : 'overview';
   const setActiveTab = useCallback(
     (tab: TabId) => {
-      setSearchParams(tab === 'overview' ? {} : { tab });
+      const next = new URLSearchParams(searchParams);
+      if (tab === 'overview') next.delete('tab');
+      else next.set('tab', tab);
+      setSearchParams(next);
     },
-    [setSearchParams]
+    [searchParams, setSearchParams]
   );
 
   // The overview's hand-off into a pre-filtered Orders tab. These stay local
@@ -182,7 +185,7 @@ const StoreAdminPage: React.FC = () => {
               inside Inventory Administration — so the way back rides here,
               beside the actions, as TrainingAdminPage does with its HelpLink. */}
           <Link
-            to="/inventory/admin"
+            to="/inventory/admin?view=storefront"
             className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
           >
             <ArrowLeft className="h-4 w-4" />

@@ -29,7 +29,9 @@ import { formatCalendarDate, formatDate } from '../../../utils/dateFormatting';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { INVENTORY_HUB_CARDS, INVENTORY_HUB_SECTIONS } from './inventoryHubCards';
-import type { InventoryHubCard, InventoryHubSection, InventoryHubTone } from './inventoryHubCards';
+import type { InventoryAdminView, InventoryHubCard, InventoryHubSection, InventoryHubTone } from './inventoryHubCards';
+import { ChecklistsAdminPage } from './ChecklistsAdminPage';
+import StoreAdminPage from '../../storefront/pages/StoreAdminPage';
 import type {
   InventorySummary,
   InventorySetupStatus,
@@ -240,11 +242,44 @@ const TABS: AdminHubTab<AdminTab>[] = [
   { id: 'settings', label: 'Settings' },
 ];
 
+const VIEW_OPTIONS: Array<{ id: InventoryAdminView; label: string; permissions: string[]; module: string }> = [
+  { id: 'inventory', label: 'Inventory', permissions: ['inventory.manage'], module: 'inventory' },
+  {
+    id: 'checklists',
+    label: 'Equipment Checklists',
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    module: 'inventory',
+  },
+  { id: 'storefront', label: 'Department Store', permissions: ['storefront.manage'], module: 'storefront' },
+];
+
 export const InventoryAdminHub: React.FC = () => {
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManage = checkPermission('inventory.manage');
+  const canManageChecklists = checkPermission('inventory.check_manage');
   const { isModuleOn } = useEnabledModules();
   const tz = useTimezone();
+
+  // Order is intentional: wildcard users land in the broad inventory workspace,
+  // while single- and multi-grant administrators get the first workspace their
+  // grants and the organization's module switches jointly make usable.
+  const availableViews = useMemo(
+    () =>
+      VIEW_OPTIONS.filter(
+        (view) => isModuleOn(view.module) && view.permissions.some((permission) => checkPermission(permission))
+      ),
+    [checkPermission, isModuleOn]
+  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedView = searchParams.get('view');
+  const activeView = availableViews.find((view) => view.id === requestedView)?.id ?? availableViews[0]?.id ?? null;
+
+  useEffect(() => {
+    if (!activeView || requestedView === activeView) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('view', activeView);
+    setSearchParams(next, { replace: true });
+  }, [activeView, requestedView, searchParams, setSearchParams]);
 
   // Every card resolves its own gate here rather than inheriting the page's.
   // The store and EMS cards are the visible reason — both are separate modules
@@ -255,13 +290,13 @@ export const InventoryAdminHub: React.FC = () => {
   const visibleCards = useMemo(
     () =>
       INVENTORY_HUB_CARDS.filter((card) => {
+        if (card.view !== activeView) return false;
         if (card.requiresModule && !isModuleOn(card.requiresModule)) return false;
         if (card.anyPermission) return card.anyPermission.some((permission) => checkPermission(permission));
         return card.permission ? checkPermission(card.permission) : true;
       }),
-    [checkPermission, isModuleOn]
+    [activeView, checkPermission, isModuleOn]
   );
-  const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
   const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
   // Bumped when the settings tab saves, so the metrics row above it reflects
@@ -459,8 +494,8 @@ export const InventoryAdminHub: React.FC = () => {
   }, [tz, showsMedical]);
 
   useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+    if (activeView === 'inventory') void loadSummary();
+  }, [activeView, loadSummary]);
 
   const actions: AdminHubAction[] = [
     {
@@ -513,123 +548,199 @@ export const InventoryAdminHub: React.FC = () => {
     .map((section) => ({ section, cards: cardsIn(section) }))
     .filter((group) => group.cards.length > 0);
 
-  return (
-    <AdminHubFrame<AdminTab>
-      moduleKey="inventory"
-      title="Inventory Administration"
-      description="Gear, uniforms and EMS supplies — stock, issuance, and what needs a decision today"
-      actions={actions}
-      primaryAction={
-        canManage
-          ? {
-              key: 'assign',
-              label: 'Assign to Member',
-              icon: UserPlus,
-              onClick: () => setMemberPickerOpen(true),
-            }
-          : undefined
-      }
-      tabs={TABS}
-      activeTab={activeTab}
-      onTabChange={(tab) => setSearchParams(tab === 'overview' ? {} : { tab })}
-      refreshToken={frameToken}
-      showAttentionQueue={false}
+  const viewSelector = availableViews.length > 1 && (
+    <nav
+      aria-label="Administrator view"
+      className="border-theme-surface-border bg-theme-surface-secondary mx-auto mt-4 flex w-fit rounded-lg border p-1"
     >
-      {activeTab === 'settings' ? (
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <AdminMetricsSettings
-            moduleKey="inventory"
-            moduleLabel="Inventory"
-            permission="inventory.manage"
-            onSaved={() => setFrameToken((token) => token + 1)}
-          />
-        </div>
-      ) : (
-        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-          <NeedsAttention
-            rows={attentionRows}
-            loading={loading}
-            failedSources={failedSources}
-            onRetry={() => void loadSummary()}
-          />
-          {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
+      {availableViews.map((view) => (
+        <button
+          key={view.id}
+          type="button"
+          aria-pressed={activeView === view.id}
+          onClick={() => {
+            const next = new URLSearchParams(searchParams);
+            next.set('view', view.id);
+            next.delete('tab');
+            setSearchParams(next);
+          }}
+          className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+            activeView === view.id
+              ? 'bg-theme-surface text-theme-text-primary shadow-sm'
+              : 'text-theme-text-muted hover:text-theme-text-primary'
+          }`}
+        >
+          {view.label}
+        </button>
+      ))}
+    </nav>
+  );
+
+  const focusedCards = visibleCards.length > 0 && (
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {visibleCards.map((card) => (
+          <NavCard key={card.id} card={card} stat={{}} />
+        ))}
+      </div>
+    </div>
+  );
+
+  if (!activeView) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12 text-center">
+        <h1 className="text-theme-text-primary text-2xl font-bold">Inventory Administration</h1>
+        <p className="text-theme-text-secondary mt-2">No enabled administrator view is available for your grants.</p>
+      </div>
+    );
+  }
+
+  if (activeView === 'checklists') {
+    return (
+      <>
+        {viewSelector}
+        {focusedCards}
+        {canManageChecklists && <ChecklistsAdminPage />}
+      </>
+    );
+  }
+
+  if (activeView === 'storefront') {
+    return (
+      <>
+        {viewSelector}
+        {focusedCards}
+        <StoreAdminPage />
+      </>
+    );
+  }
+
+  return (
+    <>
+      {viewSelector}
+      <AdminHubFrame<AdminTab>
+        moduleKey="inventory"
+        title="Inventory Administration"
+        description="Gear, uniforms and EMS supplies — stock, issuance, and what needs a decision today"
+        actions={actions}
+        primaryAction={
+          canManage
+            ? {
+                key: 'assign',
+                label: 'Assign to Member',
+                icon: UserPlus,
+                onClick: () => setMemberPickerOpen(true),
+              }
+            : undefined
+        }
+        tabs={TABS}
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          const next = new URLSearchParams(searchParams);
+          if (tab === 'overview') next.delete('tab');
+          else next.set('tab', tab);
+          next.set('view', 'inventory');
+          setSearchParams(next);
+        }}
+        refreshToken={frameToken}
+        showAttentionQueue={false}
+      >
+        {activeTab === 'settings' ? (
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            <AdminMetricsSettings
+              moduleKey="inventory"
+              moduleLabel="Inventory"
+              permission="inventory.manage"
+              onSaved={() => setFrameToken((token) => token + 1)}
+            />
+          </div>
+        ) : (
+          <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+            <NeedsAttention
+              rows={attentionRows}
+              loading={loading}
+              failedSources={failedSources}
+              onRetry={() => void loadSummary()}
+            />
+            {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
             Without it a new quartermaster meets the item form first and fills in
             three dropdowns that have nothing in them. */}
-          {setupStatus && !setupStatus.is_complete && (
-            <Link
-              to="/inventory/admin/setup"
-              className="mb-8 flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 transition-colors hover:bg-blue-500/15 sm:p-4"
-            >
-              <div className="shrink-0 rounded-lg bg-blue-600 p-2">
-                <Sparkles className="h-5 w-5 text-white" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">Finish inventory setup</h3>
-                <p className="text-xs text-blue-600 dark:text-blue-400">
-                  Still to set up:{' '}
-                  {[
-                    setupStatus.rooms === 0 ? 'rooms' : null,
-                    setupStatus.storage_areas === 0 ? 'storage areas' : null,
-                    setupStatus.categories === 0 ? 'categories' : null,
-                    setupStatus.items === 0 ? 'items' : null,
-                  ]
-                    .filter(Boolean)
-                    .join(', ')}
-                  . The guide walks through them in order.
-                </p>
-              </div>
-              <ArrowRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-            </Link>
-          )}
+            {setupStatus && !setupStatus.is_complete && (
+              <Link
+                to="/inventory/admin/setup"
+                className="mb-8 flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 transition-colors hover:bg-blue-500/15 sm:p-4"
+              >
+                <div className="shrink-0 rounded-lg bg-blue-600 p-2">
+                  <Sparkles className="h-5 w-5 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">Finish inventory setup</h3>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    Still to set up:{' '}
+                    {[
+                      setupStatus.rooms === 0 ? 'rooms' : null,
+                      setupStatus.storage_areas === 0 ? 'storage areas' : null,
+                      setupStatus.categories === 0 ? 'categories' : null,
+                      setupStatus.items === 0 ? 'items' : null,
+                    ]
+                      .filter(Boolean)
+                      .join(', ')}
+                    . The guide walks through them in order.
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              </Link>
+            )}
 
-          {/* Supply lines — the three stock lines a department staffs.
+            {/* Supply lines — the three stock lines a department staffs.
               Not a partition of the catalog: tools, equipment, electronics and
               consumables are real item types nobody is appointed to run, and
               they are reached through All Items below. */}
-          {supplyLines.length > 0 && (
-            <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {supplyLines.map((card) => (
-                <ProminentCard key={card.id} card={card} stat={statFor(card.id)} />
+            {supplyLines.length > 0 && (
+              <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {supplyLines.map((card) => (
+                  <ProminentCard key={card.id} card={card} stat={statFor(card.id)} />
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-8">
+              {bodySections.map(({ section, cards }) => (
+                <Section key={section} title={section}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {cards.map((card) => (
+                      <NavCard key={card.id} card={card} stat={statFor(card.id)} />
+                    ))}
+                  </div>
+                </Section>
               ))}
             </div>
-          )}
-
-          <div className="space-y-8">
-            {bodySections.map(({ section, cards }) => (
-              <Section key={section} title={section}>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {cards.map((card) => (
-                    <NavCard key={card.id} card={card} stat={statFor(card.id)} />
-                  ))}
-                </div>
-              </Section>
-            ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Quick-assign: pick a member, then assign items to them */}
-      <MemberPickerModal
-        isOpen={memberPickerOpen}
-        onClose={() => setMemberPickerOpen(false)}
-        title="Distribute Items — Select a Member"
-        onSelect={(member) => {
-          setMemberPickerOpen(false);
-          setAssignTarget(member);
-        }}
-      />
-      <InventoryScanModal
-        isOpen={assignTarget !== null}
-        onClose={() => setAssignTarget(null)}
-        mode="distribute"
-        userId={assignTarget?.userId ?? ''}
-        memberName={assignTarget?.memberName ?? ''}
-        onComplete={() => {
-          void loadSummary();
-          setFrameToken((token) => token + 1);
-        }}
-      />
-    </AdminHubFrame>
+        {/* Quick-assign: pick a member, then assign items to them */}
+        <MemberPickerModal
+          isOpen={memberPickerOpen}
+          onClose={() => setMemberPickerOpen(false)}
+          title="Distribute Items — Select a Member"
+          onSelect={(member) => {
+            setMemberPickerOpen(false);
+            setAssignTarget(member);
+          }}
+        />
+        <InventoryScanModal
+          isOpen={assignTarget !== null}
+          onClose={() => setAssignTarget(null)}
+          mode="distribute"
+          userId={assignTarget?.userId ?? ''}
+          memberName={assignTarget?.memberName ?? ''}
+          onComplete={() => {
+            void loadSummary();
+            setFrameToken((token) => token + 1);
+          }}
+        />
+      </AdminHubFrame>
+    </>
   );
 };
 

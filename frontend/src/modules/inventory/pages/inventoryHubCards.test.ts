@@ -53,6 +53,18 @@ describe('inventory hub cards', () => {
     }
   });
 
+  it('assigns every card to an administrator view', () => {
+    for (const card of INVENTORY_HUB_CARDS) {
+      expect(['inventory', 'checklists', 'storefront'], `${card.id} has no supported owner`).toContain(card.view);
+    }
+    expect(INVENTORY_HUB_CARDS.filter((card) => card.view === 'checklists').map((card) => card.id)).toEqual([
+      'checklists',
+      'check-reports',
+      'supply-expiring',
+    ]);
+    expect(INVENTORY_HUB_CARDS.filter((card) => card.view === 'storefront')).toHaveLength(4);
+  });
+
   it.each(resolved.map((entry) => [entry.card.id, entry] as const))('%s targets a route that exists', (_id, entry) => {
     expect(entry.gate.exists, `no <Route> defines ${entry.bare}`).toBe(true);
   });

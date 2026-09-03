@@ -69,6 +69,7 @@ export const INVENTORY_HUB_SECTIONS = [
   'Setup & Tools',
 ] as const;
 export type InventoryHubSection = (typeof INVENTORY_HUB_SECTIONS)[number];
+export type InventoryAdminView = 'inventory' | 'checklists' | 'storefront';
 
 /** Icon tint. A union rather than a class string so Tailwind's scanner sees
  *  every literal in one place (`InventoryAdminHub`'s TONE_CLASSES map). */
@@ -78,6 +79,8 @@ export type InventoryHubTone =
 export interface InventoryHubCard {
   /** Stable id — React key, and how the hub attaches live counts. */
   id: string;
+  /** Administrator workspace that owns this task. */
+  view: InventoryAdminView;
   label: string;
   description: string;
   path: string;
@@ -110,6 +113,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   // common is that a department appoints somebody to run them.
   {
     id: 'supply-ppe',
+    view: 'inventory',
     label: 'PPE & Turnout Gear',
     description: 'Structural gear, SCBA and the NFPA clock on each set',
     path: '/inventory/admin/items?item_type=ppe',
@@ -121,6 +125,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'supply-uniform',
+    view: 'inventory',
     label: 'Uniforms',
     description: 'Class A and duty uniforms, by size and style',
     path: '/inventory/admin/items?item_type=uniform',
@@ -138,6 +143,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     // holds `view_medical`, so a department running one supply line still
     // sees this.
     id: 'supply-medical',
+    view: 'inventory',
     label: 'EMS Supplies',
     description: 'Lot- and expiry-tracked medical stock',
     path: '/medical-supplies',
@@ -151,6 +157,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   // ── Catalog ────────────────────────────────────────────────────────────
   {
     id: 'items',
+    view: 'inventory',
     label: 'All Items',
     description: 'Every item on the books, across all types',
     path: '/inventory/admin/items',
@@ -162,6 +169,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'pool',
+    view: 'inventory',
     label: 'Pool Items',
     description: 'Quantity-tracked stock, issued to members',
     path: '/inventory/admin/pool',
@@ -173,6 +181,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'categories',
+    view: 'inventory',
     label: 'Categories',
     description: 'Organize items by type with tracking settings',
     path: '/inventory/admin/categories',
@@ -184,6 +193,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'variant-groups',
+    view: 'inventory',
     label: 'Variant Groups',
     description: 'Group pool item variants by size, style, and color',
     path: '/inventory/admin/variant-groups',
@@ -195,6 +205,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'storage-areas',
+    view: 'inventory',
     label: 'Storage Areas',
     description: 'Manage storage locations within facilities',
     path: '/inventory/storage-areas',
@@ -206,6 +217,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'vendors',
+    view: 'inventory',
     label: 'Vendors',
     description: 'Suppliers, their contacts, and what we buy from them',
     path: '/inventory/admin/vendors',
@@ -219,6 +231,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   // ── Issuance & Members ─────────────────────────────────────────────────
   {
     id: 'members',
+    view: 'inventory',
     label: 'Members',
     description: 'View and manage per-member equipment assignments',
     path: '/inventory/admin/members',
@@ -230,6 +243,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'checkouts',
+    view: 'inventory',
     label: 'Temporary Loans',
     description: 'Serialized gear due back on a specific date',
     path: '/inventory/checkouts',
@@ -241,6 +255,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'kits',
+    view: 'inventory',
     label: 'Gear Kits',
     description: 'Kit templates for multi-item issuance',
     path: '/inventory/admin/kits',
@@ -252,6 +267,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'allowances',
+    view: 'inventory',
     label: 'Issuance Allowances',
     description: 'Cap how many units per category a member can be issued',
     path: '/inventory/admin/allowances',
@@ -263,6 +279,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'impact-planner',
+    view: 'inventory',
     label: 'Impact Planner',
     description: "Plan a new issue: who's impacted, sizes needed, who to contact",
     path: '/inventory/admin/impact-planner',
@@ -276,6 +293,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   // ── Requests & Approvals ───────────────────────────────────────────────
   {
     id: 'requests',
+    view: 'inventory',
     label: 'Gear Requests',
     description: 'Review member requests for equipment',
     path: '/inventory/admin/requests',
@@ -287,6 +305,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'returns',
+    view: 'inventory',
     label: 'Return Requests',
     description: 'Review and process member return requests',
     path: '/inventory/admin/returns',
@@ -298,6 +317,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'reorder',
+    view: 'inventory',
     label: 'Reorder Requests',
     description: 'Track and manage supply reorder requests',
     path: '/inventory/admin/reorder',
@@ -309,6 +329,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'write-offs',
+    view: 'inventory',
     label: 'Write-Offs',
     description: 'Process loss and damage write-off requests',
     path: '/inventory/admin/write-offs',
@@ -320,6 +341,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'charges',
+    view: 'inventory',
     label: 'Charges',
     description: 'Cost recovery for lost or damaged items',
     path: '/inventory/admin/charges',
@@ -333,6 +355,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   // ── Readiness & Compliance ─────────────────────────────────────────────
   {
     id: 'maintenance',
+    view: 'inventory',
     label: 'Maintenance',
     description: 'Track inspections, repairs, and compliance',
     path: '/inventory/admin/maintenance',
@@ -347,6 +370,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     // Quartermaster holds the latter and not the former, so this card was a
     // link to Access Denied for the officer this hub is built for.
     id: 'checklists',
+    view: 'checklists',
     label: 'Equipment Checklists',
     description: 'The checklists themselves, plus fleet readiness and the check log',
     path: '/inventory/admin/checklists',
@@ -358,6 +382,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'check-reports',
+    view: 'checklists',
     label: 'Check Reports',
     description: 'Compliance, failures and item trends across completed checks',
     path: '/inventory/admin/checklists/reports',
@@ -369,6 +394,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'supply-expiring',
+    view: 'checklists',
     label: 'Expiring on Apparatus',
     description: 'Items expiring on the trucks and ready replacement stock',
     path: '/inventory/admin/checklists/supply',
@@ -388,6 +414,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   // department can run one without the other.
   {
     id: 'store',
+    view: 'storefront',
     label: 'Store Overview',
     description: 'Open orders, balances and the current window at a glance',
     path: '/inventory/admin/store',
@@ -399,6 +426,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'store-catalog',
+    view: 'storefront',
     label: 'Store Catalog',
     description: 'What the department sells, with sizes and prices',
     path: '/inventory/admin/store?tab=catalog',
@@ -410,6 +438,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'store-orders',
+    view: 'storefront',
     label: 'Store Orders',
     description: 'Member orders through to pickup, and the vendor hand-off',
     path: '/inventory/admin/store?tab=orders',
@@ -421,6 +450,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'store-payments',
+    view: 'storefront',
     label: 'Store Payments',
     description: 'Reconcile what members have paid against what they owe',
     path: '/inventory/admin/store?tab=payments',
@@ -434,6 +464,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   // ── Setup & Tools ──────────────────────────────────────────────────────
   {
     id: 'setup',
+    view: 'inventory',
     label: 'Setup Guide',
     description: 'Rooms, storage, categories, and first items in order',
     path: '/inventory/admin/setup',
@@ -445,6 +476,7 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
   },
   {
     id: 'import',
+    view: 'inventory',
     label: 'Import / Export',
     description: 'Bulk import from CSV or export inventory data',
     path: '/inventory/import',
