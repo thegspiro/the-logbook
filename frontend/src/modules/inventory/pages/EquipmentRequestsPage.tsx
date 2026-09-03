@@ -32,6 +32,8 @@ import toast from 'react-hot-toast';
 
 const EquipmentRequestsPage: React.FC = () => {
   const pageSize = 25;
+  // The API's own cap on this endpoint (`limit=Query(50, ge=1, le=200)`).
+  const LOCATE_PAGE_SIZE = 200;
   const tz = useTimezone();
   const [requests, setRequests] = useState<EquipmentRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,16 +117,33 @@ const EquipmentRequestsPage: React.FC = () => {
     let cancelled = false;
     void (async () => {
       try {
-        const all = await inventoryService.getEquipmentRequests({
-          ...(statusFilter ? { status: statusFilter } : {}),
-          skip: 0,
-          limit: Math.min(Math.max(total, pageSize), 500),
-        });
-        const index = (all.requests || []).findIndex((request) => request.id === requestedId);
-        if (!cancelled && index >= 0) setPage(Math.floor(index / pageSize));
-      } catch {
-        // A request we cannot place is a no-op, exactly like one already
-        // decided by somebody else between the queue rendering and the click.
+        // Walked in the API's own maximum page size rather than asked for in
+        // one oversized request: `list_equipment_requests` declares
+        // `limit=Query(50, ge=1, le=200)`, so a single call above 200 is a 422
+        // — which is exactly the department with a long queue that this scan
+        // exists for. Bounded by the total the list has already reported.
+        const bound = Math.max(total, pageSize);
+        let offset = 0;
+        let found = -1;
+        while (found < 0 && offset < bound) {
+          const batchResponse = await inventoryService.getEquipmentRequests({
+            ...(statusFilter ? { status: statusFilter } : {}),
+            skip: offset,
+            limit: LOCATE_PAGE_SIZE,
+          });
+          if (cancelled) return;
+          const batch = batchResponse.requests || [];
+          if (batch.length === 0) break;
+          const index = batch.findIndex((request) => request.id === requestedId);
+          if (index >= 0) found = offset + index;
+          offset += batch.length;
+        }
+        if (!cancelled && found >= 0) setPage(Math.floor(found / pageSize));
+      } catch (err: unknown) {
+        // Not silent. Every rejection here is operational — a request that is
+        // simply gone comes back as a list that does not contain it, not as an
+        // error — and the reader clicked Review expecting something to open.
+        if (!cancelled) toast.error(getErrorMessage(err, 'Could not find the linked request'));
       }
     })();
     return () => {

@@ -39,6 +39,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses, and the card now shows it.
 - **The store's old address broke the mobile-coverage check.** `/store/admin`
   was added as a redirect but never entered in the route-coverage manifest.
+- **Archiving an apparatus would have failed with a 422.** `ApparatusArchive`
+  and `ApparatusStatusChange` were the only apparatus request schemas without
+  `alias_generator=to_camel`, so the camelCase payload the frontend types
+  declare populated none of their fields. Both accept camelCase now, and
+  snake_case still validates, so no existing caller changes.
+- **The equipment-request locator asked for more than the API allows.**
+  `list_equipment_requests` caps `limit` at 200 and the scan requested up to
+  500, so a department with a long queue got a 422 that the `catch` swallowed —
+  precisely the case the scan exists for. It now walks the list in the API's own
+  page size, and reports a failure rather than opening nothing.
+- **A failed maintenance deep-link looked like a retired item.** Only a 404 is
+  silent now; a network, authorization or server failure says so.
+- **`?payment=toString` was accepted as a payment status.** The Orders tab's
+  URL filter checked the label map with `in`, which walks the prototype chain.
+- **The verification link showed orders its own headline had not counted.** The
+  attention queue excludes cancelled orders — cancelling leaves
+  `payment_status` untouched, and a cancelled order cannot be paid — so the
+  Orders tab now excludes them too whenever that payment filter is active, via
+  an additive `exclude_cancelled` on `GET /store/orders`. Narrower than the
+  existing `open_only`, which would also hide a fulfilled order still awaiting
+  verification — money the department is still owed.
 
 ### The gear admin hub is now Inventory Administration (2026-09-03)
 

@@ -22,6 +22,7 @@ import {
   PAYMENT_STATUS_BADGES,
   PAYMENT_STATUS_LABELS,
   StoreOrderStatus,
+  StorePaymentStatus,
   type StoreOrder,
   type StoreOrderWindow,
 } from '../types';
@@ -97,6 +98,17 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({
         search: search.trim() || undefined,
         submittedWithinHours,
         openOnly: openOnly || undefined,
+        // Cancelling leaves `payment_status` untouched, so a cancelled order
+        // keeps PENDING_VERIFICATION for ever — and recording a payment
+        // against a cancelled order is refused, so the row is work nobody can
+        // do. The admin hub's queue leaves them out of its count for exactly
+        // that reason; leaving them out here is what keeps this list agreeing
+        // with the headline that links to it, and applies the same rule when
+        // the filter is chosen from the dropdown instead of followed from the
+        // hub. Narrower than `openOnly`, which would also hide a *fulfilled*
+        // order still awaiting verification — real money a department that
+        // hands over before settlement is still owed.
+        excludeCancelled: paymentFilter === StorePaymentStatus.PENDING_VERIFICATION || undefined,
         page,
         pageSize: DEFAULT_PAGE_SIZE,
       });
