@@ -16,13 +16,16 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
 from app.core.permissions import (
     get_rank_default_permissions,
     permission_matches_any,
+    permission_matches_any_write,
 )
 from app.models.document import (
     Document,
@@ -30,6 +33,7 @@ from app.models.document import (
     DocumentStatus,
     FolderVisibility,
 )
+from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.user import Organization, User
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -212,7 +216,9 @@ class DocumentsService:
         return result.scalar_one_or_none()
 
     @staticmethod
-    def _folder_admits_user(folder: DocumentFolder, user: User) -> bool:
+    def _folder_admits_user(
+        folder: DocumentFolder, user: User, *, require_write: bool = False
+    ) -> bool:
         """Apply one folder's restrictions, without considering its parent.
 
         ``required_permissions`` is checked *before* the leadership bypass and
@@ -224,6 +230,21 @@ class DocumentsService:
         otherwise, and a documents administrator holding no facilities grant is
         exactly who that contract excludes. Letting the bypass win here would
         reopen the leak this field exists to close, one module at a time.
+
+        ``require_write``: ``required_permissions`` lists every permission
+        that admits a *reader* — for a sensitive facility folder, that
+        includes the read-only ``facilities.view_sensitive`` alongside
+        ``facilities.edit``/``facilities.manage``. A mutation (rename,
+        delete, move a document in or out) is a different question, and
+        answering it with the same OR-of-any-admitting-permission check lets
+        a caller who holds only the read-tier permission from the list —
+        e.g. the seeded treasurer, who has ``facilities.view_sensitive`` and
+        no facilities write grant at all — pass a check that was supposed to
+        gate writing. The source module's own mutation routes never accept a
+        view-only permission for a write (see ``facilities.py``'s
+        ``.edit``/``.delete``/``.manage`` requirements); a generic document
+        mutation reusing this folder's ACL must hold the caller to the same
+        bar.
         """
         user_perms = _get_user_permissions(user)
 
@@ -232,7 +253,12 @@ class DocumentsService:
             # granted `facilities.*` holds every facilities permission, and an
             # intersection sees none of them. It also subsumes the global "*"
             # case this previously special-cased by hand.
-            if not permission_matches_any(folder.required_permissions, user_perms):
+            matcher = (
+                permission_matches_any_write
+                if require_write
+                else permission_matches_any
+            )
+            if not matcher(folder.required_permissions, user_perms):
                 return False
 
         if _is_leadership(user_perms):
@@ -261,6 +287,8 @@ class DocumentsService:
         organization_id: UUID,
         user: User,
         folders_by_id: Optional[Dict[str, DocumentFolder]] = None,
+        *,
+        require_write: bool = False,
     ) -> bool:
         """Authorize a folder by evaluating it and every ancestor.
 
@@ -273,6 +301,11 @@ class DocumentsService:
         ``folders_by_id`` may contain an already org-scoped folder snapshot for
         callers authorizing many folders.  A missing id in such a snapshot is
         treated as corrupt ancestry rather than triggering an unscoped lookup.
+
+        ``require_write`` asks a stricter question at every level of the
+        chain: not "can this caller read this far", but "can this caller
+        write here" — see ``_folder_admits_user``. Callers authorizing a
+        mutation (rename, delete, file into, move out of) must pass this.
         """
         expected_org = str(organization_id)
         current: Optional[DocumentFolder] = folder
@@ -286,7 +319,7 @@ class DocumentsService:
 
             if str(current.organization_id) != expected_org:
                 return False
-            if not self._folder_admits_user(current, user):
+            if not self._folder_admits_user(current, user, require_write=require_write):
                 return False
 
             parent_id = current.parent_id
@@ -303,9 +336,15 @@ class DocumentsService:
         return False
 
     async def can_access_document(
-        self, document: Document, organization_id: UUID, user: User
+        self,
+        document: Document,
+        organization_id: UUID,
+        user: User,
+        *,
+        require_write: bool = False,
     ) -> bool:
-        """Whether a user may view a specific document.
+        """Whether a user may view (or, with ``require_write``, mutate) a
+        specific document.
 
         Access is governed by the document's containing folder — the same
         boundary the folder/document list enforces — so a direct by-id fetch
@@ -320,7 +359,9 @@ class DocumentsService:
             # Fail closed: a document that references a folder we can't resolve
             # must not become readable by falling through the ACL.
             return False
-        return await self.can_access_folder(folder, organization_id, user)
+        return await self.can_access_folder(
+            folder, organization_id, user, require_write=require_write
+        )
 
     async def accessible_folder_ids(
         self, organization_id: UUID, user: User
@@ -477,7 +518,7 @@ class DocumentsService:
         ``current_user`` is optional only so this signature doesn't break a
         caller with no user in scope (there are none client-facing today);
         every route that lets a caller choose *which* folder to delete must
-        pass it, or FAC-21's descendant-ACL check below silently no-ops.
+        pass it, or the descendant-ACL check below silently no-ops.
         """
         folder = await self.get_folder_by_id(folder_id, organization_id)
         if not folder:
@@ -496,30 +537,26 @@ class DocumentsService:
         if folder.is_system:
             raise PermissionError("Cannot delete a system folder")
 
-        # Walk the folder subtree (this folder + all descendants via parent_id)
-        # to collect backing file paths before the cascade delete removes the
-        # document rows.
+        # Walk the folder subtree (this folder + all descendants via
+        # parent_id) *without* an organization_id filter, then check each row
+        # found. The ORM's ``children`` cascade (``cascade="all,
+        # delete-orphan"``) will itself load descendants by ``parent_id``
+        # alone when ``self.db.delete`` runs below, with no org awareness at
+        # all. ``parent_id`` carries no same-org DB constraint --
+        # assert_in_org (DOC-6) is an application-level guard on
+        # create_folder/update_folder, the only two client-facing writers of
+        # this column, not a schema constraint -- so a row written before
+        # that guard existed, or by any future writer that forgets it, could
+        # carry a cross-organization parent_id. If the cascade were to reach
+        # such a row, it would delete another tenant's folder and documents.
+        # Failing closed here, before the delete, means this can't happen
+        # even if the guard upstream is ever wrong: any descendant outside
+        # the caller's org aborts the whole delete rather than silently
+        # being swept in.
         #
-        # FAC-17 (Codex round 4 on FAC-14/15/16): deliberately walks
-        # ``parent_id`` with no organization_id filter, then checks each row
-        # found -- not the org-scoped query the walk used before. The ORM's
-        # ``children`` cascade (``cascade="all, delete-orphan"``, FAC-16) will
-        # itself load descendants by ``parent_id`` alone when ``self.db.delete``
-        # runs below, with no org awareness at all. ``parent_id`` carries no
-        # same-org DB constraint -- assert_in_org (DOC-6) is an
-        # application-level guard on create_folder/update_folder, the only two
-        # client-facing writers of this column, not a schema constraint -- so a
-        # row written before that guard existed, or by any future writer that
-        # forgets it, could carry a cross-organization parent_id. If the
-        # cascade were to reach such a row, it would delete another tenant's
-        # folder and documents. Failing closed here, before the delete, means
-        # this can't happen even if the guard upstream is ever wrong: any
-        # descendant outside the caller's org aborts the whole delete rather
-        # than silently being swept in.
-        #
-        # FAC-21 (Codex, round 6): the endpoint's own can_access_folder check
-        # authorizes only the folder being deleted (and, via that call's own
-        # ancestor walk, everything *above* it) -- never anything *below* it.
+        # The endpoint's own can_access_folder check authorizes only the
+        # folder being deleted (and, via that call's own ancestor walk,
+        # everything *above* it) -- never anything *below* it.
         # required_permissions can differ folder-to-folder (nothing forces a
         # descendant to be at least as permissive as its parent), so a caller
         # admitted at the root of a subtree is not necessarily admitted at
@@ -559,8 +596,15 @@ class DocumentsService:
                         "Folder subtree contains a system folder and "
                         "cannot be deleted"
                     )
+                # require_write=True: a delete is a write, so a descendant
+                # folder whose required_permissions admit this caller only at
+                # its read-only tier (e.g. facilities.view_sensitive, with no
+                # facilities write grant) must not let the cascade through it
+                # either -- the same treasurer-shaped gap this predicate's
+                # top-level caller (the documents.py endpoint) is guarded
+                # against, one level down the tree.
                 if current_user is not None and not self._folder_admits_user(
-                    child, current_user
+                    child, current_user, require_write=True
                 ):
                     raise ValueError(
                         "Folder subtree contains a folder this caller cannot "
@@ -572,12 +616,24 @@ class DocumentsService:
             frontier = new_ids
 
         file_rows = await self.db.execute(
-            select(Document.file_path).where(
+            select(Document.id, Document.file_path).where(
                 Document.organization_id == str(organization_id),
                 Document.folder_id.in_(subtree_ids),
             )
         )
-        file_paths = [row[0] for row in file_rows.all() if row[0]]
+        document_ids: Set[str] = set()
+        file_paths: List[str] = []
+        for document_id, file_path in file_rows.all():
+            document_ids.add(document_id)
+            if file_path:
+                file_paths.append(file_path)
+
+        # A facility record can reference one of these documents without a
+        # foreign key (see _delete_facility_document_references) -- clean
+        # that up in the same transaction as the cascade delete, not after.
+        await self._delete_facility_document_references(
+            document_ids, organization_id, current_user
+        )
 
         await self.db.delete(folder)
         await self.db.commit()
@@ -593,6 +649,113 @@ class DocumentsService:
                     f"folder {folder_id}: {file_path}"
                 )
         return True
+
+    async def _delete_facility_document_references(
+        self,
+        document_ids: Set[str],
+        organization_id: UUID,
+        current_user: Optional[User] = None,
+    ) -> None:
+        """Delete any facility_documents rows pointing at these documents.
+
+        A facility record references a shared document by a plain
+        ``"document:<uuid>"`` string in ``FacilityDocument.file_path`` (see
+        ``_validate_shared_document_reference`` in ``facilities.py``), not a
+        foreign key. Deleting the referenced ``Document`` without this leaves a
+        facility document entry that can never be downloaded again -- a
+        dangling reference with nothing to surface it.
+
+        FAC-26 (Codex): this used to run unconditionally, so a caller reaching
+        it through the generic ``documents.manage``-gated endpoints (or a
+        folder cascade) could delete a facility's own document reference
+        without holding ``facilities.delete``/``.manage`` -- the permission
+        the facility API's own ``delete_facility_document`` route reserves
+        for exactly this action. ``current_user`` is optional only so this
+        signature doesn't break a caller with no user in scope (there are
+        none client-facing today); every route that lets a caller delete a
+        document or folder must pass it, or this check fails closed below
+        rather than silently skipping.
+
+        FAC-27 (Codex): matching used to be an exact string comparison
+        against a canonical ``document:{document_id}`` (lowercase, no
+        braces) this method built itself. ``_validate_shared_document_reference``
+        (facilities.py) validates a caller-supplied reference's UUID suffix
+        with ``UUID(...)`` but stores the *original* string unchanged, so a
+        valid, resolving reference in any other form ``UUID(...)`` accepts
+        (uppercase, brace-wrapped, ...) never matched here and was left
+        dangling after the document it pointed at was deleted. Re-parsing
+        each stored reference's UUID suffix and comparing the parsed value
+        -- via ``_match_facility_document_references`` below -- covers every
+        accepted form rather than only the one this method used to build.
+
+        FAC-28 (Codex): ``FacilityPhoto.file_path`` is validated and stored
+        through the exact same path as ``FacilityDocument``
+        (``create_facility_photo`` -> ``_validate_shared_document_reference``),
+        so a deleted document can dangle a photo reference the same way.
+        Swept in the same transaction, gated by the same permission.
+        """
+        if not document_ids:
+            return
+        target_ids = set(document_ids)
+        document_matches = await self._match_facility_document_references(
+            FacilityDocument, target_ids, organization_id
+        )
+        photo_matches = await self._match_facility_document_references(
+            FacilityPhoto, target_ids, organization_id
+        )
+        if not document_matches and not photo_matches:
+            # No facility reference exists -- nothing to protect, so the
+            # delete proceeds regardless of this permission.
+            return
+        granted = _get_user_permissions(current_user) if current_user else set()
+        if not permission_matches_any(
+            ["facilities.delete", "facilities.manage"], granted
+        ):
+            raise PermissionError(
+                "Cannot delete a document referenced by a facility without "
+                "facilities.delete or facilities.manage permission"
+            )
+        if document_matches:
+            await self.db.execute(
+                sa_delete(FacilityDocument).where(
+                    FacilityDocument.id.in_(document_matches)
+                )
+            )
+        if photo_matches:
+            await self.db.execute(
+                sa_delete(FacilityPhoto).where(FacilityPhoto.id.in_(photo_matches))
+            )
+
+    async def _match_facility_document_references(
+        self,
+        model: type,
+        target_document_ids: Set[str],
+        organization_id: UUID,
+    ) -> List[str]:
+        """Row ids of ``model`` (``FacilityDocument`` or ``FacilityPhoto``)
+        whose ``file_path`` resolves to one of ``target_document_ids``.
+
+        Matches by *parsed* UUID, not the stored string (FAC-27): a
+        ``"document:<uuid>"`` reference validates as long as ``UUID(...)``
+        accepts the suffix, which is looser than the single canonical
+        lowercase, unbraced form an exact-string match would require.
+        """
+        rows = await self.db.execute(
+            select(model.id, model.file_path).where(
+                model.organization_id == str(organization_id),
+                model.file_path.like("document:%", escape=LIKE_ESCAPE_CHAR),
+            )
+        )
+        matched_ids: List[str] = []
+        for row_id, file_path in rows.all():
+            suffix = file_path[len("document:") :]
+            try:
+                parsed_id = str(UUID(suffix))
+            except (ValueError, AttributeError, TypeError):
+                continue
+            if parsed_id in target_document_ids:
+                matched_ids.append(row_id)
+        return matched_ids
 
     # ============================================
     # Document Management
@@ -749,13 +912,31 @@ class DocumentsService:
         await self.db.refresh(document)
         return document
 
-    async def delete_document(self, document_id: UUID, organization_id: UUID) -> bool:
-        """Delete a document. Returns False if not found."""
+    async def delete_document(
+        self,
+        document_id: UUID,
+        organization_id: UUID,
+        current_user: Optional[User] = None,
+    ) -> bool:
+        """Delete a document. Returns False if not found.
+
+        ``current_user`` is optional only so this signature doesn't break a
+        caller with no user in scope (there are none client-facing today);
+        every route that lets a caller delete a document must pass it, or
+        the facility-reference permission check below fails closed rather
+        than silently skipping (FAC-26).
+        """
         document = await self.get_document_by_id(document_id, organization_id)
         if not document:
             return False
 
         file_path = document.file_path
+        # A facility record can reference this document without a foreign
+        # key (see _delete_facility_document_references) -- clean that up in
+        # the same transaction as the delete, not after.
+        await self._delete_facility_document_references(
+            {str(document_id)}, organization_id, current_user
+        )
         await self.db.delete(document)
         await self.db.commit()
 

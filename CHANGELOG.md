@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: the facility-reference cleanup missed non-canonical references and never covered facility photos (2026-09-03)
+
+**Fixed**
+
+- **FAC-27 — the facility-document-reference cleanup exact-matched a
+  canonical string it built itself, missing a stored reference in any other
+  valid form.** `_validate_shared_document_reference` validates a
+  `"document:<uuid>"` reference's UUID suffix with `UUID(...)` — which
+  accepts more than one form (mixed case, brace-wrapped, ...) — but stores
+  the original string unchanged. The cleanup added for FAC-24/26 built only
+  the canonical lowercase, unbraced form and exact-matched against it, so a
+  validated, resolving reference in any other accepted form was left
+  dangling once its document was deleted. Fixed by re-parsing every stored
+  `"document:%"` reference's UUID suffix and comparing the parsed value,
+  covering every accepted form instead of one constructed string.
+- **FAC-28 — the cleanup swept `FacilityDocument` rows only; `FacilityPhoto`
+  references, validated through the identical path, were never cleaned up.**
+  `create_facility_photo` validates its `file_path` through the same
+  `_validate_shared_document_reference` as `create_facility_document`, but
+  the cleanup never queried `FacilityPhoto` at all. Fixed by making the
+  match/delete logic model-agnostic and running it against both tables in
+  the same transaction, gated by the same `facilities.delete`/`.manage`
+  check FAC-26 added.
+- New regression tests in `TestDeleteDocumentCleansUpFacilityReference`
+  covering a non-canonical (brace-wrapped) reference and both the positive
+  and permission-denied `FacilityPhoto` cases — independently confirmed to
+  fail against the pre-fix code and pass against the fix. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-27, FAC-28) for the full
+  writeup.
+
+### Security: every generic document/folder mutation check admitted a read-only permission, letting a treasurer-shaped caller bypass facility write protections (2026-09-03)
+
+**Fixed**
+
+- **FAC-24 — `can_access_folder`/`can_access_document` admitted a caller who
+  held only a folder's read-only `required_permissions` entry, letting every
+  mutation-gating check added by prior rounds (FAC-14 through FAC-21) be
+  satisfied by a read-only grant.** A sensitive facility folder's
+  `required_permissions` lists `facilities.view_sensitive` alongside
+  `.edit`/`.manage` — the right set for a _read_, since holding any one of
+  the three should let you see the file. Reusing that same check unmodified
+  for a _write_ let a caller holding `documents.manage` (the generic
+  module's org-wide mutation grant) plus only `facilities.view_sensitive` —
+  no facilities write permission of any kind — unfile, move, or delete a
+  sensitive facility document, or rename, reparent, delete, or inject a
+  folder into the sensitive folder tree. This is a real, seeded combination:
+  the **treasurer** role holds exactly `documents.manage` +
+  `facilities.view_sensitive`, with none of
+  `facilities.edit`/`.delete`/`.manage`. Fixed by giving
+  `can_access_folder`/`can_access_document` a `require_write` mode that
+  filters a folder's `required_permissions` down to their write-tier entries
+  (every permission family in this codebase names read actions
+  `.view`/`.view_<detail>`; everything else is a write) before matching, and
+  applying it at every mutation-gating site: document update/delete and its
+  destination, folder rename/delete and its destination, and the
+  descendant-ACL check inside a folder-delete cascade.
+- **FAC-25 — `POST /documents/upload`'s folder-destination check still used
+  read-admission, not write.** Every other folder mutation FAC-24 touched was
+  updated to pass `require_write=True`; the upload endpoint's own
+  `can_access_folder` call was missed, so the treasurer-shaped caller FAC-24
+  closed everywhere else could still upload directly into a sensitive
+  facility folder. Fixed by passing `require_write=True` there too.
+- **FAC-26 — deleting a shared document (directly, or via a folder cascade)
+  cleaned up its `FacilityDocument` reference without checking the
+  facility-specific delete permission, bypassing the facility API's own
+  stricter delete gate.** The generic `DELETE /documents/{document_id}` (and
+  the folder-cascade delete) require only `documents.manage`, but the
+  facility module's own document-delete route deliberately reserves deletion
+  for `facilities.delete`/`.manage` — a stricter, action-specific grant.
+  Since `permission_matches_any_write` treats `facilities.edit` as
+  write-capable (a folder's `required_permissions` typically lists both
+  `.edit` and `.manage`), a caller with `documents.manage` + `facilities.edit`
+  but not `facilities.delete` could delete a shared document and its
+  facility reference through the generic endpoint, bypassing the
+  facility-specific boundary entirely. Fixed by threading `current_user`
+  through `delete_document` (mirroring `delete_folder`'s existing optional
+  `current_user`) and gating `_delete_facility_document_references`'s actual
+  deletion on the caller holding `facilities.delete`/`.manage` — fails closed
+  (`PermissionError` → 403) when a reference exists and the caller lacks the
+  grant, so the whole delete is blocked rather than leaving a dangling
+  reference; succeeds normally when the document has no facility reference
+  regardless of this permission.
+- New regression tests: `TestFolderWriteTierPermission` (9 tests,
+  reproducing the treasurer-shaped bypass across every affected mutation and
+  positive-controlling a caller who genuinely holds the write-tier
+  permission), `TestDeleteDocumentCleansUpFacilityReference` (3 tests, now
+  also covering the facility-delete-permission gate), and new upload/delete
+  bypass regression tests for FAC-25/FAC-26 — all independently confirmed to
+  fail against the pre-fix code and pass against the fix. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-24, FAC-25, FAC-26) for
+  the full writeup.
+
 ### Security: a system folder could be reparented under an ordinary folder, then destroyed via that folder's delete (2026-09-03)
 
 **CRITICAL — a two-step bypass of the FAC-22 fix directly below, same
@@ -169,10 +261,15 @@ because of an unrelated cross-module folder-ACL fix (PR #2160) that started
 enforcing a permission stamp already present but previously inert. A
 secretary, quartermaster, safety officer, or training officer — every one of
 whom is meant to see the baseline categories at their baseline
-`facilities.view` grant — now gets an empty folder list from that endpoint,
-and is refused the same categories' documents through the generic Documents
+`facilities.view` grant — now gets an empty folder list from that endpoint.
+Of those four, the secretary, safety officer, and training officer are also
+refused the same categories' documents through the generic Documents
 module's own folder browsing and `GET /documents/{id}/download` (both
-enforce the identical over-broad stamp). **This does not empty the
+enforce the identical over-broad stamp) — the seeded quartermaster role has
+no `documents.view` grant at all, so it could not reach the generic
+Documents module either before or after this regression; only the direct
+`/folders` endpoint's own baseline-`facilities.view` gate affects it.
+**This does not empty the
 Facilities module's own Files section in the app** — `FilesSection.tsx`
 loads via `getPhotos` and, for sensitive viewers, `getFacilityDocuments`,
 neither of which calls the affected `/folders` endpoint, so that section
