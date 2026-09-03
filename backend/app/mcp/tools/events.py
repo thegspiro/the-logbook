@@ -21,10 +21,12 @@ from app.models.event import AttendeeVisibility
 from app.models.user import Organization
 from app.services.event_service import EventService, resolve_attendee_visibility
 
-# Characters of an event description returned per call; a longer one is
-# read in pieces through ``get_event_description``. The column is unbounded
-# Text, so a page of events cannot be allowed to carry every word of it.
+# Characters of an event's description or location details returned per
+# call; a longer one is read in pieces through ``get_event_description``.
+# Both columns are unbounded Text, so a page of events cannot be allowed to
+# carry every word of them.
 EVENT_TEXT_CHARS = 20_000
+_EVENT_TEXT_FIELDS = ("description", "location_details")
 
 
 def _clip(value: Any) -> tuple[Any, bool]:
@@ -54,6 +56,7 @@ def _chunk(text: str, offset: int) -> dict:
 def _event(event: Any, counts: Optional[dict] = None) -> dict:
     counts = counts or {}
     description, cut = _clip(event.description)
+    location_details, location_cut = _clip(event.location_details)
     return {
         "id": event.id,
         "title": event.title,
@@ -62,7 +65,8 @@ def _event(event: Any, counts: Optional[dict] = None) -> dict:
         "event_type": iso(event.event_type),
         "custom_category": event.custom_category,
         "location": event.location,
-        "location_details": event.location_details,
+        "location_details": location_details,
+        "location_details_truncated": location_cut,
         "location_id": event.location_id,
         "start_datetime": iso(event.start_datetime),
         "end_datetime": iso(event.end_datetime),
@@ -98,7 +102,8 @@ def register(server: Any) -> None:
         and ``start_before`` are ISO-8601 date-times (UTC); omit both for the
         default of every non-cancelled published event. ``event_type`` is one
         of the department's event types (training, business_meeting, ...).
-        A description is cut at 20,000 characters (``description_truncated``);
+        A description or location details are cut at 20,000 characters
+        (``description_truncated``, ``location_details_truncated``);
         ``get_event_description`` reads the rest."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
@@ -119,8 +124,9 @@ def register(server: Any) -> None:
     async def get_event(
         db: AsyncSession, principal: McpPrincipal, event_id: str
     ) -> dict:
-        """One event by id, with its description (cut at 20,000 characters;
-        ``get_event_description`` reads the rest) and RSVP settings."""
+        """One event by id, with its description and location details (cut
+        at 20,000 characters; ``get_event_description`` reads the rest) and
+        RSVP settings."""
         # get_event answers (None, None) for an unknown or foreign id. The
         # RSVP roster is not read here, so it is not loaded.
         event, _ = await EventService(db).get_event(
@@ -136,18 +142,21 @@ def register(server: Any) -> None:
         principal: McpPrincipal,
         event_id: str,
         content_offset: int = 0,
+        field: str = "description",
     ) -> dict:
-        """An event's description, 20,000 characters at a time. When
-        ``content_has_more`` is true, call again with ``content_offset`` set
-        to ``next_content_offset``."""
+        """An event's ``description`` or ``location_details`` (``field``),
+        20,000 characters at a time. When ``content_has_more`` is true, call
+        again with ``content_offset`` set to ``next_content_offset``."""
+        if field not in _EVENT_TEXT_FIELDS:
+            raise ValueError("field must be one of: " + ", ".join(_EVENT_TEXT_FIELDS))
         content_offset = clamp_offset(content_offset)
         event, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
         if event is None:
             raise ValueError("Event not found")
-        body = _chunk(event.description or "", content_offset)
-        body.update({"event_id": event.id, "title": event.title})
+        body = _chunk(getattr(event, field) or "", content_offset)
+        body.update({"event_id": event.id, "title": event.title, "field": field})
         return body
 
     @logbook_tool(server, title="List event attendees")

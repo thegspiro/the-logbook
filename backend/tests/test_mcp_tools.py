@@ -3412,3 +3412,362 @@ class TestTwentySixthRoundFindings:
             )
             seen.extend(i["id"] for i in body["items"])
         assert seen == item_ids
+
+
+class TestTwentySeventhRoundFindings:
+    """Regressions for the twenty-seventh review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_event_location_details_are_bounded_and_events_page_by_id(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import events as event_tools
+        from app.models.event import Event
+
+        org_id, admin_id, _ = org_with_members
+        start = datetime.now(timezone.utc) + timedelta(days=2)
+        event_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for event_id in event_ids:
+            db_session.add(
+                Event(
+                    id=event_id,
+                    organization_id=org_id,
+                    title="Simultaneous",
+                    event_type="training",
+                    start_datetime=start,
+                    end_datetime=start + timedelta(hours=2),
+                    location_details="Bay 2, ask for 5551234567. " + "d" * 40,
+                    created_by=admin_id,
+                )
+            )
+        await db_session.flush()
+        monkeypatch.setattr(event_tools, "EVENT_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        seen = []
+        for offset in range(3):
+            body = await _call(server, principal, "list_events", limit=1, offset=offset)
+            seen.extend(e["id"] for e in body["items"])
+            for row in body["items"]:
+                assert len(row["location_details"]) == 12
+                assert row["location_details_truncated"] is True
+        assert seen == event_ids
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_event_description",
+                event_id=event_ids[0],
+                field="location_details",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert joined.endswith("d" * 40)
+        assert chunk["field"] == "location_details"
+        with pytest.raises(ToolError, match="field must be one of"):
+            await _call(
+                server,
+                principal,
+                "get_event_description",
+                event_id=event_ids[0],
+                field="title",
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_document_descriptions_are_bounded_and_read_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import documents as document_tools
+
+        org_id, admin_id, _ = org_with_members
+        doc_id = str(uuid.uuid4())
+        description = "Ask sam@example.org. " + "x" * 40
+        await db_session.execute(
+            text(
+                "INSERT INTO documents (id, organization_id, name, description, "
+                "document_type, status, version) VALUES "
+                "(:id, :org, 'SOG 7', :description, 'uploaded', 'active', 1)"
+            ),
+            {"id": doc_id, "org": org_id, "description": description},
+        )
+        await db_session.flush()
+        monkeypatch.setattr(document_tools, "DOCUMENT_CONTENT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_documents")
+        row = next(d for d in listed["items"] if d["id"] == doc_id)
+        assert len(row["description"]) == 12
+        assert row["description_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_document_description",
+                document_id=doc_id,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "sam@example.org" not in joined
+        assert joined.endswith("x" * 40)
+        assert chunk["name"] == "SOG 7"
+        with pytest.raises(ToolError, match="Document not found"):
+            await _call(
+                server,
+                principal,
+                "get_document_description",
+                document_id=str(uuid.uuid4()),
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_facility_descriptions_are_bounded_and_read_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import facilities as facility_tools
+
+        org_id, admin_id, _ = org_with_members
+        kind = FacilityType(organization_id=org_id, name="Station")
+        state = FacilityStatus(organization_id=org_id, name="Active")
+        db_session.add_all([kind, state])
+        await db_session.flush()
+        facility = Facility(
+            organization_id=org_id,
+            name="Station 3",
+            facility_type_id=kind.id,
+            status_id=state.id,
+            description="Keyholder 555-123-4567. " + "s" * 40,
+        )
+        db_session.add(facility)
+        await db_session.flush()
+        monkeypatch.setattr(facility_tools, "FACILITY_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_facilities")
+        row = next(f for f in listed["items"] if f["id"] == facility.id)
+        assert len(row["description"]) == 12
+        assert row["description_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_facility_description",
+                facility_id=facility.id,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "555-123-4567" not in joined
+        assert joined.endswith("s" * 40)
+        assert chunk["name"] == "Station 3"
+        with pytest.raises(ToolError, match="Facility not found"):
+            await _call(
+                server,
+                principal,
+                "get_facility_description",
+                facility_id=str(uuid.uuid4()),
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_budget_notes_are_bounded_and_read_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import finance as finance_tools
+        from app.models.finance import Budget, BudgetCategory, FiscalYear
+
+        org_id, admin_id, _ = org_with_members
+        fy = FiscalYear(
+            organization_id=org_id,
+            name="FY2027",
+            start_date=date(2027, 1, 1),
+            end_date=date(2027, 12, 31),
+            created_by=admin_id,
+        )
+        category = BudgetCategory(organization_id=org_id, name="Hose")
+        db_session.add_all([fy, category])
+        await db_session.flush()
+        budget = Budget(
+            organization_id=org_id,
+            fiscal_year_id=fy.id,
+            category_id=category.id,
+            amount_budgeted=500,
+            amount_spent=0,
+            amount_encumbered=0,
+            notes="Vendor rep 555-123-4567. " + "b" * 40,
+            created_by=admin_id,
+        )
+        db_session.add(budget)
+        await db_session.flush()
+        monkeypatch.setattr(finance_tools, "BUDGET_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id, expose_finance=True)
+        listed = await _call(server, principal, "list_budgets", fiscal_year_id=fy.id)
+        row = next(b for b in listed["items"] if b["id"] == budget.id)
+        assert len(row["notes"]) == 12
+        assert row["notes_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_budget_notes",
+                budget_id=budget.id,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "555-123-4567" not in joined
+        assert joined.endswith("b" * 40)
+        assert chunk["fiscal_year_id"] == fy.id
+        with pytest.raises(ToolError, match="Finance data is not shared"):
+            await _call(
+                server,
+                _principal(org_id, admin_id),
+                "get_budget_notes",
+                budget_id=budget.id,
+            )
+        with pytest.raises(ToolError, match="Budget not found"):
+            await _call(
+                server, principal, "get_budget_notes", budget_id=str(uuid.uuid4())
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_maintenance_description_is_bounded_and_fleet_types_are_rows(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import apparatus as apparatus_tools
+        from app.models.apparatus import (
+            Apparatus,
+            ApparatusMaintenance,
+            ApparatusMaintenanceType,
+            ApparatusStatus,
+            ApparatusType,
+            MaintenanceCategory,
+        )
+
+        org_id, admin_id, _ = org_with_members
+        kind = ApparatusType(
+            organization_id=org_id, name="Tanker (ask 555-123-4567)", code="TNK"
+        )
+        status = ApparatusStatus(organization_id=org_id, name="In Service", code="IS")
+        db_session.add_all([kind, status])
+        await db_session.flush()
+        unit = Apparatus(
+            organization_id=org_id,
+            unit_number="T1",
+            name="Tanker 1",
+            apparatus_type_id=kind.id,
+            status_id=status.id,
+        )
+        db_session.add(unit)
+        await db_session.flush()
+        mtype = ApparatusMaintenanceType(
+            organization_id=org_id,
+            name="Tank inspection",
+            code="TANK",
+            category=MaintenanceCategory.INSPECTION,
+        )
+        db_session.add(mtype)
+        await db_session.flush()
+        record = ApparatusMaintenance(
+            organization_id=org_id,
+            apparatus_id=unit.id,
+            maintenance_type_id=mtype.id,
+            description="Shop line 5551234567. " + "m" * 40,
+        )
+        db_session.add(record)
+        await db_session.flush()
+        monkeypatch.setattr(apparatus_tools, "MAINTENANCE_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_apparatus_maintenance")
+        row = next(r for r in listed["items"] if r["id"] == record.id)
+        assert len(row["description"]) == 12
+        assert row["description_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_maintenance_record_text",
+                record_id=record.id,
+                field="description",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert joined.endswith("m" * 40)
+        summary = await _call(server, principal, "get_fleet_summary")
+        assert summary["by_type"] == [
+            {"apparatus_type": "Tanker (ask [phone removed])", "count": 1}
+        ]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_action_items_are_unassigned_attributed_and_never_reminded(
+        self, server, org_with_members, db_session
+    ):
+        """The tool creates an item for an officer to assign: unassigned, so
+        the due-date reminder (which goes to an assignee) has nobody to page,
+        and stamped with who it is attributed to and where it came from."""
+        from app.models.notification import NotificationLog
+        from app.services.scheduled_tasks import run_action_item_reminders
+
+        org_id, admin_id, _ = org_with_members
+        meeting = Meeting(
+            organization_id=org_id,
+            title="Officers' meeting",
+            meeting_type=MeetingType.BUSINESS,
+            meeting_date=date.today(),
+        )
+        db_session.add(meeting)
+        await db_session.flush()
+        created = await _call(
+            server,
+            _principal(org_id, admin_id, access_mode="read_write"),
+            "create_meeting_action_item",
+            meeting_id=meeting.id,
+            description="Order hose; suggested owner: the quartermaster",
+            due_date=(date.today() + timedelta(days=1)).isoformat(),
+            priority="high",
+        )
+        item = await db_session.get(MeetingActionItem, created["id"])
+        assert item.assigned_to is None
+        assert item.created_by == admin_id
+        assert item.source == "mcp"
+        assert created["created_by_member_id"] == admin_id
+        assert created["source"] == "mcp"
+        assert "assigned_to_member_id" not in created
+        await run_action_item_reminders(db_session)
+        reminders = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.category == "action_items",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert reminders == []

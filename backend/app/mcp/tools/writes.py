@@ -1,7 +1,7 @@
 """Write tools. Registered only for a connection the department set to
 read/write, and even then every one of them creates something for a person
-to review: a draft event, an open action item, a pending reorder request.
-Nothing here publishes, approves, assigns or sends.
+to review: a draft event, an unassigned action item, a pending reorder
+request. Nothing here publishes, approves, assigns or sends.
 
 Rows are attributed to the administrator who issued the service key — a
 service key has no member of its own — and the audit trail records the tool
@@ -34,6 +34,9 @@ from app.services.inventory_service import InventoryService
 from app.services.meetings_service import MeetingsService
 
 _PRIORITIES = {"normal": 0, "high": 1, "urgent": 2}
+
+# The ``source`` stamped on an action item this connection creates.
+MCP_ACTION_ITEM_SOURCE = "mcp"
 
 
 def _validation_message(exc: ValidationError) -> str:
@@ -132,22 +135,26 @@ def register(server: Any) -> None:
         principal: McpPrincipal,
         meeting_id: str,
         description: str,
-        assigned_to_member_id: Optional[str] = None,
         due_date: Optional[str] = None,
         priority: str = "normal",
     ) -> dict:
-        """Add an open action item to a meeting. ``priority`` is normal, high
-        or urgent; ``due_date`` is YYYY-MM-DD; the assignee is a member id
-        from list_members."""
+        """Add an unassigned action item to a meeting for an officer to review
+        and assign; name a suggested owner in the description if one is
+        known. ``priority`` is normal, high or urgent; ``due_date`` is
+        YYYY-MM-DD."""
         if priority not in _PRIORITIES:
             raise ValueError("priority must be normal, high or urgent")
-        await _actor(db, principal)
+        actor = await _actor(db, principal)
+        # Never assigned here: assigning is the officer's review, and the
+        # due-date reminders go only to an assignee, so an item nobody has
+        # reviewed cannot page a member. The row carries who it is
+        # attributed to and that this connection created it.
         data: dict[str, Any] = {
             "description": description.strip(),
             "priority": _PRIORITIES[priority],
+            "created_by": str(actor),
+            "source": MCP_ACTION_ITEM_SOURCE,
         }
-        if assigned_to_member_id:
-            data["assigned_to"] = str(parse_uuid(assigned_to_member_id, "member_id"))
         due = parse_date(due_date, "due_date")
         if due is not None:
             data["due_date"] = due
@@ -162,10 +169,11 @@ def register(server: Any) -> None:
             "id": item.id,
             "meeting_id": item.meeting_id,
             "description": item.description,
-            "assigned_to_member_id": item.assigned_to,
             "due_date": iso(item.due_date),
             "status": iso(item.status),
             "priority": item.priority,
+            "created_by_member_id": item.created_by,
+            "source": item.source,
         }
 
     @logbook_tool(

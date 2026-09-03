@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**264 tables · 4470 columns · 851 foreign keys**
+**264 tables · 4472 columns · 852 foreign keys**
 
 ---
 
@@ -395,7 +395,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 12 | Meeting Action Item model |
+| [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 14 | Meeting Action Item model |
 | [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 10 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 20 | Meeting model |
 
@@ -5802,6 +5802,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `priority` | INTEGER | yes |  | `0` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `completion_notes` | TEXT | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `source` | VARCHAR(32) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -9315,7 +9317,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (316 references)
+### → `users` (317 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9496,6 +9498,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `mcp_service_keys` | `created_by` | SET NULL | yes |
 | `mcp_service_keys` | `revoked_by` | SET NULL | yes |
 | `meeting_action_items` | `assigned_to` | NO ACTION | yes |
+| `meeting_action_items` | `created_by` | SET NULL | yes |
 | `meeting_attendees` | `user_id` | CASCADE | no |
 | `meeting_attendees` | `waiver_granted_by` | NO ACTION | yes |
 | `meeting_minutes` | `approved_by` | NO ACTION | yes |

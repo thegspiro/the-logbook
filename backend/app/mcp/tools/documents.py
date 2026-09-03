@@ -19,10 +19,37 @@ from app.mcp.tools._common import (
 from app.models.document import DocumentFolder, DocumentStatus, FolderVisibility
 from app.services.documents_service import DocumentsService
 
-# Characters of a document's text returned per call. An in-app document is
-# a LONGTEXT column; a client reads a long one in pieces rather than having
+# Characters of a document's text, or of its description, returned per
+# call. An in-app document is a LONGTEXT column and the description is
+# unbounded Text; a client reads a long one in pieces rather than having
 # the whole thing scanned, redacted and serialized at once.
 DOCUMENT_CONTENT_CHARS = 20_000
+
+
+def _clip(value: Any) -> tuple[Any, bool]:
+    """``value`` scrubbed and cut to ``DOCUMENT_CONTENT_CHARS``, and whether cut."""
+    if not isinstance(value, str):
+        return value, False
+    value = scrub_text(value)
+    if len(value) <= DOCUMENT_CONTENT_CHARS:
+        return value, False
+    return value[:DOCUMENT_CONTENT_CHARS], True
+
+
+def _chunk(text: str, offset: int) -> dict:
+    # Scrubbed before it is cut, so a number or address that would straddle
+    # a boundary can never be reassembled from two pieces.
+    text = scrub_text(text)
+    piece = text[offset : offset + DOCUMENT_CONTENT_CHARS]
+    body = {
+        "content": piece,
+        "content_offset": offset,
+        "content_total_chars": len(text),
+        "content_has_more": offset + len(piece) < len(text),
+    }
+    if body["content_has_more"]:
+        body["next_content_offset"] = offset + len(piece)
+    return body
 
 
 def _folder_is_open(folder: DocumentFolder) -> bool:
@@ -66,11 +93,35 @@ async def _open_folder_ids(db: AsyncSession, organization_id: str) -> set[str]:
     return open_ids
 
 
+async def _visible_document(
+    db: AsyncSession, principal: McpPrincipal, document_id: str
+) -> Any:
+    """The document by id, under the same rules as ``get_document``."""
+    doc = await DocumentsService(db).get_document_by_id(
+        parse_uuid(document_id, "document_id"), org_uuid(principal)
+    )
+    if doc is None or doc.status != DocumentStatus.ACTIVE:
+        raise ValueError("Document not found")
+    # A generated document (a property-return report, filed minutes)
+    # embeds structured member data — an address, a membership number, a
+    # separation reason — that a text scrub cannot recognise. Only what a
+    # person uploaded or wrote in the app is available here.
+    if doc.source_type is not None:
+        raise ValueError("Document not found")
+    if doc.folder_id is not None:
+        open_ids = await _open_folder_ids(db, principal.organization_id)
+        if doc.folder_id not in open_ids:
+            raise ValueError("Document not found")
+    return doc
+
+
 def _document(d: Any, include_content: bool, content_offset: int = 0) -> dict:
+    description, cut = _clip(d.description)
     body = {
         "id": d.id,
         "name": d.name,
-        "description": d.description,
+        "description": description,
+        "description_truncated": cut,
         "folder_id": d.folder_id,
         "file_name": d.file_name,
         "file_type": d.file_type,
@@ -84,16 +135,9 @@ def _document(d: Any, include_content: bool, content_offset: int = 0) -> dict:
         "updated_at": iso(d.updated_at),
     }
     if include_content:
-        # Scrubbed before it is cut, so a number or address that would
-        # straddle a boundary can never be reassembled from two pieces.
-        text = scrub_text(d.content_html or "")
-        chunk = text[content_offset : content_offset + DOCUMENT_CONTENT_CHARS]
-        body["content_html"] = chunk
-        body["content_offset"] = content_offset
-        body["content_total_chars"] = len(text)
-        body["content_has_more"] = content_offset + len(chunk) < len(text)
-        if body["content_has_more"]:
-            body["next_content_offset"] = content_offset + len(chunk)
+        chunk = _chunk(d.content_html or "", content_offset)
+        body["content_html"] = chunk.pop("content")
+        body.update(chunk)
     return body
 
 
@@ -109,7 +153,9 @@ def register(server: Any) -> None:
     ) -> dict:
         """Active documents in folders every member can read: name, type,
         folder, tags and version. Restricted and archived documents are not
-        listed. Use get_document for the text of an in-app document."""
+        listed. A description is cut at 20,000 characters
+        (``description_truncated``); ``get_document_description`` reads the
+        rest. Use get_document for the text of an in-app document."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         open_ids = await _open_folder_ids(db, principal.organization_id)
@@ -142,19 +188,21 @@ def register(server: Any) -> None:
         true, call again with ``content_offset`` set to
         ``next_content_offset``."""
         content_offset = clamp_offset(content_offset)
-        doc = await DocumentsService(db).get_document_by_id(
-            parse_uuid(document_id, "document_id"), org_uuid(principal)
-        )
-        if doc is None or doc.status != DocumentStatus.ACTIVE:
-            raise ValueError("Document not found")
-        # A generated document (a property-return report, filed minutes)
-        # embeds structured member data — an address, a membership number, a
-        # separation reason — that a text scrub cannot recognise. Only what a
-        # person uploaded or wrote in the app is available here.
-        if doc.source_type is not None:
-            raise ValueError("Document not found")
-        if doc.folder_id is not None:
-            open_ids = await _open_folder_ids(db, principal.organization_id)
-            if doc.folder_id not in open_ids:
-                raise ValueError("Document not found")
+        doc = await _visible_document(db, principal, document_id)
         return _document(doc, True, content_offset)
+
+    @logbook_tool(server, title="Read document description")
+    async def get_document_description(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        document_id: str,
+        content_offset: int = 0,
+    ) -> dict:
+        """A document's description, 20,000 characters at a time, under the
+        same rules as ``get_document``. When ``content_has_more`` is true,
+        call again with ``content_offset`` set to ``next_content_offset``."""
+        content_offset = clamp_offset(content_offset)
+        doc = await _visible_document(db, principal, document_id)
+        body = {"document_id": doc.id, "name": doc.name}
+        body.update(_chunk(doc.description or "", content_offset))
+        return body

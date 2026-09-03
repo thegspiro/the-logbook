@@ -64,10 +64,10 @@ def _apparatus(a: Any, locations: dict[str, str]) -> dict:
 
 
 # Characters of a maintenance record's free text returned per row; the rest
-# is read through ``get_maintenance_record_text``. Both columns are
+# is read through ``get_maintenance_record_text``. All three columns are
 # unbounded Text, so a page of records cannot carry every word of them.
 MAINTENANCE_TEXT_CHARS = 20_000
-_MAINTENANCE_TEXT_FIELDS = ("work_performed", "findings")
+_MAINTENANCE_TEXT_FIELDS = ("description", "work_performed", "findings")
 
 
 def _clip(value: Any) -> tuple[Any, bool]:
@@ -94,13 +94,15 @@ def _chunk(text: str, offset: int) -> dict:
 
 
 def _maintenance(r: Any) -> dict:
+    description, description_cut = _clip(r.description)
     work_performed, work_cut = _clip(r.work_performed)
     findings, findings_cut = _clip(r.findings)
     return {
         "id": r.id,
         "apparatus_id": r.apparatus_id,
         "maintenance_type": getattr(getattr(r, "maintenance_type", None), "name", None),
-        "description": r.description,
+        "description": description,
+        "description_truncated": description_cut,
         "scheduled_date": iso(r.scheduled_date),
         "due_date": iso(r.due_date),
         "completed_date": iso(r.completed_date),
@@ -151,8 +153,19 @@ def register(server: Any) -> None:
     @logbook_tool(server, title="Fleet summary", module="apparatus")
     async def get_fleet_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Counts by status, deficiencies, and upcoming maintenance and
-        expirations across the fleet."""
-        return await ApparatusService(db).get_fleet_summary(principal.organization_id)
+        expirations across the fleet. ``by_type`` is a list of type name and
+        count."""
+        summary = await ApparatusService(db).get_fleet_summary(
+            principal.organization_id
+        )
+        # Apparatus type names are department-typed free text and arrive
+        # as dictionary keys, which the redactor leaves alone; as rows
+        # they are values and get scrubbed like any other string.
+        summary["by_type"] = [
+            {"apparatus_type": scrub_text(str(name)), "count": count}
+            for name, count in (summary.get("by_type") or {}).items()
+        ]
+        return summary
 
     @logbook_tool(server, title="Apparatus maintenance", module="apparatus")
     async def list_apparatus_maintenance(
@@ -189,10 +202,10 @@ def register(server: Any) -> None:
         field: str,
         content_offset: int = 0,
     ) -> dict:
-        """The full ``work_performed`` or ``findings`` text of one maintenance
-        record, 20,000 characters at a time. When ``content_has_more`` is
-        true, call again with ``content_offset`` set to
-        ``next_content_offset``."""
+        """The full ``description``, ``work_performed`` or ``findings`` text
+        of one maintenance record, 20,000 characters at a time. When
+        ``content_has_more`` is true, call again with ``content_offset`` set
+        to ``next_content_offset``."""
         if field not in _MAINTENANCE_TEXT_FIELDS:
             raise ValueError(
                 "field must be one of: " + ", ".join(_MAINTENANCE_TEXT_FIELDS)

@@ -435,7 +435,9 @@ class EventService:
         if end_before:
             query = query.where(Event.end_datetime <= end_before)
 
-        query = query.order_by(Event.start_datetime).offset(skip).limit(limit)
+        # The id breaks ties between simultaneous events, so an offset page
+        # never repeats or skips one.
+        query = query.order_by(Event.start_datetime, Event.id).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         rows = result.all()
