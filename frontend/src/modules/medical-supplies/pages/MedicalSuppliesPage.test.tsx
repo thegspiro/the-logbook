@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -76,7 +76,15 @@ function assertOrganizationLowStockCount(count: number): void {
 }
 
 describe('MedicalSuppliesPage', () => {
+  const ALL_SERVICE_MOCKS = [mockGetSummary, mockGetItems, mockGetCategories, mockGetExpiringLots, mockCheckPermission];
+
   beforeEach(() => {
+    // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
+    // leaves implementations AND any unconsumed mockRejectedValueOnce still
+    // queued. The stale-data tests below arm four one-shot rejections at once,
+    // so a test that returns before every section request fires hands the
+    // leftover to whichever test calls that mock next. (CLAUDE.md pitfall #28.)
+    ALL_SERVICE_MOCKS.forEach((mock) => mock.mockReset());
     vi.clearAllMocks();
     mockCheckPermission.mockReturnValue(false);
     mockGetSummary.mockResolvedValue(summary);
@@ -161,11 +169,14 @@ describe('MedicalSuppliesPage', () => {
     // The exact filter object, so a future item_type sneaking into the payload
     // fails here rather than quietly letting the client choose its own domain.
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenCalledWith({
-        search: undefined,
-        category_id: undefined,
-        limit: 200,
-      })
+      expect(mockGetItems).toHaveBeenCalledWith(
+        {
+          search: undefined,
+          category_id: undefined,
+          limit: 200,
+        },
+        undefined
+      )
     );
   });
 
@@ -268,7 +279,7 @@ describe('MedicalSuppliesPage', () => {
 
   it('reports the expiry window it actually queried', async () => {
     renderWithRouter(<MedicalSuppliesPage />);
-    await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledWith(30));
+    await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledWith(30, undefined));
 
     expect(await screen.findByText(/Expiring within 30d/i)).toBeInTheDocument();
   });
@@ -282,7 +293,7 @@ describe('MedicalSuppliesPage', () => {
 
     await screen.findByText('4x4 Gauze');
     assertOrganizationLowStockCount(7);
-    expect(mockGetSummary).toHaveBeenCalledWith(30);
+    expect(mockGetSummary).toHaveBeenCalledWith(30, undefined);
   });
 
   it('does not replace the organization-wide count with low-stock search results', async () => {
@@ -297,7 +308,9 @@ describe('MedicalSuppliesPage', () => {
       target: { value: 'gauze' },
     });
 
-    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze' })));
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze' }), undefined)
+    );
     assertOrganizationLowStockCount(7);
   });
 
@@ -311,7 +324,7 @@ describe('MedicalSuppliesPage', () => {
     await userEvent.selectOptions(screen.getByRole('combobox', { name: /Filter by category/i }), 'cat-1');
 
     await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ category_id: 'cat-1' }))
+      expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ category_id: 'cat-1' }), undefined)
     );
     assertOrganizationLowStockCount(7);
   });
@@ -339,7 +352,7 @@ describe('MedicalSuppliesPage', () => {
 
     expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Could not load the overview');
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry overview' })).toBeInTheDocument();
   });
 
   it('keeps the overview and expiring stock usable when the supply table fails', async () => {
@@ -411,5 +424,114 @@ describe('MedicalSuppliesPage', () => {
     expect(mockGetItems).toHaveBeenCalledTimes(2);
     expect(mockGetCategories).toHaveBeenCalledTimes(2);
     expect(mockGetExpiringLots).toHaveBeenCalledTimes(2);
+  });
+
+  describe('a section stands on its own', () => {
+    it('shows a section that has settled while another is still hanging', async () => {
+      // Promise.allSettled waits for the slowest before any section updates, so
+      // one endpoint hanging to the API timeout held every other section on its
+      // skeleton -- exactly the coupling the per-section split removes.
+      mockGetCategories.mockImplementation(() => new Promise(() => {}));
+
+      renderWithRouter(<MedicalSuppliesPage />);
+
+      expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
+    });
+
+    it('ignores a superseded request for the same section', async () => {
+      // Two retries of one section -- or a retry overlapping the refresh --
+      // otherwise both commit, and whichever lands last wins regardless of
+      // which was asked for last.
+      let failOlder: ((reason: Error) => void) | undefined;
+      mockGetExpiringLots
+        .mockRejectedValueOnce(new Error('Lots unavailable'))
+        .mockImplementationOnce(() => new Promise((_resolve, reject) => (failOlder = reject)))
+        .mockResolvedValue([expiringLot({ id: 'lot-2', item_name: 'Trauma Shears' })]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await screen.findByRole('alert');
+
+      // First retry hangs; second supersedes it and succeeds.
+      await user.click(screen.getByRole('button', { name: 'Retry expiring stock' }));
+      await waitFor(() => expect(failOlder).toBeDefined());
+      await user.click(screen.getByRole('button', { name: 'Retry expiring stock' }));
+      expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
+
+      // The older request now fails. It must not put its error back over the
+      // newer success.
+      await act(async () => {
+        failOlder?.(new Error('Stale failure'));
+        await Promise.resolve();
+      });
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByText('Trauma Shears')).toBeInTheDocument();
+    });
+
+    it('stops showing the previous query\u2019s rows once the filter changes', async () => {
+      // The table kept the old rows under the newly selected filter, with no
+      // loading or stale indication, until the request finished -- so the rows
+      // on screen and the filter above them disagreed, silently.
+      mockGetItems
+        .mockResolvedValueOnce({
+          items: [{ id: 'item-1', name: 'Trauma Shears', quantity: 6 }],
+          total: 1,
+          skip: 0,
+          limit: 200,
+        })
+        .mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+        target: { value: 'gauze' },
+      });
+
+      await waitFor(() => expect(screen.queryByText('Trauma Shears')).not.toBeInTheDocument());
+    });
+
+    it('marks a section that loaded empty as stale when a later load fails', async () => {
+      // A row count cannot tell "loaded, and there is nothing" from "never
+      // loaded", so an empty-but-loaded section lost its stale marker.
+      mockGetExpiringLots.mockResolvedValueOnce([]).mockRejectedValue(new Error('Lots unavailable'));
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      expect(await screen.findByText('Nothing expiring')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Refresh medical supplies' }));
+
+      expect(await screen.findByText('Showing previously loaded data')).toBeInTheDocument();
+    });
+
+    it('does not claim a section is empty before it has ever loaded', async () => {
+      // "Nothing expiring" is an assertion about the department's stock. A
+      // section whose only request failed knows nothing and must not make it.
+      mockGetExpiringLots.mockRejectedValue(new Error('Lots unavailable'));
+
+      renderWithRouter(<MedicalSuppliesPage />);
+      await screen.findByRole('alert');
+
+      expect(screen.queryByText('Nothing expiring')).not.toBeInTheDocument();
+    });
+
+    it('sends a user-initiated refresh past the response cache', async () => {
+      // The shared client answers a GET from cache for 30s and serves a stale
+      // one for 90s while swallowing the revalidation's failure -- so without a
+      // bypass an explicit refresh reports success against old quantities.
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await screen.findByText('4x4 Gauze');
+
+      expect(mockGetSummary).toHaveBeenLastCalledWith(30, undefined);
+
+      await user.click(screen.getByRole('button', { name: 'Refresh medical supplies' }));
+
+      await waitFor(() => expect(mockGetSummary).toHaveBeenLastCalledWith(30, { bypassCache: true }));
+    });
   });
 });

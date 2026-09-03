@@ -9,7 +9,7 @@
  * know what is about to lapse before they want an inventory count.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import {
   AlertTriangle,
@@ -89,6 +89,11 @@ const SectionError: React.FC<SectionErrorProps> = ({ section, message, isStale, 
     <button
       type="button"
       onClick={onRetry}
+      // Two of these render together when categories and items both fail, and
+      // a screen reader reads only the button's own name -- the heading beside
+      // it is not part of it. Same reason the Dashboard's SectionError takes a
+      // source.
+      aria-label={`Retry ${SECTION_LABELS[section]}`}
       className="mobile-touch-target rounded-md border border-current px-3 py-2 text-sm font-medium"
     >
       Retry
@@ -129,6 +134,27 @@ const MedicalSuppliesPage: React.FC = () => {
     expiring: true,
   });
   const [errors, setErrors] = useState<Partial<Record<Section, string>>>({});
+  // Whether a section has ever completed successfully. A row count cannot
+  // answer that: a section that legitimately loaded zero rows is
+  // indistinguishable from one that has never loaded, so an empty-but-loaded
+  // section lost its "showing previously loaded data" marker on a later
+  // failure, and a section that had never loaded still asserted "Nothing
+  // expiring" / "No medical supplies yet" as though it knew.
+  const [loaded, setLoaded] = useState<Record<Section, boolean>>({
+    summary: false,
+    items: false,
+    categories: false,
+    expiring: false,
+  });
+  // Per-section request generation. Two retries of one section -- or a retry
+  // overlapping the page refresh -- otherwise both commit, and whichever
+  // finishes last wins regardless of which was asked for last.
+  const sectionRequestIds = useRef<Record<Section, number>>({
+    summary: 0,
+    items: 0,
+    categories: 0,
+    expiring: 0,
+  });
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [showItemModal, setShowItemModal] = useState(false);
@@ -136,58 +162,81 @@ const MedicalSuppliesPage: React.FC = () => {
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
   const loadSections = useCallback(
-    async (sections: Section[]) => {
+    async (sections: Section[], { bypassCache = false }: { bypassCache?: boolean } = {}) => {
       setLoading((current) => ({ ...current, ...Object.fromEntries(sections.map((section) => [section, true])) }));
 
+      const options = bypassCache ? { bypassCache: true } : undefined;
       const requests: Record<Section, () => Promise<unknown>> = {
-        summary: () => medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS),
+        summary: () => medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS, options),
         items: () =>
-          medicalSuppliesService.getItems({
-            search: search || undefined,
-            category_id: categoryFilter || undefined,
-            limit: 200,
-          }),
-        categories: () => medicalSuppliesService.getCategories(),
-        expiring: () => medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS),
+          medicalSuppliesService.getItems(
+            {
+              search: search || undefined,
+              category_id: categoryFilter || undefined,
+              limit: 200,
+            },
+            options
+          ),
+        categories: () => medicalSuppliesService.getCategories(true, options),
+        expiring: () => medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS, options),
       };
-      const results = await Promise.allSettled(sections.map((section) => requests[section]()));
 
-      results.forEach((result, index) => {
-        const section = sections[index];
-        if (!section) return;
-        if (result.status === 'rejected') {
-          setErrors((current) => ({
-            ...current,
-            [section]: getErrorMessage(result.reason, `Failed to load the ${SECTION_LABELS[section]}`),
-          }));
-          return;
-        }
-
-        setErrors((current) => {
-          const next = { ...current };
-          delete next[section];
-          return next;
-        });
-        if (section === 'summary') setSummary(result.value as MedicalSupplySummary);
-        if (section === 'items') setItems((result.value as { items: InventoryItem[] }).items);
-        if (section === 'categories') setCategories(result.value as InventoryCategory[]);
-        if (section === 'expiring') setExpiring(result.value as ExpiringLot[]);
-      });
-      setLoading((current) => ({
-        ...current,
-        ...Object.fromEntries(sections.map((section) => [section, false])),
-      }));
+      // Settled per section, not through one Promise.allSettled. That form
+      // waits for the slowest request before any section updates, so a
+      // categories call hanging to the API timeout held summary and expiring
+      // stock on their skeletons -- which is precisely the coupling this
+      // per-section split exists to remove.
+      await Promise.all(
+        sections.map(async (section) => {
+          const requestId = sectionRequestIds.current[section] + 1;
+          sectionRequestIds.current[section] = requestId;
+          const superseded = () => sectionRequestIds.current[section] !== requestId;
+          try {
+            const value = await requests[section]();
+            if (superseded()) return;
+            setErrors((current) => {
+              const next = { ...current };
+              delete next[section];
+              return next;
+            });
+            setLoaded((current) => ({ ...current, [section]: true }));
+            if (section === 'summary') setSummary(value as MedicalSupplySummary);
+            if (section === 'items') setItems((value as { items: InventoryItem[] }).items);
+            if (section === 'categories') setCategories(value as InventoryCategory[]);
+            if (section === 'expiring') setExpiring(value as ExpiringLot[]);
+          } catch (reason: unknown) {
+            if (superseded()) return;
+            setErrors((current) => ({
+              ...current,
+              [section]: getErrorMessage(reason, `Failed to load the ${SECTION_LABELS[section]}`),
+            }));
+          } finally {
+            // Only the newest request clears the flag: an older one finishing
+            // last would otherwise report the section idle while the request
+            // the user is actually waiting on is still running.
+            if (!superseded()) setLoading((current) => ({ ...current, [section]: false }));
+          }
+        })
+      );
     },
     [search, categoryFilter]
   );
 
   const load = useCallback(() => loadSections(['summary', 'items', 'categories', 'expiring']), [loadSections]);
+  // A refresh the user asked for goes to the server. The shared client would
+  // otherwise answer a GET from cache for 30s, and serve a stale one for 90s
+  // while swallowing the revalidation's failure -- so the refresh would report
+  // success against old quantities and never raise the error it exists to find.
+  const refresh = useCallback(
+    () => loadSections(['summary', 'items', 'categories', 'expiring'], { bypassCache: true }),
+    [loadSections]
+  );
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  useRegisterPullToRefresh(load);
+  useRegisterPullToRefresh(refresh);
 
   /** Lot stock is the real count for dated items; quantity is what's left over. */
 
@@ -243,7 +292,7 @@ const MedicalSuppliesPage: React.FC = () => {
           <div className="hscroll flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => void refresh()}
               className="btn-icon"
               aria-label="Refresh medical supplies"
             >
@@ -287,7 +336,7 @@ const MedicalSuppliesPage: React.FC = () => {
               section="summary"
               message={errors.summary}
               isStale={summary !== null}
-              onRetry={() => void loadSections(['summary'])}
+              onRetry={() => void loadSections(['summary'], { bypassCache: true })}
             />
           )}
           {summary && (
@@ -352,32 +401,32 @@ const MedicalSuppliesPage: React.FC = () => {
         <SectionError
           section="expiring"
           message={errors.expiring}
-          isStale={expiring.length > 0}
-          onRetry={() => void loadSections(['expiring'])}
+          isStale={loaded.expiring}
+          onRetry={() => void loadSections(['expiring'], { bypassCache: true })}
         />
       )}
       {tab === 'stock' && errors.categories && (
         <SectionError
           section="categories"
           message={errors.categories}
-          isStale={categories.length > 0}
-          onRetry={() => void loadSections(['categories'])}
+          isStale={loaded.categories}
+          onRetry={() => void loadSections(['categories'], { bypassCache: true })}
         />
       )}
       {tab === 'stock' && errors.items && (
         <SectionError
           section="items"
           message={errors.items}
-          isStale={items.length > 0}
-          onRetry={() => void loadSections(['items'])}
+          isStale={loaded.items}
+          onRetry={() => void loadSections(['items'], { bypassCache: true })}
         />
       )}
 
-      {(tab === 'expiring' ? loading.expiring && expiring.length === 0 : loading.items && items.length === 0) ? (
+      {(tab === 'expiring' ? loading.expiring : loading.items) ? (
         <SkeletonCard />
       ) : tab === 'expiring' ? (
         <section aria-label="Expiring stock">
-          {expiring.length === 0 ? (
+          {loaded.expiring && expiring.length === 0 ? (
             <EmptyState
               icon={CalendarClock}
               title="Nothing expiring"
@@ -458,7 +507,7 @@ const MedicalSuppliesPage: React.FC = () => {
             </select>
           </div>
 
-          {items.length === 0 ? (
+          {loaded.items && items.length === 0 ? (
             <EmptyState
               icon={Stethoscope}
               title="No medical supplies yet"
