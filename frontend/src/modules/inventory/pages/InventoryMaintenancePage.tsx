@@ -3,8 +3,8 @@
  * Shows items due for inspection/maintenance, maintenance history,
  * and provides a modal to log new maintenance records.
  */
-import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import {
   ArrowLeft,
   Wrench,
@@ -143,10 +143,54 @@ const InventoryMaintenancePage: React.FC = () => {
     return d !== null && d >= 0 && d <= 30;
   }).length;
 
-  const openModal = (item: InventoryItem) => {
+  const openModal = useCallback((item: InventoryItem) => {
     setModalItem(item);
     setFormData({ ...INITIAL_FORM, condition_after: item.condition || '' });
-  };
+  }, []);
+
+  /**
+   * "+ Add Record" on an item's inspections tab names the item it came from.
+   *
+   * Fetched by id rather than looked up in the lists above: this page loads
+   * what is due within 90 days plus what is in maintenance, and an item whose
+   * next inspection is further out — or which has none — is in neither. The
+   * link would otherwise land on a generic page with nothing selected, which
+   * is what it did before the path was corrected.
+   *
+   * The parameter is consumed on success so closing the dialog and pressing
+   * Back does not reopen it; an id that resolves to nothing is a no-op, not an
+   * error.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedItemId = searchParams.get('item');
+  const openModalRef = useRef(openModal);
+  openModalRef.current = openModal;
+
+  useEffect(() => {
+    if (!requestedItemId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const item = await inventoryService.getItem(requestedItemId);
+        if (cancelled) return;
+        openModalRef.current(item);
+        setSearchParams(
+          (previous) => {
+            const next = new URLSearchParams(previous);
+            next.delete('item');
+            return next;
+          },
+          { replace: true }
+        );
+      } catch {
+        // The item may have been retired between the link being rendered and
+        // followed. A working page beats an error about a record nobody holds.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedItemId, setSearchParams]);
 
   const handleSave = async () => {
     if (!modalItem) return;

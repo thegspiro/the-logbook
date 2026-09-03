@@ -1340,6 +1340,15 @@ export interface InventorySummary {
    * no breakdown. Empty means "no breakdown", never "no items".
    */
   items_by_type: Record<string, number>;
+  /**
+   * Active non-medical items, counted as rows so the figure matches the
+   * listing at `/inventory/admin/items` — which carves medical stock out with
+   * the same predicate, and which `total_items` does not agree with because it
+   * sums quantities across every type, medical included.
+   *
+   * 0 for a caller the API serves the member-scoped summary to.
+   */
+  non_medical_items: number;
   total_value: number;
   active_checkouts: number;
   overdue_checkouts: number;
