@@ -33,7 +33,7 @@ from app.models.document import (
     DocumentStatus,
     FolderVisibility,
 )
-from app.models.facilities import FacilityDocument
+from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.user import Organization, User
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -675,17 +675,35 @@ class DocumentsService:
         none client-facing today); every route that lets a caller delete a
         document or folder must pass it, or this check fails closed below
         rather than silently skipping.
+
+        FAC-27 (Codex): matching used to be an exact string comparison
+        against a canonical ``document:{document_id}`` (lowercase, no
+        braces) this method built itself. ``_validate_shared_document_reference``
+        (facilities.py) validates a caller-supplied reference's UUID suffix
+        with ``UUID(...)`` but stores the *original* string unchanged, so a
+        valid, resolving reference in any other form ``UUID(...)`` accepts
+        (uppercase, brace-wrapped, ...) never matched here and was left
+        dangling after the document it pointed at was deleted. Re-parsing
+        each stored reference's UUID suffix and comparing the parsed value
+        -- via ``_match_facility_document_references`` below -- covers every
+        accepted form rather than only the one this method used to build.
+
+        FAC-28 (Codex): ``FacilityPhoto.file_path`` is validated and stored
+        through the exact same path as ``FacilityDocument``
+        (``create_facility_photo`` -> ``_validate_shared_document_reference``),
+        so a deleted document can dangle a photo reference the same way.
+        Swept in the same transaction, gated by the same permission.
         """
         if not document_ids:
             return
-        references = [f"document:{document_id}" for document_id in document_ids]
-        existing = await self.db.execute(
-            select(FacilityDocument.id).where(
-                FacilityDocument.organization_id == str(organization_id),
-                FacilityDocument.file_path.in_(references),
-            )
+        target_ids = set(document_ids)
+        document_matches = await self._match_facility_document_references(
+            FacilityDocument, target_ids, organization_id
         )
-        if existing.scalars().first() is None:
+        photo_matches = await self._match_facility_document_references(
+            FacilityPhoto, target_ids, organization_id
+        )
+        if not document_matches and not photo_matches:
             # No facility reference exists -- nothing to protect, so the
             # delete proceeds regardless of this permission.
             return
@@ -697,12 +715,47 @@ class DocumentsService:
                 "Cannot delete a document referenced by a facility without "
                 "facilities.delete or facilities.manage permission"
             )
-        await self.db.execute(
-            sa_delete(FacilityDocument).where(
-                FacilityDocument.organization_id == str(organization_id),
-                FacilityDocument.file_path.in_(references),
+        if document_matches:
+            await self.db.execute(
+                sa_delete(FacilityDocument).where(
+                    FacilityDocument.id.in_(document_matches)
+                )
+            )
+        if photo_matches:
+            await self.db.execute(
+                sa_delete(FacilityPhoto).where(FacilityPhoto.id.in_(photo_matches))
+            )
+
+    async def _match_facility_document_references(
+        self,
+        model: type,
+        target_document_ids: Set[str],
+        organization_id: UUID,
+    ) -> List[str]:
+        """Row ids of ``model`` (``FacilityDocument`` or ``FacilityPhoto``)
+        whose ``file_path`` resolves to one of ``target_document_ids``.
+
+        Matches by *parsed* UUID, not the stored string (FAC-27): a
+        ``"document:<uuid>"`` reference validates as long as ``UUID(...)``
+        accepts the suffix, which is looser than the single canonical
+        lowercase, unbraced form an exact-string match would require.
+        """
+        rows = await self.db.execute(
+            select(model.id, model.file_path).where(
+                model.organization_id == str(organization_id),
+                model.file_path.like("document:%"),
             )
         )
+        matched_ids: List[str] = []
+        for row_id, file_path in rows.all():
+            suffix = file_path[len("document:") :]
+            try:
+                parsed_id = str(UUID(suffix))
+            except (ValueError, AttributeError, TypeError):
+                continue
+            if parsed_id in target_document_ids:
+                matched_ids.append(row_id)
+        return matched_ids
 
     # ============================================
     # Document Management

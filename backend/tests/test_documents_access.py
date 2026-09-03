@@ -36,6 +36,7 @@ from app.models.document import Document, DocumentFolder, FolderVisibility
 from app.models.facilities import (
     Facility,
     FacilityDocument,
+    FacilityPhoto,
     FacilityStatus,
     FacilityType,
 )
@@ -2258,7 +2259,10 @@ class TestDeleteDocumentCleansUpFacilityReference:
     -- a dangling reference with no error to surface it.
     """
 
-    async def _facility_with_referenced_document(self, db_session, slug):
+    async def _facility_and_document(self, db_session, slug):
+        """An org, facility, and org-level (unfiled) document -- no facility
+        reference yet. Shared base for the reference-cleanup fixtures below.
+        """
         org = Organization(name="Falls Church VFD", slug=slug)
         db_session.add(org)
         await db_session.flush()
@@ -2285,6 +2289,10 @@ class TestDeleteDocumentCleansUpFacilityReference:
         )
         db_session.add(document)
         await db_session.flush()
+        return org, document, facility
+
+    async def _facility_with_referenced_document(self, db_session, slug):
+        org, document, facility = await self._facility_and_document(db_session, slug)
         facility_document = FacilityDocument(
             organization_id=org.id,
             facility_id=facility.id,
@@ -2489,6 +2497,117 @@ class TestDeleteDocumentCleansUpFacilityReference:
             select(Document).where(Document.id == document.id)
         )
         assert result.scalar_one_or_none() is None
+
+    async def test_a_non_canonical_reference_form_is_still_cleaned_up(self, db_session):
+        """FAC-27 (Codex): ``_validate_shared_document_reference`` validates
+        a reference's UUID suffix with ``UUID(...)`` -- which accepts far
+        more than the single canonical lowercase, unbraced form -- but
+        stores the original string unchanged. The cleanup used to build only
+        that one canonical form and exact-match against it, so a stored
+        reference in any other accepted form (brace-wrapped here -- a
+        difference no case-insensitive collation would paper over, unlike a
+        pure case difference) never matched and was left dangling."""
+        org = Organization(name="Falls Church VFD", slug="fcvfd-fdoc-7")
+        db_session.add(org)
+        await db_session.flush()
+        facility_type = FacilityType(
+            organization_id=None, name="Station", is_system=True
+        )
+        facility_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        db_session.add_all([facility_type, facility_status])
+        await db_session.flush()
+        facility = Facility(
+            organization_id=org.id,
+            name="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        db_session.add(facility)
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id, name="Policy", file_name="policy.pdf"
+        )
+        db_session.add(document)
+        await db_session.flush()
+        # Brace-wrapped UUID suffix: UUID(...) accepts it (validates and
+        # resolves to the same document), but it is not the unbraced,
+        # lowercase form the pre-fix cleanup built and exact-matched
+        # against -- and unlike a pure case difference, no collation makes
+        # "{...}" equal to "..." at the database layer.
+        facility_document = FacilityDocument(
+            organization_id=org.id,
+            facility_id=facility.id,
+            file_path=f"document:{{{document.id}}}",
+            file_name="policy.pdf",
+        )
+        db_session.add(facility_document)
+        await db_session.flush()
+        caller = self._caller(org.id)
+
+        await delete_document(document.id, db=db_session, current_user=caller)
+
+        result = await db_session.execute(
+            select(FacilityDocument).where(FacilityDocument.id == facility_document.id)
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_deleting_the_document_removes_the_facility_photo_reference(
+        self, db_session
+    ):
+        """FAC-28 (Codex): ``FacilityPhoto.file_path`` is validated and
+        stored through the same ``_validate_shared_document_reference`` path
+        as ``FacilityDocument``, so it can dangle the same way -- the
+        cleanup used to sweep only ``FacilityDocument`` rows."""
+        org, document, facility = await self._facility_and_document(
+            db_session, "fcvfd-fdoc-8"
+        )
+        facility_photo = FacilityPhoto(
+            organization_id=org.id,
+            facility_id=facility.id,
+            file_path=f"document:{document.id}",
+            file_name="policy.jpg",
+        )
+        db_session.add(facility_photo)
+        await db_session.flush()
+        caller = self._caller(org.id)
+
+        await delete_document(document.id, db=db_session, current_user=caller)
+
+        result = await db_session.execute(
+            select(FacilityPhoto).where(FacilityPhoto.id == facility_photo.id)
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_without_facility_delete_permission_a_photo_reference_also_blocks_the_delete(
+        self, db_session
+    ):
+        org, document, facility = await self._facility_and_document(
+            db_session, "fcvfd-fdoc-9"
+        )
+        facility_photo = FacilityPhoto(
+            organization_id=org.id,
+            facility_id=facility.id,
+            file_path=f"document:{document.id}",
+            file_name="policy.jpg",
+        )
+        db_session.add(facility_photo)
+        await db_session.flush()
+        caller = self._caller_without_facility_delete(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_document(document.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 403
+
+        result = await db_session.execute(
+            select(Document).where(Document.id == document.id)
+        )
+        assert result.scalar_one_or_none() is not None
+        result = await db_session.execute(
+            select(FacilityPhoto).where(FacilityPhoto.id == facility_photo.id)
+        )
+        assert result.scalar_one_or_none() is not None
 
 
 @pytest.mark.integration

@@ -1126,6 +1126,68 @@ in the class are unaffected.
 
 **Mirrored to** `CHANGELOG.md`.
 
+### FAC-27 — P2 (data integrity, dangling reference) — the facility-reference cleanup exact-matched a canonical string it built itself, missing valid non-canonical stored forms — ✅ FIXED
+
+**Found by Codex review.** Facility create schemas accept `file_path` as an
+unrestricted string; `_validate_shared_document_reference` (`facilities.py`)
+validates the UUID suffix with `UUID(...)` — which accepts far more than one
+form (mixed case, brace-wrapped, ...) — but stores the _original_ string
+unchanged, not a normalized one. `_delete_facility_document_references`
+built only the canonical lowercase, unbraced `document:{document_id}` form
+and did an exact string `IN` match against it, so a validated, resolving
+reference stored in any other accepted form never matched and was left
+dangling once the document it pointed at was deleted.
+**Where:** `backend/app/services/documents_service.py`
+(`_delete_facility_document_references`).
+**Fix:** rather than building one canonical string to match against,
+`_match_facility_document_references` fetches every `"document:%"`-prefixed
+reference in the org and re-parses each stored suffix with `UUID(...)`,
+comparing the _parsed_ value — covering every form the validation path
+accepts, not just the one the cleanup happened to construct. (A pure
+case difference turned out to be insufficient to demonstrate the bug in
+this repo's test database: MySQL's default collation compares
+case-insensitively, so an uppercase suffix already matched the pre-fix exact
+`IN` clause. The regression test instead uses a brace-wrapped suffix — a
+literal character difference no collation folds away — to exercise the
+actual defect regardless of collation.)
+**Regression test:** `TestDeleteDocumentCleansUpFacilityReference::test_a_non_canonical_reference_form_is_still_cleaned_up`.
+Independently confirmed to fail against pre-fix code (`git stash` isolating
+the source change — the brace-wrapped reference survived the delete) and
+pass post-fix.
+
+### FAC-28 — P2 (data integrity, dangling reference) — the facility-reference cleanup swept `FacilityDocument` rows only, leaving `FacilityPhoto` references dangling — ✅ FIXED
+
+**Found by Codex review.** `POST /facilities/photos` (`create_facility_photo`)
+validates its `file_path` through the same `_validate_shared_document_reference`
+used by `create_facility_document`, and stores it in `FacilityPhoto.file_path`
+— the identical `"document:<uuid>"` reference shape. The cleanup added for
+FAC-24/26 only ever queried and deleted `FacilityDocument` rows, so deleting
+a shared document referenced by a facility photo (directly, or via a folder
+cascade) left that photo row pointing at nothing, with no error surfacing
+the break — the same class of defect the original FAC-24 fix closed for
+`FacilityDocument`, just for a second table validated through the identical
+path.
+**Where:** `backend/app/services/documents_service.py`
+(`_delete_facility_document_references`).
+**Fix:** `_match_facility_document_references` (added for FAC-27) is
+model-agnostic — it takes the SQLAlchemy model as a parameter, so it runs
+once against `FacilityDocument` and once against `FacilityPhoto`.
+`_delete_facility_document_references` now checks both, gates the whole
+delete on the same `facilities.delete`/`.manage` permission if _either_
+turns up a match, and deletes from both tables in the same transaction —
+proceeding regardless of the permission only when neither table references
+the document(s) being deleted.
+**Regression tests:**
+`TestDeleteDocumentCleansUpFacilityReference::test_deleting_the_document_removes_the_facility_photo_reference`
+(a `facilities.manage` caller's delete removes a referencing photo row) and
+`test_without_facility_delete_permission_a_photo_reference_also_blocks_the_delete`
+(a `facilities.edit`-only caller is refused, mirroring FAC-26's document
+case — the document and the photo reference both survive). Independently
+confirmed both fail against pre-fix code (`git stash` isolating the source
+change) and pass post-fix.
+
+**Mirrored to** `CHANGELOG.md`.
+
 ## Verified good ✅ (re-confirmed this pass)
 
 - **Auth coverage 98/98** — exact grep count unchanged since pass 2

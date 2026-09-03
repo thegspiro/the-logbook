@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: the facility-reference cleanup missed non-canonical references and never covered facility photos (2026-09-03)
+
+**Fixed**
+
+- **FAC-27 — the facility-document-reference cleanup exact-matched a
+  canonical string it built itself, missing a stored reference in any other
+  valid form.** `_validate_shared_document_reference` validates a
+  `"document:<uuid>"` reference's UUID suffix with `UUID(...)` — which
+  accepts more than one form (mixed case, brace-wrapped, ...) — but stores
+  the original string unchanged. The cleanup added for FAC-24/26 built only
+  the canonical lowercase, unbraced form and exact-matched against it, so a
+  validated, resolving reference in any other accepted form was left
+  dangling once its document was deleted. Fixed by re-parsing every stored
+  `"document:%"` reference's UUID suffix and comparing the parsed value,
+  covering every accepted form instead of one constructed string.
+- **FAC-28 — the cleanup swept `FacilityDocument` rows only; `FacilityPhoto`
+  references, validated through the identical path, were never cleaned up.**
+  `create_facility_photo` validates its `file_path` through the same
+  `_validate_shared_document_reference` as `create_facility_document`, but
+  the cleanup never queried `FacilityPhoto` at all. Fixed by making the
+  match/delete logic model-agnostic and running it against both tables in
+  the same transaction, gated by the same `facilities.delete`/`.manage`
+  check FAC-26 added.
+- New regression tests in `TestDeleteDocumentCleansUpFacilityReference`
+  covering a non-canonical (brace-wrapped) reference and both the positive
+  and permission-denied `FacilityPhoto` cases — independently confirmed to
+  fail against the pre-fix code and pass against the fix. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-27, FAC-28) for the full
+  writeup.
+
 ### Security: every generic document/folder mutation check admitted a read-only permission, letting a treasurer-shaped caller bypass facility write protections (2026-09-03)
 
 **Fixed**
