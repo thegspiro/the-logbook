@@ -66,6 +66,7 @@ import { InventoryAdminHub } from './InventoryAdminHub';
 const mockSummary = {
   total_items: 150,
   items_by_type: { ppe: 62, uniform: 45, tool: 20 },
+  non_medical_items: 127,
   items_by_status: { available: 80, assigned: 40, checked_out: 20, in_maintenance: 5, retired: 5 },
   active_checkouts: 20,
   overdue_checkouts: 3,
@@ -491,6 +492,17 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     expect(within(screen.getByRole('link', { name: /Uniforms/ })).getByText('45')).toBeInTheDocument();
   });
 
+  it('counts All Items as the non-medical rows its listing shows', async () => {
+    // total_items is 150 and sums quantities across every type, medical
+    // included; /inventory/admin/items excludes medical and reports rows. A
+    // card that shows 150 over a list of 127 reads as a bug in the list.
+    renderWithRouter(<InventoryAdminHub />);
+    const items = await screen.findByRole('link', { name: /All Items/ });
+
+    expect(within(items).getByText('127')).toBeInTheDocument();
+    expect(within(items).queryByText('150')).not.toBeInTheDocument();
+  });
+
   it('reports what is expiring on the EMS card, not what is on the shelf', async () => {
     // 7 expiring soon, out of 88 items — the number an EMS officer opens the
     // page for is the one with a deadline on it.
@@ -499,6 +511,26 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
 
     expect(within(medical).getByText('7')).toBeInTheDocument();
     expect(within(medical).queryByText('88')).not.toBeInTheDocument();
+  });
+
+  it('names the EMS request in the failure banner rather than swallowing it', async () => {
+    // A silently-dropped stat is indistinguishable from a department with
+    // nothing expiring, and leaves no Retry for the one request that failed.
+    mockGetMedicalSummary.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryAdminHub />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('EMS supplies');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(mockGetMedicalSummary).toHaveBeenCalledTimes(2));
+  });
+
+  it('leaves the EMS card without a stat when its request fails', async () => {
+    mockGetMedicalSummary.mockRejectedValue(new Error('offline'));
+    renderWithRouter(<InventoryAdminHub />);
+    const medical = await screen.findByRole('link', { name: /EMS Supplies/ });
+
+    expect(within(medical).queryByText('7')).not.toBeInTheDocument();
   });
 
   it('hides the EMS card, and asks nothing of its API, without the medical grant', async () => {

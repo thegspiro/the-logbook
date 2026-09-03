@@ -292,22 +292,19 @@ export const InventoryAdminHub: React.FC = () => {
     }
     setLoading(true);
 
-    // Medical stock is its own module with its own grant, so it is fetched
-    // apart from the batch below and only when the card that shows the number
-    // is on screen — folding it in would spend a 403 on every department that
-    // runs no EMS supply line. The count is what expires soon rather than what
-    // is on the shelf: that is the number an EMS officer opens the page for,
-    // and it is what /medical-supplies itself leads with.
-    if (showsMedical) {
-      void medicalSuppliesService
-        .getSummary()
-        .then((medical) => setMedicalExpiring(medical.expiring_soon))
-        // A missing figure leaves the card without its stat rather than
-        // taking the hub down; the card still works as a door.
-        .catch(() => setMedicalExpiring(null));
-    } else {
-      setMedicalExpiring(null);
-    }
+    // Medical stock is its own module with its own grant, so it is requested
+    // separately, and only when the card that shows the number is on screen —
+    // folding it into the tuple below would spend a 403 on every department
+    // that runs no EMS supply line. The count is what expires soon rather than
+    // what is on the shelf: that is the number an EMS officer opens the page
+    // for, and it is what /medical-supplies itself leads with.
+    //
+    // It is settled alongside the batch and reports into the same
+    // `failedSources` banner. Swallowing its rejection would show the card
+    // without a stat, which is indistinguishable from a department that has
+    // nothing expiring — and would leave no Retry for the one request the
+    // banner could not mention.
+    const medicalRequest = showsMedical ? medicalSuppliesService.getSummary() : null;
 
     const sources = [
       ['summary', inventoryService.getSummary()],
@@ -321,11 +318,21 @@ export const InventoryAdminHub: React.FC = () => {
       ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
       ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
     ] as const;
-    const results = await Promise.allSettled(sources.map(([, promise]) => promise));
-    const failed = results.flatMap((result, index) => {
+    const [results, medicalSettled] = await Promise.all([
+      Promise.allSettled(sources.map(([, promise]) => promise)),
+      Promise.allSettled(medicalRequest ? [medicalRequest] : []),
+    ]);
+    // Widened from the `as const` tuple's literal union: the medical request is
+    // not one of its members, and it reports into the same banner.
+    const failed: string[] = results.flatMap((result, index) => {
       const source = sources[index];
       return result.status === 'rejected' && source ? [source[0]] : [];
     });
+
+    const medicalResult = medicalSettled[0];
+    if (medicalResult?.status === 'rejected') failed.push('EMS supplies');
+    setMedicalExpiring(medicalResult?.status === 'fulfilled' ? medicalResult.value.expiring_soon : null);
+
     setFailedSources(failed);
     const value = <T,>(index: number, fallback: T): T => {
       const result = results[index];
@@ -486,7 +493,13 @@ export const InventoryAdminHub: React.FC = () => {
     'supply-ppe': { stat: summary?.items_by_type?.ppe, statLabel: 'items' },
     'supply-uniform': { stat: summary?.items_by_type?.uniform, statLabel: 'items' },
     'supply-medical': { stat: medicalExpiring ?? undefined, statLabel: 'expiring soon' },
-    items: { stat: summary?.total_items, statLabel: 'total' },
+    // A badge, not a `stat`: NavCard renders only the former, so the `stat`
+    // this entry used to carry was never on screen at all. And
+    // non_medical_items rather than total_items, because the latter sums
+    // quantities across every type including medical while this card opens a
+    // row listing that excludes it — a headline of 150 over a list of 127
+    // reads as a bug in the list.
+    items: { badge: summary?.non_medical_items },
     checkouts: {
       badge: summary?.overdue_checkouts,
       badgeColor: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',

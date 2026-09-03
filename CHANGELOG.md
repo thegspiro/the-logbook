@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Email settings: Microsoft 365 OAuth submission, and a Cloudflare test that checks the account (2026-09-03)
+
+**Added**
+
+- **Microsoft 365 can now authenticate with an Entra ID app registration
+  instead of an App Password.** Exchange Online is retiring Basic
+  authentication for Client Submission (SMTP AUTH): unchanged through
+  December 2026, disabled by default for existing tenants at the end of it,
+  unavailable to tenants created after, with final removal announced for the
+  second half of 2027. An App Password is Basic auth, so every department on
+  that path has a deadline. Settings → Email and the onboarding step now
+  offer **App registration (OAuth)** alongside **App Password** for Microsoft
+  365, collecting the directory (tenant) ID, application (client) ID and
+  client secret. `app/utils/microsoft_oauth.py` exchanges them for an
+  Exchange Online token through `msal` (already a pinned dependency) and both
+  the sender and Test Connection present it to `smtp.office365.com` over SASL
+  XOAUTH2. The app registration needs the `SMTP.SendAsApp` application
+  permission and `SendAs` on the sending mailbox; the screens say so, and a
+  token Exchange Online refuses is reported as the mailbox grant rather than
+  as bad credentials, because those are fixed in different places.
+
+  **Nothing changes for an existing configuration.** `microsoft_auth_method`
+  is absent on every row written before this, and absent reads as
+  `app_password` on both the backend and the form — the behaviour those rows
+  already have. Selecting Microsoft 365 afresh preselects OAuth; a
+  configuration that already carries an App Password keeps the method it is
+  working with. The App Password option carries a dated notice of the
+  retirement rather than being removed.
+
+  The client secret is encrypted at rest like every other email secret, is
+  redacted to `••••••••` in API responses, and is bound to the app
+  registration it was saved for: changing the tenant, the client ID or the
+  method means a redacted marker resolves to nothing rather than presenting
+  the stored secret to a different application.
+
+**Changed**
+
+- **The Cloudflare connection test now verifies the token against the account
+  it will send from.** It checked `/user/tokens/verify`, which reports a token
+  as valid without saying which accounts it reaches — so a token for one
+  account paired with another account's ID passed, and the failure surfaced
+  later as unexplained send failures. The account-scoped endpoint
+  (`/accounts/{id}/tokens/verify`) is asked first, and its answer is the one
+  reported. A user-owned token can only be verified at the user endpoint;
+  rather than fail every department already sending fine with one, it passes
+  and the message names the account whose access could not be confirmed
+  (`details.account_scope_verified` carries the same fact). A network failure
+  is still reported as a network failure, not as an unconfirmed scope.
+
+- **Every email connection test is now audited, however it ends.** The
+  timeout and executor-exception paths returned before writing
+  `email_settings_tested`, so an attempt that hung against an
+  administrator-supplied mail server, or failed inside the probe, left no
+  trace beside the attempts that completed. The audit record now carries the
+  error class alongside the platform and result.
+
+- **A connection test result is discarded if the form changed while it ran.**
+  A test can take up to 30 seconds with the fields still editable, so a
+  success toast could vouch for a password the administrator had already
+  replaced. Settings → Email now reports that the settings changed and asks
+  for another test instead.
+
+### Inventory Administration follow-ups (2026-09-03)
+
+**Fixed**
+
+- **The Archive button on an apparatus went to the dashboard.** It navigated to
+  `/apparatus/:id/archive` — the _API_ path, which matches no route, so it fell
+  through the router's catch-all and left the apparatus in service with no
+  error. Archiving takes a disposal record (method, date, and buyer details for
+  a sale), so it is now a form posting to `apparatusService.archiveApparatus`.
+  Sale fields are dropped for a truck that was scrapped or donated, rather than
+  filing a buyer nobody can explain later.
+- **An election's linked meeting was a link to nowhere.** There is no meeting
+  detail screen, so naming the meeting cost the reader their place. It is text
+  now; the "(change)" control is unaffected.
+- **The clearance queue's "Review" landed on a list without the member.** A
+  departure clearance is created _after_ the drop has already made the member
+  inactive, and the members list is active-only — so the one person the queue
+  links to was the one it filtered out. `GET /inventory/members-summary` takes
+  an additive `userId` that keeps that member in the result whatever their
+  status, still org-scoped.
+- **"Verify payments" opened every order.** The store's attention row now
+  carries `payment=pending_verification` in its URL and the admin page seeds
+  the Orders tab from it, restoring the filter the old "To verify" tile
+  supplied. A value the tab does not offer is ignored rather than forwarded.
+- **The "All Items" card promised more than its list.** It described every type
+  and its (never-rendered) figure was `total_items`, which sums quantities
+  across every type including medical, while `/inventory/admin/items` excludes
+  medical and reports rows. `GET /inventory/summary` gained an additive,
+  defaulted `non_medical_items` counted with the same predicate the listing
+  uses, and the card now shows it.
+- **The store's old address broke the mobile-coverage check.** `/store/admin`
+  was added as a redirect but never entered in the route-coverage manifest.
+
 ### The gear admin hub is now Inventory Administration (2026-09-03)
 
 **Changed**

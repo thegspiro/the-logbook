@@ -3,7 +3,7 @@
  * Expandable cards with bidirectional links to member profiles and item details.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   ArrowLeft,
   Users,
@@ -98,18 +98,34 @@ const InventoryMembersPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Captured once at mount rather than read per render. The list is
+  // active-members-only, and a departure clearance is created *after* the drop
+  // has already made the member inactive — so the one person the hub's
+  // clearance queue links here to review is the one the default filter leaves
+  // out. Asking for them by id puts them back in.
+  //
+  // It has to be held rather than re-read because `useDeepLinkedRecord` removes
+  // the parameter as soon as it resolves; a websocket refresh after that would
+  // otherwise reload without the id and drop the row out from under the panel
+  // it had just expanded.
+  const [linkedSearchParams] = useSearchParams();
+  const [linkedUserId] = useState(() => linkedSearchParams.get('user') ?? '');
+
   const loadMembers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data: MembersInventoryListResponse = await inventoryService.getMembersSummary(searchDebounce || undefined);
+      const data: MembersInventoryListResponse = await inventoryService.getMembersSummary(
+        searchDebounce || undefined,
+        linkedUserId || undefined
+      );
       setMembers(data.members);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to load members inventory data.'));
     } finally {
       setLoading(false);
     }
-  }, [searchDebounce]);
+  }, [searchDebounce, linkedUserId]);
 
   useEffect(() => {
     void loadMembers();

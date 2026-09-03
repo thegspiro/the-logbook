@@ -45,6 +45,31 @@ PROVIDER_SMTP_PRESETS: dict[str, SmtpPreset] = {
 
 EMAIL_PLATFORMS = ("gmail", "microsoft", "selfhosted", "cloudflare", "other")
 
+# How a Microsoft 365 configuration authenticates to smtp.office365.com.
+# "app_password" is Basic auth, which Exchange Online is retiring; "oauth" is
+# the client credentials flow (app.utils.microsoft_oauth).
+MICROSOFT_AUTH_METHODS = ("app_password", "oauth")
+
+
+def microsoft_auth_method(email_config: Mapping[str, Any]) -> str:
+    """The Microsoft auth method a stored or submitted section asks for.
+
+    Absent means App Password. Every Microsoft row written before OAuth
+    existed carries no method and authenticates with a password, so the
+    default has to reproduce that behaviour exactly — reading absence as
+    OAuth would take those departments off the air on upgrade (CLAUDE.md
+    pitfall 19).
+    """
+    method = email_config.get("microsoft_auth_method")
+    return method if method in MICROSOFT_AUTH_METHODS else "app_password"
+
+
+def uses_microsoft_oauth(email_config: Mapping[str, Any]) -> bool:
+    return (
+        email_config.get("platform") == "microsoft"
+        and microsoft_auth_method(email_config) == "oauth"
+    )
+
 
 REDACTED_SECRET = "••••••••"
 
@@ -70,6 +95,17 @@ def connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
     port and encryption were saved; a Cloudflare token belongs to an account.
     A saved secret is reused only for the identity it was saved with.
     """
+    if uses_microsoft_oauth(values):
+        # The client secret authenticates one app registration in one
+        # directory. Carrying it to a different tenant or client ID would
+        # present a credential to an application it was never issued for.
+        return (
+            platform,
+            "oauth",
+            values.get("from_email") or None,
+            values.get("microsoft_tenant_id") or None,
+            values.get("microsoft_client_id") or None,
+        )
     if platform in PROVIDER_SMTP_PRESETS:
         return (platform, values.get("from_email") or None)
     if platform == "cloudflare":
@@ -97,6 +133,7 @@ def connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
 EMAIL_SECRET_FIELDS = (
     "google_app_password",
     "microsoft_app_password",
+    "microsoft_client_secret",
     "smtp_password",
     "cloudflare_api_token",
 )
@@ -116,6 +153,9 @@ REQUIRED_FIELD_LABELS = {
     "from_email": "a valid account email address",
     "google_app_password": "a Google App Password",
     "microsoft_app_password": "a Microsoft 365 App Password",
+    "microsoft_tenant_id": "the Microsoft 365 directory (tenant) ID",
+    "microsoft_client_id": "the Microsoft 365 application (client) ID",
+    "microsoft_client_secret": "the Microsoft 365 client secret",
     "smtp_host": "an SMTP host",
     "smtp_password": "the SMTP password",
 }
@@ -140,6 +180,15 @@ def missing_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
         # authentication rather than just delivery.
         if not is_valid_email(email_config.get("from_email")):
             return "from_email"
+        if uses_microsoft_oauth(email_config):
+            for field in (
+                "microsoft_tenant_id",
+                "microsoft_client_id",
+                "microsoft_client_secret",
+            ):
+                if not email_config.get(field):
+                    return field
+            return None
         if normalize_app_password(email_config.get(preset.password_field)) is None:
             return preset.password_field
         return None
@@ -171,8 +220,10 @@ def resolve_smtp_settings(email_config: Mapping[str, Any]) -> dict[str, Any]:
     Password. Everything else reads the ``smtp_*`` keys as entered.
 
     The result always has the keys ``host``, ``port``, ``user``, ``password``
-    and ``encryption``; a missing value is ``None`` so the caller decides how
-    to report it.
+    ``encryption`` and ``oauth``; a missing value is ``None`` so the caller
+    decides how to report it. ``oauth`` is set only for Microsoft 365 on the
+    client credentials flow, where the password is replaced by a token the
+    caller obtains from ``app.utils.microsoft_oauth``.
     """
     platform = email_config.get("platform")
     preset = PROVIDER_SMTP_PRESETS.get(platform) if isinstance(platform, str) else None
@@ -182,12 +233,25 @@ def resolve_smtp_settings(email_config: Mapping[str, Any]) -> dict[str, Any]:
         # both. A Gmail App Password is displayed with spaces; Google accepts
         # it either way, but strip them so a pasted value cannot fail login.
         password = normalize_app_password(email_config.get(preset.password_field))
+        oauth = None
+        if uses_microsoft_oauth(email_config):
+            # The mailbox still identifies itself as the From address; what
+            # changes is that the credential is a bearer token obtained from
+            # the app registration rather than a password.
+            password = None
+            oauth = {
+                "provider": "microsoft",
+                "tenant_id": email_config.get("microsoft_tenant_id") or None,
+                "client_id": email_config.get("microsoft_client_id") or None,
+                "client_secret": email_config.get("microsoft_client_secret") or None,
+            }
         return {
             "host": preset.host,
             "port": preset.port,
             "user": email_config.get("from_email") or None,
             "password": password,
             "encryption": preset.encryption,
+            "oauth": oauth,
         }
 
     port = email_config.get("smtp_port", 587)
@@ -201,6 +265,7 @@ def resolve_smtp_settings(email_config: Mapping[str, Any]) -> dict[str, Any]:
         "user": email_config.get("smtp_user") or None,
         "password": email_config.get("smtp_password") or None,
         "encryption": email_config.get("smtp_encryption") or "tls",
+        "oauth": None,
     }
 
 

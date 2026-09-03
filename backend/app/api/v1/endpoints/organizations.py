@@ -50,6 +50,7 @@ from app.schemas.organization import (
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
 from app.utils.email_providers import (
+    EMAIL_SECRET_FIELDS,
     REDACTED_SECRET,
     connection_identity,
     normalize_stored_platform,
@@ -322,12 +323,10 @@ def _resolve_redacted_secrets(
     ):
         stored = {}
     updates = {}
-    for field in (
-        "google_app_password",
-        "microsoft_app_password",
-        "smtp_password",
-        "cloudflare_api_token",
-    ):
+    # EMAIL_SECRET_FIELDS is the one list of what counts as a secret here; a
+    # second copy is what would silently skip a newly added credential,
+    # leaving its marker to travel to the provider as a literal password.
+    for field in EMAIL_SECRET_FIELDS:
         if getattr(submitted, field) == _REDACTED:
             updates[field] = stored.get(field)
     return submitted.model_copy(update=updates) if updates else submitted
@@ -382,6 +381,10 @@ async def check_email_settings(
         "fromName": resolved.from_name,
         "googleAppPassword": resolved.google_app_password,
         "microsoftAppPassword": resolved.microsoft_app_password,
+        "microsoftAuthMethod": resolved.microsoft_auth_method,
+        "microsoftTenantId": resolved.microsoft_tenant_id,
+        "microsoftClientId": resolved.microsoft_client_id,
+        "microsoftClientSecret": resolved.microsoft_client_secret,
         "smtpHost": resolved.smtp_host,
         "smtpPort": resolved.smtp_port,
         "smtpUsername": resolved.smtp_user,
@@ -418,40 +421,45 @@ async def check_email_settings(
             ),
         )
 
+    # Every attempt is audited, whichever way it ends: a timed-out or crashed
+    # test still contacted a mail server with the department's credentials,
+    # and an audit trail that records only the clean outcomes would hide the
+    # attempts an investigator most wants to see.
     try:
         async with asyncio.timeout(EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS):
             success, message, details = await asyncio.get_event_loop().run_in_executor(
                 None, test_func
             )
+        details = details or {}
     except TimeoutError:
-        return EmailConnectionTestResponse(
-            success=False,
-            message=(
-                "Email connection test timed out after "
-                f"{EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS} seconds. The mail "
-                "server may be unreachable or slow to respond."
-            ),
-            details={"error": "timeout"},
+        success = False
+        message = (
+            "Email connection test timed out after "
+            f"{EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS} seconds. The mail "
+            "server may be unreachable or slow to respond."
         )
+        details = {"error": "timeout"}
     except Exception as e:
         logger.error("Error testing email settings: {}", e)
-        return EmailConnectionTestResponse(
-            success=False,
-            message=safe_error_detail(e, "Failed to test email configuration"),
-            details={"error": "internal_error"},
-        )
+        success = False
+        message = safe_error_detail(e, "Failed to test email configuration")
+        details = {"error": "internal_error"}
 
     await log_audit_event(
         db=db,
         event_type="email_settings_tested",
         event_category="administration",
         severity="info",
-        event_data={"email_platform": platform, "success": success},
+        event_data={
+            "email_platform": platform,
+            "success": success,
+            "error": details.get("error"),
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )
     return EmailConnectionTestResponse(
-        success=success, message=message, details=details or {}
+        success=success, message=message, details=details
     )
 
 

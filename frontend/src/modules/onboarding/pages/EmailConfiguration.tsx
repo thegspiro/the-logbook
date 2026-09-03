@@ -24,8 +24,13 @@ interface EmailConfig {
   // Gmail/Google Workspace — signs in to smtp.gmail.com as fromEmail
   googleAppPassword?: string;
 
-  // Microsoft 365 — signs in to smtp.office365.com as fromEmail
+  // Microsoft 365 — signs in to smtp.office365.com as fromEmail, with an App
+  // Password (Basic auth, retiring) or an Entra ID app registration.
+  microsoftAuthMethod?: 'app_password' | 'oauth';
   microsoftAppPassword?: string;
+  microsoftTenantId?: string;
+  microsoftClientId?: string;
+  microsoftClientSecret?: string;
 
   // Self-hosted SMTP
   smtpHost?: string;
@@ -38,6 +43,24 @@ interface EmailConfig {
   fromEmail?: string;
   fromName?: string;
 }
+
+/**
+ * The Microsoft credential the chosen authentication method needs, or null.
+ *
+ * Basic auth is being retired by Exchange Online, so a setup made here
+ * starts on the app registration; the method still travels with the config
+ * because the backend reads an absent method as App Password, which is what
+ * every row written before OAuth existed means by it.
+ */
+const microsoftCredentialProblem = (config: EmailConfig, method: 'app_password' | 'oauth'): string | null => {
+  if (method === 'oauth') {
+    if (!config.microsoftTenantId?.trim()) return 'Please enter your Microsoft 365 directory (tenant) ID';
+    if (!config.microsoftClientId?.trim()) return 'Please enter your Microsoft 365 application (client) ID';
+    if (!config.microsoftClientSecret?.trim()) return 'Please enter your Microsoft 365 client secret';
+    return null;
+  }
+  return config.microsoftAppPassword?.trim() ? null : 'Please enter your Microsoft 365 App Password';
+};
 
 const EmailConfiguration: React.FC = () => {
   const navigate = useNavigate();
@@ -87,6 +110,15 @@ const EmailConfiguration: React.FC = () => {
     setConnectionTested(false); // Reset test status when config changes
   };
 
+  // Onboarding is always a new setup, so Microsoft starts on the app
+  // registration rather than on the Basic auth Microsoft is retiring.
+  const microsoftAuthMethod = config.microsoftAuthMethod || 'oauth';
+
+  // Sent rather than the raw config so the method the form is showing is the
+  // method the backend stores — an omitted key would be read as App Password.
+  const outboundConfig = (): Record<string, unknown> =>
+    emailPlatform === 'microsoft' ? { ...config, microsoftAuthMethod } : { ...config };
+
   const handleTestConnection = async () => {
     // Validate required fields before testing
     if (!config.fromEmail) {
@@ -134,9 +166,12 @@ const EmailConfiguration: React.FC = () => {
       return;
     }
 
-    if (emailPlatform === 'microsoft' && !config.microsoftAppPassword?.trim()) {
-      toast.error('Please enter your Microsoft 365 App Password');
-      return;
+    if (emailPlatform === 'microsoft') {
+      const problem = microsoftCredentialProblem(config, microsoftAuthMethod);
+      if (problem) {
+        toast.error(problem);
+        return;
+      }
     }
 
     setTestingConnection(true);
@@ -146,7 +181,7 @@ const EmailConfiguration: React.FC = () => {
       // Test email connection with real API call
       const response = await apiClient.testEmailConnection({
         platform: emailPlatform || 'other',
-        config: { ...config },
+        config: outboundConfig(),
       });
 
       setTestingConnection(false);
@@ -217,9 +252,12 @@ const EmailConfiguration: React.FC = () => {
       return;
     }
 
-    if (emailPlatform === 'microsoft' && !config.microsoftAppPassword?.trim()) {
-      toast.error('Please enter your Microsoft 365 App Password');
-      return;
+    if (emailPlatform === 'microsoft') {
+      const problem = microsoftCredentialProblem(config, microsoftAuthMethod);
+      if (problem) {
+        toast.error(problem);
+        return;
+      }
     }
 
     const { data, error: _apiError } = await executeSave(
@@ -228,7 +266,7 @@ const EmailConfiguration: React.FC = () => {
         // Passwords, API keys, and secrets will be encrypted server-side
         const response = await apiClient.saveEmailConfig({
           platform: emailPlatform || 'other',
-          config: { ...config },
+          config: outboundConfig(),
         });
 
         if (response.error) {
@@ -329,44 +367,144 @@ const EmailConfiguration: React.FC = () => {
                   <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Microsoft 365 / Outlook</p>
                   <p className="text-theme-alert-info-text text-sm">
                     The Logbook signs in to smtp.office365.com as the From address above. SMTP AUTH must be enabled for
-                    that mailbox in Exchange Online; if the account uses multi-factor sign-in, create an App Password
-                    for it.
+                    that mailbox in Exchange Online either way.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div>
-              <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                Microsoft 365 App Password <span className="text-theme-accent-red">*</span>
-              </label>
-              <input
-                type="password"
-                autoComplete="off"
-                value={config.microsoftAppPassword || ''}
-                onChange={(e) => handleInputChange('microsoftAppPassword', e.target.value)}
-                placeholder="App password for the sending mailbox"
-                className="form-input placeholder-theme-text-muted py-3"
-              />
+            <div className="mb-6">
+              <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">Authentication</label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    { id: 'oauth', label: 'App registration (OAuth)', hint: 'Recommended' },
+                    { id: 'app_password', label: 'App Password', hint: 'Basic auth — retiring' },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    aria-pressed={microsoftAuthMethod === m.id}
+                    onClick={() => handleInputChange('microsoftAuthMethod', m.id)}
+                    className={`flex flex-col items-start gap-0.5 rounded-lg border-2 px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                      microsoftAuthMethod === m.id
+                        ? 'border-theme-accent-blue bg-theme-accent-blue-muted text-theme-accent-blue'
+                        : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
+                    }`}
+                  >
+                    {m.label}
+                    <span className="text-theme-text-muted text-xs font-normal">{m.hint}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
-              <p className="text-theme-text-primary mb-2 font-medium">How to set up the mailbox:</p>
-              <ol className="list-inside list-decimal space-y-1">
-                <li>In the Microsoft 365 admin center, open the sending mailbox</li>
-                <li>Under Mail → Email apps, make sure "Authenticated SMTP" is enabled</li>
-                <li>If the account uses multi-factor sign-in, create an App Password from its security settings</li>
-                <li>Paste that password here</li>
-              </ol>
-              <a
-                href="https://account.microsoft.com/security"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-theme-alert-info-icon hover:text-theme-alert-info-title mt-2 inline-block underline"
-              >
-                Microsoft account security →
-              </a>
-            </div>
+            {microsoftAuthMethod === 'oauth' ? (
+              <>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                      Directory (tenant) ID <span className="text-theme-accent-red">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={config.microsoftTenantId || ''}
+                      onChange={(e) => handleInputChange('microsoftTenantId', e.target.value)}
+                      placeholder="00000000-0000-0000-0000-000000000000"
+                      className="form-input placeholder-theme-text-muted py-3"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                      Application (client) ID <span className="text-theme-accent-red">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      autoComplete="off"
+                      value={config.microsoftClientId || ''}
+                      onChange={(e) => handleInputChange('microsoftClientId', e.target.value)}
+                      placeholder="00000000-0000-0000-0000-000000000000"
+                      className="form-input placeholder-theme-text-muted py-3"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                    Client secret <span className="text-theme-accent-red">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={config.microsoftClientSecret || ''}
+                    onChange={(e) => handleInputChange('microsoftClientSecret', e.target.value)}
+                    placeholder="Secret value from Entra ID"
+                    className="form-input placeholder-theme-text-muted py-3"
+                  />
+                </div>
+
+                <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
+                  <p className="text-theme-text-primary mb-2 font-medium">How to register the application:</p>
+                  <ol className="list-inside list-decimal space-y-1">
+                    <li>In Entra ID, register a new application and copy its tenant and client IDs</li>
+                    <li>Add the SMTP.SendAsApp application permission for Office 365 Exchange Online</li>
+                    <li>Grant admin consent for that permission</li>
+                    <li>Create a client secret and copy its value — it is shown only once</li>
+                    <li>Have your Exchange administrator grant the application SendAs on this mailbox</li>
+                  </ol>
+                  <a
+                    href="https://entra.microsoft.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-theme-alert-info-icon hover:text-theme-alert-info-title mt-2 inline-block underline"
+                  >
+                    Open Entra ID →
+                  </a>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                    Microsoft 365 App Password <span className="text-theme-accent-red">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={config.microsoftAppPassword || ''}
+                    onChange={(e) => handleInputChange('microsoftAppPassword', e.target.value)}
+                    placeholder="App password for the sending mailbox"
+                    className="form-input placeholder-theme-text-muted py-3"
+                  />
+                </div>
+
+                <div className="alert-warning text-theme-text-secondary mt-4 text-sm">
+                  An App Password is Basic authentication. Microsoft disables it by default for existing tenants at the
+                  end of December 2026 and does not offer it to tenants created after that, so this mailbox will stop
+                  sending unless it moves to an app registration.
+                </div>
+
+                <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
+                  <p className="text-theme-text-primary mb-2 font-medium">How to set up the mailbox:</p>
+                  <ol className="list-inside list-decimal space-y-1">
+                    <li>In the Microsoft 365 admin center, open the sending mailbox</li>
+                    <li>Under Mail → Email apps, make sure "Authenticated SMTP" is enabled</li>
+                    <li>If the account uses multi-factor sign-in, create an App Password from its security settings</li>
+                    <li>Paste that password here</li>
+                  </ol>
+                  <a
+                    href="https://account.microsoft.com/security"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-theme-alert-info-icon hover:text-theme-alert-info-title mt-2 inline-block underline"
+                  >
+                    Microsoft account security →
+                  </a>
+                </div>
+              </>
+            )}
           </>
         );
 
