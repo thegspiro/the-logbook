@@ -25,8 +25,15 @@ from app.mcp.tools._common import (
 )
 from app.models.apparatus import Apparatus
 from app.models.location import Location
-from app.models.training import Shift, ShiftAssignment
+from app.models.training import AssignmentStatus, Shift, ShiftAssignment, ShiftStatus
 from app.services.scheduling_service import SchedulingService
+
+# The most candidate shifts one open-shift call examines, and the widest
+# window it accepts — the same bounds the API's /shifts/open enforces. A
+# window with more candidates than this is reported as incomplete with the
+# date to continue from, never silently cut.
+MAX_OPEN_SHIFT_CANDIDATES = 500
+MAX_OPEN_SHIFT_WINDOW_DAYS = 366
 
 
 async def _reference_names(
@@ -67,6 +74,11 @@ async def _assignments_by_shift(
         .where(
             ShiftAssignment.organization_id == organization_id,
             ShiftAssignment.shift_id.in_(shift_ids),
+            # A declined or cancelled assignment keeps its row; the roster
+            # shows who actually holds the seat.
+            ShiftAssignment.assignment_status.in_(
+                [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED]
+            ),
         )
         .order_by(ShiftAssignment.created_at.asc())
     )
@@ -170,23 +182,60 @@ def register(server: Any) -> None:
         start_date: str,
         end_date: str,
     ) -> dict:
-        """Shifts in the window that still have an unfilled seat, with the
-        seats and current assignments so the gaps can be named. Unless the
-        department shares its full schedule with Claude, only shifts open to
-        all members are listed."""
+        """Shifts in the window (at most a year) that still have an unfilled
+        seat, with the seats and current assignments so the gaps can be
+        named. Unless the department shares its full schedule with Claude,
+        only shifts open to all members are listed. A very busy window is
+        examined a few hundred shifts at a time: when ``has_more`` is true,
+        call again with ``start_date`` set to ``next_start_date``."""
         start = parse_date(start_date, "start_date")
         end = parse_date(end_date, "end_date")
         if start is None or end is None:
             raise ValueError("start_date and end_date are required")
-        shifts = list(
-            await SchedulingService(db).get_open_shifts(org_uuid(principal), start, end)
-        )
+        if end < start:
+            raise ValueError("end_date must not be before start_date")
+        if (end - start).days > MAX_OPEN_SHIFT_WINDOW_DAYS:
+            raise ValueError(
+                f"The window must not exceed {MAX_OPEN_SHIFT_WINDOW_DAYS} days"
+            )
+        # The same candidate query as SchedulingService.get_open_shifts, but
+        # one row past the cap so a truncated window is reported as such.
+        criteria = [
+            Shift.organization_id == principal.organization_id,
+            Shift.shift_date >= start,
+            Shift.shift_date <= end,
+            Shift.is_finalized.is_(False),
+            Shift.status != ShiftStatus.CANCELLED,
+        ]
         if not principal.expose_full_schedule:
-            shifts = [s for s in shifts if s.open_to_all_members]
-        items = await _render(db, principal, shifts)
-        # Not paginated: the whole window comes back at once, so there is
-        # never a continuation to ask for.
-        return {"items": items, "total": len(items), "has_more": False}
+            criteria.append(Shift.open_to_all_members.is_(True))
+        rows = await db.execute(
+            select(Shift)
+            .where(*criteria)
+            .order_by(Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id)
+            .limit(MAX_OPEN_SHIFT_CANDIDATES + 1)
+        )
+        candidates = list(rows.scalars().all())
+        truncated = len(candidates) > MAX_OPEN_SHIFT_CANDIDATES
+        next_start: Optional[str] = None
+        if truncated:
+            # Continue from the first date that was not fully examined, so
+            # no shift on the boundary is skipped.
+            cutoff = candidates[MAX_OPEN_SHIFT_CANDIDATES].shift_date
+            candidates = [c for c in candidates if c.shift_date < cutoff]
+            next_start = cutoff.isoformat()
+        shifts = await SchedulingService(db).filter_shifts_with_open_positions(
+            org_uuid(principal), candidates
+        )
+        items = await _render(db, principal, list(shifts))
+        body: dict[str, Any] = {
+            "items": items,
+            "total": len(items),
+            "has_more": truncated,
+        }
+        if next_start is not None:
+            body["next_start_date"] = next_start
+        return body
 
     @logbook_tool(server, title="Scheduling summary", module="scheduling")
     async def get_scheduling_summary(db: AsyncSession, principal: McpPrincipal) -> dict:

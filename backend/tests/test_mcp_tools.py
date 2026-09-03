@@ -1181,6 +1181,170 @@ class TestEighthRoundFindings:
         assert set(names) == {e.value for e in EventType}
 
 
+class TestEleventhRoundFindings:
+    """Regressions for the eleventh review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_roster_filters_and_pages_in_sql(self, server, org_with_members):
+        org_id, admin_id, member_id = org_with_members
+        principal = _principal(org_id, admin_id)
+        by_name = await _call(server, principal, "list_members", search="riv")
+        assert [m["id"] for m in by_name["items"]] == [member_id]
+        assert by_name["total"] == 1
+        wildcard = await _call(server, principal, "list_members", search="%")
+        assert wildcard["total"] == 0
+        first_page = await _call(server, principal, "list_members", limit=1)
+        assert len(first_page["items"]) == 1
+        assert first_page["total"] == 2
+        assert first_page["has_more"] is True
+        assert "compliance_exempt" not in first_page["items"][0]
+        with pytest.raises(ToolError, match="status must be one of"):
+            await _call(server, principal, "list_members", status="bogus")
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_elections_page_and_results_wait_for_closing(
+        self, server, org_with_members, db_session
+    ):
+        from app.models.election import Election, ElectionStatus
+
+        org_id, admin_id, _ = org_with_members
+        now = datetime.now(timezone.utc)
+        elections = []
+        for n in range(3):
+            election = Election(
+                organization_id=org_id,
+                title=f"Election {n}",
+                start_date=now - timedelta(days=10 - n),
+                end_date=now + timedelta(days=1),
+                status=ElectionStatus.OPEN,
+                results_visible_immediately=True,
+            )
+            db_session.add(election)
+            elections.append(election)
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_elections", limit=2)
+        assert [e["title"] for e in listed["items"]] == ["Election 2", "Election 1"]
+        assert listed["total"] == 3
+        assert listed["has_more"] is True
+        with pytest.raises(ToolError, match="until the election closes"):
+            await _call(
+                server, principal, "get_election_results", election_id=elections[0].id
+            )
+        with pytest.raises(ToolError, match="Election not found"):
+            await _call(
+                server, principal, "get_election_results", election_id=str(uuid.uuid4())
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_meeting_filters_are_validated(self, server, org_with_members):
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id)
+        with pytest.raises(ToolError, match="status must be one of"):
+            await _call(server, principal, "list_meetings", status="aproved")
+        with pytest.raises(ToolError, match="meeting_type must be one of"):
+            await _call(server, principal, "list_meetings", meeting_type="bored")
+        ok = await _call(
+            server, principal, "list_meetings", status="approved", meeting_type="board"
+        )
+        assert ok["items"] == []
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_shift_rosters_show_only_active_assignments(
+        self, server, org_with_members, db_session
+    ):
+        from app.models.training import AssignmentStatus, ShiftAssignment
+
+        org_id, admin_id, member_id = org_with_members
+        day = date.today() + timedelta(days=3)
+        start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        shift = Shift(
+            organization_id=org_id,
+            shift_date=day,
+            start_time=start.replace(hour=8),
+            end_time=start.replace(hour=12),
+            min_staffing=3,
+            open_to_all_members=True,
+        )
+        db_session.add(shift)
+        await db_session.flush()
+        for user_id, status in (
+            (admin_id, AssignmentStatus.DECLINED),
+            (member_id, AssignmentStatus.ASSIGNED),
+        ):
+            db_session.add(
+                ShiftAssignment(
+                    organization_id=org_id,
+                    shift_id=shift.id,
+                    user_id=user_id,
+                    position="firefighter",
+                    assignment_status=status,
+                )
+            )
+        await db_session.flush()
+        listed = await _call(
+            server,
+            _principal(org_id, admin_id),
+            "list_shifts",
+            start_date=day.isoformat(),
+            end_date=day.isoformat(),
+        )
+        (row,) = listed["items"]
+        assert [a["member_id"] for a in row["assignments"]] == [member_id]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_open_shift_window_reports_truncation(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import scheduling as scheduling_tools
+
+        org_id, admin_id, _ = org_with_members
+        days = [date.today() + timedelta(days=n) for n in (1, 2)]
+        for day in days:
+            start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+            db_session.add(
+                Shift(
+                    organization_id=org_id,
+                    shift_date=day,
+                    start_time=start.replace(hour=8),
+                    end_time=start.replace(hour=12),
+                    min_staffing=2,
+                    open_to_all_members=True,
+                )
+            )
+        await db_session.flush()
+        monkeypatch.setattr(scheduling_tools, "MAX_OPEN_SHIFT_CANDIDATES", 1)
+        principal = _principal(org_id, admin_id)
+        first = await _call(
+            server,
+            principal,
+            "list_open_shifts",
+            start_date=days[0].isoformat(),
+            end_date=days[1].isoformat(),
+        )
+        assert [s["shift_date"] for s in first["items"]] == [days[0].isoformat()]
+        assert first["has_more"] is True
+        assert first["next_start_date"] == days[1].isoformat()
+        rest = await _call(
+            server,
+            principal,
+            "list_open_shifts",
+            start_date=first["next_start_date"],
+            end_date=days[1].isoformat(),
+        )
+        assert [s["shift_date"] for s in rest["items"]] == [days[1].isoformat()]
+        assert rest["has_more"] is False
+        assert "next_start_date" not in rest
+        with pytest.raises(ToolError, match="must not exceed"):
+            await _call(
+                server,
+                principal,
+                "list_open_shifts",
+                start_date=days[0].isoformat(),
+                end_date=(days[0] + timedelta(days=400)).isoformat(),
+            )
+
+
 class TestReviewFindings:
     """Regressions for the first review round on #2197."""
 
@@ -1319,6 +1483,22 @@ class TestReviewFindings:
             "custom_1",
             "chief_report",
         ]
+        # The switch alone is not enough once the Finance module is off.
+        module_off = await _call(
+            server,
+            _principal(
+                org_id,
+                admin_id,
+                expose_finance=True,
+                enabled_modules=frozenset(
+                    {"members", "events", "integrations", "minutes"}
+                ),
+            ),
+            "get_minutes",
+            minutes_id=minutes_id,
+        )
+        assert [s["key"] for s in module_off["sections"]] == ["agenda", "chief_report"]
+        assert "treasurer_report" not in module_off
 
     @pytest.mark.usefixtures("_use_test_session")
     async def test_free_text_is_scrubbed_of_contact_details(

@@ -146,7 +146,11 @@ class McpKeyService:
     ) -> MintedKey:
         """Create a key and revoke every other active key for the org.
 
-        ``expires_in_days=None`` is a lifetime key. Commits.
+        ``expires_in_days=None`` is a lifetime key. Flushes but does not
+        commit: the caller commits the rotation together with its audit
+        entry, so a failure after this point rolls the whole thing back
+        rather than leaving a live key whose only plaintext was never
+        delivered.
         """
         name = name.strip()
         if not name:
@@ -191,7 +195,7 @@ class McpKeyService:
             created_by=created_by,
         )
         self.db.add(key)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(key)
         return MintedKey(plaintext=plaintext, key=key, revoked=revoked)
 

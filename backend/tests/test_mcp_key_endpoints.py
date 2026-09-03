@@ -119,6 +119,41 @@ class TestCreate:
             )
         assert excinfo.value.status_code == 409
 
+    async def test_rotation_rolls_back_when_the_audit_entry_fails(
+        self, db_session, setup_org_and_admin
+    ):
+        """The previous key stays live if the audit write fails: a rotation
+        the administrator never received a plaintext for must not happen."""
+        from unittest.mock import AsyncMock, patch
+
+        org_id, admin_id = setup_org_and_admin
+        await _connect(db_session, org_id)
+        user = _user(org_id, admin_id)
+        await create_mcp_key(
+            McpKeyCreateRequest(name="first"),
+            request=None,
+            db=db_session,
+            current_user=user,
+        )
+        with (
+            patch(
+                "app.api.v1.endpoints.mcp_keys.log_audit_event",
+                AsyncMock(side_effect=RuntimeError("audit store down")),
+            ),
+            pytest.raises(RuntimeError, match="audit store down"),
+        ):
+            await create_mcp_key(
+                McpKeyCreateRequest(name="second"),
+                request=None,
+                db=db_session,
+                current_user=user,
+            )
+        await db_session.rollback()
+        listed = await list_mcp_keys(db=db_session, current_user=user)
+        assert [(k["name"], k["is_active"]) for k in listed["keys"]] == [
+            ("first", True)
+        ]
+
     async def test_returns_plaintext_once_and_rotates(
         self, db_session, setup_org_and_admin
     ):

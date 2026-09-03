@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,7 +16,8 @@ from app.mcp.tools._common import (
     page,
     parse_uuid,
 )
-from app.models.user import User
+from app.models.user import User, UserStatus
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 def _member(user: User) -> dict:
@@ -33,7 +34,8 @@ def _member(user: User) -> dict:
         "member_status": user.member_status,
         "membership_type": user.membership_type,
         "hire_date": iso(user.hire_date),
-        "compliance_exempt": bool(user.compliance_exempt),
+        # ``compliance_exempt`` is deliberately absent: the members API leaves
+        # it out of the ordinary roster as plausibly sensitive.
         "positions": sorted(
             {r.name for r in (user.roles or []) if getattr(r, "name", None)}
         ),
@@ -76,27 +78,40 @@ def register(server: Any) -> None:
         administrative or social. No contact details are included."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
-        query = (
-            select(User)
-            .where(
-                User.organization_id == principal.organization_id,
-                User.deleted_at.is_(None),
+        criteria = [
+            User.organization_id == principal.organization_id,
+            User.deleted_at.is_(None),
+        ]
+        if search and search.strip():
+            pattern = like_pattern(search.strip())
+            criteria.append(
+                or_(
+                    User.first_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    User.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                )
             )
-            .options(selectinload(User.roles))
-            .order_by(User.last_name, User.first_name)
-        )
-        users = list((await db.execute(query)).scalars().all())
-        if search:
-            needle = search.strip().lower()
-            users = [u for u in users if needle in (display_name(u) or "").lower()]
         if status:
-            users = [u for u in users if iso(u.status) == status.lower()]
+            try:
+                criteria.append(User.status == UserStatus(status.lower()))
+            except ValueError:
+                raise ValueError(
+                    "status must be one of: " + ", ".join(s.value for s in UserStatus)
+                )
         if member_class:
-            users = [u for u in users if (u.member_class or "") == member_class.lower()]
-        total = len(users)
-        return page(
-            [_member(u) for u in users[offset : offset + limit]], total, limit, offset
+            criteria.append(User.member_class == member_class.lower())
+        total = (
+            await db.execute(select(func.count()).select_from(User).where(*criteria))
+        ).scalar_one()
+        rows = await db.execute(
+            select(User)
+            .where(*criteria)
+            .options(selectinload(User.roles))
+            .order_by(User.last_name, User.first_name, User.id)
+            .offset(offset)
+            .limit(limit)
         )
+        users = list(rows.scalars().all())
+        return page([_member(u) for u in users], total, limit, offset)
 
     @logbook_tool(server, title="Get member")
     async def get_member(

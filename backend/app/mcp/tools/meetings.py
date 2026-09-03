@@ -16,7 +16,12 @@ from app.mcp.tools._common import (
     page,
     parse_date,
 )
-from app.models.meeting import ActionItemStatus, MeetingActionItem
+from app.models.meeting import (
+    ActionItemStatus,
+    MeetingActionItem,
+    MeetingStatus,
+    MeetingType,
+)
 from app.services.meetings_service import MeetingsService
 from app.services.minute_service import MinuteService
 from app.utils.sql_ordering import nulls_last_asc
@@ -75,6 +80,24 @@ def register(server: Any) -> None:
         ``end_time`` are the department's local clock times, not UTC."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
+        # The service drops a filter it cannot parse, which would turn a
+        # misspelled value into "every meeting"; refuse it here instead.
+        if meeting_type:
+            try:
+                meeting_type = MeetingType(meeting_type.lower()).value
+            except ValueError:
+                raise ValueError(
+                    "meeting_type must be one of: "
+                    + ", ".join(t.value for t in MeetingType)
+                )
+        if status:
+            try:
+                status = MeetingStatus(status.lower()).value
+            except ValueError:
+                raise ValueError(
+                    "status must be one of: "
+                    + ", ".join(s.value for s in MeetingStatus)
+                )
         meetings, total = await MeetingsService(db).get_meetings(
             org_uuid(principal),
             meeting_type=meeting_type or None,
@@ -193,6 +216,9 @@ def register(server: Any) -> None:
             principal.organization_id,
             [x for mo in (m.motions or []) for x in (mo.moved_by, mo.seconded_by)],
         )
+        # Finance content needs the switch *and* the Finance module: turning
+        # the module off must stop its data reaching Claude by every path.
+        share_finance = principal.expose_finance and principal.module_enabled("finance")
         body = _minutes_summary(m)
         body.update(
             {
@@ -207,7 +233,7 @@ def register(server: Any) -> None:
                 "committee_reports": m.committee_reports,
                 "announcements": m.announcements,
                 "notes": m.notes,
-                "sections": _sections(m, principal.expose_finance),
+                "sections": _sections(m, share_finance),
                 "motions": [
                     {
                         "order": mo.order,
@@ -234,6 +260,6 @@ def register(server: Any) -> None:
                 ],
             }
         )
-        if principal.expose_finance:
+        if share_finance:
             body["treasurer_report"] = m.treasurer_report
         return body
