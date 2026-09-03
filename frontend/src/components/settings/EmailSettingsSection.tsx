@@ -1,7 +1,7 @@
 import React from 'react';
 import { SettingsToggle as Toggle } from './SettingsToggle';
 import { Loader2, Mail, Server, Cloud, Info, Eye, EyeOff } from 'lucide-react';
-import type { EmailServiceSettings } from '../../types/user';
+import type { EmailServiceSettings, MicrosoftAuthMethod } from '../../types/user';
 
 interface EmailSettingsSectionProps {
   emailSettings: EmailServiceSettings;
@@ -69,6 +69,12 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
     emailSettings.platform === 'gmail' || emailSettings.platform === 'microsoft'
       ? APP_PASSWORD_PLATFORMS[emailSettings.platform]
       : null;
+  const isMicrosoft = emailSettings.platform === 'microsoft';
+  // A stored row written before OAuth existed carries no method and signs in
+  // with a password, so absence has to read as App Password here exactly as
+  // it does on the backend.
+  const microsoftAuthMethod: MicrosoftAuthMethod = emailSettings.microsoft_auth_method || 'app_password';
+  const showMicrosoftOAuth = isMicrosoft && microsoftAuthMethod === 'oauth';
   const busy = savingEmail || testingEmail;
 
   return (
@@ -117,7 +123,19 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
             <button
               key={p.id}
               type="button"
-              onClick={() => onEmailSettingsChange((s) => ({ ...s, platform: p.id }))}
+              onClick={() =>
+                onEmailSettingsChange((s) => ({
+                  ...s,
+                  platform: p.id,
+                  // Basic auth is on its way out, so a Microsoft setup being
+                  // made now starts on OAuth. A department that already has
+                  // an App Password saved keeps the method it is working
+                  // with — the redacted marker counts as saved.
+                  ...(p.id === 'microsoft' && s.platform !== 'microsoft' && !s.microsoft_app_password
+                    ? { microsoft_auth_method: 'oauth' as const }
+                    : {}),
+                }))
+              }
               className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2.5 text-sm font-medium transition-colors ${
                 emailSettings.platform === p.id
                   ? 'border-theme-accent-blue bg-theme-accent-blue-muted text-theme-accent-blue'
@@ -161,46 +179,163 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
       {appPasswordPlatform && (
         <div className="border-theme-surface-border space-y-4 border-t pt-4">
           <p className="text-theme-text-primary text-sm font-medium">{appPasswordPlatform.heading}</p>
-          <div>
-            <label htmlFor="email-app-password" className="text-theme-text-muted mb-1 block text-xs">
-              {appPasswordPlatform.passwordLabel}
-            </label>
-            <div className="relative sm:w-1/2">
-              <input
-                id="email-app-password"
-                type={emailPasswordVisible ? 'text' : 'password'}
-                autoComplete="off"
-                value={emailSettings[appPasswordPlatform.passwordField] || ''}
-                onChange={(e) =>
-                  onEmailSettingsChange((s) => ({ ...s, [appPasswordPlatform.passwordField]: e.target.value }))
-                }
-                placeholder={appPasswordPlatform.placeholder}
-                className="form-input pr-10"
-              />
-              <button
-                type="button"
-                onClick={onTogglePasswordVisible}
-                aria-label={emailPasswordVisible ? 'Hide password' : 'Show password'}
-                className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-2 -translate-y-1/2"
-              >
-                {emailPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
+
+          {isMicrosoft && (
+            <div>
+              <label className="text-theme-text-muted mb-2 block text-xs">Authentication</label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    { id: 'oauth', label: 'App registration (OAuth)', hint: 'Recommended' },
+                    { id: 'app_password', label: 'App Password', hint: 'Basic auth — retiring' },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    aria-pressed={microsoftAuthMethod === m.id}
+                    onClick={() => onEmailSettingsChange((s) => ({ ...s, microsoft_auth_method: m.id }))}
+                    className={`flex flex-col items-start gap-0.5 rounded-lg border-2 px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                      microsoftAuthMethod === m.id
+                        ? 'border-theme-accent-blue bg-theme-accent-blue-muted text-theme-accent-blue'
+                        : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-hover'
+                    }`}
+                  >
+                    {m.label}
+                    <span className="text-theme-text-muted text-xs font-normal">{m.hint}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="text-theme-text-muted flex items-start gap-2 text-xs">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              {appPasswordPlatform.help}{' '}
-              <a
-                href={appPasswordPlatform.helpHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-theme-accent-blue underline"
-              >
-                {appPasswordPlatform.helpLinkLabel}
-              </a>
-            </span>
-          </div>
+          )}
+
+          {showMicrosoftOAuth ? (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="ms-tenant-id" className="text-theme-text-muted mb-1 block text-xs">
+                    Directory (tenant) ID
+                  </label>
+                  <input
+                    id="ms-tenant-id"
+                    type="text"
+                    autoComplete="off"
+                    value={emailSettings.microsoft_tenant_id || ''}
+                    onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_tenant_id: e.target.value }))}
+                    placeholder="00000000-0000-0000-0000-000000000000"
+                    className="form-input"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ms-client-id" className="text-theme-text-muted mb-1 block text-xs">
+                    Application (client) ID
+                  </label>
+                  <input
+                    id="ms-client-id"
+                    type="text"
+                    autoComplete="off"
+                    value={emailSettings.microsoft_client_id || ''}
+                    onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_client_id: e.target.value }))}
+                    placeholder="00000000-0000-0000-0000-000000000000"
+                    className="form-input"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="ms-client-secret" className="text-theme-text-muted mb-1 block text-xs">
+                  Client secret
+                </label>
+                <div className="relative sm:w-1/2">
+                  <input
+                    id="ms-client-secret"
+                    type={emailPasswordVisible ? 'text' : 'password'}
+                    autoComplete="off"
+                    value={emailSettings.microsoft_client_secret || ''}
+                    onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_client_secret: e.target.value }))}
+                    placeholder="Secret value from Entra ID"
+                    className="form-input pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={onTogglePasswordVisible}
+                    aria-label={emailPasswordVisible ? 'Hide client secret' : 'Show client secret'}
+                    className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-2 -translate-y-1/2"
+                  >
+                    {emailPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="text-theme-text-muted flex items-start gap-2 text-xs">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Register an application in Entra ID, give it the <span className="font-medium">SMTP.SendAsApp</span>{' '}
+                  application permission for Office 365 Exchange Online, and grant it{' '}
+                  <span className="font-medium">SendAs</span> on this mailbox. Copy the secret{' '}
+                  <span className="font-medium">value</span> — not its ID — into the field above.{' '}
+                  <a
+                    href="https://entra.microsoft.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-theme-accent-blue underline"
+                  >
+                    Open Entra ID
+                  </a>
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label htmlFor="email-app-password" className="text-theme-text-muted mb-1 block text-xs">
+                  {appPasswordPlatform.passwordLabel}
+                </label>
+                <div className="relative sm:w-1/2">
+                  <input
+                    id="email-app-password"
+                    type={emailPasswordVisible ? 'text' : 'password'}
+                    autoComplete="off"
+                    value={emailSettings[appPasswordPlatform.passwordField] || ''}
+                    onChange={(e) =>
+                      onEmailSettingsChange((s) => ({ ...s, [appPasswordPlatform.passwordField]: e.target.value }))
+                    }
+                    placeholder={appPasswordPlatform.placeholder}
+                    className="form-input pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={onTogglePasswordVisible}
+                    aria-label={emailPasswordVisible ? 'Hide password' : 'Show password'}
+                    className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-2 -translate-y-1/2"
+                  >
+                    {emailPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="text-theme-text-muted flex items-start gap-2 text-xs">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {appPasswordPlatform.help}{' '}
+                  <a
+                    href={appPasswordPlatform.helpHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-theme-accent-blue underline"
+                  >
+                    {appPasswordPlatform.helpLinkLabel}
+                  </a>
+                </span>
+              </div>
+              {isMicrosoft && (
+                <div className="alert-warning text-theme-text-secondary text-xs">
+                  An App Password is Basic authentication. Microsoft disables it by default for existing tenants at the
+                  end of December 2026 and does not offer it to tenants created after that, so this mailbox will stop
+                  sending unless it moves to an app registration. Switch to{' '}
+                  <span className="font-medium">App registration (OAuth)</span> above when your Entra ID administrator
+                  can set one up.
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

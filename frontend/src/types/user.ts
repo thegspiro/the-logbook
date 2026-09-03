@@ -102,6 +102,12 @@ export interface EmailConnectionTestResult {
   details: Record<string, unknown>;
 }
 
+export const MicrosoftAuthMethod = {
+  APP_PASSWORD: 'app_password',
+  OAUTH: 'oauth',
+} as const;
+export type MicrosoftAuthMethod = (typeof MicrosoftAuthMethod)[keyof typeof MicrosoftAuthMethod];
+
 export interface EmailServiceSettings {
   enabled: boolean;
   platform: string;
@@ -110,8 +116,13 @@ export interface EmailServiceSettings {
   cloudflare_api_token?: string;
   // Gmail / Google Workspace — signs in to smtp.gmail.com as from_email
   google_app_password?: string;
-  // Microsoft 365 — signs in to smtp.office365.com as from_email
+  // Microsoft 365 — signs in to smtp.office365.com as from_email, with an
+  // App Password (Basic auth, retiring) or an Entra ID app registration.
+  microsoft_auth_method?: MicrosoftAuthMethod;
   microsoft_app_password?: string;
+  microsoft_tenant_id?: string;
+  microsoft_client_id?: string;
+  microsoft_client_secret?: string;
   // Self-hosted SMTP
   smtp_host?: string;
   smtp_port: number;

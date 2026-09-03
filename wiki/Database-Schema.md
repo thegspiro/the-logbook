@@ -226,21 +226,25 @@ All data is scoped by `organization_id`. Key constraints:
 
 The `organizations.settings` JSON column stores email platform configuration under the `email_service` key. No database migration is needed when adding new email platforms — the JSON structure is flexible. Secret fields are AES-256-GCM encrypted (legacy Fernet values still readable).
 
-| Field                    | Type               | Platforms  | Description                                                                |
-| ------------------------ | ------------------ | ---------- | -------------------------------------------------------------------------- |
-| `enabled`                | boolean            | all        | Whether org-specific email config is active                                |
-| `platform`               | string             | all        | `gmail`, `microsoft`, `selfhosted`, `cloudflare`, or `other`               |
-| `from_email`             | string             | all        | Sender email address                                                       |
-| `from_name`              | string             | all        | Sender display name                                                        |
-| `smtp_host`              | string             | selfhosted | SMTP server hostname                                                       |
-| `smtp_port`              | integer            | selfhosted | SMTP server port                                                           |
-| `smtp_user`              | string             | selfhosted | SMTP username                                                              |
-| `smtp_password`          | string (encrypted) | selfhosted | SMTP password                                                              |
-| `smtp_encryption`        | string             | selfhosted | `tls`, `ssl`, or `none`                                                    |
-| `google_app_password`    | string (encrypted) | gmail      | Google App Password; signs in to smtp.gmail.com as `from_email`            |
-| `microsoft_app_password` | string (encrypted) | microsoft  | Microsoft 365 App Password; signs in to smtp.office365.com as `from_email` |
-| `cloudflare_account_id`  | string             | cloudflare | Cloudflare Account ID (32-char hex)                                        |
-| `cloudflare_api_token`   | string (encrypted) | cloudflare | Cloudflare API token with email sending permission                         |
+| Field                     | Type               | Platforms  | Description                                                                |
+| ------------------------- | ------------------ | ---------- | -------------------------------------------------------------------------- |
+| `enabled`                 | boolean            | all        | Whether org-specific email config is active                                |
+| `platform`                | string             | all        | `gmail`, `microsoft`, `selfhosted`, `cloudflare`, or `other`               |
+| `from_email`              | string             | all        | Sender email address                                                       |
+| `from_name`               | string             | all        | Sender display name                                                        |
+| `smtp_host`               | string             | selfhosted | SMTP server hostname                                                       |
+| `smtp_port`               | integer            | selfhosted | SMTP server port                                                           |
+| `smtp_user`               | string             | selfhosted | SMTP username                                                              |
+| `smtp_password`           | string (encrypted) | selfhosted | SMTP password                                                              |
+| `smtp_encryption`         | string             | selfhosted | `tls`, `ssl`, or `none`                                                    |
+| `google_app_password`     | string (encrypted) | gmail      | Google App Password; signs in to smtp.gmail.com as `from_email`            |
+| `microsoft_auth_method`   | string             | microsoft  | `app_password` (default; absent means this) or `oauth`                     |
+| `microsoft_app_password`  | string (encrypted) | microsoft  | Microsoft 365 App Password; signs in to smtp.office365.com as `from_email` |
+| `microsoft_tenant_id`     | string             | microsoft  | Entra ID directory (tenant) ID; `oauth` only                               |
+| `microsoft_client_id`     | string             | microsoft  | Entra ID application (client) ID; `oauth` only                             |
+| `microsoft_client_secret` | string (encrypted) | microsoft  | Entra ID client secret; `oauth` only                                       |
+| `cloudflare_account_id`   | string             | cloudflare | Cloudflare Account ID (32-char hex)                                        |
+| `cloudflare_api_token`    | string (encrypted) | cloudflare | Cloudflare API token with email sending permission                         |
 
 ---
 
