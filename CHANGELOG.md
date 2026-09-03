@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: closes the gap in pass 9's own per-write registration invariant — a save-operation-level lock, not a sixth pairwise patch (2026-09-03)
+
+A Codex review of pass 9's own PR found that per-write registration
+(`registerInFlightSave`) cannot, by itself, close every race between a
+subtree delete and an in-progress Save: `handleSave` is a sequence of
+awaited steps (flush, the template's own PATCH, then the compartment/item
+update batch) with real gaps between them where nothing is on the wire yet —
+so a delete confirmed inside one of those gaps sees both tracking maps
+correctly empty and proceeds, only for the next step to PATCH rows it just
+removed. Fixed with a new `saveOperationActive` flag, set on `handleSave`'s
+very first line and cleared in a `finally` spanning the whole function, that
+`deleteCompartment` checks before anything else. This also closes, as a side
+effect, the compartment-level in-flight tracking gap pass 9 had explicitly
+flagged and left open.
+
+**Fixed**
+
+- **AP-13 finding 1, pass 10 (P2, frontend) — `deleteCompartment` could
+  proceed in the gap between two of `handleSave`'s own awaited steps, where
+  neither `autoSavePendingRef` nor `autoSaveInFlightRef` had anything
+  registered yet**: reproduced live by deferring the template's own PATCH
+  (a real `await` already in `handleSave`) to hold it in the window right
+  after the pre-save flush resolves and before the update batch is even
+  built — a delete confirmed in that window proceeded immediately, and the
+  batch's PATCHes then fired against rows it had just removed. Fixed with a
+  save-operation-level lock (`saveOperationActive`) spanning `handleSave`'s
+  entire async span, checked by `deleteCompartment` before anything else and
+  also used to disable every delete affordance while a save is active.
+
 ### Security: one canonical invariant replacing four pairwise rounds on the autosave/subtree-delete interaction (2026-09-03)
 
 A fifth Codex round on the same `EquipmentCheckTemplateBuilder.tsx`
