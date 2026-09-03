@@ -402,6 +402,11 @@ const IntegrationsPage: React.FC = () => {
   // The status endpoint accepts their permission; it decides whether the
   // service key card is shown instead.
   const [delegatedMcp, setDelegatedMcp] = useState<McpStatus | null>(null);
+  // Set when that status request fails. Without it a transient failure
+  // leaves the page on the generic empty state with no way back to the key
+  // panel short of a full reload.
+  const [delegatedMcpError, setDelegatedMcpError] = useState<string | null>(null);
+  const [delegatedMcpAttempt, setDelegatedMcpAttempt] = useState(0);
 
   const loadIntegrations = useCallback(async () => {
     // Listing integrations needs integrations.manage; a delegated key
@@ -428,15 +433,19 @@ const IntegrationsPage: React.FC = () => {
     void integrationsService
       .getMcpStatus()
       .then((status) => {
-        if (!cancelled) setDelegatedMcp(status);
+        if (cancelled) return;
+        setDelegatedMcp(status);
+        setDelegatedMcpError(null);
       })
-      .catch(() => {
-        if (!cancelled) setDelegatedMcp(null);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setDelegatedMcp(null);
+        setDelegatedMcpError(getErrorMessage(err, 'Failed to load the Claude (MCP) status'));
       });
     return () => {
       cancelled = true;
     };
-  }, [canManage, canIssueKeys]);
+  }, [canManage, canIssueKeys, delegatedMcpAttempt]);
 
   useEffect(() => {
     void loadIntegrations();
@@ -1928,7 +1937,25 @@ const IntegrationsPage: React.FC = () => {
             </div>
           )}
 
-        {filteredIntegrations.length === 0 && !showDelegatedMcpCard && (
+        {delegatedMcpError && !showDelegatedMcpCard && (
+          <div className="alert-error mt-6 flex items-start gap-2" role="alert" data-testid="mcp-delegated-error">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm">
+                The Claude (MCP) status could not be loaded, so the service key cannot be managed right now.
+              </p>
+              <button
+                type="button"
+                onClick={() => setDelegatedMcpAttempt((n) => n + 1)}
+                className="mt-2 text-xs underline"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {filteredIntegrations.length === 0 && !showDelegatedMcpCard && !delegatedMcpError && (
           <div className="py-12 text-center">
             <Plug className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
             <p className="text-theme-text-secondary text-lg">No integrations match your search</p>

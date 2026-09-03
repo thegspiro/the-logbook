@@ -31,8 +31,26 @@ async def _location_names(
     return {loc.id: loc.name for loc in rows.scalars().all()}
 
 
+# Characters of an apparatus's free text returned per row; the rest is read
+# through ``get_apparatus_text``. Both columns are unbounded Text, so a page
+# of the fleet cannot carry every word of them.
+APPARATUS_TEXT_CHARS = 20_000
+_APPARATUS_TEXT_FIELDS = ("description", "status_reason")
+
+
+def _clip_apparatus(value: Any) -> tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    value = scrub_text(value)
+    if len(value) <= APPARATUS_TEXT_CHARS:
+        return value, False
+    return value[:APPARATUS_TEXT_CHARS], True
+
+
 def _apparatus(a: Any, locations: dict[str, str]) -> dict:
     status = getattr(a, "status_record", None)
+    status_reason, reason_cut = _clip_apparatus(a.status_reason)
+    description, description_cut = _clip_apparatus(a.description)
     return {
         "id": a.id,
         "unit_number": a.unit_number,
@@ -40,7 +58,8 @@ def _apparatus(a: Any, locations: dict[str, str]) -> dict:
         "apparatus_type": getattr(getattr(a, "apparatus_type", None), "name", None),
         "status": getattr(status, "name", None),
         "status_code": getattr(status, "code", None),
-        "status_reason": a.status_reason,
+        "status_reason": status_reason,
+        "status_reason_truncated": reason_cut,
         "year": a.year,
         "make": a.make,
         "model": a.model,
@@ -59,7 +78,8 @@ def _apparatus(a: Any, locations: dict[str, str]) -> dict:
         "has_deficiency": bool(a.has_deficiency),
         "deficiency_since": iso(a.deficiency_since),
         "is_archived": bool(a.is_archived),
-        "description": a.description,
+        "description": description,
+        "description_truncated": description_cut,
     }
 
 
@@ -133,7 +153,10 @@ def register(server: Any) -> None:
         offset: int = 0,
     ) -> dict:
         """The fleet: unit number, type, status, station, capacities, mileage
-        and hours, inspection and registration expiries, open deficiencies."""
+        and hours, inspection and registration expiries, open deficiencies.
+        A description or status reason is cut at 20,000 characters
+        (``description_truncated``, ``status_reason_truncated``);
+        ``get_apparatus_text`` reads the rest."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         filters = ApparatusListFilters(
@@ -149,6 +172,42 @@ def register(server: Any) -> None:
             [i for a in rows for i in (a.primary_station_id, a.current_location_id)],
         )
         return page([_apparatus(a, locations) for a in rows], total, limit, offset)
+
+    @logbook_tool(server, title="Read apparatus text", module="apparatus")
+    async def get_apparatus_text(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        apparatus_id: str,
+        field: str = "description",
+        content_offset: int = 0,
+    ) -> dict:
+        """One apparatus's ``description`` or ``status_reason`` (``field``),
+        20,000 characters at a time. When ``content_has_more`` is true, call
+        again with ``content_offset`` set to ``next_content_offset``."""
+        if field not in _APPARATUS_TEXT_FIELDS:
+            raise ValueError(
+                "field must be one of: " + ", ".join(_APPARATUS_TEXT_FIELDS)
+            )
+        content_offset = clamp_offset(content_offset)
+        unit = await ApparatusService(db).get_apparatus(
+            str(parse_uuid(apparatus_id, "apparatus_id")), principal.organization_id
+        )
+        if unit is None:
+            raise ValueError("Apparatus not found")
+        text = scrub_text(getattr(unit, field) or "")
+        piece = text[content_offset : content_offset + APPARATUS_TEXT_CHARS]
+        body: dict[str, Any] = {
+            "apparatus_id": unit.id,
+            "unit_number": unit.unit_number,
+            "field": field,
+            "content": piece,
+            "content_offset": content_offset,
+            "content_total_chars": len(text),
+            "content_has_more": content_offset + len(piece) < len(text),
+        }
+        if body["content_has_more"]:
+            body["next_content_offset"] = content_offset + len(piece)
+        return body
 
     @logbook_tool(server, title="Fleet summary", module="apparatus")
     async def get_fleet_summary(db: AsyncSession, principal: McpPrincipal) -> dict:

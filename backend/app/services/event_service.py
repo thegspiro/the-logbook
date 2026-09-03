@@ -1826,7 +1826,9 @@ class EventService:
             .where(EventRSVP.event_id == str(event_id))
             .where(EventRSVP.status == RSVPStatus.GOING)
             .options(selectinload(EventRSVP.user))
-            .order_by(EventRSVP.responded_at.asc())
+            # The id breaks ties between responses at one instant, so an
+            # offset page never repeats or skips one.
+            .order_by(EventRSVP.responded_at.asc(), EventRSVP.id.asc())
             .offset(skip)
             .limit(limit)
         )

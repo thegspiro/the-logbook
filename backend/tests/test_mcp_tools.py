@@ -3771,3 +3771,213 @@ class TestTwentySeventhRoundFindings:
             .all()
         )
         assert reminders == []
+
+
+class TestTwentyEighthRoundFindings:
+    """Regressions for the twenty-eighth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_apparatus_text_is_bounded_and_read_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import apparatus as apparatus_tools
+        from app.models.apparatus import Apparatus, ApparatusStatus, ApparatusType
+
+        org_id, admin_id, _ = org_with_members
+        kind = ApparatusType(organization_id=org_id, name="Engine", code="ENG")
+        status = ApparatusStatus(organization_id=org_id, name="Out", code="OOS")
+        db_session.add_all([kind, status])
+        await db_session.flush()
+        unit = Apparatus(
+            organization_id=org_id,
+            unit_number="E2",
+            name="Engine 2",
+            apparatus_type_id=kind.id,
+            status_id=status.id,
+            description="Spare pump; mechanic 555-123-4567. " + "a" * 40,
+            status_reason="Awaiting parts, call 5551234567. " + "r" * 40,
+        )
+        db_session.add(unit)
+        await db_session.flush()
+        monkeypatch.setattr(apparatus_tools, "APPARATUS_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_apparatus")
+        row = next(a for a in listed["items"] if a["id"] == unit.id)
+        assert len(row["description"]) == 12
+        assert row["description_truncated"] is True
+        assert len(row["status_reason"]) == 12
+        assert row["status_reason_truncated"] is True
+        for field, tail in (("description", "a" * 40), ("status_reason", "r" * 40)):
+            pieces = []
+            offset = 0
+            while True:
+                chunk = await _call(
+                    server,
+                    principal,
+                    "get_apparatus_text",
+                    apparatus_id=unit.id,
+                    field=field,
+                    content_offset=offset,
+                )
+                pieces.append(chunk["content"])
+                if not chunk["content_has_more"]:
+                    break
+                offset = chunk["next_content_offset"]
+            joined = "".join(pieces)
+            assert "555" not in joined
+            assert joined.endswith(tail)
+            assert chunk["unit_number"] == "E2"
+        with pytest.raises(ToolError, match="field must be one of"):
+            await _call(
+                server,
+                principal,
+                "get_apparatus_text",
+                apparatus_id=unit.id,
+                field="name",
+            )
+        with pytest.raises(ToolError, match="Apparatus not found"):
+            await _call(
+                server,
+                principal,
+                "get_apparatus_text",
+                apparatus_id=str(uuid.uuid4()),
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_locations_are_paged_and_bounded(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import organization as organization_tools
+        from app.models.location import Location
+
+        org_id, admin_id, _ = org_with_members
+        for name in ("Station 1", "Station 2", "Training tower"):
+            db_session.add(
+                Location(
+                    organization_id=org_id,
+                    name=name,
+                    description=f"{name}: gate code from 555-123-4567. " + "l" * 40,
+                    is_active=True,
+                )
+            )
+        db_session.add(
+            Location(organization_id=org_id, name="Old annex", is_active=False)
+        )
+        await db_session.flush()
+        monkeypatch.setattr(organization_tools, "LOCATION_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        profile = await _call(server, principal, "get_department_profile")
+        assert "locations" not in profile
+        assert profile["active_location_count"] == 3
+        first = await _call(server, principal, "list_locations", limit=2)
+        assert [loc["name"] for loc in first["items"]] == ["Station 1", "Station 2"]
+        assert first["total"] == 3
+        assert first["has_more"] is True
+        assert all(len(loc["description"]) == 12 for loc in first["items"])
+        assert all(loc["description_truncated"] for loc in first["items"])
+        rest = await _call(server, principal, "list_locations", limit=2, offset=2)
+        assert [loc["name"] for loc in rest["items"]] == ["Training tower"]
+        target = first["items"][0]["id"]
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_location_description",
+                location_id=target,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "555-123-4567" not in joined
+        assert joined.endswith("l" * 40)
+        assert chunk["name"] == "Station 1"
+        inactive = (
+            await db_session.execute(
+                select(Location.id).where(
+                    Location.organization_id == org_id, Location.name == "Old annex"
+                )
+            )
+        ).scalar_one()
+        with pytest.raises(ToolError, match="Location not found"):
+            await _call(
+                server, principal, "get_location_description", location_id=inactive
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_meetings_on_one_day_page_without_repeats(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        meeting_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for meeting_id in meeting_ids:
+            db_session.add(
+                Meeting(
+                    id=meeting_id,
+                    organization_id=org_id,
+                    title="Same day",
+                    meeting_type=MeetingType.BUSINESS,
+                    meeting_date=date(2027, 3, 1),
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        seen = []
+        for offset in range(3):
+            body = await _call(
+                server, principal, "list_meetings", limit=1, offset=offset
+            )
+            seen.extend(m["id"] for m in body["items"])
+        # Newest first, and within the day the id descending: each exactly once.
+        assert seen == sorted(meeting_ids, reverse=True)
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_attendees_responding_at_one_instant_page_without_repeats(
+        self, server, org_with_members, db_session
+    ):
+        from app.models.event import Event, EventRSVP
+
+        org_id, admin_id, member_id = org_with_members
+        now = datetime.now(timezone.utc)
+        event = Event(
+            organization_id=org_id,
+            title="Open house",
+            event_type="public_education",
+            start_datetime=now + timedelta(days=3),
+            end_datetime=now + timedelta(days=3, hours=2),
+            attendee_visibility="members",
+            created_by=admin_id,
+        )
+        db_session.add(event)
+        await db_session.flush()
+        rsvp_ids = sorted(str(uuid.uuid4()) for _ in range(2))
+        for rsvp_id, user_id in zip(rsvp_ids, (admin_id, member_id)):
+            db_session.add(
+                EventRSVP(
+                    id=rsvp_id,
+                    organization_id=org_id,
+                    event_id=event.id,
+                    user_id=user_id,
+                    status="going",
+                    responded_at=now,
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        seen = []
+        for offset in range(2):
+            body = await _call(
+                server,
+                principal,
+                "list_event_attendees",
+                event_id=event.id,
+                limit=1,
+                offset=offset,
+            )
+            seen.extend(a["member_id"] for a in body["items"])
+        expected = [uid for _, uid in sorted(zip(rsvp_ids, (admin_id, member_id)))]
+        assert seen == expected

@@ -36,6 +36,21 @@ def _has_column(table: str, column: str) -> bool:
     return column in {c["name"] for c in inspector.get_columns(table)}
 
 
+def _foreign_keys_on(table: str, column: str) -> list[str]:
+    """Names of the foreign keys constraining ``column`` alone.
+
+    An installation built by ``create_all`` carries the model's constraint
+    under a name the database generated, not ``_FK``; the downgrade drops
+    whatever is there rather than the name this file chose.
+    """
+    inspector = sa.inspect(op.get_bind())
+    return [
+        fk["name"]
+        for fk in inspector.get_foreign_keys(table)
+        if fk.get("name") and fk.get("constrained_columns") == [column]
+    ]
+
+
 def upgrade() -> None:
     # The table is renamed into existence by 20260312_0200, so it is
     # present on every upgrade path; the column guards keep the step
@@ -59,5 +74,6 @@ def downgrade() -> None:
     if _has_column(_TABLE, "source"):
         op.drop_column(_TABLE, "source")
     if _has_column(_TABLE, "created_by"):
-        op.drop_constraint(_FK, _TABLE, type_="foreignkey")
+        for name in _foreign_keys_on(_TABLE, "created_by"):
+            op.drop_constraint(name, _TABLE, type_="foreignkey")
         op.drop_column(_TABLE, "created_by")

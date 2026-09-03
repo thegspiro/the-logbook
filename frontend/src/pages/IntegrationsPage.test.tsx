@@ -647,6 +647,23 @@ describe('IntegrationsPage', () => {
       expect(await screen.findByTestId('mcp-key-panel')).toBeInTheDocument();
     });
 
+    it('offers a retry when the delegated status request fails', async () => {
+      const user = userEvent.setup();
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
+      mockGetMcpStatus.mockRejectedValueOnce(new Error('offline'));
+
+      renderPage();
+      const alert = await screen.findByTestId('mcp-delegated-error');
+      expect(mockGetIntegrations).not.toHaveBeenCalled();
+      expect(screen.queryByText('No integrations match your search')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('integration-card-claude-mcp-delegated')).not.toBeInTheDocument();
+
+      await user.click(within(alert).getByText('Try again'));
+      expect(await screen.findByTestId('integration-card-claude-mcp-delegated')).toBeInTheDocument();
+      expect(screen.queryByTestId('mcp-delegated-error')).not.toBeInTheDocument();
+      expect(mockGetMcpStatus).toHaveBeenCalledTimes(2);
+    });
+
     it('shows no delegated card when the integration is not connected', async () => {
       mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
       mockGetIntegrations.mockRejectedValue(new Error('403'));
