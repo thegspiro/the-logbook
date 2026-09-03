@@ -17,16 +17,27 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
-Apparatus & NFC, pass 3. AP-8 fixed: `CheckTemplateCompartment.children` had
-the same inverted self-referential `remote_side` shape FAC-16 found and
-fixed on `DocumentFolder.children` (flagged there as a sibling instance,
-out of scope for Facilities) — reproduced live (three-level fixture,
-delete_compartment's own cascade) before fixing. `TrainingCategory.subcategories`
-has the same shape and remains flagged, out of scope for this feature. Also
-corrected a stale `docs/app-review/apparatus.md` entry (AP2-2) that still
-read OPEN though the code has validated all four FKs since before pass 1.
-Rest of the feature re-verified unchanged against pass 2 (near-zero diff).
-See the log entry below for the full writeup once merged.
+Apparatus & NFC, passes 3–4. Pass 3: AP-8 fixed —
+`CheckTemplateCompartment.children` had the same inverted self-referential
+`remote_side` shape FAC-16 found and fixed on `DocumentFolder.children`
+(flagged there as a sibling instance, out of scope for Facilities) —
+reproduced live (three-level fixture, delete_compartment's own cascade)
+before fixing. `TrainingCategory.subcategories` has the same shape and
+remains flagged, out of scope for this feature. Also corrected a stale
+`docs/app-review/apparatus.md` entry (AP2-2) that still read OPEN though the
+code has validated all four FKs since before pass 1. Pass 4 (same PR, in
+response to a Codex review of the AP-8 fix commit): three more findings, all
+surfaced by AP-8's cascade going from no-op to genuinely effective, exactly
+the pattern the Facilities pass (PR #2198) went through — AP-9 (P1, clone
+endpoint 500s on nested templates, plus a co-discovered duplicate-clone bug
+in the same code), AP-10 (P1, `create_template` had no in-template/in-org
+validation on a client-supplied `parent_compartment_id`, unlike
+`add_compartment`/`update_compartment`), AP-11 (P2, frontend delete
+confirmation and local-state removal didn't account for the descendants
+the backend now cascade-deletes). All three reproduced live against the
+current fixed code before being called findings, and regression-tested
+failing pre-fix / passing post-fix via `git stash`. See the log entry below
+for the full writeup once merged.
 
 ---
 

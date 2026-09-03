@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: making the equipment-check compartment cascade real (AP-8) exposed three dormant bugs in code written against its old no-op behavior (2026-09-03)
+
+**Fixed**
+
+- **AP-9 (P1, functional regression) — cloning a template with nested
+  compartments 500'd** (`POST /templates/{id}/clone`): `_clone_compartment`
+  walked `.children`, which `get_template` never eager-loads, so touching it
+  outside the awaited context raised `MissingGreenlet` the moment AP-8 made
+  `children` a real relationship. A second, independent bug found in the
+  same code while fixing the first: the outer loop cloned every compartment
+  in the template's flat list as a root, then `_clone_compartment`'s own
+  `.children` walk cloned each nested one a second time — doubling every
+  nested compartment in the clone. Fixed by grouping the already-loaded flat
+  `source.compartments` collection by parent id and cloning root-down from
+  that, touching `.children` nowhere.
+- **AP-10 (P1, multi-tenant isolation, CLAUDE.md Pitfall #14c) —
+  `create_template` forwarded a client-supplied `parent_compartment_id`
+  with no validation that it belongs to the same template or organization**,
+  unlike `add_compartment`/`update_compartment`, which both already validate
+  this. With the cascade now genuinely destructive (AP-8), an unvalidated
+  cross-template (or cross-org) parent link let deleting a compartment in
+  one template cascade-delete a compartment — and all its items — actually
+  belonging to a different template, potentially in a different
+  organization. Fixed by applying the same org-scoped
+  same-template validation the other two write paths already use.
+- **AP-11 (P2, frontend/backend state mismatch) — the compartment delete
+  confirmation and local-state removal only accounted for the selected row,
+  not the descendants the backend now cascade-deletes with it**: the
+  confirmation undercounted items (missing every descendant compartment's),
+  deleted descendants lingered in the UI as orphaned top-level rows, and the
+  next Save 404'd against their already-deleted ids. Fixed by reusing the
+  module's existing `descendantCompartmentIds` hierarchy helper (the same
+  pattern Facilities' `roomTree.ts` uses for room subtrees) to fold the
+  whole subtree into both the confirmation and the local-state removal.
+- All three reproduced live against the current, fixed AP-8 code before
+  being called findings, and confirmed failing pre-fix / passing post-fix
+  via `git stash`. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 4) for the full writeup, including the maintenance query to check
+  a production database for any already-persisted cross-template
+  `parent_compartment_id` link (none found in this review's dev database,
+  which has no such data to find).
+
 ### Security: deleting a nested equipment-check compartment silently orphaned its children instead of removing them (2026-09-03)
 
 **Fixed**

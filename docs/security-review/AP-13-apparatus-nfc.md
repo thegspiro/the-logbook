@@ -1,12 +1,273 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–4)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py` (new),
 `api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 4 (2026-09-03) — three findings surfaced by pass 3's own cascade fix (AP-8), all fixed
+
+**Trigger.** Pass 3 fixed AP-8 — `CheckTemplateCompartment.children` had
+the same inverted self-referential `remote_side` shape FAC-16 fixed on
+`DocumentFolder.children` — which made the model's `cascade="all,
+delete-orphan"` genuinely effective for the first time. Exactly as happened
+across the Facilities pass this rotation is modeled on (FAC-16 through
+FAC-45: making one cascade real exposed a chain of code that had only ever
+run against the previous no-op behavior), a Codex review of the AP-8 fix
+commit found three call sites written against the old (silently-inert)
+cascade. All three were reproduced live against the current, fixed code
+before being called findings — not inferred from reading the diff — and
+each has a regression test confirmed failing pre-fix (`git stash` on just
+the fix) and passing post-fix.
+
+### AP-9 — P1 (functional regression) — `clone_template` walked a relationship `get_template` never eager-loads, 500ing on any nested template — ✅ FIXED
+
+**What:** `EquipmentCheckService._clone_compartment` recursed into
+`source.children` to clone each nested compartment. `get_template` (the only
+place `clone_template` sources `source` from) eager-loads
+(`selectinload`) each compartment's `.items` but never `.children`. Before
+AP-8, `.children` was effectively dead code — the inverted `remote_side`
+meant no delete ever cascaded through it, but nothing had ever forced a
+_read_ through it either, so the missing eager-load was latent. The moment
+AP-8 made `children` a real, correctly-wired one-to-many, touching it
+outside `clone_template`'s own awaited `db.execute` calls became a genuine
+lazy-load attempt, which `AsyncSession` cannot service inline —
+`sqlalchemy.exc.MissingGreenlet`, even to establish that a leaf
+compartment's `children` collection is empty.
+
+**Where:** `backend/app/services/equipment_check_service.py`, `clone_template`
+(pre-fix ~446–496) and `_clone_compartment` (pre-fix ~4308–4319, the
+`for child in getattr(source, "children", []) or []` walk at the end).
+
+**Failure scenario, reproduced live:** built a template with one root and
+one nested compartment against a live test database, called
+`EquipmentCheckService.clone_template` directly (the same call
+`POST /templates/{id}/clone` makes) — pre-fix, this raised
+`sqlalchemy.exc.MissingGreenlet` from inside the `SELECT ...
+check_template_compartments ... WHERE %s = parent_compartment_id` query
+SQLAlchemy issued to resolve `.children`. Any department cloning a template
+that has so much as one nested compartment (the feature's own worked
+example — pack inside bag inside compartment) gets a 500 instead of a
+clone, with no partial data left behind (the failure happens before
+`commit()`).
+
+**A second, independent bug in the same code, found while fixing the
+first:** `clone_template`'s outer loop was `for compartment in
+source.compartments: await self._clone_compartment(new_template.id,
+compartment, parent_id=None)` — `source.compartments` is the template's
+_flat_ collection (every compartment, root or nested, `back_populates`
+with no parent filter), so every nested compartment was cloned **twice**:
+once wrongly promoted to a root by the outer loop, once correctly nested by
+`_clone_compartment`'s own recursive `.children` walk. This predates AP-8
+(the duplication happens on the clone side regardless of whether the
+delete cascade works) and was masked only by the first bug crashing before
+a caller could ever observe the duplicate rows. The regression test below
+asserts the post-fix compartment count to catch a reintroduction of either
+bug.
+
+**Impact:** availability/correctness, not access control — the clone
+endpoint is unusable for the templates it exists to help with (multi-rig
+departments duplicating a checklist across a fleet), and the co-discovered
+duplication bug would have produced a doubled compartment tree the moment
+the crash was naively patched around (e.g. by simply eager-loading
+`.children` without also fixing the outer loop).
+
+**Fix:** `clone_template` now groups the already-loaded flat
+`source.compartments` collection by `parent_compartment_id` into a
+dict and walks it root-down itself (`_clone_subtree`), rather than
+either re-querying with a deeper `selectinload` chain or touching
+`.children` at all. `_clone_compartment` no longer recurses into
+`.children` — cloning descendants is entirely the caller's
+responsibility now, which is what closes both bugs in the same change:
+each source compartment is visited exactly once, by parent-id, regardless
+of what is or isn't eager-loaded on the ORM object.
+
+### AP-10 — P1 (multi-tenant isolation, CLAUDE.md Pitfall #14c) — `create_template` forwarded a client-supplied `parent_compartment_id` with no in-template/in-org validation — ✅ FIXED
+
+**What:** `create_template` → `_create_compartment` built each
+`CheckTemplateCompartment` from the request body with `**data`, including
+whatever `parent_compartment_id` the client sent, with no check that the
+referenced compartment belongs to the template being created (or even the
+caller's organization). `add_compartment` and `update_compartment` both
+already validate this (`parent.template_id != template_id` /
+`_validate_compartment_parent`, the latter also walking the chain for
+cycles) — `_create_compartment` was the one write path that didn't.
+Before AP-8 this was a dangling-FK nuisance at worst, since a no-op cascade
+can't destroy anything by following it. AP-8 made the cascade real, which
+turns an unvalidated parent link into a cross-tenant destructive
+capability: deleting a compartment in template A now genuinely
+cascade-deletes whatever got linked underneath it as a "child," including
+every item on that row, regardless of which template or organization it
+actually belongs to.
+
+**Where:** `backend/app/services/equipment_check_service.py`,
+`create_template` (~117–131 pre-fix) and `_create_compartment` (~4303–4319
+pre-fix, no `organization_id` parameter, no validation before the
+`CheckTemplateCompartment(**data)` construction).
+
+**Failure scenario, reproduced live:** created a compartment in Org B's
+template, then called `EquipmentCheckService.create_template` for Org A
+with a `compartments` payload naming that Org B compartment's id as
+`parent_compartment_id` — pre-fix, the row persisted with the cross-org
+link intact and no error. A department's admin — or anyone who can reach
+this endpoint, since it needs no special privilege beyond
+`inventory.check_manage` in their _own_ org — could plant a foreign
+compartment as a "child" of one of their own, then delete their own parent
+to cascade-delete another organization's compartment and every item on it,
+entirely within their own org's permissions.
+
+**Note on the frontend:** the builder UI never actually exercises this
+path today — a template's `compartments` array is only populated with a
+real `parent_compartment_id` once compartments are persisted and nested via
+`addCompartment`/the indent control (both of which call the already-validated
+`add_compartment` endpoint); the initial `POST /templates` payload's
+compartments are always freshly-generated with no id to reference yet, so
+`parentCompartmentId` is always empty at that point. This closes a request-body
+level vulnerability reachable by any client that talks to the API directly
+(a crafted request, a future UI change, or an already-malformed stored
+payload), not a bug a normal user could trigger by clicking around — see
+CLAUDE.md Pitfall #14c: an FK is validated in-org at the write regardless of
+whether today's UI happens to always send a safe value.
+
+**Existing-data check:** ran the equivalent of
+`SELECT c.id FROM check_template_compartments c JOIN check_template_compartments p
+ON c.parent_compartment_id = p.id JOIN equipment_check_templates t1 ON c.template_id = t1.id
+JOIN equipment_check_templates t2 ON p.template_id = t2.id WHERE c.template_id <> p.template_id
+OR t1.organization_id <> t2.organization_id` against the only database this
+review environment has access to (a fresh/empty dev database — 0 rows in
+`check_template_compartments`), so no malformed rows were found or could
+have been found here. Given `_create_compartment` was the only unvalidated
+write path and has existed since the feature shipped, a production
+database that has ever accepted a crafted or buggy client request through
+`POST /templates` could hold such rows; this query is the way to check.
+Repairing any found would need either nulling the cross-boundary
+`parent_compartment_id` or deleting the misattached compartment, decided
+per row — which template and organization the orphaned compartment's item
+history actually belongs to merits a human decision, not a blind
+migration, and this review has no production data access to make that call
+regardless.
+
+**Fix:** `_create_compartment` now takes `organization_id` and, when
+`parent_compartment_id` is supplied, resolves it via the same org-scoped
+`_get_compartment` helper `add_compartment`/`update_compartment` already
+use and rejects (`ValueError`, surfaced as an existing 400 by the
+endpoint's existing `except ValueError` handler) unless
+`parent.template_id == template_id`. Since a template being created has no
+compartments of its own yet, this means a create-time `parent_compartment_id`
+is always rejected today — matching the frontend's own behavior of only
+ever nesting via `add_compartment` after the template exists — while still
+being available to relax later if a legitimate same-request nested-create
+payload shape is ever introduced (it would need real, resolvable parent
+ids to validate against, which the current flat client-generates-nothing
+shape doesn't have).
+
+### AP-11 — P2 (frontend/backend state mismatch) — the compartment delete confirmation and local-state removal only accounted for the one selected row, not its cascade-deleted descendants — ✅ FIXED
+
+**What:** `EquipmentCheckTemplateBuilder.deleteCompartment` built its
+confirmation message from `comp.items.length` (this compartment's own
+items only) and, after a successful delete, removed only the one array
+index (`prev.filter((_, i) => i !== idx)`). Before AP-8, this matched
+reality — the backend cascade was a no-op, so a parent delete only ever
+removed the parent. AP-8 made the backend cascade delete the whole
+subtree, so for a nested template the frontend now: undercounts what the
+confirmation dialog says will be destroyed (missing every descendant
+compartment and its items), leaves the now-deleted descendant compartments
+displayed as orphaned rows in the local list (their
+`parentCompartmentId` still points at an id that no longer exists), and
+sends the next Save with update requests for those deleted descendant
+ids, which 404.
+
+**Where:**
+`frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx`,
+`deleteCompartment` (~pre-fix line 804–826).
+
+**Failure scenario, reproduced live (component test, `git stash` on just
+the fix):** rendered the builder against the fixture template (`Cab`, 2
+items, with `Medical bag` nested underneath it), clicked delete on `Cab`.
+Pre-fix, the confirmation read `Delete "Cab" and its 2 items? This cannot
+be undone.` — no mention of `Medical bag` or its items at all. Confirming
+would call `deleteCompartment('cab')` (which the backend now cascades
+correctly, per AP-8/AP-9), but the frontend would still show `Medical bag`
+as a surviving top-level row until the next full reload, and the next Save
+would `updateCompartment('bag', ...)` against an id the backend has
+already deleted, 404ing.
+
+**Precedent used:** the Facilities module already solved this exact shape
+for room hierarchies — `frontend/src/modules/facilities/roomTree.ts`
+exports `collectSubtreeIds`. This feature has its own existing hierarchy
+helper module (`equipmentCheckHierarchy.ts`, already used by the indent/
+outdent and "stored inside" picker code) with an equivalent function,
+`descendantCompartmentIds`, that was not yet being used by delete — reused
+it here rather than writing a third implementation of the same walk.
+
+**Impact:** no data-integrity risk (the backend cascade this depends on is
+correct, per AP-8/AP-9) — this is a UI-honesty and stale-state defect: an
+undercounted confirmation, a UI that shows deleted rows as if they
+survived, and a guaranteed 404 on the very next save for any template with
+nested compartments.
+
+**Fix:** `deleteCompartment` now calls
+`descendantCompartmentIds(compartments, comp.id)` to compute the full
+descendant set before showing the confirmation, folds every descendant
+compartment's item count into the total the dialog states (and names the
+nested-compartment count when there is one), and — after the delete API
+call succeeds — filters both the selected index and every descendant id out
+of local state in the same `setCompartments` call, so a deleted subtree
+never lingers as orphaned top-level rows.
+
+## Existing-data note
+
+The maintenance query in AP-10 above is the reusable check for any
+already-persisted cross-template/cross-org `parent_compartment_id` link.
+No repair was attempted against production data — this review environment
+only has access to an empty dev/test database, and per CLAUDE.md's
+guidance on this class of finding, a live data repair needs a human
+decision on affected rows, not a blind migration run without seeing what
+it would touch.
+
+## Guard tests added (pass 4)
+
+- `backend/tests/test_apparatus_check_template_compartment_cascade_followups.py`
+  — `TestCloneTemplatePreservesNestedCompartments` (AP-9: clone succeeds,
+  exactly one root + one child, ids are new rows not the source re-parented)
+  and `TestCreateTemplateRejectsCrossTemplateParent` (AP-10: cross-org
+  parent rejected, cross-template-same-org parent rejected, a normal
+  null-parent create still succeeds). All confirmed failing against the
+  pre-fix `equipment_check_service.py` via `git stash` (the two AP-10 tests
+  fail with the same `MissingGreenlet` as AP-9's, one level removed — the
+  malformed row's parent write succeeds pre-fix, and the subsequent
+  `get_template` refetch is what then trips over the same unloaded
+  `.children` touch) and passing against the fix.
+- `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`
+  — `'deletes the whole nested subtree, in the confirmation and in local
+state, when a parent compartment is removed'` (AP-11). Confirmed failing
+  pre-fix (`git stash` on just the component file) with the actual pre-fix
+  dialog text `Delete "Cab" and its 2 items? This cannot be undone.` printed
+  in the failure output — no mention of the nested compartment — and
+  passing against the fix.
+
+## Completion gate (pass 4)
+
+| Check                                                                             | Result                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                     | ✅ 0 violations                                                                                                                                                                         |
+| `black --check app/ tests/ alembic/`                                              | ✅ clean                                                                                                                                                                                |
+| `isort --check-only app/ tests/ alembic/`                                         | ✅ clean                                                                                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                 | ✅ single head, no schema change                                                                                                                                                        |
+| `pytest tests/ -k "apparatus or nfc or evoc or equipment_check or compartment"`   | ✅ 572 passed, 1 skipped (pre-existing optional-dependency skip)                                                                                                                        |
+| `pytest tests/` (full backend suite)                                              | ✅ 10064 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed                                                                                                 |
+| `mypy app/services/equipment_check_service.py`                                    | pre-existing repo-wide debt (1225 errors before this pass's changes, 1224 after — net −1, no error newly introduced by this diff; not part of this repo's enforced gate, see CLAUDE.md) |
+| `pylint app/services/equipment_check_service.py --enable=E`                       | ✅ 2 pre-existing false positives (`func.count` not-callable), none on changed lines                                                                                                    |
+| `tsc --noEmit`                                                                    | ✅ 0 errors                                                                                                                                                                             |
+| `eslint src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx(.test.tsx)` | ✅ 0 errors                                                                                                                                                                             |
+| `npm run lint` (full frontend)                                                    | ✅ 0 errors                                                                                                                                                                             |
+| `vitest run src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`   | ✅ 80 passed                                                                                                                                                                            |
+| `vitest run src/modules/inventory` (full module)                                  | ✅ 915 passed (69 files)                                                                                                                                                                |
 
 ---
 
