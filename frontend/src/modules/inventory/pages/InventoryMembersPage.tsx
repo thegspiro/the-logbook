@@ -3,7 +3,7 @@
  * Expandable cards with bidirectional links to member profiles and item details.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import {
   ArrowLeft,
   Users,
@@ -30,6 +30,7 @@ import type {
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
@@ -97,18 +98,34 @@ const InventoryMembersPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Captured once at mount rather than read per render. The list is
+  // active-members-only, and a departure clearance is created *after* the drop
+  // has already made the member inactive — so the one person the hub's
+  // clearance queue links here to review is the one the default filter leaves
+  // out. Asking for them by id puts them back in.
+  //
+  // It has to be held rather than re-read because `useDeepLinkedRecord` removes
+  // the parameter as soon as it resolves; a websocket refresh after that would
+  // otherwise reload without the id and drop the row out from under the panel
+  // it had just expanded.
+  const [linkedSearchParams] = useSearchParams();
+  const [linkedUserId] = useState(() => linkedSearchParams.get('user') ?? '');
+
   const loadMembers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data: MembersInventoryListResponse = await inventoryService.getMembersSummary(searchDebounce || undefined);
+      const data: MembersInventoryListResponse = await inventoryService.getMembersSummary(
+        searchDebounce || undefined,
+        linkedUserId || undefined
+      );
       setMembers(data.members);
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Unable to load members inventory data.'));
     } finally {
       setLoading(false);
     }
-  }, [searchDebounce]);
+  }, [searchDebounce, linkedUserId]);
 
   useEffect(() => {
     void loadMembers();
@@ -119,6 +136,19 @@ const InventoryMembersPage: React.FC = () => {
       void loadMembers();
     }, [loadMembers]),
   });
+
+  // "Review" on the inventory hub's attention queue names the member whose
+  // departure clearance is outstanding. Declared after handleExpand below
+  // would read better, but the hook has to see the list, and handleExpand is
+  // what does the work — so it is called through a ref-free arrow here.
+  useDeepLinkedRecord(
+    'user',
+    members,
+    (member) => member.user_id,
+    (member) => {
+      void handleExpand(member.user_id);
+    }
+  );
 
   const handleExpand = async (userId: string) => {
     if (expandedUserId === userId) {
@@ -208,7 +238,7 @@ const InventoryMembersPage: React.FC = () => {
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
-        title="Back to Gear Admin"
+        title="Back to Inventory Admin"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Admin
       </Link>

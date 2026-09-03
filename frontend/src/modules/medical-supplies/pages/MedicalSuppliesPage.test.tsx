@@ -111,7 +111,7 @@ describe('MedicalSuppliesPage', () => {
 
     renderWithRouter(<MedicalSuppliesPage />);
 
-    const gearLink = await screen.findByRole('link', { name: /Gear & Uniforms/i });
+    const gearLink = await screen.findByRole('link', { name: /Inventory/i });
     expect(gearLink).toHaveAttribute('href', '/inventory');
   });
 
@@ -125,8 +125,8 @@ describe('MedicalSuppliesPage', () => {
     renderWithRouter(<MedicalSuppliesPage />);
     await screen.findByRole('heading', { name: /Medical Supplies/i });
 
-    expect(screen.getByText(/Gear and uniforms are tracked separately/i)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Gear & Uniforms/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/run on the same catalog as gear and uniforms/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Inventory/i })).not.toBeInTheDocument();
   });
 
   it('opens on expiring stock, which is what goes wrong quietly', async () => {

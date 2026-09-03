@@ -1,42 +1,25 @@
 /**
- * Inventory Admin Hub
+ * Inventory Administration
  *
- * Central navigation page for inventory administration.
- * Links to separate pages for items, pool items, categories,
- * maintenance, members, checkouts, charges, and return requests.
+ * The launching point for whoever runs the department's stock — gear, PPE,
+ * uniforms and EMS supplies, which are one catalog on the backend partitioned
+ * by `InventoryCategory.item_type`, plus the store the uniforms are bought
+ * through.
+ *
+ * The body is a card wall, and every card comes from `inventoryHubCards.ts`
+ * carrying the gate of the route it targets, filtered here through
+ * `checkPermission` / `isModuleOn`. That indirection is the point: as JSX
+ * literals the cards inherited this page's own `inventory.manage` gate, and
+ * two of them targeted routes requiring the check grants — which the seeded
+ * Quartermaster does not hold — so the hub offered its primary audience two
+ * cards that both refused them.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import {
-  Package,
-  Tag,
-  Users,
-  Wrench,
-  ArrowDownToLine,
-  Layers,
-  RefreshCw,
-  ClipboardList,
-  ClipboardCheck,
-  DollarSign,
-  CornerDownLeft,
-  Upload,
-  MapPin,
-  FileX,
-  Truck,
-  Clock,
-  BoxSelect,
-  Ruler,
-  UserPlus,
-  SlidersHorizontal,
-  Target,
-  Store,
-  Sparkles,
-  ArrowRight,
-  Building2,
-  AlertTriangle,
-} from 'lucide-react';
+import { RefreshCw, UserPlus, Sparkles, ArrowRight, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
+import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { useAuthStore } from '../../../stores/authStore';
@@ -45,6 +28,8 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate, formatDate } from '../../../utils/dateFormatting';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
+import { INVENTORY_HUB_CARDS, INVENTORY_HUB_SECTIONS } from './inventoryHubCards';
+import type { InventoryHubCard, InventoryHubSection, InventoryHubTone } from './inventoryHubCards';
 import type {
   InventorySummary,
   InventorySetupStatus,
@@ -149,69 +134,88 @@ const NeedsAttention: React.FC<{
     )}
   </section>
 );
-interface NavCardProps {
-  to: string;
-  icon: React.ReactNode;
-  title: string;
-  description: string;
+/**
+ * Icon tints, spelled out as whole class strings.
+ *
+ * Tailwind scans source for complete class names, so these cannot be built
+ * from the tone at runtime — `bg-${tone}-500/10` compiles to nothing. Keeping
+ * the literals in one map is also what lets the registry carry a tone name
+ * instead of a class string it has no business knowing.
+ */
+const TONE_CLASSES: Record<InventoryHubTone, string> = {
+  blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  purple: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+  orange: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  cyan: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+  yellow: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+  green: 'bg-green-500/10 text-green-600 dark:text-green-400',
+  red: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  indigo: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+  amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+  emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  slate: 'bg-theme-surface-secondary text-theme-text-muted group-hover:text-theme-text-primary',
+};
+
+/** Live figures the registry cannot carry, attached to a card by its id. */
+interface CardStat {
+  /** Large number on a supply-line card. */
+  stat?: number | undefined;
+  statLabel?: string | undefined;
+  /** Small pill beside a nav card's title. */
   badge?: number | undefined;
   badgeColor?: string | undefined;
-  iconBg?: string | undefined;
 }
 
-const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, badgeColor, iconBg }) => (
+const NavCard: React.FC<{ card: InventoryHubCard; stat: CardStat }> = ({ card, stat }) => (
   <Link
-    to={to}
+    to={card.path}
     className="card-secondary hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex items-center gap-3 p-3 sm:items-start sm:gap-4 sm:p-4"
   >
     <div
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors sm:h-10 sm:w-10 ${iconBg ?? 'bg-theme-surface-secondary text-theme-text-muted group-hover:text-theme-text-primary'}`}
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors sm:h-10 sm:w-10 ${TONE_CLASSES[card.tone]}`}
     >
-      {icon}
+      <card.icon className="h-5 w-5" aria-hidden="true" />
     </div>
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
-        <h3 className="text-theme-text-primary group-hover:text-theme-text-primary text-sm font-semibold">{title}</h3>
-        {badge != null && badge > 0 && (
+        <h3 className="text-theme-text-primary group-hover:text-theme-text-primary text-sm font-semibold">
+          {card.label}
+        </h3>
+        {stat.badge != null && stat.badge > 0 && (
           <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeColor ?? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'}`}
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${stat.badgeColor ?? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'}`}
           >
-            {badge}
+            {stat.badge}
           </span>
         )}
       </div>
-      <p className="text-theme-text-muted mt-0.5 hidden text-xs sm:block">{description}</p>
+      <p className="text-theme-text-muted mt-0.5 hidden text-xs sm:block">{card.description}</p>
     </div>
   </Link>
 );
 
-interface ProminentCardProps {
-  to: string;
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  stat?: string | number | undefined;
-  statLabel?: string | undefined;
-  iconBg: string;
-}
-
-const ProminentCard: React.FC<ProminentCardProps> = ({ to, icon, title, description, stat, statLabel, iconBg }) => (
+const ProminentCard: React.FC<{ card: InventoryHubCard; stat: CardStat }> = ({ card, stat }) => (
   <Link
-    to={to}
+    to={card.path}
     className="card-secondary hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex flex-col gap-3 p-4 transition-all sm:p-5"
   >
     <div className="flex items-center justify-between">
-      <div className={`flex h-10 w-10 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${iconBg}`}>{icon}</div>
-      {stat != null && (
+      <div
+        className={`flex h-10 w-10 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${TONE_CLASSES[card.tone]}`}
+      >
+        <card.icon className="h-5 w-5" aria-hidden="true" />
+      </div>
+      {stat.stat != null && (
         <div className="text-right">
-          <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">{stat}</p>
-          {statLabel && <p className="text-theme-text-muted text-[11px]">{statLabel}</p>}
+          <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">{stat.stat}</p>
+          {stat.statLabel && <p className="text-theme-text-muted text-[11px]">{stat.statLabel}</p>}
         </div>
       )}
     </div>
     <div>
-      <h3 className="text-theme-text-primary text-sm font-semibold">{title}</h3>
-      <p className="text-theme-text-muted mt-0.5 text-xs">{description}</p>
+      <h3 className="text-theme-text-primary text-sm font-semibold">{card.label}</h3>
+      <p className="text-theme-text-muted mt-0.5 text-xs">{card.description}</p>
     </div>
   </Link>
 );
@@ -240,13 +244,23 @@ export const InventoryAdminHub: React.FC = () => {
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManage = checkPermission('inventory.manage');
   const { isModuleOn } = useEnabledModules();
-  // The store is a separate module with its own grant. Gating this card the
-  // same way every navigation surface does keeps it from being the one door
-  // into a console the department has not enabled — which is how a store got
-  // set up that members could never see, since their side nav reads the same
-  // module flag this card was ignoring.
-  const canOpenStore = isModuleOn('storefront') && checkPermission('storefront.manage');
   const tz = useTimezone();
+
+  // Every card resolves its own gate here rather than inheriting the page's.
+  // The store and EMS cards are the visible reason — both are separate modules
+  // with their own grants, and an unguarded card is the one door into a
+  // console the department has not enabled — but the checklist cards are the
+  // reason it is done for all of them: they refuse `inventory.manage`, which
+  // is the grant everyone reaching this page holds.
+  const visibleCards = useMemo(
+    () =>
+      INVENTORY_HUB_CARDS.filter((card) => {
+        if (card.requiresModule && !isModuleOn(card.requiresModule)) return false;
+        if (card.anyPermission) return card.anyPermission.some((permission) => checkPermission(permission));
+        return card.permission ? checkPermission(card.permission) : true;
+      }),
+    [checkPermission, isModuleOn]
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
   const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
@@ -260,7 +274,12 @@ export const InventoryAdminHub: React.FC = () => {
   const [setupStatus, setSetupStatus] = useState<InventorySetupStatus | null>(null);
   const [attentionRows, setAttentionRows] = useState<AttentionRow[]>([]);
   const [failedSources, setFailedSources] = useState<string[]>([]);
+  const [medicalExpiring, setMedicalExpiring] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // A primitive, not the card object: this goes in a dependency array, and
+  // `visibleCards` is only as stable as the two callbacks it memoizes on.
+  const showsMedical = visibleCards.some((card) => card.id === 'supply-medical');
 
   // Quick-assign flow: pick a member, then assign items to them via the scan modal.
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
@@ -268,6 +287,21 @@ export const InventoryAdminHub: React.FC = () => {
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
+
+    // Medical stock is its own module with its own grant, so it is requested
+    // separately, and only when the card that shows the number is on screen —
+    // folding it into the tuple below would spend a 403 on every department
+    // that runs no EMS supply line. The count is what expires soon rather than
+    // what is on the shelf: that is the number an EMS officer opens the page
+    // for, and it is what /medical-supplies itself leads with.
+    //
+    // It is settled alongside the batch and reports into the same
+    // `failedSources` banner. Swallowing its rejection would show the card
+    // without a stat, which is indistinguishable from a department that has
+    // nothing expiring — and would leave no Retry for the one request the
+    // banner could not mention.
+    const medicalRequest = showsMedical ? medicalSuppliesService.getSummary() : null;
+
     const sources = [
       ['summary', inventoryService.getSummary()],
       ['low stock', inventoryService.getLowStockItems()],
@@ -280,11 +314,21 @@ export const InventoryAdminHub: React.FC = () => {
       ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
       ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
     ] as const;
-    const results = await Promise.allSettled(sources.map(([, promise]) => promise));
-    const failed = results.flatMap((result, index) => {
+    const [results, medicalSettled] = await Promise.all([
+      Promise.allSettled(sources.map(([, promise]) => promise)),
+      Promise.allSettled(medicalRequest ? [medicalRequest] : []),
+    ]);
+    // Widened from the `as const` tuple's literal union: the medical request is
+    // not one of its members, and it reports into the same banner.
+    const failed: string[] = results.flatMap((result, index) => {
       const source = sources[index];
       return result.status === 'rejected' && source ? [source[0]] : [];
     });
+
+    const medicalResult = medicalSettled[0];
+    if (medicalResult?.status === 'rejected') failed.push('EMS supplies');
+    setMedicalExpiring(medicalResult?.status === 'fulfilled' ? medicalResult.value.expiring_soon : null);
+
     setFailedSources(failed);
     const value = <T,>(index: number, fallback: T): T => {
       const result = results[index];
@@ -328,7 +372,11 @@ export const InventoryAdminHub: React.FC = () => {
             : ('High' as const),
         rank: item.next_inspection_due && new Date(item.next_inspection_due).getTime() < now ? 0 : 2,
         action: 'Open item',
-        href: `/inventory/admin/items/${item.id}`,
+        // /inventory/items/:id, not /inventory/admin/items/:id — the latter
+        // matches no route, so this row spent its life dropping the reader on
+        // the dashboard via App.tsx's catch-all. The inspections tab is the
+        // half of the record the row is about.
+        href: `/inventory/items/${item.id}?tab=inspections`,
       })),
       ...checkouts.map((checkout) => ({
         key: `loan-${checkout.checkout_id}`,
@@ -352,7 +400,9 @@ export const InventoryAdminHub: React.FC = () => {
           severity: 'High' as const,
           rank: 1,
           action: 'Receive',
-          href: `/inventory/admin/reorder/${delivery.id}`,
+          // A query parameter, not a path segment: /inventory/admin/reorder is
+          // an exact-match route, so the id-in-the-path form matched nothing.
+          href: `/inventory/admin/reorder?request=${delivery.id}`,
         })),
       ...requests.requests.map((request) => ({
         key: `request-${request.id}`,
@@ -413,7 +463,7 @@ export const InventoryAdminHub: React.FC = () => {
     ];
     setAttentionRows(rows.sort((a, b) => a.rank - b.rank || a.when.localeCompare(b.when)));
     setLoading(false);
-  }, [tz]);
+  }, [tz, showsMedical]);
 
   useEffect(() => {
     void loadSummary();
@@ -432,11 +482,55 @@ export const InventoryAdminHub: React.FC = () => {
     },
   ];
 
+  /** Live figures per card id. Everything else about a card is static data. */
+  const cardStats: Record<string, CardStat> = {
+    'supply-ppe': { stat: summary?.items_by_type?.ppe, statLabel: 'items' },
+    'supply-uniform': { stat: summary?.items_by_type?.uniform, statLabel: 'items' },
+    'supply-medical': { stat: medicalExpiring ?? undefined, statLabel: 'expiring soon' },
+    // A badge, not a `stat`: NavCard renders only the former, so the `stat`
+    // this entry used to carry was never on screen at all. And
+    // non_medical_items rather than total_items, because the latter sums
+    // quantities across every type including medical while this card opens a
+    // row listing that excludes it — a headline of 150 over a list of 127
+    // reads as a bug in the list.
+    items: { badge: summary?.non_medical_items },
+    checkouts: {
+      badge: summary?.overdue_checkouts,
+      badgeColor: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    },
+    maintenance: {
+      badge: summary?.maintenance_due_count,
+      badgeColor: 'bg-orange-500/10 text-orange-700 dark:text-orange-400',
+    },
+    requests: {
+      badge: pendingRequests > 0 ? pendingRequests : undefined,
+      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+    },
+    returns: {
+      badge: pendingReturns > 0 ? pendingReturns : undefined,
+      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+    },
+    reorder: {
+      badge: lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined,
+      badgeColor: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+    },
+  };
+  const statFor = (id: string): CardStat => cardStats[id] ?? {};
+
+  const cardsIn = (section: InventoryHubSection) => visibleCards.filter((card) => card.section === section);
+  const supplyLines = cardsIn('Supply lines');
+  // Sections after the supply-line row, rendered in registry order. A section
+  // whose every card is filtered out renders nothing — a heading over an empty
+  // grid tells the reader they are missing something without saying what.
+  const bodySections = INVENTORY_HUB_SECTIONS.filter((section) => section !== 'Supply lines')
+    .map((section) => ({ section, cards: cardsIn(section) }))
+    .filter((group) => group.cards.length > 0);
+
   return (
     <AdminHubFrame<AdminTab>
       moduleKey="inventory"
-      title="Gear & Uniforms Administration"
-      description="Manage equipment, assignments, and compliance"
+      title="Inventory Administration"
+      description="Gear, uniforms and EMS supplies — stock, issuance, and what needs a decision today"
       actions={actions}
       primaryAction={
         canManage
@@ -458,7 +552,7 @@ export const InventoryAdminHub: React.FC = () => {
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <AdminMetricsSettings
             moduleKey="inventory"
-            moduleLabel="Gear & Uniforms"
+            moduleLabel="Inventory"
             permission="inventory.manage"
             onSaved={() => setFrameToken((token) => token + 1)}
           />
@@ -501,201 +595,28 @@ export const InventoryAdminHub: React.FC = () => {
             </Link>
           )}
 
-          {/* Prominent top cards */}
-          <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <ProminentCard
-              to="/inventory/admin/items"
-              icon={<Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-              title="Items"
-              description="Browse, add, edit, and manage individual equipment"
-              stat={summary?.total_items}
-              statLabel="total"
-              iconBg="bg-blue-500/10"
-            />
-            <ProminentCard
-              to="/inventory/admin/members"
-              icon={<Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
-              title="Members"
-              description="View and manage per-member equipment assignments"
-              iconBg="bg-emerald-500/10"
-            />
-            <ProminentCard
-              to="/inventory/checkouts"
-              icon={<ArrowDownToLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
-              title="Temporary Loans"
-              description="Manage serialized gear due back on a specific date"
-              stat={summary?.overdue_checkouts}
-              statLabel="overdue"
-              iconBg="bg-amber-500/10"
-            />
-          </div>
+          {/* Supply lines — the three stock lines a department staffs.
+              Not a partition of the catalog: tools, equipment, electronics and
+              consumables are real item types nobody is appointed to run, and
+              they are reached through All Items below. */}
+          {supplyLines.length > 0 && (
+            <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {supplyLines.map((card) => (
+                <ProminentCard key={card.id} card={card} stat={statFor(card.id)} />
+              ))}
+            </div>
+          )}
 
-          {/* Inventory Management */}
           <div className="space-y-8">
-            <Section title="Inventory Management">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <NavCard
-                  to="/inventory/admin/pool"
-                  icon={<Layers className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-                  title="Pool Items"
-                  description="Manage quantity-tracked items, issue to members"
-                  iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                />
-                <NavCard
-                  to="/inventory/admin/categories"
-                  icon={<Tag className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-                  title="Categories"
-                  description="Organize items by type with tracking settings"
-                  iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                />
-                <NavCard
-                  to="/inventory/admin/kits"
-                  icon={<BoxSelect className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
-                  title="Gear Kits"
-                  description="Create and manage kit templates for multi-item issuance"
-                  iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                />
-                <NavCard
-                  to="/inventory/admin/variant-groups"
-                  icon={<Ruler className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
-                  title="Variant Groups"
-                  description="Group pool item variants by size, style, and color"
-                  iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                />
-                <NavCard
-                  to="/inventory/admin/allowances"
-                  icon={<SlidersHorizontal className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-                  title="Issuance Allowances"
-                  description="Cap how many units per category a member can be issued"
-                  iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                />
-                <NavCard
-                  to="/inventory/admin/impact-planner"
-                  icon={<Target className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
-                  title="Impact Planner"
-                  description="Plan a new issue: who's impacted, sizes needed, who to contact"
-                  iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                />
-                <NavCard
-                  to="/inventory/admin/maintenance"
-                  icon={<Wrench className="h-5 w-5 text-orange-600 dark:text-orange-400" />}
-                  title="Maintenance"
-                  description="Track inspections, repairs, and compliance"
-                  badge={summary?.maintenance_due_count}
-                  badgeColor="bg-orange-500/10 text-orange-700 dark:text-orange-400"
-                  iconBg="bg-orange-500/10 text-orange-600 dark:text-orange-400"
-                />
-                <NavCard
-                  to="/inventory/storage-areas"
-                  icon={<MapPin className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
-                  title="Storage Areas"
-                  description="Manage storage locations within facilities"
-                  iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
-                />
-                <NavCard
-                  to="/inventory/admin/vendors"
-                  icon={<Building2 className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
-                  title="Vendors"
-                  description="Suppliers, their contacts, and what we buy from them"
-                  iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
-                />
-              </div>
-            </Section>
-
-            {/* Requests & Workflows */}
-            <Section title="Requests & Workflows">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <NavCard
-                  to="/inventory/admin/requests"
-                  icon={<ClipboardList className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
-                  title="Gear Requests"
-                  description="Review member requests for equipment"
-                  badge={pendingRequests > 0 ? pendingRequests : undefined}
-                  badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-                  iconBg="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                />
-                <NavCard
-                  to="/inventory/admin/returns"
-                  icon={<CornerDownLeft className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
-                  title="Return Requests"
-                  description="Review and process member return requests"
-                  badge={pendingReturns > 0 ? pendingReturns : undefined}
-                  badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-                  iconBg="bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                />
-                <NavCard
-                  to="/inventory/admin/charges"
-                  icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
-                  title="Charges"
-                  description="Cost recovery for lost or damaged items"
-                  iconBg="bg-green-500/10 text-green-600 dark:text-green-400"
-                />
-                <NavCard
-                  to="/inventory/admin/write-offs"
-                  icon={<FileX className="h-5 w-5 text-red-600 dark:text-red-400" />}
-                  title="Write-Offs"
-                  description="Process loss and damage write-off requests"
-                  iconBg="bg-red-500/10 text-red-600 dark:text-red-400"
-                />
-                <NavCard
-                  to="/inventory/admin/reorder"
-                  icon={<Truck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
-                  title="Reorder Requests"
-                  description="Track and manage supply reorder requests"
-                  badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}
-                  badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-                  iconBg="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-                />
-                <NavCard
-                  to="/inventory/admin/checklists/supply"
-                  icon={<Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
-                  title="Expiring on Apparatus"
-                  description="Items expiring on the trucks and ready replacement stock"
-                  iconBg="bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                />
-                <NavCard
-                  to="/inventory/admin/checklists"
-                  icon={<ClipboardList className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
-                  title="Equipment Checklists"
-                  description="The checklists themselves, plus fleet readiness and the check log"
-                  iconBg="bg-sky-500/10 text-sky-600 dark:text-sky-400"
-                />
-                <NavCard
-                  to="/inventory/admin/checklists/reports"
-                  icon={<ClipboardCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
-                  title="Check Reports"
-                  description="Compliance, failures and item trends across completed checks"
-                  iconBg="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                />
-              </div>
-            </Section>
-
-            {/* Tools */}
-            <Section title="Tools">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <NavCard
-                  to="/inventory/admin/setup"
-                  icon={<Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
-                  title="Setup Guide"
-                  description="Rooms, storage, categories, and first items in order"
-                  iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                />
-                <NavCard
-                  to="/inventory/import"
-                  icon={<Upload className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
-                  title="Import / Export"
-                  description="Bulk import from CSV or export inventory data"
-                />
-                {canOpenStore && (
-                  <NavCard
-                    to="/store/admin"
-                    icon={<Store className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
-                    title="Department Store"
-                    description="Order windows, catalog, and member order payments"
-                  />
-                )}
-              </div>
-            </Section>
+            {bodySections.map(({ section, cards }) => (
+              <Section key={section} title={section}>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {cards.map((card) => (
+                    <NavCard key={card.id} card={card} stat={statFor(card.id)} />
+                  ))}
+                </div>
+              </Section>
+            ))}
           </div>
         </div>
       )}

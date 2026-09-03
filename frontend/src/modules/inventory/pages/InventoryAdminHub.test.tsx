@@ -32,6 +32,13 @@ vi.mock('../../../services/api', () => ({
   },
 }));
 
+const mockGetMedicalSummary = vi.fn();
+vi.mock('../../../services/medicalSuppliesService', () => ({
+  medicalSuppliesService: {
+    getSummary: (...args: unknown[]) => mockGetMedicalSummary(...args) as unknown,
+  },
+}));
+
 const mockGetAdminHubSummary = vi.fn();
 vi.mock('../../../services/adminHubService', () => ({
   adminHubService: {
@@ -58,6 +65,8 @@ import { InventoryAdminHub } from './InventoryAdminHub';
 
 const mockSummary = {
   total_items: 150,
+  items_by_type: { ppe: 62, uniform: 45, tool: 20 },
+  non_medical_items: 127,
   items_by_status: { available: 80, assigned: 40, checked_out: 20, in_maintenance: 5, retired: 5 },
   active_checkouts: 20,
   overdue_checkouts: 3,
@@ -91,6 +100,13 @@ describe('InventoryAdminHub', () => {
     mockGetDepartureClearances.mockResolvedValue({ clearances: [], total: 0 });
     mockCheckPermission.mockReturnValue(true);
     mockIsModuleOn.mockReturnValue(true);
+    mockGetMedicalSummary.mockResolvedValue({
+      total_items: 88,
+      expiring_soon: 7,
+      expired: 1,
+      low_stock: 2,
+      expiring_within_days: 30,
+    });
     mockGetAdminHubSummary.mockResolvedValue({
       moduleKey: 'inventory',
       generatedAt: '2026-08-23T12:00:00Z',
@@ -124,8 +140,10 @@ describe('InventoryAdminHub', () => {
 
   it('renders the page title and subtitle', async () => {
     renderWithRouter(<InventoryAdminHub />);
-    expect(screen.getByText('Gear & Uniforms Administration')).toBeInTheDocument();
-    expect(screen.getByText('Manage equipment, assignments, and compliance')).toBeInTheDocument();
+    expect(screen.getByText('Inventory Administration')).toBeInTheDocument();
+    expect(
+      screen.getByText('Gear, uniforms and EMS supplies — stock, issuance, and what needs a decision today')
+    ).toBeInTheDocument();
     await waitFor(() => {
       expect(mockGetSummary).toHaveBeenCalledTimes(1);
     });
@@ -166,10 +184,10 @@ describe('InventoryAdminHub', () => {
   it('renders all navigation cards', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     const navTitles = [
-      'Items',
+      'All Items',
       'Pool Items',
       'Categories',
       'Members',
@@ -193,7 +211,7 @@ describe('InventoryAdminHub', () => {
   it('renders correct links for navigation cards', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     const allLinks = screen.getAllByRole('link');
     const itemsLink = allLinks.find((l) => l.getAttribute('href') === '/inventory/admin/items');
@@ -219,7 +237,7 @@ describe('InventoryAdminHub', () => {
     mockGetSummary.mockRejectedValue(new Error('Network error'));
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     expect(screen.queryByText('available')).not.toBeInTheDocument();
   });
@@ -228,7 +246,7 @@ describe('InventoryAdminHub', () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     await user.click(screen.getByRole('button', { name: /Assign to Member/ }));
     await waitFor(() => {
@@ -237,13 +255,16 @@ describe('InventoryAdminHub', () => {
     expect(screen.getByLabelText('Search members')).toBeInTheDocument();
   });
 
-  it('hides "Assign to Member" without inventory.manage permission', async () => {
+  it('hides "Assign to Member" and every card without any grant', async () => {
+    // Each card now resolves its own gate, so a caller holding nothing sees
+    // an empty body rather than a wall of links that all refuse them.
     mockCheckPermission.mockReturnValue(false);
     renderWithRouter(<InventoryAdminHub />);
-    await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
-    });
+    await screen.findByRole('region', { name: 'Needs attention' });
+
     expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('All Items')).not.toBeInTheDocument();
+    expect(screen.queryByText('Catalog')).not.toBeInTheDocument();
   });
 
   // The store is its own module with its own grant, and this card used to
@@ -254,32 +275,34 @@ describe('InventoryAdminHub', () => {
     mockIsModuleOn.mockImplementation((key: unknown) => key !== 'storefront');
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
+    expect(screen.queryByText('Store Overview')).not.toBeInTheDocument();
   });
 
   it('hides the Department Store card without storefront.manage', async () => {
     mockCheckPermission.mockImplementation((p: unknown) => p !== 'storefront.manage');
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
   });
 
-  it('shows the Department Store card with the module on and the grant held', async () => {
+  it('shows the store section with the module on and the grant held', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
-    expect(screen.getByRole('link', { name: /Department Store/ })).toHaveAttribute('href', '/store/admin');
+    expect(screen.getByText('Department Store')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Store Overview/ })).toHaveAttribute('href', '/inventory/admin/store');
   });
 
   it('shows badges on nav cards with counts', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     expect(screen.getAllByText('7').length).toBeGreaterThanOrEqual(1);
   });
@@ -303,7 +326,7 @@ describe('InventoryAdminHub', () => {
   it('hides the setup prompt once every step has records', async () => {
     renderWithRouter(<InventoryAdminHub />);
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     expect(screen.queryByText('Finish inventory setup')).not.toBeInTheDocument();
   });
@@ -313,7 +336,7 @@ describe('InventoryAdminHub', () => {
     renderWithRouter(<InventoryAdminHub />);
 
     await waitFor(() => {
-      expect(screen.getByText('Items')).toBeInTheDocument();
+      expect(screen.getByText('All Items')).toBeInTheDocument();
     });
     expect(screen.queryByText('Finish inventory setup')).not.toBeInTheDocument();
   });
@@ -370,5 +393,215 @@ describe('InventoryAdminHub', () => {
     mockGetLowStockItems.mockResolvedValue([]);
     renderWithRouter(<InventoryAdminHub />);
     expect(await screen.findByText('Nothing needs attention. All inventory work is up to date.')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The supply lines, the per-area gates, and the queue's repaired links.
+ *
+ * Its own block with its own `beforeEach`: `vi.clearAllMocks()` resets calls
+ * but not implementations, so a block that configures nothing runs on whatever
+ * its neighbour left behind and passes for the wrong reason (CLAUDE.md #28).
+ * Every mock this block depends on is reset and given a default here.
+ */
+describe('InventoryAdminHub — supply lines and per-area gates', () => {
+  const grantAll = () => mockCheckPermission.mockReturnValue(true);
+
+  beforeEach(() => {
+    mockGetSummary.mockReset();
+    mockGetSummary.mockResolvedValue(mockSummary);
+    mockGetLowStockItems.mockReset();
+    mockGetLowStockItems.mockResolvedValue([]);
+    mockGetReturnRequests.mockReset();
+    mockGetReturnRequests.mockResolvedValue([]);
+    mockGetEquipmentRequests.mockReset();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [], total: 0 });
+    mockGetSetupStatus.mockReset();
+    mockGetSetupStatus.mockResolvedValue({ rooms: 3, storage_areas: 8, categories: 6, items: 150, is_complete: true });
+    mockGetOverdueCheckouts.mockReset();
+    mockGetOverdueCheckouts.mockResolvedValue({ checkouts: [], total: 0 });
+    mockGetMaintenanceDueItems.mockReset();
+    mockGetMaintenanceDueItems.mockResolvedValue([]);
+    mockGetWriteOffRequests.mockReset();
+    mockGetWriteOffRequests.mockResolvedValue([]);
+    mockGetReorderRequests.mockReset();
+    mockGetReorderRequests.mockResolvedValue([]);
+    mockGetDepartureClearances.mockReset();
+    mockGetDepartureClearances.mockResolvedValue({ clearances: [], total: 0 });
+    mockGetMembersSummary.mockReset();
+    mockGetMembersSummary.mockResolvedValue({ members: [], total: 0 });
+    mockGetAdminHubSummary.mockReset();
+    mockGetAdminHubSummary.mockResolvedValue({
+      moduleKey: 'inventory',
+      generatedAt: '2026-08-23T12:00:00Z',
+      timezone: 'UTC',
+      metrics: [],
+      attention: [],
+    });
+    mockGetMedicalSummary.mockReset();
+    mockGetMedicalSummary.mockResolvedValue({
+      total_items: 88,
+      expiring_soon: 7,
+      expired: 1,
+      low_stock: 2,
+      expiring_within_days: 30,
+    });
+    mockCheckPermission.mockReset();
+    grantAll();
+    mockIsModuleOn.mockReset();
+    mockIsModuleOn.mockReturnValue(true);
+  });
+
+  it('opens each supply line on the catalogue filtered to it', async () => {
+    renderWithRouter(<InventoryAdminHub />);
+    await screen.findByText('PPE & Turnout Gear');
+
+    expect(screen.getByRole('link', { name: /PPE & Turnout Gear/ })).toHaveAttribute(
+      'href',
+      '/inventory/admin/items?item_type=ppe'
+    );
+    expect(screen.getByRole('link', { name: /Uniforms/ })).toHaveAttribute(
+      'href',
+      '/inventory/admin/items?item_type=uniform'
+    );
+    expect(screen.getByRole('link', { name: /EMS Supplies/ })).toHaveAttribute('href', '/medical-supplies');
+  });
+
+  it('counts each supply line from the summary breakdown', async () => {
+    renderWithRouter(<InventoryAdminHub />);
+    const ppe = await screen.findByRole('link', { name: /PPE & Turnout Gear/ });
+
+    expect(within(ppe).getByText('62')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Uniforms/ })).getByText('45')).toBeInTheDocument();
+  });
+
+  it('counts All Items as the non-medical rows its listing shows', async () => {
+    // total_items is 150 and sums quantities across every type, medical
+    // included; /inventory/admin/items excludes medical and reports rows. A
+    // card that shows 150 over a list of 127 reads as a bug in the list.
+    renderWithRouter(<InventoryAdminHub />);
+    const items = await screen.findByRole('link', { name: /All Items/ });
+
+    expect(within(items).getByText('127')).toBeInTheDocument();
+    expect(within(items).queryByText('150')).not.toBeInTheDocument();
+  });
+
+  it('reports what is expiring on the EMS card, not what is on the shelf', async () => {
+    // 7 expiring soon, out of 88 items — the number an EMS officer opens the
+    // page for is the one with a deadline on it.
+    renderWithRouter(<InventoryAdminHub />);
+    const medical = await screen.findByRole('link', { name: /EMS Supplies/ });
+
+    expect(within(medical).getByText('7')).toBeInTheDocument();
+    expect(within(medical).queryByText('88')).not.toBeInTheDocument();
+  });
+
+  it('names the EMS request in the failure banner rather than swallowing it', async () => {
+    // A silently-dropped stat is indistinguishable from a department with
+    // nothing expiring, and leaves no Retry for the one request that failed.
+    mockGetMedicalSummary.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryAdminHub />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('EMS supplies');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(mockGetMedicalSummary).toHaveBeenCalledTimes(2));
+  });
+
+  it('leaves the EMS card without a stat when its request fails', async () => {
+    mockGetMedicalSummary.mockRejectedValue(new Error('offline'));
+    renderWithRouter(<InventoryAdminHub />);
+    const medical = await screen.findByRole('link', { name: /EMS Supplies/ });
+
+    expect(within(medical).queryByText('7')).not.toBeInTheDocument();
+  });
+
+  it('hides the EMS card, and asks nothing of its API, without the medical grant', async () => {
+    mockCheckPermission.mockImplementation((permission: unknown) => permission !== 'inventory.view_medical');
+    renderWithRouter(<InventoryAdminHub />);
+    await screen.findByText('PPE & Turnout Gear');
+
+    expect(screen.queryByText('EMS Supplies')).not.toBeInTheDocument();
+    // The fetch is gated on the same condition as the card: a department with
+    // no EMS supply line should not spend a 403 on every page load.
+    expect(mockGetMedicalSummary).not.toHaveBeenCalled();
+  });
+
+  it('hides the EMS card when the medical module is off', async () => {
+    mockIsModuleOn.mockImplementation((key: unknown) => key !== 'medical_supplies');
+    renderWithRouter(<InventoryAdminHub />);
+    await screen.findByText('PPE & Turnout Gear');
+
+    expect(screen.queryByText('EMS Supplies')).not.toBeInTheDocument();
+  });
+
+  // The bug this whole change set exists to close: the seeded Quartermaster
+  // holds `inventory.manage` and neither check grant, and `checkPermission` is
+  // exact match plus module wildcard — so these two cards were a link to
+  // Access Denied for the officer the hub is built for.
+  it('hides the checklist cards from a quartermaster with no check grants', async () => {
+    mockCheckPermission.mockImplementation(
+      (permission: unknown) => permission !== 'inventory.check_manage' && permission !== 'inventory.check_view'
+    );
+    renderWithRouter(<InventoryAdminHub />);
+    await screen.findByText('All Items');
+
+    expect(screen.queryByText('Equipment Checklists')).not.toBeInTheDocument();
+    expect(screen.queryByText('Check Reports')).not.toBeInTheDocument();
+    // Still shown: its route accepts `inventory.manage` too.
+    expect(screen.getByText('Expiring on Apparatus')).toBeInTheDocument();
+  });
+
+  it('shows the checklist cards once the check grants are held', async () => {
+    renderWithRouter(<InventoryAdminHub />);
+    await screen.findByText('All Items');
+
+    expect(screen.getByRole('link', { name: /Equipment Checklists/ })).toHaveAttribute(
+      'href',
+      '/inventory/admin/checklists'
+    );
+    expect(screen.getByRole('link', { name: /Check Reports/ })).toHaveAttribute(
+      'href',
+      '/inventory/admin/checklists/reports'
+    );
+  });
+
+  it('drops a section heading when every card under it is hidden', async () => {
+    // A heading over an empty grid tells the reader something is missing
+    // without saying what.
+    mockIsModuleOn.mockImplementation((key: unknown) => key !== 'storefront');
+    renderWithRouter(<InventoryAdminHub />);
+    await screen.findByText('All Items');
+
+    expect(screen.getByText('Catalog')).toBeInTheDocument();
+    expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
+  });
+
+  it('sends the maintenance row to the item, not to the dashboard', async () => {
+    // `/inventory/admin/items/:id` matches no route, so this row spent its
+    // life falling through App.tsx's catch-all.
+    mockGetMaintenanceDueItems.mockResolvedValue([
+      { id: 'maint-1', name: 'SCBA 12', next_inspection_due: '2020-01-01' },
+    ]);
+    renderWithRouter(<InventoryAdminHub />);
+    const queue = await screen.findByRole('region', { name: 'Needs attention' });
+
+    expect(within(queue).getByRole('link', { name: 'Open item' })).toHaveAttribute(
+      'href',
+      '/inventory/items/maint-1?tab=inspections'
+    );
+  });
+
+  it('sends the overdue delivery to its request, not to a path with no route', async () => {
+    mockGetReorderRequests.mockResolvedValue([
+      { id: 'ro-1', item_name: 'Gloves', expected_delivery_date: '2020-01-01' },
+    ]);
+    renderWithRouter(<InventoryAdminHub />);
+    const queue = await screen.findByRole('region', { name: 'Needs attention' });
+
+    expect(within(queue).getByRole('link', { name: 'Receive' })).toHaveAttribute(
+      'href',
+      '/inventory/admin/reorder?request=ro-1'
+    );
   });
 });

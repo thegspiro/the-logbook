@@ -1,5 +1,5 @@
 /**
- * Equipment checklist settings — Gear Admin.
+ * Equipment checklist settings — Inventory Admin.
  *
  * These four values decide when crews are prompted to run a checklist and how
  * long the check-in link stays usable. They were edited from the shift module's

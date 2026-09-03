@@ -62,7 +62,14 @@ describe('getStorefrontRoutes', () => {
     expect(await screen.findByTestId('my-orders-page')).toBeInTheDocument();
   });
 
-  it('renders the admin console at /store/admin', async () => {
+  it('renders the admin console inside Inventory Administration', async () => {
+    renderRoute('/inventory/admin/store');
+    expect(await screen.findByTestId('store-admin-page')).toBeInTheDocument();
+  });
+
+  it('still answers the console’s old address, for bookmarks', async () => {
+    // The store sells the uniforms Inventory tracks, so the console moved
+    // inside it. Anyone who bookmarked the old URL keeps working.
     renderRoute('/store/admin');
     expect(await screen.findByTestId('store-admin-page')).toBeInTheDocument();
   });
@@ -74,14 +81,14 @@ describe('getStorefrontRoutes', () => {
   });
 
   it('gates the admin console on storefront.manage', async () => {
-    renderRoute('/store/admin');
+    renderRoute('/inventory/admin/store');
     await screen.findByTestId('store-admin-page');
     expect(capturedPermissions).toContain('storefront.manage');
   });
 
   // Permission alone left the URL reachable for a department that had the
   // module off, which is how a store got configured that members could not see.
-  it.each(['/store', '/store/checkout', '/store/orders', '/store/admin'])(
+  it.each(['/store', '/store/checkout', '/store/orders', '/inventory/admin/store'])(
     'gates %s on the storefront module',
     async (path) => {
       renderRoute(path);

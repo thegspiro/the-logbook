@@ -326,6 +326,29 @@ const InventoryItemsPage: React.FC = () => {
   // shareable link is the point.
   const [searchParams, setSearchParams] = useSearchParams();
   const vendorFilter = searchParams.get('vendor_id') ?? '';
+  // The type filter is URL-driven for the same reason vendor scoping is: the
+  // inventory hub's supply-line cards link straight at one domain
+  // (?item_type=uniform), and that only works if the list reads the URL.
+  // Derived rather than mirrored into state on mount — mirroring reads the
+  // parameter once, so moving from one supply line to another, or pressing
+  // Back between them, would leave the list showing the first.
+  //
+  // An unrecognized value is dropped rather than passed through: GET /items
+  // 400s on a type outside the enum, so a hand-edited URL would turn a filter
+  // into an error page instead of degrading to the unfiltered list.
+  const requestedType = searchParams.get('item_type');
+  const fType = ITEM_TYPES.some((option) => option.value === requestedType) ? (requestedType ?? '') : '';
+  const setFType = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (value) next.set('item_type', value);
+      else next.delete('item_type');
+      // replace, like the vendor chip's clear: changing a dropdown should not
+      // stack a history entry the Back button then has to walk through.
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
   const tz = useTimezone();
   const { confirm } = useConfirm();
   const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
@@ -344,7 +367,6 @@ const InventoryItemsPage: React.FC = () => {
   const [fCat, setFCat] = useState('');
   const [fStatus, setFStatus] = useState('');
   const [fCond, setFCond] = useState('');
-  const [fType, setFType] = useState('');
   const [fLoc, setFLoc] = useState('');
   const [fSize, setFSize] = useState('');
   const [fColor, setFColor] = useState('');

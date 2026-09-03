@@ -234,7 +234,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
       icon: Package,
       subItems: [
         // My Issued Gear carries no gate: it is a member's own kit, plus the
-        // request and return they raise against it. Gear & Uniforms is the
+        // request and return they raise against it. Inventory is the
         // whole department's catalogue and gates on `inventory.manage` —
         // NOT on `inventory.view`, which every seeded member holds and needs
         // for the request picker's item search.
@@ -245,10 +245,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 path: '/inventory/my-equipment',
                 icon: Package,
               },
-              { label: 'Gear & Uniforms', path: '/inventory', icon: Package, permission: 'inventory.manage' },
+              { label: 'Inventory', path: '/inventory', icon: Package, permission: 'inventory.manage' },
             ]
           : []),
-        // Its own entry rather than a child of Gear & Uniforms: the two are
+        // Its own entry rather than a child of Inventory: the two are
         // run by different officers in departments that split the role, and
         // burying one under the other implies a hierarchy that isn't there.
         //
@@ -495,7 +495,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
           ...(isModuleOn('inventory')
             ? [
                 {
-                  label: 'Gear Admin',
+                  label: 'Inventory Admin',
                   path: '/inventory/admin',
                   icon: Package,
                   permission: 'inventory.manage',
@@ -506,7 +506,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             ? [
                 {
                   label: 'Store Admin',
-                  path: '/store/admin',
+                  path: '/inventory/admin/store',
                   icon: Store,
                   permission: 'storefront.manage',
                 } as NavItem,

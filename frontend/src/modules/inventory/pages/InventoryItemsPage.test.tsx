@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -242,6 +242,99 @@ describe('InventoryItemsPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retire' }));
     await waitFor(() => expect(mockRetireItem).toHaveBeenCalledWith('it-1'));
+  });
+});
+
+describe('InventoryItemsPage — the item_type URL filter', () => {
+  // The inventory hub's supply-line cards link straight at one domain, so the
+  // list has to read the type out of the URL rather than only out of its own
+  // dropdown. Each test states the mocks it depends on: `vi.clearAllMocks()`
+  // resets calls but not implementations, so a block that configures nothing
+  // runs on whatever its neighbour left behind (CLAUDE.md #28).
+  beforeEach(() => {
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetSummary.mockReset();
+    mockGetSummary.mockResolvedValue({
+      total_items: 0,
+      overdue_checkouts: 0,
+      maintenance_due_count: 0,
+      total_value: 0,
+    });
+    mockGetSummaryByLocation.mockReset();
+    mockGetSummaryByLocation.mockResolvedValue([]);
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    mockGetStorageAreas.mockReset();
+    mockGetStorageAreas.mockResolvedValue([]);
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([]);
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  // renderWithRouter mounts a BrowserRouter, which reads window.location — so
+  // the URL is the fixture here, and it has to be put back or it leaks into
+  // every test that runs after this block.
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  const renderAt = (url: string) => {
+    window.history.pushState({}, '', url);
+    return renderWithRouter(<InventoryItemsPage />);
+  };
+
+  it('filters the query by a type named in the URL', async () => {
+    renderAt('/inventory/admin/items?item_type=uniform');
+    await screen.findByText('No items found');
+
+    expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ item_type: 'uniform' }));
+  });
+
+  it('shows that type as the selected option, so it can be cleared', async () => {
+    renderAt('/inventory/admin/items?item_type=uniform');
+    await screen.findByText('No items found');
+
+    expect(screen.getByLabelText('Filter by type')).toHaveValue('uniform');
+  });
+
+  it('ignores a type outside the enum rather than sending it', async () => {
+    // GET /items 400s on an unknown item_type, so a hand-edited URL has to
+    // degrade to the unfiltered list, not to an error page.
+    renderAt('/inventory/admin/items?item_type=not-a-type');
+    await screen.findByText('No items found');
+
+    expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ item_type: undefined }));
+    expect(screen.getByLabelText('Filter by type')).toHaveValue('');
+  });
+
+  it('sends no type filter when the parameter is absent', async () => {
+    renderAt('/inventory/admin/items');
+    await screen.findByText('No items found');
+
+    expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ item_type: undefined }));
+  });
+
+  it('writes the dropdown selection back to the URL', async () => {
+    const user = userEvent.setup();
+    renderAt('/inventory/admin/items');
+    await screen.findByText('No items found');
+
+    await user.selectOptions(screen.getByLabelText('Filter by type'), 'ppe');
+
+    await waitFor(() => expect(window.location.search).toBe('?item_type=ppe'));
+    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ item_type: 'ppe' })));
+  });
+
+  it('drops the parameter when the filter is cleared', async () => {
+    const user = userEvent.setup();
+    renderAt('/inventory/admin/items?item_type=ppe');
+    await screen.findByText('No items found');
+
+    await user.selectOptions(screen.getByLabelText('Filter by type'), '');
+
+    await waitFor(() => expect(window.location.search).toBe(''));
   });
 });
 
