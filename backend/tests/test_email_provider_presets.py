@@ -429,7 +429,13 @@ class TestRedactedSecretsResolveAgainstStore:
         )
 
         resolved = _resolve_redacted_secrets(
-            submitted, {"google_app_password": "saved-pw", "smtp_password": "s"}
+            submitted,
+            {
+                "platform": "gmail",
+                "from_email": "chief@example.org",
+                "google_app_password": "saved-pw",
+                "smtp_password": "s",
+            },
         )
 
         assert resolved.google_app_password == "saved-pw"
@@ -439,10 +445,89 @@ class TestRedactedSecretsResolveAgainstStore:
         submitted = EmailServiceSettings(platform="gmail", google_app_password="new")
 
         resolved = _resolve_redacted_secrets(
-            submitted, {"google_app_password": "saved-pw"}
+            submitted, {"platform": "gmail", "google_app_password": "saved-pw"}
         )
 
         assert resolved.google_app_password == "new"
+
+    def test_placeholder_is_not_reused_against_a_different_host(self):
+        # SEC (Codex P2 on #2196): the caller cannot read the stored password,
+        # and the test presents it to whatever host the form names. A marker
+        # paired with a new host must not carry the saved secret there.
+        stored = {
+            "platform": "selfhosted",
+            "smtp_host": "mail.dept.example",
+            "smtp_port": 587,
+            "smtp_user": "svc",
+            "smtp_encryption": "tls",
+            "smtp_password": "saved-pw",
+        }
+        submitted = EmailServiceSettings(
+            platform="selfhosted",
+            smtp_host="attacker.example",
+            smtp_port=587,
+            smtp_user="svc",
+            smtp_encryption="tls",
+            smtp_password="••••••••",
+        )
+
+        assert _resolve_redacted_secrets(submitted, stored).smtp_password is None
+
+    def test_placeholder_is_reused_for_the_saved_host(self):
+        stored = {
+            "platform": "selfhosted",
+            "smtp_host": "mail.dept.example",
+            "smtp_port": "587",
+            "smtp_user": "svc",
+            "smtp_encryption": "tls",
+            "smtp_password": "saved-pw",
+        }
+        submitted = EmailServiceSettings(
+            platform="selfhosted",
+            smtp_host="mail.dept.example",
+            smtp_port=587,
+            smtp_user="svc",
+            smtp_encryption="tls",
+            smtp_password="••••••••",
+        )
+
+        assert _resolve_redacted_secrets(submitted, stored).smtp_password == "saved-pw"
+
+    def test_app_password_is_not_reused_for_a_different_account(self):
+        stored = {
+            "platform": "gmail",
+            "from_email": "chief@example.org",
+            "google_app_password": "saved-pw",
+        }
+        submitted = EmailServiceSettings(
+            platform="gmail",
+            from_email="someone-else@example.org",
+            google_app_password="••••••••",
+        )
+
+        assert _resolve_redacted_secrets(submitted, stored).google_app_password is None
+
+    def test_app_password_is_not_reused_across_platforms(self):
+        # Switching Gmail -> self-hosted and naming a host must not carry the
+        # Gmail password to that host, even though the stored dict has it.
+        stored = {
+            "platform": "gmail",
+            "from_email": "chief@example.org",
+            "google_app_password": "saved-pw",
+            "smtp_password": "old-smtp-pw",
+        }
+        submitted = EmailServiceSettings(
+            platform="selfhosted",
+            smtp_host="attacker.example",
+            smtp_user="chief@example.org",
+            smtp_password="••••••••",
+            google_app_password="••••••••",
+        )
+
+        resolved = _resolve_redacted_secrets(submitted, stored)
+
+        assert resolved.smtp_password is None
+        assert resolved.google_app_password is None
 
     def test_placeholder_with_nothing_saved_resolves_to_none(self):
         submitted = EmailServiceSettings(

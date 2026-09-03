@@ -6,6 +6,7 @@ Endpoints for organization settings management.
 
 import asyncio
 from functools import partial
+from typing import Any, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
@@ -48,6 +49,7 @@ from app.schemas.organization import (
 )
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
+from app.utils.email_providers import PROVIDER_SMTP_PRESETS
 
 router = APIRouter()
 
@@ -265,8 +267,33 @@ EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS = 30
 _REDACTED = "••••••••"
 
 
+def _connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
+    """The server a stored secret authenticates to, per platform.
+
+    A Gmail / Microsoft App Password logs in as the From address to a fixed
+    host; a self-hosted password logs in as ``smtp_user`` to whatever host,
+    port and encryption were saved; a Cloudflare token belongs to an account.
+    """
+    if platform in PROVIDER_SMTP_PRESETS:
+        return (platform, values.get("from_email") or None)
+    if platform == "cloudflare":
+        return (platform, values.get("cloudflare_account_id") or None)
+    port = values.get("smtp_port")
+    try:
+        port = int(port) if port is not None else None
+    except (TypeError, ValueError):
+        port = None
+    return (
+        platform,
+        values.get("smtp_host") or None,
+        port,
+        values.get("smtp_user") or None,
+        values.get("smtp_encryption") or "tls",
+    )
+
+
 def _resolve_redacted_secrets(
-    submitted: EmailServiceSettings, stored: dict
+    submitted: EmailServiceSettings, stored: Mapping[str, Any]
 ) -> EmailServiceSettings:
     """Substitute the saved secret for each field the client sent as redacted.
 
@@ -274,7 +301,18 @@ def _resolve_redacted_secrets(
     form sends it straight back. Testing what is saved without retyping the
     password is the whole point of the button, so map the marker back to the
     stored (already decrypted) value before the test runs.
+
+    SEC: only when the submitted connection is the one the secret was saved
+    for. The caller cannot read the stored password, and this endpoint
+    presents it to whatever server the form names — so a marker paired with a
+    different host (or a different account on a preset platform) would hand
+    the saved credential to that host. In that case the marker resolves to
+    nothing and the test reports the password as missing.
     """
+    if _connection_identity(submitted.platform, submitted.model_dump()) != (
+        _connection_identity(stored.get("platform"), stored)
+    ):
+        stored = {}
     updates = {}
     for field in (
         "google_app_password",
