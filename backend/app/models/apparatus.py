@@ -2240,11 +2240,25 @@ class CheckTemplateCompartment(Base):
 
     # Relationships
     template = relationship("EquipmentCheckTemplate", back_populates="compartments")
+    # AP-12 (Codex, on top of AP-8): passive_deletes=True stops SQLAlchemy from
+    # lazy-loading this collection itself when a compartment is deleted via
+    # the ORM (``session.delete()``). Without it, that lazy-load is a *plain*
+    # SELECT and answers from the deleting transaction's REPEATABLE READ
+    # snapshot -- stale relative to EquipmentCheckService.delete_compartment's
+    # own locking subtree walk (_lock_compartment_subtree), which always sees
+    # latest committed state. delete_compartment now deletes the subtree's
+    # CheckTemplateItem rows via the database's own
+    # ondelete="CASCADE" on CheckTemplateItem.compartment_id (a bulk
+    # ``DELETE ... WHERE id IN (...)`` against the locked compartment rows,
+    # not a per-object ``session.delete()``) -- this relationship's own
+    # cascade must stay out of that decision entirely rather than separately,
+    # and unreliably, re-deriving the same set from a stale snapshot.
     items = relationship(
         "CheckTemplateItem",
         back_populates="compartment",
         cascade="all, delete-orphan",
         order_by="CheckTemplateItem.sort_order",
+        passive_deletes=True,
     )
     # ``remote_side`` belongs on the *singular* backref (``parent``), not on
     # ``children`` itself -- the same inverted shape FAC-16 found and fixed on
@@ -2255,11 +2269,25 @@ class CheckTemplateCompartment(Base):
     # it -- confirmed live (three-level fixture, delete_compartment's own
     # `db.delete()` cascade) in
     # test_apparatus_check_template_compartment_cascade.py.
+    #
+    # AP-12 (Codex): passive_deletes=True here too, and for the same reason as
+    # ``items`` above -- but with a sharper consequence, because unlike
+    # CheckTemplateItem.compartment_id (ondelete="CASCADE"),
+    # parent_compartment_id is ondelete="SET NULL". Without passive_deletes,
+    # a plain ``session.delete(compartment)`` on a single root would lazy-load
+    # this collection from the same stale snapshot and cascade off of it --
+    # exactly the AP-8 shape, just reintroduced through staleness rather than
+    # an inverted remote_side. delete_compartment no longer calls
+    # ``session.delete()`` on any compartment at all: it deletes every row in
+    # the locked, authoritative subtree via a bulk
+    # ``DELETE ... WHERE id IN (...)``, so this relationship's cascade must
+    # never independently re-derive (and potentially disagree with) that set.
     children = relationship(
         "CheckTemplateCompartment",
         backref=backref("parent", remote_side=[id]),
         cascade="all, delete-orphan",
         single_parent=True,
+        passive_deletes=True,
     )
 
     __table_args__ = (

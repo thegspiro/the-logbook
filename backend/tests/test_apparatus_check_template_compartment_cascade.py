@@ -7,12 +7,25 @@ backref.
 
 Reproduced live against a real database, not inferred from reading the model:
 a three-level compartment hierarchy (root -> child -> grandchild), deleted at
-the root exactly the way ``EquipmentCheckService.delete_compartment`` does it
-(``await self.db.delete(compartment)``, a pure ORM cascade with no
-DB-level ``ON DELETE CASCADE`` on ``parent_compartment_id`` -- that FK is
-``ondelete="SET NULL"``, so the database itself would only null the column,
-never delete the row; the ORM's own ``cascade="all, delete-orphan"`` is the
-only thing that is supposed to remove the descendants).
+the root exactly the way ``EquipmentCheckService.delete_compartment`` does it.
+
+AP-12 (Codex, on top of AP-8) changed what that "exact way" is: the service
+no longer relies on a bare ``await self.db.delete(compartment)`` and the
+ORM's own ``children`` cascade (which lazy-loads off a possibly-stale
+REPEATABLE READ snapshot -- see
+``tests/test_apparatus_check_template_compartment_race.py``). It now locks
+the subtree with a fresh, level-by-level ``FOR UPDATE`` walk
+(``_lock_compartment_subtree``) and deletes it as one explicit bulk
+statement against that authoritative id set.
+``CheckTemplateCompartment.children`` also gained ``passive_deletes=True``
+as part of that fix, which means a *bare* ``session.delete(compartment)`` --
+this test's original approach -- no longer cascades to descendants at all:
+with passive_deletes on, the ORM defers entirely to the database's own
+``ondelete`` action, and ``parent_compartment_id`` is ``ondelete="SET
+NULL"``, not ``CASCADE``, so a bare ORM delete now only orphans the subtree.
+Exercising the actual service method (rather than a hand-rolled ORM delete)
+is therefore not just closer to production, it is now the only way this
+positive control can pass at all.
 """
 
 import uuid
@@ -22,6 +35,7 @@ from sqlalchemy import select
 
 from app.models.apparatus import CheckTemplateCompartment, EquipmentCheckTemplate
 from app.models.user import Organization
+from app.services.equipment_check_service import EquipmentCheckService
 
 pytestmark = [pytest.mark.integration]
 
@@ -83,14 +97,16 @@ class TestCompartmentDeleteCascadesToDescendants:
         await db_session.flush()
 
         root_id, child_id, grandchild_id = root.id, child.id, grandchild.id
+        organization_id = template.organization_id
 
-        # The exact operation EquipmentCheckService.delete_compartment
-        # performs: an ORM-level delete, relying on the relationship's own
-        # cascade="all, delete-orphan" to remove descendants -- there is no
-        # DB-level ON DELETE CASCADE on parent_compartment_id to fall back on
-        # (it is ondelete="SET NULL").
-        await db_session.delete(root)
-        await db_session.commit()
+        # The actual service method, not a hand-rolled ORM delete: AP-12
+        # moved the descendant-removal mechanism off the ORM's own
+        # (possibly stale) ``children`` cascade and onto an explicit,
+        # locked bulk delete -- see this file's module docstring.
+        deleted = await EquipmentCheckService(db_session).delete_compartment(
+            root_id, organization_id
+        )
+        assert deleted is True
 
         for row_id in (root_id, child_id, grandchild_id):
             result = await db_session.execute(

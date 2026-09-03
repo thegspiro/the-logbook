@@ -12,7 +12,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -604,16 +606,100 @@ class EquipmentCheckService:
     async def delete_compartment(
         self, compartment_id: str, organization_id: str
     ) -> bool:
-        """Delete a compartment and all its items."""
+        """Delete a compartment, its descendant compartments, and their items.
+
+        AP-12 (Codex, on top of AP-8): this used to be a plain
+        ``await self.db.delete(compartment)``, trusting the ORM's own
+        ``cascade="all, delete-orphan"`` on ``children`` to remove every
+        descendant. That cascade lazy-loads ``compartment.children`` via a
+        *plain* SELECT, which -- under this app's MySQL/InnoDB REPEATABLE
+        READ isolation -- answers from this transaction's snapshot,
+        established at ``_get_compartment`` above (this method's first
+        read), not the latest committed state. This is structurally
+        identical to FAC-40 (docs/security-review/FAC-12-facilities.md),
+        fixed on ``DocumentFolder``/``delete_folder`` -- and worse here,
+        because ``parent_compartment_id`` is ``ondelete="SET NULL"``
+        (``DocumentFolder.parent_id`` is ``ondelete="CASCADE"``), so nothing
+        at the database level catches what a stale ORM walk misses: a
+        descendant reparented OUT of this subtree between the snapshot and
+        the delete is still in the stale ``children`` collection and gets
+        destroyed even though it now belongs elsewhere; a descendant
+        reparented IN is absent from the stale collection, survives the
+        cascade, and is left behind, orphaned, by the SET NULL.
+
+        Fixed the same way FAC-40 fixed it: ``_lock_compartment_subtree``
+        below re-derives the subtree with a locking (``FOR UPDATE``) walk,
+        which always sees latest committed state and locks every row it
+        finds -- so a concurrent reparent targeting an already-locked row
+        blocks until this transaction commits or rolls back, rather than
+        racing it. The subtree is then deleted explicitly, as a single bulk
+        statement against that authoritative id set, rather than through the
+        ORM's own (possibly stale) ``children`` cascade -- see
+        ``CheckTemplateCompartment.children``'s ``passive_deletes=True``
+        (models/apparatus.py) for the other half: without it, the ORM's own
+        cascade could still independently re-derive (and disagree with) this
+        set. Items fall out of the subtree's compartment rows automatically,
+        via ``CheckTemplateItem.compartment_id``'s ``ondelete="CASCADE"`` at
+        the database level -- unlike compartments-under-compartments, that FK
+        action fires against the database's own current row state, not any
+        session's snapshot, so it is correct regardless of a concurrent item
+        reparent (see ``CheckTemplateItem.compartment_id`` and
+        ``CheckTemplateCompartment.items``'s ``passive_deletes=True``).
+
+        Verified live with two real, independently-committing database
+        sessions, in both directions (reparent-out-then-delete,
+        reparent-in-then-delete) -- see
+        ``tests/test_apparatus_check_template_compartment_race.py``.
+        """
         compartment = await self._get_compartment(compartment_id, organization_id)
         if not compartment:
             return False
 
         template_id = str(compartment.template_id)
-        await self.db.delete(compartment)
+        subtree_ids = await self._lock_compartment_subtree(compartment_id)
+        await self.db.execute(
+            sa_delete(CheckTemplateCompartment).where(
+                CheckTemplateCompartment.id.in_(subtree_ids)
+            )
+        )
         await self._advance_content_revision(template_id)
         await self.db.commit()
         return True
+
+    async def _lock_compartment_subtree(self, compartment_id: str) -> Set[str]:
+        """AP-12: lock a compartment and every descendant, ``FOR UPDATE``.
+
+        Walks level by level. Each level's read both filters *and* locks on
+        ``parent_compartment_id`` in one atomic statement, so a row is only
+        ever included after being locked against the database's latest
+        committed state -- there is no separate "discover, then lock" step
+        for a concurrent reparent to land inside. A locking read ignores this
+        transaction's REPEATABLE READ snapshot (unlike a plain SELECT, which
+        would still answer from ``_get_compartment``'s snapshot), so this
+        converges on the subtree as it actually is *now*, not as it was when
+        ``delete_compartment`` started.
+
+        A standalone method (mirroring ``documents_service._lock_subtree_folders``)
+        so tests can assert on its locking behaviour directly.
+        """
+        subtree_ids: Set[str] = {compartment_id}
+        await self.db.execute(
+            select(CheckTemplateCompartment.id)
+            .where(CheckTemplateCompartment.id == compartment_id)
+            .with_for_update()
+        )
+        frontier = {compartment_id}
+        while frontier:
+            result = await self.db.execute(
+                select(CheckTemplateCompartment.id)
+                .where(CheckTemplateCompartment.parent_compartment_id.in_(frontier))
+                .with_for_update()
+            )
+            found = {row[0] for row in result.all()}
+            new_ids = found - subtree_ids
+            subtree_ids |= new_ids
+            frontier = new_ids
+        return subtree_ids
 
     async def replace_compartments(
         self,
