@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: the compartment-delete cascade race fix had its own cross-template gap, and the builder left a stale auto-save timer running after a delete (2026-09-03)
+
+**Fixed**
+
+- **AP-14 (P1, multi-tenant isolation, CLAUDE.md Pitfall #14a/14c) — the
+  locking subtree walk added to fix AP-12 had no template or organization
+  boundary**: `add_compartment`/`update_compartment`/`create_template`
+  validate a _new or changed_ `parent_compartment_id` is same-template and
+  same-org (AP-10), but that only prevents a cross-template link from
+  being written from now on — a row persisted before that validation
+  shipped could still carry a dangling one. Left unscoped, deleting a
+  compartment in one template could reach into, and permanently destroy, a
+  compartment (and its items) belonging to a different template — in this
+  org or another org entirely. Fixed by requiring every row the walk locks
+  to belong to the same template as the one being deleted, and failing the
+  whole delete (400, nothing destroyed) the moment it finds one that
+  doesn't — the same fail-closed pattern `delete_folder` already uses for
+  cross-org folder references.
+- **AP-15 (P2, frontend, stale autosave state) — deleting a compartment
+  left its items' pending debounced auto-saves running**: a queued
+  auto-save timer for a deleted item fired anyway, called the update API
+  against an id that no longer existed, 404'd, and could flip the global
+  "saving" indicator to a false "Save failed" — or, if Save was pressed in
+  the same window, abort saving unrelated edits entirely (the flush of
+  pending auto-saves is the first thing Save does). Fixed by cancelling
+  every pending auto-save for the deleted subtree's items right before
+  issuing the delete.
+- Both reproduced live before being called findings and confirmed failing
+  pre-fix / passing post-fix via `git stash`. See
+  `docs/security-review/AP-13-apparatus-nfc.md` (pass 6) for the full
+  writeup.
+
 ### Security: a compartment delete could race a concurrent reparent, on the backend and in the builder UI (2026-09-03)
 
 **Fixed**

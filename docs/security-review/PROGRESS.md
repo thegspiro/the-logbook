@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
-Apparatus & NFC, passes 3–5. Pass 3: AP-8 fixed —
+Apparatus & NFC, passes 3–6. Pass 3: AP-8 fixed —
 `CheckTemplateCompartment.children` had the same inverted self-referential
 `remote_side` shape FAC-16 found and fixed on `DocumentFolder.children`
 (flagged there as a sibling instance, out of scope for Facilities) —
@@ -50,8 +50,20 @@ exact concurrency race FAC-40 already fixed once on `DocumentFolder`/
   Both reproduced live (two real, independently-committing database sessions
   for AP-12; a component test reproducing the actual data-loss scenario for
   AP-13) before being called findings, and regression-tested failing pre-fix /
-  passing post-fix via `git stash`. See the log entry below for the full
-  writeup once merged.
+  passing post-fix via `git stash`. Pass 6 (same PR, a third Codex review, this
+  time of the pass-5 fix commits): two more findings — AP-14 (P1, multi-tenant
+  isolation — the pass-5 locking subtree walk had no template/org boundary, so
+  a dangling cross-template `parent_compartment_id` from before AP-10's
+  validation shipped could let deleting a compartment in one template destroy
+  a compartment in another; fixed with the same fail-closed pattern
+  `delete_folder` uses for cross-org references) and AP-15 (P2, frontend — the
+  pass-5 `deleteCompartment` fix left descendant items' pending debounced
+  auto-saves running after their compartment was deleted, so a stale timer
+  could 404 against a removed item and, worse, abort an unrelated Save pressed
+  in the same window; fixed by cancelling those timers before the delete
+  call). Both reproduced live before being called findings, and
+  regression-tested failing pre-fix / passing post-fix via `git stash`. See
+  the log entry below for the full writeup once merged.
 
 ---
 

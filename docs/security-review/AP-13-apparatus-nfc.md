@@ -1,12 +1,147 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–5)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–6)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py` (new),
 `api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 6 (2026-09-03) — two more findings surfaced by pass 5's own AP-12/AP-13 fixes, both fixed
+
+**Trigger.** Codex re-reviewed the pass-5 fix commits (AP-12 and AP-13) and
+found two more issues, each in the code pass 5 had just added: an
+unscoped subtree walk in the new `_lock_compartment_subtree`, and a
+pre-existing autosave-timer gap in `deleteCompartment` that AP-13's own new
+subtree-aware confirmation logic sits next to but does not address. Both
+reproduced live before being called findings, both have a regression test
+confirmed failing pre-fix (`git stash` on just the fix) and passing
+post-fix.
+
+### AP-14 — P1 (multi-tenant isolation, CLAUDE.md Pitfall #14a/14c) — `_lock_compartment_subtree`'s walk had no template or organization boundary — ✅ FIXED
+
+**What:** AP-12's `_lock_compartment_subtree` walks descendants purely by
+`parent_compartment_id`, with no check against `template_id`. `add_compartment`/
+`update_compartment`/`create_template` all validate a _new or changed_
+`parent_compartment_id` is same-template and same-org (AP-10) — but that
+only prevents a cross-template link from being written from now on. A row
+persisted before AP-10 shipped (or by any future writer that misses the
+same validation) could still carry a dangling cross-template
+`parent_compartment_id`. Left unscoped, the walk would follow it: deleting
+a compartment in template A would reach into — and, via AP-12's own bulk
+delete, permanently destroy — a compartment (and its items) belonging to
+template B, in this org or another org entirely.
+
+**Where:** `backend/app/services/equipment_check_service.py`,
+`_lock_compartment_subtree` (pass-5 version, no `template_id` filter).
+
+**Failure scenario, reproduced live:** built `Template A` (org A) with a
+root compartment, and a completely separate `Template B` — in org A for one
+test, in org B for another — with one compartment, then wrote that second
+compartment's `parent_compartment_id` directly to point at `Template A`'s
+root (simulating a row that predates AP-10's validation, the way an
+existing installation's data could already look). Called
+`delete_compartment` on `Template A`'s root. Pre-fix, the call
+succeeded and returned `True` with no error — the cross-template
+compartment would have been destroyed along with everything legitimately
+in the subtree.
+
+**Impact:** multi-tenant isolation — an authorized delete of an org's own
+compartment could permanently destroy another organization's data, given a
+single dangling FK from before this review's own create-time validation
+shipped. Not attacker-controlled on a fresh install (both write paths now
+validate), but a real amplification of any already-persisted malformed row,
+exactly the shape CLAUDE.md Pitfall #14a/14c describes.
+
+**Fix:** mirrors `documents_service.delete_folder`'s cross-org fail-closed
+check. `_lock_compartment_subtree` now takes the root's `template_id` and
+requires every locked row — root and each level of the walk — to belong to
+it; the per-level query now also selects `template_id` so a mismatch can be
+detected before the row is folded into the subtree set. Finding one raises
+`ValueError` (`"...contains a cross-template reference..."`), which the
+`DELETE /compartments/{id}` endpoint now catches and turns into a 400 (it
+previously had no `try`/`except` around this call at all). The whole delete
+aborts — nothing is destroyed — rather than either silently sweeping the
+foreign row in or silently excluding it and leaving an unexplained
+dangling reference.
+
+### AP-15 — P2 (frontend, stale autosave state) — `deleteCompartment` left descendant items' pending auto-saves running after the subtree was gone — ✅ FIXED
+
+_(Referred to as "AP-13 finding 4" in this pass's commit messages and code
+comments, written before this doc gave it its own number — same finding,
+cross-referenced here so a reader of either doesn't lose the thread.)_
+
+**What:** `deleteCompartment`'s backend call removes every item in the
+deleted subtree, but a debounced auto-save
+(`scheduleAutoSaveItem`'s 1.5s timer, `updateItemFieldWithAutoSave`'s
+persistence path) already queued for one of those items was left
+untouched. The timer fires anyway, calls `updateCheckItem` against an id
+the delete just removed, 404s, and (via `settleAutoSaveStatus`) flips the
+global auto-save indicator to "Save failed" for an item the user never
+touched. Worse: pressing Save inside that same window calls
+`flushPendingAutoSaves` — the _first_ thing `handleSave` does, before any
+compartment or other item update is sent — so the one stale patch aborts
+saving everything else in the request too.
+
+**Where:**
+`frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx`,
+`deleteCompartment` (between the confirmation and the backend delete call).
+
+**Failure scenario, reproduced live (component test, `git stash` on just
+the fix):** rendered the builder, queued a debounced edit on `Radio`
+(a `Cab` item) via the bulk-toolbar "Set Required" action, then deleted
+`Cab` inside the 1.5s debounce window. Pre-fix, outwaiting the window
+showed `updateCheckItem('radio', ...)` called anyway — the stale timer
+fired against an id the delete had already removed.
+
+**Impact:** no data-integrity risk on its own (the item really was
+deleted, correctly, by the subtree delete) — a UI-honesty and
+save-reliability defect: a spurious "Save failed" indicator with nothing
+actually failed, and a real chance of aborting the save of _other_,
+legitimate edits made around the same time as an unrelated delete.
+
+**Fix:** right before issuing the backend delete call, `deleteCompartment`
+now walks every item in `comp.items` and each `descendantComps[*].items`,
+clears any pending timer for it in `autoSavePendingRef`, and removes the
+entry — cancelling, not flushing, since the compartment those items
+belonged to no longer exists to save them into. Calls
+`settleAutoSaveStatus()` afterward so the global indicator doesn't stay
+stuck reporting on save state that no longer applies.
+
+## Guard tests added (pass 6)
+
+- `backend/tests/test_apparatus_check_template_compartment_delete_scope.py`
+  (new) — `TestDeleteCompartmentRejectsCrossTemplateSubtree` with
+  `test_cross_org_dangling_link_aborts_the_whole_delete`,
+  `test_same_org_cross_template_dangling_link_aborts_the_whole_delete`
+  (AP-14, both confirmed failing pre-fix — the call succeeded and would
+  have destroyed the foreign row — and passing post-fix), and
+  `test_normal_same_template_subtree_still_deletes` (sanity check the
+  scoping doesn't block the ordinary case).
+- `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`
+  — `'cancels a pending item auto-save when the item's compartment is
+deleted inside the debounce window'` (AP-15). Confirmed failing pre-fix
+  (`updateCheckItem` recorded a call for the deleted item's id after the
+  debounce window passed) and passing post-fix.
+
+## Completion gate (pass 6)
+
+| Check                                                                             | Result                                                                                  |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                     | ✅ 0 violations                                                                         |
+| `black --check app/ tests/ alembic/`                                              | ✅ clean                                                                                |
+| `isort --check-only app/ tests/ alembic/`                                         | ✅ clean                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                                 | ✅ single head, no schema change                                                        |
+| `pytest tests/ -k "apparatus or nfc or evoc or equipment_check or compartment"`   | ✅ 577 passed, 1 skipped (pre-existing optional-dependency skip)                        |
+| `pytest tests/` (full backend suite)                                              | ✅ 10069 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed |
+| `tsc --noEmit`                                                                    | ✅ 0 errors                                                                             |
+| `eslint src/modules/inventory/pages/EquipmentCheckTemplateBuilder.tsx(.test.tsx)` | ✅ 0 errors                                                                             |
+| `npm run lint` (full frontend, i.e. `eslint .`)                                   | ✅ 0 errors                                                                             |
+| `vitest run EquipmentCheckTemplateBuilder.test.tsx`                               | ✅ 82 passed                                                                            |
+| `vitest run src/modules/inventory` (full module)                                  | ✅ 683 passed (49 files)                                                                |
 
 ---
 
