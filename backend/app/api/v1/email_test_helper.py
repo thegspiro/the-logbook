@@ -3,7 +3,8 @@ Email Testing Helper Functions
 
 Provides SMTP connection testing functionality for onboarding email configuration.
 Runs synchronous SMTP operations in thread pool to avoid blocking async event loop.
-Includes OAuth validation for Gmail, Microsoft 365, and Cloudflare Email Service.
+Gmail and Microsoft 365 are tested as SMTP submission with an App Password;
+Cloudflare is verified through its REST API.
 """
 
 import json
@@ -15,6 +16,8 @@ import urllib.request
 from typing import Any
 
 from loguru import logger
+
+from app.utils.email_providers import normalize_app_password, resolve_smtp_settings
 
 
 def _https_urlopen(request: urllib.request.Request, timeout: int = 10):
@@ -217,388 +220,69 @@ def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, A
         return False, message, details
 
 
-def test_gmail_oauth(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
+def _provider_smtp_config(platform: str, config: dict[str, Any]) -> dict[str, Any]:
+    """Translate a Gmail / Microsoft 365 test request into SMTP test settings.
+
+    The request carries the onboarding form's camelCase keys; the preset
+    resolver reads the snake_case settings shape, so map into that, resolve,
+    and map back. Keeping the resolver as the single authority means the
+    connection test exercises exactly the host, port and login the sender
+    will use.
     """
-    Test Gmail OAuth configuration
-
-    For OAuth with refresh token: Validates credentials by exchanging refresh token for access token.
-    For app password: Tests SMTP connection directly.
-
-    Args:
-        config: Dictionary containing Gmail OAuth configuration
-
-    Returns:
-        Tuple of (success, message, details)
-    """
-    details = {}
-
-    try:
-        auth_method = config.get("authMethod", "oauth")
-
-        if auth_method == "oauth":
-            client_id = config.get("googleClientId")
-            client_secret = config.get("googleClientSecret")
-            refresh_token = config.get("googleRefreshToken")
-
-            if not all([client_id, client_secret]):
-                return (
-                    False,
-                    "Missing OAuth credentials (Client ID and Client Secret required)",
-                    {},
-                )
-
-            details["auth_method"] = "oauth"
-            details["client_id_present"] = bool(client_id)
-            details["refresh_token_present"] = bool(refresh_token)
-
-            # If we have a refresh token, validate by exchanging for access token
-            if refresh_token:
-                success, message, token_details = _validate_google_oauth_token(
-                    client_id=client_id,
-                    client_secret=client_secret,
-                    refresh_token=refresh_token,
-                )
-                details.update(token_details)
-
-                if success:
-                    return (
-                        True,
-                        "Gmail OAuth credentials validated successfully",
-                        details,
-                    )
-                else:
-                    return False, message, details
-            else:
-                # No refresh token - just validate client credentials format
-                # Full OAuth flow requires user consent which can't be done server-side
-                if len(client_id) < 20 or not client_id.endswith(
-                    ".apps.googleusercontent.com"
-                ):
-                    return False, "Invalid Google Client ID format", details
-
-                return (
-                    True,
-                    "Gmail OAuth configuration valid (refresh token not provided for full validation)",
-                    details,
-                )
-
-        else:
-            # App password method - use SMTP testing
-            config_copy = config.copy()
-            config_copy["smtpHost"] = "smtp.gmail.com"
-            config_copy["smtpPort"] = 587
-            config_copy["smtpEncryption"] = "tls"
-            config_copy["smtpUsername"] = config.get("fromEmail")
-            config_copy["smtpPassword"] = config.get("googleAppPassword")
-
-            return test_smtp_connection(config_copy)
-
-    except Exception as e:
-        logger.error("Error testing Gmail configuration: {}", e)
-        return False, f"Error: {str(e)}", details
+    resolved = resolve_smtp_settings(
+        {
+            "platform": platform,
+            "from_email": config.get("fromEmail"),
+            "google_app_password": config.get("googleAppPassword"),
+            "microsoft_app_password": config.get("microsoftAppPassword"),
+        }
+    )
+    config_copy = config.copy()
+    config_copy["smtpHost"] = resolved["host"]
+    config_copy["smtpPort"] = resolved["port"]
+    config_copy["smtpEncryption"] = resolved["encryption"]
+    config_copy["smtpUsername"] = resolved["user"]
+    config_copy["smtpPassword"] = resolved["password"]
+    return config_copy
 
 
-def _validate_google_oauth_token(
-    client_id: str,
-    client_secret: str,
-    refresh_token: str,
+def _test_provider_connection(
+    platform: str, label: str, config: dict[str, Any]
 ) -> tuple[bool, str, dict[str, Any]]:
-    """
-    Validate Google OAuth credentials by exchanging refresh token for access token.
-
-    Args:
-        client_id: Google OAuth client ID
-        client_secret: Google OAuth client secret
-        refresh_token: Google OAuth refresh token
-
-    Returns:
-        Tuple of (success, message, details)
-    """
-    details = {}
-    token_url = "https://oauth2.googleapis.com/token"
-
-    try:
-        # Prepare token exchange request
-        data = urllib.parse.urlencode(
-            {
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-                "grant_type": "refresh_token",
-            }
-        ).encode("utf-8")
-
-        request = urllib.request.Request(
-            token_url,
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            method="POST",
-        )
-
-        with _https_urlopen(request, timeout=10) as response:
-            result = json.loads(response.read().decode("utf-8"))
-
-            if "access_token" in result:
-                details["token_valid"] = True
-                details["token_type"] = result.get("token_type", "Bearer")
-                details["expires_in"] = result.get("expires_in")
-                details["scope"] = result.get("scope", "").split()
-
-                # Validate that we have email sending scope
-                scopes = result.get("scope", "")
-                if "gmail.send" in scopes or "mail.google.com" in scopes:
-                    details["has_send_permission"] = True
-                    return (
-                        True,
-                        "OAuth token validated with email sending permission",
-                        details,
-                    )
-                else:
-                    details["has_send_permission"] = False
-                    return (
-                        True,
-                        "OAuth token valid but may lack email sending permission",
-                        details,
-                    )
-            else:
-                return (
-                    False,
-                    "Token exchange failed - no access token returned",
-                    details,
-                )
-
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8") if e.fp else ""
-        try:
-            error_data = json.loads(error_body)
-            error_msg = error_data.get(
-                "error_description", error_data.get("error", str(e))
-            )
-        except json.JSONDecodeError:
-            error_msg = str(e)
-
-        logger.error("Google OAuth token validation failed: {}", error_msg)
-        details["error"] = error_msg
-        return False, f"OAuth validation failed: {error_msg}", details
-
-    except urllib.error.URLError as e:
-        logger.error("Network error during Google OAuth validation: {}", e)
-        return False, "Network error: Unable to reach Google OAuth servers", details
-
-    except Exception as e:
-        logger.error("Error validating Google OAuth token: {}", e)
-        return False, f"Validation error: {str(e)}", details
-
-
-def test_microsoft_oauth(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
-    """
-    Test Microsoft 365 OAuth configuration using client credentials flow.
-
-    Validates credentials by requesting an access token from Microsoft Identity Platform.
-    Uses Microsoft Graph API scope for email sending.
-
-    Args:
-        config: Dictionary containing Microsoft OAuth configuration
-
-    Returns:
-        Tuple of (success, message, details)
-    """
-    details = {}
-
-    try:
-        tenant_id = config.get("microsoftTenantId")
-        client_id = config.get("microsoftClientId")
-        client_secret = config.get("microsoftClientSecret")
-
-        if not all([tenant_id, client_id, client_secret]):
-            return (
-                False,
-                "Missing OAuth credentials (Tenant ID, Client ID, and Client Secret required)",
-                {},
-            )
-
-        details["auth_method"] = "oauth"
-        details["tenant_id_present"] = bool(tenant_id)
-        details["client_id_present"] = bool(client_id)
-
-        # Validate credentials by requesting access token
-        success, message, token_details = _validate_microsoft_oauth_token(
-            tenant_id=tenant_id,
-            client_id=client_id,
-            client_secret=client_secret,
-        )
-        details.update(token_details)
-
-        if success:
-            return (
-                True,
-                "Microsoft 365 OAuth credentials validated successfully",
-                details,
-            )
-        else:
-            return False, message, details
-
-    except Exception as e:
-        logger.error("Error testing Microsoft configuration: {}", e)
-        return False, f"Error: {str(e)}", details
-
-
-def _validate_microsoft_oauth_token(
-    tenant_id: str,
-    client_id: str,
-    client_secret: str,
-) -> tuple[bool, str, dict[str, Any]]:
-    """
-    Validate Microsoft OAuth credentials using client credentials flow.
-
-    Requests an access token from Microsoft Identity Platform using the
-    client credentials grant type.
-
-    Args:
-        tenant_id: Azure AD tenant ID
-        client_id: Application (client) ID
-        client_secret: Client secret value
-
-    Returns:
-        Tuple of (success, message, details)
-    """
-    details = {}
-    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-
-    try:
-        # Prepare token request using client credentials flow
-        # Request scope for Microsoft Graph mail sending
-        data = urllib.parse.urlencode(
-            {
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "scope": "https://graph.microsoft.com/.default",
-                "grant_type": "client_credentials",
-            }
-        ).encode("utf-8")
-
-        request = urllib.request.Request(
-            token_url,
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            method="POST",
-        )
-
-        with _https_urlopen(request, timeout=10) as response:
-            result = json.loads(response.read().decode("utf-8"))
-
-            if "access_token" in result:
-                details["token_valid"] = True
-                details["token_type"] = result.get("token_type", "Bearer")
-                details["expires_in"] = result.get("expires_in")
-
-                # Optionally validate the token has required permissions
-                # by making a test call to Graph API
-                access_token = result["access_token"]
-                has_mail_permission = _check_microsoft_mail_permission(access_token)
-                details["has_mail_permission"] = has_mail_permission
-
-                if has_mail_permission:
-                    return (
-                        True,
-                        "OAuth credentials validated with mail sending permission",
-                        details,
-                    )
-                else:
-                    return (
-                        True,
-                        "OAuth credentials valid (mail permission may need to be configured in Azure AD)",
-                        details,
-                    )
-            else:
-                return (
-                    False,
-                    "Token exchange failed - no access token returned",
-                    details,
-                )
-
-    except urllib.error.HTTPError as e:
-        error_body = e.read().decode("utf-8") if e.fp else ""
-        try:
-            error_data = json.loads(error_body)
-            error_msg = error_data.get(
-                "error_description", error_data.get("error", str(e))
-            )
-            error_code = error_data.get("error", "")
-        except json.JSONDecodeError:
-            error_msg = str(e)
-            error_code = ""
-
-        logger.error("Microsoft OAuth token validation failed: {}", error_msg)
-        details["error"] = error_msg
-        details["error_code"] = error_code
-
-        # Provide helpful error messages for common issues
-        if "AADSTS700016" in error_msg or "AADSTS700016" in error_code:
-            return False, "Invalid Client ID - application not found in tenant", details
-        elif "AADSTS7000215" in error_msg or "invalid_client" in error_code:
-            return (
-                False,
-                "Invalid Client Secret - secret may be expired or incorrect",
-                details,
-            )
-        elif "AADSTS90002" in error_msg:
-            return False, "Invalid Tenant ID - tenant not found", details
-        else:
-            return False, f"OAuth validation failed: {error_msg}", details
-
-    except urllib.error.URLError as e:
-        logger.error("Network error during Microsoft OAuth validation: {}", e)
+    password_key = (
+        "googleAppPassword" if platform == "gmail" else "microsoftAppPassword"
+    )
+    if not config.get("fromEmail"):
+        return False, f"{label} account email address is required", {}
+    if normalize_app_password(config.get(password_key)) is None:
         return (
             False,
-            "Network error: Unable to reach Microsoft identity servers",
-            details,
+            f"{label} App Password is required",
+            {"required": ["fromEmail", password_key]},
         )
-
-    except Exception as e:
-        logger.error("Error validating Microsoft OAuth token: {}", e)
-        return False, f"Validation error: {str(e)}", details
+    return test_smtp_connection(_provider_smtp_config(platform, config))
 
 
-def _check_microsoft_mail_permission(access_token: str) -> bool:
+def test_gmail_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
+    """Test a Gmail / Google Workspace account by signing in to smtp.gmail.com.
+
+    Gmail is SMTP submission behind an App Password (2-Step Verification must
+    be on for the account). There is no OAuth path: the sender only speaks
+    SMTP, so a test that validated OAuth client credentials was confirming
+    something the system could never use.
     """
-    Check if the access token has mail sending permissions.
+    return _test_provider_connection("gmail", "Gmail", config)
 
-    Makes a lightweight call to Microsoft Graph API to verify permissions.
 
-    Args:
-        access_token: Valid Microsoft Graph access token
+def test_microsoft_connection(
+    config: dict[str, Any],
+) -> tuple[bool, str, dict[str, Any]]:
+    """Test a Microsoft 365 mailbox by signing in to smtp.office365.com.
 
-    Returns:
-        True if mail permissions appear to be configured
+    Requires SMTP AUTH to be enabled for the mailbox in Exchange Online and,
+    where the tenant enforces multi-factor sign-in, an App Password.
     """
-    try:
-        # Try to access the organization info endpoint
-        # This is a lightweight check that requires minimal permissions
-        # and helps verify the token is working
-        request = urllib.request.Request(
-            "https://graph.microsoft.com/v1.0/organization",
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            },
-            method="GET",
-        )
-
-        with _https_urlopen(request, timeout=10):
-            # If we can access organization info, the token is valid
-            # Mail.Send permission would need to be verified separately
-            # but for testing purposes, this confirms the credentials work
-            return True
-
-    except urllib.error.HTTPError as e:
-        # 403 means token works but may lack specific permissions
-        if e.code == 403:
-            return True  # Token works, permissions may be limited
-        return False
-
-    except Exception:
-        return False
+    return _test_provider_connection("microsoft", "Microsoft 365", config)
 
 
 def test_cloudflare_email(

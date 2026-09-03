@@ -105,7 +105,7 @@ export const saveEmailConfig = (config: EmailConfig, method?: 'oauth' | 'apppass
   sessionStorage.setItem(STORAGE_KEYS.EMAIL_CONFIGURED, 'true');
 
   // Log security warning if config contains sensitive data
-  if (config && (config.smtpPassword || config.googleClientSecret || config.microsoftClientSecret)) {
+  if (config && (config.smtpPassword || config.googleAppPassword || config.microsoftAppPassword)) {
     console.warn(
       'SECURITY: Email credentials should be sent directly to the backend API, ' +
         'not stored in browser storage. The credentials have been excluded from local storage.'
