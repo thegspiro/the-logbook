@@ -132,6 +132,28 @@ const MedicalSuppliesPage: React.FC = () => {
 
   const filterKey = itemQueryKey(debouncedSearch, categoryFilter, page);
 
+  /**
+   * Shown while the numbers still describe something real: the rows on screen,
+   * or the request that is replacing them. A query that settles without
+   * producing rows for itself has failed, and `itemPage` still holds the
+   * previous response -- so the range would sit above an empty table, under
+   * the error explaining why it is empty.
+   *
+   * Deliberately still shown during an ordinary page change: hiding the pager
+   * on the click that uses it is worse than leaving it in place, disabled.
+   */
+  const pagerDescribesScreen = itemsFilterKey !== null && (itemsFilterKey === filterKey || isItemsLoading);
+
+  /**
+   * Whether the on-screen controls have actually been asked yet.
+   *
+   * During the search debounce no request has started, so nothing is loading
+   * and Next would otherwise stay live. One click there advances the page, and
+   * the typed search is then requested at skip 200 -- past its own first page,
+   * for a range like "Showing 201-5 of 5".
+   */
+  const filtersSettled = search === debouncedSearch;
+
   const loadOverview = useCallback(async () => {
     const requestId = ++overviewRequestId.current;
     setIsOverviewLoading(true);
@@ -557,12 +579,12 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
           )}
 
-          {itemPage.total > 0 && (
+          {pagerDescribesScreen && itemPage.total > 0 && (
             <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={isItemsLoading || itemPage.skip === 0}
+                disabled={isItemsLoading || !filtersSettled || itemPage.skip === 0}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
               >
                 Previous
@@ -579,7 +601,7 @@ const MedicalSuppliesPage: React.FC = () => {
                 // response, so a second activation before this one landed
                 // stepped past the last page -- skip=400 on a 201-item catalog,
                 // an empty table and a range reading "Showing 401-201 of 201".
-                disabled={isItemsLoading || itemPage.skip + itemPage.limit >= itemPage.total}
+                disabled={isItemsLoading || !filtersSettled || itemPage.skip + itemPage.limit >= itemPage.total}
                 onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
               >
                 Next

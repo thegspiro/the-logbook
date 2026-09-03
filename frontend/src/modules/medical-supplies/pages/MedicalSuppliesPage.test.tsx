@@ -407,6 +407,55 @@ describe('MedicalSuppliesPage', () => {
     assertOrganizationLowStockCount(7);
   });
 
+  it('does not let Next run ahead of a search that has not been requested yet', async () => {
+    // Typing while already on page 0 makes setPage(0) a no-op, so no request
+    // starts until the debounce expires. Next stayed live in that window, and
+    // one click there meant the search itself was requested at skip 200 --
+    // past its own first page, for a range like "Showing 201-5 of 5".
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: 'Gauze', quantity: 1 }],
+      total: 201,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    expect(await screen.findByRole('button', { name: 'Next' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+      target: { value: 'gauze' },
+    });
+
+    // Still on screen -- hiding the pager mid-type would be its own problem --
+    // but inert until the typed query has actually been asked.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled());
+  });
+
+  it('does not keep a page range on screen for a query that failed', async () => {
+    // itemPage still holds the previous response after a failure, so the range
+    // and total would sit above an empty table, under the error that explains
+    // why there are no rows.
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: 'Gauze', quantity: 1 }],
+      total: 201,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    expect(await screen.findByText(/Showing 1–1 of 201/)).toBeInTheDocument();
+
+    mockGetItems.mockRejectedValue(new Error('Supplies unavailable'));
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+      target: { value: 'gauze' },
+    });
+
+    await waitFor(() => expect(screen.queryByText(/Showing 1–1 of 201/)).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+  });
+
   it('does not report an empty catalogue while the first item request is still in flight', async () => {
     // The empty state is keyed off items.length, which is [] both before the
     // first response and after an empty one. Reporting "No medical supplies
