@@ -40,6 +40,7 @@ import { EXPIRY_WINDOW_DAYS } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
+const PAGE_SIZE = 200;
 
 /** Severity of a dated lot, by how long is left on it. */
 function expiryTone(days: number | undefined): string {
@@ -56,13 +57,6 @@ function expiryLabel(days: number | undefined): string {
   return `${days}d left`;
 }
 
-interface StatTileProps {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  tone: string;
-}
-
 type Section = 'summary' | 'items' | 'categories' | 'expiring';
 
 const ALL_SECTIONS: Section[] = ['summary', 'items', 'categories', 'expiring'];
@@ -74,6 +68,16 @@ const SECTION_LABELS: Record<Section, string> = {
   expiring: 'expiring stock',
 };
 
+/**
+ * Identity of an item query: what the rendered rows are an answer to.
+ *
+ * NUL separator, because a plain space would let search "a b" with no category
+ * collide with search "a" under category "b".
+ */
+function itemQueryKey(searchTerm: string, category: string, pageIndex: number): string {
+  return `${searchTerm}\u0000${category}\u0000${pageIndex}`;
+}
+
 interface SectionErrorProps {
   section: Section;
   message: string;
@@ -82,7 +86,7 @@ interface SectionErrorProps {
 }
 
 const SectionError: React.FC<SectionErrorProps> = ({ section, message, isStale, onRetry }) => (
-  <div className="alert-error mb-4 flex flex-wrap items-center justify-between gap-3" role="alert">
+  <div className="alert-danger mb-4 flex flex-wrap items-center justify-between gap-3" role="alert">
     <div>
       <p className="font-medium">Could not load the {SECTION_LABELS[section]}.</p>
       <p className="text-sm">{message}</p>
@@ -102,6 +106,13 @@ const SectionError: React.FC<SectionErrorProps> = ({ section, message, isStale, 
     </button>
   </div>
 );
+
+interface StatTileProps {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  tone: string;
+}
 
 const StatTile: React.FC<StatTileProps> = ({ icon, label, value, tone }) => (
   <div className="card flex items-center gap-3 p-4">
@@ -136,39 +147,47 @@ const MedicalSuppliesPage: React.FC = () => {
     expiring: true,
   });
   const [errors, setErrors] = useState<Partial<Record<Section, string>>>({});
-  // Whether a section has ever completed successfully. A row count cannot
-  // answer that: a section that legitimately loaded zero rows is
-  // indistinguishable from one that has never loaded, so an empty-but-loaded
-  // section lost its "showing previously loaded data" marker on a later
-  // failure, and a section that had never loaded still asserted "Nothing
-  // expiring" / "No medical supplies yet" as though it knew.
+  // Whether a section has ever completed a load. Distinct from "has rows":
+  // a section that loaded and came back empty is loaded, and one that has only
+  // ever failed is not -- so an empty state is an answer rather than a guess.
   const [loaded, setLoaded] = useState<Record<Section, boolean>>({
     summary: false,
     items: false,
     categories: false,
     expiring: false,
   });
-  // Per-section request generation. Two retries of one section -- or a retry
-  // overlapping the page refresh -- otherwise both commit, and whichever
-  // finishes last wins regardless of which was asked for last.
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const [itemPage, setItemPage] = useState({ total: 0, skip: 0, limit: PAGE_SIZE });
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+
+  // Which item query the rows in `items` answer, and which one the standing
+  // item error belongs to. Both are needed: rows that predate the active
+  // filter must not be presented under it, and neither must the failure of a
+  // query the user has already moved on from.
+  const [itemsFilterKey, setItemsFilterKey] = useState<string | null>(null);
+  const [itemsErrorKey, setItemsErrorKey] = useState<string | null>(null);
+
+  // Monotonic request id per section. Clicking Next and then editing the
+  // filter starts two item loads; without this both commit, and if the older
+  // one lands last the table shows rows that do not match the visible filter
+  // while `page` and `itemPage.skip` disagree -- a state the Previous button
+  // cannot recover from, because decrementing page 0 is a no-op.
   const sectionRequestIds = useRef<Record<Section, number>>({
     summary: 0,
     items: 0,
     categories: 0,
     expiring: 0,
   });
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [showItemModal, setShowItemModal] = useState(false);
-  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
-  const [itemsFilterKey, setItemsFilterKey] = useState<string | null>(null);
 
-  const filterKey = `${search}\u0000${categoryFilter}`;
+  const filterKey = itemQueryKey(search, categoryFilter, page);
 
   const loadSections = useCallback(
     async (sections: Section[], { bypassCache = false }: { bypassCache?: boolean } = {}) => {
-      const requestedFilterKey = `${search}\u0000${categoryFilter}`;
+      const requestedFilterKey = itemQueryKey(search, categoryFilter, page);
       setLoading((current) => ({ ...current, ...Object.fromEntries(sections.map((section) => [section, true])) }));
 
       const options = bypassCache ? { bypassCache: true } : undefined;
@@ -179,7 +198,8 @@ const MedicalSuppliesPage: React.FC = () => {
             {
               search: search || undefined,
               category_id: categoryFilter || undefined,
-              limit: 200,
+              skip: page * PAGE_SIZE,
+              limit: PAGE_SIZE,
             },
             options
           ),
@@ -208,7 +228,9 @@ const MedicalSuppliesPage: React.FC = () => {
             setLoaded((current) => ({ ...current, [section]: true }));
             if (section === 'summary') setSummary(value as MedicalSupplySummary);
             if (section === 'items') {
-              setItems((value as { items: InventoryItem[] }).items);
+              const itemsData = value as { items: InventoryItem[]; total: number; skip: number; limit: number };
+              setItems(itemsData.items);
+              setItemPage({ total: itemsData.total, skip: itemsData.skip, limit: itemsData.limit });
               setItemsFilterKey(requestedFilterKey);
             }
             if (section === 'categories') setCategories(value as InventoryCategory[]);
@@ -219,6 +241,9 @@ const MedicalSuppliesPage: React.FC = () => {
               ...current,
               [section]: getErrorMessage(reason, `Failed to load the ${SECTION_LABELS[section]}`),
             }));
+            // Stamped with the query that failed, so a filter change retires
+            // the alert instead of presenting A's failure under B's controls.
+            if (section === 'items') setItemsErrorKey(requestedFilterKey);
           } finally {
             // Only the newest request clears the flag: an older one finishing
             // last would otherwise report the section idle while the request
@@ -228,11 +253,12 @@ const MedicalSuppliesPage: React.FC = () => {
         })
       );
     },
-    [search, categoryFilter]
+    [search, categoryFilter, page]
   );
 
   const loadSectionsRef = useRef(loadSections);
   loadSectionsRef.current = loadSections;
+
   // A refresh the user asked for goes to the server. The shared client would
   // otherwise answer a GET from cache for 30s, and serve a stale one for 90s
   // while swallowing the revalidation's failure -- so the refresh would report
@@ -244,23 +270,20 @@ const MedicalSuppliesPage: React.FC = () => {
   // since each section's newest request wins, those filter-driven requests
   // superseded an explicit refresh's four, letting cached summary, category
   // and expiring responses land while the refresh's fresh data was discarded.
-  //
-  // A filter says something about the item list and nothing about the other
-  // three, so only the item list reloads for it.
   useEffect(() => {
     void loadSectionsRef.current(ALL_SECTIONS);
   }, []);
 
-  // Keyed on the filter values themselves, not on a "has mounted" flag: the
-  // mount effect runs first and would set such a flag before this one reads
-  // it, so the initial render loaded the item list twice.
-  const lastItemFilters = useRef(`${search}\u0000${categoryFilter}`);
+  // Compared by value rather than gated on a "has mounted" ref: the mount
+  // effect above runs first, so a flag would let this one fire immediately
+  // after it and load the items twice.
+  const lastItemQuery = useRef(itemQueryKey('', '', 0));
   useEffect(() => {
-    const key = `${search}\u0000${categoryFilter}`;
-    if (lastItemFilters.current === key) return;
-    lastItemFilters.current = key;
+    const key = itemQueryKey(search, categoryFilter, page);
+    if (lastItemQuery.current === key) return;
+    lastItemQuery.current = key;
     void loadSectionsRef.current(['items']);
-  }, [search, categoryFilter]);
+  }, [search, categoryFilter, page]);
 
   useRegisterPullToRefresh(refresh);
 
@@ -280,12 +303,11 @@ const MedicalSuppliesPage: React.FC = () => {
     if (known) return known;
     // Pending, not absent: '—' is an answer ("no category"), and the page is
     // not entitled to give it while the list that would name the category is
-    // still in flight. This is not only the first load: a refresh that returns
-    // items before categories misses the lookup for a category another session
-    // just created, so the marker keys off the request being in flight rather
-    // than off the section having never loaded. A *failed* list is a different
-    // state -- the section error above says so, and the table stays usable --
-    // so it keeps the dash.
+    // still in flight. This is not only the first load -- a refresh that
+    // returns items before categories misses the lookup for a category another
+    // session just created -- so it keys off the request being in flight. A
+    // *failed* list is a different state: the section error says so, the table
+    // stays usable, and it keeps the dash.
     return loading.categories ? '…' : '—';
   };
 
@@ -364,49 +386,41 @@ const MedicalSuppliesPage: React.FC = () => {
         </div>
       </div>
 
-      {loading.summary && !summary ? (
-        <div className="mb-6">
-          <SkeletonCard />
+      {errors.summary && (
+        <SectionError
+          section="summary"
+          message={errors.summary}
+          isStale={loaded.summary}
+          onRetry={() => void loadSections(['summary'], { bypassCache: true })}
+        />
+      )}
+      {summary && (
+        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile
+            icon={<Stethoscope className="h-4 w-4 text-sky-700 dark:text-sky-400" />}
+            label="Supply items"
+            value={summary.total_items}
+            tone="bg-sky-500/10"
+          />
+          <StatTile
+            icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
+            label={`Expiring within ${summary.expiring_within_days}d`}
+            value={summary.expiring_soon}
+            tone="bg-amber-500/10"
+          />
+          <StatTile
+            icon={<AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400" />}
+            label="Already expired"
+            value={summary.expired}
+            tone="bg-red-500/10"
+          />
+          <StatTile
+            icon={<TrendingDown className="h-4 w-4 text-orange-700 dark:text-orange-400" />}
+            label="Below reorder point"
+            value={summary.low_stock}
+            tone="bg-orange-500/10"
+          />
         </div>
-      ) : (
-        <>
-          {errors.summary && (
-            <SectionError
-              section="summary"
-              message={errors.summary}
-              isStale={summary !== null}
-              onRetry={() => void loadSections(['summary'], { bypassCache: true })}
-            />
-          )}
-          {summary && (
-            <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatTile
-                icon={<Stethoscope className="h-4 w-4 text-sky-700 dark:text-sky-400" />}
-                label="Supply items"
-                value={summary.total_items}
-                tone="bg-sky-500/10"
-              />
-              <StatTile
-                icon={<CalendarClock className="h-4 w-4 text-amber-700 dark:text-amber-400" />}
-                label={`Expiring within ${summary.expiring_within_days}d`}
-                value={summary.expiring_soon}
-                tone="bg-amber-500/10"
-              />
-              <StatTile
-                icon={<AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400" />}
-                label="Already expired"
-                value={summary.expired}
-                tone="bg-red-500/10"
-              />
-              <StatTile
-                icon={<TrendingDown className="h-4 w-4 text-orange-700 dark:text-orange-400" />}
-                label="Below reorder point"
-                value={summary.low_stock}
-                tone="bg-orange-500/10"
-              />
-            </div>
-          )}
-        </>
       )}
 
       <div className="tab-scroll mb-4">
@@ -452,7 +466,12 @@ const MedicalSuppliesPage: React.FC = () => {
           onRetry={() => void loadSections(['categories'], { bypassCache: true })}
         />
       )}
-      {tab === 'stock' && errors.items && (
+      {/*
+       * Keyed to the query that failed. Without that, changing the filter after
+       * a failure left A's error standing under B's controls for as long as B
+       * took to load, and its Retry re-ran A.
+       */}
+      {tab === 'stock' && errors.items && itemsErrorKey === filterKey && (
         <SectionError
           section="items"
           message={errors.items}
@@ -461,75 +480,74 @@ const MedicalSuppliesPage: React.FC = () => {
         />
       )}
 
-      {tab === 'expiring' ? (
-        loading.expiring && !loaded.expiring ? (
-          <SkeletonCard />
-        ) : (
-          <section aria-label="Expiring stock">
-            {loaded.expiring && expiring.length === 0 ? (
-              <EmptyState
-                icon={CalendarClock}
-                title="Nothing expiring"
-                description={`No medical stock lot expires within ${EXPIRY_WINDOW_DAYS} days.`}
-              />
-            ) : (
-              <div className="card overflow-x-auto p-0">
-                <table className="rwd-table w-full text-sm">
-                  <thead>
-                    <tr className="border-theme-surface-border border-b">
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                        Item
-                      </th>
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Lot</th>
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                        Expires
-                      </th>
-                      <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
-                        On hand
-                      </th>
-                      <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
-                        Status
-                      </th>
+      {tab === 'expiring' && loading.expiring && !loaded.expiring ? (
+        <SkeletonCard />
+      ) : tab === 'expiring' ? (
+        <section aria-label="Expiring stock">
+          {loaded.expiring && expiring.length === 0 ? (
+            <EmptyState
+              icon={CalendarClock}
+              title="Nothing expiring"
+              description={`No medical stock lot expires within ${EXPIRY_WINDOW_DAYS} days.`}
+            />
+          ) : (
+            <div className="card overflow-x-auto p-0">
+              <table className="rwd-table w-full text-sm">
+                <thead>
+                  <tr className="border-theme-surface-border border-b">
+                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Item</th>
+                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">Lot</th>
+                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                      Expires
+                    </th>
+                    <th className="text-theme-text-muted px-4 py-3 text-right text-xs font-semibold uppercase">
+                      On hand
+                    </th>
+                    <th className="text-theme-text-muted px-4 py-3 text-left text-xs font-semibold uppercase">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expiring.map((lot) => (
+                    <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
+                      <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
+                        {lot.item_name ?? '—'}
+                      </td>
+                      <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
+                        {lot.lot_number || '—'}
+                      </td>
+                      <td data-label="Expires" className="text-theme-text-muted px-4 py-3">
+                        {lot.expiration_date ? formatDate(lot.expiration_date, tz) : '—'}
+                      </td>
+                      <td data-label="On hand" className="text-theme-text-primary px-4 py-3 text-right tabular-nums">
+                        {formatNumber(lot.quantity)}
+                      </td>
+                      <td
+                        data-label="Status"
+                        className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration)}`}
+                      >
+                        {expiryLabel(lot.days_until_expiration)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {expiring.map((lot) => (
-                      <tr key={lot.id} className="border-theme-surface-border border-b last:border-0">
-                        <td data-label="Item" className="text-theme-text-primary px-4 py-3 font-medium">
-                          {lot.item_name ?? '—'}
-                        </td>
-                        <td data-label="Lot" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
-                          {lot.lot_number || '—'}
-                        </td>
-                        <td data-label="Expires" className="text-theme-text-muted px-4 py-3">
-                          {lot.expiration_date ? formatDate(lot.expiration_date, tz) : '—'}
-                        </td>
-                        <td data-label="On hand" className="text-theme-text-primary px-4 py-3 text-right tabular-nums">
-                          {formatNumber(lot.quantity)}
-                        </td>
-                        <td
-                          data-label="Status"
-                          className={`px-4 py-3 font-medium ${expiryTone(lot.days_until_expiration)}`}
-                        >
-                          {expiryLabel(lot.days_until_expiration)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        )
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       ) : (
-        <section aria-label="All supplies">
+        <section aria-label="All supplies" aria-busy={loading.items}>
           <div className="mb-4 flex flex-wrap gap-2">
             <div className="relative min-w-[200px] flex-1">
               <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
               <input
                 type="search"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(0);
+                }}
                 placeholder="Search supplies"
                 aria-label="Search medical supplies"
                 className="form-input w-full pl-9"
@@ -537,9 +555,15 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(0);
+              }}
               aria-label="Filter by category"
               className="form-input w-auto"
+              // Disabled only before the list has ever loaded. A *failed* list
+              // leaves the control usable: the server still filters, and the
+              // section alert above says why the names are missing.
               disabled={loading.categories && !loaded.categories}
             >
               <option value="">
@@ -553,12 +577,15 @@ const MedicalSuppliesPage: React.FC = () => {
             </select>
           </div>
 
+          {/*
+           * Rows are shown only when they answer the query that is on screen.
+           * Anything else is a pending request (skeleton) or a failed one -- and
+           * a failed one renders nothing here, because the section alert above
+           * already says what happened and "No medical supplies yet" would
+           * contradict it. The controls above stay mounted throughout: putting
+           * the skeleton over them would unmount the search box mid-keystroke.
+           */}
           {itemsFilterKey !== filterKey ? (
-            // The rows on hand answer a different filter. While the request for
-            // the selected one is in flight that is a skeleton; once it has
-            // failed there is nothing honest to show, and the section error
-            // above already says why. Either way the stale rows stay off screen
-            // rather than sitting under controls that disagree with them.
             loading.items ? (
               <SkeletonCard />
             ) : null
@@ -644,12 +671,43 @@ const MedicalSuppliesPage: React.FC = () => {
               </table>
             </div>
           )}
+
+          {itemPage.total > 0 && (
+            <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={loading.items || itemPage.skip === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <p className="text-theme-text-muted text-sm" aria-live="polite">
+                Showing {formatNumber(itemPage.skip + 1)}–
+                {formatNumber(Math.min(itemPage.skip + items.length, itemPage.total))} of {formatNumber(itemPage.total)}
+              </p>
+              <button
+                type="button"
+                className="btn-secondary"
+                // Disabled while a page is in flight, and bounded by the known
+                // total. The enabled state otherwise came from the *previous*
+                // response, so a second activation before this one landed
+                // stepped past the last page -- skip=400 on a 201-item catalog,
+                // an empty table and a range reading "Showing 401-201 of 201".
+                disabled={loading.items || itemPage.skip + itemPage.limit >= itemPage.total}
+                onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </section>
       )}
 
       {editingItem && (
         <MedicalItemFormModal
           categories={categories}
+          categoriesError={errors.categories ?? null}
           item={editingItem}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
@@ -657,17 +715,15 @@ const MedicalSuppliesPage: React.FC = () => {
       )}
 
       {showItemModal && (
-        <MedicalItemFormModal categories={categories} onClose={() => setShowItemModal(false)} onSaved={handleSaved} />
-      )}
-
-      {showDeliveryModal && (
-        <ReceiveDeliveryModal
-          items={items}
-          loadError={errors.items ?? null}
-          onClose={() => setShowDeliveryModal(false)}
+        <MedicalItemFormModal
+          categories={categories}
+          categoriesError={errors.categories ?? null}
+          onClose={() => setShowItemModal(false)}
           onSaved={handleSaved}
         />
       )}
+
+      {showDeliveryModal && <ReceiveDeliveryModal onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />}
     </div>
   );
 };

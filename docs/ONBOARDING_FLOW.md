@@ -366,10 +366,18 @@ history and inventory on top of these.
 - From Email (the Google account that signs in to smtp.gmail.com)
 - Google App Password (2-Step Verification required)
 
-**Microsoft 365**:
+**Microsoft 365**: Authenticated SMTP must be enabled for the mailbox either
+way. The step offers a choice of authentication and defaults to the app
+registration, because Exchange Online disables Basic auth for SMTP AUTH by
+default at the end of December 2026 and does not offer it to tenants created
+after that.
 
 - From Email (the mailbox that signs in to smtp.office365.com)
-- Microsoft 365 App Password (Authenticated SMTP must be enabled for the mailbox)
+- _App registration (OAuth)_ — Directory (tenant) ID, Application (client) ID,
+  Client secret. The registration needs the `SMTP.SendAsApp` application
+  permission for Office 365 Exchange Online, admin consent for it, and
+  `SendAs` on the sending mailbox.
+- _App Password_ — Microsoft 365 App Password. Basic auth; retiring.
 
 **SMTP (Self-Hosted)**:
 

@@ -77,23 +77,31 @@ _EMAIL_SECRET_FIELDS = frozenset(
     {
         "google_app_password",
         "microsoft_app_password",
+        "microsoft_client_secret",
         "smtp_password",
         "cloudflare_api_token",
     }
 )
 
-# Gmail / Microsoft OAuth client credentials collected by earlier versions.
-# Nothing ever sent through them — the sender only speaks SMTP — so they were
-# dropped from EmailServiceSettings (2026-09-03). Rows written before then
-# still carry the keys, encrypted; they are ignored on read and pruned on the
-# next write so a dead client secret does not sit in the database forever.
+# Gmail OAuth client credentials collected by earlier versions. Nothing ever
+# sent through them — the sender only speaks SMTP — so they were dropped from
+# EmailServiceSettings (2026-09-03). Rows written before then still carry the
+# keys, encrypted; they are ignored on read and pruned on the next write so a
+# dead client secret does not sit in the database forever.
+#
+# The three Microsoft names that were pruned alongside these are back as real
+# fields: Exchange Online is retiring Basic auth for SMTP AUTH, so the client
+# credentials flow is now a supported way to send, and it needs exactly the
+# tenant, client and secret an app registration issues. Migration
+# e3a9c1d5b7f2 still deletes the values it found — they belonged to an OAuth
+# path that could not send — and it must, so a department re-enters
+# credentials rather than inheriting ones no administrator has looked at
+# since. A row it cleared reads back as App Password, because
+# microsoft_auth_method is absent there.
 _LEGACY_EMAIL_OAUTH_FIELDS = frozenset(
     {
         "google_client_id",
         "google_client_secret",
-        "microsoft_tenant_id",
-        "microsoft_client_id",
-        "microsoft_client_secret",
     }
 )
 
@@ -218,9 +226,23 @@ class EmailServiceSettings(BaseModel):
     google_app_password: Optional[str] = Field(
         None, description="Google App Password for the sending account"
     )
-    # Microsoft 365 — signs in to smtp.office365.com as from_email
+    # Microsoft 365 — signs in to smtp.office365.com as from_email, with
+    # either an App Password (Basic auth) or an app-registration token.
+    microsoft_auth_method: str = Field(
+        default="app_password",
+        description="Microsoft 365 SMTP authentication: app_password or oauth",
+    )
     microsoft_app_password: Optional[str] = Field(
         None, description="Microsoft 365 App Password for the sending mailbox"
+    )
+    microsoft_tenant_id: Optional[str] = Field(
+        None, description="Entra ID directory (tenant) ID for OAuth submission"
+    )
+    microsoft_client_id: Optional[str] = Field(
+        None, description="Entra ID application (client) ID for OAuth submission"
+    )
+    microsoft_client_secret: Optional[str] = Field(
+        None, description="Entra ID client secret for OAuth submission"
     )
     # Self-hosted SMTP
     smtp_host: Optional[str] = Field(None, description="SMTP server hostname")
@@ -244,12 +266,33 @@ class EmailServiceSettings(BaseModel):
             raise ValueError(f"platform must be one of: {', '.join(EMAIL_PLATFORMS)}")
         return value
 
+    @field_validator("microsoft_auth_method", mode="before")
+    @classmethod
+    def _validate_microsoft_auth_method(cls, value: Any) -> str:
+        """Settle the method, defaulting a stored null to App Password.
+
+        Rows written before OAuth existed have no method and authenticate
+        with a password; reads rebuild every stored section through this
+        schema, so a null has to land on the behaviour that row already has.
+        """
+        from app.utils.email_providers import MICROSOFT_AUTH_METHODS
+
+        if value is None or value == "":
+            return "app_password"
+        if value not in MICROSOFT_AUTH_METHODS:
+            raise ValueError(
+                "microsoft_auth_method must be one of: "
+                f"{', '.join(MICROSOFT_AUTH_METHODS)}"
+            )
+        return value
+
     def redacted(self) -> "EmailServiceSettings":
         """Return a copy with secret fields replaced by redaction markers."""
         return self.model_copy(
             update={
                 "google_app_password": _redact(self.google_app_password),
                 "microsoft_app_password": _redact(self.microsoft_app_password),
+                "microsoft_client_secret": _redact(self.microsoft_client_secret),
                 "smtp_password": _redact(self.smtp_password),
                 "cloudflare_api_token": _redact(self.cloudflare_api_token),
             }
@@ -263,6 +306,8 @@ class EmailServiceSettings(BaseModel):
                     "smtp_host",
                     "smtp_user",
                     "cloudflare_account_id",
+                    "microsoft_tenant_id",
+                    "microsoft_client_id",
                 ),
                 None,
             )
