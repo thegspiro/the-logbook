@@ -19,7 +19,8 @@ import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import {
   getCacheKey,
   getCached,
-  setCache,
+  setCacheAtGeneration,
+  cacheGeneration,
   invalidateByPrefix,
   getResourcePrefix,
   isCacheable,
@@ -60,7 +61,20 @@ api.interceptors.request.use(
     // Skip cache for requests explicitly marked (e.g. background revalidation)
     // and for endpoints carrying sensitive/PII data (HIPAA compliance).
     const skipCache = (config as unknown as Record<string, unknown>)._skipCache === true;
-    if (method === 'GET' && !skipCache && config.url && isCacheable(config.url)) {
+    const cacheableGet = method === 'GET' && !!config.url && isCacheable(config.url);
+
+    // SEC: stamped for EVERY cacheable GET, `_skipCache` included. That flag
+    // says "do not read from the cache", not "write to it unchecked" -- and a
+    // bypassed read is exactly the kind a user-triggered refresh issues, which
+    // is the request most likely to still be in flight when they log out. An
+    // unstamped response is cached unconditionally by the write below, so
+    // leaving the bypass path unstamped defeated the guard for the requests
+    // that most needed it.
+    if (cacheableGet) {
+      (config as unknown as Record<string, unknown>)._cacheGeneration = cacheGeneration();
+    }
+
+    if (cacheableGet && !skipCache && config.url) {
       const key = getCacheKey(config.url, config.params as Record<string, unknown> | undefined);
       const cached = getCached(key);
 
@@ -83,11 +97,24 @@ api.interceptors.request.use(
         // If stale, trigger a background revalidation for the next caller
         if (!cached.fresh && !isRevalidating(key)) {
           markRevalidating(key);
-          const { adapter: _adapter, ...restConfig } = config;
+          // Drop the caller's cancellation from the background request. The
+          // revalidation outlives the call that triggered it — the caller has
+          // already been handed the cached body and may abort on the next
+          // filter change or unmount, which would otherwise cancel the only
+          // thing refreshing this entry and leave the stale body cached until
+          // it expires.
+          //
+          // SEC: losing the abort means losing the one thing that stopped this
+          // request from outliving a logout, so the write is gated on the cache
+          // era instead. Without that, a slow revalidation issued under one
+          // member's session could land after clearCache() and be served to
+          // whoever signs in next on a shared terminal.
+          const { adapter: _adapter, signal: _signal, cancelToken: _cancelToken, ...restConfig } = config;
           const bgConfig = { ...restConfig, _skipCache: true };
+          const issuedAt = cacheGeneration();
           void api
             .request(bgConfig)
-            .then((res) => setCache(key, res.data))
+            .then((res) => setCacheAtGeneration(key, res.data, issuedAt))
             .catch(() => {
               /* background revalidation failure is non-critical */
             })
@@ -214,7 +241,13 @@ api.interceptors.response.use(
       !(response.config as unknown as Record<string, unknown>)._fromCache
     ) {
       const key = getCacheKey(response.config.url, response.config.params as Record<string, unknown> | undefined);
-      setCache(key, response.data);
+      const issuedAt = (response.config as unknown as Record<string, unknown>)._cacheGeneration;
+      // SEC: fail closed. An unstamped response is one we cannot prove was
+      // issued in this cache era, and defaulting to the current one would
+      // permit exactly the post-logout write the stamp exists to stop.
+      if (typeof issuedAt === 'number') {
+        setCacheAtGeneration(key, response.data, issuedAt);
+      }
     }
 
     // Invalidate related cache entries after mutations

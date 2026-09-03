@@ -1678,6 +1678,7 @@ class StorefrontService:
         search: Optional[str] = None,
         submitted_within_hours: Optional[int] = None,
         open_only: bool = False,
+        exclude_cancelled: bool = False,
         page: int = 1,
         page_size: int = 25,
     ) -> Tuple[List[StoreOrder], int]:
@@ -1706,6 +1707,15 @@ class StorefrontService:
                     [StoreOrderStatus.FULFILLED, StoreOrderStatus.CANCELLED]
                 )
             )
+        if exclude_cancelled:
+            # Narrower than `open_only`, and deliberately so. The admin hub's
+            # pending-verification queue excludes cancelled orders — cancelling
+            # leaves `payment_status` untouched, so the flag survives for ever
+            # on work that can no longer be done — but it still counts a
+            # fulfilled one, which a department whose payment policy allows
+            # handing over before the money settles can have. `open_only` would
+            # hide those, leaving the linked list short of its own headline.
+            filters.append(StoreOrder.status != StoreOrderStatus.CANCELLED)
         if search:
             pattern = like_pattern(search)
             filters.append(

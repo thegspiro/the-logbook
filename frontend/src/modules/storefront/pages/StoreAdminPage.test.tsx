@@ -219,6 +219,15 @@ describe('StoreAdminPage — tabs in the URL', () => {
     expect(await screen.findByText(/payment: all/)).toBeInTheDocument();
   });
 
+  it('does not mistake an inherited property for a payment status', async () => {
+    // `'toString' in PAYMENT_STATUS_LABELS` is true via Object.prototype, and
+    // the value would then be forwarded to the API as a payment_status that
+    // matches nothing — an empty list instead of the documented fallback.
+    renderAt('/inventory/admin/store?tab=orders&payment=toString');
+
+    expect(await screen.findByText(/payment: all/)).toBeInTheDocument();
+  });
+
   it('falls back to the overview for a tab that does not exist', async () => {
     renderAt('/inventory/admin/store?tab=not-a-tab');
 

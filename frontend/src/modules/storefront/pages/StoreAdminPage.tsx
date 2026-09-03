@@ -114,7 +114,11 @@ const StoreAdminPage: React.FC = () => {
   // unfiltered order list leaves the counted work to be found by eye. A value
   // the Orders tab does not offer is ignored rather than forwarded to the API.
   const paymentParam = searchParams.get('payment') ?? '';
-  const urlPaymentFilter = paymentParam in PAYMENT_STATUS_LABELS ? paymentParam : '';
+  // `hasOwnProperty`, not `in`: `?payment=toString` walks the prototype chain
+  // and would be forwarded to the API as a payment_status nothing matches.
+  const urlPaymentFilter = Object.prototype.hasOwnProperty.call(PAYMENT_STATUS_LABELS, paymentParam)
+    ? paymentParam
+    : '';
 
   // The overview's hand-off into a pre-filtered Orders tab. These stay local
   // rather than joining `?tab=` in the URL: they are one click's worth of

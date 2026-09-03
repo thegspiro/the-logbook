@@ -2359,18 +2359,53 @@ class SchedulingService:
             if id_error:
                 return None, id_error
 
-        template, error = await self._crud_create(
-            ShiftTemplate, template_data, organization_id, created_by
-        )
-        if error or template is None:
-            return template, error
-        if validated_ids is not None:
-            await self._replace_equipment_check_links(
-                template, organization_id, validated_ids
-            )
+        # Not routed through _crud_create: that commits the template on its
+        # own, and a template referencing checklists is only a valid row once
+        # its links exist too. Committing it alone — even briefly — makes it
+        # visible to every other request in the org: one could list it, or
+        # create a shift against it (stamping the shift's own template_id),
+        # before a failed link write is cleaned up. A compensating delete at
+        # that point doesn't undo what the other request already did with the
+        # row in between — an ON DELETE SET NULL shift.template_id, for one.
+        # Flushing instead of committing keeps the template unobservable
+        # outside this transaction until both writes are ready to land
+        # together, so there is nothing for a concurrent request to see.
+        try:
+            kwargs: Dict[str, Any] = {
+                "organization_id": organization_id,
+                **template_data,
+            }
+            if created_by is not None:
+                kwargs["created_by"] = created_by
+            template = ShiftTemplate(**kwargs)
+            self.db.add(template)
+            await self.db.flush()
+            if validated_ids is not None:
+                await self._replace_equipment_check_links(
+                    template, organization_id, validated_ids
+                )
             await self.db.commit()
             await self.db.refresh(template)
-        return template, None
+            return template, None
+        except IntegrityError as e:
+            await self.db.rollback()
+            if validated_ids is not None:
+                # Confirm the cause rather than assume it from the exception
+                # type alone: a checklist named here is only actually the
+                # reason if it no longer validates. Any other integrity
+                # failure (e.g., a duplicate-link race, vanishingly unlikely
+                # against a template id that didn't exist a moment ago, but
+                # not to be misreported if it somehow happens) falls through
+                # to the same str(e) handling every other failure here gets.
+                still_valid, _ = await self._validated_check_ids(
+                    validated_ids, organization_id
+                )
+                if len(still_valid) != len(validated_ids):
+                    return None, "Equipment checklist not found"
+            return None, str(e)
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
 
     async def _validated_check_ids(
         self,
