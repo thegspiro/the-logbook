@@ -23,6 +23,10 @@ from app.mcp.keys import (
 )
 from app.models.integration import Integration
 
+# Every test here needs the database: CI's unit job runs without one and
+# deselects this marker; the integration job selects it.
+pytestmark = [pytest.mark.integration]
+
 
 async def _integration(db, org_id, *, enabled=True, status="connected", config=None):
     row = Integration(

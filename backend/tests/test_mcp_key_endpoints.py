@@ -25,6 +25,10 @@ from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.models.audit import AuditLog
 from app.models.integration import Integration
 
+# Every test here needs the database: CI's unit job runs without one and
+# deselects this marker; the integration job selects it.
+pytestmark = [pytest.mark.integration]
+
 
 def _user(org_id, user_id):
     return SimpleNamespace(organization_id=org_id, id=user_id)

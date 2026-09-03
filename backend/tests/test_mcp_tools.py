@@ -19,6 +19,10 @@ from sqlalchemy import select, text
 from app.mcp import db as mcp_db
 from app.mcp.principal import McpPrincipal, bind_principal
 from app.mcp.server import build_server
+
+# Every test here needs the database: CI's unit job runs without one and
+# deselects this marker; the integration job selects it.
+pytestmark = [pytest.mark.integration]
 from app.models.audit import AuditLog
 
 
