@@ -34,7 +34,15 @@ const items = [
   { id: 'item-2', name: 'Epi 1:1000' },
 ] as never;
 
-const renderModal = () => renderWithRouter(<ReceiveDeliveryModal items={items} onClose={vi.fn()} onSaved={vi.fn()} />);
+const renderModal = (overrides: { items?: never[]; loadError?: string | null } = {}) =>
+  renderWithRouter(
+    <ReceiveDeliveryModal
+      items={overrides.items ?? items}
+      loadError={overrides.loadError ?? null}
+      onClose={vi.fn()}
+      onSaved={vi.fn()}
+    />
+  );
 
 describe('ReceiveDeliveryModal', () => {
   beforeEach(() => {
@@ -107,5 +115,22 @@ describe('ReceiveDeliveryModal', () => {
 
     expect(mockReceiveDelivery).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('at least one line'));
+  });
+
+  it('does not tell an officer to add a supply when the catalogue simply failed to load', async () => {
+    // An empty `items` has two causes and only one of them is the officer's to
+    // act on. Telling them to add a supply after a failed load sends them to
+    // create a duplicate of stock the department already has.
+    renderModal({ items: [], loadError: 'Network Error.' });
+
+    expect(await screen.findByText(/The supply catalogue could not be loaded/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Add a medical supply first/i)).not.toBeInTheDocument();
+  });
+
+  it('still advises adding a supply when the catalogue loaded and is genuinely empty', async () => {
+    renderModal({ items: [], loadError: null });
+
+    expect(await screen.findByText(/Add a medical supply first/i)).toBeInTheDocument();
+    expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument();
   });
 });

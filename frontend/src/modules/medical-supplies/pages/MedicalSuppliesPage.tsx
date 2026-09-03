@@ -280,9 +280,13 @@ const MedicalSuppliesPage: React.FC = () => {
     if (known) return known;
     // Pending, not absent: '—' is an answer ("no category"), and the page is
     // not entitled to give it while the list that would name the category is
-    // still in flight. A *failed* list is a different state -- the section
-    // error above says so, and the table stays usable -- so it keeps the dash.
-    return loading.categories && !loaded.categories ? '…' : '—';
+    // still in flight. This is not only the first load: a refresh that returns
+    // items before categories misses the lookup for a category another session
+    // just created, so the marker keys off the request being in flight rather
+    // than off the section having never loaded. A *failed* list is a different
+    // state -- the section error above says so, and the table stays usable --
+    // so it keeps the dash.
+    return loading.categories ? '…' : '—';
   };
 
   const handleSaved = () => {
@@ -657,7 +661,12 @@ const MedicalSuppliesPage: React.FC = () => {
       )}
 
       {showDeliveryModal && (
-        <ReceiveDeliveryModal items={items} onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />
+        <ReceiveDeliveryModal
+          items={items}
+          loadError={errors.items ?? null}
+          onClose={() => setShowDeliveryModal(false)}
+          onSaved={handleSaved}
+        />
       )}
     </div>
   );

@@ -19,6 +19,14 @@ import { Modal } from '../../../components/Modal';
 
 interface ReceiveDeliveryModalProps {
   items: InventoryItem[];
+  /**
+   * Why `items` is empty, when it is empty because the catalogue could not be
+   * loaded. Without it this modal reads an empty array as "nothing has been
+   * added yet" and tells the officer to add a supply -- advice that is wrong,
+   * and that sends them to create a duplicate of stock the department already
+   * has. null when the load succeeded.
+   */
+  loadError: string | null;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -40,7 +48,7 @@ const newLine = (): Line => ({
   expiration_date: '',
 });
 
-export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ items, onClose, onSaved }) => {
+export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ items, loadError, onClose, onSaved }) => {
   const tz = useTimezone();
   const [lines, setLines] = useState<Line[]>(() => [newLine()]);
   const [isSaving, setIsSaving] = useState(false);
@@ -106,7 +114,12 @@ export const ReceiveDeliveryModal: React.FC<ReceiveDeliveryModalProps> = ({ item
     <Modal isOpen onClose={onClose} title="Receive delivery" size="xl">
       <form onSubmit={(e) => void handleSubmit(e)}>
         <div className="modal-body space-y-3">
-          {items.length === 0 ? (
+          {items.length === 0 && loadError ? (
+            <div className="alert-danger">
+              The supply catalogue could not be loaded, so there is nothing to book this delivery against: {loadError}{' '}
+              Close this and retry the list from the All supplies tab.
+            </div>
+          ) : items.length === 0 ? (
             <div className="alert-warning">
               Add a medical supply first — a delivery is booked against existing items.
             </div>

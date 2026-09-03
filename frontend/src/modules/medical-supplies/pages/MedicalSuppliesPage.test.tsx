@@ -638,6 +638,42 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.getByRole('option', { name: 'Loading categories…' })).toBeInTheDocument();
     });
 
+    it('does not call a supply uncategorized while a refresh is still fetching categories', async () => {
+      // Same rule on a refresh as on the first load. Another session can add a
+      // category and an item in it between loads, so a lookup that misses
+      // while the list is in flight is a pending answer, not "uncategorized" --
+      // even though this section has loaded successfully once already.
+      mockGetItems.mockResolvedValue({
+        items: [{ id: 'item-1', name: 'Trauma Shears', quantity: 6, category_id: 'cat-1' }],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Airway' }]);
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await screen.findByText('Trauma Shears');
+      // Named, not pending: the category list is in hand for this one.
+      expect(screen.queryByText('…')).not.toBeInTheDocument();
+
+      // The refresh returns an item in a category the stale list cannot name,
+      // and hangs on the categories that would name it.
+      mockGetItems.mockResolvedValue({
+        items: [{ id: 'item-2', name: 'Nasal Airway', quantity: 4, category_id: 'cat-2' }],
+        total: 1,
+        skip: 0,
+        limit: 200,
+      });
+      mockGetCategories.mockImplementation(() => new Promise(() => {}));
+
+      await user.click(screen.getByRole('button', { name: 'Refresh medical supplies' }));
+
+      expect(await screen.findByText('Nasal Airway')).toBeInTheDocument();
+      expect(screen.getByText('…')).toBeInTheDocument();
+    });
+
     it('sends a user-initiated refresh past the response cache', async () => {
       // The shared client answers a GET from cache for 30s and serves a stale
       // one for 90s while swallowing the revalidation's failure -- so without a
