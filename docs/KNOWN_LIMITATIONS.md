@@ -68,6 +68,36 @@ here.
 | **No knowledge-test engine (officer-entered scores only)**             | Open (feature)       | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Skills-test completion does not enforce requirement `max_attempts`** | ✅ Resolved          | `assert_attempts_remaining` (`app/services/skills_testing_service.py`) now guards the cap at both ends of the flow: creating an official test — so an examiner is refused before running an evaluation that could not count — and, **since 2026-08-08, validating one** rather than completing it. Opening the examiner role to every member means completion is no longer the moment a result counts, so the cap is spent where the credit is granted; a submission that is never validated never costs the candidate a chance. An attempt is a completed, official, **validated**, non-voided test against that requirement, pass or fail; voided results and unvalidated submissions do not consume a chance, and practice attempts never do. A requirement already completed, verified, or waived is exempt, matching the knowledge-test path and keeping recertification testing possible. |
 
+## Claude (MCP) — claude.ai Custom Connectors Need an OAuth Server (2026-09-03)
+
+The Claude (MCP) integration authenticates MCP clients with a static bearer
+service key. Claude Code (`claude mcp add --transport http … --header
+"Authorization: Bearer …"`) and the Messages API connector
+(`authorization_token`) accept that directly. The claude.ai custom-connector
+dialog — and Claude Desktop's remote-connector flow — authenticate remote
+servers with OAuth 2.1 plus dynamic client registration instead, and The
+Logbook is currently an OAuth _client_ (Google and Microsoft sign-in), not
+an authorization server: there is no `/authorize`, `/token` or client
+registration endpoint for a connector to talk to.
+
+Until that is built, those clients connect through a local stdio-to-HTTP
+bridge (such as `mcp-remote`) that passes the `Authorization` header. Adding
+the authorization server is a separate change set: it needs a consent screen
+on top of the existing login, token issuance keyed to the same service-key
+gating, protected-resource metadata under `/.well-known/`, and the
+`mcp` SDK's `TokenVerifier` hook in place of the bearer check in
+`app/mcp/transport.py`.
+
+Two smaller ones, both deliberate:
+
+- **Department contact details are withheld along with personal ones.** The
+  redaction boundary matches field _names_ so that a test can prove it
+  holds for every tool at once; a station's public phone number is stripped
+  the same as a member's. Locations and facilities are still listed by name,
+  city and state.
+- **Tool results are point-in-time.** The server exposes no resources or
+  subscriptions; a client re-asks to refresh.
+
 ## ONBOARD-1 — The Setup Wizard's Per-Module Configuration Step Is Inert (2026-08-24)
 
 Fifteen of the setup wizard's module cards point at a per-module
@@ -3152,13 +3182,33 @@ destination-not-checked shape on folder reparenting (`update_folder`'s
 `parent_id`, FAC-18) and folder creation (`create_folder`'s `parent_id`,
 FAC-19), and added a defense-in-depth guard so the now-working
 folder-delete cascade cannot follow a cross-organization `parent_id` even
-if one is ever written outside the two guarded write paths (FAC-20). None
-of FAC-14 through FAC-20 are listed here because they are resolved, not
-open limitations. The already-filed sub-case in item (3) above and the
+if one is ever written outside the two guarded write paths (FAC-20). A
+further round found the delete cascade checked only the folder named in
+the request, never any descendant's own `required_permissions` (FAC-21).
+And, after PR #2191 (carrying FAC-14 through FAC-21) had already merged,
+a Codex finding on its final commit caught the most severe instance of
+this family: `delete_folder` never checked `is_system`, so — now that
+FAC-16 made the cascade genuinely destructive — any `documents.manage`
+holder could delete a system root such as "Member Files" outright and
+destroy every member's subfolder and document beneath it in one request,
+contradicting the documented invariant that system folders cannot be
+deleted; fixed on a dedicated follow-up branch/PR per CLAUDE.md Pitfall
+#24 (FAC-22). A further Codex review of that same fix commit, still on the
+same PR before it merged, found a two-step bypass of FAC-22 itself:
+`update_folder` never checked `is_system` before applying a reparent, so a
+system folder could be moved underneath an ordinary, freely deletable
+folder and destroyed by deleting that folder instead — the delete
+cascade's subtree walk checked cross-organization membership and each
+descendant's own ACL but never a descendant's `is_system`. Fixed with two
+independent changes: `update_folder` now refuses to reparent a system
+folder, and `delete_folder`'s subtree walk now refuses if any descendant is
+a system folder regardless of how it got there (FAC-23). None of FAC-14
+through FAC-23 are listed here because they are resolved, not open
+limitations. The already-filed sub-case in item (3) above and the
 Blueprints & Permits classification question in item (2) remain open,
 unresolved by any of these rounds.
 
-## FAC-16-adjacent — `CheckTemplateCompartment.children` and `TrainingCategory.subcategories` Likely Share the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` (2026-09-03)
+## FAC-16-adjacent — `TrainingCategory.subcategories` Likely Shares the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` / `CheckTemplateCompartment.children` (2026-09-03, updated 2026-09-03)
 
 While diagnosing why `DocumentFolder.delete_folder`'s cascade did not
 actually remove descendant folders (see FAC-16,
@@ -3167,29 +3217,30 @@ usage in `app/models/` found two other self-referential relationships
 declared with the same inverted shape — `remote_side` placed on the plural
 collection attribute instead of on its singular backref, unlike the correct
 pattern used elsewhere (`FacilityRoom.parent_room`, `BudgetCategory.parent`,
-`StorageArea.parent`, `Event.recurrence_parent`, and now
-`DocumentFolder.children` after the FAC-16 fix):
+`StorageArea.parent`, `Event.recurrence_parent`, and now `DocumentFolder.children`
+and `CheckTemplateCompartment.children` after their fixes):
 
 - `CheckTemplateCompartment.children` (`app/models/apparatus.py`, backref
-  `"parent"`, `cascade="all, delete-orphan"`).
+  `"parent"`, `cascade="all, delete-orphan"`) — **fixed**, feature 13
+  (Apparatus & NFC), see `docs/security-review/AP-13-apparatus-nfc.md`.
+  Empirically confirmed the same failure mode as `DocumentFolder.children`
+  with a three-level fixture
+  (`test_apparatus_check_template_compartment_cascade.py`): deleting a
+  compartment with nested children (a bag inside a pack inside a
+  compartment, or any two-level nesting) left the descendants behind,
+  orphaned with a `NULL` `parent_compartment_id`, instead of removing them —
+  exactly the shape `EquipmentCheckService.delete_compartment`'s
+  `db.delete()` call relies on the relationship's own cascade to prevent.
 - `TrainingCategory.subcategories` (`app/models/training.py`, backref
   `"parent_category"` — no cascade configured, so the practical effect here
   is more likely a `parent_category_id` silently nulled to `None` on a
   parent-category delete than a failed delete, though this has not been
-  empirically confirmed).
-
-`DocumentFolder.children`'s confirmed failure mode: `session.delete()` on a
-parent with descendants proactively set each descendant's foreign key to
-`NULL` before issuing the `DELETE`, so the database's own `ON DELETE CASCADE`
-never fired — the parent was removed but its descendants survived, detached
-and orphaned rather than deleted. Not verified for the two entries above —
-each has its own cascade configuration and would need the same empirical
-multi-level-fixture check `DocumentFolder`'s fix used (a plain code read is
-not sufficient; that is exactly what missed the `DocumentFolder` instance of
-this bug for as long as it existed). Out of scope for the Facilities feature
-this was found under; apparatus and training belong to other rotation
-features. Found in `docs/security-review/FAC-12-facilities.md` (feature 12,
-pass 3, FAC-16).
+  empirically confirmed). **Still open** — belongs to the Training rotation
+  features (17/18), out of scope for feature 13. Needs the same empirical
+  multi-level-fixture check the other two used before being called a
+  confirmed finding (a plain code read is not sufficient; that is exactly
+  what missed the `DocumentFolder` and `CheckTemplateCompartment` instances
+  of this bug for as long as they existed).
 
 ## Process
 

@@ -117,6 +117,8 @@ class ActionItemResponse(UTCResponseBase):
     priority: int = 0
     completed_at: Optional[datetime] = None
     completion_notes: Optional[str] = None
+    created_by: Optional[UUID] = None
+    source: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

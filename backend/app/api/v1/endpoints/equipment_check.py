@@ -478,9 +478,15 @@ async def delete_compartment(
     )
     comp_name = comp.name if comp else "Unknown"
     comp_template_id = str(comp.template_id) if comp else ""
-    deleted = await service.delete_compartment(
-        compartment_id, current_user.organization_id
-    )
+    try:
+        deleted = await service.delete_compartment(
+            compartment_id, current_user.organization_id
+        )
+    except ValueError as e:
+        # AP-14: _lock_compartment_subtree raises when it finds a
+        # cross-template reference in the subtree -- surface it as a 400
+        # rather than letting the cascade proceed.
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if not deleted:
         raise HTTPException(status_code=404, detail="Compartment not found")
     if comp_template_id:

@@ -16,18 +16,246 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-#2191 (`claude/security-review-facilities`) — Feature 12, Facilities, pass
-3, complete and ready for review. One HIGH finding flagged (FAC-13:
-facility-file folder access over-restricted for three established-baseline
-categories — Photos, Maintenance Records, Inspection Reports; Blueprints &
-Permits' classification is separately undecided — needs an owner decision,
-not auto-fixed) and eight P1/P2/MED findings fixed same-day across six
-Codex review rounds of this PR's own fix commits and write-up: FAC-14
-(documents.manage bypassing a document's own folder ACL on the generic
-update/delete routes), FAC-15 (the same bypass on a document _move_'s
-destination folder, missed by FAC-14's fix), FAC-16 (the identical bypass
-on the folder-mutation routes themselves — rename/reparent/delete of the
-target folder — which also uncovered and fixed a pre-existing bug where
+**#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
+Apparatus & NFC, passes 3–7. Pass 3: AP-8 fixed —
+`CheckTemplateCompartment.children` had the same inverted self-referential
+`remote_side` shape FAC-16 found and fixed on `DocumentFolder.children`
+(flagged there as a sibling instance, out of scope for Facilities) —
+reproduced live (three-level fixture, delete_compartment's own cascade)
+before fixing. `TrainingCategory.subcategories` has the same shape and
+remains flagged, out of scope for this feature. Also corrected a stale
+`docs/app-review/apparatus.md` entry (AP2-2) that still read OPEN though the
+code has validated all four FKs since before pass 1. Pass 4 (same PR, in
+response to a Codex review of the AP-8 fix commit): three more findings, all
+surfaced by AP-8's cascade going from no-op to genuinely effective, exactly
+the pattern the Facilities pass (PR #2198) went through — AP-9 (P1, clone
+endpoint 500s on nested templates, plus a co-discovered duplicate-clone bug
+in the same code), AP-10 (P1, `create_template` had no in-template/in-org
+validation on a client-supplied `parent_compartment_id`, unlike
+`add_compartment`/`update_compartment`), AP-11 (P2, frontend delete
+confirmation and local-state removal didn't account for the descendants
+the backend now cascade-deletes). All three reproduced live against the
+current fixed code before being called findings, and regression-tested
+failing pre-fix / passing post-fix via `git stash`. Pass 5 (same PR, a
+second Codex review of the pass-4 commit): two more findings — AP-12 (P1,
+`delete_compartment` cascaded off a stale REPEATABLE READ snapshot, the
+exact concurrency race FAC-40 already fixed once on `DocumentFolder`/
+`delete_folder`; fixed with FAC-40's own locking-walk + explicit-bulk-delete
+
+- `passive_deletes=True` pattern, adapted to this model's `SET NULL` vs.
+  `CASCADE` FK actions) and AP-13 (P1, frontend — AP-11's own descendant
+  computation trusted the browser's hierarchy, which can be ahead of what's
+  saved since reparenting has no auto-save path; fixed by tracking
+  last-known-server parent linkage and blocking the delete on disagreement).
+  Both reproduced live (two real, independently-committing database sessions
+  for AP-12; a component test reproducing the actual data-loss scenario for
+  AP-13) before being called findings, and regression-tested failing pre-fix /
+  passing post-fix via `git stash`. Pass 6 (same PR, a third Codex review, this
+  time of the pass-5 fix commits): two more findings — AP-14 (P1, multi-tenant
+  isolation — the pass-5 locking subtree walk had no template/org boundary, so
+  a dangling cross-template `parent_compartment_id` from before AP-10's
+  validation shipped could let deleting a compartment in one template destroy
+  a compartment in another; fixed with the same fail-closed pattern
+  `delete_folder` uses for cross-org references) and AP-15 (P2, frontend — the
+  pass-5 `deleteCompartment` fix left descendant items' pending debounced
+  auto-saves running after their compartment was deleted, so a stale timer
+  could 404 against a removed item and, worse, abort an unrelated Save pressed
+  in the same window; fixed by cancelling those timers before the delete
+  call). Both reproduced live before being called findings, and
+  regression-tested failing pre-fix / passing post-fix via `git stash`. Pass
+  7 (same PR, a fourth Codex round on the same chain): AP-16 (P2, data
+  completeness — `clone_template`'s root-down walk silently drops a
+  compartment whose parent lies outside the source template, the same
+  dangling-link shape AP-14 guards delete against; fixed the same way,
+  fail-closed rather than committing an incomplete clone), plus four
+  Codex-caught regressions in this rotation's own pass-6 fixes to
+  `deleteCompartment`'s auto-save cancellation (a stale entry left in the
+  pending-reparent guard's map after a successful delete; a mock not reset
+  between tests; canceling auto-saves before vs. after the delete call each
+  leaving a different failure window open) — the auto-save fix took two
+  more rounds to converge on capturing and cancelling every timer
+  synchronously before the delete request is sent, then discarding or
+  re-arming the captured patches depending on whether the delete succeeded.
+  All reproduced live or via a test failing against the specific prior
+  state, all regression-tested failing pre-fix / passing post-fix. See the
+  log entry below for the full writeup once merged.
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2198 (FAC-29 through FAC-45)
+
+`bcbffabc` merged. This PR was the second facilities-followup (continuing
+pass 3's concurrency investigation after #2195 merged mid-round, per
+CLAUDE.md Pitfall #24), and closes out feature 12: 14 findings fixed
+(FAC-29, FAC-31 through FAC-40, FAC-42, FAC-43, FAC-45) and 3 correctly
+flagged as design/tradeoff decisions rather than mechanical fixes (FAC-30,
+FAC-41, FAC-44). The fixed set is almost entirely TOCTOU races and
+lock-ordering deadlocks in `facilities.py`/`documents_service.py`'s
+shared-document-reference and folder-locking paths — each reproduced live
+with real concurrent sessions before being called a finding, per this
+rotation's standing discipline, and each fix carries a regression test
+confirmed failing pre-fix (`git stash`) and passing post-fix. Full detail
+is in `docs/security-review/FAC-12-facilities.md` and the PR itself, not
+duplicated here. Rotation row 12 → ✅.
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2195 (FAC-24 through FAC-28)
+
+`38410c86` merged (by the repo owner directly, mid-round — see the FAC-29
+entry above) pass 3's continuation through FAC-28. #2191 merged (`f5e800f1`)
+while this round's own fix (FAC-24) was in progress — its last pushed commit
+(`910c27e6`, FAC-18/19/20/21) did not include FAC-24, which Codex found on
+that same merged PR's sweep after the merge. Per CLAUDE.md Pitfall #24, that
+work continued on a new branch (`claude/security-review-facilities-followup`)
+and this PR rather than reusing the dead `claude/security-review-facilities`
+or reopening the merged one. #2194's separate, urgent post-merge fix
+(FAC-22, FAC-23) — an unrelated cascade-delete bug found and merged to
+`main` while this PR was open — claimed the FAC-22/FAC-23 numbers first;
+this PR's own finding was renumbered FAC-22 → **FAC-24** once the collision
+surfaced during the merge of `origin/main` into this branch.
+
+**FAC-24 (P1, access control, fixed):**
+`can_access_folder`/`can_access_document` — the one shared predicate every
+FAC-14 through FAC-21 mutation check relies on — admitted a caller who held
+only a folder's **read-only** `required_permissions` entry
+(`facilities.view_sensitive`), letting a caller holding `documents.manage` +
+that one read-tier grant (the seeded **treasurer** role's exact shape, no
+facilities write permission at all) unfile/move/delete a sensitive document
+or rename/reparent/delete/create-under the sensitive folder tree — bypassing
+every one of FAC-14 through FAC-21's checks at once, since they all reuse
+this same predicate. Fixed with a new `require_write` mode on the predicate
+(filters `required_permissions` to write-tier entries — the
+`.view`/`.view_*` vs. everything-else convention already used throughout
+`core/permissions.py` — before matching), applied at every mutation-gating
+site the FAC-14–21 sweep enumerated, including the descendant-ACL check
+inside a folder-delete cascade. Also closed a dangling reference the same
+audit surfaced: deleting a shared document (directly or via a folder
+cascade) left a facility's own `"document:<uuid>"` reference to it pointing
+at nothing; now cleaned up in the same transaction. Plus two doc corrections
+Codex found on the same round: the FAC-16 write-up claimed a
+`root → child → grandchild → document` regression-test cascade the actual
+fixture didn't build (fixed by extending the fixture, not narrowing the
+claim), and `CHANGELOG.md`'s FAC-13 entry over-broadly named the seeded
+`quartermaster` role among those refused generic-Documents-module access,
+when quartermaster never held the `documents.view` that path requires (fixed
+by scoping that specific claim to the three roles that do). Full completion
+gate green, 10029/10029 full backend suite (+12 for FAC-24's regression
+tests over the 10017 baseline `main` carried at fork time).
+
+**`origin/main` merged into that branch** (bringing in #2194's since-merged
+FAC-22/FAC-23 fix — same two functions, `update_folder`/`delete_folder`,
+this PR also touched) with the conflict resolved by keeping both sets of
+changes: #2194's `is_system` checks and this PR's own `require_write`/
+permission-tier changes coexist in the merged `update_folder`/
+`delete_folder`. Full backend suite re-run green against the merged code.
+
+**FAC-25 (P1, access control, fixed), Codex review of the FAC-24 commit:**
+`POST /documents/upload`'s folder-destination check was the one
+mutation site FAC-24's sweep missed — still called `can_access_folder` with
+no `require_write=True`, so the treasurer-shaped caller FAC-24 closed
+everywhere else could still upload directly into a sensitive facility
+folder. Fixed by passing `require_write=True` there too.
+
+**FAC-26 (P1, access control, fixed), Codex review of the same commit:**
+deleting a shared document (directly, or via a folder cascade) cleaned up
+its `FacilityDocument` reference without checking the facility-specific
+delete permission — the generic `DELETE /documents/{document_id}` requires
+only `documents.manage`, but the facility module's own document-delete
+route reserves deletion for `facilities.delete`/`.manage` specifically, and
+`permission_matches_any_write` treats `facilities.edit` (present in a
+folder's `required_permissions` alongside `.manage`) as write-capable — so a
+`documents.manage` + `facilities.edit` (no `facilities.delete`) caller could
+delete a shared document and its facility reference through the generic
+endpoint. Fixed by threading `current_user` through `delete_document`
+(mirroring `delete_folder`'s existing optional param) and gating the
+reference cleanup's actual deletion on `facilities.delete`/`.manage` when a
+reference exists — fails closed (`PermissionError` → 403), blocking the
+whole delete rather than leaving a dangling reference; proceeds normally
+when there's no reference to protect.
+
+**FAC-27 (P2, data integrity, fixed), Codex review, same commit's own
+neighboring code:** the facility-reference cleanup exact-matched a canonical
+`document:{uuid}` string it built itself; `_validate_shared_document_reference`
+validates the UUID suffix with `UUID(...)` (accepting far more forms —
+mixed case, brace-wrapped) but stores the original string unchanged, so a
+valid reference in any other accepted form was left dangling. Fixed by
+re-parsing every stored `"document:%"` reference's UUID suffix and comparing
+the parsed value instead of an exact string match.
+
+**FAC-28 (P2, data integrity, fixed), same round:** the cleanup swept
+`FacilityDocument` rows only; `FacilityPhoto.file_path` is validated and
+stored through the identical path (`create_facility_photo` ->
+`_validate_shared_document_reference`), so a photo reference dangled the
+same way. Fixed by making the match/delete logic model-agnostic and running
+it against both tables in the same transaction, gated by the same
+permission FAC-26 added.
+
+**Also this round:** a one-line fix for a `LIKE` call FAC-27/28 added with
+no `escape=LIKE_ESCAPE_CHAR` (CLAUDE.md Pitfall #25 — `test_like_escaping.py`
+caught it in CI).
+
+Full completion gate green across all rounds (final: 10th commit `38410c86`,
+targeted + `-k "facilities or documents"` suites green, no regressions).
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2194 (FAC-22, FAC-23 — urgent, out-of-rotation post-merge fix)
+
+`claude/security-facilities-system-folder-delete-fix` — **urgent,
+out-of-rotation fix, not routine feature work.** PR #2191 (Feature 12,
+Facilities, pass 3 — full history below) merged before Codex's P1 finding
+on its final commit (`910c27e6`) could be addressed on that branch;
+reusing a merged branch's name is prohibited (CLAUDE.md Pitfall #24), so
+the fix landed on a fresh branch off `main`. FAC-22 (CRITICAL): FAC-16's
+correction of `DocumentFolder.children`'s self-referential relationship
+(within #2191) made the folder-delete cascade genuinely destructive, and
+`delete_folder` never checked `existing.is_system` before invoking it — so
+any `documents.manage` holder could delete a system root such as "Member
+Files" outright and cascade-destroy every member's subfolder and document
+beneath it in one request. Reproduced against pre-fix code before fixing;
+fixed in the service layer (`PermissionError` → 403, checked before any
+subtree walk begins); two new regression tests
+(`TestDeleteFolderRefusesSystemFolder`), confirmed to fail pre-fix and
+pass post-fix. Full completion gate green, 10019/10019 full backend suite,
+no regressions. **FAC-23 (CRITICAL, same PR):** a further Codex review of
+the FAC-22 fix commit, still before the PR merged, found a two-step bypass
+of it — `update_folder` never checked `is_system` before applying a
+reparent, so a system folder could be moved underneath an ordinary, freely
+deletable folder and then destroyed by deleting that folder instead; the
+delete cascade's subtree walk checked cross-org membership (FAC-20) and
+each descendant's own ACL (FAC-21) but never a descendant's `is_system`.
+Reproduced end to end against pre-fix code before fixing (two-step bypass:
+reparent, then delete the ordinary folder — silently destroyed the system
+folder, its descendant, and its document); fixed with two independent
+changes — `update_folder` now refuses (400) to reparent a system folder,
+and `delete_folder`'s subtree walk now refuses (400) if any descendant is a
+system folder regardless of how it got there. Four new regression tests
+(`TestUpdateFolderRefusesReparentingSystemFolder`,
+`TestDeleteFolderRefusesReparentedSystemFolderInSubtree`), confirmed to
+fail pre-fix and pass post-fix. Full completion gate green, 10023/10023
+full backend suite (+4 over FAC-22's 10019), no regressions. See
+`docs/security-review/FAC-12-facilities.md` (FAC-22 and FAC-23 sections, at
+the top) for full detail. Rotation row 12 was left unmodified by this fix:
+both FAC-22 and FAC-23 were post-merge fixes on top of an already-merged
+pass, not a new rotation pass — the row-12 → ✅ flip is #2195's own merge to
+record, per the same convention this row followed for every other PR.
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2191 (FAC-13 through FAC-21)
+
+`f5e800f1` merged pass 3's work through FAC-21: one HIGH finding flagged
+(FAC-13: facility-file folder access over-restricted for three
+established-baseline categories — Photos, Maintenance Records, Inspection
+Reports; Blueprints & Permits' classification is separately undecided —
+needs an owner decision, not auto-fixed) and eight P1/P2/MED findings fixed
+same-day across six Codex review rounds of the PR's own fix commits and
+write-up: FAC-14 (documents.manage bypassing a document's own folder ACL on
+the generic update/delete routes), FAC-15 (the same bypass on a document
+_move_'s destination folder, missed by FAC-14's fix), FAC-16 (the identical
+bypass on the folder-mutation routes themselves — rename/reparent/delete of
+the target folder — which also uncovered and fixed a pre-existing bug where
 deleting a folder with descendants silently orphaned them instead of
 cascading; two sibling relationships elsewhere in the codebase flagged with
 the same shape, not fixed, out of scope), FAC-17 (`get_facility_folders`'s
@@ -42,24 +270,28 @@ cascade cannot follow a cross-organization `parent_id`, even though no
 current write path can create one), and FAC-21 (the delete cascade checked
 only the folder named in the request, never any descendant's own
 `required_permissions` — found by Codex on the FAC-18/19/20 fix commit
-itself, after a systematic sweep of every remaining folder/document route
-in `documents.py` had already (wrongly) concluded no further instance of
-this bug class remained; every descendant is now checked too). Plus two
+itself, after a systematic sweep of every remaining folder/document route in
+`documents.py` had already (wrongly) concluded no further instance of this
+bug class remained; every descendant is now checked too). Plus two
 doc-accuracy corrections (stale comments claiming a now-false
 "facilities.view-only sees the folders" invariant), and a
-separately-diagnosed, separately-fixed CI failure (two of an earlier
-round's own regression test classes were missing
-`@pytest.mark.integration`, so the DB-less "Backend Unit Tests" job tried to
-run them against no MySQL and errored on all 8; traced to root cause during
-FAC-17's investigation, fixed by a concurrent commit (`acc4e29d`) rebased
-onto — now marked and deselected there correctly). Full completion gate
-green, 10017/10017 full backend suite (+13 total across FAC-17's,
-FAC-18/19/20's, and FAC-21's regression tests, over the pre-round-4
-baseline of 10004), and the exact CI unit-test filter (`-m "not integration
-and not slow and not docker"`) 8474 passed/0 errors (was 8472 passed/8
-errors before `acc4e29d`). Rotation row 12 → ⏳ (awaiting this PR's merge).
+separately-diagnosed, separately-fixed CI failure (two of an earlier round's
+own regression test classes were missing `@pytest.mark.integration`, so the
+DB-less "Backend Unit Tests" job tried to run them against no MySQL and
+errored on all 8; traced to root cause during FAC-17's investigation, fixed
+by a concurrent commit (`acc4e29d`) rebased onto — now marked and deselected
+there correctly). Full completion gate green at merge time: 10017/10017
+full backend suite (+13 total across FAC-17's, FAC-18/19/20's, and FAC-21's
+regression tests, over the pre-round-4 baseline of 10004), and the exact CI
+unit-test filter (`-m "not integration and not slow and not docker"`) 8474
+passed/0 errors (was 8472 passed/8 errors before `acc4e29d`).
 
----
+A further Codex round landed on the merged PR's own sweep after the merge —
+FAC-24 (originally numbered FAC-22; renumbered to avoid colliding with
+#2194's own FAC-22/FAC-23, above, once the two branches were merged), the
+write-vs-read permission-tier gap underlying every FAC-14–21 check —
+recorded in the "Open PR" section above as a new PR/branch per
+CLAUDE.md Pitfall #24, since the merged branch can no longer be pushed to.
 
 ### 2026-09-03 — Feature 12 (Facilities, pass 3) — 0 fixed (2 doc-accuracy corrections), 1 HIGH flagged
 
@@ -7669,8 +7901,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | 🔄     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |

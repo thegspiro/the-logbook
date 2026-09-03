@@ -503,11 +503,23 @@ async def test_shared_file_reference_files_an_unfiled_document_into_the_facility
 async def test_shared_file_reference_leaves_an_already_filed_document_alone():
     """Re-parenting another module's document because a facility happens to
     reference it would be the more surprising behaviour; the reference is still
-    validated either way."""
+    validated either way.
+
+    FAC-35: the destination folder is now resolved/locked unconditionally
+    (canonical lock order -- DocumentFolder before Document, see
+    documents_service.py's module-level note), so ``ensure_facility_folder``
+    IS awaited here even though this document already has a folder. What
+    must not happen is the *assignment* -- ``document.folder_id`` stays
+    exactly what it was.
+    """
     user = SimpleNamespace(organization_id=str(uuid4()))
     document = SimpleNamespace(id=str(uuid4()), folder_id="somewhere-else")
+    facility = SimpleNamespace(id=str(uuid4()), name="Station 1")
 
     with patch(
+        "app.api.v1.endpoints.facilities.FacilitiesService.get_facility",
+        new=AsyncMock(return_value=facility),
+    ), patch(
         "app.api.v1.endpoints.facilities.DocumentsService.get_document_by_id",
         new=AsyncMock(return_value=document),
     ), patch(
@@ -519,14 +531,21 @@ async def test_shared_file_reference_leaves_an_already_filed_document_alone():
         )
 
     assert document.folder_id == "somewhere-else"
-    ensure.assert_not_awaited()
+    ensure.assert_awaited()
 
 
 @pytest.mark.asyncio
 async def test_shared_file_reference_rejects_cross_organization_document():
     """The org-scoped storage lookup must not allow attaching another org's ID."""
     user = SimpleNamespace(organization_id=str(uuid4()))
+    facility = SimpleNamespace(id=str(uuid4()), name="Station 1")
     with patch(
+        "app.api.v1.endpoints.facilities.FacilitiesService.get_facility",
+        new=AsyncMock(return_value=facility),
+    ), patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_folder",
+        new=AsyncMock(),
+    ), patch(
         "app.api.v1.endpoints.facilities.DocumentsService.get_document_by_id",
         new=AsyncMock(return_value=None),
     ) as lookup:

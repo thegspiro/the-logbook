@@ -237,6 +237,7 @@ from app.models.legal import (
     LegalRevisionStatus,
 )
 from app.models.location import Location
+from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
     ScreeningRequirement,
@@ -444,6 +445,7 @@ __all__ = [
     "MessageTargetType",
     # Integration models
     "Integration",
+    "McpServiceKey",
     # Analytics models
     "AnalyticsEvent",
     # Error log models

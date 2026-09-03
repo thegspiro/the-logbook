@@ -7,6 +7,831 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a fourth round on the delete/autosave interaction, and a bulk-replace path that never refreshed the reparent-guard's server-truth map (2026-09-03)
+
+**Fixed**
+
+- **AP-13 finding 1 (P2, frontend) — the subtree-delete autosave-quiescing
+  step only inspected `autoSavePendingRef`, not the separate
+  `autoSaveInFlightRef` a timer moves into once it actually fires**: if the
+  delete-confirmation dialog was left open past the 1.5s debounce window,
+  the queued item auto-save had already fired and its PATCH was in flight
+  by the time the user confirmed — invisible to the doomed-item capture
+  loop, which only cancels still-pending timers. Left unawaited, that PATCH
+  could settle after the DELETE, reporting "Save failed" for an item the
+  delete had just removed, or racing it outright. Fixed by keying
+  `autoSaveInFlightRef` by item id (it was an anonymous `Set<Promise>`) so
+  the same quiescing step can find and await a doomed item's in-flight
+  request too, not just its pending timer.
+- **AP-13 finding 2 (P2, frontend) — `replaceAllCompartments` (vehicle
+  preset apply / JSON import / CSV import) never refreshed
+  `savedParentByIdRef` with the newly-persisted ids the backend hands
+  back**: the AP-13 pending-reparent delete guard treats an id absent from
+  that map as nothing to compare, not as something to block on — so an
+  unsaved indent of one of these brand-new rows under another, followed by
+  a delete of the parent, bypassed the guard entirely. The backend cascade
+  then removed only the still-top-level parent (the reparent was never
+  saved), leaving the child alive in the database and reappearing
+  unexpectedly on the next reload, though the frontend's own local state
+  showed it gone. Fixed by rebuilding the map from the bulk-replace's
+  freshly-persisted response, the same way the initial load already does
+  — extracted the shared rebuild into `buildParentByIdMap`
+  (`equipmentCheckHierarchy.ts`) so both call sites share one
+  implementation instead of two copies of the same loop.
+- Both reproduced live via a component test confirmed failing pre-fix and
+  passing post-fix. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 8) for the full writeup.
+
+### Security: a clone could silently drop a disconnected compartment, and the delete/autosave interaction took two more rounds to close for good (2026-09-03)
+
+**Fixed**
+
+- **AP-16 (P2, data completeness) — `clone_template` silently dropped a
+  compartment whose parent lay outside the source template**: the same
+  dangling cross-template reference AP-14 guards the delete path against
+  left a compartment unreachable from the clone's root-down walk, so it
+  (and its items) vanished from the clone with no error. Fixed the same
+  way AP-14 fixed delete — fail closed (400) rather than commit an
+  incomplete clone.
+- **Three more rounds on the same `deleteCompartment` auto-save
+  interaction** (AP-13/AP-15 follow-up): cancelling a pending item
+  auto-save timer against an in-flight delete has two failure directions —
+  act too early and a failed delete loses the edit for good; act too late
+  and the timer can still fire mid-flight and race the delete to the
+  server. Landed in two more corrections before converging: capture and
+  cancel every timer synchronously, before the delete request is sent, and
+  either discard the captured edits (delete succeeded) or re-arm them
+  (delete failed) using the same recovery path a failed Save already uses.
+  A related bug in the same fix (a stale entry left in the pending-reparent
+  guard's server-truth map after a successful delete, which could
+  permanently and falsely block deleting anything else) was fixed
+  alongside it, along with a test-hygiene gap (a mock not reset between
+  tests) Codex caught in the same review.
+- All reproduced live (or via a failing test against the specific prior
+  state) before being called findings, and confirmed failing pre-fix /
+  passing post-fix. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 7) for the full writeup.
+
+### Security: the compartment-delete cascade race fix had its own cross-template gap, and the builder left a stale auto-save timer running after a delete (2026-09-03)
+
+**Fixed**
+
+- **AP-14 (P1, multi-tenant isolation, CLAUDE.md Pitfall #14a/14c) — the
+  locking subtree walk added to fix AP-12 had no template or organization
+  boundary**: `add_compartment`/`update_compartment`/`create_template`
+  validate a _new or changed_ `parent_compartment_id` is same-template and
+  same-org (AP-10), but that only prevents a cross-template link from
+  being written from now on — a row persisted before that validation
+  shipped could still carry a dangling one. Left unscoped, deleting a
+  compartment in one template could reach into, and permanently destroy, a
+  compartment (and its items) belonging to a different template — in this
+  org or another org entirely. Fixed by requiring every row the walk locks
+  to belong to the same template as the one being deleted, and failing the
+  whole delete (400, nothing destroyed) the moment it finds one that
+  doesn't — the same fail-closed pattern `delete_folder` already uses for
+  cross-org folder references.
+- **AP-15 (P2, frontend, stale autosave state) — deleting a compartment
+  left its items' pending debounced auto-saves running**: a queued
+  auto-save timer for a deleted item fired anyway, called the update API
+  against an id that no longer existed, 404'd, and could flip the global
+  "saving" indicator to a false "Save failed" — or, if Save was pressed in
+  the same window, abort saving unrelated edits entirely (the flush of
+  pending auto-saves is the first thing Save does). Fixed by cancelling
+  every pending auto-save for the deleted subtree's items right before
+  issuing the delete.
+- Both reproduced live before being called findings and confirmed failing
+  pre-fix / passing post-fix via `git stash`. See
+  `docs/security-review/AP-13-apparatus-nfc.md` (pass 6) for the full
+  writeup.
+
+### Security: a compartment delete could race a concurrent reparent, on the backend and in the builder UI (2026-09-03)
+
+**Fixed**
+
+- **AP-12 (P1, data integrity, concurrency) — `delete_compartment` cascaded
+  off a stale database snapshot, the exact race this codebase's own
+  `delete_folder`/FAC-40 fix already closed once on `DocumentFolder`**:
+  under MySQL/InnoDB REPEATABLE READ, the ORM's `children` cascade
+  lazy-loaded the subtree from the transaction's snapshot, not latest
+  committed state. A descendant reparented out of the subtree by a
+  concurrent, already-committed edit was destroyed anyway; one reparented
+  in survived, orphaned (`parent_compartment_id` is `ondelete="SET NULL"`,
+  unlike `DocumentFolder.parent_id`'s `CASCADE`, so nothing at the database
+  level caught what the stale ORM walk missed). Fixed with FAC-40's own
+  pattern: a level-by-level `FOR UPDATE` locking walk that always sees
+  latest committed state, an explicit bulk delete against that
+  authoritative id set instead of the ORM's cascade, and
+  `passive_deletes=True` on `children`/`items` so the ORM never
+  independently re-derives a conflicting view. Verified live with two real,
+  independently-committing database sessions in both directions.
+- **AP-13 (P1, frontend, pending-edit staleness) — the compartment delete
+  confirmation's descendant computation (added by AP-11) trusted the
+  browser's own hierarchy, which can be ahead of what's saved**:
+  reparenting (indent/outdent/the parent picker) has no auto-save path, so
+  an unsaved move could leave the confirmation and local-state removal
+  disagreeing with what the backend's cascade would actually delete —
+  destroying a compartment the user just moved out, unsaved, or leaving one
+  moved in alive on the server after it vanished from the screen. Fixed by
+  tracking the last-known-server parent linkage and blocking the delete
+  (with a "save first" prompt) when it disagrees with the live computation,
+  rather than risking either direction.
+- Both reproduced live before being called findings (two real database
+  sessions for AP-12; a component test reproducing the actual pending-edit
+  scenario for AP-13) and confirmed failing pre-fix / passing post-fix via
+  `git stash`. See `docs/security-review/AP-13-apparatus-nfc.md` (pass 5)
+  for the full writeup.
+
+### Security: making the equipment-check compartment cascade real (AP-8) exposed three dormant bugs in code written against its old no-op behavior (2026-09-03)
+
+**Fixed**
+
+- **AP-9 (P1, functional regression) — cloning a template with nested
+  compartments 500'd** (`POST /templates/{id}/clone`): `_clone_compartment`
+  walked `.children`, which `get_template` never eager-loads, so touching it
+  outside the awaited context raised `MissingGreenlet` the moment AP-8 made
+  `children` a real relationship. A second, independent bug found in the
+  same code while fixing the first: the outer loop cloned every compartment
+  in the template's flat list as a root, then `_clone_compartment`'s own
+  `.children` walk cloned each nested one a second time — doubling every
+  nested compartment in the clone. Fixed by grouping the already-loaded flat
+  `source.compartments` collection by parent id and cloning root-down from
+  that, touching `.children` nowhere.
+- **AP-10 (P1, multi-tenant isolation, CLAUDE.md Pitfall #14c) —
+  `create_template` forwarded a client-supplied `parent_compartment_id`
+  with no validation that it belongs to the same template or organization**,
+  unlike `add_compartment`/`update_compartment`, which both already validate
+  this. With the cascade now genuinely destructive (AP-8), an unvalidated
+  cross-template (or cross-org) parent link let deleting a compartment in
+  one template cascade-delete a compartment — and all its items — actually
+  belonging to a different template, potentially in a different
+  organization. Fixed by applying the same org-scoped
+  same-template validation the other two write paths already use.
+- **AP-11 (P2, frontend/backend state mismatch) — the compartment delete
+  confirmation and local-state removal only accounted for the selected row,
+  not the descendants the backend now cascade-deletes with it**: the
+  confirmation undercounted items (missing every descendant compartment's),
+  deleted descendants lingered in the UI as orphaned top-level rows, and the
+  next Save 404'd against their already-deleted ids. Fixed by reusing the
+  module's existing `descendantCompartmentIds` hierarchy helper (the same
+  pattern Facilities' `roomTree.ts` uses for room subtrees) to fold the
+  whole subtree into both the confirmation and the local-state removal.
+- All three reproduced live against the current, fixed AP-8 code before
+  being called findings, and confirmed failing pre-fix / passing post-fix
+  via `git stash`. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 4) for the full writeup, including the maintenance query to check
+  a production database for any already-persisted cross-template
+  `parent_compartment_id` link (none found in this review's dev database,
+  which has no such data to find).
+
+### Security: deleting a nested equipment-check compartment silently orphaned its children instead of removing them (2026-09-03)
+
+**Fixed**
+
+- **AP-8 (MED, data integrity) — `CheckTemplateCompartment.children` had the
+  same inverted self-referential relationship FAC-16 found and fixed on
+  `DocumentFolder.children`**: `remote_side` was declared on the plural
+  `children` collection instead of on the singular `parent` backref, which
+  made SQLAlchemy null out each descendant's `parent_compartment_id` before
+  a parent delete rather than cascading to it. Deleting a compartment that
+  contained nested sub-compartments (a pack inside a bag inside a
+  compartment) left the nested ones behind as orphans instead of removing
+  them. Fixed by moving `remote_side` onto the `parent` backref, the same
+  correction FAC-16 applied; reproduced live with a three-level fixture
+  before and after the fix. `TrainingCategory.subcategories` has the same
+  shape and remains flagged, unconfirmed and out of scope — see
+  `docs/KNOWN_LIMITATIONS.md`.
+- See `docs/security-review/AP-13-apparatus-nfc.md` (pass 3, AP-8) for the
+  full writeup and regression test.
+
+### Added: Claude (MCP) integration — an opt-in MCP server, off by default, that never carries personal information (2026-09-03)
+
+**Added**
+
+- **`/api/mcp` — a Model Context Protocol endpoint served by the existing
+  backend process**, so Claude Code, the Messages API connector and (through
+  a local bridge) Claude Desktop can ask questions of a department's
+  Logbook. It is a catalog integration (`claude-mcp`, category _AI
+  Assistants_), disabled on every installation until an administrator
+  connects it, and answers nothing until an IT administrator issues a
+  service key. Stateless, JSON-response transport: any worker or replica
+  answers any request and no reverse-proxy change is needed for `/api/`.
+- **51 tools** over the roster, events, shifts, training and certifications,
+  inventory, apparatus, facilities, meetings and published minutes,
+  documents in unrestricted folders, and elections. Finance totals,
+  medical-screening _status_ and the full duty schedule are behind three
+  per-department switches, off by default (without the schedule switch the
+  shift tools list only shifts open to all members, what any eligible
+  member can see); three write tools (draft event, meeting action item, reorder
+  request) are behind a read/write switch, also off by default. Tools a
+  department has not switched on are not listed to the client.
+- **One redaction boundary** (`app/mcp/redaction.py`) applied to every tool
+  result: phone, mobile, email (work and personal), home address, date of
+  birth, emergency contacts, photo, membership and certification numbers,
+  login names, medical results, credentials and tokens are stripped at
+  every depth, and every string value is scrubbed of email addresses and
+  phone numbers so free text cannot carry them out either. `tests/test_mcp_redaction.py` asserts the behaviour and that
+  no tool module names a denied field.
+- **`mcp_service_keys`** (migration `c4d5e6f7a8b9`): one active key per
+  organization, SHA-256 digest only, optional expiry or lifetime, rotation
+  revokes the previous key. Issuing and revoking require the new
+  `integrations.mcp_keys` permission, which only the IT Manager position
+  holds by default. Every tool call, issue and revocation is audit-logged.
+- Integrations screen: connect form (access mode, finance, medical and
+  schedule switches) and a **Service key** panel that shows the plaintext exactly
+  once. Wiki: `Integration-Claude-MCP`.
+
+**Known limitation** — claude.ai custom connectors authenticate with OAuth
+2.1; The Logbook is an OAuth client, not an authorization server, so those
+clients use a local bridge for now (see `docs/KNOWN_LIMITATIONS.md`).
+
+**Dependency** — `mcp==2.1.1`, which brings in `httpx2` (coexists with the
+pinned `httpx`), `sse-starlette`, `mcp-types`, `jsonschema` and
+`opentelemetry-api`.
+
+### Security: FAC-43's fast path could deadlock two concurrent first-time creations of the same facility's folder (2026-09-03)
+
+**Fixed**
+
+- **FAC-45 (P2, correctness — deadlock) — `ensure_facility_folder`'s fast
+  path (FAC-43) still called `_lock_facility_folder` unconditionally for
+  the per-facility check**, including when the target facility's folder
+  does not exist yet. A `FOR UPDATE` lookup that matches nothing takes an
+  InnoDB **gap lock**, and unlike a record lock, a gap lock is _compatible_
+  with another transaction's gap lock on the same range — so two requests
+  racing to create the _same_ brand-new facility's folder could both take
+  that gap lock before either reached the organization lock, then
+  deadlock: whichever won the organization lock's INSERT needed an
+  insert-intention lock conflicting with the other's still-held gap lock,
+  while that other transaction waited on the organization lock the winner
+  held. InnoDB killed one side outright (`OperationalError` 1213) — an
+  unhandled 500 for one of two entirely legitimate concurrent requests.
+- Fixed the same way as FAC-43 fixed the root: peek first
+  (`_peek_facility_folder`, no lock — a "not found" falls straight through
+  to the slow path, same as every other missing-folder case), and only
+  lock an actual row (`_lock_folder_by_id`, a primary-key point lookup)
+  once the peek has confirmed it exists. The slow path's own
+  `_lock_facility_folder` call is untouched — it was never part of the
+  deadlock, since only one transaction can be past the organization lock
+  at a time.
+- Reproduced live with genuine concurrent sessions (`asyncio.gather`, no
+  artificial staging): two real sessions racing to create the same
+  never-before-seen facility's folder hit the deadlock in 5/5 runs
+  pre-fix, and succeeded 8/8 runs post-fix (both resolving to the same
+  folder row — no duplicate). The committed regression test forces the
+  interleaving deterministically, since natural scheduling alone
+  reproduced the pre-fix deadlock only intermittently (~60% of runs);
+  confirmed to fail against pre-fix code and pass post-fix, five repeated
+  runs with no flakiness.
+
+### Security: FAC-42's fast path still locked the shared facilities-root row unconditionally; a related over-locking finding in the same helper flagged rather than fixed (2026-09-03)
+
+**Fixed**
+
+- **FAC-43 (P2, liveness/performance) — `ensure_facility_folder`'s fast
+  path (FAC-42) still called `_lock_facilities_root` unconditionally**, an
+  exclusive lock on the organization's single "Facility Files" root row,
+  even though the fast path never writes to it. Two concurrent reference
+  creations for two _different_ facilities in the same organization
+  therefore still serialized on that one shared row before either could
+  reach its own, genuinely distinct, facility folder — the same class of
+  bug FAC-42 fixed, one row up.
+- Fixed by resolving the root with a non-locking read
+  (`_peek_facilities_root`) on the fast path instead of the locking
+  `_lock_facilities_root`. Safe specifically because the root is a system
+  folder: it can be neither moved (`update_folder` refuses to reparent one)
+  nor deleted (`delete_folder` refuses to delete one), so a stale peek can
+  only under-report existence — never hand back a wrong id — and an
+  under-report safely falls through to the slow path's locking re-check
+  under the organization lock, which is unchanged. The slow (creation)
+  path's own `_lock_facilities_root` call, and the per-facility
+  `_lock_facility_folder` lock both paths still take, are untouched.
+- Reproduced live with two real sessions: a lock held on the root row (by
+  primary key, isolating exactly the resource in question) no longer
+  blocks a concurrent `ensure_facility_folder` call for a different,
+  already-existing facility — pre-fix, the identical scenario timed out.
+  New regression test plus a source-inspection test guarding the fast path
+  against ever reintroducing the root lock; both confirmed to fail against
+  pre-fix code and pass post-fix, five repeated runs with no flakiness.
+
+**Flagged, not fixed**
+
+- **FAC-44 (P3, scalability/contention) — two `document_folders` lookups
+  (`_lock_facilities_root` and, per a Codex finding on the FAC-43 commit,
+  `_lock_facility_folder`) can each incidentally lock an unrelated,
+  already-existing folder row while scanning for their actual target.**
+  Both `WHERE` clauses are indexed only on their first column
+  (`organization_id`, `parent_id` respectively) — `slug` (and, for the
+  root, `is_system`) is not — so under InnoDB REPEATABLE READ with `FOR
+UPDATE`, MySQL must examine — and lock — every candidate row in ascending
+  primary-key order until it finds one matching every predicate. Since
+  these primary keys are random UUIDs, not monotonic, that order has no
+  relationship to which row is the actual target, so a sibling row whose
+  UUID happens to sort below it gets swept into the lock too. Both are now
+  reachable only from the already-rare slow (creation) path — FAC-43 and
+  FAC-45 (below) each removed the fast path's own call to one of them — so
+  the practical exposure is small, but it is the same underlying class of
+  defect as the already-flagged FAC-41 (an unindexed predicate forcing a
+  broader-than-intended lock scan), on two sibling methods. The fix shape
+  is the same as FAC-41's recommendation: a schema-level index or lookup
+  key that makes each a direct point lookup rather than a scan, out of
+  scope for this pass. See `docs/security-review/FAC-12-facilities.md`
+  (FAC-44) for the full reasoning.
+
+### Security: ensure_facility_folder took an exclusive organization-row lock unconditionally, serializing unrelated facility uploads org-wide (2026-09-03)
+
+**Fixed**
+
+- **FAC-42 — `ensure_facility_folder`'s get-or-create locks the
+  organization's single row to serialize concurrent creates (Pitfall #27),
+  but took that lock unconditionally, before ever checking whether
+  creation was needed** — even though a facility's folder is created
+  exactly once, ever. Per FAC-31, the only caller
+  (`_validate_shared_document_reference`) holds whatever this method locks
+  until its own reference insert commits, so every facility document/photo
+  upload in an organization was briefly serializing on that one row, even
+  for completely unrelated facilities and documents — a real lock-wait
+  risk under concurrent bulk uploads.
+- Fixed with a fast/slow split: a fast path takes the same, pre-existing
+  folder-level locking reads (now extracted into
+  `_lock_facilities_root`/`_lock_facility_folder`) without ever touching
+  the organization row, returning immediately if both already exist; only
+  a genuinely missing folder falls through to a slow path that locks the
+  organization row and re-checks both folders again under that lock
+  (double-checked locking) before creating. Two concurrent callers that
+  could actually race on a create still serialize exactly as before; only
+  callers who need nothing built at all now skip the lock entirely.
+- Reproduced live with two real sessions (one holding the org lock, one
+  calling `ensure_facility_folder` for an already-existing facility) —
+  pre-fix, genuinely blocked; post-fix, completes despite the held lock.
+  New regression test plus an updated source-inspection test (whose
+  `with_for_update()` count assertion the extraction moved code out from
+  under); both confirmed to fail against pre-fix code and pass post-fix.
+
+### Security: delete_folder's ORM cascade could orphan a document moved in, or destroy one moved out, mid-transaction; a related over-locking finding flagged rather than fixed (2026-09-03)
+
+**Fixed**
+
+- **FAC-40 (P1, data integrity) — `delete_folder`'s document-removal step
+  relied on the ORM's own `cascade="all, delete-orphan"`, which lazy-loads
+  the folder's documents via a plain (snapshot-bound) SELECT, not the
+  locking scan (`_lock_subtree_documents`, FAC-32) the rest of the cleanup
+  already trusts.** Under InnoDB REPEATABLE READ, that staleness cuts both
+  ways: a document moved into the folder by a concurrent, already-committed
+  transaction after the deleting transaction's snapshot was taken is
+  invisible to the ORM's lazy-load and never queued for cascade deletion —
+  yet it _is_ visible to the locking scan, so its file and facility
+  reference were already removed; since `Document.folder_id` is
+  `ondelete="SET NULL"` (not CASCADE) at the DB level, the survivor's
+  `folder_id` is just nulled when the folder is deleted, leaving a live,
+  file-less, unreferenced row behind. The opposite direction is just as
+  real: a document moved _out_ of the folder before the delete is still
+  present in the ORM's stale collection and gets cascade-deleted anyway,
+  destroying a document that by then belongs to a different, live folder.
+  Reproduced live, both directions, with two real, independently-committing
+  sessions.
+- Fixed with two parts, both independently confirmed necessary: `delete_folder`
+  now explicitly deletes the subtree's `Document` rows from the locking
+  scan's own authoritative result (before deleting the folder), and
+  `DocumentFolder.documents` is now `passive_deletes=True` so the ORM never
+  independently re-derives (and potentially disagrees with) that set at
+  all. Only one call site in the codebase ever deletes a `DocumentFolder`
+  via the ORM, so this relationship-level change has exactly one caller to
+  reason about.
+- Two new regression tests (`TestDeleteFolderExplicitlyDeletesTheLockedDocuments`),
+  one per direction. Both confirmed to fail against pre-fix code (`git
+stash`) and pass post-fix, three repeated runs with no flakiness.
+
+**Flagged, not fixed**
+
+- **FAC-41 (P2, scalability/contention) — locking a single document's
+  facility reference for deletion locks _every_ facility-document/photo
+  reference row in the organization**, because the per-row match (parsing
+  each stored reference's UUID suffix) happens in Python after the query
+  returns, not in a `WHERE` clause `organization_id` alone is selective
+  enough to avoid — and `file_path` carries no index. Reproduced live:
+  locking a reference to one document blocked a concurrent, unrelated
+  insert of a reference to a _different_ document in the same org. The
+  natural lighter fix (an unlocked broad scan to find matching row IDs,
+  then a narrow locked query by those IDs) was evaluated and rejected on
+  correctness grounds, not effort grounds: the unlocked first step is bound
+  by the same REPEATABLE READ snapshot FAC-29 already had to defeat, so it
+  can silently miss a reference filed after that snapshot but before the
+  scan runs — reopening FAC-29's exact, previously-P1 vulnerability rather
+  than merely narrowing a lock. A genuinely narrow, still-safe fix needs the
+  locking predicate itself to be index-satisfied, which needs a schema
+  change (a canonicalized, indexed reference-document column) — a bigger,
+  cross-cutting change more appropriately scoped as its own reviewed pass.
+  See `docs/security-review/FAC-12-facilities.md` (FAC-41) for the full
+  reasoning and the recommended future fix.
+
+### Security: full-file sweep after a third Codex round found more instances of the fixed-sleep pattern FAC-37/FAC-38 had just fixed (2026-09-03)
+
+**Fixed (test-only)**
+
+- **FAC-39 — three more lock-order regression tests carried the same fixed
+  `asyncio.sleep(0.5)` risk as FAC-37/FAC-38, found in one Codex comment.**
+  Rather than fix three more line numbers and risk a fourth round finding a
+  fifth instance, every remaining `asyncio.sleep(...)` used as inter-task
+  lock-order synchronization in `test_facility_document_reference_race.py`
+  was converted — the three Codex found
+  (`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`,
+  `TestCreatorLocksTheFolderBeforeTheDocument`,
+  `TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`) plus
+  `TestUpdateDocumentLocksTheFolderBeforeTheDocument` (FAC-36's own
+  regression test, which landed with the same pattern before this sweep
+  existed to catch it).
+- One site (`TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`) needed
+  a second pass during this sweep's own verification: an event-only
+  conversion looked sufficient and passed repeatedly, but checking it
+  against the true historical pre-FAC-35 revision showed the event alone
+  made it worse, not better — resolving the instant the tracked call is
+  _entered_ let the assertions run before a genuinely uncontended, pre-fix
+  cascade had time to race ahead and complete, the same false-pass shape
+  relocated rather than fixed. The original fixed sleep had, by accident,
+  given that path enough real time to finish and fail correctly. Fixed by
+  adding a bounded `asyncio.wait_for(asyncio.shield(...), timeout=2.0)`
+  probe after the event.
+- Also corrected the module-level canonical lock-order note in
+  `documents_service.py`, which still described only the two call sites
+  FAC-35 fixed — FAC-36's own commit added `update_document`'s fix without
+  updating the note to name it as a third site, or removing FAC-35's own
+  now-falsified "only two call sites in the whole backend" scale
+  justification for skipping a runtime lock-order assertion.
+- All four converted sites independently verified against a genuine
+  ordering regression (a temporary call swap, the true historical pre-fix
+  revision, or a temporary reorder inside `update_document`, as
+  applicable) — each failed on a clean assertion or a deterministic
+  timeout before the fix, and passed, five repeated runs with no
+  flakiness, after. No behavioral (non-test) code changed.
+
+### Security: a second regression test carried the same flaky fixed-sleep pattern FAC-37 had just fixed elsewhere (2026-09-03)
+
+**Fixed (test-only)**
+
+- **FAC-38 — `TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`
+  (FAC-32's regression test) used a fixed 0.5s sleep, the identical shape
+  FAC-37 fixed on a sibling test in the same review round.** On a slow
+  MySQL/MariaDB runner, `delete_folder` could still be doing its preliminary
+  folder-subtree walk when the delay expired, letting the test's assertions
+  pass without ever having proven the intended lock ordering. Replaced with
+  an event set the moment the cascade actually attempts its `Document` lock
+  (via `_lock_subtree_documents`, already extracted by FAC-34), the same
+  technique FAC-37 used.
+
+### Security: the generic document-move endpoint was the third call site FAC-35's total lock order missed (2026-09-03)
+
+**Fixed**
+
+- **FAC-36 — `DocumentsService.update_document` (the generic
+  `PATCH /documents/{id}` handler) wrote a client-supplied `folder_id`
+  directly onto the `Document` row without ever explicitly locking the
+  destination `DocumentFolder` first.** FAC-35 declared a canonical
+  `DocumentFolder` → `Document` → reference-table lock order and brought
+  `_validate_shared_document_reference` and `delete_folder` into line with
+  it, but missed this third call site. The only lock this path took on the
+  destination folder was the implicit one InnoDB's own row-then-FK-check
+  order takes for the `UPDATE` at commit — which lands _after_ this
+  transaction has already (implicitly) locked the `Document` row being
+  written, i.e. Document-then-Folder, the opposite of the declared order and
+  of what `_validate_shared_document_reference` now always does. A document
+  moved into the same facility folder a concurrent facility-reference filing
+  (or folder deletion) is touching could deadlock: each side holding the
+  resource the other is waiting on.
+- Fixed by locking the destination `DocumentFolder` first (extracted into
+  `_lock_destination_folder`, matching the `_lock_subtree_folders`/
+  `_lock_subtree_documents` "extract for testability" pattern), only when
+  `folder_id` is actually being set to a real folder, then re-fetching the
+  `Document` row under `for_update=True` before applying the update. The
+  existing "document not found returns `None`" precedence is unchanged.
+- New regression test (`TestUpdateDocumentLocksTheFolderBeforeTheDocument`):
+  proves the update blocks on an already-held destination-folder lock and
+  never explicitly locks the `Document` row until after that lock is
+  released — the differentiator that actually distinguishes pre- and
+  post-fix behavior, since both remain "not done" after a short pause
+  either way (pre-fix blocks later, inside the implicit FK-check lock at
+  commit, which is not directly observable). Confirmed against pre-fix code
+  (`git stash`).
+
+**Also fixed (test-only, found in the same review round)**
+
+- **FAC-37 — a fixed 0.5s sleep in the existing
+  `TestReferenceInsertStaysUnderTheDocumentLock` (FAC-31's regression test)
+  could let a slow-CI run pass for the wrong reason**, if the deleting
+  task's own preliminary query was still in flight (or not yet issued) when
+  the delay expired. Replaced with an event set the moment the deleter
+  issues its actual locking read, removing the query-latency ambiguity the
+  fixed delay left open.
+
+### Security: FAC-34's cascade reorder left the creator path locking `Document` and `DocumentFolder` in the opposite order (2026-09-03)
+
+**Fixed**
+
+- **FAC-35 — the total-order fix that supersedes FAC-32 and FAC-34's
+  pairwise reorderings.** FAC-34 reordered `delete_folder`'s cascade to lock
+  `DocumentFolder` before `Document`, closing the conflict Codex reported at
+  the time — but never touched the creator path
+  (`_validate_shared_document_reference` in `facilities.py`), which still
+  locked `Document` first, then `DocumentFolder`, the opposite order. Two
+  paths taking the same two locks in opposite orders is the same deadlock
+  shape FAC-32 closed for a different pair (Document/reference-table),
+  reopened here for Document/DocumentFolder: a cascade holding the
+  destination folder and a creator holding the document being filed into it
+  could each end up waiting on what the other held. This is the second
+  round in a row where fixing one pairwise ordering conflict created a
+  different one.
+- Fixed by adopting a single, documented total order across all three
+  shared resources — `DocumentFolder`, then `Document`, then the
+  `FacilityDocument`/`FacilityPhoto` reference table — recorded as a
+  module-level note at the top of `documents_service.py` so a future call
+  site checks against one written source of truth rather than inferring an
+  order from whichever existing function it reads first.
+  `delete_folder`'s cascade already matched this order (no change needed);
+  `_validate_shared_document_reference` was reordered to match it too — it
+  now resolves and locks the destination folder before it ever locks the
+  document, **unconditionally** (even when the document already has a
+  folder and will not be reassigned), because `document.folder_id` is
+  client-writable through the generic document-move endpoint and an
+  unlocked peek used to decide "is the folder lock needed" would reopen a
+  narrow staleness window the pre-fix code never had.
+- Two new regression tests in `test_facility_document_reference_race.py`,
+  both driving the _real_ `_validate_shared_document_reference` (not a
+  hand-reconstructed lock sequence): one proves the creator now blocks on a
+  cascade-held folder before ever touching the document; the other proves
+  the cascade still blocks on a creator-held folder even when the creator
+  has not yet locked its own document row (a deliberately paused
+  interleaving — a naive "let the creator finish, then start the cascade"
+  version of this test was found to pass against both pre- and post-fix
+  code, since a fully-finished creator holds both locks regardless of
+  acquisition order). Both confirmed to fail against pre-fix code
+  (`git stash`) and pass post-fix, five repeated runs with no flakiness.
+
+### Security: FAC-32's Document-lock reordering in `delete_folder` covered the reference table but not the destination folder itself (2026-09-03)
+
+**Fixed**
+
+- **FAC-34 — a _third_ shared resource `delete_folder`'s cascade never
+  explicitly locked at all: the destination `DocumentFolder` a folderless
+  document's creator locks via `ensure_facility_folder` before flushing
+  `document.folder_id` onto it.** FAC-32 ordered this cascade's `Document`
+  lock before its reference-table scan, matching the creator's own order for
+  those two resources — but the creator also locks the destination folder in
+  between, and this cascade's only lock on that folder was the implicit one
+  its own `DELETE` takes at commit, after both of FAC-32's locks. A creator
+  racing to file a folderless document into a facility folder this cascade
+  is concurrently deleting could still deadlock: the cascade's Document-lock
+  query can itself block a concurrent `document.folder_id` write (confirmed
+  live, with two real sessions, down to the SQL locking primitive — the
+  exact InnoDB mechanism is plan-dependent, so a small test database's
+  optimizer choice does not reliably reproduce it end-to-end even though the
+  underlying hazard is real) while the cascade is waiting on the folder lock
+  the creator already holds.
+- Fixed by locking the subtree's `DocumentFolder` rows _first_, before this
+  cascade's Document-lock query — removing the dependency on that query's
+  plan entirely, rather than reordering only the pair FAC-32 already
+  covered. The two queries were extracted into
+  `_lock_subtree_folders`/`_lock_subtree_documents` so a regression test can
+  assert the ordering directly.
+- New regression test
+  (`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`): same
+  engine-independence rationale as FAC-32's own test — proves `delete_folder`
+  blocks on the destination folder lock and never issues its Document-lock
+  query while blocked, rather than trying to force one specific InnoDB plan.
+  Confirmed against pre-fix code (`git stash`).
+
+### Security: FAC-29's locking read protected reference validation, but released the lock before the reference it validated for was ever inserted (2026-09-03)
+
+**Fixed**
+
+- **FAC-31 — `_validate_shared_document_reference` committed after
+  assigning a folder, releasing the document's `FOR UPDATE` lock before the
+  caller (`create_facility_document`/`create_facility_photo`) ever inserted
+  the `FacilityDocument`/`FacilityPhoto` row the lock was meant to protect.**
+  A concurrent `delete_document` could acquire the lock in that gap, find no
+  reference yet (because none had been filed), delete the document, and let
+  the original request file a reference to nothing the moment both
+  finished — FAC-29's own race, reopened one step later. Fixed by no longer
+  committing inside the validation helper (flushing instead); the lock now
+  stays held across the folder assignment and the caller's reference
+  insert, released only by the endpoint's own single commit (or a full
+  rollback on failure).
+- New regression test in `tests/test_facility_document_reference_race.py`
+  (`TestReferenceInsertStaysUnderTheDocumentLock`), using a background task
+  against a still-open transaction to prove the concurrent side genuinely
+  _blocks_ on the held lock rather than merely reading a stale value.
+  Confirmed to reproduce a real dangling reference against pre-fix code
+  (`git stash` isolating the source change) and to close it post-fix.
+- **FAC-32 — `delete_folder`'s cascade took the same two locks the FAC-31
+  creator path takes (a `Document` row, then the
+  `FacilityDocument`/`FacilityPhoto` reference table) in the opposite
+  order** — reference table first (via `_match_facility_document_references`),
+  `Document` rows only afterward via the ORM cascade delete. Two
+  transactions locking the same two resources in opposite orders is a
+  textbook InnoDB deadlock. Fixed by adding `.with_for_update()` to the
+  subtree's `Document` query and running it before the reference-table
+  scan, matching the creator's order.
+- New regression test (`TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`):
+  a true two-session deadlock is inherently timing-sensitive to force on
+  demand, so this instead proves the concrete, engine-independent effect —
+  with a `Document` row locked by one session, `delete_folder` run in a
+  second blocks on it immediately, before ever reaching the reference-table
+  scan. Confirmed backwards pre-fix (`git stash`): the scan ran first, and
+  the block only happened much later, at the cascade delete itself.
+- **FAC-33 (test-only) — the two-session test fixture's teardown swallowed
+  any rollback failure with a blanket `except Exception: pass`.** Verified
+  no known-benign exception occurs in practice against this backend; removed
+  the blanket catch per CLAUDE.md's "Fix All Errors" policy so a broken
+  connection or unreleased transaction fails the test that caused it instead
+  of being silently hidden.
+
+### Security: the facility-document-reference check and creation-side validation were each a plain SELECT, vulnerable to a stale REPEATABLE READ snapshot (2026-09-03)
+
+**Fixed**
+
+- **FAC-29 — a facility-reference could be committed after the deleting
+  transaction's snapshot was taken, and be missed; a reference could be
+  filed against a document already deleted and committed, and resolve
+  anyway.** Both directions were reproduced live with two real,
+  independently-committing database sessions. `delete_document`'s facility-
+  reference existence check (added for FAC-26) and
+  `_validate_shared_document_reference`'s document lookup (facilities.py)
+  were each a plain SELECT, which under InnoDB REPEATABLE READ answers from
+  the snapshot taken at the transaction's _first_ read — already stale by
+  the time either check runs, since the request has already read something
+  else first (the endpoint's own document fetch, an auth dependency's user
+  lookup). Fixed with locking reads (`with_for_update()`/`for_update=True`,
+  the same pattern this codebase's capacity checks already use): a new
+  `for_update` keyword on `get_document_by_id`, used by `delete_document`
+  and `_validate_shared_document_reference` to lock the `Document` row they
+  both read, and `_match_facility_document_references`'s own query made a
+  locking read too.
+- New regression tests in `tests/test_facility_document_reference_race.py`
+  (two real sessions, deterministic ordering — not a timing-dependent
+  `asyncio.gather` race), independently confirmed to fail against the
+  pre-fix code and pass against the fix.
+
+**Flagged, not fixed**
+
+- **FAC-30 — a custom position granting `facilities.delete` without
+  `.edit`/`.manage` cannot pass the generic Documents API's folder ACL at
+  all.** Confirmed pre-existing (not a regression from FAC-24/26 — the
+  folder's `required_permissions` list never included `facilities.delete`,
+  so this combination was refused before FAC-24 too) and confirmed no seeded
+  role holds this exact combination (`facilities.delete` only ever appears
+  bundled with `.edit` and `.manage` together, on three operational ranks).
+  Closing it is a permission-model design decision — whether the generic
+  Documents API should honor a facility-specific action grant distinct from
+  its existing authority on the facility-specific delete route — not a
+  mechanical fix. See `docs/security-review/FAC-12-facilities.md` (FAC-30)
+  for the full reasoning.
+
+### Security: the facility-reference cleanup missed non-canonical references and never covered facility photos (2026-09-03)
+
+**Fixed**
+
+- **FAC-27 — the facility-document-reference cleanup exact-matched a
+  canonical string it built itself, missing a stored reference in any other
+  valid form.** `_validate_shared_document_reference` validates a
+  `"document:<uuid>"` reference's UUID suffix with `UUID(...)` — which
+  accepts more than one form (mixed case, brace-wrapped, ...) — but stores
+  the original string unchanged. The cleanup added for FAC-24/26 built only
+  the canonical lowercase, unbraced form and exact-matched against it, so a
+  validated, resolving reference in any other accepted form was left
+  dangling once its document was deleted. Fixed by re-parsing every stored
+  `"document:%"` reference's UUID suffix and comparing the parsed value,
+  covering every accepted form instead of one constructed string.
+- **FAC-28 — the cleanup swept `FacilityDocument` rows only; `FacilityPhoto`
+  references, validated through the identical path, were never cleaned up.**
+  `create_facility_photo` validates its `file_path` through the same
+  `_validate_shared_document_reference` as `create_facility_document`, but
+  the cleanup never queried `FacilityPhoto` at all. Fixed by making the
+  match/delete logic model-agnostic and running it against both tables in
+  the same transaction, gated by the same `facilities.delete`/`.manage`
+  check FAC-26 added.
+- New regression tests in `TestDeleteDocumentCleansUpFacilityReference`
+  covering a non-canonical (brace-wrapped) reference and both the positive
+  and permission-denied `FacilityPhoto` cases — independently confirmed to
+  fail against the pre-fix code and pass against the fix. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-27, FAC-28) for the full
+  writeup.
+
+### Security: every generic document/folder mutation check admitted a read-only permission, letting a treasurer-shaped caller bypass facility write protections (2026-09-03)
+
+**Fixed**
+
+- **FAC-24 — `can_access_folder`/`can_access_document` admitted a caller who
+  held only a folder's read-only `required_permissions` entry, letting every
+  mutation-gating check added by prior rounds (FAC-14 through FAC-21) be
+  satisfied by a read-only grant.** A sensitive facility folder's
+  `required_permissions` lists `facilities.view_sensitive` alongside
+  `.edit`/`.manage` — the right set for a _read_, since holding any one of
+  the three should let you see the file. Reusing that same check unmodified
+  for a _write_ let a caller holding `documents.manage` (the generic
+  module's org-wide mutation grant) plus only `facilities.view_sensitive` —
+  no facilities write permission of any kind — unfile, move, or delete a
+  sensitive facility document, or rename, reparent, delete, or inject a
+  folder into the sensitive folder tree. This is a real, seeded combination:
+  the **treasurer** role holds exactly `documents.manage` +
+  `facilities.view_sensitive`, with none of
+  `facilities.edit`/`.delete`/`.manage`. Fixed by giving
+  `can_access_folder`/`can_access_document` a `require_write` mode that
+  filters a folder's `required_permissions` down to their write-tier entries
+  (every permission family in this codebase names read actions
+  `.view`/`.view_<detail>`; everything else is a write) before matching, and
+  applying it at every mutation-gating site: document update/delete and its
+  destination, folder rename/delete and its destination, and the
+  descendant-ACL check inside a folder-delete cascade.
+- **FAC-25 — `POST /documents/upload`'s folder-destination check still used
+  read-admission, not write.** Every other folder mutation FAC-24 touched was
+  updated to pass `require_write=True`; the upload endpoint's own
+  `can_access_folder` call was missed, so the treasurer-shaped caller FAC-24
+  closed everywhere else could still upload directly into a sensitive
+  facility folder. Fixed by passing `require_write=True` there too.
+- **FAC-26 — deleting a shared document (directly, or via a folder cascade)
+  cleaned up its `FacilityDocument` reference without checking the
+  facility-specific delete permission, bypassing the facility API's own
+  stricter delete gate.** The generic `DELETE /documents/{document_id}` (and
+  the folder-cascade delete) require only `documents.manage`, but the
+  facility module's own document-delete route deliberately reserves deletion
+  for `facilities.delete`/`.manage` — a stricter, action-specific grant.
+  Since `permission_matches_any_write` treats `facilities.edit` as
+  write-capable (a folder's `required_permissions` typically lists both
+  `.edit` and `.manage`), a caller with `documents.manage` + `facilities.edit`
+  but not `facilities.delete` could delete a shared document and its
+  facility reference through the generic endpoint, bypassing the
+  facility-specific boundary entirely. Fixed by threading `current_user`
+  through `delete_document` (mirroring `delete_folder`'s existing optional
+  `current_user`) and gating `_delete_facility_document_references`'s actual
+  deletion on the caller holding `facilities.delete`/`.manage` — fails closed
+  (`PermissionError` → 403) when a reference exists and the caller lacks the
+  grant, so the whole delete is blocked rather than leaving a dangling
+  reference; succeeds normally when the document has no facility reference
+  regardless of this permission.
+- New regression tests: `TestFolderWriteTierPermission` (9 tests,
+  reproducing the treasurer-shaped bypass across every affected mutation and
+  positive-controlling a caller who genuinely holds the write-tier
+  permission), `TestDeleteDocumentCleansUpFacilityReference` (3 tests, now
+  also covering the facility-delete-permission gate), and new upload/delete
+  bypass regression tests for FAC-25/FAC-26 — all independently confirmed to
+  fail against the pre-fix code and pass against the fix. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-24, FAC-25, FAC-26) for
+  the full writeup.
+
+### Security: a system folder could be reparented under an ordinary folder, then destroyed via that folder's delete (2026-09-03)
+
+**CRITICAL — a two-step bypass of the FAC-22 fix directly below, same
+unrecoverable, organization-wide data loss.** Found by Codex review of the
+FAC-22 fix commit, on the same PR before it merged.
+
+**Fixed**
+
+- **FAC-23 — `update_folder` never checked `is_system` before applying a
+  reparent, and `delete_folder`'s subtree walk never checked a descendant's
+  `is_system` either.** FAC-22 (below) closed the direct route — deleting a
+  system folder outright — but left this two-step route open: `PATCH` a
+  system folder's `parent_id` to point at an ordinary, freely deletable
+  folder, then delete that ordinary folder. The root-level `is_system` check
+  FAC-22 added only inspects the folder named in the delete request; the
+  subtree walk (which already checks cross-org membership and each
+  descendant's own access-control list) found the system folder as a
+  descendant and cascaded through it like any other row. Reproduced against
+  pre-fix code before fixing: the two-step sequence succeeded silently and
+  destroyed a system folder, its descendant, and its document. Fixed with two
+  independent changes in `DocumentsService`: `update_folder` now refuses
+  (400) to reparent a folder with `is_system == True`, and `delete_folder`'s
+  subtree walk now refuses (400) the moment any descendant it visits is a
+  system folder, regardless of how it got there. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-23) for the full writeup
+  and regression tests.
+
+### Security: any `documents.manage` holder could delete a system folder outright, cascade-destroying an entire tree such as every member's files (2026-09-03)
+
+**CRITICAL — the most severe finding in this cascade-delete investigation:
+unrecoverable, organization-wide data loss from a single request, by a
+permission held broadly across the org.** Fixed on a dedicated, urgent
+follow-up PR after Codex flagged it on the merged commit that shipped the
+other fixes below.
+
+**Fixed**
+
+- **FAC-22 — `DELETE /documents/folders/{folder_id}` checked the caller's
+  folder ACL but never checked whether the target was a system folder.**
+  FAC-16 (below) corrected `DocumentFolder.children`'s self-referential
+  relationship so the folder-delete cascade genuinely deletes a folder's
+  subtree instead of merely orphaning it. Before that fix, the missing
+  `is_system` check was latent — a delete on a folder with descendants
+  didn't destroy anything. After it, any `documents.manage` holder — an
+  org-wide, broadly-held permission — could delete a system root such as
+  "Member Files" outright and cascade-destroy every member's subfolder and
+  document beneath it in one request, directly contradicting the
+  documented invariant that system folders cannot be deleted
+  (`docs/TROUBLESHOOTING.md`, `docs/changelog/2026-02.md`). Reproduced
+  against pre-fix code before fixing: the delete succeeded silently and
+  destroyed a system folder, its descendant, and its document. Fixed in
+  `DocumentsService.delete_folder`, which now refuses (403) the moment it
+  loads a folder with `is_system == True`, before any subtree walk or
+  delete begins. See `docs/security-review/FAC-12-facilities.md` (FAC-22)
+  for the full writeup and regression tests.
+
 ### Security: a folder delete could cascade-destroy a more-restricted descendant the caller could never access directly (2026-09-03)
 
 **Fixed**
@@ -113,10 +938,15 @@ because of an unrelated cross-module folder-ACL fix (PR #2160) that started
 enforcing a permission stamp already present but previously inert. A
 secretary, quartermaster, safety officer, or training officer — every one of
 whom is meant to see the baseline categories at their baseline
-`facilities.view` grant — now gets an empty folder list from that endpoint,
-and is refused the same categories' documents through the generic Documents
+`facilities.view` grant — now gets an empty folder list from that endpoint.
+Of those four, the secretary, safety officer, and training officer are also
+refused the same categories' documents through the generic Documents
 module's own folder browsing and `GET /documents/{id}/download` (both
-enforce the identical over-broad stamp). **This does not empty the
+enforce the identical over-broad stamp) — the seeded quartermaster role has
+no `documents.view` grant at all, so it could not reach the generic
+Documents module either before or after this regression; only the direct
+`/folders` endpoint's own baseline-`facilities.view` gate affects it.
+**This does not empty the
 Facilities module's own Files section in the app** — `FilesSection.tsx`
 loads via `getPhotos` and, for sensitive viewers, `getFacilityDocuments`,
 neither of which calls the affected `/folders` endpoint, so that section
@@ -193,6 +1023,32 @@ and why a naive fix would reopen a broader leak.
   genuinely holds the folder's own required permission is unaffected. See
   `docs/security-review/FAC-12-facilities.md` (FAC-14) for the full
   writeup and regression test.
+
+### Dashboard: acting on a message or notification could be silently undone by a refresh that was already running (2026-09-02)
+
+**Fixed**
+
+- **An acknowledgement could be reverted, and the member asked to acknowledge
+  the same message again.** The Updates card deliberately keeps rows on screen
+  during a refresh, so a member can acknowledge a message while an inbox read
+  is still in flight. That read captured the message _before_ the
+  acknowledgement, so when it landed it replaced the list wholesale and
+  restored the unacknowledged row — with the server having already recorded
+  the acknowledgement. The same race reverted marking a message read, and put
+  a dismissed persistent message back on the card.
+- **A notification marked read could return to the feed**, taking the unread
+  count back up with it, when a notifications read that started before the tap
+  landed after it.
+
+Where the row is meant to disappear (a dismissed persistent message, a read
+notification) the fix is to re-read after the change, so the newest answer
+lands last. Where the row is meant to stay — reading or acknowledging a
+message, which deliberately leaves the text in place rather than yanking it
+out from under the reader — re-reading is not available as a fix, because the
+inbox is fetched with `include_read: false` and would drop the very row the
+design keeps. Those two edits are recorded and re-applied to whatever response
+arrives instead. The unread badge is a number rather than a row, so it is
+re-read from the server in both cases.
 
 ### Inventory: a concurrent return or check-in could double-credit stock or silently overwrite condition notes, and the first fix for it had a lock-ordering bug of its own (2026-09-02)
 
@@ -2620,7 +3476,6 @@ the "kept in lockstep with the frontend" comment that nothing had been enforcing
 
   So the built-in categories **keep their legacy meaning**, and the real
   changes are narrower than first written, one of them a tightening:
-
   - **A life member now receives a `regular` ballot.** With one fused field
     `life` and `regular` were mutually exclusive values, so they could not.
   - **Every status category now also requires the operational class**, so an
