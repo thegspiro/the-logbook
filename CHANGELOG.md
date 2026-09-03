@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: FAC-34's cascade reorder left the creator path locking `Document` and `DocumentFolder` in the opposite order (2026-09-03)
+
+**Fixed**
+
+- **FAC-35 — the total-order fix that supersedes FAC-32 and FAC-34's
+  pairwise reorderings.** FAC-34 reordered `delete_folder`'s cascade to lock
+  `DocumentFolder` before `Document`, closing the conflict Codex reported at
+  the time — but never touched the creator path
+  (`_validate_shared_document_reference` in `facilities.py`), which still
+  locked `Document` first, then `DocumentFolder`, the opposite order. Two
+  paths taking the same two locks in opposite orders is the same deadlock
+  shape FAC-32 closed for a different pair (Document/reference-table),
+  reopened here for Document/DocumentFolder: a cascade holding the
+  destination folder and a creator holding the document being filed into it
+  could each end up waiting on what the other held. This is the second
+  round in a row where fixing one pairwise ordering conflict created a
+  different one.
+- Fixed by adopting a single, documented total order across all three
+  shared resources — `DocumentFolder`, then `Document`, then the
+  `FacilityDocument`/`FacilityPhoto` reference table — recorded as a
+  module-level note at the top of `documents_service.py` so a future call
+  site checks against one written source of truth rather than inferring an
+  order from whichever existing function it reads first.
+  `delete_folder`'s cascade already matched this order (no change needed);
+  `_validate_shared_document_reference` was reordered to match it too — it
+  now resolves and locks the destination folder before it ever locks the
+  document, **unconditionally** (even when the document already has a
+  folder and will not be reassigned), because `document.folder_id` is
+  client-writable through the generic document-move endpoint and an
+  unlocked peek used to decide "is the folder lock needed" would reopen a
+  narrow staleness window the pre-fix code never had.
+- Two new regression tests in `test_facility_document_reference_race.py`,
+  both driving the _real_ `_validate_shared_document_reference` (not a
+  hand-reconstructed lock sequence): one proves the creator now blocks on a
+  cascade-held folder before ever touching the document; the other proves
+  the cascade still blocks on a creator-held folder even when the creator
+  has not yet locked its own document row (a deliberately paused
+  interleaving — a naive "let the creator finish, then start the cascade"
+  version of this test was found to pass against both pre- and post-fix
+  code, since a fully-finished creator holds both locks regardless of
+  acquisition order). Both confirmed to fail against pre-fix code
+  (`git stash`) and pass post-fix, five repeated runs with no flakiness.
+
 ### Security: FAC-32's Document-lock reordering in `delete_folder` covered the reference table but not the destination folder itself (2026-09-03)
 
 **Fixed**

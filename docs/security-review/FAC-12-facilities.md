@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed, pass 3 continued)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34 — pass 3 continued)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -1524,6 +1524,209 @@ inspection while the block was held.
 
 **Mirrored to** `CHANGELOG.md`.
 
+### FAC-35 — P2 (reliability, lock-ordering deadlock) — the total-order fix that supersedes FAC-32 and FAC-34's pairwise reorderings — ✅ FIXED
+
+**Found by Codex review of the FAC-34 commit (`b651b5cc`), at
+`documents_service.py:656`.** FAC-34 reordered `delete_folder`'s cascade to
+lock the subtree's `DocumentFolder` rows before its `Document` rows —
+correct for the conflict it was fixing (this cascade's Document-lock query
+trapping a concurrent creator's `document.folder_id` flush), and verified
+against the FAC-32 pairing it had to preserve (Document before the reference
+table). What it did not check is that reordering _created a new conflict
+with a third path_: the FAC-31-fixed creator (`_validate_shared_document_reference`
+in `facilities.py`) still locked `Document` first, then `DocumentFolder`
+(via `ensure_facility_folder`) — the exact opposite of the order FAC-34 had
+just given the cascade. Two paths taking the same two locks in opposite
+orders is the textbook deadlock shape FAC-32 closed for the
+Document/reference-table pair, reopened here for the Document/DocumentFolder
+pair: a cascade that has locked the destination folder and a creator that
+has locked the document being filed into it can each end up waiting on the
+resource the other holds.
+
+**This is the second time in a row a pairwise reorder created a different
+pairwise conflict** (FAC-32 ordered Document/reference-table; fixing the
+Document/DocumentFolder conflict against it (FAC-34) put Document/DocumentFolder
+in one order in the cascade while the creator — never touched by either
+fix — still used the other). Each of FAC-29/31/32/34 individually verified
+its own fix closed the _specific_ interleaving reported, without checking
+the result against _every other_ path touching the same shared state. This
+finding does that check, and replaces the pairwise-reorder pattern with a
+single total order instead of reordering one more pair.
+
+**The canonical order chosen:** `DocumentFolder`, then `Document`, then the
+`FacilityDocument`/`FacilityPhoto` reference table — documented as a
+module-level note at the top of `documents_service.py` (immediately after
+`FACILITY_SENSITIVE_PERMISSIONS`), so a future call site checks against one
+written source of truth instead of inferring an order from whichever
+existing function it reads first. This is `delete_folder`'s order exactly as
+FAC-32/34 left it — no change was needed on the cascade side. `DocumentFolder`
+sorts first because the mechanism FAC-34 identified is not really about the
+`Document` row as a primary-key lock at all: assigning `document.folder_id`
+is a write against the `folder_id` secondary index, and FAC-34's own
+verification showed a locking read filtered on that column can block a
+concurrent write to it (a gap/next-key lock) even when it currently matches
+no rows, or — depending on which index the query optimizer picks — block
+outright on some other, unrelated row of the same organization that happens
+to be examined first. Either behaviour is plan-dependent and not something
+either code path controls, so the only order immune to it is one where
+nothing ever issues a `Document`/`folder_id` operation before the specific
+`DocumentFolder` row it concerns is already locked. Locking the folder first
+in both paths removes the dependency on that query plan entirely, the same
+way FAC-34 removed it for the cascade alone.
+
+**Where:** `backend/app/api/v1/endpoints/facilities.py`
+(`_validate_shared_document_reference` — reordered);
+`backend/app/services/documents_service.py` (module-level canonical-order
+note, added; `delete_folder` — comment updated to point at it, no lock-order
+change).
+
+**Fix:** `_validate_shared_document_reference` now resolves and locks the
+destination `DocumentFolder` (via `ensure_facility_folder`) _before_ it
+locks the `Document` row, matching the cascade's existing order. This is
+resolved **unconditionally** — even for a document that already has a
+folder and will not be reassigned — rather than only when a preliminary
+read says the document is folderless. That is a deliberate choice, not an
+oversight: `document.folder_id` is client-writable through the generic
+`PATCH /documents/{id}` endpoint (`DocumentsService.update_document`,
+confirmed via `grep` as the _only_ other writer of `Document.folder_id` in
+the backend — including a legal `null`, "moves the document to org level"),
+and that write is not itself a locking read. An unlocked peek at
+`document.folder_id`, taken before the document's own `FOR UPDATE` lock, to
+decide "does this request need the folder lock" would create a window in
+which a concurrent `PATCH` clears the field after the peek but before the
+locked read — and a creator that skipped the folder lock based on the stale
+peek would then, correctly per its own (now-wrong) decision, leave the
+document unfiled: a facility reference left pointing at an org-level,
+unfiled document, which is precisely the vulnerability
+`_validate_shared_document_reference` exists to close (see the function's
+own docstring). The pre-FAC-35 code never had this window, because its
+single locked read of `Document` was also the only read the "assign or not"
+decision was ever based on — decoupling that decision from the lock (to buy
+back the folder-lock-only-when-needed optimization) would have reopened it.
+Resolving the folder unconditionally keeps the actual assignment decision
+exactly where it always was — the `Document` row's own locked,
+authoritative read — while still achieving a lock order with no exceptions
+to remember.
+
+One observable side effect: a request that references an already-filed
+document against a nonexistent `facility_id` now gets `404 Facility not
+found` directly from this function (as unfiled documents already did),
+rather than reaching `FacilitiesService.create_document`/`create_photo`'s
+own `assert_in_org` check downstream (`400`). No test asserted the old,
+inconsistent behaviour (grepped `backend/tests/` for both status codes
+against this scenario); the two are equivalent in intent — neither responds
+in a way a caller could use to distinguish "wrong org" from "does not
+exist" — and the fix makes the two branches agree instead of only one of
+them getting the check.
+
+**Regression tests:** `tests/test_facility_document_reference_race.py`, two
+new classes, driving the _real_ `_validate_shared_document_reference` (not a
+hand-reconstructed lock sequence, unlike FAC-34's own test — see its updated
+comment there, which now explains why its manual replication still tests
+something valid: `delete_folder`'s own behaviour, independent of whoever
+holds the folder lock):
+
+- `TestCreatorLocksTheFolderBeforeTheDocument` — the direction that had no
+  coverage at all before this fix. A cascade-like session locks the
+  destination `DocumentFolder` first (`_lock_subtree_folders`, exactly as
+  `delete_folder` does); the real creator function, raced in as a
+  background task, must block there _before_ it ever issues its own
+  `Document` lock query. Confirmed to **fail** against pre-fix code via
+  `git stash` (the pre-fix creator locked `Document` immediately, never
+  deferring to the folder lock at all — `document_lock_reached` was set
+  before the blocking assertion even ran) and pass post-fix.
+- `TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar` — the mirror
+  direction, built the hard way on purpose. An earlier draft of this test
+  let the creator run to full completion (holding both locks) before
+  starting the cascade — and passed against **both** pre- and post-fix code,
+  because a creator that has already finished holds both locks regardless
+  of which order it acquired them in; that shape cannot discriminate the
+  fix from its absence, since `delete_folder`'s own order was never in
+  question here (FAC-34 already covers it). The corrected version pauses
+  the real creator, via a patched, event-gated `get_document_by_id`, at the
+  exact instant it is about to lock the `Document` row — post-fix, this is
+  strictly after the destination folder is already locked; pre-fix, it is
+  the creator's very first locking call, before any folder has been
+  touched. Only the post-fix window has the property the finding is about
+  (folder held, document not yet). Confirmed to **fail** against pre-fix
+  code via `git stash` (nothing blocks the cascade at that pause point, and
+  it runs straight through to, and past, the Document-lock query) and pass
+  post-fix.
+
+Both tests were also run five times in a row post-fix with no failures (no
+flakiness from the event-based pause/release synchronization), and the full
+`tests/test_facility_document_reference_race.py` file (7 tests total, the 5
+pre-existing plus these 2) passes together.
+
+**Two existing unit tests in `test_facilities_permissions.py` needed
+updating**, not because their invariants changed but because the
+unconditional folder resolution described above changes which mocks a
+call now reaches: `test_shared_file_reference_leaves_an_already_filed_document_alone`
+now also mocks `FacilitiesService.get_facility` and asserts
+`ensure_facility_folder` **is** awaited (previously asserted the opposite) —
+its real invariant, that `document.folder_id` is left untouched, is
+unchanged and still asserted; `test_shared_file_reference_rejects_cross_organization_document`
+now also mocks `get_facility`/`ensure_facility_folder` so the test reaches
+the same `get_document_by_id`-returns-`None` → `404` path it always tested,
+rather than failing earlier on an unmocked `FacilitiesService(db).get_facility`
+call against a bare `AsyncMock` session (confirmed this is exactly what
+happened: `pytest tests/ -k "facilities or documents"` failed both, with
+`AttributeError: 'coroutine' object has no attribute 'id'` from the
+unmocked call, before these two tests were updated).
+
+**Manual trace of both interleavings, post-fix** (the check the four prior
+rounds each skipped — verifying a fix against every _other_ path touching
+the same resources, not just the one interleaving that was reported):
+
+1. _Cascade reaches the folder first._ Cascade locks `DocumentFolder`
+   (`_lock_subtree_folders`), then blocks nothing (nothing else is
+   contending yet), proceeds to lock `Document` rows
+   (`_lock_subtree_documents`), then the reference table, then commits. A
+   concurrent creator's `ensure_facility_folder` call blocks on the
+   cascade-held `DocumentFolder` row immediately — before the creator has
+   locked anything else at all (per FAC-35's fix, `Document` is locked
+   _after_ the folder). The creator simply waits; no cycle, because the
+   creator holds nothing the cascade needs.
+2. _Creator reaches the folder first._ Creator locks `DocumentFolder`, then
+   `Document`, then (FAC-31) holds both while the caller inserts the
+   reference row, then commits once. A concurrent cascade's
+   `_lock_subtree_folders` blocks on the creator-held folder immediately —
+   before the cascade has issued any `Document` query at all. The cascade
+   waits; no cycle, because the cascade holds nothing the creator needs.
+3. _Both start at approximately the same instant._ Whichever session's
+   `DocumentFolder` lock request InnoDB/MariaDB serializes first wins outright
+   (case 1 or case 2, from that point on); the other blocks on that single,
+   explicit, primary-key-scoped row lock — not on a plan-dependent scan or
+   gap lock, since the folder lock is always the first shared resource
+   either side touches. No third resource is ever acquired by the loser
+   before the winner already holds the one lock the loser is waiting on, so
+   no cycle can form regardless of which side wins the race.
+
+No interleaving was found in which the two paths wait on each other. The
+`Organization` row `ensure_facility_folder` also locks (for its own,
+FAC-27-style get-or-create race, unrelated to this finding) is only ever
+locked by the creator path — `delete_folder`'s cascade never touches it —
+so it is not part of this three-resource ordering problem and was left out
+of the canonical-order note.
+
+**Whether this needs a runtime lock-order assertion, not just documentation
+and tests:** considered and rejected for now, on scale grounds. Only two
+call sites in the whole backend acquire more than one of these three
+resources together (the ones this finding fixes), and this pattern — a
+shared reference table bridging two modules' own primary resources, with a
+third, cross-cutting delete cascade — does not recur elsewhere in this
+codebase's other ~30 service files audited so far in this rotation. A
+generic runtime checker (tracking acquired-lock "levels" per session and
+raising if a later acquisition violates the declared order) would be
+justified once a third call site needs this order, or once any other
+feature grows a comparable three-way shared-resource shape; for two call
+sites, the module-level note plus the two direction-specific regression
+tests above are the proportionate control, and are already what caught this
+exact defect in review before it reached production. Revisit this if a
+sixth round is ever needed despite the total order.
+
+**Mirrored to** `CHANGELOG.md`.
+
 ## Completion gate (pass 3, round 8 — Codex review of `d0ec9194`, FAC-34)
 
 | Check                                                   | Result                                       |
@@ -1540,6 +1743,31 @@ inspection while the block was held.
 (`AttributeError`, since `_lock_subtree_documents` is part of the fix's own
 refactor and does not exist without it); `git stash pop` restored the fix
 and all 5 tests in the file passed.
+
+## Completion gate (pass 3, round 9 — Codex review of `b651b5cc`, FAC-35)
+
+| Check                                                   | Result                                                                      |
+| ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                    | ✅ clean                                                                    |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                                                    |
+| `pytest tests/test_facility_document_reference_race.py` | ✅ 7 passed (+2, FAC-35's two regression tests)                             |
+| `pytest tests/ -k "facilities or documents"`            | ✅ 301 passed, 1 skipped (pre-existing)                                     |
+| `pytest tests/` (full backend suite)                    | ✅ 10050 passed, 21 skipped (pre-existing Docker/optional-dependency skips) |
+
+**FAC-35's two regression tests independently confirmed against pre-fix
+code:** `git stash` isolating just the `facilities.py`/`documents_service.py`
+fix (test file changes kept) —
+`TestCreatorLocksTheFolderBeforeTheDocument::test_creator_blocks_on_a_cascade_held_folder_before_locking_the_document`
+and
+`TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar::test_cascade_blocks_on_the_folder_while_the_creator_has_not_yet_locked_its_document`
+both fail (each on its own "should still be blocked" assertion — the
+pre-fix creator does not defer to a cascade-held folder lock at all); `git
+stash pop` restored the fix and all 7 tests in the file passed, repeated 5
+times with no flakiness. `pytest tests/ -k "facilities or documents"` also
+caught two now-updated unit tests in `test_facilities_permissions.py` that
+assumed `ensure_facility_folder` was skipped for an already-filed document —
+see FAC-35's write-up above for why that assumption changed.
 
 ## Verified good ✅ (re-confirmed this pass)
 
