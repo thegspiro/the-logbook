@@ -31,8 +31,8 @@ export function descendantCompartmentIds(
  * Descendant ids of `rootId`, walked from a flat `id -> parentCompartmentId`
  * map rather than a live `HierarchyCompartment[]` — used to compare the
  * *last known server* subtree against the current, possibly locally-edited
- * one (AP-13 finding 2: reparenting has no auto-save path, so the client's
- * in-memory hierarchy can disagree with what the backend still has).
+ * one. Reparenting has no auto-save path, so the client's in-memory
+ * hierarchy can disagree with what the backend still has.
  */
 export function descendantIdsFromParentMap(parentById: Map<string, string>, rootId: string): Set<string> {
   const descendants = new Set<string>();
@@ -57,9 +57,9 @@ export function descendantIdsFromParentMap(parentById: Map<string, string>, root
  * complete, authoritative set of rows and should rebuild the whole map from
  * it rather than merge into whatever it held before: a bulk replace mints
  * new ids for every row, so entries for the old ones would otherwise sit in
- * the map as dead weight, and — the AP-13 finding 2 case — a new row's id is
- * simply absent from a merge, which is what let the pending-reparent delete
- * guard's `knownIds` filter silently drop it instead of blocking the delete.
+ * the map as dead weight, and a new row's id is simply absent from a merge,
+ * which is what let the pending-reparent delete guard's `knownIds` filter
+ * silently drop it instead of blocking the delete.
  */
 export function buildParentByIdMap(compartments: HierarchyCompartment[]): Map<string, string> {
   const parentById = new Map<string, string>();
