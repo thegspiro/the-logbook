@@ -54,7 +54,7 @@ async def org_with_members(db_session, setup_org_and_admin):
         text(
             "UPDATE users SET phone = '555-0100', mobile = '555-0101', "
             "personal_email = 'admin@home.example', address_street = '1 Main St', "
-            "date_of_birth = '1980-01-01', rank = 'chief', station = 'Station 1' "
+            "date_of_birth = '1980-01-01', `rank` = 'chief', station = 'Station 1' "
             "WHERE id = :id"
         ),
         {"id": admin_id},
@@ -63,7 +63,7 @@ async def org_with_members(db_session, setup_org_and_admin):
     await db_session.execute(
         text(
             "INSERT INTO users (id, organization_id, username, first_name, last_name, "
-            "email, phone, password_hash, status, rank) VALUES "
+            "email, phone, password_hash, status, `rank`) VALUES "
             "(:id, :org, :un, 'Sam', 'Rivera', :em, '555-0199', 'x', 'active', 'firefighter')"
         ),
         {
