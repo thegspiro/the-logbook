@@ -15,12 +15,13 @@ import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import type { AxiosResponse } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
 import { clearQueuedReports, reportApiError } from './errorReporting';
+import type { CacheWriteToken } from '../utils/apiCache';
 import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import {
   getCacheKey,
   getCached,
-  setCacheAtGeneration,
-  cacheGeneration,
+  setCacheIfCurrent,
+  cacheWriteToken,
   invalidateByPrefix,
   getResourcePrefix,
   isCacheable,
@@ -65,7 +66,7 @@ api.interceptors.request.use(
       const key = getCacheKey(config.url, config.params as Record<string, unknown> | undefined);
       // Stamped on issue, checked on the write below: a foreground GET still in
       // flight when logout purges the cache must not repopulate it either.
-      (config as unknown as Record<string, unknown>)._cacheGeneration = cacheGeneration();
+      (config as unknown as Record<string, unknown>)._cacheToken = cacheWriteToken(config.url);
       const cached = getCached(key);
 
       if (cached) {
@@ -101,10 +102,10 @@ api.interceptors.request.use(
           // whoever signs in next on a shared terminal.
           const { adapter: _adapter, signal: _signal, cancelToken: _cancelToken, ...restConfig } = config;
           const bgConfig = { ...restConfig, _skipCache: true };
-          const issuedAt = cacheGeneration();
+          const token = cacheWriteToken(config.url);
           void api
             .request(bgConfig)
-            .then((res) => setCacheAtGeneration(key, res.data, issuedAt))
+            .then((res) => setCacheIfCurrent(key, res.data, token))
             .catch(() => {
               /* background revalidation failure is non-critical */
             })
@@ -231,8 +232,9 @@ api.interceptors.response.use(
       !(response.config as unknown as Record<string, unknown>)._fromCache
     ) {
       const key = getCacheKey(response.config.url, response.config.params as Record<string, unknown> | undefined);
-      const issuedAt = (response.config as unknown as Record<string, unknown>)._cacheGeneration;
-      setCacheAtGeneration(key, response.data, typeof issuedAt === 'number' ? issuedAt : cacheGeneration());
+      const stamped = (response.config as unknown as Record<string, unknown>)._cacheToken;
+      const token = (stamped as CacheWriteToken | undefined) ?? cacheWriteToken(response.config.url);
+      setCacheIfCurrent(key, response.data, token);
     }
 
     // Invalidate related cache entries after mutations
