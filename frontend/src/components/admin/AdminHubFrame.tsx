@@ -67,6 +67,8 @@ interface AdminHubFrameProps<K extends string> {
    * in its own body passes a counter so the queue reflects the work.
    */
   refreshToken?: number | string | undefined;
+  /** Skip summary metrics and their request when this viewer cannot use them. */
+  showSummary?: boolean | undefined;
   /** A module with a richer, record-level queue in its body can hide the aggregate queue. */
   showAttentionQueue?: boolean | undefined;
 
@@ -86,6 +88,7 @@ export function AdminHubFrame<K extends string>({
   onTabChange,
   nav,
   refreshToken,
+  showSummary = true,
   showAttentionQueue = true,
   children,
 }: AdminHubFrameProps<K>) {
@@ -95,6 +98,12 @@ export function AdminHubFrame<K extends string>({
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const load = useCallback(async () => {
+    if (!showSummary) {
+      setSummary(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       setSummary(await adminHubService.getSummary(moduleKey));
@@ -107,7 +116,7 @@ export function AdminHubFrame<K extends string>({
     } finally {
       setLoading(false);
     }
-  }, [moduleKey]);
+  }, [moduleKey, showSummary]);
 
   useEffect(() => {
     void load();
@@ -174,28 +183,30 @@ export function AdminHubFrame<K extends string>({
         {/* 2 & 3 — Metrics and queue. Source order is the desktop order; the
             phone swaps them, because the queue is the only thing worth a phone
             visit and four metric cards would push it under the fold. */}
-        <div className="flex flex-col gap-4">
-          <AdminMetricsRow
-            metrics={summary?.metrics ?? []}
-            loading={loading && summary === null}
-            className="order-2 sm:order-1"
-          />
-          {summary && showAttentionQueue && (
-            <AdminAttentionQueue items={summary.attention} moduleLabel={title} className="order-1 sm:order-2" />
-          )}
-          {error && !loading && (
-            <p className="text-theme-text-muted order-1 text-xs sm:order-2" role="status">
-              {error}{' '}
-              <button
-                type="button"
-                onClick={() => void load()}
-                className="text-theme-accent-red font-semibold underline"
-              >
-                Try again
-              </button>
-            </p>
-          )}
-        </div>
+        {showSummary && (
+          <div className="flex flex-col gap-4">
+            <AdminMetricsRow
+              metrics={summary?.metrics ?? []}
+              loading={loading && summary === null}
+              className="order-2 sm:order-1"
+            />
+            {summary && showAttentionQueue && (
+              <AdminAttentionQueue items={summary.attention} moduleLabel={title} className="order-1 sm:order-2" />
+            )}
+            {error && !loading && (
+              <p className="text-theme-text-muted order-1 text-xs sm:order-2" role="status">
+                {error}{' '}
+                <button
+                  type="button"
+                  onClick={() => void load()}
+                  className="text-theme-accent-red font-semibold underline"
+                >
+                  Try again
+                </button>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* 4 — Tab bar. Underline tabs, red-500 active border, Settings last;
             scrolls horizontally on a phone rather than wrapping. */}

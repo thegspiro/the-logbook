@@ -98,7 +98,8 @@ describe('inventory hub cards', () => {
 
   it('gates every store card on the store’s own grant and module', () => {
     const storeCards = INVENTORY_HUB_CARDS.filter((card) => card.section === 'Department Store');
-    expect(storeCards.length).toBeGreaterThan(0);
+    expect(storeCards).toHaveLength(1);
+    expect(storeCards[0]).toMatchObject({ id: 'store', label: 'Department Store', path: '/inventory/admin/store' });
 
     for (const card of storeCards) {
       expect(card.permission, `${card.id} does not require storefront.manage`).toBe('storefront.manage');

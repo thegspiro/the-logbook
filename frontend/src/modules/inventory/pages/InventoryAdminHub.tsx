@@ -286,6 +286,10 @@ export const InventoryAdminHub: React.FC = () => {
   const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
 
   const loadSummary = useCallback(async () => {
+    if (!canManage) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     // Medical stock is its own module with its own grant, so it is fetched
@@ -456,24 +460,26 @@ export const InventoryAdminHub: React.FC = () => {
     ];
     setAttentionRows(rows.sort((a, b) => a.rank - b.rank || a.when.localeCompare(b.when)));
     setLoading(false);
-  }, [tz, showsMedical]);
+  }, [canManage, tz, showsMedical]);
 
   useEffect(() => {
     void loadSummary();
   }, [loadSummary]);
 
-  const actions: AdminHubAction[] = [
-    {
-      key: 'refresh',
-      label: 'Refresh inventory counts',
-      icon: RefreshCw,
-      busy: loading,
-      onClick: () => {
-        void loadSummary();
-        setFrameToken((token) => token + 1);
-      },
-    },
-  ];
+  const actions: AdminHubAction[] = canManage
+    ? [
+        {
+          key: 'refresh',
+          label: 'Refresh inventory counts',
+          icon: RefreshCw,
+          busy: loading,
+          onClick: () => {
+            void loadSummary();
+            setFrameToken((token) => token + 1);
+          },
+        },
+      ]
+    : [];
 
   /** Live figures per card id. Everything else about a card is static data. */
   const cardStats: Record<string, CardStat> = {
@@ -529,13 +535,14 @@ export const InventoryAdminHub: React.FC = () => {
             }
           : undefined
       }
-      tabs={TABS}
+      tabs={canManage ? TABS : TABS.filter((tab) => tab.id === 'overview')}
       activeTab={activeTab}
       onTabChange={(tab) => setSearchParams(tab === 'overview' ? {} : { tab })}
       refreshToken={frameToken}
+      showSummary={canManage}
       showAttentionQueue={false}
     >
-      {activeTab === 'settings' ? (
+      {canManage && activeTab === 'settings' ? (
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <AdminMetricsSettings
             moduleKey="inventory"
@@ -546,16 +553,18 @@ export const InventoryAdminHub: React.FC = () => {
         </div>
       ) : (
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-          <NeedsAttention
-            rows={attentionRows}
-            loading={loading}
-            failedSources={failedSources}
-            onRetry={() => void loadSummary()}
-          />
+          {canManage && (
+            <NeedsAttention
+              rows={attentionRows}
+              loading={loading}
+              failedSources={failedSources}
+              onRetry={() => void loadSummary()}
+            />
+          )}
           {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
             Without it a new quartermaster meets the item form first and fills in
             three dropdowns that have nothing in them. */}
-          {setupStatus && !setupStatus.is_complete && (
+          {canManage && setupStatus && !setupStatus.is_complete && (
             <Link
               to="/inventory/admin/setup"
               className="mb-8 flex items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 transition-colors hover:bg-blue-500/15 sm:p-4"
@@ -609,26 +618,30 @@ export const InventoryAdminHub: React.FC = () => {
       )}
 
       {/* Quick-assign: pick a member, then assign items to them */}
-      <MemberPickerModal
-        isOpen={memberPickerOpen}
-        onClose={() => setMemberPickerOpen(false)}
-        title="Distribute Items — Select a Member"
-        onSelect={(member) => {
-          setMemberPickerOpen(false);
-          setAssignTarget(member);
-        }}
-      />
-      <InventoryScanModal
-        isOpen={assignTarget !== null}
-        onClose={() => setAssignTarget(null)}
-        mode="distribute"
-        userId={assignTarget?.userId ?? ''}
-        memberName={assignTarget?.memberName ?? ''}
-        onComplete={() => {
-          void loadSummary();
-          setFrameToken((token) => token + 1);
-        }}
-      />
+      {canManage && (
+        <MemberPickerModal
+          isOpen={memberPickerOpen}
+          onClose={() => setMemberPickerOpen(false)}
+          title="Distribute Items — Select a Member"
+          onSelect={(member) => {
+            setMemberPickerOpen(false);
+            setAssignTarget(member);
+          }}
+        />
+      )}
+      {canManage && (
+        <InventoryScanModal
+          isOpen={assignTarget !== null}
+          onClose={() => setAssignTarget(null)}
+          mode="distribute"
+          userId={assignTarget?.userId ?? ''}
+          memberName={assignTarget?.memberName ?? ''}
+          onComplete={() => {
+            void loadSummary();
+            setFrameToken((token) => token + 1);
+          }}
+        />
+      )}
     </AdminHubFrame>
   );
 };

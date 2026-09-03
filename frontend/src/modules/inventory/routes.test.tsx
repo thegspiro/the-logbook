@@ -94,13 +94,24 @@ vi.mock('./pages/ChecklistsAdminPage', () => ({
 vi.mock('./pages/ChecklistSettingsPage', () => ({
   default: () => <div data-testid="checklist-settings-page">ChecklistSettings</div>,
 }));
+const capturedAnyPermissions: (string[] | undefined)[] = [];
 vi.mock('../../components/ProtectedRoute', () => ({
-  ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  ProtectedRoute: ({
+    children,
+    requiredAnyPermission,
+  }: {
+    children: React.ReactNode;
+    requiredAnyPermission?: string[];
+  }) => {
+    capturedAnyPermissions.push(requiredAnyPermission);
+    return <>{children}</>;
+  },
 }));
 
 import { getInventoryRoutes } from './routes';
 
 function renderRoute(path: string) {
+  capturedAnyPermissions.length = 0;
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>{getInventoryRoutes()}</Routes>
@@ -122,6 +133,12 @@ describe('getInventoryRoutes', () => {
   it('renders AdminHub at /inventory/admin', async () => {
     renderRoute('/inventory/admin');
     expect(await screen.findByTestId('admin-hub')).toBeInTheDocument();
+  });
+
+  it('allows any inventory, checklist, or storefront administrator into the admin hub', async () => {
+    renderRoute('/inventory/admin');
+    await screen.findByTestId('admin-hub');
+    expect(capturedAnyPermissions).toContainEqual(['inventory.manage', 'inventory.check_manage', 'storefront.manage']);
   });
 
   it('renders PoolItemsPage at /inventory/admin/pool', async () => {

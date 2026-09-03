@@ -5,12 +5,14 @@ import { renderWithRouter } from '../../test/utils';
 import { TopNavigation } from './TopNavigation';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 
+const { mockCheckPermission } = vi.hoisted(() => ({ mockCheckPermission: vi.fn() }));
+
 vi.mock('../../contexts/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
 }));
 
 vi.mock('../../stores/authStore', () => ({
-  useAuthStore: () => ({ checkPermission: () => false }),
+  useAuthStore: () => ({ checkPermission: mockCheckPermission }),
 }));
 
 vi.mock('../../hooks/useEnabledModules', () => ({
@@ -48,6 +50,7 @@ const mobileMenu = () => screen.queryByRole('navigation', { name: 'Mobile naviga
 describe('TopNavigation mobile menu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckPermission.mockReturnValue(false);
   });
 
   it('stays closed until the bottom bar asks for it', () => {
@@ -92,5 +95,16 @@ describe('TopNavigation mobile menu', () => {
   it('renders no backdrop while closed', () => {
     renderNav();
     expect(screen.queryByTestId('mobile-menu-backdrop')).not.toBeInTheDocument();
+  });
+
+  it('offers one shared Inventory Admin entry to a storefront-only administrator', async () => {
+    const user = userEvent.setup();
+    mockCheckPermission.mockImplementation((permission: string) => permission === 'storefront.manage');
+    renderNav();
+    fireMoreEvent();
+    await user.click(screen.getAllByRole('button', { name: 'Admin' }).at(-1));
+
+    expect(screen.getByRole('link', { name: 'Inventory Admin' })).toHaveAttribute('href', '/inventory/admin');
+    expect(screen.queryByRole('link', { name: 'Store Admin' })).not.toBeInTheDocument();
   });
 });

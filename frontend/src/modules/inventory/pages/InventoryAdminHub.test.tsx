@@ -259,7 +259,7 @@ describe('InventoryAdminHub', () => {
     // an empty body rather than a wall of links that all refuse them.
     mockCheckPermission.mockReturnValue(false);
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByRole('region', { name: 'Needs attention' });
+    await screen.findByRole('heading', { name: 'Inventory Administration' });
 
     expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
     expect(screen.queryByText('All Items')).not.toBeInTheDocument();
@@ -294,8 +294,25 @@ describe('InventoryAdminHub', () => {
     await waitFor(() => {
       expect(screen.getByText('All Items')).toBeInTheDocument();
     });
-    expect(screen.getByText('Department Store')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Store Overview/ })).toHaveAttribute('href', '/inventory/admin/store');
+    expect(screen.getAllByText('Department Store')).toHaveLength(2);
+    expect(screen.getByRole('link', { name: /Department Store/ })).toHaveAttribute('href', '/inventory/admin/store');
+  });
+
+  it('shows only the store entry to a storefront-only administrator without inventory requests', async () => {
+    mockCheckPermission.mockImplementation((permission: unknown) => permission === 'storefront.manage');
+    renderWithRouter(<InventoryAdminHub />);
+
+    const storeLink = await screen.findByRole('link', { name: /Department Store/ });
+    expect(storeLink).toHaveAttribute('href', '/inventory/admin/store');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(screen.queryByText('All Items')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Needs attention' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Headline metrics' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Refresh inventory counts/ })).not.toBeInTheDocument();
+    expect(mockGetSummary).not.toHaveBeenCalled();
+    expect(mockGetLowStockItems).not.toHaveBeenCalled();
+    expect(mockGetAdminHubSummary).not.toHaveBeenCalled();
   });
 
   it('shows badges on nav cards with counts', async () => {
