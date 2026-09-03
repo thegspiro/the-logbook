@@ -20,6 +20,7 @@ from app.api.v1.endpoints.documents import (
     _parse_uuid_or_400,
     _resolve_document_name,
     create_folder,
+    delete_document,
     delete_folder,
     download_document,
     update_document,
@@ -1052,6 +1053,125 @@ class TestDownloadDocument:
                 document.id, db=db_session, current_user=self._caller(org.id)
             )
         assert exc.value.status_code == 403
+
+
+@pytest.mark.integration
+class TestUpdateAndDeleteDocumentRespectFolderAcl:
+    """FAC-13 Codex follow-up (P1): ``documents.manage`` is an org-wide
+    mutation grant, but a folder's ``required_permissions`` is the one rule
+    leadership/documents.manage does not override (see
+    ``_folder_admits_user``). ``get_document``/``download_document`` already
+    enforce that boundary via ``can_access_document`` on read --
+    ``update_document`` and ``delete_document`` did not, so a documents.manage
+    holder with no facilities grant at all could move a facility's
+    sensitive-folder document (e.g. Insurance & Leases, gated on
+    ``facilities.view_sensitive``) to org-level storage -- after which any
+    ``documents.view`` holder could read it -- or delete it outright,
+    defeating the folder ACL from the write side instead of merely lacking
+    documents.manage's own scope.
+    """
+
+    async def _org_and_sensitive_document(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        folder = DocumentFolder(
+            organization_id=org.id,
+            name="Insurance & Leases",
+            required_permissions=["facilities.view_sensitive"],
+        )
+        db_session.add(folder)
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id,
+            folder_id=folder.id,
+            name="Policy",
+            file_name="policy.pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+        return org, folder, document
+
+    def _caller(self, org_id, *, facilities_permission=False):
+        perms = ["documents.manage"]
+        if facilities_permission:
+            perms.append("facilities.view_sensitive")
+        user = _user(uid="caller-1", roles=[(perms, "admin")])
+        user.organization_id = org_id
+        user.username = "caller"
+        return user
+
+    async def test_documents_manage_alone_cannot_unfile_a_sensitive_document(
+        self, db_session
+    ):
+        org, folder, document = await self._org_and_sensitive_document(
+            db_session, "fcvfd-acl-1"
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_document(
+                document.id,
+                DocumentUpdate(folder_id=None),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 404
+
+        # The document must be left untouched, not partially applied before
+        # the ACL check runs.
+        await db_session.refresh(document)
+        assert document.folder_id == folder.id
+
+    async def test_documents_manage_alone_cannot_delete_a_sensitive_document(
+        self, db_session
+    ):
+        org, folder, document = await self._org_and_sensitive_document(
+            db_session, "fcvfd-acl-2"
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_document(document.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 404
+
+        result = await db_session.execute(
+            select(Document).where(Document.id == document.id)
+        )
+        assert result.scalar_one_or_none() is not None
+
+    async def test_caller_with_the_folders_own_permission_can_still_unfile_it(
+        self, db_session
+    ):
+        # Positive control: the fix must not block a caller who genuinely
+        # holds the folder's required permission.
+        org, folder, document = await self._org_and_sensitive_document(
+            db_session, "fcvfd-acl-3"
+        )
+        caller = self._caller(org.id, facilities_permission=True)
+
+        result = await update_document(
+            document.id,
+            DocumentUpdate(folder_id=None),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.folder_id is None
+
+    async def test_caller_with_the_folders_own_permission_can_still_delete_it(
+        self, db_session
+    ):
+        org, folder, document = await self._org_and_sensitive_document(
+            db_session, "fcvfd-acl-4"
+        )
+        caller = self._caller(org.id, facilities_permission=True)
+
+        await delete_document(document.id, db=db_session, current_user=caller)
+
+        result = await db_session.execute(
+            select(Document).where(Document.id == document.id)
+        )
+        assert result.scalar_one_or_none() is None
 
 
 @pytest.mark.integration

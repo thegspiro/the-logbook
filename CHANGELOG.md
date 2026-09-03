@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Flagged: an unrelated folder-authorization fix silently emptied the Facilities Files section for baseline permission tiers it was never meant to affect (2026-09-03)
+### Flagged: an unrelated folder-authorization fix silently emptied direct-API and generic-Documents-module access to facility folders for baseline permission tiers it was never meant to affect (2026-09-03)
 
 **Not fixed — flagged for a product decision.** `GET /{facility_id}/folders`
 still requires only baseline `facilities.view`, but every facility folder —
@@ -19,15 +19,44 @@ because of an unrelated cross-module folder-ACL fix (PR #2160) that started
 enforcing a permission stamp already present but previously inert. A
 secretary, quartermaster, safety officer, or training officer — every one of
 whom is meant to see the baseline categories at their baseline
-`facilities.view` grant — now gets an empty folder list for every facility.
-Fail-closed, not a data leak, but the department's own file records (photo
-captions, upload metadata) remain visible while the actual files behind them
-do not open for the same caller. Correcting it needs a new permission tier,
-an owner call on Blueprints & Permits, reclassifying existing unfiled
-uploads out of the per-facility parent folder, and a migration — not a
-one-line loosening — see `docs/KNOWN_LIMITATIONS.md` and
+`facilities.view` grant — now gets an empty folder list from that endpoint,
+and is refused the same categories' documents through the generic Documents
+module's own folder browsing and `GET /documents/{id}/download` (both
+enforce the identical over-broad stamp). **This does not empty the
+Facilities module's own Files section in the app** — `FilesSection.tsx`
+loads via `getPhotos` and, for sensitive viewers, `getFacilityDocuments`,
+neither of which calls the affected `/folders` endpoint, so that section
+stays populated; a repo-wide search found no frontend consumer of
+`GET /{facility_id}/folders` at all. The real, live impact is on a direct
+API client and on anyone browsing a facility's baseline categories through
+the generic Documents module UI. Fail-closed, not a data leak. Correcting
+it needs a new permission tier, an owner call on Blueprints & Permits,
+reclassifying existing document references out of the per-facility parent
+folder or a too-weak sub-folder, and a migration — not a one-line loosening
+— see `docs/KNOWN_LIMITATIONS.md` and
 `docs/security-review/FAC-12-facilities.md` (FAC-13) for the full reasoning
 and why a naive fix would reopen a broader leak.
+
+### Security: `documents.manage` could bypass a document's own folder ACL through the generic update/delete routes (2026-09-03)
+
+**Fixed**
+
+- `PATCH /documents/{document_id}` and `DELETE /documents/{document_id}`
+  checked only the caller's `documents.manage` grant and the target
+  document's organization — never the document's _current_ folder ACL,
+  unlike `GET /documents/{document_id}` and its `/download` sibling, which
+  already call `can_access_document`. A `documents.manage` holder with no
+  facilities grant at all could therefore move a facility's
+  `facilities.view_sensitive`-gated document to unfiled/org-level storage
+  (or delete it outright) despite never being able to view it, after which
+  any `documents.view` holder could list and download it.
+- Both routes now call `can_access_document` on the existing document
+  before mutating it, matching the read-side check, and return the same
+  404 an inaccessible document already returns elsewhere rather than
+  confirming its existence to a caller who can't see it. A caller who
+  genuinely holds the folder's own required permission is unaffected. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-14) for the full
+  writeup and regression test.
 
 ### Inventory: a concurrent return or check-in could double-credit stock or silently overwrite condition notes, and the first fix for it had a lock-ordering bug of its own (2026-09-02)
 

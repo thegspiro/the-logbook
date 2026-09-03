@@ -17,12 +17,16 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 #2191 (`claude/security-review-facilities`) — Feature 12, Facilities, pass
-3, complete and ready for review. One HIGH finding (FAC-13, facility-file
-folder access over-restricted for four non-sensitive categories, flagged —
-needs an owner decision, not auto-fixed) plus two doc-accuracy corrections
-(stale comments claiming a now-false "facilities.view-only sees the
-folders" invariant). Full completion gate green. Rotation row 12 → ⏳
-(awaiting this PR's merge).
+3, complete and ready for review. Two HIGH findings: FAC-13 (facility-file
+folder access over-restricted for three established-baseline categories —
+Photos, Maintenance Records, Inspection Reports; Blueprints & Permits'
+classification is separately undecided — flagged, needs an owner decision,
+not auto-fixed) and FAC-14 (a distinct, opposite-direction bypass on the
+generic document update/delete routes, found by Codex reviewing this PR's
+own fix commit and fixed same-day) plus two doc-accuracy corrections (stale
+comments claiming a now-false "facilities.view-only sees the folders"
+invariant). Full completion gate green. Rotation row 12 → ⏳ (awaiting this
+PR's merge).
 
 ---
 
@@ -53,7 +57,8 @@ existed since 2026-08-27 but was inert until #2160 wired enforcement
 admitted only at baseline `facilities.view` — secretary, quartermaster,
 safety officer, training officer, by FAC-5's own design — now gets an
 **empty** folder list for every facility, including the non-sensitive
-Photos/Blueprints/Maintenance/Inspection categories they're meant to see.
+Photos/Maintenance/Inspection categories they're meant to see (Blueprints &
+Permits' classification is separately undecided — see below).
 Verified empirically against the real `can_access_folder` code path (not a
 reimplementation): a `facilities.view`-only caller is refused a
 sensitive-stamped folder, a `facilities.manage` caller is admitted.
@@ -72,9 +77,93 @@ flagged access gap itself. Mirrored to `docs/KNOWN_LIMITATIONS.md` and
 `CHANGELOG.md`. Full local completion gate green: flake8/black/isort clean
 across `app/ tests/ alembic/`, migrations validated (no schema change),
 249/249 scoped and 9992/9992 full backend suite pass (21 pre-existing
-skips), `tsc --noEmit` 0 errors, `eslint .` clean (no frontend code changed
-this pass). Findings doc: `docs/security-review/FAC-12-facilities.md`. PR
-#2191 opened and subscribed. Next: 13 apparatus & NFC, once #2191 merges.
+skips), `npm run typecheck` (the real TS 7 build compiler, not bare `tsc`,
+which resolves to the 5.9 lint compiler) 0 errors, `eslint .` clean (no
+frontend code changed this pass). Findings doc:
+`docs/security-review/FAC-12-facilities.md`. PR #2191 opened and
+subscribed. Next: 13 apparatus & NFC, once #2191 merges.
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 2) — 1 fixed (FAC-14), 4 doc corrections (Codex review of PR #2191's `0231a904`)
+
+Codex reviewed pass 3's fix commit (`0231a904`, the response to the first
+Codex round — CHANGELOG/KNOWN_LIMITATIONS/FAC-12 wording corrections and a
+trimmed endpoint comment) and posted 5 new comments. All 5 independently
+verified against current code before acting on any of them; disposition
+below.
+
+**FAC-14 (HIGH, access control/IDOR, fixed).** `PATCH /documents/{document_id}`
+and `DELETE /documents/{document_id}` were gated on `documents.manage`
+alone and never called `can_access_document`/`can_access_folder` — the
+same check `get_document`/`download_document` already run — so a
+`documents.manage` holder with zero facilities permission could `PATCH`
+`{"folder_id": null}` on a facility's `facilities.view_sensitive`-gated
+document (unfiling it to org-level storage, after which any
+`documents.view` holder could read it) or `DELETE` it outright, despite
+never being authorized to view it in the first place. Confirmed
+independently by reading both routes and `_folder_admits_user` in full
+(the `required_permissions` check genuinely isn't overridden by
+`documents.manage`'s leadership bypass, so the read-side check this fix
+reuses is a real gate, not a no-op for that grant). Fixed: both routes now
+call `can_access_document` on the existing document before mutating it,
+returning 404 (matching the existing "don't confirm existence" convention)
+when it fails; a caller who holds the folder's own required permission is
+unaffected. Regression tests in
+`tests/test_documents_access.py::TestUpdateAndDeleteDocumentRespectFolderAcl`
+(4 tests: 2 bypass, 2 positive-control) — the 2 bypass tests independently
+confirmed to fail (`DID NOT RAISE HTTPException`) against the pre-fix
+routes via `git stash`, pass again once restored.
+
+**Extended, not fixed — FAC-13's remediation plan, item (3).** A second
+report showed `_validate_shared_document_reference` only relocates a
+document when currently unfiled (`folder_id is None`) — deliberately, per
+its own docstring — so a reference to an already-org-shared document
+already sitting in a weakly-protected folder is left there, and
+`GET /documents/{id}/download` authorizes purely on that folder's own ACL
+with no facility-specific check, so a default `documents.view` holder can
+already download it. Confirmed independently by re-reading the function
+and the download endpoint in full. Judged this a flag, not a same-day fix:
+unlike FAC-14's missing-call-to-an-existing-check shape, this needs an
+"is folder A's ACL at least as strong as folder B's requirement"
+comparison that doesn't exist anywhere in the codebase, and every
+candidate remedy (silent relocation, rejection, per-document
+re-authorization) reverses or extends a prior intentional design decision
+— the same "owner call" bar as the Blueprints & Permits question already
+flagged in this finding. Remediation-plan item (3) in
+`FAC-12-facilities.md` extended to describe both cases explicitly;
+mirrored to `KNOWN_LIMITATIONS.md`.
+
+**3 doc-accuracy corrections, all confirmed and applied:**
+
+- CHANGELOG.md's flagged-entry heading/body said the Facilities "Files"
+  UI section was emptied by FAC-13; a repo-wide frontend search found no
+  consumer of `GET /{facility_id}/folders` at all —
+  `FilesSection.tsx` loads via `getPhotos`/`getFacilityDocuments` and
+  stays populated. Reworded to name the actual impact (direct API clients,
+  generic Documents-module browsing/downloads).
+- The completion-gate table in `FAC-12-facilities.md` recorded a bare
+  `tsc --noEmit`, which per CLAUDE.md's own documented two-TypeScript-
+  installs setup resolves to the 5.9 lint compiler, not the 7.0.2 build
+  compiler `npm run typecheck` actually invokes. Re-ran the real gate
+  against this PR's head — 0 errors — and corrected the table to name and
+  record that command; same correction applied to this doc's own pass-3
+  log entry above, which had the identical stale claim.
+- This log entry's own pass-3 summary (line 21 as originally written)
+  still said "four non-sensitive categories" and "Photos/Blueprints/
+  Maintenance/Inspection" after a previous round had already corrected
+  `FAC-12-facilities.md`, `KNOWN_LIMITATIONS.md`, and `CHANGELOG.md` to
+  name three established-baseline categories with Blueprints & Permits
+  called out separately as undecided. Corrected here to match.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/documents.py` and `tests/test_documents_access.py`,
+migrations validated (no schema change), 253/253 scoped (`facilities or
+documents`, +4 for FAC-14's regression tests) and 9996/9996 full backend
+suite pass (21 pre-existing skips), `npm run typecheck` 0 errors, `eslint .`
+clean (no frontend code changed this round), prettier clean on the four
+markdown docs touched. Findings doc: `docs/security-review/
+FAC-12-facilities.md` (FAC-14, and FAC-13's extended remediation item 3).
+Pushed to `claude/security-review-facilities`. Rotation row 12 stays ⏳
+(awaiting PR #2191's merge).
 
 ### 2026-09-03 — Feature 11 (Inventory) fully closed — PR #2190 merged
 

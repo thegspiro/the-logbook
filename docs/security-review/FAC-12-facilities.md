@@ -108,6 +108,15 @@ comments in the code now assert something false about current behavior as a
 result — both corrected in this pass as a pure-documentation, zero-behavior
 change (see below); the underlying access gap is flagged, not fixed.
 
+This claim is scoped to the mechanism just described (the folder-listing
+over-restriction itself) — it is not a claim that every document-access path
+in this pass is airtight. A Codex review of this pass's own fix commit found
+two real gaps nearby, on the opposite side of the same boundary: FAC-14
+below (a genuine bypass on the generic document write routes, now fixed) and
+an extension to remediation item (3) further down (already-filed documents
+left in a weakly-protected folder are not relocated either — flagged, not
+yet fixed).
+
 **Why this is flagged rather than fixed:** a correct fix is not "loosen the
 gate" — that would let any `documents.view` holder (a much broader grant;
 the default `member` position holds it) browse a facility's Photos/
@@ -130,18 +139,60 @@ correctly needs:
    call, not one this review should make unilaterally. Until that call is
    made, Blueprints & Permits stays on `FACILITY_SENSITIVE_PERMISSIONS`
    alongside the two financial sub-folders, fail-closed.
-3. Reclassifying existing unfiled documents **before** touching the
-   per-facility folder's own permission. `_validate_shared_document_reference`
-   (`facilities.py:180-189`) files every currently-unfiled photo/document
-   directly into the per-facility folder itself — the parent all six
-   sub-folders hang off, and the very node (1) proposes loosening — not into
-   any of the six sub-folders. Loosening that parent folder's ACL on its own
-   would therefore immediately expose every document sitting there today,
-   sensitive or not, to a baseline viewer, regardless of how the sub-folders
-   underneath it end up classified. Every existing unfiled document must
-   first be classified and moved into the correctly-gated sub-folder (or
-   authorized individually) before the per-facility folder's permission
-   changes — a data-classification pass, not just a permission change.
+3. Reclassifying existing document references into a correctly-gated
+   sub-folder **before** touching the per-facility folder's own permission
+   — covering two distinct cases, not just the unfiled one (the second was
+   missing from this remediation plan as originally drafted; a Codex
+   review of this pass's own fix commit caught it, verified independently
+   below):
+   - **Unfiled documents.** `_validate_shared_document_reference`
+     (`facilities.py:180-189`) files every currently-unfiled photo/document
+     directly into the per-facility folder itself — the parent all six
+     sub-folders hang off, and the very node (1) proposes loosening — not
+     into any of the six sub-folders. Loosening that parent folder's ACL on
+     its own would therefore immediately expose every document sitting
+     there today, sensitive or not, to a baseline viewer, regardless of how
+     the sub-folders underneath it end up classified.
+   - **Already-filed documents left in a weaker folder.** The same
+     function only relocates when `document.folder_id is None`
+     (`facilities.py:180`) — deliberately, per its own docstring: "Only an
+     unfiled document is moved. A caller that deliberately filed it
+     somewhere else keeps that placement." So `POST /facilities/documents`
+     referencing an already-org-shared document that is already sitting in
+     an unrestricted or otherwise weakly-protected folder leaves it exactly
+     there. `GET /documents/{id}/download` authorizes on that folder's own
+     ACL alone (`can_access_document`, with no facility-specific check
+     layered on top — confirmed by reading the endpoint in full), so a
+     default member holding only `documents.view` can already download
+     bytes a facility record treats as sensitive today, through a
+     pre-existing folder placement the facility endpoint never chose and
+     never re-examines. **This gap is live today**, independently of
+     whether (1)/(2) above are ever acted on — it needs no loosening of
+     anything to be exploitable.
+
+   Both cases need to be classified and moved into the correctly-gated
+   sub-folder (or individually re-authorized) — a data-classification
+   pass, not just a permission change — before the per-facility folder's
+   own permission changes.
+
+   **Flagged, not fixed, here — unlike FAC-14 below.** FAC-14 closed a
+   mechanical gap: a well-tested ACL check (`can_access_document`) simply
+   wasn't being called on two routes that already had everything needed to
+   call it. Closing the already-filed case above is a different shape of
+   problem — there is no existing "is folder A's grant at least as strong
+   as folder B's requirement" comparison anywhere in this codebase
+   (`can_access_folder` only ever answers "can _this_ user access _this_
+   folder", never whether one folder's ACL subsumes another's) — and each
+   candidate remedy is itself a product call: silently relocating the
+   document reverses the _intentional_ "only an unfiled document is moved"
+   decision quoted above with no signal that reversing it is now safe for
+   every caller of this endpoint; rejecting the reference outright breaks
+   any legitimate workflow that shares an already-filed document across
+   modules; and per-document re-authorization needs a new override plus
+   its own migration. That is the same "owner call, not one this review
+   should make unilaterally" bar as point (2)'s Blueprints & Permits
+   decision — not a same-day fix.
+
 4. A migration correcting every already-stamped row for the categories that
    move (the root, the per-facility folders, and the sub-folders chosen in
    (1)/(2)), sequenced after the reclassification in (3) — mirroring
@@ -165,6 +216,75 @@ test's pass/fail outcome — both are doc-accuracy fixes, verified by the full
 `facilities`/`documents` test run below.
 
 **Mirrored to** `docs/KNOWN_LIMITATIONS.md`.
+
+### FAC-14 — HIGH (access control, IDOR) — generic document mutation routes let `documents.manage` bypass a document's own folder ACL entirely — ✅ FIXED
+
+**Found by Codex review of this pass's own fix commit (`0231a904`).**
+FAC-13's "not a data-exposure bug — fail-closed throughout" claim above is
+about the _read_ path (`get_document`/`download_document`, and the folder
+listing they sit behind). The write path told a different story.
+`PATCH /documents/{document_id}` and `DELETE /documents/{document_id}`
+(`documents.py`) were gated only on `documents.manage`, resolved the
+target purely by `organization_id`
+(`DocumentsService.get_document_by_id`), and never called
+`can_access_document`/`can_access_folder` — the same check `get_document`
+and `download_document` already run. `PATCH` additionally accepted
+`{"folder_id": null}` and validated only that a _new_ `folder_id` belongs
+to the caller's own org (`assert_in_org`, DOC-6/XC-1) — never that the
+caller may access the document's _current_ folder.
+
+**Impact:** `documents.manage` is an org-wide administrative grant,
+independent of any facilities permission. `_folder_admits_user`
+(`documents_service.py:214-239`) deliberately does **not** let
+`documents.manage`'s leadership bypass override a folder's own
+`required_permissions` — the entire point of `FACILITY_SENSITIVE_PERMISSIONS`
+is that a documents administrator holding none of `facilities.view_sensitive`/
+`.edit`/`.manage` cannot read a facility's Insurance & Leases or Capital
+Projects folder. Because the mutation routes skipped the check entirely, that
+same documents.manage-only caller — holding or obtaining a sensitive
+facility document's UUID (an earlier authorized view, a URL, an audit-log
+entry, a list elsewhere) — could `PATCH` its `folder_id` to `null` and move
+it to unfiled/org-level storage, after which any `documents.view` holder
+(the default `member` grant) could list and download it. `DELETE` had the
+identical gap and could destroy the file outright.
+
+**Verified independently**, not on Codex's claim alone: read
+`update_document`/`delete_document` in both `documents.py` and
+`documents_service.py` in full and confirmed neither calls
+`can_access_document`/`can_access_folder` anywhere in the call chain, and
+confirmed `_folder_admits_user` really does check `required_permissions`
+_before_ the `documents.manage` leadership bypass (so the read-side check
+this fix now reuses genuinely denies a documents.manage-only, non-facilities
+caller — it isn't itself a no-op for that grant).
+
+**Fix:** both endpoints now fetch the existing document and call
+`DocumentsService.can_access_document` — the same helper `get_document`/
+`download_document` already use — before applying any change, returning the
+same "not found" 404 (not 403) an inaccessible document already returns
+elsewhere, so existence isn't confirmed to a caller who can't see it. A
+document with no folder (org-level) is unaffected — `can_access_document`
+already treats that as accessible to any `documents.view` holder, matching
+existing behavior. A caller who genuinely holds the folder's own
+`required_permissions` (e.g. `facilities.view_sensitive`) can still move or
+delete the document, so legitimate facility-admin workflows are unaffected.
+
+**Regression test:** `tests/test_documents_access.py::
+TestUpdateAndDeleteDocumentRespectFolderAcl` (4 tests) — two prove a
+`documents.manage`-only caller can no longer unfile or delete a document
+sitting in a `facilities.view_sensitive`-gated folder (both now raise 404;
+independently confirmed to fail — "DID NOT RAISE HTTPException" — against
+the pre-fix routes via `git stash`, and to pass again once the stash was
+restored), and two positive-control tests prove a caller who holds that
+folder's own `required_permissions` can still do both.
+
+**Scope note:** `facilities.py` and `apparatus.py` also call methods named
+`update_document`/`delete_document`, but on `FacilitiesService` and
+`ApparatusService` respectively — distinct classes operating on their own
+`FacilityDocument`/apparatus-document models, not the generic
+`DocumentsService` this finding is about. Confirmed via `grep` that
+`DocumentsService.update_document`/`delete_document` have exactly one
+caller each, both in `documents.py`, so this fix has no effect on those
+other modules.
 
 ## Verified good ✅ (re-confirmed this pass)
 
@@ -198,16 +318,39 @@ test's pass/fail outcome — both are doc-accuracy fixes, verified by the full
 
 ## Completion gate (pass 3)
 
-| Check                                             | Result                                                                     |
-| ------------------------------------------------- | -------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                            |
-| `black --check app/ tests/ alembic/`              | ✅ clean                                                                   |
-| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                                   |
-| `python3 scripts/validate_migrations.py --strict` | ✅ single head, no schema change                                           |
-| `pytest tests/ -k "facilities or documents"`      | ✅ 249 passed, 1 skipped (pre-existing optional-dependency skip)           |
-| `pytest tests/` (full backend suite)              | ✅ 9992 passed, 21 skipped (pre-existing Docker/optional-dependency skips) |
-| `tsc --noEmit`                                    | ✅ 0 errors (no frontend code changed this pass)                           |
-| `eslint .`                                        | ✅ (see report body — no frontend code changed this pass)                  |
+| Check                                                                                                                                                                     | Result                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                             | ✅ 0 violations                                                            |
+| `black --check app/ tests/ alembic/`                                                                                                                                      | ✅ clean                                                                   |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                 | ✅ clean                                                                   |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                         | ✅ single head, no schema change                                           |
+| `pytest tests/ -k "facilities or documents"`                                                                                                                              | ✅ 249 passed, 1 skipped (pre-existing optional-dependency skip)           |
+| `pytest tests/` (full backend suite)                                                                                                                                      | ✅ 9992 passed, 21 skipped (pre-existing Docker/optional-dependency skips) |
+| `npm run typecheck` (TypeScript 7 via `tsc-native.mjs` — bare `tsc` resolves to the 5.9 lint compiler, not the build compiler; see CLAUDE.md's "Two TypeScript installs") | ✅ 0 errors (no frontend code changed this pass)                           |
+| `eslint .`                                                                                                                                                                | ✅ (see report body — no frontend code changed this pass)                  |
+
+## Completion gate (pass 3, round 2 — Codex review of `0231a904`)
+
+Re-run after FAC-14's fix and the doc corrections (Finding 1/3/4/5) below.
+
+| Check                                                                                                                        | Result                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/api/v1/endpoints/documents.py tests/test_documents_access.py`                                                    | ✅ 0 violations                                          |
+| `black --check app/api/v1/endpoints/documents.py tests/test_documents_access.py`                                             | ✅ clean                                                 |
+| `isort --check-only app/api/v1/endpoints/documents.py tests/test_documents_access.py`                                        | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                                            | ✅ single head, no schema change                         |
+| `pytest tests/ -k "facilities or documents"`                                                                                 | ✅ 253 passed (+4, FAC-14's regression tests), 1 skipped |
+| `pytest tests/` (full backend suite)                                                                                         | ✅ 9996 passed (+4), 21 skipped (pre-existing)           |
+| `npm run typecheck` (TypeScript 7 via `tsc-native.mjs`)                                                                      | ✅ 0 errors (no frontend code changed this round)        |
+| `eslint .`                                                                                                                   | ✅ clean, exit 0 (no frontend code changed this round)   |
+| `prettier` on the four markdown docs touched (`FAC-12-facilities.md`, `KNOWN_LIMITATIONS.md`, `CHANGELOG.md`, `PROGRESS.md`) | ✅ clean                                                 |
+
+**FAC-14's regression test independently confirmed against pre-fix code:**
+`git stash` isolating just the `documents.py` fix, then
+`pytest tests/test_documents_access.py -k TestUpdateAndDeleteDocumentRespectFolderAcl`
+— the two bypass tests failed (`DID NOT RAISE HTTPException`) as expected,
+the two positive-control tests still passed; `git stash pop` restored the
+fix and all four passed.
 
 ---
 

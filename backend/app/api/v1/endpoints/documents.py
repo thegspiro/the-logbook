@@ -567,6 +567,23 @@ async def update_document(
 ):
     """Update a document's metadata"""
     service = DocumentsService(db)
+    existing = ensure_found(
+        await service.get_document_by_id(document_id, current_user.organization_id),
+        "Document",
+    )
+    # documents.manage is an org-wide administrative grant, but a document's
+    # containing folder can carry its own narrower ACL (required_permissions,
+    # leadership/owner/role visibility) -- the same boundary can_access_document
+    # already enforces on GET and download. Without this check here, a
+    # documents.manage holder with none of a folder's own required_permissions
+    # (e.g. a facility's facilities.view_sensitive-gated folder) could move a
+    # document they cannot even view out of that folder -- or delete it below
+    # -- defeating the folder ACL from the write side instead of merely
+    # lacking documents.manage's own scope.
+    if not await service.can_access_document(
+        existing, current_user.organization_id, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
     # exclude_unset, not exclude_none: an explicit null (clearing folder_id to
     # move a document to org level) must reach the service as a clear, not be
     # silently dropped (CLAUDE.md pitfall #1's update-path mirror image).
@@ -602,6 +619,17 @@ async def delete_document(
 ):
     """Delete a document"""
     service = DocumentsService(db)
+    existing = ensure_found(
+        await service.get_document_by_id(document_id, current_user.organization_id),
+        "Document",
+    )
+    # Same folder-ACL boundary as update_document above: documents.manage
+    # alone must not be able to destroy a document sitting in a folder gated
+    # by its own required_permissions.
+    if not await service.can_access_document(
+        existing, current_user.organization_id, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
     success = await service.delete_document(document_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")

@@ -3118,14 +3118,27 @@ and Capital Projects); (2) an owner call on whether **Blueprints & Permits**
 specifically should stay sensitive (floor plans can be defensibly
 security-sensitive even though FAC-5 never named them as one of the five
 families) or move with the other three — until decided it stays sensitive,
-fail-closed; (3) reclassifying existing unfiled documents before loosening
-the per-facility folder's own permission — `_validate_shared_document_reference`
+fail-closed; (3) reclassifying existing document references before
+loosening the per-facility folder's own permission — this covers two
+cases, not just unfiled documents: `_validate_shared_document_reference`
 files every currently-unfiled photo/document directly into that parent
 folder, not into any of the six sub-folders, so loosening it first would
 expose every document sitting there today regardless of how the sub-folders
-are classified; (4) a migration correcting every already-stamped row for
-whichever categories move, sequenced after (3). Found in
-`docs/security-review/FAC-12-facilities.md` (feature 12, pass 3, FAC-13).
+are classified — **and** the same function only relocates when
+`folder_id is None`, so an already-org-shared document already sitting in
+an unrestricted or otherwise weakly-protected folder is left exactly there
+and stays downloadable via `GET /documents/{id}/download` (which authorizes
+on that folder's own ACL alone, no facility-specific check) to any
+`documents.view` holder — a gap that is live today independent of whether
+this permission tier is ever loosened; (4) a migration correcting every
+already-stamped row for whichever categories move, sequenced after (3).
+Found in `docs/security-review/FAC-12-facilities.md` (feature 12, pass 3,
+FAC-13; the already-filed sub-case surfaced in a later Codex review round
+of the same pass). A related but distinct gap — `documents.manage` alone
+bypassing a document's own folder ACL through the _generic_ update/delete
+routes, independent of this facility-specific over-restriction — was found
+in the same review round and fixed (FAC-14, same doc); it is not listed
+here because it is resolved, not an open limitation.
 
 ## Process
 
