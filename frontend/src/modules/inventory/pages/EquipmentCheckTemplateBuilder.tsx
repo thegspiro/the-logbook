@@ -86,7 +86,12 @@ import type { CatalogAddPayload } from '@/modules/inventory/components/CatalogQu
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
-import { storedInsideOptions } from './equipmentCheckHierarchy';
+import {
+  buildParentByIdMap,
+  descendantCompartmentIds,
+  descendantIdsFromParentMap,
+  storedInsideOptions,
+} from './equipmentCheckHierarchy';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -479,6 +484,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
   const compartmentsRef = useRef(compartments);
   compartmentsRef.current = compartments;
+  // AP-13 finding 2 (Codex): last-known-server `id -> parentCompartmentId`
+  // for every persisted compartment. Reparenting (indent/outdent/the parent
+  // picker) has no auto-save path -- handleSave is the only writer of
+  // parent_compartment_id -- so this is what deleteCompartment compares
+  // against to detect a pending, unsaved hierarchy edit that would make its
+  // own client-side subtree computation disagree with what the backend's
+  // cascade would actually delete. Refreshed wholesale on every load (initial
+  // load and the reload handleSave triggers after a successful save) and
+  // per-row wherever a compartment's parent is persisted outside handleSave
+  // (add/duplicate a compartment, which the backend assigns a parent to
+  // immediately).
+  const savedParentByIdRef = useRef<Map<string, string>>(new Map());
   const itemMoveQueue = useRef<Promise<void>>(Promise.resolve());
   // Two guards, not one: adding a compartment and adding a section header are
   // separate buttons, and a shared flag would gray out one because the other
@@ -542,7 +559,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const autoSavePendingRef = useRef<
     Map<string, { timer: ReturnType<typeof setTimeout>; patch: Record<string, unknown> }>
   >(new Map());
-  const autoSaveInFlightRef = useRef<Set<Promise<void>>>(new Set());
+  // Keyed by item id, like autoSavePendingRef above -- once a debounce timer
+  // fires, scheduleAutoSaveItem moves the request here so a subtree delete
+  // can find and quiesce a doomed item's in-flight PATCH, not just its
+  // still-pending timer (AP-13 finding 1).
+  const autoSaveInFlightRef = useRef<Map<string, Set<Promise<void>>>>(new Map());
   const autoSaveErrorRef = useRef(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -621,6 +642,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       });
       setCompartments(mapped);
       setExpandedCompartments(expanded);
+      savedParentByIdRef.current = buildParentByIdMap(mapped);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load template'));
     } finally {
@@ -743,6 +765,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
+        savedParentByIdRef.current.set(created.id, comp.parentCompartmentId);
         setCompartments((prev) => [...prev, comp]);
         setExpandedCompartments((prev) => new Set(prev).add(created.id));
         toast.success('Compartment added');
@@ -783,6 +806,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
+        savedParentByIdRef.current.set(created.id, comp.parentCompartmentId);
         setCompartments((prev) => [...prev, comp]);
         toast.success('Section header added');
       } catch (err: unknown) {
@@ -805,14 +829,100 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const comp = compartments[idx];
     if (!comp) return;
 
-    const itemCount = comp.items.length;
+    // The backend cascade-deletes the whole subtree, not just this row
+    // (AP-8/AP-13 finding 3) -- the confirmation and the local-state removal
+    // both have to account for every descendant, or the count undersells
+    // what's being destroyed and deleted descendants linger as orphaned
+    // "top-level" rows whose ids 404 on the next Save.
+    const descendantIds = descendantCompartmentIds(compartments, comp.id);
+
+    // AP-13 finding 2 (Codex): descendantIds above is computed from *this
+    // screen's* current hierarchy, which can disagree with what the backend
+    // still has -- reparenting (indent/outdent/the parent picker) has no
+    // auto-save path; handleSave is the only writer of
+    // parent_compartment_id. If a descendant was reparented OUT of this
+    // subtree in unsaved local state, the confirmation and local removal
+    // below would correctly leave it alone -- but the backend's cascade,
+    // still seeing the old parent_compartment_id, destroys it anyway,
+    // silently losing whatever the user was in the middle of saving. The
+    // inverse (reparented IN, unsaved) would remove it from this screen
+    // while the backend leaves it alive elsewhere, untouched. Comparing the
+    // live computation against the last-known-server subtree
+    // (savedParentByIdRef) catches both directions and blocks rather than
+    // risks either.
+    if (comp.id) {
+      const serverDescendantIds = descendantIdsFromParentMap(savedParentByIdRef.current, comp.id);
+      const knownIds = new Set(
+        [...serverDescendantIds, ...descendantIds].filter((id) => savedParentByIdRef.current.has(id))
+      );
+      const hasPendingReparent = [...knownIds].some((id) => serverDescendantIds.has(id) !== descendantIds.has(id));
+      if (hasPendingReparent) {
+        toast.error(
+          'This compartment’s hierarchy has unsaved changes that would affect what gets deleted. Save the template, then delete this compartment.'
+        );
+        return;
+      }
+    }
+
+    const descendantComps = compartments.filter((c) => c.id !== undefined && descendantIds.has(c.id));
+    const totalItems = comp.items.length + descendantComps.reduce((sum, c) => sum + c.items.length, 0);
     const label = comp.name || 'Untitled Compartment';
+    const subtreeNote =
+      descendantComps.length > 0
+        ? ` and ${descendantComps.length} nested compartment${descendantComps.length !== 1 ? 's' : ''}`
+        : '';
     const msg =
-      itemCount > 0
-        ? `Delete "${label}" and its ${itemCount} item${itemCount !== 1 ? 's' : ''}? This cannot be undone.`
-        : `Delete "${label}"? This cannot be undone.`;
+      totalItems > 0
+        ? `Delete "${label}"${subtreeNote} and ${totalItems} item${totalItems !== 1 ? 's' : ''} total? This cannot be undone.`
+        : `Delete "${label}"${subtreeNote}? This cannot be undone.`;
     if (!(await confirm({ title: 'Delete compartment', message: msg, confirmLabel: 'Delete', cancelLabel: 'Keep it' })))
       return;
+
+    // AP-13 finding 4 / AP-15 / AP-15 follow-up (Codex, three rounds on the
+    // same race): the backend delete is about to remove every item in this
+    // subtree too. A descendant item can have a debounced auto-save still
+    // pending (scheduleAutoSaveItem's 1.5s timer) at this moment, and that
+    // timer runs independently of the delete request -- cancelling it only
+    // *after* `await`ing the delete (the first fix here) leaves a window
+    // where the timer can still fire *while the delete is in flight*, start
+    // its own PATCH, and race the DELETE to the server; cancelling it only
+    // *before* the delete (an even earlier version) instead throws the
+    // pending edit away for good the moment the delete request fails. Both
+    // symptoms are the same one this comment is trying to close for good:
+    // capture and cancel every timer now, synchronously, before the delete
+    // even starts -- so none of them can fire mid-flight -- and hold the
+    // captured patches so they can be re-armed if the delete turns out to
+    // have failed, exactly the way flushPendingAutoSaves already re-arms a
+    // failed flush's patches (asFallback, so a newer edit made since still
+    // wins).
+    const doomedItemIds = [...comp.items, ...descendantComps.flatMap((c) => c.items)]
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id));
+    const capturedAutoSaves: Array<[string, Record<string, unknown>]> = [];
+    for (const itemId of doomedItemIds) {
+      const pending = autoSavePendingRef.current.get(itemId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        autoSavePendingRef.current.delete(itemId);
+        capturedAutoSaves.push([itemId, pending.patch]);
+      }
+    }
+
+    // AP-13 finding 1 (Codex, follow-up): a timer that fired before this
+    // point -- e.g. the user left the confirmation dialog above open past
+    // the debounce window -- has already left autoSavePendingRef; the
+    // capture loop above never sees it. scheduleAutoSaveItem moved it into
+    // autoSaveInFlightRef instead, where its PATCH is already in flight
+    // against the server. Left alone, that PATCH can settle *after* the
+    // DELETE below -- reporting "Save failed" for an item the delete just
+    // removed, or racing the DELETE outright. Waiting for it here keeps the
+    // same ordering guarantee finding 12 established for pending timers:
+    // nothing touching a doomed item can still be running once the DELETE is
+    // sent. The request's own .catch already swallows a failure (it only
+    // flags autoSaveErrorRef), so this can never reject and abort the
+    // delete.
+    const doomedInFlight = doomedItemIds.flatMap((itemId) => [...(autoSaveInFlightRef.current.get(itemId) ?? [])]);
+    if (doomedInFlight.length > 0) await Promise.all(doomedInFlight);
 
     if (comp.id) {
       try {
@@ -820,11 +930,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         await equipmentCheckService.deleteCompartment(comp.id);
         toast.success('Compartment deleted');
       } catch (err: unknown) {
+        // The compartment (and these items) are still live -- re-arm rather
+        // than let the captured edits vanish.
+        for (const [itemId, patch] of capturedAutoSaves) {
+          scheduleAutoSaveItem(itemId, patch, { asFallback: true });
+        }
         toast.error(getErrorMessage(err, 'Failed to delete compartment'));
         return;
       }
     }
-    setCompartments((prev) => prev.filter((_, i) => i !== idx));
+    settleAutoSaveStatus();
+
+    // AP-13 finding 5 (Codex): savedParentByIdRef must drop every id this
+    // delete just removed, or a *second* delete of a still-surviving
+    // ancestor -- in the same session, no reload in between -- compares its
+    // live subtree against a server-truth map that still lists the
+    // already-deleted rows as descendants. That permanent mismatch trips the
+    // AP-13 pending-reparent guard for a delete with nothing pending at all,
+    // blocking every further compartment delete until the page reloads.
+    if (comp.id) savedParentByIdRef.current.delete(comp.id);
+    for (const id of descendantIds) savedParentByIdRef.current.delete(id);
+
+    setCompartments((prev) => prev.filter((c, i) => i !== idx && !(c.id !== undefined && descendantIds.has(c.id))));
     markDirty();
   };
 
@@ -847,6 +974,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       try {
         await ensureDraftBeforeStructureEdit();
         copy = compartmentFormFromResponse(await equipmentCheckService.cloneCompartment(comp.id, idx + 1));
+        if (copy.id) savedParentByIdRef.current.set(copy.id, copy.parentCompartmentId);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to duplicate compartment'));
         return;
@@ -1698,10 +1826,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               autoSaveErrorRef.current = true;
             })
             .finally(() => {
-              autoSaveInFlightRef.current.delete(request);
+              const inFlightForItem = autoSaveInFlightRef.current.get(itemId);
+              inFlightForItem?.delete(request);
+              if (inFlightForItem && inFlightForItem.size === 0) autoSaveInFlightRef.current.delete(itemId);
               settleAutoSaveStatus();
             });
-          autoSaveInFlightRef.current.add(request);
+          const inFlightForItem = autoSaveInFlightRef.current.get(itemId);
+          if (inFlightForItem) inFlightForItem.add(request);
+          else autoSaveInFlightRef.current.set(itemId, new Set([request]));
         },
         options?.immediate ? 0 : 1500
       );
@@ -1797,7 +1929,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         return false;
       }
     }
-    if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
+    if (autoSaveInFlightRef.current.size > 0) {
+      await Promise.all([...autoSaveInFlightRef.current.values()].flatMap((requests) => [...requests]));
+    }
     settleAutoSaveStatus();
     return true;
   };
@@ -1918,6 +2052,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           }
         }
         await Promise.all(updatePromises);
+        // Every compartment update above just persisted parent_compartment_id
+        // exactly as sent (handleSave is the only writer -- see the comment
+        // on the update above) -- refresh the server-truth map immediately
+        // rather than waiting on loadTemplate's reload below, which is a
+        // separate, unawaited round trip (AP-13 finding 2).
+        for (const comp of compartments) {
+          if (comp.id) savedParentByIdRef.current.set(comp.id, comp.parentCompartmentId);
+        }
 
         if (publish) {
           await equipmentCheckService.updateEquipmentCheckTemplate(templateId, { is_active: true });
@@ -2063,6 +2205,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     setCompartments(staged);
+    // AP-13 finding 2 (Codex, follow-up): a bulk replace mints brand-new
+    // persisted rows with new ids -- savedParentByIdRef has to be rebuilt
+    // from `staged`, the same way the initial load rebuilds it, or the new
+    // ids are simply absent from the map. The delete guard's `knownIds`
+    // filter treats an id it has no record of as "nothing to compare," so an
+    // unsaved reparent of one of these new rows would silently bypass the
+    // guard instead of blocking the delete -- the backend cascade would then
+    // delete only the still-top-level parent, leaving the reparented child
+    // alive and reappearing on the next reload.
+    savedParentByIdRef.current = buildParentByIdMap(staged);
     // Marked here rather than at each call site: replacing the contents leaves
     // a save outstanding on every path that does it, and the vehicle-preset
     // branch was the one that forgot. On an unsaved template the replacement
