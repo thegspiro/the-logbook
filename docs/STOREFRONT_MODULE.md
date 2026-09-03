@@ -37,11 +37,12 @@ forty job shirts a year.
 
 ## Where it lives
 
-| Path            | Page                                                            | Permission          |
-| --------------- | --------------------------------------------------------------- | ------------------- |
-| `/store`        | Member storefront — browse the open window, build a cart, order | `storefront.view`   |
-| `/store/orders` | My Orders — status, balance, payment buttons                    | `storefront.view`   |
-| `/store/admin`  | Quartermaster console (6 tabs)                                  | `storefront.manage` |
+| Path                     | Page                                                            | Permission          |
+| ------------------------ | --------------------------------------------------------------- | ------------------- |
+| `/store`                 | Member storefront — browse the open window, build a cart, order | `storefront.view`   |
+| `/store/orders`          | My Orders — status, balance, payment buttons                    | `storefront.view`   |
+| `/inventory/admin/store` | Quartermaster console (6 tabs, selected by `?tab=`)             | `storefront.manage` |
+| `/store/admin`           | Redirects to `/inventory/admin/store`, for bookmarks            | —                   |
 
 The admin console's tabs are Overview, Order Windows, Catalog, Orders,
 Payments, and Settings.

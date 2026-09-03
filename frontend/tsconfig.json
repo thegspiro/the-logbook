@@ -53,6 +53,11 @@
     "allowSyntheticDefaultImports": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/__tests__/**", "src/e2e/**"],
+  // `src/test/routeGates.ts` is test infrastructure that reads the route
+  // sources off disk. It is excluded for the same reason the `.test.ts` files
+  // beside it are: it imports `node:fs`, and the app build has no Node types,
+  // so type-checking it here would report the platform rather than the code.
+  // Vitest still runs it, and `tsconfig.eslint.json` still lints it.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/__tests__/**", "src/e2e/**", "src/test/routeGates.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

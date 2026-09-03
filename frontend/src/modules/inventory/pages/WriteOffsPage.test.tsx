@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -204,5 +204,42 @@ describe('WriteOffsPage', () => {
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith(expect.any(String));
     });
+  });
+});
+
+/**
+ * Arriving from the inventory hub's "Needs attention" queue.
+ *
+ * Its own block with its own resets: `vi.clearAllMocks()` clears calls but not
+ * implementations, so a block that configures nothing inherits its neighbour's
+ * (CLAUDE.md #28).
+ */
+describe('WriteOffsPage — opened from the attention queue', () => {
+  beforeEach(() => {
+    mockGetWriteOffRequests.mockReset();
+    mockGetWriteOffRequests.mockResolvedValue([makeWriteOff()]);
+    mockReviewWriteOff.mockReset();
+    mockReviewWriteOff.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('opens the review dialog for the write-off the link names', async () => {
+    window.history.pushState({}, '', '/inventory/admin/write-offs?request=wo-1');
+    renderWithRouter(<WriteOffsPage />);
+
+    expect(await screen.findByText('Review Write-Off: Damaged Helmet')).toBeInTheDocument();
+  });
+
+  it('leaves the list alone when the write-off has already been resolved', async () => {
+    // Somebody else may have decided it between the queue rendering and the
+    // click; a working page beats an error about work nobody still owes.
+    window.history.pushState({}, '', '/inventory/admin/write-offs?request=gone');
+    renderWithRouter(<WriteOffsPage />);
+    await screen.findByText('Damaged Helmet');
+
+    expect(screen.queryByText(/Review Write-Off:/)).not.toBeInTheDocument();
   });
 });

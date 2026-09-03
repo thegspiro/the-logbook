@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from typing import Awaitable, Callable, Optional, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -47,6 +48,17 @@ from app.models.skills_testing import (
     SkillTest,
     SkillTestResult,
     SkillTestStatus,
+)
+from app.models.storefront import (
+    StoreOrder,
+    StoreOrderStatus,
+    StoreOrderWindow,
+    StorePaymentEvent,
+    StorePaymentEventStatus,
+    StorePaymentStatus,
+    StoreProduct,
+    StoreProductStatus,
+    StoreWindowStatus,
 )
 from app.models.training import (
     EnrollmentStatus,
@@ -165,6 +177,11 @@ def _fmt_hours(value: float | None) -> str:
     """Hours read better without a trailing .0 once they run to thousands."""
     total = float(value or 0)
     return f"{total:,.0f}" if total >= 100 else f"{total:,.1f}"
+
+
+def _fmt_money(value: Decimal | float | None) -> str:
+    """Whole dollars. A metric card is a glance, and cents do not survive one."""
+    return f"${Decimal(value or 0):,.0f}"
 
 
 def _plural(count: int, singular: str, plural: Optional[str] = None) -> str:
@@ -1247,6 +1264,263 @@ async def _events_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     return items
 
 
+# ── Department store ────────────────────────────────────────────────────────
+#
+# The store sells the uniforms the inventory module tracks, and its admin page
+# now lives inside Inventory Administration — so it renders the same frame as
+# every other admin page, and the frame needs a module spec to fill.
+#
+# The money and the fulfillment are counted separately on purpose: an order can
+# be paid and undelivered, or delivered and unpaid, and the store's model
+# tracks `payment_status` apart from `status` for exactly that reason.
+
+#: Orders still needing somebody to do something. Fulfilled and cancelled ones
+#: are history; everything between is work.
+_OPEN_ORDER_STATUSES = (
+    StoreOrderStatus.SUBMITTED,
+    StoreOrderStatus.AWAITING_PAYMENT,
+    StoreOrderStatus.PAID,
+    StoreOrderStatus.ORDERED,
+    StoreOrderStatus.READY_FOR_PICKUP,
+)
+
+#: Reported payments the automatic matcher could not settle. `MATCHED` is here
+#: too: it found an order and stopped short of applying the money, so a person
+#: still has to agree before the balance moves.
+_UNSETTLED_PAYMENT_EVENTS = (
+    StorePaymentEventStatus.UNMATCHED,
+    StorePaymentEventStatus.AMBIGUOUS,
+    StorePaymentEventStatus.MATCHED,
+)
+
+
+def _store_open_orders_criteria(organization_id: str):
+    return (
+        StoreOrder.organization_id == organization_id,
+        StoreOrder.status.in_(_OPEN_ORDER_STATUSES),
+    )
+
+
+async def _store_open_orders(ctx: MetricContext) -> tuple[str, str]:
+    count = await _scalar(
+        ctx.db,
+        select(func.count(StoreOrder.id)).where(
+            *_store_open_orders_criteria(ctx.organization_id)
+        ),
+    )
+    ready = await _scalar(
+        ctx.db,
+        select(func.count(StoreOrder.id)).where(
+            StoreOrder.organization_id == ctx.organization_id,
+            StoreOrder.status == StoreOrderStatus.READY_FOR_PICKUP,
+        ),
+    )
+    return _fmt_int(count), f"{ready} ready for pickup"
+
+
+async def _store_awaiting_payment(ctx: MetricContext) -> tuple[str, str]:
+    count = await _scalar(
+        ctx.db,
+        select(func.count(StoreOrder.id)).where(
+            StoreOrder.organization_id == ctx.organization_id,
+            StoreOrder.status != StoreOrderStatus.CANCELLED,
+            StoreOrder.payment_status.in_(
+                (StorePaymentStatus.UNPAID, StorePaymentStatus.PARTIAL)
+            ),
+        ),
+    )
+    return _fmt_int(count), "unpaid or part-paid"
+
+
+async def _store_outstanding_balance(ctx: MetricContext) -> tuple[str, str]:
+    """What members still owe: the total less what has actually landed.
+
+    Cancelled orders are excluded — nobody owes for an order that was called
+    off — and the sum is floored at zero per row, so an overpayment sitting on
+    one order cannot quietly cancel out a genuine debt on another.
+    """
+    total = (
+        await ctx.db.execute(
+            select(
+                func.coalesce(
+                    func.sum(
+                        func.greatest(StoreOrder.total - StoreOrder.amount_paid, 0)
+                    ),
+                    0,
+                )
+            ).where(
+                StoreOrder.organization_id == ctx.organization_id,
+                StoreOrder.status != StoreOrderStatus.CANCELLED,
+                StoreOrder.payment_status.notin_(
+                    (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED)
+                ),
+            )
+        )
+    ).scalar()
+    orders = await _scalar(
+        ctx.db,
+        select(func.count(StoreOrder.id)).where(
+            StoreOrder.organization_id == ctx.organization_id,
+            StoreOrder.status != StoreOrderStatus.CANCELLED,
+            StoreOrder.payment_status.notin_(
+                (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED)
+            ),
+        ),
+    )
+    return _fmt_money(total), f"across {orders} {_plural(orders, 'order')}"
+
+
+async def _store_pending_verification(ctx: MetricContext) -> tuple[str, str]:
+    count = await _scalar(
+        ctx.db,
+        select(func.count(StoreOrder.id)).where(
+            StoreOrder.organization_id == ctx.organization_id,
+            StoreOrder.payment_status == StorePaymentStatus.PENDING_VERIFICATION,
+        ),
+    )
+    return _fmt_int(count), "member says they paid"
+
+
+async def _store_ready_for_pickup(ctx: MetricContext) -> tuple[str, str]:
+    count = await _scalar(
+        ctx.db,
+        select(func.count(StoreOrder.id)).where(
+            StoreOrder.organization_id == ctx.organization_id,
+            StoreOrder.status == StoreOrderStatus.READY_FOR_PICKUP,
+        ),
+    )
+    return _fmt_int(count), "waiting to be collected"
+
+
+async def _store_active_products(ctx: MetricContext) -> tuple[str, str]:
+    count = await _scalar(
+        ctx.db,
+        select(func.count(StoreProduct.id)).where(
+            StoreProduct.organization_id == ctx.organization_id,
+            StoreProduct.status == StoreProductStatus.ACTIVE,
+        ),
+    )
+    drafts = await _scalar(
+        ctx.db,
+        select(func.count(StoreProduct.id)).where(
+            StoreProduct.organization_id == ctx.organization_id,
+            StoreProduct.status == StoreProductStatus.DRAFT,
+        ),
+    )
+    return _fmt_int(count), f"{drafts} still in draft"
+
+
+async def _storefront_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
+    items: list[AdminAttentionItem] = []
+
+    # A member has said they paid and nobody has agreed yet. Their order does
+    # not move until somebody looks, so this is the queue that stalls people.
+    verify_count, oldest_reported = await _count_and_oldest(
+        ctx.db,
+        StoreOrder,
+        StoreOrder.organization_id == ctx.organization_id,
+        StoreOrder.payment_status == StorePaymentStatus.PENDING_VERIFICATION,
+        date_column=StoreOrder.payment_reported_at,
+    )
+    if verify_count:
+        age = _age_days(oldest_reported, ctx.today)
+        items.append(
+            AdminAttentionItem(
+                key="store_pending_verification",
+                title=(
+                    f"{verify_count} {_plural(verify_count, 'payment')} "
+                    "awaiting verification"
+                ),
+                detail=" · ".join(
+                    part
+                    for part in (
+                        _waiting_phrase(age),
+                        "the order does not move until it is checked",
+                    )
+                    if part
+                ),
+                action_label="Verify payments",
+                href="/inventory/admin/store?tab=orders",
+                severity="warning",
+                count=verify_count,
+                oldest_age_days=age,
+            )
+        )
+
+    # Money the provider reported that the matcher could not settle. Left
+    # alone it is a member who has paid and is still being chased.
+    unsettled_count, oldest_event = await _count_and_oldest(
+        ctx.db,
+        StorePaymentEvent,
+        StorePaymentEvent.organization_id == ctx.organization_id,
+        StorePaymentEvent.status.in_(_UNSETTLED_PAYMENT_EVENTS),
+        date_column=StorePaymentEvent.created_at,
+    )
+    if unsettled_count:
+        age = _age_days(oldest_event, ctx.today)
+        items.append(
+            AdminAttentionItem(
+                key="store_unmatched_payments",
+                title=(
+                    f"{unsettled_count} reported "
+                    f"{_plural(unsettled_count, 'payment')} unreconciled"
+                ),
+                detail=" · ".join(
+                    part
+                    for part in (
+                        _waiting_phrase(age),
+                        "matched to no order, or matched and not applied",
+                    )
+                    if part
+                ),
+                action_label="Reconcile",
+                href="/inventory/admin/store?tab=payments",
+                severity="warning",
+                count=unsettled_count,
+                oldest_age_days=age,
+            )
+        )
+
+    # A window that closed and was never fulfilled is an order period nobody
+    # finished handing out — the members have paid and are waiting.
+    now = datetime.now(timezone.utc)
+    stale_count, oldest_close = await _count_and_oldest(
+        ctx.db,
+        StoreOrderWindow,
+        StoreOrderWindow.organization_id == ctx.organization_id,
+        StoreOrderWindow.status == StoreWindowStatus.CLOSED,
+        StoreOrderWindow.closes_at.isnot(None),
+        StoreOrderWindow.closes_at < now - timedelta(days=30),
+        date_column=StoreOrderWindow.closes_at,
+    )
+    if stale_count:
+        age = _age_days(oldest_close, ctx.today)
+        items.append(
+            AdminAttentionItem(
+                key="store_unfulfilled_windows",
+                title=(
+                    f"{stale_count} order {_plural(stale_count, 'window')} "
+                    "closed but not fulfilled"
+                ),
+                detail=" · ".join(
+                    part
+                    for part in (
+                        _waiting_phrase(age),
+                        "members have ordered and are waiting on delivery",
+                    )
+                    if part
+                ),
+                action_label="Open windows",
+                href="/inventory/admin/store?tab=windows",
+                severity="warning",
+                count=stale_count,
+                oldest_age_days=age,
+            )
+        )
+
+    return items
+
+
 # ── Registry ────────────────────────────────────────────────────────────────
 
 MODULE_REGISTRY: dict[str, ModuleSpec] = {
@@ -1447,6 +1721,51 @@ MODULE_REGISTRY: dict[str, ModuleSpec] = {
                 label="Public requests",
                 description="Community event requests not yet completed or declined",
                 resolve=_events_open_requests,
+            ),
+        ),
+    ),
+    "storefront": ModuleSpec(
+        key="storefront",
+        permission="storefront.manage",
+        requires_module="storefront",
+        default_metrics=("open_orders", "awaiting_payment", "outstanding_balance"),
+        attention=_storefront_attention,
+        metrics=(
+            MetricSpec(
+                key="open_orders",
+                label="Open orders",
+                description="Member orders that are neither fulfilled nor cancelled",
+                resolve=_store_open_orders,
+            ),
+            MetricSpec(
+                key="awaiting_payment",
+                label="Awaiting payment",
+                description="Orders with money still owed on them",
+                resolve=_store_awaiting_payment,
+            ),
+            MetricSpec(
+                key="outstanding_balance",
+                label="Outstanding",
+                description="What members still owe across unsettled orders",
+                resolve=_store_outstanding_balance,
+            ),
+            MetricSpec(
+                key="pending_verification",
+                label="To verify",
+                description="Payments a member has reported and nobody has checked",
+                resolve=_store_pending_verification,
+            ),
+            MetricSpec(
+                key="ready_for_pickup",
+                label="Ready for pickup",
+                description="Orders sitting on the shelf waiting to be collected",
+                resolve=_store_ready_for_pickup,
+            ),
+            MetricSpec(
+                key="active_products",
+                label="Active items",
+                description="Catalog products members can currently order",
+                resolve=_store_active_products,
             ),
         ),
     ),

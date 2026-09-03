@@ -1,25 +1,25 @@
 /**
  * Store Admin Page
  *
- * Quartermaster view of the department store, tabbed: overview, order windows,
- * catalog, orders, inbound payments, and settings.
+ * The department store, run from inside Inventory Administration — it sells the
+ * uniforms the inventory module tracks, so it lives at
+ * /inventory/admin/store rather than beside it. Tabbed: overview, order
+ * windows, catalog, orders, inbound payments, and settings.
+ *
+ * Renders through `AdminHubFrame` like every other administration page, which
+ * is where the headline metrics and the "Needs attention" queue come from —
+ * see the `storefront` entry in the backend's admin-hub MODULE_REGISTRY. The
+ * page's own stat strip is gone with it: the frame says those numbers once,
+ * and two panels restating one figure is the duplication the shared frame
+ * exists to remove.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import {
-  ArrowLeft,
-  CalendarClock,
-  Clock3,
-  Loader2,
-  Package,
-  RefreshCw,
-  Settings,
-  ShoppingBag,
-  Store,
-  Wallet,
-} from 'lucide-react';
+import { Link, useSearchParams } from 'react-router';
+import { ArrowLeft, CalendarClock, Clock3, Loader2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { AdminHubFrame } from '../../../components/admin';
+import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -34,46 +34,22 @@ import {
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_BADGES,
   PAYMENT_STATUS_LABELS,
-  StoreOrderStatus,
-  StorePaymentStatus,
   type StoreDashboard,
 } from '../types';
 
 type TabId = 'overview' | 'windows' | 'catalog' | 'orders' | 'payments' | 'settings';
 
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'overview', label: 'Overview', icon: <Store className="h-4 w-4" /> },
-  {
-    id: 'windows',
-    label: 'Order Windows',
-    icon: <CalendarClock className="h-4 w-4" />,
-  },
-  { id: 'catalog', label: 'Catalog', icon: <Package className="h-4 w-4" /> },
-  { id: 'orders', label: 'Orders', icon: <ShoppingBag className="h-4 w-4" /> },
-  { id: 'payments', label: 'Payments', icon: <Wallet className="h-4 w-4" /> },
-  {
-    id: 'settings',
-    label: 'Settings',
-    icon: <Settings className="h-4 w-4" />,
-  },
+/** Settings is always last — the frame's rule, on every module. */
+const TABS: AdminHubTab<TabId>[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'windows', label: 'Order Windows' },
+  { id: 'catalog', label: 'Catalog' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'payments', label: 'Payments' },
+  { id: 'settings', label: 'Settings' },
 ];
 
-const activityDescription = (activity: StoreDashboard['recentActivity'][number]) => {
-  if (activity.message) return activity.message;
-  if (activity.toStatus) {
-    return `Status changed to ${ORDER_STATUS_LABELS[activity.toStatus] ?? activity.toStatus}`;
-  }
-  const labels: Record<string, string> = {
-    created: 'Order placed',
-    payment_reported: 'Payment reported',
-    payment_recorded: 'Payment recorded',
-    refunded: 'Refund recorded',
-    cancelled: 'Order cancelled',
-    note: 'Internal note added',
-    message: 'Order message added',
-  };
-  return labels[activity.eventType] ?? 'Order activity recorded';
-};
+const isTabId = (value: string | null): value is TabId => TABS.some((tab) => tab.id === value);
 
 const StatTile: React.FC<{
   label: string;
@@ -101,9 +77,41 @@ const StatTile: React.FC<{
   );
 };
 
+const activityDescription = (activity: StoreDashboard['recentActivity'][number]) => {
+  if (activity.message) return activity.message;
+  if (activity.toStatus) {
+    return `Status changed to ${ORDER_STATUS_LABELS[activity.toStatus] ?? activity.toStatus}`;
+  }
+  const labels: Record<string, string> = {
+    created: 'Order placed',
+    payment_reported: 'Payment reported',
+    payment_recorded: 'Payment recorded',
+    refunded: 'Refund recorded',
+    cancelled: 'Order cancelled',
+    note: 'Internal note added',
+    message: 'Order message added',
+  };
+  return labels[activity.eventType] ?? 'Order activity recorded';
+};
+
 const StoreAdminPage: React.FC = () => {
   const tz = useTimezone();
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  // Mirrored into `?tab=` like every other admin page, so the inventory hub
+  // can link at a tab rather than dropping the reader on Overview to find it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: TabId = isTabId(tabParam) ? tabParam : 'overview';
+  const setActiveTab = useCallback(
+    (tab: TabId) => {
+      setSearchParams(tab === 'overview' ? {} : { tab });
+    },
+    [setSearchParams]
+  );
+
+  // The overview's hand-off into a pre-filtered Orders tab. These stay local
+  // rather than joining `?tab=` in the URL: they are one click's worth of
+  // context, not a place, and putting five filters in a shareable link would
+  // promise a view that a reload cannot rebuild.
   const [ordersPaymentFilter, setOrdersPaymentFilter] = useState('');
   const [ordersStatusFilter, setOrdersStatusFilter] = useState('');
   const [ordersDetailId, setOrdersDetailId] = useState('');
@@ -122,6 +130,9 @@ const StoreAdminPage: React.FC = () => {
   };
   const [dashboard, setDashboard] = useState<StoreDashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  // Bumped when the page's own work changes something the frame summarises,
+  // so the metrics row and queue above reflect it without a reload.
+  const [frameToken, setFrameToken] = useState(0);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -134,59 +145,57 @@ const StoreAdminPage: React.FC = () => {
     }
   }, []);
 
+  /** Anything that changes an order, a window or a payment moves the frame too. */
+  const handleChanged = useCallback(() => {
+    void loadDashboard();
+    setFrameToken((token) => token + 1);
+  }, [loadDashboard]);
+
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
 
-  return (
-    <div className="min-h-screen">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <Link
-          to="/inventory/admin"
-          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Logistics Admin
-        </Link>
+  const actions: AdminHubAction[] = [
+    {
+      key: 'refresh',
+      label: 'Refresh store figures',
+      icon: RefreshCw,
+      busy: loading,
+      onClick: handleChanged,
+    },
+  ];
 
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-blue-600 p-2">
-              <Store className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-xl font-bold">Department Store</h1>
-              <p className="text-theme-text-muted text-sm">
-                Order windows, catalog, orders, and payment reconciliation
-              </p>
-            </div>
-          </div>
+  return (
+    <AdminHubFrame<TabId>
+      moduleKey="storefront"
+      title="Department Store"
+      description="Order windows, catalog, orders, and payment reconciliation"
+      actions={actions}
+      headerAside={
+        <div className="flex items-center gap-2">
           {dashboard && !dashboard.isEnabled && (
             <span className="badge border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
               Store is offline
             </span>
           )}
+          {/* The frame has no back-link prop, and this page sits one level
+              inside Inventory Administration — so the way back rides here,
+              beside the actions, as TrainingAdminPage does with its HelpLink. */}
+          <Link
+            to="/inventory/admin"
+            className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Inventory
+          </Link>
         </div>
-
-        <div className="tab-scroll mb-6">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'text-theme-text-primary border-blue-600'
-                  : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
-              }`}
-              aria-current={activeTab === tab.id ? 'page' : undefined}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
+      }
+      tabs={TABS}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      refreshToken={frameToken}
+    >
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         {activeTab === 'overview' &&
           (loading ? (
             <div className="flex justify-center py-12" role="status" aria-live="polite">
@@ -194,12 +203,16 @@ const StoreAdminPage: React.FC = () => {
             </div>
           ) : dashboard ? (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <StatTile
-                  label="Open orders"
-                  value={dashboard.openOrderCount}
-                  onClick={() => openOrders({ openOnly: true })}
-                />
+              {/* Open orders, awaiting payment, outstanding, to verify, ready
+                  for pickup and active items all left this strip: each is a
+                  metric the frame above can show, and two panels restating one
+                  number is the duplication the shared frame exists to remove.
+                  What stays is the pair the metric registry has no entry for,
+                  and both keep their click-through into a filtered Orders tab.
+                  The queues that lost a tile are still one click away — from
+                  the workflow grid below, the attention queue above, or the
+                  Orders tab's own filters. */}
+              <div className="grid grid-cols-2 gap-3">
                 <StatTile
                   label="New (24 hours)"
                   value={dashboard.newOrderCount}
@@ -207,38 +220,33 @@ const StoreAdminPage: React.FC = () => {
                   onClick={() => openOrders({ recentHours: 24 })}
                 />
                 <StatTile
-                  label="Awaiting payment"
-                  value={dashboard.awaitingPaymentCount}
-                  tone="text-amber-600 dark:text-amber-400"
-                  onClick={() => openOrders({ payment: StorePaymentStatus.UNPAID })}
-                />
-                <StatTile
-                  label="To verify"
-                  value={dashboard.pendingVerificationCount}
-                  tone="text-amber-600 dark:text-amber-400"
-                  onClick={() => openOrders({ payment: StorePaymentStatus.PENDING_VERIFICATION })}
-                />
-                <StatTile
-                  label="Ready for pickup"
-                  value={dashboard.readyForPickupCount}
-                  onClick={() => openOrders({ status: StoreOrderStatus.READY_FOR_PICKUP })}
-                />
-                <StatTile label="Outstanding balance" value={formatCurrency(Number(dashboard.outstandingBalance))} />
-                <StatTile
                   label="Collected (open window)"
                   value={formatCurrency(Number(dashboard.collectedThisWindow))}
                   tone="text-green-600 dark:text-green-400"
                 />
-                <StatTile label="Active items" value={dashboard.activeProductCount} />
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <section className="card-secondary p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h2 className="text-theme-text-primary font-semibold">Order workflow</h2>
-                    <button type="button" className="btn-secondary btn-sm" onClick={() => openOrders()}>
-                      View all
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* The Orders tab can clear this filter but has no
+                          control to set it, so the entry point has to live
+                          somewhere — here, beside the status buttons it reads
+                          with, rather than on a tile restating a headline
+                          metric. */}
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() => openOrders({ openOnly: true })}
+                      >
+                        Open only
+                      </button>
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => openOrders()}>
+                        View all
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {Object.entries(ORDER_STATUS_LABELS).map(([status, label]) => (
@@ -426,12 +434,12 @@ const StoreAdminPage: React.FC = () => {
             </div>
           ) : null)}
 
-        {activeTab === 'windows' && <StoreWindowsTab onChanged={() => void loadDashboard()} />}
+        {activeTab === 'windows' && <StoreWindowsTab onChanged={handleChanged} />}
         {activeTab === 'catalog' && <StoreCatalogTab />}
         {activeTab === 'orders' && (
           <StoreOrdersTab
             key={`${ordersStatusFilter}:${ordersPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
-            onChanged={() => void loadDashboard()}
+            onChanged={handleChanged}
             initialStatusFilter={ordersStatusFilter}
             initialPaymentFilter={ordersPaymentFilter}
             initialOrderId={ordersDetailId}
@@ -439,10 +447,10 @@ const StoreAdminPage: React.FC = () => {
             initialOpenOnly={ordersOpenOnly}
           />
         )}
-        {activeTab === 'payments' && <StorePaymentsTab onChanged={() => void loadDashboard()} />}
-        {activeTab === 'settings' && <StoreSettingsTab onChanged={() => void loadDashboard()} />}
+        {activeTab === 'payments' && <StorePaymentsTab onChanged={handleChanged} />}
+        {activeTab === 'settings' && <StoreSettingsTab onChanged={handleChanged} />}
       </div>
-    </div>
+    </AdminHubFrame>
   );
 };
 

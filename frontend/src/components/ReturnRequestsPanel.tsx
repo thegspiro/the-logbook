@@ -7,6 +7,7 @@ import { RequestStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useDeepLinkedRecord } from '../hooks/useDeepLinkedRecord';
 import toast from 'react-hot-toast';
 
 const STATUS_BADGES: Record<string, string> = {
@@ -51,6 +52,16 @@ const ReturnRequestsPanel: React.FC = () => {
   useEffect(() => {
     void loadRequests();
   }, [loadRequests]);
+
+  // Read here rather than in ReturnRequestsPage, which is a 47-line wrapper
+  // holding none of the state — this panel owns the list and the modal, and
+  // has no other consumer.
+  useDeepLinkedRecord(
+    'request',
+    requests,
+    (request) => request.id,
+    (request) => setReviewModal({ open: true, request })
+  );
 
   const handleReview = async () => {
     if (!reviewModal.request) return;

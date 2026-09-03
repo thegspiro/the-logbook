@@ -7,7 +7,7 @@ into the gear catalog.
 Shipped 2026-08-16. Off by default; a department that does not run EMS never
 sees it.
 
-> **Why it is separate from Gear & Uniforms.** The two supply lines answer
+> **Why it is separate from the gear and uniform pages.** The two supply lines answer
 > different questions and are usually owned by different people. Gear is
 > tracked per unit, issued to a named member, and retires on an NFPA clock. EMS
 > stock is tracked by quantity and expiration date, belongs to the rig rather
@@ -105,13 +105,18 @@ Books a whole shipment as **one dated lot per item line** — item, lot number,
 expiration, quantity — under a single received date. This is the only way to
 add stock to a lot-tracked item; see [Lots and on-hand](#lots-and-on-hand).
 
-### The gear side was renamed to match
+### Naming
 
-So the two are distinguishable in navigation: **Inventory** → **Gear &
-Uniforms**, **My Equipment** → **My Issued Gear**, **Inventory Admin** →
-**Gear Admin**, **Equipment Requests** → **Gear Requests**, **Equipment
-Kits** → **Gear Kits**. **Routes and table names are unchanged**, so no
-existing link, bookmark or integration breaks.
+The gear side is **Inventory** in navigation, with **Inventory Admin** as its
+administration hub; the screens under it keep the gear vocabulary a
+quartermaster uses — **My Issued Gear**, **Gear Requests**, **Gear Kits**.
+
+The module was briefly called "Gear & Uniforms" outright, when gear and
+uniforms were all it held. It now also covers EMS supplies on the same catalog,
+so the area carries the category name and the gear language lives on the
+screens that are actually about gear. **Routes, permission keys and table names
+have never changed through any of this**, so no link, bookmark or integration
+breaks.
 
 ---
 

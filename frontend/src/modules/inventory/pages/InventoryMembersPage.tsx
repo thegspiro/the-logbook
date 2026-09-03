@@ -30,6 +30,7 @@ import type {
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
@@ -120,6 +121,19 @@ const InventoryMembersPage: React.FC = () => {
     }, [loadMembers]),
   });
 
+  // "Review" on the inventory hub's attention queue names the member whose
+  // departure clearance is outstanding. Declared after handleExpand below
+  // would read better, but the hook has to see the list, and handleExpand is
+  // what does the work — so it is called through a ref-free arrow here.
+  useDeepLinkedRecord(
+    'user',
+    members,
+    (member) => member.user_id,
+    (member) => {
+      void handleExpand(member.user_id);
+    }
+  );
+
   const handleExpand = async (userId: string) => {
     if (expandedUserId === userId) {
       setExpandedUserId(null);
@@ -208,7 +222,7 @@ const InventoryMembersPage: React.FC = () => {
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
-        title="Back to Gear Admin"
+        title="Back to Inventory Admin"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Admin
       </Link>
