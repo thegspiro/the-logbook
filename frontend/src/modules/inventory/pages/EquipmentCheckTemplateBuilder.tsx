@@ -533,6 +533,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [expandedCompartments, setExpandedCompartments] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Distinct from `saving`, which is UI-only (it starts *after* the pending-
+  // edit flush and any publish-warnings confirmation, purely to drive the
+  // Save/Publish buttons' spinner) and stays that way -- an existing test
+  // depends on the field staying editable through that window. This flag
+  // spans handleSave's entire async span, from its very first line to its
+  // very last, and is the one deleteCompartment checks: see the invariant
+  // comment on savedParentByIdRef above for why per-write registration alone
+  // (registerInFlightSave) cannot close every gap on its own -- handleSave
+  // itself is a sequence of awaited steps (flush, then, for a publish with
+  // warnings, a user confirmation, then the update batch) with real gaps
+  // between them where nothing has been registered into either tracking map
+  // yet. A delete confirmed inside one of those gaps would see both maps
+  // empty and proceed, only for handleSave's later batch to PATCH rows the
+  // delete just removed. This flag is a superset of every one of those gaps
+  // by construction, since it covers the whole function.
+  const [saveOperationActive, setSaveOperationActive] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   // Template metadata moved off the canvas into a right-side drawer: the
@@ -856,6 +872,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const deleteCompartment = async (idx: number) => {
     const comp = compartments[idx];
     if (!comp) return;
+
+    // Blocks for the whole span of a Save, not just the moments this file's
+    // per-write registration (registerInFlightSave) can see. handleSave is
+    // itself a sequence of awaited steps -- flush pending edits, possibly wait
+    // on a publish-warnings confirmation, then a Promise.allSettled batch of
+    // compartment/item PATCHes -- with real gaps between them where a request
+    // has resolved (or hasn't been issued yet) and so is invisible to both
+    // autoSavePendingRef and autoSaveInFlightRef. A delete confirmed inside
+    // one of those gaps would see both maps empty and proceed immediately,
+    // only for handleSave's later steps to PATCH rows the delete just
+    // removed. saveOperationActive spans the entire handleSave call by
+    // construction (see its declaration above), so checking it here closes
+    // every such gap at once rather than needing a fifth per-step
+    // registration point. The delete buttons are also disabled while this is
+    // true (belt-and-suspenders for the normal click path); this check is the
+    // one thing every path -- including a future delete affordance that
+    // forgets to wire up `disabled` -- actually depends on.
+    if (saveOperationActive) {
+      toast.error('A save is in progress. Wait for it to finish, then try deleting again.');
+      return;
+    }
 
     // The backend cascade-deletes the whole subtree, not just this row -- the
     // confirmation and the local-state removal both have to account for
@@ -1986,197 +2023,211 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   };
 
   const handleSave = async (publish: boolean) => {
-    if (!(await flushPendingAutoSaves())) return;
-    // Drafts deliberately bypass readiness checks; publication never does.
-    // Keep the blocking rules aligned with the backend instead of putting them
-    // in the overridable warning dialog below.
-    if (publish && !publishReady) return;
-    const warnings: string[] = [];
-    for (const comp of compartments) {
-      if (comp.isHeader) continue;
-      for (const item of comp.items) {
-        if (item.hasExpiration && !item.expirationDate.trim()) {
-          warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
-        }
-        if (
-          item.checkType === 'count' &&
-          item.criticalMinimumQuantity &&
-          item.expectedQuantity &&
-          Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
-        ) {
-          warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
-        }
-        if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
-          warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
+    // saveOperationActive has to become true before anything below can await
+    // -- including the flush, which is the very thing the pass-9 gap slipped
+    // through: it registers each of its own PATCHes individually, but there
+    // was nothing marking the *operation* itself as active before that
+    // registration happened. This flag is unconditionally cleared in the
+    // outer finally below regardless of which of this function's several
+    // early returns or its inner try/catch is what ends it, so
+    // deleteCompartment's read of it can never observe a stuck `true` from a
+    // prior save.
+    setSaveOperationActive(true);
+    try {
+      if (!(await flushPendingAutoSaves())) return;
+      // Drafts deliberately bypass readiness checks; publication never does.
+      // Keep the blocking rules aligned with the backend instead of putting them
+      // in the overridable warning dialog below.
+      if (publish && !publishReady) return;
+      const warnings: string[] = [];
+      for (const comp of compartments) {
+        if (comp.isHeader) continue;
+        for (const item of comp.items) {
+          if (item.hasExpiration && !item.expirationDate.trim()) {
+            warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
+          }
+          if (
+            item.checkType === 'count' &&
+            item.criticalMinimumQuantity &&
+            item.expectedQuantity &&
+            Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
+          ) {
+            warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
+          }
+          if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
+            warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
+          }
         }
       }
-    }
-    if (publish && warnings.length > 0) {
-      const proceed = await confirm({
-        title: 'Save with warnings?',
-        message: `${warnings.join('\n\n')}\n\nYou can save anyway and fix these later.`,
-        confirmLabel: 'Save anyway',
-        cancelLabel: 'Go back',
-        variant: 'warning',
-      });
-      if (!proceed) return;
-    }
-
-    setSaving(true);
-    try {
-      const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
-        .filter((c) => !c.id) // Only include unsaved compartments in create payload
-        .map(compartmentCreateFromForm);
-
-      if (isEditing && templateId) {
-        await equipmentCheckService.updateEquipmentCheckTemplate(templateId, {
-          name: form.name.trim(),
-          // Explicit nulls, not omissions: this is an update, and the backend
-          // dumps it with exclude_unset. Omitting a cleared field left the old
-          // value in place behind a success toast — un-pinning a template from
-          // an apparatus, or removing its position restriction, did nothing.
-          description: blankToNull(form.description),
-          check_timing: form.checkTiming,
-          template_type: form.templateType,
-          // An empty array is a meaningful value here: it means "no position
-          // restriction", which is exactly what the user just asked for.
-          assigned_positions: form.assignedPositions,
-          apparatus_type: form.apparatusType || null,
-          apparatus_id: form.apparatusId || null,
-          is_active: false,
+      if (publish && warnings.length > 0) {
+        const proceed = await confirm({
+          title: 'Save with warnings?',
+          message: `${warnings.join('\n\n')}\n\nYou can save anyway and fix these later.`,
+          confirmLabel: 'Save anyway',
+          cancelLabel: 'Go back',
+          variant: 'warning',
         });
+        if (!proceed) return;
+      }
 
-        // Save any new compartments that haven't been persisted yet
-        for (const payload of compartmentPayloads) {
-          await ensureDraftBeforeStructureEdit();
-          await equipmentCheckService.addCompartment(templateId, payload);
-        }
+      setSaving(true);
+      try {
+        const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
+          .filter((c) => !c.id) // Only include unsaved compartments in create payload
+          .map(compartmentCreateFromForm);
 
-        // Update existing compartments and items in parallel. Compartment
-        // and item requests are tracked as two separate settlements rather
-        // than one Promise.all: a compartment's PATCH can commit
-        // server-side while an unrelated item PATCH in the same batch
-        // rejects, and Promise.all's fail-fast rejection would skip the
-        // savedParentByIdRef refresh below entirely -- leaving that map
-        // describing the pre-save hierarchy even though the reparent it
-        // disagrees with already reached the server. allSettled lets every
-        // compartment that actually succeeded update the map regardless of
-        // what else in the batch failed, and a save failure still surfaces
-        // exactly as before (below).
-        const compartmentUpdates: Array<{ comp: CompartmentFormState; promise: Promise<unknown> }> = [];
-        const itemUpdatePromises: Promise<unknown>[] = [];
-        for (const comp of compartments) {
-          if (comp.id) {
-            compartmentUpdates.push({
-              comp,
-              promise: equipmentCheckService.updateCompartment(comp.id, {
-                name: comp.name,
-                description: blankToNull(comp.description),
-                image_url: blankToNull(comp.imageUrl),
-                is_header: comp.isHeader,
-                container_type: comp.containerType || null,
-                is_sealed: comp.isSealed,
-                // Compartments have no auto-save path, so this is the only
-                // writer: re-parenting one to the top level is expressible
-                // only as an explicit null.
-                parent_compartment_id: comp.parentCompartmentId || null,
-              }),
-            });
+        if (isEditing && templateId) {
+          await equipmentCheckService.updateEquipmentCheckTemplate(templateId, {
+            name: form.name.trim(),
+            // Explicit nulls, not omissions: this is an update, and the backend
+            // dumps it with exclude_unset. Omitting a cleared field left the old
+            // value in place behind a success toast — un-pinning a template from
+            // an apparatus, or removing its position restriction, did nothing.
+            description: blankToNull(form.description),
+            check_timing: form.checkTiming,
+            template_type: form.templateType,
+            // An empty array is a meaningful value here: it means "no position
+            // restriction", which is exactly what the user just asked for.
+            assigned_positions: form.assignedPositions,
+            apparatus_type: form.apparatusType || null,
+            apparatus_id: form.apparatusId || null,
+            is_active: false,
+          });
 
-            for (const item of comp.items) {
-              if (item.id) {
-                // Registered the same way a debounced auto-save or the
-                // pre-save flush is, so a compartment delete triggered while
-                // this batch is still in flight waits it out too -- see the
-                // invariant comment on savedParentByIdRef above.
-                const request = equipmentCheckService
-                  .updateCheckItem(item.id, {
-                    name: item.name,
-                    // Same coercions the auto-save path in this file already
-                    // uses (updateItemFieldWithAutoSave); handleSave was the
-                    // one writer still omitting cleared fields.
-                    description: blankToNull(item.description),
-                    check_type: item.checkType,
-                    is_required: item.isRequired,
-                    required_quantity: numberOrNull(item.requiredQuantity),
-                    expected_quantity: numberOrNull(item.expectedQuantity),
-                    critical_minimum_quantity: numberOrNull(item.criticalMinimumQuantity),
-                    min_level: numberOrNull(item.minLevel),
-                    level_unit: blankToNull(item.levelUnit),
-                    serial_number: blankToNull(item.serialNumber),
-                    lot_number: blankToNull(item.lotNumber),
-                    inventory_item_id: item.inventoryItemId || null,
-                    image_url: blankToNull(item.imageUrl),
-                    has_expiration: item.hasExpiration,
-                    expiration_date: blankToNull(item.expirationDate),
-                    expiration_warning_days: numberOrNull(item.expirationWarningDays),
-                  })
-                  .then(() => undefined);
-                void registerInFlightSave(
-                  item.id,
-                  request.catch(() => undefined)
-                );
-                itemUpdatePromises.push(request);
+          // Save any new compartments that haven't been persisted yet
+          for (const payload of compartmentPayloads) {
+            await ensureDraftBeforeStructureEdit();
+            await equipmentCheckService.addCompartment(templateId, payload);
+          }
+
+          // Update existing compartments and items in parallel. Compartment
+          // and item requests are tracked as two separate settlements rather
+          // than one Promise.all: a compartment's PATCH can commit
+          // server-side while an unrelated item PATCH in the same batch
+          // rejects, and Promise.all's fail-fast rejection would skip the
+          // savedParentByIdRef refresh below entirely -- leaving that map
+          // describing the pre-save hierarchy even though the reparent it
+          // disagrees with already reached the server. allSettled lets every
+          // compartment that actually succeeded update the map regardless of
+          // what else in the batch failed, and a save failure still surfaces
+          // exactly as before (below).
+          const compartmentUpdates: Array<{ comp: CompartmentFormState; promise: Promise<unknown> }> = [];
+          const itemUpdatePromises: Promise<unknown>[] = [];
+          for (const comp of compartments) {
+            if (comp.id) {
+              compartmentUpdates.push({
+                comp,
+                promise: equipmentCheckService.updateCompartment(comp.id, {
+                  name: comp.name,
+                  description: blankToNull(comp.description),
+                  image_url: blankToNull(comp.imageUrl),
+                  is_header: comp.isHeader,
+                  container_type: comp.containerType || null,
+                  is_sealed: comp.isSealed,
+                  // Compartments have no auto-save path, so this is the only
+                  // writer: re-parenting one to the top level is expressible
+                  // only as an explicit null.
+                  parent_compartment_id: comp.parentCompartmentId || null,
+                }),
+              });
+
+              for (const item of comp.items) {
+                if (item.id) {
+                  // Registered the same way a debounced auto-save or the
+                  // pre-save flush is, so a compartment delete triggered while
+                  // this batch is still in flight waits it out too -- see the
+                  // invariant comment on savedParentByIdRef above.
+                  const request = equipmentCheckService
+                    .updateCheckItem(item.id, {
+                      name: item.name,
+                      // Same coercions the auto-save path in this file already
+                      // uses (updateItemFieldWithAutoSave); handleSave was the
+                      // one writer still omitting cleared fields.
+                      description: blankToNull(item.description),
+                      check_type: item.checkType,
+                      is_required: item.isRequired,
+                      required_quantity: numberOrNull(item.requiredQuantity),
+                      expected_quantity: numberOrNull(item.expectedQuantity),
+                      critical_minimum_quantity: numberOrNull(item.criticalMinimumQuantity),
+                      min_level: numberOrNull(item.minLevel),
+                      level_unit: blankToNull(item.levelUnit),
+                      serial_number: blankToNull(item.serialNumber),
+                      lot_number: blankToNull(item.lotNumber),
+                      inventory_item_id: item.inventoryItemId || null,
+                      image_url: blankToNull(item.imageUrl),
+                      has_expiration: item.hasExpiration,
+                      expiration_date: blankToNull(item.expirationDate),
+                      expiration_warning_days: numberOrNull(item.expirationWarningDays),
+                    })
+                    .then(() => undefined);
+                  void registerInFlightSave(
+                    item.id,
+                    request.catch(() => undefined)
+                  );
+                  itemUpdatePromises.push(request);
+                }
               }
             }
           }
-        }
 
-        const compartmentResults = await Promise.allSettled(compartmentUpdates.map((update) => update.promise));
-        // Every compartment PATCH that actually settled fulfilled persisted
-        // parent_compartment_id exactly as sent (handleSave is the only
-        // writer -- see the comment on the update above) -- refresh the
-        // server-truth map for exactly those, immediately, rather than
-        // waiting on loadTemplate's reload below, which is a separate,
-        // unawaited round trip and skipped entirely if this save goes on to
-        // fail.
-        compartmentResults.forEach((result, index) => {
-          const comp = compartmentUpdates[index]?.comp;
-          if (comp?.id && result.status === 'fulfilled') {
-            savedParentByIdRef.current.set(comp.id, comp.parentCompartmentId);
+          const compartmentResults = await Promise.allSettled(compartmentUpdates.map((update) => update.promise));
+          // Every compartment PATCH that actually settled fulfilled persisted
+          // parent_compartment_id exactly as sent (handleSave is the only
+          // writer -- see the comment on the update above) -- refresh the
+          // server-truth map for exactly those, immediately, rather than
+          // waiting on loadTemplate's reload below, which is a separate,
+          // unawaited round trip and skipped entirely if this save goes on to
+          // fail.
+          compartmentResults.forEach((result, index) => {
+            const comp = compartmentUpdates[index]?.comp;
+            if (comp?.id && result.status === 'fulfilled') {
+              savedParentByIdRef.current.set(comp.id, comp.parentCompartmentId);
+            }
+          });
+
+          const itemResults = await Promise.allSettled(itemUpdatePromises);
+          const firstFailure = [...compartmentResults, ...itemResults].find(
+            (result): result is PromiseRejectedResult => result.status === 'rejected'
+          );
+          if (firstFailure) throw firstFailure.reason;
+
+          if (publish) {
+            await equipmentCheckService.updateEquipmentCheckTemplate(templateId, { is_active: true });
           }
-        });
-
-        const itemResults = await Promise.allSettled(itemUpdatePromises);
-        const firstFailure = [...compartmentResults, ...itemResults].find(
-          (result): result is PromiseRejectedResult => result.status === 'rejected'
-        );
-        if (firstFailure) throw firstFailure.reason;
-
-        if (publish) {
-          await equipmentCheckService.updateEquipmentCheckTemplate(templateId, { is_active: true });
+          setForm((current) => ({ ...current, isActive: publish }));
+          setIsDirty(false);
+          toast.success(publish ? 'Template published' : 'Draft saved');
+        } else {
+          const createPayload: EquipmentCheckTemplateCreate = {
+            name: form.name.trim(),
+            description: form.description.trim() || undefined,
+            check_timing: form.checkTiming,
+            template_type: form.templateType,
+            assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
+            apparatus_type: form.apparatusType || undefined,
+            apparatus_id: form.apparatusId || undefined,
+            is_active: publish,
+            compartments: compartments.map(compartmentCreateFromForm),
+          };
+          const created = await equipmentCheckService.createEquipmentCheckTemplate(createPayload);
+          setIsDirty(false);
+          toast.success(publish ? 'Template published' : 'Draft saved');
+          // Navigate to edit mode so subsequent saves work as updates
+          void navigate(`/inventory/admin/checklists/templates/${created.id}`, { replace: true });
+          return;
         }
-        setForm((current) => ({ ...current, isActive: publish }));
-        setIsDirty(false);
-        toast.success(publish ? 'Template published' : 'Draft saved');
-      } else {
-        const createPayload: EquipmentCheckTemplateCreate = {
-          name: form.name.trim(),
-          description: form.description.trim() || undefined,
-          check_timing: form.checkTiming,
-          template_type: form.templateType,
-          assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
-          apparatus_type: form.apparatusType || undefined,
-          apparatus_id: form.apparatusId || undefined,
-          is_active: publish,
-          compartments: compartments.map(compartmentCreateFromForm),
-        };
-        const created = await equipmentCheckService.createEquipmentCheckTemplate(createPayload);
-        setIsDirty(false);
-        toast.success(publish ? 'Template published' : 'Draft saved');
-        // Navigate to edit mode so subsequent saves work as updates
-        void navigate(`/inventory/admin/checklists/templates/${created.id}`, { replace: true });
-        return;
-      }
 
-      // Re-fetch the template to sync local state with server
-      if (isEditing && templateId) {
-        void loadTemplate(templateId);
+        // Re-fetch the template to sync local state with server
+        if (isEditing && templateId) {
+          void loadTemplate(templateId);
+        }
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to save template'));
+      } finally {
+        setSaving(false);
       }
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save template'));
     } finally {
-      setSaving(false);
+      setSaveOperationActive(false);
     }
   };
 
@@ -3948,7 +3999,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => void deleteCompartment(idx)}
-              className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 sm:min-h-0 sm:min-w-0"
+              disabled={saveOperationActive}
+              className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
               aria-label="Delete section header"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -4149,7 +4201,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void deleteCompartment(idx)}
-                className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 sm:min-h-0 sm:min-w-0"
+                disabled={saveOperationActive}
+                className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
                 aria-label={`Delete ${comp.name || 'compartment'}`}
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -4266,8 +4319,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </label>
               <button
                 type="button"
-                className={mobileDestructiveMenuItemClass}
+                className={`${mobileDestructiveMenuItemClass} disabled:opacity-40`}
                 onClick={() => void deleteCompartment(idx)}
+                disabled={saveOperationActive}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
               </button>
