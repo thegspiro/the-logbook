@@ -199,9 +199,11 @@ INTEGRATION_CATALOG = [
             "Let Claude answer questions about the department over the Model "
             "Context Protocol: rosters, schedules, training and certification "
             "status, inventory, apparatus, facilities, published minutes and "
-            "documents. Personal information — phone numbers, personal email, "
-            "home addresses, dates of birth, emergency contacts, medical "
-            "results — is never sent, whatever the settings. Off until an IT "
+            "documents. Member records never carry personal information — "
+            "phone numbers, email, home addresses, dates of birth, emergency "
+            "contacts, medical results — whatever the settings, and free text "
+            "is scrubbed of phone numbers and email addresses; other details "
+            "typed into published content pass through. Off until an IT "
             "administrator connects it and issues a service key."
         ),
         "category": "AI Assistants",

@@ -20,6 +20,10 @@ KEY_DISPLAY_PREFIX_LEN = 20
 # human-driven session and still bounds a runaway loop.
 RATE_LIMIT_REQUESTS = 240
 RATE_LIMIT_WINDOW_SECONDS = 60
+# Authentication attempts per client address, counted before the key is
+# looked up. A real client authenticates once per call and never nears
+# this; a guesser does.
+AUTH_RATE_LIMIT_ATTEMPTS = 60
 
 # Refresh ``last_used_at`` at most this often, so a busy key does not force a
 # row write on every call (the public portal does the same).

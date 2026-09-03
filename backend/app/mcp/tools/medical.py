@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
 from app.mcp.registry import logbook_tool
-from app.mcp.tools._common import parse_uuid
+from app.mcp.tools._common import require_member
 from app.services.medical_screening_service import MedicalScreeningService
 
 
@@ -28,9 +28,9 @@ def register(server: Any) -> None:
         """Whether a member is current on each active screening requirement:
         compliant or not, last screening date, expiration and days left.
         Status only — no results."""
+        member = await require_member(db, principal.organization_id, member_id)
         summary = await MedicalScreeningService(db).get_compliance_status(
-            principal.organization_id,
-            user_id=str(parse_uuid(member_id, "member_id")),
+            principal.organization_id, user_id=member.id
         )
         return summary.model_dump(mode="json")
 

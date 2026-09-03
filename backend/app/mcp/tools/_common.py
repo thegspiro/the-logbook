@@ -66,7 +66,14 @@ def iso(value: Any) -> Any:
         return None
     if isinstance(value, Enum):
         return value.value
-    if isinstance(value, (datetime, date, time)):
+    if isinstance(value, datetime):
+        # Stored values are UTC, but a driver may hand back a naive datetime
+        # for a timezone-aware column; emit the offset so a client cannot
+        # read the value as local time. Dates and clock times are untouched.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat()
+    if isinstance(value, (date, time)):
         return value.isoformat()
     if isinstance(value, UUID):
         return str(value)
@@ -81,6 +88,25 @@ def display_name(user: Optional[User]) -> Optional[str]:
     parts = [user.first_name, user.last_name]
     name = " ".join(p for p in parts if p)
     return name or None
+
+
+async def require_member(
+    db: AsyncSession, organization_id: str, member_id: str
+) -> User:
+    """An org-scoped member by id, or ``ValueError`` — so a tool that
+    aggregates over a member's records cannot report a nonexistent or
+    foreign member as a real, empty one."""
+    result = await db.execute(
+        select(User).where(
+            User.id == str(parse_uuid(member_id, "member_id")),
+            User.organization_id == organization_id,
+            User.deleted_at.is_(None),
+        )
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise ValueError("Member not found")
+    return user
 
 
 async def member_names(

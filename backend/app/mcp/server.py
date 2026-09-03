@@ -26,9 +26,11 @@ Tools answer from the department's own records: roster, events, shifts,
 training and certifications, inventory, apparatus, facilities, meetings,
 published minutes and documents, and elections.
 
-Personal information is never available through this connection — no phone
-numbers, email addresses, home addresses, dates of birth, emergency contacts
-or medical results — so do not ask for it or try to infer it. Members are
+Personal information from member records is never available through this
+connection — no phone numbers, email addresses, home addresses, dates of
+birth, emergency contacts or medical results — and free text is scrubbed of
+phone numbers and email addresses. Do not ask for personal details, try to
+infer them, or repeat any that appear in published text. Members are
 identified by name, rank, station and position.
 
 Dates and times are UTC ISO-8601 unless a tool says otherwise; the

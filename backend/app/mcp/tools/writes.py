@@ -104,7 +104,7 @@ def register(server: Any) -> None:
             "is_draft": bool(event.is_draft),
         }
 
-    @logbook_tool(server, title="Create action item", gate="write")
+    @logbook_tool(server, title="Create action item", gate="write", module="minutes")
     async def create_meeting_action_item(
         db: AsyncSession,
         principal: McpPrincipal,

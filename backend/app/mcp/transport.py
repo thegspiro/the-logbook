@@ -31,7 +31,11 @@ from starlette.types import Receive, Scope, Send
 from app.core.config import settings
 from app.core.security import is_rate_limited
 from app.core.security_middleware import get_client_ip
-from app.mcp.constants import RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW_SECONDS
+from app.mcp.constants import (
+    AUTH_RATE_LIMIT_ATTEMPTS,
+    RATE_LIMIT_REQUESTS,
+    RATE_LIMIT_WINDOW_SECONDS,
+)
 from app.mcp.db import open_session
 from app.mcp.keys import McpAuthError, McpKeyService
 from app.mcp.principal import McpPrincipal, bind_principal
@@ -54,7 +58,10 @@ class _MemoryRateLimiter:
         self.max_keys = max_keys
         self._hits: "OrderedDict[str, list[float]]" = OrderedDict()
 
-    def exceeded(self, key: str, now: Optional[float] = None) -> bool:
+    def exceeded(
+        self, key: str, now: Optional[float] = None, limit: Optional[int] = None
+    ) -> bool:
+        limit = self.limit if limit is None else limit
         now = time.monotonic() if now is None else now
         cutoff = now - self.window
         hits = self._hits.get(key)
@@ -66,7 +73,7 @@ class _MemoryRateLimiter:
         else:
             self._hits.move_to_end(key)
         hits[:] = [t for t in hits if t > cutoff]
-        if len(hits) >= self.limit:
+        if len(hits) >= limit:
             return True
         hits.append(now)
         return False
@@ -87,11 +94,13 @@ class McpEndpoint:
         *,
         authenticate: Authenticator = authenticate_with_database,
         rate_limit: int = RATE_LIMIT_REQUESTS,
+        auth_rate_limit: int = AUTH_RATE_LIMIT_ATTEMPTS,
         rate_window_seconds: int = RATE_LIMIT_WINDOW_SECONDS,
         state_attr: str = "mcp_session_manager",
     ):
         self._authenticate = authenticate
         self._rate_limit = rate_limit
+        self._auth_rate_limit = auth_rate_limit
         self._rate_window = rate_window_seconds
         self._state_attr = state_attr
         self._memory_limiter = _MemoryRateLimiter(rate_limit, rate_window_seconds)
@@ -117,6 +126,19 @@ class McpEndpoint:
             return
 
         client_ip = _client_ip(scope, receive)
+        # Every token-shaped value costs a database lookup, so attempts are
+        # budgeted per client address before authentication, not only per
+        # key after it; otherwise a stranger could guess keys at line rate.
+        if await self._limited(f"auth:{client_ip or 'unknown'}", self._auth_rate_limit):
+            await _reject(
+                scope,
+                receive,
+                send,
+                429,
+                "Too many authentication attempts",
+                headers={"Retry-After": str(self._rate_window)},
+            )
+            return
         try:
             principal = await self._authenticate(presented, client_ip)
         except McpAuthError as exc:
@@ -127,7 +149,7 @@ class McpEndpoint:
             await _reject(scope, receive, send, 503, "Service temporarily unavailable")
             return
 
-        if await self._limited(principal.key_id):
+        if await self._limited(principal.key_id, self._rate_limit):
             await _reject(
                 scope,
                 receive,
@@ -146,24 +168,24 @@ class McpEndpoint:
         with bind_principal(principal):
             await manager.handle_request(scope, receive, send)
 
-    async def _limited(self, key_id: str) -> bool:
+    async def _limited(self, bucket_id: str, limit: int) -> bool:
         if not settings.RATE_LIMIT_ENABLED:
             return False
-        bucket = f"mcp:{key_id}"
+        bucket = f"mcp:{bucket_id}"
         try:
             from app.core.cache import cache_manager
 
             if cache_manager.is_connected and cache_manager.redis_client:
                 return await is_rate_limited(
                     key=bucket,
-                    limit=self._rate_limit,
+                    limit=limit,
                     window_seconds=self._rate_window,
                     fail_closed=False,
                     raise_on_error=True,
                 )
         except Exception:
             logger.warning("Redis rate limit unavailable for MCP; using in-memory")
-        return self._memory_limiter.exceeded(bucket)
+        return self._memory_limiter.exceeded(bucket, limit=limit)
 
 
 def _bearer_token(authorization: Optional[str]) -> Optional[str]:

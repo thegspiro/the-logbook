@@ -182,6 +182,43 @@ class TestRateLimit:
         limiter.exceeded("c", now=62)  # evicts the oldest tracked key
         assert len(limiter._hits) == 2
 
+    async def test_bad_keys_are_limited_per_address_before_the_lookup(
+        self, monkeypatch
+    ):
+        """Guessing keys must cost the guesser a bucket, not the database a
+        lookup per attempt: the per-address budget runs before authentication."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
+        attempts: list[str] = []
+
+        async def counting_authenticate(presented, client_ip):
+            attempts.append(presented)
+            raise McpAuthError("Invalid service key")
+
+        server = _server()
+        manager = create_session_manager(server)
+        endpoint = McpEndpoint(authenticate=counting_authenticate, auth_rate_limit=2)
+        app = Starlette(routes=[Route("/api/mcp", endpoint)])
+        app.state.mcp_session_manager = manager
+        async with manager.run():
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as c:
+                codes = [
+                    (
+                        await c.post(
+                            "/api/mcp",
+                            json=_call("whoami"),
+                            headers=_headers(token=f"logbook_mcp_guess{i}"),
+                        )
+                    ).status_code
+                    for i in range(4)
+                ]
+        assert codes == [401, 401, 429, 429]
+        assert len(attempts) == 2
+
     async def test_endpoint_returns_429_when_over_budget(self, monkeypatch):
         from app.core.config import settings
 

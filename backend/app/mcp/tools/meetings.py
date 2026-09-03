@@ -57,7 +57,7 @@ def _minutes_summary(m: Any) -> dict:
 
 
 def register(server: Any) -> None:
-    @logbook_tool(server, title="List meetings")
+    @logbook_tool(server, title="List meetings", module="minutes")
     async def list_meetings(
         db: AsyncSession,
         principal: McpPrincipal,
@@ -99,7 +99,7 @@ def register(server: Any) -> None:
         ]
         return page(items, total, limit, offset)
 
-    @logbook_tool(server, title="Open action items")
+    @logbook_tool(server, title="Open action items", module="minutes")
     async def list_open_action_items(db: AsyncSession, principal: McpPrincipal) -> dict:
         """Action items still open or in progress across all meetings, with
         assignee name, due date and priority."""

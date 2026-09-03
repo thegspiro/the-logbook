@@ -1,17 +1,36 @@
 """Apparatus: the fleet, its status and maintenance."""
 
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
 from app.mcp.registry import logbook_tool
 from app.mcp.tools._common import clamp_limit, clamp_offset, iso, page, parse_uuid
+from app.models.location import Location
 from app.schemas.apparatus import ApparatusListFilters
 from app.services.apparatus_service import ApparatusService
 
 
-def _apparatus(a: Any) -> dict:
+async def _location_names(
+    db: AsyncSession, organization_id: str, ids: Iterable[Optional[str]]
+) -> dict[str, str]:
+    """Station and location names by id. Resolved in one query rather than
+    through the relationships, which the list query does not eager-load and
+    an async session cannot lazy-load."""
+    wanted = {i for i in ids if i}
+    if not wanted:
+        return {}
+    rows = await db.execute(
+        select(Location).where(
+            Location.organization_id == organization_id, Location.id.in_(wanted)
+        )
+    )
+    return {loc.id: loc.name for loc in rows.scalars().all()}
+
+
+def _apparatus(a: Any, locations: dict[str, str]) -> dict:
     status = getattr(a, "status_record", None)
     return {
         "id": a.id,
@@ -24,8 +43,8 @@ def _apparatus(a: Any) -> dict:
         "year": a.year,
         "make": a.make,
         "model": a.model,
-        "primary_station": getattr(getattr(a, "primary_station", None), "name", None),
-        "current_location": getattr(getattr(a, "current_location", None), "name", None),
+        "primary_station": locations.get(a.primary_station_id or ""),
+        "current_location": locations.get(a.current_location_id or ""),
         "seating_capacity": a.seating_capacity,
         "min_staffing": a.min_staffing,
         "pump_capacity_gpm": a.pump_capacity_gpm,
@@ -64,7 +83,12 @@ def register(server: Any) -> None:
         rows, total = await ApparatusService(db).list_apparatus(
             principal.organization_id, filters=filters, skip=offset, limit=limit
         )
-        return page([_apparatus(a) for a in rows], total, limit, offset)
+        locations = await _location_names(
+            db,
+            principal.organization_id,
+            [i for a in rows for i in (a.primary_station_id, a.current_location_id)],
+        )
+        return page([_apparatus(a, locations) for a in rows], total, limit, offset)
 
     @logbook_tool(server, title="Fleet summary", module="apparatus")
     async def get_fleet_summary(db: AsyncSession, principal: McpPrincipal) -> dict:

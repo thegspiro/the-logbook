@@ -1180,9 +1180,11 @@ const IntegrationsPage: React.FC = () => {
         return (
           <div className="space-y-3">
             <div className="alert-info text-xs">
-              Claude never receives personal information through this connection &mdash; no phone numbers, email
-              addresses, home addresses, dates of birth, emergency contacts or medical results &mdash; whatever is
-              chosen below. After connecting, an IT administrator issues the service key from the card.
+              Member records never carry personal information through this connection &mdash; phone numbers, email
+              addresses, home addresses, dates of birth, emergency contacts and medical results are stripped whatever is
+              chosen below, and free text is scrubbed of phone numbers and email addresses. Other personal details
+              someone typed into a published document or note are not detectable and will pass through, so keep them out
+              of published content. After connecting, an IT administrator issues the service key from the card.
             </div>
             <div>
               <label htmlFor="mcp-access-mode" className={labelClass}>

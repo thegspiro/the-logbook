@@ -1,6 +1,7 @@
 """Training and certifications: records, requirement progress, expiries."""
 
 from typing import Any, Optional
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,7 @@ from app.mcp.tools._common import (
     member_names,
     org_uuid,
     page,
-    parse_uuid,
+    require_member,
 )
 from app.models.training import TrainingRecord
 from app.services.training_service import TrainingService
@@ -71,8 +72,9 @@ def register(server: Any) -> None:
         expired, and courses completed. This does not compute the green /
         yellow / red compliance standing; for standing against each
         requirement use get_member_requirements_progress."""
+        member = await require_member(db, principal.organization_id, member_id)
         stats = await TrainingService(db).get_user_training_stats(
-            parse_uuid(member_id, "member_id"), org_uuid(principal)
+            UUID(member.id), org_uuid(principal)
         )
         return stats.model_dump(mode="json")
 
@@ -86,8 +88,9 @@ def register(server: Any) -> None:
         """Progress against each training requirement that applies to a member:
         required and completed hours, percentage, due date and days until due
         (negative when overdue). ``year`` narrows to one training year."""
+        member = await require_member(db, principal.organization_id, member_id)
         progress = await TrainingService(db).get_all_requirements_progress(
-            parse_uuid(member_id, "member_id"), org_uuid(principal), year=year
+            UUID(member.id), org_uuid(principal), year=year
         )
         return {"items": [p.model_dump(mode="json") for p in progress]}
 
@@ -102,7 +105,7 @@ def register(server: Any) -> None:
         """A member's training records, most recent first."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
-        uid = str(parse_uuid(member_id, "member_id"))
+        uid = (await require_member(db, principal.organization_id, member_id)).id
         rows = await db.execute(
             select(TrainingRecord)
             .where(

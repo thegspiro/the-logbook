@@ -92,13 +92,15 @@ def register(server: Any) -> None:
 
     @logbook_tool(server, title="Overdue checkouts", module="inventory")
     async def list_overdue_checkouts(
-        db: AsyncSession, principal: McpPrincipal, limit: int = 100
+        db: AsyncSession, principal: McpPrincipal, limit: int = 100, offset: int = 0
     ) -> dict:
         """Items checked out past their expected return date, with who has
-        them and how long they have been out."""
+        them and how long they have been out. Page with ``limit`` and
+        ``offset``."""
         limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
         records = await InventoryService(db).get_overdue_checkouts(
-            org_uuid(principal), limit=limit
+            org_uuid(principal), skip=offset, limit=limit
         )
         names = await member_names(
             db, principal.organization_id, (r.user_id for r in records)
@@ -115,4 +117,4 @@ def register(server: Any) -> None:
             }
             for r in records
         ]
-        return page(items, None, limit, 0)
+        return page(items, None, limit, offset)

@@ -463,6 +463,179 @@ class TestDatetimeParsing:
             parse_datetime("yesterday", "x")
 
 
+class TestFourthReviewRound:
+    """Regressions for the fourth review round on #2197."""
+
+    def test_iso_emits_utc_instants_and_leaves_dates_alone(self):
+        from datetime import time
+        from decimal import Decimal
+
+        from app.mcp.tools._common import iso
+
+        assert iso(datetime(2026, 9, 3, 10)) == "2026-09-03T10:00:00+00:00"
+        assert (
+            iso(datetime(2026, 9, 3, 6, tzinfo=timezone(timedelta(hours=-4))))
+            == "2026-09-03T10:00:00+00:00"
+        )
+        assert iso(date(2026, 9, 3)) == "2026-09-03"
+        assert iso(time(7, 30)) == "07:30:00"
+        assert iso(Decimal("12.50")) == 12.5
+
+    @pytest.mark.usefixtures("_use_test_session")
+    @pytest.mark.parametrize(
+        ("tool", "extra"),
+        [
+            ("get_member_training_summary", {}),
+            ("get_member_requirements_progress", {}),
+            ("list_member_training_records", {}),
+        ],
+    )
+    async def test_member_tools_refuse_an_unknown_member(
+        self, server, org_with_members, tool, extra
+    ):
+        org_id, admin_id, _ = org_with_members
+        with pytest.raises(ToolError, match="Member not found"):
+            await _call(
+                server,
+                _principal(org_id, admin_id),
+                tool,
+                member_id=str(uuid.uuid4()),
+                **extra,
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_medical_compliance_refuses_an_unknown_member(
+        self, server, org_with_members
+    ):
+        org_id, admin_id, _ = org_with_members
+        with pytest.raises(ToolError, match="Member not found"):
+            await _call(
+                server,
+                _principal(org_id, admin_id, expose_medical_screening=True),
+                "get_member_medical_compliance",
+                member_id=str(uuid.uuid4()),
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_budget_summary_refuses_an_unknown_fiscal_year(
+        self, server, org_with_members
+    ):
+        org_id, admin_id, _ = org_with_members
+        with pytest.raises(ToolError, match="Fiscal year not found"):
+            await _call(
+                server,
+                _principal(org_id, admin_id, expose_finance=True),
+                "get_budget_summary",
+                fiscal_year_id=str(uuid.uuid4()),
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_budgets_resolve_categories_without_lazy_loads(
+        self, server, org_with_members, db_session
+    ):
+        """The budget list does not eager-load categories and the async
+        session cannot lazy-load them; names come from one explicit query."""
+        from datetime import date as _date
+
+        from app.models.finance import Budget, BudgetCategory, FiscalYear
+
+        org_id, admin_id, _ = org_with_members
+        fy = FiscalYear(
+            organization_id=org_id,
+            name="FY2026",
+            start_date=_date(2026, 1, 1),
+            end_date=_date(2026, 12, 31),
+            created_by=admin_id,
+        )
+        category = BudgetCategory(organization_id=org_id, name="Turnout gear")
+        db_session.add_all([fy, category])
+        await db_session.flush()
+        db_session.add(
+            Budget(
+                organization_id=org_id,
+                fiscal_year_id=fy.id,
+                category_id=category.id,
+                amount_budgeted=1000,
+                amount_spent=250,
+                amount_encumbered=0,
+                created_by=admin_id,
+            )
+        )
+        await db_session.flush()
+        fy_id = fy.id
+        # Expire so the tool's own queries, not this session's identity map,
+        # supply the rows — the way a fresh MCP request sees them.
+        db_session.expire_all()
+        principal = _principal(org_id, admin_id, expose_finance=True)
+        body = await _call(
+            server, principal, "list_budgets", fiscal_year_id=fy_id, limit=10
+        )
+        assert [b["category"] for b in body["items"]] == ["Turnout gear"]
+        assert body["has_more"] is False
+        summary = await _call(
+            server, principal, "get_budget_summary", fiscal_year_id=fy_id
+        )
+        assert summary["total_budgeted"] == 1000.0
+
+    async def test_apparatus_projection_reads_locations_from_the_lookup(self):
+        from types import SimpleNamespace
+
+        from app.mcp.tools.apparatus import _apparatus
+
+        row = SimpleNamespace(
+            id="a1",
+            unit_number="E1",
+            name="Engine 1",
+            apparatus_type=SimpleNamespace(name="Engine"),
+            status_record=SimpleNamespace(name="In Service", code="in_service"),
+            status_reason=None,
+            year=2020,
+            make="Pierce",
+            model="Enforcer",
+            primary_station_id="s1",
+            current_location_id="s2",
+            seating_capacity=6,
+            min_staffing=3,
+            pump_capacity_gpm=1500,
+            tank_capacity_gallons=750,
+            ladder_length_feet=None,
+            current_mileage=1000,
+            current_hours=200.0,
+            in_service_date=None,
+            inspection_expiration=None,
+            registration_expiration=None,
+            has_deficiency=False,
+            deficiency_since=None,
+            is_archived=False,
+            description=None,
+        )
+        rendered = _apparatus(row, {"s1": "Station 1", "s2": "Shop"})
+        assert rendered["primary_station"] == "Station 1"
+        assert rendered["current_location"] == "Shop"
+
+    async def test_meeting_tools_belong_to_the_minutes_module(
+        self, server, org_with_members
+    ):
+        org_id, admin_id, _ = org_with_members
+        with bind_principal(
+            _principal(
+                org_id,
+                admin_id,
+                access_mode="read_write",
+                enabled_modules=frozenset({"members", "events", "integrations"}),
+            )
+        ):
+            names = {t.name for t in await server.list_tools()}
+        assert (
+            not {
+                "list_meetings",
+                "list_open_action_items",
+                "create_meeting_action_item",
+            }
+            & names
+        )
+
+
 class TestAudit:
     @pytest.mark.usefixtures("_use_test_session")
     async def test_every_call_writes_an_audit_entry(
