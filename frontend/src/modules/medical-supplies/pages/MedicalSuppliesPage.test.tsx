@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -369,5 +369,91 @@ describe('MedicalSuppliesPage', () => {
     await waitFor(() =>
       expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'gauze', skip: 0 }))
     );
+  });
+
+  describe('paging the catalog', () => {
+    it('does not step past the last page while a page request is in flight', async () => {
+      // Next took its enabled state from the *previous* response, so a second
+      // activation before this one landed asked for skip=400 on a 201-item
+      // catalog: an empty table and a range reading "Showing 401-201 of 201".
+      // The first attempt at this guard used `isLoading`, which starts true and
+      // is only ever cleared -- so it said nothing about a later request, and
+      // this test passed against the unfixed control.
+      let releasePage2: ((value: unknown) => void) | undefined;
+      mockGetItems
+        .mockResolvedValueOnce({
+          items: [{ id: 'item-0', name: 'Supply 1', quantity: 1 }],
+          total: 201,
+          skip: 0,
+          limit: 200,
+        })
+        .mockImplementationOnce(() => new Promise((resolve) => (releasePage2 = resolve)));
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await screen.findByText('Showing 1–1 of 201');
+
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      await waitFor(() => expect(releasePage2).toBeDefined());
+      const callsAfterFirst = mockGetItems.mock.calls.length;
+
+      // The page-2 request is still in flight. A second activation must not
+      // start a third one.
+      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+
+      expect(mockGetItems.mock.calls.length).toBe(callsAfterFirst);
+      expect(mockGetItems).not.toHaveBeenCalledWith(expect.objectContaining({ skip: 400 }));
+    });
+
+    it('ignores a catalog response that a newer request has superseded', async () => {
+      // Clicking Next and then editing the filter starts two loads. If the
+      // older one lands last the table shows rows that do not match the visible
+      // filter, with page at 0 and skip at 200 -- a state Previous cannot undo,
+      // because decrementing page 0 is a no-op.
+      let releaseOlder: ((value: unknown) => void) | undefined;
+      mockGetItems
+        .mockResolvedValueOnce({
+          items: [{ id: 'item-1', name: 'Supply 1', quantity: 1 }],
+          total: 201,
+          skip: 0,
+          limit: 200,
+        })
+        .mockImplementationOnce(() => new Promise((resolve) => (releaseOlder = resolve)))
+        .mockResolvedValue({
+          items: [{ id: 'item-9', name: 'Filtered Supply', quantity: 1 }],
+          total: 1,
+          skip: 0,
+          limit: 200,
+        });
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      await screen.findByText('Supply 1');
+
+      // Page 2 is requested and hangs; the filter then changes and settles.
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+      await waitFor(() => expect(releaseOlder).toBeDefined());
+      fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+        target: { value: 'filtered' },
+      });
+      expect(await screen.findByText('Filtered Supply')).toBeInTheDocument();
+
+      // The superseded page-2 response lands last and must be discarded.
+      await act(async () => {
+        releaseOlder?.({
+          items: [{ id: 'item-200', name: 'Supply 201', quantity: 1 }],
+          total: 201,
+          skip: 200,
+          limit: 200,
+        });
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText('Filtered Supply')).toBeInTheDocument();
+      expect(screen.queryByText('Supply 201')).not.toBeInTheDocument();
+    });
   });
 });

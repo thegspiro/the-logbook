@@ -9,7 +9,7 @@
  * know what is about to lapse before they want an inventory count.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -92,6 +92,7 @@ const MedicalSuppliesPage: React.FC = () => {
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [expiring, setExpiring] = useState<ExpiringLot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [page, setPage] = useState(0);
@@ -100,7 +101,16 @@ const MedicalSuppliesPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
+  // Monotonic request id. Clicking Next and then editing the filter starts two
+  // loads; without this both commit, and if the older one lands last the table
+  // shows rows that do not match the visible filter while `page` and
+  // `itemPage.skip` disagree -- a state the Previous button cannot recover from,
+  // because decrementing page 0 is a no-op.
+  const loadId = useRef(0);
+
   const load = useCallback(async () => {
+    const requestId = ++loadId.current;
+    setIsFetching(true);
     try {
       const [summaryData, itemsData, categoryData, expiringData] = await Promise.all([
         medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS),
@@ -113,15 +123,20 @@ const MedicalSuppliesPage: React.FC = () => {
         medicalSuppliesService.getCategories(),
         medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS),
       ]);
+      if (requestId !== loadId.current) return;
       setSummary(summaryData);
       setItems(itemsData.items);
       setItemPage({ total: itemsData.total, skip: itemsData.skip, limit: itemsData.limit });
       setCategories(categoryData);
       setExpiring(expiringData);
     } catch (err: unknown) {
+      if (requestId !== loadId.current) return;
       toast.error(getErrorMessage(err, 'Failed to load medical supplies'));
     } finally {
-      setIsLoading(false);
+      if (requestId === loadId.current) {
+        setIsLoading(false);
+        setIsFetching(false);
+      }
     }
   }, [search, categoryFilter, page]);
 
@@ -453,7 +468,7 @@ const MedicalSuppliesPage: React.FC = () => {
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={itemPage.skip === 0}
+                disabled={isFetching || itemPage.skip === 0}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
               >
                 Previous
@@ -465,8 +480,13 @@ const MedicalSuppliesPage: React.FC = () => {
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={itemPage.skip + itemPage.limit >= itemPage.total}
-                onClick={() => setPage((p) => p + 1)}
+                // Disabled while a page is in flight, and bounded by the known
+                // total. The enabled state otherwise came from the *previous*
+                // response, so a second activation before this one landed
+                // stepped past the last page -- skip=400 on a 201-item catalog,
+                // an empty table and a range reading "Showing 401-201 of 201".
+                disabled={isFetching || itemPage.skip + itemPage.limit >= itemPage.total}
+                onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
               >
                 Next
               </button>
