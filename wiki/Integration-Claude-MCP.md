@@ -128,8 +128,10 @@ stdio-to-HTTP bridge (such as `mcp-remote`) that passes the
   the MCP server.
 - **Redaction is enforced in one place.** `app/mcp/redaction.py` strips
   denied field names at every depth of every tool result and scrubs every
-  string value of email addresses and phone numbers, so a note or a
-  document body cannot carry either out. `tests/test_mcp_redaction.py`
+  string value of email addresses and phone numbers — international,
+  North American, local and national formats without a country code, and
+  bare runs of seven to eleven digits — so a note or a document body cannot
+  carry either out. `tests/test_mcp_redaction.py`
   asserts both behaviours and that no tool module names a denied field.
   What a value-level scrub cannot recognise — a street address written
   out, a diagnosis in prose — is why only _published_ minutes and

@@ -127,6 +127,15 @@ class TestScrubText:
             ("Call 555-0100", "Call [phone removed]"),
             ("Dial +44 20 7946 0958", "Dial [phone removed]"),
             ("+49 30 1234567", "[phone removed]"),
+            # National formats without a country code.
+            ("Ring 020 7946 0958", "Ring [phone removed]"),
+            ("Ring (020) 7946 0958", "Ring [phone removed]"),
+            ("Ring 020 79460958", "Ring [phone removed]"),
+            ("Ring 912 34 567", "Ring [phone removed]"),
+            ("Ring 91234567", "Ring [phone removed]"),
+            ("Ring 912345678", "Ring [phone removed]"),
+            ("01 23 45 67 89", "[phone removed]"),
+            ("030-1234-5678", "[phone removed]"),
         ],
     )
     def test_contact_shapes_are_replaced(self, text, expected):
@@ -142,6 +151,10 @@ class TestScrubText:
             "ext 4567",
             "range 2024-2025",
             "ISO 9001-2015",
+            "due 03.09.2026",
+            "on 2026-09-03 at 19:30",
+            "budget 10 000 000",
+            "1 500 000 gallons",
         ],
     )
     def test_quantities_and_codes_survive_in_prose(self, text):

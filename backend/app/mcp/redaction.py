@@ -141,11 +141,49 @@ _PHONE_FORMATTED_RE = re.compile(
     r"\d{3}[.-]\d{4}"
     r")(?![\w-])"
 )
-# Bare runs: ten or eleven digits (an area code and number, with or
-# without the leading 1) or exactly seven (a local number). Six digits or
-# fewer is a date, a count or a code far more often than a phone number,
-# and eight or nine is neither.
-_PHONE_BARE_RE = re.compile(r"(?<![\w-])(?:\+?\d{10,11}|\d{7})(?![\w-])")
+# National formats without a country code, which is how most of the world
+# writes its own numbers: three to five separated groups (020 7946 0958,
+# 912 34 567, 01 23 45 67 89), or a leading-zero trunk prefix followed by
+# the subscriber number (020 79460958). The grouped form is checked by
+# ``_is_national_phone`` so that a date written with separators or a figure
+# grouped in thousands is left alone.
+_PHONE_NATIONAL_GROUPED_RE = re.compile(
+    r"(?<![\w-])\(?\d{2,5}\)?(?:[\s.-]\d{2,5}){2,4}(?![\w-])"
+)
+_PHONE_NATIONAL_TRUNK_RE = re.compile(r"(?<![\w-])0\d{1,4}[\s.-]\d{6,9}(?![\w-])")
+_DATE_SHAPES = (
+    re.compile(r"\d{1,2}[\s.-]\d{1,2}[\s.-]\d{4}"),
+    re.compile(r"\d{4}[\s.-]\d{1,2}[\s.-]\d{1,2}"),
+)
+
+
+def _is_national_phone(match: "re.Match[str]") -> bool:
+    raw = match.group(0)
+    digits = sum(ch.isdigit() for ch in raw)
+    if not 8 <= digits <= 15:
+        return False
+    if any(shape.fullmatch(raw) for shape in _DATE_SHAPES):
+        return False
+    # 10 000 000: a figure grouped in thousands, not a number to dial.
+    groups = re.split(r"[\s.-]", raw.strip("()"))
+    if len(groups) > 1 and all(len(g) == 3 for g in groups[1:]):
+        return False
+    return True
+
+
+def _scrub_national(text: str) -> str:
+    text = _PHONE_NATIONAL_GROUPED_RE.sub(
+        lambda m: PHONE_PLACEHOLDER if _is_national_phone(m) else m.group(0), text
+    )
+    return _PHONE_NATIONAL_TRUNK_RE.sub(PHONE_PLACEHOLDER, text)
+
+
+# Bare runs: seven to eleven digits — a local number, an eight- or
+# nine-digit national number (91234567), or an area code and number with
+# or without the leading 1. Six digits or fewer is a date, a count or a
+# code far more often than a phone number; twelve or more is a barcode or
+# an order number.
+_PHONE_BARE_RE = re.compile(r"(?<![\w-])\+?\d{7,11}(?![\w-])")
 EMAIL_PLACEHOLDER = "[email removed]"
 PHONE_PLACEHOLDER = "[phone removed]"
 
@@ -189,6 +227,7 @@ def scrub_text(text: str, *, identifier: bool = False) -> str:
         text = _EMAIL_RE.sub(EMAIL_PLACEHOLDER, text)
     if any(ch.isdigit() for ch in text):
         text = _PHONE_FORMATTED_RE.sub(PHONE_PLACEHOLDER, text)
+        text = _scrub_national(text)
         if not identifier:
             text = _PHONE_BARE_RE.sub(PHONE_PLACEHOLDER, text)
     return text
