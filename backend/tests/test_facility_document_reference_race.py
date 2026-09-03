@@ -1468,3 +1468,162 @@ class TestEnsureFacilityFolderFastPathSkipsTheOrganizationLock:
                 await cleanup.commit()
             finally:
                 await cleanup.close()
+
+
+class TestEnsureFacilityFolderFastPathDoesNotLockTheSharedRoot:
+    """FAC-43 (Codex, on top of FAC-42): FAC-42's fast path stopped taking
+    the organization-row lock once a facility's folder already existed, but
+    it still called ``_lock_facilities_root`` unconditionally -- an
+    exclusive lock on the org's single "Facility Files" root row, shared by
+    every facility in the organization. Two concurrent reference creations
+    for two *different* facilities therefore still serialized on that one
+    row before either could reach its own, genuinely distinct, facility
+    folder -- the same class of bug FAC-42 fixed, one row up.
+
+    Fixed by resolving the root with a non-locking read
+    (``_peek_facilities_root``) on the fast path instead; only the
+    per-facility folder lock (needed to serialize two callers for the *same*
+    facility, and to satisfy FAC-31/FAC-35's hold-until-commit and
+    total-lock-order requirements) remains.
+
+    The locker below takes its lock on the root by primary key
+    (``id == root_id``), not by calling ``_lock_facilities_root`` itself.
+    That method's own WHERE clause (``organization_id`` + ``slug`` +
+    ``is_system``, only the first of which is indexed) has to scan every
+    org-scoped ``document_folders`` row in ascending id order until it finds
+    one matching all three -- and since these ids are random UUIDs, not
+    monotonic, "ascending id order" has no relationship to "the root was
+    created first". A first version of this test called
+    ``_lock_facilities_root`` directly for the lock and was flaky depending
+    on the generated UUIDs: whenever facility B's own folder id happened to
+    sort below the root's, the scan locked (and released only at commit) B's
+    row too, on its way to finding and locking the root -- which then made
+    *this test's own caller* time out for a reason that has nothing to do
+    with FAC-43, and would have been unrelated to whichever facility a real
+    concurrent create happened to race against. A primary-key lock is an
+    InnoDB point lookup against the clustered index -- deterministic,
+    independent of what else is in the table -- so it isolates exactly the
+    one thing FAC-43 is about: whether the fast path itself still takes a
+    lock on that row. The scan behavior above is real on its own terms (it
+    can happen during a genuine slow-path creation, which still calls
+    ``_lock_facilities_root``) -- tracked separately as FAC-44, not fixed
+    here; see docs/security-review/FAC-12-facilities.md.
+    """
+
+    async def test_fast_path_for_a_different_facility_skips_the_root_lock(
+        self, two_sessions
+    ):
+        locker, caller = two_sessions
+        slug = f"fcvfd-fac43-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        locker.add(org)
+        await locker.flush()
+        facility_type = FacilityType(
+            organization_id=None, name="Station", is_system=True
+        )
+        facility_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        locker.add_all([facility_type, facility_status])
+        await locker.flush()
+        facility_a = Facility(
+            organization_id=org.id,
+            name="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        facility_b = Facility(
+            organization_id=org.id,
+            name="Station 2",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        locker.add_all([facility_a, facility_b])
+        await locker.commit()
+        org_id, facility_a_id, facility_b_id, facility_type_id, status_id = (
+            org.id,
+            facility_a.id,
+            facility_b.id,
+            facility_type.id,
+            facility_status.id,
+        )
+        call_task = None
+        try:
+            # Pre-create both facilities' folders (and the shared root), in
+            # their own committed transaction, so the call under test takes
+            # the fast path for facility B.
+            setup = database_manager.session_factory()
+            try:
+                docs = DocumentsService(setup)
+                await docs.ensure_facility_folder(
+                    org_id, str(facility_a_id), "Station 1"
+                )
+                folder_b = await docs.ensure_facility_folder(
+                    org_id, str(facility_b_id), "Station 2"
+                )
+                root_id = folder_b.parent_id
+                await setup.commit()
+            finally:
+                await setup.close()
+
+            # Locker holds the shared "Facility Files" root row's exclusive
+            # lock, uncommitted, by primary key -- see the class docstring
+            # for why this is the deterministic way to hold exactly (and
+            # only) the resource FAC-43 is about, rather than calling
+            # _lock_facilities_root itself.
+            locked_root = (
+                await locker.execute(
+                    select(DocumentFolder)
+                    .where(DocumentFolder.id == root_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            assert locked_root is not None
+
+            # The caller's own call, for a DIFFERENT, already-existing
+            # facility folder, must complete despite locker's still-open
+            # lock on the shared root -- if the fast path still locked that
+            # row, this would time out.
+            call_task = asyncio.create_task(
+                DocumentsService(caller).ensure_facility_folder(
+                    org_id, str(facility_b_id), "Station 2"
+                )
+            )
+            result = await asyncio.wait_for(call_task, timeout=5)
+            assert result is not None
+            assert result.slug == f"facility-{facility_b_id}"
+        finally:
+            if call_task is not None and not call_task.done():
+                call_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await call_task
+            await locker.rollback()
+            await caller.rollback()
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.organization_id == org_id
+                    )
+                )
+                await cleanup.execute(
+                    Facility.__table__.delete().where(
+                        Facility.id.in_([facility_a_id, facility_b_id])
+                    )
+                )
+                await cleanup.execute(
+                    FacilityType.__table__.delete().where(
+                        FacilityType.id == facility_type_id
+                    )
+                )
+                await cleanup.execute(
+                    FacilityStatus.__table__.delete().where(
+                        FacilityStatus.id == status_id
+                    )
+                )
+                await cleanup.execute(
+                    Organization.__table__.delete().where(Organization.id == org_id)
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()

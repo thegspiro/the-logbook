@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: FAC-42's fast path still locked the shared facilities-root row unconditionally; a related over-locking finding in the same helper flagged rather than fixed (2026-09-03)
+
+**Fixed**
+
+- **FAC-43 (P2, liveness/performance) — `ensure_facility_folder`'s fast
+  path (FAC-42) still called `_lock_facilities_root` unconditionally**, an
+  exclusive lock on the organization's single "Facility Files" root row,
+  even though the fast path never writes to it. Two concurrent reference
+  creations for two _different_ facilities in the same organization
+  therefore still serialized on that one shared row before either could
+  reach its own, genuinely distinct, facility folder — the same class of
+  bug FAC-42 fixed, one row up.
+- Fixed by resolving the root with a non-locking read
+  (`_peek_facilities_root`) on the fast path instead of the locking
+  `_lock_facilities_root`. Safe specifically because the root is a system
+  folder: it can be neither moved (`update_folder` refuses to reparent one)
+  nor deleted (`delete_folder` refuses to delete one), so a stale peek can
+  only under-report existence — never hand back a wrong id — and an
+  under-report safely falls through to the slow path's locking re-check
+  under the organization lock, which is unchanged. The slow (creation)
+  path's own `_lock_facilities_root` call, and the per-facility
+  `_lock_facility_folder` lock both paths still take, are untouched.
+- Reproduced live with two real sessions: a lock held on the root row (by
+  primary key, isolating exactly the resource in question) no longer
+  blocks a concurrent `ensure_facility_folder` call for a different,
+  already-existing facility — pre-fix, the identical scenario timed out.
+  New regression test plus a source-inspection test guarding the fast path
+  against ever reintroducing the root lock; both confirmed to fail against
+  pre-fix code and pass post-fix, five repeated runs with no flakiness.
+
+**Flagged, not fixed**
+
+- **FAC-44 (P3, scalability/contention) — `_lock_facilities_root`'s own
+  query can incidentally lock an unrelated, already-existing facility's
+  folder row while scanning for the root.** Its `WHERE` clause
+  (`organization_id` + `slug` + `is_system`) is only indexed on the first
+  column; under InnoDB REPEATABLE READ with `FOR UPDATE`, MySQL must
+  examine — and lock — every org-scoped `document_folders` row in ascending
+  primary-key order until it finds one matching all three predicates. Since
+  these primary keys are random UUIDs, not monotonic, that order has no
+  relationship to which folder is the root, so a facility folder whose UUID
+  happens to sort below the root's gets swept into the lock too. This can
+  only occur during the already-rare slow (creation) path — the fast path
+  fixed by FAC-43 above no longer calls this method at all — so the
+  practical exposure is small, but it is the same underlying class of
+  defect as the already-flagged FAC-41 (an unindexed predicate forcing a
+  broader-than-intended lock scan), on a sibling method, discovered while
+  verifying FAC-43. The fix shape is the same as FAC-41's recommendation: a
+  schema-level index or lookup key that makes the root a direct point
+  lookup rather than a scan, out of scope for this pass. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-44) for the full
+  reasoning.
+
 ### Security: ensure_facility_folder took an exclusive organization-row lock unconditionally, serializing unrelated facility uploads org-wide (2026-09-03)
 
 **Fixed**

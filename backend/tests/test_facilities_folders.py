@@ -132,6 +132,36 @@ class TestFolderCreationIsLocked:
             "-- FAC-42 regressed"
         )
 
+    def test_ensure_facility_folder_fast_path_does_not_lock_the_facilities_root(
+        self,
+    ):
+        """FAC-43 (Codex, on top of FAC-42): FAC-42's fast path still called
+        ``_lock_facilities_root`` -- an exclusive lock on the org's single
+        "Facility Files" root row -- unconditionally, so two concurrent
+        reference creations for two *different* facilities in the same
+        organization still serialized on that one shared row before either
+        could reach its own, genuinely distinct, facility folder.
+
+        The fast path must use ``_peek_facilities_root`` (a plain read --
+        see that method's own docstring for why this is safe: a system
+        folder can be neither moved nor deleted, so a stale peek can only
+        under-report existence, never hand back a wrong id) instead. The
+        per-facility lock (``_lock_facility_folder``) is unaffected and
+        stays required -- this test only guards the root.
+        """
+        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        fast_path, _, _slow_path = source.partition("org = await self.db.scalar(")
+        assert "_peek_facilities_root(" in fast_path, (
+            "ensure_facility_folder's fast path must resolve the facilities "
+            "root with the non-locking _peek_facilities_root, not a locking "
+            "read -- FAC-43 regressed"
+        )
+        assert "_lock_facilities_root(" not in fast_path, (
+            "ensure_facility_folder's fast path must not take an exclusive "
+            "lock on the shared facilities-root row -- FAC-43 regressed "
+            "(this serializes unrelated facilities' uploads on one row)"
+        )
+
 
 class TestFacilityFolderDocumentCountRedaction:
     async def _call(self, current_user):

@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock — pass 3 continued)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock; FAC-43 fixed — the fast path still locked the shared facilities-root row; FAC-44 flagged — the same unindexed-scan class as FAC-41, on the root lookup — pass 3 continued, closing this PR)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -2192,6 +2192,211 @@ flakiness. Full backend suite re-run clean (see the completion gate
 below).
 
 **Mirrored to** `CHANGELOG.md`.
+
+### FAC-43 — P2 (liveness/performance) — FAC-42's own fast path still locked the shared "Facility Files" root row unconditionally — ✅ FIXED
+
+**Found by Codex review of the FAC-42 commit (`5ff75380`), at
+`documents_service.py:1424`.** FAC-42 split `ensure_facility_folder` into a
+fast path (both folders already exist) and a slow path (something needs
+creating), and stopped the fast path from taking the organization-row lock.
+But the fast path still called `_lock_facilities_root` unconditionally — an
+exclusive lock on the organization's single "Facility Files" root row,
+shared by **every** facility in the organization. Per FAC-31, the caller
+(`_validate_shared_document_reference`) holds whatever this method
+returns/locks until its own reference insert commits, so two concurrent
+reference creations for two entirely _different_ facilities in the same
+organization still serialized on that one shared row before either could
+reach its own, genuinely distinct, facility folder — the identical class of
+bug FAC-42 had just fixed, one row up in the hierarchy.
+
+**Where:** `backend/app/services/documents_service.py`
+(`ensure_facility_folder`, `_lock_facilities_root`, plus a new
+`_peek_facilities_root`).
+
+**Fix:** the fast path now resolves the root with a non-locking read
+(`_peek_facilities_root`) instead of `_lock_facilities_root`. This is safe
+specifically because the root is a **system** folder, and two existing,
+independent guards make it immutable in exactly the ways that would matter
+here:
+
+- `update_folder` refuses to reparent a system folder (`"Cannot move a
+system folder"`, FAC-23) — so its row is never subject to a location
+  change.
+- `delete_folder` refuses to delete a system folder (`"Cannot delete a
+system folder"`, FAC-22) — so its row, once created, exists forever.
+
+Given both, a plain read of the root can only ever be **stale in one
+direction**: it can fail to see a root created and committed by a
+concurrent transaction after this transaction's REPEATABLE READ snapshot
+was taken (an under-report), never see a wrong id for a root that exists,
+and never see a root that has since moved or been removed (because neither
+is possible). The only field this method's caller reads off the result is
+`.id` — a facility folder's `parent_id` — which never changes once
+assigned once the row exists at all. An under-report is therefore always
+safe: it just falls through to the unchanged slow path, which re-resolves
+the root with a genuine locking read (`_lock_facilities_root`, still called
+there, unchanged) under the organization lock before creating anything —
+the same double-checked-locking guarantee FAC-42 already established. This
+is the same reasoning shape FAC-41 used to reject a lighter fix for a
+_different_ method (a snapshot-bound read is only safe when nothing that
+matters can be missed _and acted on wrongly_) — here, unlike FAC-41's
+document-existence check, the thing being peeked at cannot itself change
+underneath the peek, so the same technique that was unsafe there is safe
+here.
+
+The per-facility lock (`_lock_facility_folder`) — the resource two callers
+racing on the _same_ facility must actually serialize on, and the one
+FAC-31/FAC-35 rely on being held until the caller's own insert commits — is
+unchanged. So is the slow path in its entirety, including its own
+`_lock_facilities_root` call and its double-check re-read of the facility
+folder.
+
+**Reproduced live** with two real, independently-committing sessions, and a
+subtlety in how to do that correctly: a first version of this test had
+`locker` call `_lock_facilities_root` itself to hold "the root's lock", and
+was flaky. That method's own `WHERE` clause (`organization_id` + `slug` +
+`is_system`, only the first indexed) forces InnoDB to scan every org-scoped
+`document_folders` row in ascending primary-key order under `FOR UPDATE`
+until it finds one matching all three predicates — and since these
+primary keys are random UUIDs, not monotonic, that scan order has no
+relationship to which row is the root. Depending on the generated UUIDs,
+the scan could sweep in (and lock, until commit) a completely unrelated
+facility's own folder row on its way to finding the root — which then made
+_that_ facility's concurrent `ensure_facility_folder` call block for a
+reason unrelated to FAC-43. See FAC-44 immediately below — this is a real,
+separate finding, not a test artifact to shrug off, just not what this
+test needed to hold constant to demonstrate FAC-43's specific fix. The
+corrected test locks the root row by primary key instead (an InnoDB point
+lookup against the clustered index, independent of what else is in the
+table) — deterministic, and isolates exactly the one resource FAC-43 is
+about. With that lock held, a second session's `ensure_facility_folder`
+call for a **different**, already-existing facility completed within a
+bounded wait; pre-fix, the identical scenario timed out.
+
+**Regression tests:**
+
+- `tests/test_facility_document_reference_race.py`,
+  `TestEnsureFacilityFolderFastPathDoesNotLockTheSharedRoot` — the live,
+  two-session reproduction above (locking the root by primary key) as a
+  permanent test. Confirmed to fail against pre-fix code (`git stash`,
+  timing out on the bounded wait) and pass post-fix, five repeated runs
+  with no flakiness.
+- `tests/test_facilities_folders.py`, `TestFolderCreationIsLocked` — added
+  `test_ensure_facility_folder_fast_path_does_not_lock_the_facilities_root`,
+  a source-inspection test asserting the fast path (the portion of the
+  method's source before the organization lock is acquired) calls
+  `_peek_facilities_root` and never `_lock_facilities_root`.
+
+**Verified:** `pytest tests/test_facility_document_reference_race.py
+tests/test_facilities_folders.py` — 21 passed, five repeated runs of the
+new live test with no flakiness. Full backend suite re-run clean (see the
+completion gate below).
+
+**Mirrored to** `CHANGELOG.md`.
+
+### FAC-44 — P3 (scalability/contention), FLAGGED — `_lock_facilities_root`'s own query can incidentally lock an unrelated facility's folder row while scanning for the root
+
+**Found during FAC-43's own live verification**, not by a separate Codex
+comment — see the "reproduced live" paragraph above for how it surfaced.
+`_lock_facilities_root`'s `WHERE organization_id = :org AND slug =
+'facilities' AND is_system = true ORDER BY id LIMIT 1 FOR UPDATE` filters on
+three columns, only the first of which (`organization_id`) is indexed
+(`idx_doc_folders_org`). Under InnoDB REPEATABLE READ with `FOR UPDATE`,
+evaluating the un-indexed remainder of the `WHERE` clause against each
+candidate requires fetching (and, for a locking read, locking) every row the
+scan examines — not only the one row that ultimately satisfies all three
+predicates and gets returned. Because `document_folders.id` is a randomly
+generated UUID (`generate_uuid`, not an auto-increment column), "ascending
+id order" — the order the org-scoped index scan proceeds in to satisfy
+`ORDER BY id` — has no relationship to which row is the root versus which
+are ordinary facility folders. A facility folder created long after the
+root, but whose UUID happens to sort below it, is examined (and locked)
+before the scan ever reaches the root.
+
+**Reproduced live** while building FAC-43's own regression test (see that
+finding's write-up): with two facilities' folders and the shared root
+already created and committed, calling the real `_lock_facilities_root`
+from one session locked not only the root but — depending on the randomly
+generated UUIDs for that run — sometimes also a second, unrelated
+facility's own folder row, which then blocked that facility's concurrent
+`ensure_facility_folder` call in a second session. This is exactly the same
+mechanism as the already-flagged FAC-41 (`_match_facility_document_references`
+scanning and locking every `document:%` reference row in the organization
+because `file_path` carries no index), on a sibling method in the same
+file.
+
+**Why this is flagged rather than fixed here:** the blast radius is
+meaningfully smaller than FAC-41's, which is why this is P3 rather than
+P2 — `_lock_facilities_root` is now called from exactly one place,
+`ensure_facility_folder`'s slow path, which FAC-42 already established runs
+essentially once ever per organization (only while the root or a specific
+facility's folder is still missing). FAC-43's fix above removed the
+_other_ caller (the fast path) entirely, which was the call site actually
+responsible for the org-wide contention Codex's FAC-43 finding described.
+What remains is a narrow, low-probability window during that already-rare
+creation path, not a routine-operation hazard. A fix needs the same shape
+as FAC-41's recommendation — a lookup that does not depend on scanning
+unindexed columns, e.g. a dedicated indexed marker or a lookup keyed
+directly by a column already covered by an index — which is a schema-level
+change more appropriately scoped as its own reviewed pass than folded into
+a liveness fix already in flight.
+
+**Where:** `backend/app/services/documents_service.py`
+(`_lock_facilities_root`) — not modified.
+
+**Recommendation for a future pass:** add an index covering `(organization_id,
+slug)` (or `(organization_id, is_system)`, given `is_system` is the
+coarser, more reusable predicate across this file's other system-folder
+lookups — `get_facility_sub_folders` and the other call sites sharing the
+`.where(DocumentFolder.is_system.is_(True))` shape found earlier in this
+file) so the root lookup becomes a genuine index-satisfied point lookup
+rather than a scan-and-filter. Worth evaluating together with FAC-41's own
+recommended fix, since both are instances of the same underlying gap
+(locking reads whose `WHERE` clause outruns this table's indexes) and a
+single review pass over `document_folders`' indexing could close both.
+
+**Mirrored to** `CHANGELOG.md`.
+
+## Completion gate (pass 3, round 15 — Codex review of `5ff75380`, FAC-43 fixed, FAC-44 flagged)
+
+| Check                                                                                                                                               | Result                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                       | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                                                                                                                | ✅ clean                                                                    |
+| `isort --check-only app/ tests/ alembic/`                                                                                                           | ✅ clean                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                   | ✅ passed (411 migrations, single head)                                     |
+| `pytest tests/test_facility_document_reference_race.py tests/test_facilities_folders.py`                                                            | ✅ 21 passed (+2, FAC-43's two new tests), 5 repeated runs, no flakiness    |
+| `pytest tests/test_facility_document_reference_race.py tests/test_documents_access.py tests/test_facilities_folders.py tests/test_like_escaping.py` | ✅ 138 passed                                                               |
+| `pytest tests/ -k "facilities or documents"`                                                                                                        | ✅ 305 passed, 1 skipped (pre-existing, optional dependency)                |
+| `pytest tests/` (full backend suite)                                                                                                                | ✅ 10057 passed, 21 skipped (pre-existing Docker/optional-dependency skips) |
+
+**FAC-43's regression tests independently confirmed against pre-fix code:**
+`git stash` isolating just the `documents_service.py` fix (test changes
+kept) — the live two-session test (`TestEnsureFacilityFolderFastPathDoesNotLockTheSharedRoot`)
+times out on its bounded wait (genuinely blocked on the shared root row,
+locked by primary key); `git stash pop` restored the fix and both new tests
+passed, five repeated runs with no flakiness.
+
+**FAC-44 reproduced live** with two real, independently-committing
+sessions, confirmed to be a genuine, reproducible hazard (not a test
+artifact) before deciding whether/how to fix — see the write-up above for
+why it is flagged, at a lower severity than FAC-41, rather than folded into
+FAC-43's fix.
+
+**A note on this round's own local-environment noise, not a code finding:**
+an earlier ad hoc diagnostic script (run directly against this sandbox's
+persistent MySQL instance while investigating FAC-44's own discovery, not
+`pytest`) crashed before its cleanup ran, leaving two stray `Organization`
+rows behind. Those rows tripped onboarding's single-instance guard
+(`"An organization has already been created"`, `onboarding.py:531`) and
+were the actual cause of 38 failures across `test_facilities_onboarding.py`,
+`test_agency_position_seeding.py`, `test_public_legal.py`, and
+`test_onboarding_integration.py` on the first full-suite run this round —
+confirmed unrelated to this PR's diff (`git stash` reproduced the identical
+38 failures with the fix removed) and to any file this PR's chain touches.
+Deleted by hand (`DELETE FROM organizations WHERE slug LIKE 'diagfac43-%'`
+and its now-orphaned `facilities`/`document_folders` rows); the full-suite
+result above is the clean re-run after that cleanup.
 
 ## Completion gate (pass 3, round 14 — Codex review of `9306051e`, FAC-42)
 

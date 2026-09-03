@@ -1442,6 +1442,42 @@ class DocumentsService:
         )
         return result.scalar_one_or_none()
 
+    async def _peek_facilities_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Non-locking read for the org's 'Facility Files' system folder.
+
+        FAC-43 (Codex, on top of FAC-42): used only by
+        ``ensure_facility_folder``'s fast path, in place of
+        ``_lock_facilities_root``. Safe as a plain read specifically because
+        the root is a system folder: ``update_folder`` refuses to move one
+        (``"Cannot move a system folder"``) and ``delete_folder`` refuses to
+        delete one (``"Cannot delete a system folder"``) -- so once this row
+        is visible to any snapshot, it stays visible, at the same id,
+        forever. There is no "moved" or "deleted" state for a later locking
+        read to catch that this peek could miss.
+
+        The only thing this method's caller reads off the result is
+        ``.id`` -- a facility folder's ``parent_id`` -- which never changes
+        once assigned. A stale peek can therefore only under-report
+        existence (the root was created and committed by another
+        transaction after this one's snapshot was taken, not yet visible
+        here), never return a wrong id for one that does exist. An
+        under-report just falls through to the slow path below, which
+        re-resolves the root with a genuine locking read under the
+        organization lock -- so this cannot admit a false "no folder yet"
+        past the point where that would matter (a create).
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == FOLDER_FACILITIES)
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def ensure_facility_folder(
         self, organization_id: UUID, facility_id: str, facility_display_name: str
     ) -> DocumentFolder:
@@ -1506,10 +1542,25 @@ class DocumentsService:
         unchanged: any two callers that could actually race on a *create*
         still serialize on it exactly as before; only callers who need
         nothing built at all now skip it entirely.
+
+        FAC-43 (Codex, on top of FAC-42): the fast path above still called
+        ``_lock_facilities_root`` -- an exclusive lock on the org's single
+        "Facility Files" root row -- unconditionally, even though the fast
+        path never writes to it. Two concurrent reference creations for two
+        *different* facilities in the same organization therefore still
+        serialized on that one shared row before either could reach its own,
+        genuinely distinct, facility folder. The fast path now peeks at the
+        root with a plain read (``_peek_facilities_root``) instead: that
+        method's own docstring is the safety argument (a system folder can
+        be neither moved nor deleted, so a stale peek can only under-report
+        existence, never hand back a wrong id, and an under-report safely
+        falls through to the slow path's locking re-check). The per-facility
+        lock below -- the one two callers *for the same facility* actually
+        need to serialize on -- is unchanged.
         """
         facility_id_str = str(facility_id)
 
-        facilities_root = await self._lock_facilities_root(organization_id)
+        facilities_root = await self._peek_facilities_root(organization_id)
         if facilities_root is not None:
             facility_folder = await self._lock_facility_folder(
                 facilities_root.id, facility_id_str
