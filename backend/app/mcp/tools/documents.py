@@ -18,6 +18,11 @@ from app.mcp.tools._common import (
 from app.models.document import DocumentFolder, DocumentStatus, FolderVisibility
 from app.services.documents_service import DocumentsService
 
+# Characters of a document's text returned per call. An in-app document is
+# a LONGTEXT column; a client reads a long one in pieces rather than having
+# the whole thing scanned, redacted and serialized at once.
+DOCUMENT_CONTENT_CHARS = 20_000
+
 
 def _folder_is_open(folder: DocumentFolder) -> bool:
     """A folder every member can read, judged on its own settings only."""
@@ -60,7 +65,7 @@ async def _open_folder_ids(db: AsyncSession, organization_id: str) -> set[str]:
     return open_ids
 
 
-def _document(d: Any, include_content: bool) -> dict:
+def _document(d: Any, include_content: bool, content_offset: int = 0) -> dict:
     body = {
         "id": d.id,
         "name": d.name,
@@ -78,7 +83,14 @@ def _document(d: Any, include_content: bool) -> dict:
         "updated_at": iso(d.updated_at),
     }
     if include_content:
-        body["content_html"] = d.content_html
+        text = d.content_html or ""
+        chunk = text[content_offset : content_offset + DOCUMENT_CONTENT_CHARS]
+        body["content_html"] = chunk
+        body["content_offset"] = content_offset
+        body["content_total_chars"] = len(text)
+        body["content_has_more"] = content_offset + len(chunk) < len(text)
+        if body["content_has_more"]:
+            body["next_content_offset"] = content_offset + len(chunk)
     return body
 
 
@@ -114,10 +126,17 @@ def register(server: Any) -> None:
 
     @logbook_tool(server, title="Get document")
     async def get_document(
-        db: AsyncSession, principal: McpPrincipal, document_id: str
+        db: AsyncSession,
+        principal: McpPrincipal,
+        document_id: str,
+        content_offset: int = 0,
     ) -> dict:
         """One active document with its text when it was written in the app.
-        Uploaded files return their metadata only."""
+        Uploaded files return their metadata only. Text is returned in
+        pieces of at most 20,000 characters: when ``content_has_more`` is
+        true, call again with ``content_offset`` set to
+        ``next_content_offset``."""
+        content_offset = clamp_offset(content_offset)
         doc = await DocumentsService(db).get_document_by_id(
             parse_uuid(document_id, "document_id"), org_uuid(principal)
         )
@@ -127,4 +146,4 @@ def register(server: Any) -> None:
             open_ids = await _open_folder_ids(db, principal.organization_id)
             if doc.folder_id not in open_ids:
                 raise ValueError("Document not found")
-        return _document(doc, True)
+        return _document(doc, True, content_offset)

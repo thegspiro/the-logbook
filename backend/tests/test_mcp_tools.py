@@ -700,7 +700,9 @@ class TestAudit:
             .scalars()
             .all()
         )
-        assert rows == []
+        # The refusal itself is recorded, with the argument bounded.
+        assert [r.event_data["outcome"] for r in rows] == ["refused"]
+        assert len(rows[0].event_data["arguments"]["search"]) < 300
 
 
 class TestAuditBounding:
@@ -1324,17 +1326,26 @@ class TestEleventhRoundFindings:
         )
         assert [s["shift_date"] for s in first["items"]] == [days[0].isoformat()]
         assert first["has_more"] is True
-        assert first["next_start_date"] == days[1].isoformat()
         rest = await _call(
             server,
             principal,
             "list_open_shifts",
-            start_date=first["next_start_date"],
+            start_date=days[0].isoformat(),
             end_date=days[1].isoformat(),
+            cursor=first["next_cursor"],
         )
         assert [s["shift_date"] for s in rest["items"]] == [days[1].isoformat()]
         assert rest["has_more"] is False
-        assert "next_start_date" not in rest
+        assert "next_cursor" not in rest
+        with pytest.raises(ToolError, match="not a continuation"):
+            await _call(
+                server,
+                principal,
+                "list_open_shifts",
+                start_date=days[0].isoformat(),
+                end_date=days[1].isoformat(),
+                cursor="garbage",
+            )
         with pytest.raises(ToolError, match="must not exceed"):
             await _call(
                 server,
@@ -1343,6 +1354,150 @@ class TestEleventhRoundFindings:
                 start_date=days[0].isoformat(),
                 end_date=(days[0] + timedelta(days=400)).isoformat(),
             )
+
+
+class TestTwelfthRoundFindings:
+    """Regressions for the twelfth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_open_shift_cursor_advances_within_a_day(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import scheduling as scheduling_tools
+
+        org_id, admin_id, _ = org_with_members
+        day = date.today() + timedelta(days=1)
+        base = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        for hour in (8, 14):
+            db_session.add(
+                Shift(
+                    organization_id=org_id,
+                    shift_date=day,
+                    start_time=base.replace(hour=hour),
+                    end_time=base.replace(hour=hour + 4),
+                    min_staffing=2,
+                    open_to_all_members=True,
+                )
+            )
+        await db_session.flush()
+        monkeypatch.setattr(scheduling_tools, "MAX_OPEN_SHIFT_CANDIDATES", 1)
+        principal = _principal(org_id, admin_id)
+        seen = []
+        cursor = None
+        for _ in range(3):
+            body = await _call(
+                server,
+                principal,
+                "list_open_shifts",
+                start_date=day.isoformat(),
+                end_date=day.isoformat(),
+                cursor=cursor,
+            )
+            seen.extend(s["start_time"] for s in body["items"])
+            if not body["has_more"]:
+                break
+            cursor = body["next_cursor"]
+        assert len(seen) == 2
+        assert seen == sorted(seen)
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_refused_and_rejected_calls_are_audited(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id)
+        with pytest.raises(ToolError):
+            await _call(server, principal, "list_fiscal_years")  # switch off
+        with pytest.raises(ToolError, match="Member not found"):
+            await _call(server, principal, "get_member", member_id=str(uuid.uuid4()))
+        await _call(server, principal, "get_department_profile")
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog)
+                    .where(
+                        AuditLog.event_type == "mcp.tool_call",
+                        AuditLog.organization_id == org_id,
+                    )
+                    .order_by(AuditLog.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        outcomes = [(r.event_data["tool"], r.event_data["outcome"]) for r in rows]
+        assert outcomes == [
+            ("list_fiscal_years", "refused"),
+            ("get_member", "rejected"),
+            ("get_department_profile", "ok"),
+        ]
+        assert "Finance data is not shared" in rows[0].event_data["reason"]
+        assert rows[1].event_data["reason"] == "Member not found"
+        assert "reason" not in rows[2].event_data
+        assert rows[0].severity != rows[2].severity
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_low_stock_is_paged(self, server, org_with_members, db_session):
+        org_id, admin_id, _ = org_with_members
+        for name in ("Boots", "Coats", "Gloves"):
+            category = InventoryCategory(
+                organization_id=org_id,
+                name=name,
+                item_type=ItemType.UNIFORM,
+                low_stock_threshold=5,
+            )
+            db_session.add(category)
+            await db_session.flush()
+            db_session.add(
+                InventoryItem(
+                    organization_id=org_id,
+                    category_id=category.id,
+                    name=f"{name} item",
+                    quantity=1,
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        first = await _call(server, principal, "list_low_stock_items", limit=2)
+        assert [c["category_name"] for c in first["items"]] == ["Boots", "Coats"]
+        assert first["has_more"] is True
+        rest = await _call(server, principal, "list_low_stock_items", limit=2, offset=2)
+        assert [c["category_name"] for c in rest["items"]] == ["Gloves"]
+        assert rest["has_more"] is False
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_document_text_is_returned_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import documents as document_tools
+
+        org_id, admin_id, _ = org_with_members
+        doc_id = str(uuid.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO documents (id, organization_id, name, document_type, "
+                "status, version, content_html) VALUES "
+                "(:id, :org, 'SOG 7', 'uploaded', 'active', 1, :html)"
+            ),
+            {"id": doc_id, "org": org_id, "html": "<p>" + "a" * 30 + "</p>"},
+        )
+        await db_session.flush()
+        monkeypatch.setattr(document_tools, "DOCUMENT_CONTENT_CHARS", 20)
+        principal = _principal(org_id, admin_id)
+        first = await _call(server, principal, "get_document", document_id=doc_id)
+        assert len(first["content_html"]) == 20
+        assert first["content_total_chars"] == 37
+        assert first["content_has_more"] is True
+        assert first["next_content_offset"] == 20
+        rest = await _call(
+            server,
+            principal,
+            "get_document",
+            document_id=doc_id,
+            content_offset=first["next_content_offset"],
+        )
+        assert first["content_html"] + rest["content_html"] == "<p>" + "a" * 30 + "</p>"
+        assert rest["content_has_more"] is False
 
 
 class TestReviewFindings:

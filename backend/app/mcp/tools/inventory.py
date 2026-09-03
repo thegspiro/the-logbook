@@ -35,13 +35,25 @@ def register(server: Any) -> None:
         )
 
     @logbook_tool(server, title="Low stock", module="inventory")
-    async def list_low_stock_items(db: AsyncSession, principal: McpPrincipal) -> dict:
-        """Categories whose stock has fallen below their reorder point, with
-        the item names involved. Medical supplies are not included."""
+    async def list_low_stock_items(
+        db: AsyncSession, principal: McpPrincipal, limit: int = 50, offset: int = 0
+    ) -> dict:
+        """Categories whose stock has fallen below their reorder point, by
+        name, with the item names involved. Medical supplies are not
+        included. Paged; ``has_more`` says whether to ask for the next page."""
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
+        # One row past the page decides ``has_more`` without a second
+        # aggregate query.
         items = await InventoryService(db).get_low_stock_items(
-            org_uuid(principal), exclude_item_types=MEDICAL_ITEM_TYPES
+            org_uuid(principal),
+            exclude_item_types=MEDICAL_ITEM_TYPES,
+            skip=offset,
+            limit=limit + 1,
         )
-        return {"items": items, "total": len(items)}
+        body = page(items[:limit], None, limit, offset)
+        body["has_more"] = len(items) > limit
+        return body
 
     @logbook_tool(server, title="List inventory items", module="inventory")
     async def list_inventory_items(

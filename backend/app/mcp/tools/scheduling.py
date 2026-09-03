@@ -7,9 +7,10 @@ the one set every eligible member can see — shifts open to all members.
 With it, they show the roster as a scheduling manager sees it.
 """
 
+from datetime import date, datetime
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
@@ -99,6 +100,30 @@ async def _assignments_by_shift(
     return grouped
 
 
+def _cursor_for(shift: Shift) -> str:
+    """Opaque continuation naming the last examined shift."""
+    return f"{shift.shift_date.isoformat()}|{iso(shift.start_time)}|{shift.id}"
+
+
+def _after_cursor(cursor: str):
+    """The keyset predicate for rows after ``cursor`` in listing order."""
+    try:
+        day_text, time_text, shift_id = cursor.split("|", 2)
+        day = date.fromisoformat(day_text)
+        start_time = datetime.fromisoformat(time_text)
+    except ValueError:
+        raise ValueError("cursor is not a continuation from a previous call")
+    return or_(
+        Shift.shift_date > day,
+        and_(Shift.shift_date == day, Shift.start_time > start_time),
+        and_(
+            Shift.shift_date == day,
+            Shift.start_time == start_time,
+            Shift.id > shift_id,
+        ),
+    )
+
+
 def _shift(
     shift: Shift,
     apparatus: dict[str, str],
@@ -181,13 +206,15 @@ def register(server: Any) -> None:
         principal: McpPrincipal,
         start_date: str,
         end_date: str,
+        cursor: Optional[str] = None,
     ) -> dict:
         """Shifts in the window (at most a year) that still have an unfilled
         seat, with the seats and current assignments so the gaps can be
         named. Unless the department shares its full schedule with Claude,
         only shifts open to all members are listed. A very busy window is
         examined a few hundred shifts at a time: when ``has_more`` is true,
-        call again with ``start_date`` set to ``next_start_date``."""
+        call again with the same dates and ``cursor`` set to
+        ``next_cursor``."""
         start = parse_date(start_date, "start_date")
         end = parse_date(end_date, "end_date")
         if start is None or end is None:
@@ -209,21 +236,17 @@ def register(server: Any) -> None:
         ]
         if not principal.expose_full_schedule:
             criteria.append(Shift.open_to_all_members.is_(True))
+        if cursor:
+            criteria.append(_after_cursor(cursor))
         rows = await db.execute(
             select(Shift)
             .where(*criteria)
-            .order_by(Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id)
+            .order_by(Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc())
             .limit(MAX_OPEN_SHIFT_CANDIDATES + 1)
         )
         candidates = list(rows.scalars().all())
         truncated = len(candidates) > MAX_OPEN_SHIFT_CANDIDATES
-        next_start: Optional[str] = None
-        if truncated:
-            # Continue from the first date that was not fully examined, so
-            # no shift on the boundary is skipped.
-            cutoff = candidates[MAX_OPEN_SHIFT_CANDIDATES].shift_date
-            candidates = [c for c in candidates if c.shift_date < cutoff]
-            next_start = cutoff.isoformat()
+        candidates = candidates[:MAX_OPEN_SHIFT_CANDIDATES]
         shifts = await SchedulingService(db).filter_shifts_with_open_positions(
             org_uuid(principal), candidates
         )
@@ -233,8 +256,11 @@ def register(server: Any) -> None:
             "total": len(items),
             "has_more": truncated,
         }
-        if next_start is not None:
-            body["next_start_date"] = next_start
+        if truncated and candidates:
+            # A keyset cursor on the last examined row: it advances within a
+            # date as well as across dates, so a day with more shifts than
+            # the cap cannot trap the continuation.
+            body["next_cursor"] = _cursor_for(candidates[-1])
         return body
 
     @logbook_tool(server, title="Scheduling summary", module="scheduling")

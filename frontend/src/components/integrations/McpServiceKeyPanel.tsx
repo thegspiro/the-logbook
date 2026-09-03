@@ -39,6 +39,15 @@ const EXPIRY_OPTIONS: ReadonlyArray<{ value: string; label: string; days: number
 const inputClass = 'form-input';
 const labelClass = 'form-label';
 
+const apiOrigin = (): string => {
+  const base = import.meta.env.VITE_API_URL || '/api/v1';
+  try {
+    return new URL(base, window.location.origin).origin;
+  } catch {
+    return window.location.origin;
+  }
+};
+
 export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose }) => {
   const { checkPermission } = useAuthStore();
   const canIssue = checkPermission('integrations.mcp_keys');
@@ -58,7 +67,10 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
   const [issued, setIssued] = useState<McpKeyCreateResult | null>(null);
   const [copied, setCopied] = useState<'key' | 'url' | null>(null);
 
-  const endpointUrl = `${window.location.origin}${status?.endpoint_path ?? '/api/mcp'}`;
+  // The MCP endpoint lives beside the API, which a direct-backend deployment
+  // serves from another origin than the page (VITE_API_URL absolute); a
+  // relative base means same-origin.
+  const endpointUrl = `${apiOrigin()}${status?.endpoint_path ?? '/api/mcp'}`;
 
   const load = useCallback(async () => {
     try {

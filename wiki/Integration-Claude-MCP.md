@@ -133,11 +133,13 @@ stdio-to-HTTP bridge (such as `mcp-remote`) that passes the
   What a value-level scrub cannot recognise — a street address written
   out, a diagnosis in prose — is why only _published_ minutes and
   documents in unrestricted folders are exposed at all.
-- **Audit.** Every tool call, key issue and key revocation is written to the
-  audit log (`mcp.tool_call`, `mcp.key_created`, `mcp.key_revoked`) with the
-  key id, the tool, its arguments (redacted, and cut to 200 characters per
-  value so the audit table cannot grow by the size of every payload a
-  client sends) and the client IP.
+- **Audit.** Every tool call — successful, refused by a switch or module,
+  rejected by validation, or failed — is written to the audit log
+  (`mcp.tool_call`) with the key id, the tool, its arguments (redacted, and
+  cut to 200 characters per value so the audit table cannot grow by the size
+  of every payload a client sends), the outcome, the reason when it did not
+  succeed, and the client IP. Key issue and revocation are `mcp.key_created`
+  and `mcp.key_revoked`.
 - **Medical supplies are a separate domain.** The Medical Supplies module
   has its own page and officer, and the inventory API keeps its stock out
   of the gear listing. The inventory tools and `create_reorder_request` do

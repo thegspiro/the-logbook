@@ -3307,10 +3307,14 @@ class InventoryService:
         self,
         organization_id: UUID,
         exclude_item_types: Optional[Iterable[ItemType]] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Get categories with low stock, using the sum of item quantities
         rather than a simple row count, and include the names of low-stock items.
-        ``exclude_item_types`` leaves out categories of those domains."""
+        ``exclude_item_types`` leaves out categories of those domains;
+        ``skip`` / ``limit`` page the categories (by name) — the default is
+        every category, as the dashboard reads it."""
         org_id = str(organization_id)
 
         # Sum the quantity field per category (handles pool items correctly)
@@ -3331,12 +3335,19 @@ class InventoryService:
             query = query.where(
                 InventoryCategory.item_type.notin_(list(exclude_item_types))
             )
-        result = await self.db.execute(
-            query.group_by(InventoryCategory.id).having(
+        query = (
+            query.group_by(InventoryCategory.id)
+            .having(
                 func.coalesce(func.sum(InventoryItem.quantity), 0)
                 <= InventoryCategory.low_stock_threshold
             )
+            .order_by(InventoryCategory.name, InventoryCategory.id)
         )
+        if skip:
+            query = query.offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
+        result = await self.db.execute(query)
 
         low_stock_items = []
         for category, current_stock in result.all():

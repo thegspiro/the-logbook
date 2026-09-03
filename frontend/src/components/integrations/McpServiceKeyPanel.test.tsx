@@ -68,6 +68,16 @@ describe('McpServiceKeyPanel', () => {
     toastError.mockReset();
   });
 
+  it('builds the endpoint URL from an absolute API base', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://api.example.test/api/v1');
+    try {
+      renderWithRouter(<McpServiceKeyPanel onClose={vi.fn()} />);
+      expect(await screen.findByText('https://api.example.test/api/mcp')).toBeInTheDocument();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('shows the endpoint URL and the no-key state', async () => {
     renderWithRouter(<McpServiceKeyPanel onClose={vi.fn()} />);
     expect(await screen.findByText(`${window.location.origin}/api/mcp`)).toBeInTheDocument();
