@@ -151,14 +151,15 @@ re-reporting a fixed finding as new.
 
 ## Completion gate (pass 3)
 
-| Check                                                                           | Result                                                           |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                   | ✅ 0 violations                                                  |
-| `black --check app/ tests/ alembic/`                                            | ✅ clean                                                         |
-| `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                                         |
-| `python3 scripts/validate_migrations.py --strict`                               | ✅ single head, no schema change                                 |
-| `pytest tests/ -k "apparatus or nfc or evoc or equipment_check or compartment"` | ✅ 568 passed, 1 skipped (pre-existing optional-dependency skip) |
-| `tsc --noEmit` / `eslint .`                                                     | n/a this pass — no frontend change                               |
+| Check                                                                           | Result                                                                                  |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                   | ✅ 0 violations                                                                         |
+| `black --check app/ tests/ alembic/`                                            | ✅ clean                                                                                |
+| `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                               | ✅ single head, no schema change                                                        |
+| `pytest tests/ -k "apparatus or nfc or evoc or equipment_check or compartment"` | ✅ 568 passed, 1 skipped (pre-existing optional-dependency skip)                        |
+| `pytest tests/` (full backend suite)                                            | ✅ 10060 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed |
+| `tsc --noEmit` / `eslint .`                                                     | n/a this pass — no frontend change                                                      |
 
 ---
 
