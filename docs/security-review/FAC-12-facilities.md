@@ -1188,6 +1188,126 @@ change) and pass post-fix.
 
 **Mirrored to** `CHANGELOG.md`.
 
+### FAC-29 — P1 (access control, TOCTOU) — the facility-reference check and the reference-filing validation were each a plain SELECT, so a stale REPEATABLE READ snapshot could miss a concurrent commit on either side — ✅ FIXED
+
+**Found by Codex review of the FAC-26/27/28 commit.** Both directions of this
+read-then-write are a genuine race, not a hypothetical one, and both were
+reproduced live against a real MySQL connection (two independently-
+committing sessions — not the savepoint-based test fixture, which never
+truly commits and so cannot demonstrate cross-transaction visibility):
+
+- **Delete misses a reference committed mid-flight.** Under InnoDB's default
+  REPEATABLE READ, a plain SELECT answers from the snapshot taken at the
+  transaction's _first_ read — and the `delete_document` endpoint already
+  reads the document once (to check folder access) before `delete_document`
+  and its facility-reference existence check ever run, so that snapshot
+  predates a reference someone else commits in between. Reproduced: a
+  deleting transaction reads the document (establishing its snapshot), a
+  second, real transaction files and commits a `FacilityDocument` reference,
+  and the deleting transaction's (pre-fix) plain-SELECT existence check
+  reported no reference at all — the delete would have proceeded
+  unconditionally, past FAC-26's permission gate, leaving the just-created
+  reference dangling the moment the delete committed.
+- **A reference gets filed against a document already deleted.**
+  Symmetrically, `_validate_shared_document_reference` (facilities.py) reads
+  the `Document` row with a plain SELECT. Reproduced: an unrelated earlier
+  read establishes the creating transaction's snapshot while the document
+  still exists (modeling a request's own earlier reads, e.g. an auth
+  dependency's user lookup), a second, real transaction deletes and commits
+  the document, and the creating transaction's (pre-fix) plain read still
+  resolved the document as existing — it would have filed a
+  `FacilityDocument`/`FacilityPhoto` reference to a row already gone the
+  moment both transactions finished, permanently dangling from the instant
+  it committed (not merely until some later delete, unlike FAC-27/28).
+  **Where:** `backend/app/services/documents_service.py`
+  (`get_document_by_id`, `delete_document`, `_match_facility_document_references`);
+  `backend/app/api/v1/endpoints/facilities.py` (`_validate_shared_document_reference`).
+  **Fix:** a _locking_ read (`with_for_update()`/`for_update=True`) always
+  reads the latest committed version regardless of when the transaction's
+  snapshot was taken — the same pattern this codebase's capacity checks
+  already use (CLAUDE.md Pitfall #27). `get_document_by_id` gained a
+  `for_update` keyword (mirroring `scheduling_service.get_shift_by_id`);
+  `delete_document` and `_validate_shared_document_reference` both now lock
+  the `Document` row they read, serializing "delete this document" against
+  "file a reference to this document" on the one row both sides share.
+  `_match_facility_document_references`'s own SELECT is now also a locking
+  read, so the existence check itself — not just the `Document` row — is
+  immune to a stale snapshot.
+  **Regression tests:** `tests/test_facility_document_reference_race.py`
+  (new file; `@pytest.mark.integration`), using two real, independently-
+  committing sessions to force each interleaving deterministically (no
+  timing-dependent flakiness — the order of operations across the two
+  sessions is fully controlled, not raced via `asyncio.gather`).
+  `TestFacilityReferenceExistenceCheckIsALockingRead` reproduces the first
+  race directly against `_match_facility_document_references`;
+  `TestCreateReferenceValidationIsALockingRead` reproduces the second directly
+  against `get_document_by_id`, asserting the plain read _does_ see the stale
+  state (documenting the race) before asserting the locking read does not.
+  Both independently confirmed to fail against pre-fix code (`git stash`
+  isolating the source change) and pass post-fix.
+
+**Mirrored to** `CHANGELOG.md`.
+
+### FAC-30 — P2 (access control, permission-model gap) — FLAGGED, not fixed — a `facilities.delete`-only custom role cannot pass the generic Documents folder ACL at all, before or after FAC-24/26
+
+**Found by Codex review**, and worth recording precisely because the finding
+as posted is easy to misread as a regression from FAC-24/26. Verified
+independently before deciding not to fix it:
+
+**What Codex observed:** a custom caller holding `documents.manage` +
+`facilities.view_sensitive` + `facilities.delete` (no `.edit`/`.manage`)
+"passed the previous ACL check" (via `view_sensitive`, a read-tier grant)
+and, per Codex's framing, holds the exact action-specific permission
+`delete_facility_document` (`facilities.py:1006-1017`) itself accepts — yet
+`require_write` now rejects them, since a sensitive folder's
+`required_permissions` list (`FACILITY_SENSITIVE_PERMISSIONS`) is
+`[facilities.view_sensitive, facilities.edit, facilities.manage]` and
+**never included `facilities.delete` at all**.
+
+**Why this is not a regression, and not something FAC-24/26 changed:**
+`facilities.delete` was never a member of the folder's `required_permissions`
+list, so `permission_matches_any` (the read-admission check, unchanged by
+FAC-24) never admitted a `facilities.delete`-only caller either — before
+FAC-24, this caller failed the read check and got a 404; after FAC-24, they
+still fail the read check for the exact same reason (the permission is
+simply absent from the list), and now also fail the narrower write check for
+the same reason. `require_write` filtering the list down to its write-tier
+entries didn't remove `facilities.delete` from anything — it was never in
+the list to begin with. So "this caller passed the previous ACL check" is
+not accurate: they never passed it, on either side of FAC-24/26.
+
+**Confirmed no seeded role is affected:** `facilities.delete` appears in
+`core/permissions.py` only bundled with `facilities.edit` **and**
+`facilities.manage` together, on exactly three operational ranks
+(`fire_chief`, `deputy_chief`, `assistant_chief`) — never alone. No seeded
+role or rank holds `facilities.delete` without also holding `.manage` (which
+already satisfies `require_write` outright). The gap is real only for a
+department's own **custom** position that grants `facilities.delete` without
+`.edit`/`.manage` — a combination nothing in this codebase's seed data
+creates.
+
+**Why this is flagged rather than fixed:** closing it isn't a mechanical
+correction — it's a permission-model design question. `can_access_folder`'s
+`required_permissions` list is a single read/write-filterable list shared by
+every mutation the generic Documents API performs on a folder (rename,
+reparent, delete, file/unfile a document). Teaching it a third,
+action-specific tier (distinguishing "delete-capable" from "edit-capable"
+within the write tier) — so that a `facilities.delete`-only holder can delete
+through the _generic_ Documents API the same way they can through the
+_facility-specific_ `delete_facility_document` route — is a real product
+decision about whether the generic module should honor a facility-specific
+action grant at all, not a bug this rotation's read-vs-write distinction is
+positioned to answer. Flagging per CLAUDE.md's fix-vs-flag discipline rather
+than making that call unreviewed.
+**Where:** `backend/app/core/permissions.py` (`FACILITY_SENSITIVE_PERMISSIONS`
+consumed by `can_access_folder`/`can_access_document` in
+`documents_service.py`).
+**Status:** deferred — needs a product decision on whether
+`facilities.delete` alone should authorize a folder/document delete through
+the generic Documents API, distinct from its existing authority on the
+facility-specific delete route. Not mirrored to `CHANGELOG.md` (no code
+change).
+
 ## Verified good ✅ (re-confirmed this pass)
 
 - **Auth coverage 98/98** — exact grep count unchanged since pass 2

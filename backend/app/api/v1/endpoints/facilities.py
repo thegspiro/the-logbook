@@ -172,7 +172,16 @@ async def _validate_shared_document_reference(
         ) from exc
     organization_id = UUID(str(current_user.organization_id))
     documents = DocumentsService(db)
-    document = await documents.get_document_by_id(document_id, organization_id)
+    # FAC-29 (Codex): for_update=True locks the same row DocumentsService
+    # .delete_document locks before it deletes -- filing a reference here and
+    # deleting the document there are a read-then-write racing on this one
+    # row from two directions. Without the lock, this read can resolve
+    # against a document a concurrent delete has already committed away (its
+    # own snapshot predating that commit), filing a reference to nothing the
+    # moment both transactions finish.
+    document = await documents.get_document_by_id(
+        document_id, organization_id, for_update=True
+    )
     if document is None:
         # Deliberately indistinguishable from a missing same-org document.
         raise HTTPException(status_code=404, detail="Document not found")

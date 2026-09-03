@@ -739,12 +739,24 @@ class DocumentsService:
         ``"document:<uuid>"`` reference validates as long as ``UUID(...)``
         accepts the suffix, which is looser than the single canonical
         lowercase, unbraced form an exact-string match would require.
+
+        FAC-29 (Codex): ``with_for_update()`` -- a plain SELECT answers from
+        the snapshot taken at this transaction's *first* read (InnoDB
+        REPEATABLE READ), and the caller of ``delete_document`` (the
+        endpoint) already reads the document once before this ever runs, so
+        that snapshot can predate a reference someone else just committed.
+        A locking read always reads the latest committed version regardless
+        of when the snapshot was taken -- the same fix this codebase already
+        applies to every capacity check (CLAUDE.md Pitfall #27) -- so a
+        reference filed a moment ago is never missed here.
         """
         rows = await self.db.execute(
-            select(model.id, model.file_path).where(
+            select(model.id, model.file_path)
+            .where(
                 model.organization_id == str(organization_id),
                 model.file_path.like("document:%", escape=LIKE_ESCAPE_CHAR),
             )
+            .with_for_update()
         )
         matched_ids: List[str] = []
         for row_id, file_path in rows.all():
@@ -828,14 +840,29 @@ class DocumentsService:
         return documents, total
 
     async def get_document_by_id(
-        self, document_id: UUID, organization_id: UUID
+        self,
+        document_id: UUID,
+        organization_id: UUID,
+        for_update: bool = False,
     ) -> Optional[Document]:
-        """Get a document by ID"""
-        result = await self.db.execute(
+        """Get a document by ID.
+
+        ``for_update`` locks the row for the caller's transaction (FAC-29):
+        deleting a document and filing a facility reference to it
+        (``_validate_shared_document_reference``, facilities.py) are a
+        read-then-write racing on the same row from two directions, and
+        acquiring the lock here is what serializes them -- see
+        ``delete_document`` and ``_validate_shared_document_reference`` for
+        the two call sites that need it.
+        """
+        query = (
             select(Document)
             .where(Document.id == str(document_id))
             .where(Document.organization_id == str(organization_id))
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def attach_document_names(
@@ -925,8 +952,15 @@ class DocumentsService:
         every route that lets a caller delete a document must pass it, or
         the facility-reference permission check below fails closed rather
         than silently skipping (FAC-26).
+
+        FAC-29 (Codex): locks the document row (``for_update=True``) so a
+        concurrent ``_validate_shared_document_reference`` (facilities.py)
+        filing a reference to this same document -- which takes the same
+        lock -- serializes against this delete rather than racing it.
         """
-        document = await self.get_document_by_id(document_id, organization_id)
+        document = await self.get_document_by_id(
+            document_id, organization_id, for_update=True
+        )
         if not document:
             return False
 

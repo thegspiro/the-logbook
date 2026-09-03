@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: the facility-document-reference check and creation-side validation were each a plain SELECT, vulnerable to a stale REPEATABLE READ snapshot (2026-09-03)
+
+**Fixed**
+
+- **FAC-29 — a facility-reference could be committed after the deleting
+  transaction's snapshot was taken, and be missed; a reference could be
+  filed against a document already deleted and committed, and resolve
+  anyway.** Both directions were reproduced live with two real,
+  independently-committing database sessions. `delete_document`'s facility-
+  reference existence check (added for FAC-26) and
+  `_validate_shared_document_reference`'s document lookup (facilities.py)
+  were each a plain SELECT, which under InnoDB REPEATABLE READ answers from
+  the snapshot taken at the transaction's _first_ read — already stale by
+  the time either check runs, since the request has already read something
+  else first (the endpoint's own document fetch, an auth dependency's user
+  lookup). Fixed with locking reads (`with_for_update()`/`for_update=True`,
+  the same pattern this codebase's capacity checks already use): a new
+  `for_update` keyword on `get_document_by_id`, used by `delete_document`
+  and `_validate_shared_document_reference` to lock the `Document` row they
+  both read, and `_match_facility_document_references`'s own query made a
+  locking read too.
+- New regression tests in `tests/test_facility_document_reference_race.py`
+  (two real sessions, deterministic ordering — not a timing-dependent
+  `asyncio.gather` race), independently confirmed to fail against the
+  pre-fix code and pass against the fix.
+
+**Flagged, not fixed**
+
+- **FAC-30 — a custom position granting `facilities.delete` without
+  `.edit`/`.manage` cannot pass the generic Documents API's folder ACL at
+  all.** Confirmed pre-existing (not a regression from FAC-24/26 — the
+  folder's `required_permissions` list never included `facilities.delete`,
+  so this combination was refused before FAC-24 too) and confirmed no seeded
+  role holds this exact combination (`facilities.delete` only ever appears
+  bundled with `.edit` and `.manage` together, on three operational ranks).
+  Closing it is a permission-model design decision — whether the generic
+  Documents API should honor a facility-specific action grant distinct from
+  its existing authority on the facility-specific delete route — not a
+  mechanical fix. See `docs/security-review/FAC-12-facilities.md` (FAC-30)
+  for the full reasoning.
+
 ### Security: the facility-reference cleanup missed non-canonical references and never covered facility photos (2026-09-03)
 
 **Fixed**
