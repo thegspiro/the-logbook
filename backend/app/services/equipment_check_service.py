@@ -128,7 +128,7 @@ class EquipmentCheckService:
         await self.db.flush()
 
         for comp_data in compartments_data:
-            await self._create_compartment(template.id, comp_data)
+            await self._create_compartment(template.id, organization_id, comp_data)
 
         await self.db.commit()
         return await self.get_template(template.id, organization_id)
@@ -4301,10 +4301,28 @@ class EquipmentCheckService:
         return templates
 
     async def _create_compartment(
-        self, template_id: str, data: Dict[str, Any]
+        self, template_id: str, organization_id: str, data: Dict[str, Any]
     ) -> CheckTemplateCompartment:
         """Create a compartment with its items."""
         items_data = data.pop("items", None) or []
+
+        # AP-13 finding 2: a client-supplied ``parent_compartment_id`` was
+        # forwarded to the model with no validation, unlike add_compartment /
+        # update_compartment. With CheckTemplateCompartment.children's cascade
+        # now genuinely effective (AP-8), an unvalidated cross-template (or
+        # cross-org) parent link is not just a dangling reference -- deleting
+        # the parent cascade-deletes the other template's/org's compartment
+        # and all its items. A brand-new template never has existing
+        # compartments of its own yet, so any non-null parent here can only
+        # ever point outside this template; the frontend's builder agrees --
+        # it never sends parent_compartment_id on initial create, only via
+        # add_compartment once the template (and a real parent id) exist.
+        parent_id = data.get("parent_compartment_id")
+        if parent_id:
+            parent = await self._get_compartment(parent_id, organization_id)
+            if not parent or parent.template_id != template_id:
+                raise ValueError("Parent compartment must belong to the same template")
+
         compartment = CheckTemplateCompartment(
             id=generate_uuid(),
             template_id=template_id,
