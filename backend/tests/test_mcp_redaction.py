@@ -120,6 +120,7 @@ class TestScrubText:
             ("+1 555 123 4567", "[phone removed]"),
             ("call 5551234567 now", "call [phone removed] now"),
             ("5551234567", "[phone removed]"),  # a note that is only the number
+            ("Call 5551234", "Call [phone removed]"),  # a compact local number
             ("<p>5551234567</p>", "<p>[phone removed]</p>"),
             ("Reach me: 5551234567.", "Reach me: [phone removed]."),
             ("5551234567,15551234567", "[phone removed],[phone removed]"),
@@ -154,6 +155,7 @@ class TestScrubText:
         """The field decides, not the shape: the same ten digits are an
         asset tag here and a phone number in a description."""
         assert redact({field: "5551234567"}) == {field: "5551234567"}
+        assert redact({field: "5551234"}) == {field: "5551234"}
         assert redact({field: "LOT/2026/1234567890"}) == {field: "LOT/2026/1234567890"}
 
     def test_a_string_without_a_field_is_prose(self):

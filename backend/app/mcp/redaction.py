@@ -141,7 +141,11 @@ _PHONE_FORMATTED_RE = re.compile(
     r"\d{3}[.-]\d{4}"
     r")(?![\w-])"
 )
-_PHONE_BARE_RE = re.compile(r"(?<![\w-])\+?\d{10,11}(?![\w-])")
+# Bare runs: ten or eleven digits (an area code and number, with or
+# without the leading 1) or exactly seven (a local number). Six digits or
+# fewer is a date, a count or a code far more often than a phone number,
+# and eight or nine is neither.
+_PHONE_BARE_RE = re.compile(r"(?<![\w-])(?:\+?\d{10,11}|\d{7})(?![\w-])")
 EMAIL_PLACEHOLDER = "[email removed]"
 PHONE_PLACEHOLDER = "[phone removed]"
 
