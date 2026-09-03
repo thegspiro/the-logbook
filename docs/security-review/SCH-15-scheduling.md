@@ -889,7 +889,7 @@ covered; and type/export housekeeping for the same move
 No new API call, no new user-input sink, no privilege-escalation shape.
 Verified good, no finding.
 
-### SCH-12 — LOW (fixed) — `create_template` could leave a checklist-less orphan template if a checklist is deleted between validation and the link write
+### SCH-12 — LOW (fixed, revised twice more on further Codex rounds) — `create_template` could leave a checklist-less orphan template if a checklist is deleted between validation and the link write
 
 **What:** `_validated_check_ids` runs one read-only query to confirm every
 `equipment_check_template_id` is in-org, _before_ `_crud_create` commits the
@@ -903,43 +903,82 @@ its FK constraint and raises. The `ShiftTemplate` row from the _first_,
 already-committed write survives that failure: the caller sees an error, but
 a checklist-less template now exists for a retry to duplicate.
 
-**Where:** `app/services/scheduling_service.py` — `create_template`
-(around what was line 2367 before this fix).
+**Where:** `app/services/scheduling_service.py` — `create_template`.
 
 **Impact:** LOW. Requires a real race (concurrent delete of the specific
 checklist within the same request's short write window) with no cross-tenant
-or privilege component — the worst case is a stray, checklist-less template
-an officer would need to notice and delete, or duplicate on a naive retry.
-Not exploitable for unauthorized access or data exposure.
+or privilege component — the worst case (in the first two fix attempts,
+closed by the third — see below) was a stray, checklist-less template an
+officer would need to notice and delete, or duplicate on a naive retry. Not
+exploitable for unauthorized access or data exposure at any revision.
 
-**Fix:** the link write now runs inside `self.db.begin_nested()` (a
-SAVEPOINT) with an explicit `flush()`, so a failure there rolls back only
-the link write, not the whole session. On that exception, the orphan
-template is deleted and the deletion committed in the same outer
-transaction, and the caller gets the same `"Equipment checklist not found"`
-it would have seen had the race lost the other way — no session-level
-`rollback()` call, which would have unwound work the outer request still
-needs (and, incidentally, does not compose with this repo's
-`join_transaction_mode="create_savepoint"` test-isolation fixture; the
-nested-savepoint form does, in both production and tests). Guard test:
-`test_shift_template_equipment_checks.py::TestLinkManagement::
-test_a_checklist_deleted_after_validation_leaves_no_orphan_template` —
-bypasses `_validated_check_ids` (standing in for "valid when checked, gone
-by the time it mattered", since a real concurrent-delete race cannot be made
-deterministic) and asserts both the correct error and that no template row
-survives.
+**Fix history — three rounds, each catching a real gap in the last:**
 
-**Revised on second Codex round:** the fix's first version caught bare
-`except Exception`, which would also swallow an unrelated failure inside the
-same savepoint (a query error, an ORM defect) and misreport it as the same
-"Equipment checklist not found" — hiding the real problem behind a
-plausible-sounding wrong one. Narrowed to `except IntegrityError` (already
-imported and used elsewhere in this file, `scheduling_service.py:17,3453`).
-Confirmed the app has a matching safety net for what now propagates instead:
-`main.py`'s `@app.exception_handler(Exception)` catches any unhandled
-exception app-wide, logs it to `error_logs` (visible on the Error Monitoring
-page), and returns a generic 500 — so a non-FK failure here is no longer
-misreported, and is no longer silent either.
+1. **First attempt:** the link write ran inside a `self.db.begin_nested()`
+   SAVEPOINT with an explicit `flush()`, catching bare `except Exception` to
+   delete the orphan template and report `"Equipment checklist not found"`.
+   Closed the original race, but two problems remained.
+2. **Second round (Codex: "catch only the missing-checklist integrity
+   failure"):** bare `except Exception` would also swallow an unrelated
+   failure inside the same savepoint (a query error, an ORM defect) and
+   misreport it as the same message — hiding the real problem behind a
+   plausible-sounding wrong one. Narrowed to `except IntegrityError` (already
+   imported and used elsewhere in this file,
+   `scheduling_service.py:17,3453`), with any other exception left to
+   propagate to `main.py`'s `@app.exception_handler(Exception)` (logs to
+   `error_logs`, visible on Error Monitoring, returns a generic 500) instead
+   of being mischaracterized.
+3. **Third round (Codex, two comments: "verify the violated constraint
+   before deleting the template" and "create the template and links in one
+   transaction"):** both real, and related. Catching `IntegrityError` still
+   didn't confirm the FK that fired was the checklist one specifically — a
+   same-pair unique-constraint race (`uq_stec_template_pair`) on this exact
+   template's own links is vanishingly unlikely for a brand-new id nothing
+   else could yet reference, but "vanishingly unlikely" is not "impossible,"
+   and the code shouldn't guess. Separately, and more importantly: the
+   nested-savepoint design still committed the bare template via
+   `_crud_create` **before** attempting the link write, so it was
+   observable — listable, or referenceable as a shift's `template_id` — for
+   the whole window between that commit and the cleanup delete. A shift
+   created against it in that window would have its `template_id` silently
+   `SET NULL`ed by the cleanup delete once it ran, detaching a real shift
+   from its intended checklist configuration with no error to anyone.
+
+   **Fixed by dropping `_crud_create` for this method and inlining an
+   atomic create:** the template is `add()`ed and `flush()`ed (assigns its
+   id, executes the INSERT, commits nothing) rather than committed; the
+   links are written against the flushed-but-uncommitted template; **one**
+   `commit()` lands both together. Nothing is observable to any other
+   transaction until both writes are ready, so there is no window for a
+   concurrent request to act on a template that might still be rolled back.
+   On `IntegrityError`, the whole (uncommitted) attempt is rolled back — a
+   plain `session.rollback()`, safe here because nothing committed yet in
+   this attempt, unlike the abandoned first-draft approach that tried to
+   rollback partway through an already-committed sequence and broke this
+   repo's `join_transaction_mode="create_savepoint"` test fixture — and the
+   _specific_ named checklists are re-validated via `_validated_check_ids`
+   before deciding the message: only if one of them no longer resolves does
+   the caller see `"Equipment checklist not found"`; any other integrity
+   failure falls through to the same `str(e)` handling every other failure
+   in this method already gets, matching the file-wide convention rather
+   than introducing a second one.
+
+**Guard tests** (`test_shift_template_equipment_checks.py::TestLinkManagement`):
+
+- `test_a_checklist_deleted_after_validation_leaves_no_orphan_template` —
+  wraps the real `_replace_equipment_check_links` to delete the checklist
+  from inside it (standing in for the moment a concurrent delete would
+  land, since a real race can't be made deterministic), asserts the correct
+  error and that no template row survives.
+- `test_an_unrelated_integrity_error_is_not_misreported` — raises a
+  synthetic `IntegrityError` after a successful link write (so the named
+  checklist still resolves on re-check), asserts the error is _not_
+  `"Equipment checklist not found"` and carries the real underlying message
+  instead.
+
+Also updated `tests/test_position_slots.py::TestWritePathWiring._service()`
+to mock `db.flush`, which the two existing tests in that class didn't need
+before this rewrite made `create_template` call it unconditionally.
 
 ### Reviewed on the second Codex round: the remaining 8 files and 1 migration
 
@@ -995,15 +1034,15 @@ of a loaded JSON value), no new capacity/count-then-insert pattern.
 
 ## Completion gate (pass 3)
 
-| Check                                                         | Result                                                                                                                                                                  |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                 | ✅ 0 violations                                                                                                                                                         |
-| `black --check app/ tests/ alembic/`                          | ✅ 1451 files unchanged                                                                                                                                                 |
-| `isort --check-only app/ tests/ alembic/`                     | ✅ clean                                                                                                                                                                |
-| `python3 scripts/validate_migrations.py --strict`             | ✅ single head, 414 revisions                                                                                                                                           |
-| `pytest tests/ -q -k "scheduling or shift or swap or calcom"` | ✅ 804 passed, 1 skipped (pre-existing optional-dep skip) — +1 (SCH-12 guard test)                                                                                      |
-| `pytest tests/` (full backend suite)                          | ✅ 10486 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) — +1                                                                                            |
-| `tsc --noEmit`                                                | ✅ 0 errors                                                                                                                                                             |
-| `eslint .`                                                    | ✅ 0 errors                                                                                                                                                             |
-| `npx vitest run src/modules/scheduling src/pages/scheduling`  | ✅ 375 passed (26 files) — not in CLAUDE.md's mandatory gate list, run anyway since a "full completion gate green" claim should not omit a check there's a means to run |
-| `npm run build` (frontend)                                    | ✅ built in 6.62s, PWA precache generated — pre-existing chunk-size warning only                                                                                        |
+| Check                                                                           | Result                                                                                                                                                                  |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                   | ✅ 0 violations                                                                                                                                                         |
+| `black --check app/ tests/ alembic/`                                            | ✅ 1451 files unchanged                                                                                                                                                 |
+| `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                                                                                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                               | ✅ single head, 414 revisions                                                                                                                                           |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom or position_slots"` | ✅ 886 passed, 1 skipped (pre-existing optional-dep skip) — re-run on PR #2212's base after #2210 merged                                                                |
+| `pytest tests/` (full backend suite)                                            | ✅ 10549 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep)                                                                                                 |
+| `tsc --noEmit`                                                                  | ✅ 0 errors                                                                                                                                                             |
+| `eslint .`                                                                      | ✅ 0 errors                                                                                                                                                             |
+| `npx vitest run src/modules/scheduling src/pages/scheduling`                    | ✅ 375 passed (26 files) — not in CLAUDE.md's mandatory gate list, run anyway since a "full completion gate green" claim should not omit a check there's a means to run |
+| `npm run build` (frontend)                                                      | ✅ built in 6.62s, PWA precache generated — pre-existing chunk-size warning only                                                                                        |
