@@ -10,7 +10,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from loguru import logger
@@ -137,6 +137,43 @@ def _parse_smtp_port(value: Any) -> int:
     if not 1 <= port <= 65535:
         raise ValueError("SMTP port must be a number between 1 and 65535")
     return port
+
+
+def _incomplete_session_email(session_data: Optional[dict]) -> Optional[str]:
+    """Why the email configuration saved in this session cannot send, or None.
+
+    A session persisted by an earlier release may hold only the OAuth fields
+    that release collected; the mapping drops them and the section would
+    complete as disabled without a word. Checked before completion writes
+    anything, so the admin is sent back to the email step instead. A session
+    with no email data, or one that chose "Other / Skip", is fine.
+    """
+    import json
+
+    from app.core.security import decrypt_data
+
+    email_data = (session_data or {}).get("email")
+    if not email_data or not email_data.get("config_encrypted"):
+        return None
+    try:
+        raw_config = json.loads(decrypt_data(email_data["config_encrypted"]))
+    except Exception:
+        return (
+            "The saved email configuration could not be read. Return to the "
+            "email step and enter it again."
+        )
+    platform = email_data.get("platform", "other")
+    try:
+        mapped = _email_settings_from_onboarding(platform, raw_config)
+    except ValueError as e:
+        return f"{e}. Return to the email step and correct it."
+    missing = missing_for_enabled(mapped)
+    if missing:
+        return (
+            f"{required_field_message(platform, missing)} Return to the email "
+            "step and save it again, or choose Other to configure email later."
+        )
+    return None
 
 
 def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
@@ -1359,6 +1396,15 @@ async def complete_onboarding(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Onboarding has already been completed",
             error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+
+    # A saved email configuration that cannot send (one persisted by an
+    # earlier release with only OAuth fields, say) is refused here, before
+    # anything is written, rather than stored disabled behind a success.
+    email_problem = _incomplete_session_email(session.data)
+    if email_problem:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=email_problem
         )
 
     # Persist session-collected data into Organization.settings before completion

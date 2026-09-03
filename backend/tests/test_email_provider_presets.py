@@ -23,8 +23,10 @@ from app.api.v1.endpoints.organizations import (
 )
 from app.api.v1.onboarding import (
     _email_settings_from_onboarding,
+    _incomplete_session_email,
     _parse_smtp_port,
 )
+from app.core.security import encrypt_data
 from app.schemas.organization import (
     _EMAIL_SECRET_FIELDS,
     _LEGACY_EMAIL_OAUTH_FIELDS,
@@ -1113,3 +1115,65 @@ class TestSettingsReadVisibility:
     def test_an_ordinary_member_does_not(self):
         assert not _administers_settings({"events.view", "members.view"})
         assert not _administers_settings(set())
+
+
+def _session_email(platform: str, config: dict) -> dict:
+    import json
+
+    return {
+        "email": {
+            "platform": platform,
+            "config_encrypted": encrypt_data(json.dumps(config)),
+        }
+    }
+
+
+class TestCompletionRefusesAnUnsendableSessionEmail:
+    def test_oauth_era_session_is_sent_back_to_the_email_step(self):
+        # Persisted before this branch: Gmail with only the OAuth fields.
+        problem = _incomplete_session_email(
+            _session_email(
+                "gmail",
+                {
+                    "fromEmail": "chief@example.org",
+                    "googleClientId": "123.apps.googleusercontent.com",
+                    "googleClientSecret": "GOCSPX-x",
+                },
+            )
+        )
+
+        assert problem is not None
+        assert "Google App Password" in problem
+        assert "email step" in problem
+
+    def test_complete_session_passes(self):
+        assert (
+            _incomplete_session_email(
+                _session_email(
+                    "gmail",
+                    {"fromEmail": "chief@example.org", "googleAppPassword": "pw"},
+                )
+            )
+            is None
+        )
+
+    def test_skip_and_absent_pass(self):
+        assert _incomplete_session_email(_session_email("other", {})) is None
+        assert _incomplete_session_email({}) is None
+        assert _incomplete_session_email(None) is None
+
+    def test_malformed_port_is_reported_not_raised(self):
+        problem = _incomplete_session_email(
+            _session_email("selfhosted", {"smtpHost": "h", "smtpPort": "abc"})
+        )
+
+        assert problem is not None
+        assert "SMTP port" in problem
+
+    def test_undecryptable_config_is_reported_not_raised(self):
+        problem = _incomplete_session_email(
+            {"email": {"platform": "gmail", "config_encrypted": "not-ciphertext"}}
+        )
+
+        assert problem is not None
+        assert "could not be read" in problem
