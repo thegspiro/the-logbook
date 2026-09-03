@@ -305,7 +305,7 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
                       onClick={() => {
                         void handleRevoke();
                       }}
-                      disabled={revoking}
+                      disabled={busy}
                       className="rounded-lg bg-red-800/10 px-3 py-1.5 text-sm text-red-800 transition-colors hover:bg-red-800/20 disabled:opacity-50 dark:text-red-300"
                     >
                       {revoking ? 'Revoking…' : 'Revoke'}
@@ -362,7 +362,7 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
                   </select>
                 </div>
               </div>
-              <button type="submit" disabled={issuing} className="btn-primary" data-testid="mcp-issue-key">
+              <button type="submit" disabled={busy} className="btn-primary" data-testid="mcp-issue-key">
                 {issuing ? 'Issuing…' : status?.active_key ? 'Issue new key' : 'Issue key'}
               </button>
             </form>

@@ -1500,6 +1500,173 @@ class TestTwelfthRoundFindings:
         assert rest["content_has_more"] is False
 
 
+class TestThirteenthRoundFindings:
+    """Regressions for the thirteenth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_results_of_an_early_closed_election_are_available(
+        self, server, org_with_members, db_session
+    ):
+        from app.models.election import Election, ElectionStatus
+
+        org_id, admin_id, _ = org_with_members
+        now = datetime.now(timezone.utc)
+        election = Election(
+            organization_id=org_id,
+            title="Closed early",
+            start_date=now - timedelta(days=3),
+            end_date=now + timedelta(days=3),  # scheduled end still ahead
+            status=ElectionStatus.CLOSED,
+            results_visible_immediately=False,
+        )
+        db_session.add(election)
+        await db_session.flush()
+        body = await _call(
+            server,
+            _principal(org_id, admin_id),
+            "get_election_results",
+            election_id=election.id,
+        )
+        assert body["election_id"] == election.id
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_document_chunks_cannot_reassemble_a_number(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import documents as document_tools
+
+        org_id, admin_id, _ = org_with_members
+        doc_id = str(uuid.uuid4())
+        html = "<p>Call me on 5551234567 today</p>"
+        await db_session.execute(
+            text(
+                "INSERT INTO documents (id, organization_id, name, document_type, "
+                "status, version, content_html) VALUES "
+                "(:id, :org, 'Contact sheet', 'uploaded', 'active', 1, :html)"
+            ),
+            {"id": doc_id, "org": org_id, "html": html},
+        )
+        await db_session.flush()
+        # A boundary in the middle of the number.
+        monkeypatch.setattr(document_tools, "DOCUMENT_CONTENT_CHARS", 18)
+        principal = _principal(org_id, admin_id)
+        pieces = []
+        offset = 0
+        while True:
+            body = await _call(
+                server,
+                principal,
+                "get_document",
+                document_id=doc_id,
+                content_offset=offset,
+            )
+            pieces.append(body["content_html"])
+            if not body["content_has_more"]:
+                break
+            offset = body["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert "[phone removed]" in joined
+        listed = await _call(server, principal, "list_documents")
+        assert [d["name"] for d in listed["items"]] == ["Contact sheet"]
+        assert "content_html" not in listed["items"][0]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_meeting_caller_is_the_stored_name(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        db_session.add(
+            Meeting(
+                organization_id=org_id,
+                title="Special meeting",
+                meeting_type=MeetingType.SPECIAL,
+                meeting_date=date.today(),
+                called_by="Chief Smith",
+            )
+        )
+        await db_session.flush()
+        body = await _call(server, _principal(org_id, admin_id), "list_meetings")
+        assert [m["called_by"] for m in body["items"]] == ["Chief Smith"]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_minutes_text_is_bounded_and_readable_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import meetings as meeting_tools
+
+        org_id, admin_id, _ = org_with_members
+        minutes_id = str(uuid.uuid4())
+        long_text = "x" * 25
+        sections = json.dumps(
+            [
+                {"order": 0, "key": "agenda", "title": "Agenda", "content": long_text},
+                {"order": 1, "key": "custom_1", "title": "Other", "content": "short"},
+            ]
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, sections, chief_report, treasurer_report, "
+                "created_by) VALUES (:id, :org, 'October meeting', 'business', "
+                "'2026-10-01', 'approved', :sections, :chief, :treasurer, :by)"
+            ),
+            {
+                "id": minutes_id,
+                "org": org_id,
+                "sections": sections,
+                "chief": long_text,
+                "treasurer": "$1",
+                "by": admin_id,
+            },
+        )
+        await db_session.flush()
+        monkeypatch.setattr(meeting_tools, "MINUTES_TEXT_CHARS", 10)
+        principal = _principal(org_id, admin_id)
+        body = await _call(
+            server, principal, "get_minutes", minutes_id=minutes_id, section_limit=1
+        )
+        assert body["chief_report"] == "x" * 10
+        assert body["truncated_fields"] == ["chief_report"]
+        assert [s["key"] for s in body["sections"]] == ["agenda"]
+        assert body["sections"][0]["content"] == "x" * 10
+        assert body["sections"][0]["content_truncated"] is True
+        assert body["section_total"] == 2
+        assert body["sections_has_more"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field="section:agenda",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        assert "".join(pieces) == long_text
+        with pytest.raises(ToolError, match="Finance data is not shared"):
+            await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field="treasurer_report",
+            )
+        with pytest.raises(ToolError, match="field must be one of"):
+            await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field="secrets",
+            )
+
+
 class TestReviewFindings:
     """Regressions for the first review round on #2197."""
 

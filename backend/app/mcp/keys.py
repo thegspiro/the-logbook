@@ -205,7 +205,8 @@ class McpKeyService:
         """Revoke one key. Returns None if it does not exist in this org.
 
         Revoking an already-revoked key is a no-op that still returns it, so a
-        double click cannot produce an error toast. Commits.
+        double click cannot produce an error toast. Flushes but does not
+        commit: the caller commits the revocation with its audit entry.
         """
         key = await self.get_key(organization_id, key_id)
         if key is None:
@@ -213,7 +214,7 @@ class McpKeyService:
         if key.revoked_at is None:
             key.revoked_at = datetime.now(timezone.utc)
             key.revoked_by = revoked_by
-            await self.db.commit()
+            await self.db.flush()
             await self.db.refresh(key)
         return key
 

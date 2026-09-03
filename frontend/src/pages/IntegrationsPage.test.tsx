@@ -626,11 +626,10 @@ describe('IntegrationsPage', () => {
 
     it('shows the service key button to a delegated key manager without integrations.manage', async () => {
       mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
-      mockGetIntegrations.mockResolvedValue([mcpConnected]);
 
       renderPage();
-      await screen.findByText('Claude (MCP)');
-      const card = screen.getByTestId('integration-card-claude-mcp');
+      const card = await screen.findByTestId('integration-card-claude-mcp-delegated');
+      expect(mockGetIntegrations).not.toHaveBeenCalled();
       expect(within(card).getByText('Service key')).toBeInTheDocument();
       expect(within(card).queryByText('Disconnect')).not.toBeInTheDocument();
     });
@@ -642,6 +641,7 @@ describe('IntegrationsPage', () => {
 
       renderPage();
       const card = await screen.findByTestId('integration-card-claude-mcp-delegated');
+      expect(mockGetIntegrations).not.toHaveBeenCalled();
       expect(screen.queryByText('No integrations match your search')).not.toBeInTheDocument();
       await user.click(within(card).getByText('Service key'));
       expect(await screen.findByTestId('mcp-key-panel')).toBeInTheDocument();

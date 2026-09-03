@@ -397,6 +397,14 @@ const IntegrationsPage: React.FC = () => {
   const [delegatedMcp, setDelegatedMcp] = useState<McpStatus | null>(null);
 
   const loadIntegrations = useCallback(async () => {
+    // Listing integrations needs integrations.manage; a delegated key
+    // manager (key permission without it) would only ever get a 403 and an
+    // error toast, so they are not sent to it — the status endpoint decides
+    // what they see instead.
+    if (!canManage && canIssueKeys) {
+      setLoading(false);
+      return;
+    }
     try {
       const data = await integrationsService.getIntegrations();
       setIntegrations(data);
@@ -405,7 +413,7 @@ const IntegrationsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManage, canIssueKeys]);
 
   useEffect(() => {
     if (canManage || !canIssueKeys) return;

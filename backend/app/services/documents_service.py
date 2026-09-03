@@ -20,6 +20,7 @@ from sqlalchemy import case
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from app.core.constants import FOLDER_EVENTS, FOLDER_FACILITIES
 from app.core.permissions import (
@@ -785,6 +786,7 @@ class DocumentsService:
         skip: int = 0,
         limit: int = 100,
         accessible_folder_ids: Optional[Set[str]] = None,
+        defer_content: bool = False,
     ) -> Tuple[List[Document], int]:
         """Get documents with filtering and pagination.
 
@@ -792,6 +794,10 @@ class DocumentsService:
         result is restricted to documents in those folders (or with no folder),
         so an unfiltered listing can't leak documents from restricted folders.
         Pass None to impose no folder restriction (leadership).
+
+        *defer_content* leaves ``content_html`` (a LONGTEXT) unloaded, for a
+        caller that renders metadata only; touching the attribute afterwards
+        would lazy-load it, which an async caller must not do.
         """
         query = select(Document).where(Document.organization_id == str(organization_id))
 
@@ -822,6 +828,8 @@ class DocumentsService:
 
         # Paginated results
         query = query.order_by(Document.updated_at.desc()).offset(skip).limit(limit)
+        if defer_content:
+            query = query.options(defer(Document.content_html))
         result = await self.db.execute(query)
         documents = result.scalars().all()
 

@@ -154,6 +154,34 @@ class TestCreate:
             ("first", True)
         ]
 
+    async def test_revocation_rolls_back_when_the_audit_entry_fails(
+        self, db_session, setup_org_and_admin
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        org_id, admin_id = setup_org_and_admin
+        await _connect(db_session, org_id)
+        user = _user(org_id, admin_id)
+        created = await create_mcp_key(
+            McpKeyCreateRequest(name="only"),
+            request=None,
+            db=db_session,
+            current_user=user,
+        )
+        with (
+            patch(
+                "app.api.v1.endpoints.mcp_keys.log_audit_event",
+                AsyncMock(side_effect=RuntimeError("audit store down")),
+            ),
+            pytest.raises(RuntimeError, match="audit store down"),
+        ):
+            await revoke_mcp_key(
+                created["key"]["id"], request=None, db=db_session, current_user=user
+            )
+        await db_session.rollback()
+        listed = await list_mcp_keys(db=db_session, current_user=user)
+        assert [k["is_active"] for k in listed["keys"]] == [True]
+
     async def test_returns_plaintext_once_and_rotates(
         self, db_session, setup_org_and_admin
     ):

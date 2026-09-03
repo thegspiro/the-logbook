@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
-from app.mcp.registry import logbook_tool
+from app.mcp.registry import GATE_MESSAGES, logbook_tool
 from app.mcp.tools._common import (
     clamp_limit,
     clamp_offset,
@@ -47,6 +47,40 @@ def _sections(m: Any, expose_finance: bool) -> list:
     if expose_finance:
         return list(sections)
     return [sec for sec in sections if not _is_finance_section(sec)]
+
+
+# Characters of any one piece of minutes text returned per call; a longer
+# report or section is read in pieces through ``get_minutes_text``.
+MINUTES_TEXT_CHARS = 20_000
+# The free-text columns ``get_minutes`` returns, in the order it lists them.
+_MINUTES_TEXT_FIELDS = (
+    "old_business",
+    "new_business",
+    "chief_report",
+    "committee_reports",
+    "announcements",
+    "notes",
+)
+
+
+def _clip(value: Any) -> tuple[Any, bool]:
+    """``value`` cut to ``MINUTES_TEXT_CHARS`` and whether it was cut."""
+    if not isinstance(value, str) or len(value) <= MINUTES_TEXT_CHARS:
+        return value, False
+    return value[:MINUTES_TEXT_CHARS], True
+
+
+def _chunk(text: str, offset: int) -> dict:
+    piece = text[offset : offset + MINUTES_TEXT_CHARS]
+    body = {
+        "content": piece,
+        "content_offset": offset,
+        "content_total_chars": len(text),
+        "content_has_more": offset + len(piece) < len(text),
+    }
+    if body["content_has_more"]:
+        body["next_content_offset"] = offset + len(piece)
+    return body
 
 
 def _minutes_summary(m: Any) -> dict:
@@ -106,9 +140,6 @@ def register(server: Any) -> None:
             skip=offset,
             limit=limit,
         )
-        callers = await member_names(
-            db, principal.organization_id, (m.called_by for m in meetings)
-        )
         items = [
             {
                 "id": m.id,
@@ -118,7 +149,8 @@ def register(server: Any) -> None:
                 "start_time": iso(m.start_time),
                 "end_time": iso(m.end_time),
                 "location": m.location,
-                "called_by": callers.get(m.called_by or ""),
+                # A free-text name as entered on the meeting, not a member id.
+                "called_by": m.called_by,
                 "status": iso(m.status),
                 "agenda": m.agenda,
             }
@@ -201,11 +233,21 @@ def register(server: Any) -> None:
 
     @logbook_tool(server, title="Get published minutes", module="minutes")
     async def get_minutes(
-        db: AsyncSession, principal: McpPrincipal, minutes_id: str
+        db: AsyncSession,
+        principal: McpPrincipal,
+        minutes_id: str,
+        section_offset: int = 0,
+        section_limit: int = 20,
     ) -> dict:
-        """The full text of one set of approved minutes: reports, business,
-        announcements, motions with their votes, and action items. The
-        treasurer's report is included only when finance sharing is on."""
+        """One set of approved minutes: reports, business, announcements,
+        motions with their votes, action items and the dynamic sections
+        (``section_offset`` / ``section_limit`` page them). Every piece of
+        text is cut at 20,000 characters; ``truncated_fields`` and a
+        section's ``content_truncated`` say which were, and
+        ``get_minutes_text`` reads the rest. The treasurer's report is
+        included only when finance sharing is on."""
+        section_offset = clamp_offset(section_offset)
+        section_limit = clamp_limit(section_limit)
         m = await MinuteService(db).get_minutes(
             str(minutes_id), org_uuid(principal), restricted=True
         )
@@ -220,6 +262,19 @@ def register(server: Any) -> None:
         # the module off must stop its data reaching Claude by every path.
         share_finance = principal.expose_finance and principal.module_enabled("finance")
         body = _minutes_summary(m)
+        truncated_fields: list[str] = []
+        texts: dict[str, Any] = {}
+        for field in _MINUTES_TEXT_FIELDS:
+            texts[field], cut = _clip(getattr(m, field))
+            if cut:
+                truncated_fields.append(field)
+        visible_sections = _sections(m, share_finance)
+        sections_page = []
+        for sec in visible_sections[section_offset : section_offset + section_limit]:
+            entry = dict(sec) if isinstance(sec, dict) else {"content": sec}
+            entry["content"], cut = _clip(entry.get("content"))
+            entry["content_truncated"] = cut
+            sections_page.append(entry)
         body.update(
             {
                 "called_to_order_at": iso(m.called_to_order_at),
@@ -227,13 +282,12 @@ def register(server: Any) -> None:
                 "attendees": m.attendees,
                 "quorum_count": m.quorum_count,
                 "agenda": m.agenda,
-                "old_business": m.old_business,
-                "new_business": m.new_business,
-                "chief_report": m.chief_report,
-                "committee_reports": m.committee_reports,
-                "announcements": m.announcements,
-                "notes": m.notes,
-                "sections": _sections(m, share_finance),
+                **texts,
+                "sections": sections_page,
+                "section_offset": section_offset,
+                "section_total": len(visible_sections),
+                "sections_has_more": section_offset + len(sections_page)
+                < len(visible_sections),
                 "motions": [
                     {
                         "order": mo.order,
@@ -261,5 +315,56 @@ def register(server: Any) -> None:
             }
         )
         if share_finance:
-            body["treasurer_report"] = m.treasurer_report
+            body["treasurer_report"], cut = _clip(m.treasurer_report)
+            if cut:
+                truncated_fields.append("treasurer_report")
+        body["truncated_fields"] = truncated_fields
+        return body
+
+    @logbook_tool(server, title="Read minutes text", module="minutes")
+    async def get_minutes_text(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        minutes_id: str,
+        field: str,
+        content_offset: int = 0,
+    ) -> dict:
+        """One piece of text from approved minutes, 20,000 characters at a
+        time: ``field`` is a report or business field named by ``get_minutes``
+        (old_business, chief_report, treasurer_report, ...) or
+        ``section:<key>`` for a dynamic section. When ``content_has_more`` is
+        true, call again with ``content_offset`` set to
+        ``next_content_offset``."""
+        content_offset = clamp_offset(content_offset)
+        m = await MinuteService(db).get_minutes(
+            str(minutes_id), org_uuid(principal), restricted=True
+        )
+        if m is None:
+            raise ValueError("Minutes not found or not published")
+        share_finance = principal.expose_finance and principal.module_enabled("finance")
+        if field == "treasurer_report":
+            if not share_finance:
+                raise ValueError(GATE_MESSAGES["finance"])
+            text = m.treasurer_report
+        elif field.startswith("section:"):
+            key = field[len("section:") :]
+            matches = [
+                sec
+                for sec in _sections(m, share_finance)
+                if isinstance(sec, dict) and str(sec.get("key")) == key
+            ]
+            if not matches:
+                raise ValueError(f"No section named {key!r}")
+            text = matches[0].get("content")
+        elif field in _MINUTES_TEXT_FIELDS:
+            text = getattr(m, field)
+        else:
+            raise ValueError(
+                "field must be one of: "
+                + ", ".join(
+                    (*_MINUTES_TEXT_FIELDS, "treasurer_report", "section:<key>")
+                )
+            )
+        body = _chunk(text if isinstance(text, str) else "", content_offset)
+        body.update({"minutes_id": m.id, "field": field})
         return body

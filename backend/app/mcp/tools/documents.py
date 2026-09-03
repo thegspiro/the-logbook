@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
+from app.mcp.redaction import scrub_text
 from app.mcp.registry import logbook_tool
 from app.mcp.tools._common import (
     clamp_limit,
@@ -83,7 +84,9 @@ def _document(d: Any, include_content: bool, content_offset: int = 0) -> dict:
         "updated_at": iso(d.updated_at),
     }
     if include_content:
-        text = d.content_html or ""
+        # Scrubbed before it is cut, so a number or address that would
+        # straddle a boundary can never be reassembled from two pieces.
+        text = scrub_text(d.content_html or "")
         chunk = text[content_offset : content_offset + DOCUMENT_CONTENT_CHARS]
         body["content_html"] = chunk
         body["content_offset"] = content_offset
@@ -121,6 +124,7 @@ def register(server: Any) -> None:
             skip=offset,
             limit=limit,
             accessible_folder_ids=open_ids,
+            defer_content=True,
         )
         return page([_document(d, False) for d in docs], total, limit, offset)
 
