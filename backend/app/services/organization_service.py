@@ -256,8 +256,9 @@ class OrganizationService:
         # Parse email service settings. A platform label saved before the
         # schema validated the field is settled onto a known value first, or
         # this read raises for that organization (see normalize_stored_platform).
+        # `or {}`: the section is optional and may be stored as null.
         email_service = normalize_stored_platform(
-            settings_dict.get("email_service", {})
+            settings_dict.get("email_service") or {}
         )
         email_settings = (
             EmailServiceSettings(

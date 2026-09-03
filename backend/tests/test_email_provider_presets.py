@@ -16,7 +16,10 @@ import pytest
 # Imported as a module: the helpers are named test_* and pytest would collect
 # them as tests if they were bound in this namespace.
 import app.api.v1.email_test_helper as email_test_helper
-from app.api.v1.endpoints.organizations import _resolve_redacted_secrets
+from app.api.v1.endpoints.organizations import (
+    _resolve_redacted_secrets,
+    _smtp_login_incomplete,
+)
 from app.schemas.organization import (
     _EMAIL_SECRET_FIELDS,
     _LEGACY_EMAIL_OAUTH_FIELDS,
@@ -338,6 +341,11 @@ class TestLegacyPlatformOnRead:
     def test_known_platform_is_left_alone(self):
         assert normalize_stored_platform({"platform": "gmail"})["platform"] == "gmail"
 
+    def test_null_section_reads_as_defaults(self):
+        # OrganizationSettings.email_service is optional, so a row can store
+        # the section as null; the read must not raise on it.
+        assert normalize_stored_platform(None or {})["platform"] == "other"
+
     def test_missing_platform_reads_as_other(self):
         # Pre-validation rows could omit the key; the schema default was
         # "other" and must stay so.
@@ -613,3 +621,26 @@ class TestRedactedSecretsResolveAgainstStore:
         resolved = _resolve_redacted_secrets(submitted, {})
 
         assert resolved.microsoft_app_password is None
+
+
+class TestUnrestorablePasswordIsNotTestedAsAnonymous:
+    def test_username_without_password_is_incomplete(self):
+        # After an identity mismatch the marker resolves to None; the SMTP
+        # helper would then connect anonymously and report success.
+        resolved = EmailServiceSettings(
+            platform="selfhosted", smtp_host="attacker.example", smtp_user="svc"
+        )
+
+        assert _smtp_login_incomplete(resolved)
+
+    def test_anonymous_relay_is_still_testable(self):
+        resolved = EmailServiceSettings(platform="selfhosted", smtp_host="relay")
+
+        assert not _smtp_login_incomplete(resolved)
+
+    def test_complete_login_is_testable(self):
+        resolved = EmailServiceSettings(
+            platform="selfhosted", smtp_host="h", smtp_user="svc", smtp_password="pw"
+        )
+
+        assert not _smtp_login_incomplete(resolved)

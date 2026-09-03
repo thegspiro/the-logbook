@@ -259,7 +259,13 @@ async def update_email_settings(
 # new capability, but it is cheap to spam, so it shares the onboarding test's
 # per-IP budget.
 async def _rate_limit_settings_test_email(request: Request) -> None:
-    await check_rate_limit(request, scope="settings_test_email")
+    # lockout_seconds only applies on the in-memory fallback (Redis enforces
+    # the window alone); the default 1800 s is an authentication lockout and
+    # would block an admin for 30 minutes after five troubleshooting attempts
+    # while the UI tells them to wait one. Match the window.
+    await check_rate_limit(
+        request, scope="settings_test_email", window_seconds=60, lockout_seconds=60
+    )
 
 
 EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS = 30
@@ -325,6 +331,19 @@ def _resolve_redacted_secrets(
     return submitted.model_copy(update=updates) if updates else submitted
 
 
+def _smtp_login_incomplete(resolved: EmailServiceSettings) -> bool:
+    """A self-hosted username with no password cannot be tested honestly.
+
+    The SMTP helper treats a missing password as "no authentication" and
+    reports any reachable server as a success. That is right for a relay that
+    takes unauthenticated mail, but a username with no password is a
+    credential that could not be restored — the marker was submitted against
+    a different server than it was saved for — and a green result would
+    misreport the saved configuration.
+    """
+    return bool(resolved.smtp_user) and not resolved.smtp_password
+
+
 @router.post("/settings/email/test", response_model=EmailConnectionTestResponse)
 async def check_email_settings(
     email_settings: EmailServiceSettings,
@@ -377,6 +396,16 @@ async def check_email_settings(
     elif platform == "cloudflare":
         test_func = partial(test_cloudflare_email, config)
     elif platform == "selfhosted":
+        if _smtp_login_incomplete(resolved):
+            return EmailConnectionTestResponse(
+                success=False,
+                message=(
+                    "SMTP password is required. A saved password is only "
+                    "reused for the server it was saved for; enter the "
+                    "password for this server and test again."
+                ),
+                details={"required": ["smtp_password"]},
+            )
         test_func = partial(test_smtp_connection, config)
     else:
         return EmailConnectionTestResponse(
