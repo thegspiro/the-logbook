@@ -25,7 +25,16 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
-from app.models.minute import ActionItem, Motion
+from app.models.minute import (
+    DEFAULT_ANNUAL_SECTIONS,
+    DEFAULT_BUSINESS_SECTIONS,
+    DEFAULT_COMMITTEE_SECTIONS,
+    DEFAULT_EXECUTIVE_SECTIONS,
+    DEFAULT_SPECIAL_SECTIONS,
+    DEFAULT_TRUSTEE_SECTIONS,
+    ActionItem,
+    Motion,
+)
 from app.services.meetings_service import MeetingsService
 from app.services.minute_service import MinuteService
 from app.utils.sql_ordering import nulls_last_asc
@@ -35,9 +44,25 @@ from app.utils.sql_ordering import nulls_last_asc
 # has to be applied to the array as well as to the column. The built-in
 # templates' finance-bearing sections are named outright (the trustee
 # template's trust-fund and audit reports carry figures without a word of
-# "treasurer" in them); the markers catch a department's own sections.
+# "treasurer" in them). Every other built-in section is known not to carry
+# money. A department's own section carries no metadata saying what is in
+# it, so it is treated as finance-bearing unless finance sharing is on: a
+# keyword list cannot anticipate "fund_balance" or "accounts_payable", and
+# guessing wrong leaks the figures the switch exists to hold back.
 _FINANCE_SECTION_KEYS = frozenset(
     {"treasurer_report", "financial_review", "trust_fund_report", "audit_report"}
+)
+_KNOWN_SECTION_KEYS = frozenset(
+    str(sec["key"])
+    for template in (
+        DEFAULT_BUSINESS_SECTIONS,
+        DEFAULT_SPECIAL_SECTIONS,
+        DEFAULT_COMMITTEE_SECTIONS,
+        DEFAULT_TRUSTEE_SECTIONS,
+        DEFAULT_EXECUTIVE_SECTIONS,
+        DEFAULT_ANNUAL_SECTIONS,
+    )
+    for sec in template
 )
 _FINANCE_SECTION_MARKERS = (
     "treasurer",
@@ -51,9 +76,15 @@ _FINANCE_SECTION_MARKERS = (
 
 
 def _is_finance_section(section: Any) -> bool:
+    """Whether a section is withheld when finance is not shared.
+
+    Fails closed: a section that is not one of the built-in template
+    sections, or has no key at all, counts as finance-bearing.
+    """
     if not isinstance(section, dict):
-        return False
-    if str(section.get("key") or "") in _FINANCE_SECTION_KEYS:
+        return True
+    key = str(section.get("key") or "")
+    if key in _FINANCE_SECTION_KEYS or key not in _KNOWN_SECTION_KEYS:
         return True
     haystack = " ".join(
         str(section.get(field) or "") for field in ("key", "title")

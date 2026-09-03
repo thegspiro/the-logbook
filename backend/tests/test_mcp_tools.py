@@ -1602,8 +1602,18 @@ class TestThirteenthRoundFindings:
         long_text = "x" * 25
         sections = json.dumps(
             [
-                {"order": 0, "key": "agenda", "title": "Agenda", "content": long_text},
-                {"order": 1, "key": "custom_1", "title": "Other", "content": "short"},
+                {
+                    "order": 0,
+                    "key": "old_business",
+                    "title": "Old Business",
+                    "content": long_text,
+                },
+                {
+                    "order": 1,
+                    "key": "new_business",
+                    "title": "New Business",
+                    "content": "short",
+                },
             ]
         )
         await db_session.execute(
@@ -1630,7 +1640,7 @@ class TestThirteenthRoundFindings:
         )
         assert body["chief_report"] == "x" * 10
         assert body["truncated_fields"] == ["chief_report"]
-        assert [s["key"] for s in body["sections"]] == ["agenda"]
+        assert [s["key"] for s in body["sections"]] == ["old_business"]
         assert body["sections"][0]["content"] == "x" * 10
         assert body["sections"][0]["content_truncated"] is True
         assert body["section_total"] == 2
@@ -1643,7 +1653,7 @@ class TestThirteenthRoundFindings:
                 principal,
                 "get_minutes_text",
                 minutes_id=minutes_id,
-                field="section:agenda",
+                field="section:old_business",
                 content_offset=offset,
             )
             pieces.append(chunk["content"])
@@ -2035,22 +2045,80 @@ class TestSixteenthRoundFindings:
                     field=f"section:{key}",
                 )
 
-    def test_custom_finance_sections_are_recognised_by_name(self):
+    def test_sections_outside_the_built_in_templates_fail_closed(self):
+        """A department's own section carries no metadata saying what is in
+        it, so it is withheld without the finance switch: a keyword list
+        cannot anticipate every name a treasurer might choose."""
         from app.mcp.tools.meetings import _is_finance_section
 
         for section in (
             {"key": "custom_3", "title": "Trust Fund Update"},
-            {"key": "custom_4", "title": "Dues collected"},
-            {"key": "custom_5", "title": "Budget"},
             {"key": "trust_fund_report", "title": "Report"},
+            {"key": "fund_balance", "title": "Fund Balance"},
+            {"key": "revenue_report", "title": "Revenue"},
+            {"key": "accounts_payable", "title": "Accounts Payable"},
+            {"key": "custom_6", "title": "Training report"},
+            {"title": "No key at all"},
+            "not a dict",
+            # A built-in key renamed for money is still money.
+            {"key": "old_business", "title": "Budget carry-over"},
         ):
             assert _is_finance_section(section), section
         for section in (
             {"key": "old_business", "title": "Old Business"},
-            {"key": "custom_6", "title": "Training report"},
-            "not a dict",
+            {"key": "chief_report", "title": "Chief's Report"},
+            {"key": "roll_call", "title": "Roll Call / Attendance"},
         ):
             assert not _is_finance_section(section), section
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_custom_sections_follow_the_finance_switch(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        minutes_id = str(uuid.uuid4())
+        sections = [
+            {
+                "order": 0,
+                "key": "old_business",
+                "title": "Old Business",
+                "content": "x",
+            },
+            {
+                "order": 1,
+                "key": "fund_balance",
+                "title": "Fund Balance",
+                "content": "$9",
+            },
+        ]
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, sections, created_by) VALUES (:id, :org, "
+                "'May meeting', 'business', '2027-05-01', 'approved', :sections, :by)"
+            ),
+            {
+                "id": minutes_id,
+                "org": org_id,
+                "sections": json.dumps(sections),
+                "by": admin_id,
+            },
+        )
+        await db_session.flush()
+        without = await _call(
+            server, _principal(org_id, admin_id), "get_minutes", minutes_id=minutes_id
+        )
+        assert [s["key"] for s in without["sections"]] == ["old_business"]
+        with_finance = await _call(
+            server,
+            _principal(org_id, admin_id, expose_finance=True),
+            "get_minutes",
+            minutes_id=minutes_id,
+        )
+        assert [s["key"] for s in with_finance["sections"]] == [
+            "old_business",
+            "fund_balance",
+        ]
 
     @pytest.mark.usefixtures("_use_test_session")
     async def test_agenda_is_bounded_and_readable_in_pieces(
@@ -2574,7 +2642,7 @@ class TestReviewFindings:
             [
                 {
                     "order": 0,
-                    "key": "agenda",
+                    "key": "old_business",
                     "title": "Agenda",
                     "content": "Roll call",
                 },
@@ -2611,7 +2679,10 @@ class TestReviewFindings:
         hidden = await _call(
             server, _principal(org_id, admin_id), "get_minutes", minutes_id=minutes_id
         )
-        assert [s["key"] for s in hidden["sections"]] == ["agenda", "chief_report"]
+        assert [s["key"] for s in hidden["sections"]] == [
+            "old_business",
+            "chief_report",
+        ]
         assert "treasurer_report" not in hidden
         shown = await _call(
             server,
@@ -2620,7 +2691,7 @@ class TestReviewFindings:
             minutes_id=minutes_id,
         )
         assert [s["key"] for s in shown["sections"]] == [
-            "agenda",
+            "old_business",
             "treasurer_report",
             "custom_1",
             "chief_report",
@@ -2639,7 +2710,10 @@ class TestReviewFindings:
             "get_minutes",
             minutes_id=minutes_id,
         )
-        assert [s["key"] for s in module_off["sections"]] == ["agenda", "chief_report"]
+        assert [s["key"] for s in module_off["sections"]] == [
+            "old_business",
+            "chief_report",
+        ]
         assert "treasurer_report" not in module_off
 
     @pytest.mark.usefixtures("_use_test_session")
