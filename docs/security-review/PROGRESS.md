@@ -21,19 +21,32 @@ feature. The rotation cannot outrun its own review queue.
 facility-file folder access over-restricted for three established-baseline
 categories — Photos, Maintenance Records, Inspection Reports; Blueprints &
 Permits' classification is separately undecided — needs an owner decision,
-not auto-fixed) and three P1 findings fixed same-day across two Codex
-review rounds of this PR's own fix commits: FAC-14 (documents.manage
-bypassing a document's own folder ACL on the generic update/delete routes),
-FAC-15 (the same bypass on a document _move_'s destination folder, missed
-by FAC-14's fix), and FAC-16 (the identical bypass on the folder-mutation
-routes themselves — rename/reparent/delete of the target folder — which
-also uncovered and fixed a pre-existing bug where deleting a folder with
-descendants silently orphaned them instead of cascading; two sibling
-relationships elsewhere in the codebase flagged with the same shape, not
-fixed, out of scope). Plus two doc-accuracy corrections (stale comments
-claiming a now-false "facilities.view-only sees the folders" invariant).
-Full completion gate green, 10004/10004 full backend suite (+8 for FAC-15/
-FAC-16's regression tests). Rotation row 12 → ⏳ (awaiting this PR's merge).
+not auto-fixed) and four P1/MED findings fixed same-day across three Codex
+review rounds of this PR's own fix commits and write-up: FAC-14
+(documents.manage bypassing a document's own folder ACL on the generic
+update/delete routes), FAC-15 (the same bypass on a document _move_'s
+destination folder, missed by FAC-14's fix), FAC-16 (the identical bypass
+on the folder-mutation routes themselves — rename/reparent/delete of the
+target folder — which also uncovered and fixed a pre-existing bug where
+deleting a folder with descendants silently orphaned them instead of
+cascading; two sibling relationships elsewhere in the codebase flagged with
+the same shape, not fixed, out of scope), and FAC-17
+(`get_facility_folders`'s return value never satisfied its own declared
+`FoldersListResponse`, so response-model validation 500'd on every real
+HTTP call — round 3's direct-Python-call tests never exercised FastAPI's
+response cycle, so it went uncaught; fixed, and re-covered with a real ASGI
+request). Plus two doc-accuracy corrections (stale comments claiming a
+now-false "facilities.view-only sees the folders" invariant), and a
+separately-diagnosed, separately-fixed CI failure (two of round 3's own
+regression test classes were missing `@pytest.mark.integration`, so the
+DB-less "Backend Unit Tests" job tried to run them against no MySQL and
+errored on all 8; traced to root cause during FAC-17's investigation, fixed
+by a concurrent commit (`acc4e29d`) this round rebased onto — now marked and
+deselected there correctly). Full completion gate green, 10006/10006 full
+backend suite (+2 for FAC-17's regression tests over round 3's 10004), and
+the exact CI unit-test filter (`-m "not integration and not slow and not
+docker"`) now 8474 passed/0 errors (was 8472 passed/8 errors). Rotation row
+12 → ⏳ (awaiting this PR's merge).
 
 ---
 
@@ -255,6 +268,79 @@ this is a relationship-mapping fix, not a column/constraint change);
 errors, `eslint .` clean (no frontend code changed this round); prettier
 clean on the markdown docs touched. Findings doc: `docs/security-review/
 FAC-12-facilities.md` (FAC-15, FAC-16). Pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 4) — 1 fixed (FAC-17); a second, unrelated CI failure investigated and traced, fixed by a concurrent commit (Codex review of PR #2191's FAC-13 write-up)
+
+Codex reviewed the FAC-13 write-up itself (round 1's finding text, which
+describes `GET /{facility_id}/folders` returning `{"folders": [], "total":
+0}` for the empty-list case) and flagged that this is not observable over
+real HTTP: `FoldersListResponse` requires `skip`/`limit`, the handler's
+single return statement never set them, and `TestFacilityFolderDocument
+CountRedaction` (the only existing coverage) calls the handler as a plain
+Python coroutine, bypassing FastAPI's response-model validation entirely.
+Independently verified: `skip: int`/`limit: int` are non-`Optional` fields
+on `FoldersListResponse`; the handler's one return path (shared by both the
+empty and populated cases) set only `folders`/`total`; a real ASGI request
+through the actual router (`httpx.AsyncClient` + `ASGITransport`,
+dependency-overriding `get_current_user`/`get_db`, the pattern already
+established in `test_equipment_check_endpoint_permissions.py`) reproduced
+the exact failure Codex described —
+`fastapi.exceptions.ResponseValidationError`, `Field required` on both
+`skip` and `limit` — on every successful call, not just the empty-list one.
+
+**FAC-17 (MED, correctness, fixed).** The return now includes `"skip": 0,
+"limit": len(sub_folders)` alongside `folders`/`total`. This route has no
+pagination parameters of its own (a facility's folder tree is a small,
+fixed set — six sub-folders), so it reports the whole unpaginated result
+rather than echoing request query params, unlike the generic, actually-
+paginated `GET /folders` in `documents.py`. Widening the response schema to
+make `skip`/`limit` optional was rejected — `FoldersListResponse` is a
+shared pagination shape with a genuinely paginated sibling caller, and
+weakening the contract there to fit one non-paginated route risks a future
+paginated caller silently omitting the fields too. New tests
+(`TestFolderRouteResponseValidation` in `test_facilities_folders.py`, 2
+tests: empty-list and populated-list) issue a real ASGI request and assert
+a 200 with `skip`/`limit` present; both independently confirmed to fail
+with `ResponseValidationError` against the pre-fix return statement via
+`git stash`, pass again once restored.
+
+**A second, unrelated CI failure investigated alongside the fix above.**
+The coordinator flagged a red "Backend Unit Tests" job on the PR's then-head
+(`489f8c9e`) and attributed it to CI's "Generated schema docs are stale"
+step, tied to round 3's `DocumentFolder.children`/`remote_side` fix.
+Verified that attribution was wrong before acting on it: the CI log showed
+that step completing with no error, and `python scripts/
+generate_schema_docs.py --check` was clean locally with no diff — consistent
+with `remote_side` being ORM-relationship metadata that carries no
+table/column/FK/index representation for that generator to reflect. Reading
+the same job's log in full found the real cause: `TestUpdateDocumentRespects
+DestinationFolderAcl` and `TestFolderMutationRespectsOwnFolderAcl` (round
+3's own FAC-15/FAC-16 regression tests) use the real `db_session` fixture,
+exactly like their sibling `TestUpdateAndDeleteDocumentRespectFolderAcl`
+(FAC-14) — but unlike that sibling and every other `db_session`-backed class
+in the file, neither carried `@pytest.mark.integration`, so the DB-less
+"Backend Unit Tests" job (`-m "not integration and not slow and not
+docker"`, no MySQL service — see its own "no DB required" comment in
+`.github/workflows/ci.yml`) tried to run them anyway and errored on all 8
+with `Can't connect to MySQL server on 'localhost'`. Before this round's own
+fix commit could land, a separate, concurrent session pushed exactly that
+fix (`acc4e29d`, "fix Backend Unit Tests CI failure -- mark two new
+DB-backed test classes integration") — this round rebased onto it rather
+than duplicating it. Re-verified post-rebase: all 8 pass unmodified against
+a real database, and are correctly deselected (not run, not errored) under
+the unit-only filter.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/facilities.py`, `tests/test_facilities_folders.py`;
+`pytest tests/ -m "not integration and not slow and not docker"` (mirrors
+CI exactly) 8474 passed/1 skipped/0 errors (was 8472 passed/8 errors before
+`acc4e29d`'s fix); `facilities`/`documents`-scoped 263 passed/1 skipped;
+full backend suite 10006/10006 passed (+2), 21 pre-existing skips — no
+regression from round 3's 10004 baseline; `generate_schema_docs.py --check`
+clean. Findings doc: `docs/security-review/FAC-12-facilities.md` (FAC-17,
+pass 3 round 4). Rebased onto and pushed to
 `claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
 #2191's merge).
 

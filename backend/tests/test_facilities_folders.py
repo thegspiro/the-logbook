@@ -20,9 +20,16 @@ mock hands it.
 """
 
 import inspect
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+from app.api.dependencies import get_current_user
+from app.core.database import get_db
 from app.models.document import DocumentFolder
 from app.services.documents_service import DocumentsService
 
@@ -114,3 +121,93 @@ class TestFacilityFolderDocumentCountRedaction:
             _user(permissions=["facilities.manage", "documents.manage"])
         )
         assert result["folders"][0]["document_count"] == 3
+
+
+class TestFolderRouteResponseValidation:
+    """Codex review (PR #2191): the handler once returned a dict with only
+    ``folders``/``total``, omitting the ``skip``/``limit`` fields
+    ``FoldersListResponse`` requires. ``TestFacilityFolderDocumentCountRedaction``
+    above calls ``get_facility_folders`` as a plain Python function and reads
+    the returned dict directly -- that bypasses FastAPI's response-model
+    validation entirely, so it could not have caught a shape that only fails
+    once real request/response serialization runs. These issue a real ASGI
+    request through the actual router instead, which is what turned the
+    missing fields into a 500 in production.
+    """
+
+    def _app(self, user):
+        from app.api.v1.endpoints.facilities import router
+
+        app = FastAPI()
+        app.include_router(router, prefix="/facilities")
+        app.dependency_overrides[get_current_user] = lambda: user
+        app.dependency_overrides[get_db] = lambda: AsyncMock()
+        return app
+
+    async def _get(self, user, sub_folders):
+        app = self._app(user)
+        facility = SimpleNamespace(id="fac-1", display_name="Station 1")
+
+        with (
+            patch("app.api.v1.endpoints.facilities.FacilitiesService") as mock_fac_svc,
+            patch("app.api.v1.endpoints.facilities.DocumentsService") as mock_doc_svc,
+        ):
+            mock_fac_svc.return_value.get_facility = AsyncMock(return_value=facility)
+            mock_doc_svc.return_value.ensure_facility_folder = AsyncMock()
+            mock_doc_svc.return_value.get_facility_sub_folders = AsyncMock(
+                return_value=sub_folders
+            )
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                return await client.get("/facilities/fac-1/folders")
+
+    async def test_empty_folder_list_passes_response_validation(self):
+        """The facilities.view-only caller FAC-13 describes: every sub-folder
+        is sensitive-gated, so get_facility_sub_folders legitimately returns
+        nothing. This must come back as a real 200 with an empty list -- not
+        a 500 from FastAPI's own response-model validation, which is exactly
+        what happened before this fix (skip/limit were missing on every
+        return path, not just this one).
+        """
+        response = await self._get(
+            _user(permissions=["facilities.view"]), sub_folders=[]
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["folders"] == []
+        assert body["total"] == 0
+        assert body["skip"] == 0
+        assert body["limit"] == 0
+
+    async def test_populated_folder_list_passes_response_validation(self):
+        now = datetime.now(timezone.utc)
+        sub_folder = DocumentFolder(
+            id=str(uuid4()),
+            organization_id=str(uuid4()),
+            name="Photos",
+            slug="facility-fac-1-photos",
+            parent_id=str(uuid4()),
+            color="#3B82F6",
+            icon="folder",
+            is_system=False,
+            sort_order=0,
+            visibility="organization",
+            created_at=now,
+            updated_at=now,
+        )
+        sub_folder.document_count = 2
+
+        response = await self._get(
+            _user(permissions=["facilities.manage", "documents.manage"]),
+            sub_folders=[sub_folder],
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["folders"]) == 1
+        assert body["folders"][0]["document_count"] == 2
+        assert body["total"] == 1
+        assert body["skip"] == 0
+        assert body["limit"] == 1

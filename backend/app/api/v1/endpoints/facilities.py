@@ -3766,6 +3766,13 @@ async def get_facility_folders(
         current_user, "documents.view"
     ) or user_has_permission(current_user, "documents.manage")
 
+    # This route has no pagination params of its own -- a facility's folder
+    # tree is a fixed, small set (the six sub-folders) -- so skip/limit are
+    # not request-echoed the way list_folders' are; they report the whole
+    # unpaginated result, which is what FoldersListResponse's required
+    # skip/limit fields need to validate on every return path, including the
+    # empty-list one (Codex review, PR #2191: the prior return omitted them
+    # entirely, so response-model validation 500'd on every real HTTP call).
     return {
         "folders": [
             {
@@ -3777,6 +3784,8 @@ async def get_facility_folders(
             for f in sub_folders
         ],
         "total": len(sub_folders),
+        "skip": 0,
+        "limit": len(sub_folders),
     }
 
 

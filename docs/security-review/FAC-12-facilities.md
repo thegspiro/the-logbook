@@ -434,6 +434,61 @@ from the `HTTPException`-based ACL failures).
 **Mirrored to** `docs/KNOWN_LIMITATIONS.md` (the two flagged sibling
 relationships) and `CHANGELOG.md`.
 
+### FAC-17 — MED (correctness) — `GET /{facility_id}/folders`'s return value never satisfied its own declared `FoldersListResponse`, so a real HTTP call 500'd on every path — ✅ FIXED
+
+**Found by Codex review of this pass's own work** (thread on the FAC-13
+write-up's own body, which describes the endpoint returning
+`{"folders": [], "total": 0}` for the empty-list case). `FoldersListResponse`
+(`schemas/documents.py`) requires `folders`, `total`, `skip`, and `limit` —
+none of the last two are `Optional`. `get_facility_folders`'s return
+statement only ever set `folders` and `total`, on the single return path
+both the populated and the empty-list cases share. Once a facility is found
+(past the 404 check), FastAPI's own response-model validation runs against
+that dict on _every_ successful call and rejects it — `skip`/`limit` are
+`Field required`, `msg: 'Field required'` — which FastAPI turns into a 500,
+not the 200 with an empty (or populated) folder list the surrounding
+documentation, the FAC-13 write-up above, and `TestFacilityFolderDocumentCountRedaction`'s
+assertions all assume.
+
+**Why the existing tests missed it:** `TestFacilityFolderDocumentCountRedaction`
+(`test_facilities_folders.py`) calls `get_facility_folders` as a plain Python
+coroutine and indexes straight into the dict it returns — that path never
+goes through FastAPI's request/response cycle, so `response_model` validation
+never runs and the missing fields were invisible to the suite.
+
+**Verified independently:** reverted just the handler's return statement
+(`git stash`), reran the route through a real ASGI request (`httpx.AsyncClient`
+with `ASGITransport`, dependency-overriding `get_current_user`/`get_db` the
+way `test_equipment_check_endpoint_permissions.py` already does elsewhere in
+this suite), and reproduced the exact failure:
+`fastapi.exceptions.ResponseValidationError`, two validation errors, one at
+`loc: ('response', 'skip')` and one at `loc: ('response', 'limit')`.
+Restored the fix and reran — 200 in both the empty and populated cases.
+
+**Fix:** the return now includes `"skip": 0, "limit": len(sub_folders)`
+alongside the existing `folders`/`total`. This route has no pagination
+parameters of its own — a facility's folder tree is a small, fixed set (the
+six sub-folders) — so `skip`/`limit` report the whole unpaginated result
+rather than echoing request query params, unlike the generic `GET /folders`
+in `documents.py` (`list_folders`), which does paginate and echoes
+`pagination.skip`/`pagination.limit` back. Widening the response model
+instead (making `skip`/`limit` optional) was rejected: `DocumentsListResponse`
+and `FoldersListResponse` are shared pagination shapes used by an actually-
+paginated sibling endpoint, and weakening the contract there to accommodate
+one non-paginated caller would let a future paginated caller silently omit
+the fields too.
+
+**Regression test:** `TestFolderRouteResponseValidation`
+(`test_facilities_folders.py`) — two new tests issue a real ASGI request
+through the actual `facilities` router (not a direct handler call) for both
+the empty-list and populated-list cases, and assert a 200 with `skip`/
+`limit` present in the JSON body. Independently confirmed both fail with
+`ResponseValidationError` against the pre-fix return statement and pass
+against the fix.
+
+**Mirrored to** `CHANGELOG.md`. No `KNOWN_LIMITATIONS.md` entry — unlike
+FAC-13, this was a straightforward code fix, not a flagged design decision.
+
 ## Verified good ✅ (re-confirmed this pass)
 
 - **Auth coverage 98/98** — exact grep count unchanged since pass 2
@@ -499,6 +554,60 @@ Re-run after FAC-14's fix and the doc corrections (Finding 1/3/4/5) below.
 — the two bypass tests failed (`DID NOT RAISE HTTPException`) as expected,
 the two positive-control tests still passed; `git stash pop` restored the
 fix and all four passed.
+
+## Completion gate (pass 3, round 4 — Codex review of FAC-13's empty-list return, FAC-17)
+
+FAC-15/FAC-16 (round 3, `489f8c9e`) landed without an accompanying gate
+table here; this round's numbering continues from round 2 above rather than
+re-using "round 3", which that commit's own message already claimed.
+
+**Two issues were in play by the time this round finished; only one was
+this round's own fix.** While investigating FAC-17, a coordinator report
+surfaced a red "Backend Unit Tests" job on the PR's then-head (`489f8c9e`)
+and attributed it to stale generated schema docs. Verified that attribution
+was wrong before acting on it — `python scripts/generate_schema_docs.py
+--check` was already clean on `489f8c9e` (relationship-metadata changes
+like `DocumentFolder.children`'s `remote_side` fix carry no
+table/column/FK/index representation for that generator to reflect), and the
+job's own log showed the schema-docs step completing with no error. Reading
+the same job's log in full found the real cause: `489f8c9e`'s own FAC-15/
+FAC-16 regression test classes
+(`TestUpdateDocumentRespectsDestinationFolderAcl`,
+`TestFolderMutationRespectsOwnFolderAcl`) use the real `db_session` fixture
+like their sibling `TestUpdateAndDeleteDocumentRespectFolderAcl` (FAC-14),
+but were missing the `@pytest.mark.integration` marker that sibling carries
+— so the DB-less "Backend Unit Tests" job (`pytest -m "not integration and
+not slow and not docker"`, no MySQL service; see `.github/workflows/ci.yml`'s
+own "no DB required" comment on that job) tried to run them anyway and
+errored on all 8 with `Can't connect to MySQL server`. Before this round's
+own fix commit could land, a separate, concurrent session pushed exactly
+that fix (`acc4e29d`, "fix Backend Unit Tests CI failure -- mark two new
+DB-backed test classes integration") — this round rebased onto it rather
+than duplicating it. Re-verified post-rebase: unit-mode selection deselects
+both classes (0 collected, previously 8 setup errors), and an integration-
+mode run against a real database still passes all 8.
+
+**This round's own fix is FAC-17** (see above): `get_facility_folders`'s
+return value never satisfied `FoldersListResponse`.
+
+| Check                                                                                                      | Result                                                                                     |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `flake8 app/api/v1/endpoints/facilities.py tests/test_facilities_folders.py`                               | ✅ 0 violations                                                                            |
+| `black --check` (same two files)                                                                           | ✅ clean                                                                                   |
+| `isort --check-only` (same two files)                                                                      | ✅ clean                                                                                   |
+| `pytest tests/test_facilities_folders.py`                                                                  | ✅ 7 passed (+2, FAC-17's regression tests)                                                |
+| `pytest tests/ -m "not integration and not slow and not docker"` (mirrors the "Backend Unit Tests" CI job) | ✅ 8474 passed, 1 skipped, 0 errors (was 8472 passed, 8 errors before `acc4e29d`'s fix)    |
+| `pytest tests/ -k "facilities or documents"`                                                               | ✅ 263 passed, 1 skipped                                                                   |
+| `pytest tests/` (full backend suite)                                                                       | ✅ 10006 passed (+2), 21 skipped (pre-existing) — no regression from the 10004/21 baseline |
+| `python scripts/generate_schema_docs.py --check`                                                           | ✅ up to date — no model change this round                                                 |
+
+**FAC-17's regression test independently confirmed against pre-fix code:**
+`git stash` isolating just the `facilities.py` return-statement fix, then a
+real ASGI request through `TestFolderRouteResponseValidation` — both new
+tests failed with `fastapi.exceptions.ResponseValidationError` (`loc:
+('response', 'skip')` / `('response', 'limit')`, `Field required`), the
+exact failure Codex described; `git stash pop` restored the fix and both
+passed.
 
 ---
 

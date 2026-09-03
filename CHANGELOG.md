@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed: `GET /{facility_id}/folders` 500'd on every real HTTP call because its return value never matched its own declared response schema (2026-09-03)
+
+**Fixed**
+
+- **FAC-17 — `get_facility_folders`'s return dict omitted `skip`/`limit`,
+  which `FoldersListResponse` requires.** The handler's single return
+  statement (shared by both the empty-list and populated-list cases
+  described in FAC-13 above) set only `folders`/`total`. Once a facility is
+  found, FastAPI's own response-model validation runs against that dict on
+  every successful call and rejected it — turning what should have been a
+  200 (with an empty or populated folder list) into a 500. The prior round's
+  direct-Python-call tests never exercised FastAPI's request/response cycle,
+  so response-model validation never ran and the bug was invisible to them.
+  Fixed by including `"skip": 0, "limit": len(sub_folders)` on the return —
+  this route has no pagination params of its own, so it reports the whole
+  unpaginated result rather than echoing request query params. New tests
+  issue a real ASGI request through the actual router for both the
+  empty-list and populated-list cases and assert a 200 with `skip`/`limit`
+  present; independently confirmed both fail with `ResponseValidationError`
+  against the pre-fix return statement. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-17) for the full writeup.
+- **A separate, unrelated CI failure investigated alongside the fix above:**
+  the prior round's own FAC-15/FAC-16 regression tests
+  (`TestUpdateDocumentRespectsDestinationFolderAcl`,
+  `TestFolderMutationRespectsOwnFolderAcl` in `test_documents_access.py`)
+  use the real `db_session` fixture but, unlike every sibling class in that
+  file, were missing `@pytest.mark.integration` — so the "Backend Unit
+  Tests" CI job, which runs with no MySQL service specifically so
+  `db_session`-backed tests stay out of it, tried to run them anyway and
+  failed all 8 with `Can't connect to MySQL server`. Also ruled out a
+  competing theory (stale generated schema docs) before landing on the real
+  cause. Fixed by a separate, concurrent commit
+  (`acc4e29d`) that added the missing marker to both classes; this round
+  rebased onto it. See `docs/security-review/FAC-12-facilities.md`
+  (pass 3, round 4) for the full investigation.
+
 ### Flagged: an unrelated folder-authorization fix silently emptied direct-API and generic-Documents-module access to facility folders for baseline permission tiers it was never meant to affect (2026-09-03)
 
 **Not fixed — flagged for a product decision.** `GET /{facility_id}/folders`
