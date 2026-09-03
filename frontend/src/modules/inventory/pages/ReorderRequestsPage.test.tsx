@@ -346,7 +346,13 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     renderWithRouter(<ReorderRequestsPage />);
 
     expect(await screen.findByText('New Reorder Request')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Nitrile Gloves L')).toBeInTheDocument();
+    // findBy, not getBy: the heading renders as soon as the modal opens, but
+    // the pre-fill waits on the low-stock response that names the item and
+    // supplies the shortfall. A synchronous query here asserts the form is
+    // populated in the same tick the modal appeared, which is only true when
+    // that response has already landed -- so it passed locally and failed on a
+    // loaded CI runner.
+    expect(await screen.findByDisplayValue('Nitrile Gloves L')).toBeInTheDocument();
     // 10 par less 2 on hand — the shortfall, which is what to order.
     expect(screen.getByDisplayValue('8')).toBeInTheDocument();
   });
