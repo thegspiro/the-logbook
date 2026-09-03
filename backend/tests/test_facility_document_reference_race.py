@@ -645,6 +645,12 @@ class TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery:
     which order that other session acquired its own locks in.
     ``TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`` below proves
     the same thing driven through the real, now-fixed creator function.
+
+    FAC-39 (Codex, full-file sweep): the checkpoint below now waits for an
+    event set the instant ``_lock_subtree_folders`` -- the actual contended
+    call -- is attempted, instead of a fixed sleep; see the FAC-39 write-up
+    in ``docs/security-review/FAC-12-facilities.md`` for why a fixed sleep
+    here specifically risked a false pass.
     """
 
     async def test_delete_folder_blocks_on_the_folder_lock_before_any_document_query(
@@ -667,22 +673,36 @@ class TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery:
             )
 
             document_query_reached = asyncio.Event()
+            folder_lock_attempted = asyncio.Event()
             cascade_service = DocumentsService(cascade)
             original_lock_documents = cascade_service._lock_subtree_documents
+            original_lock_folders = cascade_service._lock_subtree_folders
 
             async def _tracking_lock_documents(*args, **kwargs):
                 document_query_reached.set()
                 return await original_lock_documents(*args, **kwargs)
 
+            async def _tracking_lock_folders(*args, **kwargs):
+                folder_lock_attempted.set()
+                return await original_lock_folders(*args, **kwargs)
+
             with patch.object(
                 cascade_service,
                 "_lock_subtree_documents",
                 _tracking_lock_documents,
+            ), patch.object(
+                cascade_service,
+                "_lock_subtree_folders",
+                _tracking_lock_folders,
             ):
                 cascade_task = asyncio.create_task(
                     cascade_service.delete_folder(folder_id, org_id, current_user=None)
                 )
-                await asyncio.sleep(0.5)
+                # FAC-39: wait for the cascade to have actually attempted
+                # its folder-lock query (the contended resource here) rather
+                # than guessing how long the preliminary folder lookup and
+                # subtree walk take on a given runner.
+                await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
 
                 # The fix's whole point: delete_folder is still blocked, and
                 # blocked *before* it ever issued the Document-lock query --
@@ -737,6 +757,10 @@ class TestCreatorLocksTheFolderBeforeTheDocument:
     ``Document`` lock query -- the mirror image of
     ``TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery``
     above, which proves the same thing for the cascade side.
+
+    FAC-39 (Codex, full-file sweep): see that class's own FAC-39 note --
+    the same fixed-sleep risk applied here, against ``ensure_facility_folder``
+    instead of ``_lock_subtree_folders``.
     """
 
     async def test_creator_blocks_on_a_cascade_held_folder_before_locking_the_document(
@@ -762,6 +786,17 @@ class TestCreatorLocksTheFolderBeforeTheDocument:
                     document_lock_reached.set()
                 return await original_get_document_by_id(self, *args, **kwargs)
 
+            # FAC-39: also track the moment the creator actually attempts
+            # ensure_facility_folder -- the call whose "found" path takes
+            # the contended folder lock -- rather than guessing how long
+            # the (fast, uncontended) preceding facility lookup takes.
+            folder_lock_attempted = asyncio.Event()
+            original_ensure_facility_folder = DocumentsService.ensure_facility_folder
+
+            async def _tracking_ensure_facility_folder(self, *args, **kwargs):
+                folder_lock_attempted.set()
+                return await original_ensure_facility_folder(self, *args, **kwargs)
+
             creator_user = SimpleNamespace(organization_id=org_id)
 
             # Patched at the class level -- _validate_shared_document_reference
@@ -773,6 +808,10 @@ class TestCreatorLocksTheFolderBeforeTheDocument:
             # #22 (two coroutines concurrently entering the same patch).
             with patch.object(
                 DocumentsService, "get_document_by_id", _tracking_get_document_by_id
+            ), patch.object(
+                DocumentsService,
+                "ensure_facility_folder",
+                _tracking_ensure_facility_folder,
             ):
                 creator_task = asyncio.create_task(
                     _validate_shared_document_reference(
@@ -782,7 +821,7 @@ class TestCreatorLocksTheFolderBeforeTheDocument:
                         str(facility_id),
                     )
                 )
-                await asyncio.sleep(0.5)
+                await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
 
                 # The fix's whole point: the creator path is still blocked,
                 # and blocked *before* it ever issued the Document lock
@@ -840,6 +879,13 @@ class TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar:
     ``get_document_by_id(for_update=True)`` being called -- paused here with
     a patched, event-gated ``get_document_by_id`` so the window is
     deterministic instead of a race against real query latency.
+
+    FAC-39 (Codex, full-file sweep): the *second* checkpoint below (the
+    cascade's own blocking check) also used a fixed sleep, tracking only
+    ``_lock_subtree_documents`` -- reached after the actually-contended
+    ``_lock_subtree_folders`` call, the same gap
+    ``TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery``
+    had. Now waits for that call to be attempted instead.
     """
 
     async def test_cascade_blocks_on_the_folder_while_the_creator_has_not_yet_locked_its_document(
@@ -884,24 +930,56 @@ class TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar:
                 await asyncio.wait_for(about_to_lock_document.wait(), timeout=10)
 
                 document_query_reached = asyncio.Event()
+                folder_lock_attempted = asyncio.Event()
                 cascade_service = DocumentsService(cascade)
                 original_lock_documents = cascade_service._lock_subtree_documents
+                original_lock_folders = cascade_service._lock_subtree_folders
 
                 async def _tracking_lock_documents(*args, **kwargs):
                     document_query_reached.set()
                     return await original_lock_documents(*args, **kwargs)
 
+                async def _tracking_lock_folders(*args, **kwargs):
+                    folder_lock_attempted.set()
+                    return await original_lock_folders(*args, **kwargs)
+
                 with patch.object(
                     cascade_service,
                     "_lock_subtree_documents",
                     _tracking_lock_documents,
+                ), patch.object(
+                    cascade_service,
+                    "_lock_subtree_folders",
+                    _tracking_lock_folders,
                 ):
                     cascade_task = asyncio.create_task(
                         cascade_service.delete_folder(
                             folder_id, org_id, current_user=None
                         )
                     )
-                    await asyncio.sleep(0.5)
+                    # FAC-39: wait for the cascade to have actually
+                    # attempted its folder-lock query, rather than guessing
+                    # how long the preliminary folder lookup and subtree
+                    # walk take. Unlike this file's other lock-order tests,
+                    # this alone is not enough here: whether that call
+                    # actually *blocks* depends on which order the creator
+                    # (paused above) has used -- pre-fix, it holds nothing
+                    # yet at its pause point, so this call succeeds
+                    # uncontended and the cascade runs to completion on its
+                    # own. A short bounded wait on the task itself (as
+                    # FAC-37 uses for its own fast-path/blocked-path
+                    # ambiguity) gives that uncontested run enough real time
+                    # to actually finish -- proving the pre-fix branch by
+                    # letting it complete, rather than by finding the
+                    # assertions trivially true before it has had the
+                    # chance to.
+                    await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.shield(cascade_task), timeout=2.0
+                        )
+                    except asyncio.TimeoutError:
+                        pass
 
                     # Post-fix: the creator holds only the destination
                     # DocumentFolder so far (paused before its own Document
@@ -972,6 +1050,11 @@ class TestUpdateDocumentLocksTheFolderBeforeTheDocument:
     rather than merely completing eventually (which the old ordering also
     does, just via InnoDB's implicit FK-check lock at commit, a step this
     test cannot instrument directly).
+
+    FAC-39 (Codex, full-file sweep): the checkpoint below now waits for an
+    event set the instant ``update_document`` actually attempts
+    ``_lock_destination_folder`` (its own contended call), rather than a
+    fixed sleep.
     """
 
     async def test_update_document_locks_the_folder_before_the_document(
@@ -1002,17 +1085,31 @@ class TestUpdateDocumentLocksTheFolderBeforeTheDocument:
                     document_lock_reached.set()
                 return await original_get_document_by_id(*args, **kwargs)
 
+            # FAC-39: also track the moment update_document actually
+            # attempts its folder lock -- the contended call -- rather than
+            # guessing how long it takes to get there.
+            folder_lock_attempted = asyncio.Event()
+            original_lock_folder = updater_service._lock_destination_folder
+
+            async def _tracking_lock_folder(*args, **kwargs):
+                folder_lock_attempted.set()
+                return await original_lock_folder(*args, **kwargs)
+
             with patch.object(
                 updater_service,
                 "get_document_by_id",
                 _tracking_get_document_by_id,
+            ), patch.object(
+                updater_service,
+                "_lock_destination_folder",
+                _tracking_lock_folder,
             ):
                 updater_task = asyncio.create_task(
                     updater_service.update_document(
                         document_id, org_id, {"folder_id": str(folder_id)}
                     )
                 )
-                await asyncio.sleep(0.5)
+                await asyncio.wait_for(folder_lock_attempted.wait(), timeout=10)
 
                 # Still blocked, and -- the fix's whole point -- not yet
                 # having issued its own Document-lock query. Pre-fix, this

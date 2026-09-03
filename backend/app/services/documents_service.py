@@ -57,16 +57,18 @@ FACILITY_SENSITIVE_PERMISSIONS = [
 # ============================================================================
 # FAC-35: canonical lock order for facility document/photo references
 # ============================================================================
-# Two independent code paths mutate the same three resources concurrently --
-# facilities.py's ``_validate_shared_document_reference`` (the creator path,
-# reached from ``create_facility_document``/``create_facility_photo``) and
-# this file's ``delete_folder`` (the deletion cascade). Any path that needs
-# more than one of these locked at once MUST acquire them in exactly this
-# order -- a total order across all three, not just the pair a given change
-# happens to touch:
+# Three independent code paths mutate the same three resources concurrently
+# -- facilities.py's ``_validate_shared_document_reference`` (the creator
+# path, reached from ``create_facility_document``/``create_facility_photo``),
+# this file's ``delete_folder`` (the deletion cascade), and this file's
+# ``update_document`` (the generic ``PATCH /documents/{id}`` move, FAC-36).
+# Any path that needs more than one of these locked at once MUST acquire
+# them in exactly this order -- a total order across all three, not just the
+# pair a given change happens to touch:
 #
 #   1. DocumentFolder   -- e.g. ``ensure_facility_folder``,
-#                           ``_lock_subtree_folders``
+#                           ``_lock_subtree_folders``,
+#                           ``_lock_destination_folder``
 #   2. Document          -- e.g. ``get_document_by_id(for_update=True)``,
 #                           ``_lock_subtree_documents``
 #   3. FacilityDocument / FacilityPhoto reference table -- e.g. the caller's
@@ -74,15 +76,22 @@ FACILITY_SENSITIVE_PERMISSIONS = [
 #                           returns, or ``_match_facility_document_references``/
 #                           ``_delete_facility_document_references``
 #
-# FAC-29/31/32/34 each closed one *pairwise* conflict between two of these
+# FAC-29/31/32/34/36 each closed one *pairwise* conflict between two of these
 # three resources without checking the fix against every other path that
 # touches the same state, and each reordering opened a new conflict with the
 # pair it hadn't considered (FAC-32 vs FAC-34: Document/reference-table vs
 # Document/DocumentFolder; FAC-34 vs the creator path: DocumentFolder/Document
-# ordered oppositely by the two sides). FAC-35 (docs/security-review/
-# FAC-12-facilities.md) is the total-order fix that supersedes all of them --
-# a new call site touching two or more of these three resources follows this
-# order, it does not invent its own.
+# ordered oppositely by the two sides; FAC-35's fixed creator path vs
+# ``update_document``: the same DocumentFolder/Document pair, ordered
+# oppositely yet again by a third site nobody had touched). FAC-35
+# (docs/security-review/FAC-12-facilities.md) is the total-order fix that
+# supersedes the pairwise ones above it; FAC-36 is the third call site that
+# fix's own write-up flagged as needing a revisit "if a third site...
+# appears." A new call site touching two or more of these three resources
+# follows this order, it does not invent its own -- and does not assume the
+# two documented here are exhaustive; grep this file and facilities.py for
+# ``with_for_update``/``for_update=True`` against these three models before
+# trusting this comment's site list over the code.
 # ============================================================================
 
 

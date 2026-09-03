@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: full-file sweep after a third Codex round found more instances of the fixed-sleep pattern FAC-37/FAC-38 had just fixed (2026-09-03)
+
+**Fixed (test-only)**
+
+- **FAC-39 — three more lock-order regression tests carried the same fixed
+  `asyncio.sleep(0.5)` risk as FAC-37/FAC-38, found in one Codex comment.**
+  Rather than fix three more line numbers and risk a fourth round finding a
+  fifth instance, every remaining `asyncio.sleep(...)` used as inter-task
+  lock-order synchronization in `test_facility_document_reference_race.py`
+  was converted — the three Codex found
+  (`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`,
+  `TestCreatorLocksTheFolderBeforeTheDocument`,
+  `TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`) plus
+  `TestUpdateDocumentLocksTheFolderBeforeTheDocument` (FAC-36's own
+  regression test, which landed with the same pattern before this sweep
+  existed to catch it).
+- One site (`TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`) needed
+  a second pass during this sweep's own verification: an event-only
+  conversion looked sufficient and passed repeatedly, but checking it
+  against the true historical pre-FAC-35 revision showed the event alone
+  made it worse, not better — resolving the instant the tracked call is
+  _entered_ let the assertions run before a genuinely uncontended, pre-fix
+  cascade had time to race ahead and complete, the same false-pass shape
+  relocated rather than fixed. The original fixed sleep had, by accident,
+  given that path enough real time to finish and fail correctly. Fixed by
+  adding a bounded `asyncio.wait_for(asyncio.shield(...), timeout=2.0)`
+  probe after the event.
+- Also corrected the module-level canonical lock-order note in
+  `documents_service.py`, which still described only the two call sites
+  FAC-35 fixed — FAC-36's own commit added `update_document`'s fix without
+  updating the note to name it as a third site, or removing FAC-35's own
+  now-falsified "only two call sites in the whole backend" scale
+  justification for skipping a runtime lock-order assertion.
+- All four converted sites independently verified against a genuine
+  ordering regression (a temporary call swap, the true historical pre-fix
+  revision, or a temporary reorder inside `update_document`, as
+  applicable) — each failed on a clean assertion or a deterministic
+  timeout before the fix, and passed, five repeated runs with no
+  flakiness, after. No behavioral (non-test) code changed.
+
 ### Security: a second regression test carried the same flaky fixed-sleep pattern FAC-37 had just fixed elsewhere (2026-09-03)
 
 **Fixed (test-only)**
@@ -3019,7 +3059,6 @@ the "kept in lockstep with the frontend" comment that nothing had been enforcing
 
   So the built-in categories **keep their legacy meaning**, and the real
   changes are narrower than first written, one of them a tightening:
-
   - **A life member now receives a `regular` ballot.** With one fused field
     `life` and `regular` were mutually exclusive values, so they could not.
   - **Every status category now also requires the operational class**, so an

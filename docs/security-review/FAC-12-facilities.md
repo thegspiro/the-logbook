@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34 — pass 3 continued)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep) — pass 3 continued)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -1874,6 +1874,116 @@ test now waits on that event, plus a short fixed grace period, instead of a
 sleep timed from task creation.
 
 **Mirrored to** `CHANGELOG.md`.
+
+### FAC-39 — LOW, test-only (Codex, flaky-test risk) — full-file sweep: every remaining fixed-delay synchronization point in this file converted to event-based waits — ✅ FIXED
+
+**Found by Codex review, a third round on the same file** — three more
+instances in one comment
+(`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`,
+`TestCreatorLocksTheFolderBeforeTheDocument`,
+`TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`), the same root
+cause as FAC-37/FAC-38: a fixed sleep used to "wait" for a competing task to
+reach its actual lock-acquisition point, which can expire before the task
+gets there on a slow CI runner, making the test pass without proving
+anything. Rather than fix three more line numbers and risk a fourth Codex
+round finding a fifth instance, this finding is a **comprehensive sweep** of
+every `await asyncio.sleep(...)` used as inter-task lock-order
+synchronization in `test_facility_document_reference_race.py` — four sites,
+the three Codex found plus `TestUpdateDocumentLocksTheFolderBeforeTheDocument`
+(FAC-36's own regression test, landed with the same pattern before this
+sweep existed to catch it).
+
+| Site (class)                                                      | Contended call tracked                                                                                         | Extra fast-path probe needed?                                                |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery` | `_lock_subtree_folders` (new event; `_lock_subtree_documents` already tracked)                                 | No — creator holds both Document and folder locks unconditionally throughout |
+| `TestCreatorLocksTheFolderBeforeTheDocument`                      | `DocumentsService.ensure_facility_folder` (class-level patch, alongside the existing `get_document_by_id` one) | No — cascade holds the folder lock unconditionally throughout                |
+| `TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`          | `_lock_subtree_folders` (new event)                                                                            | **Yes** — see below                                                          |
+| `TestUpdateDocumentLocksTheFolderBeforeTheDocument`               | `_lock_destination_folder` (new event, on the test's existing named per-coroutine `updater_service` instance)  | No — the cascade session holds the folder lock unconditionally throughout    |
+
+**The fast-path subtlety in `TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`,
+found during this sweep's own verification, not by Codex.** This test's
+creator is deliberately _paused_ at a point that, pre-fix, holds no lock at
+all yet (its very first locking call) — unlike every other site in the
+table, there is no lock unconditionally held throughout to guarantee the
+cascade's tracked call actually blocks. Wiring in only the event (as the
+other three sites use) initially looked sufficient and passed 5 repeated
+runs — but verifying it against the true historical pre-FAC-35 revision
+(`git show <FAC-35 commit>~1:.../facilities.py`, the same file FAC-35's own
+verification used) revealed the event alone made this **worse**, not
+better: because the event resolves the instant `_lock_subtree_folders` is
+_entered_ (before its own internal locking completes), the assertions
+could run before the pre-fix, genuinely uncontended cascade had had time to
+race ahead and complete — the exact same false-pass shape Codex flagged,
+just relocated. The original fixed `asyncio.sleep(0.5)` had — by accident,
+not by design — given that uncontended path enough real wall-clock time to
+finish, which is _why_ the sleep-based version of this specific test
+correctly failed against pre-fix code when it was first written; a naive
+event-only conversion would have silently broken that. Fixed by adding a
+bounded `asyncio.wait_for(asyncio.shield(cascade_task), timeout=2.0)` probe
+after the event — the same technique FAC-37 uses for its own fast-path
+grace period, just as a probe on the task rather than a flat sleep: it
+gives a genuinely uncontended cascade real time to complete and prove the
+regression, while a genuinely blocked one (current, correct code) simply
+times out and is confirmed still pending. Re-verified against the same
+historical pre-FAC-35 revision after this correction: the test now fails on
+the expected assertion (`cascade_task` has a `result=True`, i.e. completed,
+rather than "still blocked").
+
+**Why the other three sites don't need the same probe:** each has a lock
+unconditionally held by the _other_ session for the test's entire duration,
+established synchronously before the task under test is even created (see
+the table) — so the tracked call's block is a deterministic property of the
+setup, not a race between two tasks' relative speed.
+
+**Also corrected as part of this sweep:** the module-level canonical-order
+note atop `documents_service.py` still described only the two call sites
+FAC-35 fixed — FAC-36's own commit added `update_document`'s fix without
+updating the note to name it as a third site, or removing FAC-35's own
+"only two call sites in the whole backend acquire more than one of these
+three resources together" scale-based justification for skipping a runtime
+lock-order assertion, which this finding (a third site existing) already
+falsifies. The note now names `update_document`/`_lock_destination_folder`
+explicitly and, rather than repeat an exhaustiveness claim that has now
+been wrong once, tells the next reader to grep for
+`with_for_update`/`for_update=True` against these three models before
+trusting the comment's site list over the code.
+
+**Verified:** all four converted sites independently confirmed against a
+genuine ordering regression, not merely re-run against already-correct
+code — a temporary swap of the two calls in `delete_folder` (for the FAC-34
+site; failed via a deterministic 10s timeout, since the creator in that
+test holds both locks and the cascade never reaches the tracked call at
+all), the true historical pre-FAC-35 `facilities.py` (for both FAC-35
+sites), and a temporary reorder inside `update_document` (for the FAC-36
+site) — each failed on a clean assertion (or the one deterministic timeout)
+before the fix, and passed, five repeated runs with no flakiness, after.
+Full file (8 tests) now runs in ~5.3s, down from ~6-8s pre-sweep across the
+several fixed sleeps removed.
+
+**Where:** `backend/tests/test_facility_document_reference_race.py`
+(four test-file sites) and `backend/app/services/documents_service.py`
+(module-level note only — no behavioral change).
+
+**Mirrored to** `CHANGELOG.md`.
+
+## Completion gate (pass 3, round 12 — Codex review, third round on the same file, FAC-39 full-file sweep)
+
+| Check                                                   | Result                                                                      |
+| ------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                    | ✅ clean                                                                    |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                                                    |
+| `pytest tests/test_facility_document_reference_race.py` | ✅ 8 passed, 5 repeated runs, no flakiness, ~5.3s                           |
+| `pytest tests/ -k "facilities or documents"`            | ✅ 301 passed, 1 skipped (pre-existing)                                     |
+| `pytest tests/` (full backend suite)                    | ✅ 10051 passed, 21 skipped (pre-existing Docker/optional-dependency skips) |
+
+**All four converted sites independently verified against a genuine
+ordering regression** (not merely re-run against already-correct code) —
+see the FAC-39 write-up above for the specific method used at each, including
+the one (`TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`) whose
+first, event-only conversion attempt was itself found to be insufficient
+during this verification, and was corrected in the same pass before this
+table was produced.
 
 ## Completion gate (pass 3, round 11 — Codex review of `53de6d0e`, FAC-38)
 
