@@ -6,7 +6,7 @@ Business logic for training management including courses, records, requirements,
 
 import calendar
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -1038,16 +1038,21 @@ class TrainingService:
         # requirement on the page; each check then filters in memory
         # instead of issuing its own queries. Only the columns the checks
         # read are loaded (never notes or attachments), and the read is cut
-        # at the earliest window any requirement on the page evaluates —
-        # unless one of them judges certifications, which count however old.
+        # to the union of the windows the page's requirements evaluate — a
+        # page for a past year does not load the years since — unless one
+        # of them judges certifications, which count however old.
         preload = select(*_PROGRESS_RECORD_COLUMNS).where(
             TrainingRecord.user_id == str(user_id),
             TrainingRecord.organization_id == str(organization_id),
             TrainingRecord.status == TrainingStatus.COMPLETED,
         )
-        earliest = self._earliest_window_start(requirements, date.today())
-        if earliest is not None:
-            preload = preload.where(TrainingRecord.completion_date >= earliest)
+        window = self._preload_window(requirements, date.today())
+        if window is not None:
+            start, end = window
+            preload = preload.where(
+                TrainingRecord.completion_date >= start,
+                TrainingRecord.completion_date <= end,
+            )
         # Plain rows, not ORM instances: the checks only read attributes,
         # and a partial entity load would collide with any full copy of the
         # same record already in the session.
@@ -1066,10 +1071,11 @@ class TrainingService:
         return progress_list
 
     @classmethod
-    def _earliest_window_start(
+    def _preload_window(
         cls, requirements: List[TrainingRequirement], today: date
-    ) -> Optional[date]:
-        """The earliest completion date any of ``requirements`` can count.
+    ) -> Optional[Tuple[date, date]]:
+        """The span of completion dates any of ``requirements`` can count:
+        the earliest window start to the latest window end.
 
         ``None`` when some requirement counts records regardless of the
         frequency window — a certification, or a biannual hours requirement
@@ -1080,6 +1086,7 @@ class TrainingService:
         from app.services.training_compliance import recency_cutoff
 
         starts = []
+        ends = []
         for req in requirements:
             req_type = getattr(req.requirement_type, "value", req.requirement_type)
             freq = getattr(req.frequency, "value", req.frequency)
@@ -1089,13 +1096,19 @@ class TrainingService:
             ):
                 return None
             start, end = cls._get_date_window(req, today)
+            # Mirrors check_requirement_progress: a freshness cutoff narrows
+            # the start and closes an open-ended window at today.
             cutoff = recency_cutoff(req, today)
             if cutoff is not None:
                 start = cutoff if start is None else max(start, cutoff)
+                end = end or today
             if start is None or end is None:
                 return None
             starts.append(start)
-        return min(starts) if starts else None
+            ends.append(end)
+        if not starts:
+            return None
+        return min(starts), max(ends)
 
     async def get_applicable_requirements(
         self, user_id: UUID, organization_id: UUID, year: Optional[int] = None

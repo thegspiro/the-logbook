@@ -4574,6 +4574,79 @@ class TestThirtiethRoundFindings:
         )
         assert "training_records.notes" not in preload
         assert "training_records.completion_date >=" in preload
+        assert "training_records.completion_date <=" in preload
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_requirement_progress_preload_stops_at_the_latest_window_end(
+        self, org_with_members, db_session, monkeypatch
+    ):
+        """A page for a past year loads that year's records and not the
+        years since: the preload is cut at the latest window end on the page
+        as well as the earliest start, and the check still judges the year
+        from what it loaded."""
+        from types import SimpleNamespace
+
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+        from app.services.training_service import TrainingService
+
+        org_id, admin_id, member_id = org_with_members
+        past = TrainingRequirement(
+            organization_id=org_id,
+            name="Annual hours 2020",
+            requirement_type=RequirementType.HOURS,
+            frequency=RequirementFrequency.ANNUAL,
+            year=2020,
+            required_hours=2,
+            applies_to_all=True,
+            active=True,
+        )
+        db_session.add(past)
+        for completed_on, hours in (
+            (date(2020, 6, 1), 1.0),
+            (date(2020, 11, 1), 1.0),
+            (date(2021, 3, 1), 5.0),
+            (date.today(), 5.0),
+        ):
+            db_session.add(
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member_id,
+                    course_name="Drill",
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=completed_on,
+                    hours_completed=hours,
+                )
+            )
+        await db_session.flush()
+        service = TrainingService(db_session)
+        original_execute = db_session.execute
+        loaded = []
+
+        async def recording_execute(*args, **kwargs):
+            result = await original_execute(*args, **kwargs)
+            if "training_records" in str(args[0]):
+                rows = result.all()
+                loaded.extend(rows)
+                result = SimpleNamespace(all=lambda: rows)
+            return result
+
+        monkeypatch.setattr(db_session, "execute", recording_execute)
+        (progress,) = await service.get_requirements_progress_for(
+            uuid.UUID(member_id), uuid.UUID(org_id), [past]
+        )
+        # Both 2020 records were read and counted; neither later record was
+        # transferred to be discarded.
+        assert sorted(r.completion_date for r in loaded) == [
+            date(2020, 6, 1),
+            date(2020, 11, 1),
+        ]
+        assert progress.completed_hours == 2.0
+        assert progress.is_complete is True
 
     @pytest.mark.usefixtures("_use_test_session")
     async def test_requirement_progress_preload_is_unbounded_for_certifications(
@@ -4600,9 +4673,28 @@ class TestThirtiethRoundFindings:
             frequency=RequirementFrequency.BIANNUAL,
             required_hours=2,
         )
-        today = date(2026, 9, 3)
-        assert TrainingService._earliest_window_start([annual], today) == date(
-            2026, 1, 1
+        past = TrainingRequirement(
+            requirement_type=RequirementType.HOURS,
+            frequency=RequirementFrequency.ANNUAL,
+            year=2020,
+            required_hours=2,
         )
-        assert TrainingService._earliest_window_start([annual, cert], today) is None
-        assert TrainingService._earliest_window_start([annual, biannual], today) is None
+        fresh = TrainingRequirement(
+            requirement_type=RequirementType.COURSES,
+            frequency=RequirementFrequency.ONE_TIME,
+            recency_days=180,
+        )
+        today = date(2026, 9, 3)
+        window = TrainingService._preload_window
+        assert window([annual], today) == (date(2026, 1, 1), date(2026, 12, 31))
+        assert window([past], today) == (date(2020, 1, 1), date(2020, 12, 31))
+        # A mixed page spans from the earliest start to the latest end.
+        assert window([past, annual], today) == (
+            date(2020, 1, 1),
+            date(2026, 12, 31),
+        )
+        # A freshness window closes an open-ended one-time requirement at
+        # today, as the check itself does.
+        assert window([fresh], today) == (date(2026, 3, 7), today)
+        assert window([annual, cert], today) is None
+        assert window([annual, biannual], today) is None
