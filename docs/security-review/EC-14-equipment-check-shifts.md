@@ -1,7 +1,7 @@
 # Security Review 14 — Equipment Check & Shift Completion
 
 **Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-28 (pass 2) · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
+2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
 (pass 1)
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (47 routes),
@@ -10,6 +10,261 @@
 `services/shift_completion_service.py`
 **Frontend:** in-app (no dedicated module directory)
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 3 (2026-09-03) — module moved to Inventory, 65 new routes across five commits; re-audited, no new findings
+
+**Baseline note.** Pass 2 merged as `d1f43285` (PR #1963), but that commit is
+no longer reachable in this worktree's shallow history (`git cat-file -t
+d1f43285` fails) — five more months of `main` sit between it and this pass,
+including the 2026-08-31 move documented at the top of
+`docs/module-audit/equipment-check.md`: equipment checklists are now owned by
+the **Inventory** module, not Scheduling. The router's module gate is
+`inventory`, every permission string that used to read `equipment_check.*`
+now reads `inventory.check_view` / `.check_manage` / `.check_submit`, and the
+frontend moved to `frontend/src/modules/inventory/`. The API paths
+(`/equipment-checks/...`) and file names (`equipment_check.py`,
+`equipment_check_service.py`) did not move. Because a clean diff against the
+pass-2 baseline isn't available, this pass re-derives the route inventory
+from current code (AST-equivalent read of every `@router.` decorator) and
+reads every new service method in full, rather than trusting the "zero diff"
+shortcut pass 2 used.
+
+**Growth since pass 1's table:** `equipment_check.py` grew from 47 to **57**
+routes (+10 new: `suggest_inventory_matches`, `link_inventory_items`,
+`replace_compartments`, `clone_compartment`, `reorder_compartments`,
+`add_items_bulk`, `delete_items_bulk`, `reorder_items`,
+`get_last_check_seals`, plus the permission rename touching every existing
+one); `shift_completion.py` is unchanged at 21 routes (same line count, 707,
+as pass 1/2). `equipment_check_service.py` grew from ~3,200 L to 5,368 L;
+`shift_completion_service.py` grew from ~1,477 L to 1,751 L (method list
+unchanged from pass 2's — the growth is inside existing methods, principally
+`_update_requirement_progress` and the call/hours auto-population helpers,
+already covered by feature 15's `ShiftCall.responding_members` XC-1 fix
+pass 2 reviewed from this feature's reader side).
+
+### Route/permission enumeration (both files, full)
+
+`equipment_check.py` — 57/57 authenticated. Every write route
+(`create_template`, `update_template`, `delete_template`, `clone_template`,
+`suggest_inventory_matches`, `link_inventory_items`, `add_compartment`,
+`update_compartment`, `delete_compartment`, `replace_compartments`,
+`clone_compartment`, `reorder_compartments`, `add_item`, `add_items_bulk`,
+`update_item`, `delete_item`, `delete_items_bulk`, `reorder_items`) gates on
+`inventory.check_manage` alone. `get_shift_checklists`, `get_shift_checks`,
+`get_check`, `get_item_history`, `get_last_check_results`,
+`get_last_check_seals` gate on `inventory.check_view OR
+inventory.check_submit` (EC-7's fix, carried through the rename unchanged).
+`submit_check`, `submit_standalone_check`, `complete_incomplete_check` gate
+on `inventory.check_submit OR inventory.check_manage` (EC-7 residual,
+unchanged — still the owner's intra-org call, not reopened). `get_fleet_
+readiness`, `get_compliance_report`, `get_failure_log`, `get_item_trends`,
+`export_csv`, `export_pdf` gate on `inventory.check_view` alone (officer-only
+reporting surface). `get_template_changelog` gates via a router-level
+`dependencies=[Depends(require_permission("inventory.check_manage"))]`
+(unchanged from pass 1's noted exception to the inline-`Depends` scan
+pattern). `get_my_checklists`, `get_my_checklist_history`, `get_check_log`,
+`upload_check_item_photos`, `download_csv_sample` are bare
+`get_current_user` (self-scoped or, for `get_check_log`, broadened in-service
+for `inventory.check_view` holders — unchanged from pass 1). The nine
+supply/swap endpoints (`get_supply_expiring_items` through `swap_item_lot`)
+keep their pass-1 gates exactly, permission strings renamed only:
+`inventory.check_view OR inventory.manage` (`get_supply_expiring_items`);
+`inventory.check_view OR inventory.check_submit OR inventory.view`
+(`get_apparatus_inventory`, `get_item_deployed_lots`); `inventory.check_
+submit OR inventory.check_manage OR inventory.manage` (`report_item_used`,
+`update_deployed_lot`, `set_item_quantity`, `swap_item_lot`); `inventory.
+check_manage OR inventory.manage` (`clear_item_restock`); `inventory.check_
+view OR inventory.view` (`get_item_deployments` — the deliberately-
+unadjudicated discrepancy against `update_deployed_lot`'s tighter gate,
+carried forward, see below).
+
+`shift_completion.py` — 21/21 authenticated, unchanged from pass 1/2's
+enumeration: `training.manage` on every officer-facing endpoint, bare
+`get_current_user` on the four self-scoped ones (`my-reports`, `my-stats`,
+`get_shift_report` — additionally scoped in-service to trainee/officer/
+`training.manage` — and `acknowledge_report`, self-scoped to
+`trainee_id=current_user.id`).
+
+### New surface read in full (not previously audited)
+
+- **Catalog linking** (`suggest_inventory_matches`, `link_inventory_items`,
+  `get_link_coverage`, `_linkable_items`, `_get_template_row`,
+  `equipment_check_service.py:4101-4308`) — both sides of the read (template)
+  and write (link) path resolve through `_get_template_row`/`_linkable_items`,
+  which join `CheckTemplateItem → CheckTemplateCompartment →
+EquipmentCheckTemplate` filtered on `organization_id`; `link_inventory_
+items` additionally validates every client-supplied `inventory_item_id` in
+  the links payload against `InventoryItem.organization_id == organization_id`
+  before writing (the XC-1 shape EC2-3/EC2-4 established, applied to a new
+  write path). `suggest_inventory_matches` is read-only (fuzzy-matches
+  against the caller's own `InventoryItem` rows, writes nothing).
+- **Sealed-container support** (`_create_check_seals`, `_sealed_compartment_
+ids`, `get_last_check_seals`, lines 1557-1629, 2690-2749) — `template_id`
+  reaches `_sealed_compartment_ids` (which itself takes no
+  `organization_id`) only after being validated against the caller's org at
+  each of its three call sites: `submit_check` resolves it through
+  `_resolve_templates`/`selected_template` before ever reaching the seal
+  helpers (traced directly, `equipment_check_service.py:1915-1934`),
+  `submit_standalone_check` and `complete_incomplete_check` resolve their
+  template the same way earlier in each method. `get_last_check_seals`
+  (the read endpoint) takes `organization_id` directly and passes it through.
+  Migration `20260823_1100_d5b207e4f139` adds `is_sealed` (`NOT NULL`,
+  server default `0`) to `check_template_compartments` and creates
+  `shift_equipment_check_seals` with `template_compartment_id` as
+  `ondelete="SET NULL"` **and** `nullable=True` — Pitfall #2 checked and
+  clean.
+- **Bulk item add/delete with idempotency** (`add_items_bulk`,
+  `_replay_bulk_request`, `delete_items_bulk`, lines 999-1303) — both
+  resolve `compartment_id` through the org-scoped `_get_compartment` before
+  doing anything else; `add_items_bulk` runs `_validate_item_fks` (in-org
+  `inventory_item_id`/`equipment_id`) on every item in the batch before the
+  first write; both take a locking read on the parent compartment
+  (`with_for_update()`) to serialize append-position allocation / retry
+  detection against a concurrent batch on the same compartment, matching
+  Pitfall #27's shape (the parent is locked, and the read that decides the
+  outcome — the ledger lookup, the max-sort-order read — is itself a
+  locking read, not a plain `SELECT` against a stale REPEATABLE READ
+  snapshot). The idempotency ledgers (`EquipmentCheckBulkRequest`/
+  `EquipmentCheckBulkDeleteRequest`) are keyed
+  `(organization_id, compartment_id, idempotency_key)` unique, with a
+  payload-hash check on replay so a reused key against a different payload
+  is rejected rather than silently returning the wrong batch. Both new
+  tables' migrations (`20260821_8a4f2d1c9b30`,
+  `20260829_1200_d4e8f1a2b3c4`) match their models exactly:
+  `organization_id`/`compartment_id` both `ondelete="CASCADE"` and
+  `nullable=False` — no Pitfall #2 exposure (cascade, not SET NULL).
+- **`replace_compartments`, `clone_compartment`, `reorder_compartments`,
+  `reorder_items`** (lines 762-949, 1283-1303) — `replace_compartments`
+  validates every nested item's FKs before deleting the existing tree (fail
+  before destroy, not after) and locks the doomed rows
+  (`with_for_update()`) before deleting them; rejects a replacement entry
+  that names a parent (the endpoint always sends a flat list, so this also
+  closes off a route to the cross-template dangling-parent shape AP-14/AP-16
+  guard against on the create/delete paths). `clone_compartment` resolves
+  its source through the org-scoped `_get_compartment` and reuses the
+  source's own `template_id`/`parent_compartment_id` — it cannot manufacture
+  a cross-org or cross-template link because every field it writes is copied
+  from an already-org-validated row, not client-supplied. `reorder_
+compartments`/`reorder_items` mutate only entries found in the org-scoped
+  parent's already-loaded in-memory collection (`template.compartments` /
+  `compartment.items`); an id in `ordered_ids` that doesn't belong to the
+  parent is silently skipped rather than rejected — a correctness quirk
+  (a bogus id in the list has no effect and the response gives no error),
+  not a tenant-isolation gap, since nothing outside the org-scoped
+  collection can be reached or written through this path.
+
+### Re-verified: every pass-1/2 fix intact at its current location
+
+Read each fix directly rather than re-citing the doc, since line numbers
+moved with the file's growth:
+
+- **EC-1** (`_update_apparatus_deficiency`, `equipment_check_service.py:
+1631-1660`) — still filters `Apparatus.id == apparatus_id,
+Apparatus.organization_id == organization_id`.
+- **EC-2/EC2-3/EC2-4** (`_validate_item_fks`, line 955; `item_names` lookup
+  inside `get_my_checklists`) — `_validate_item_fks` still checked via
+  `is_in_org` and is now also called from `add_items_bulk` and
+  `replace_compartments`'s nested items (new call sites since pass 1, both
+  confirmed present above).
+- **EC-4** (`clone_template`'s apparatus XC-3, line 448) — still org-scopes
+  the target apparatus lookup and raises `ValueError` on a foreign id.
+- **EC-6** (`create_report`'s `shift_id`-absent branch,
+  `shift_completion_service.py:294-310`) — still validates `trainee_id` is a
+  user in the caller's org before creating the report.
+- **EC-9** (`get_report`, `shift_completion_service.py:1145`) — still takes
+  an optional `organization_id` and filters on it; `review_report`/
+  `acknowledge_report`/`update_report` all still resolve through it.
+- **EC-10** (`complete_incomplete_check` auto-fail rule) — still present.
+- **EC-12** (`report_item_used` locking, line 3302-3320) — `_get_item_with_
+template(..., for_update=True)` still present, still followed by a locking
+  read on the item's deployed lots before the consume.
+- **EC-13** (`update_deployed_lot`'s submitter-quantity-inflation guard,
+  lines 3428-3479) — `if not allow_metadata_change and quantity >
+target.quantity: raise PermissionError(...)` still present verbatim;
+  `swap_item_lot`'s `enforce_submitter_limits` still reads that
+  now-protected value as its cap.
+- **EC-14** (`apiCache.ts`'s `/equipment-checks` prefix) — present,
+  unmodified, at line 103.
+- **EC-11** (compliance metrics) — still hardcoded to 0 in
+  `get_compliance_report`; confirmed still an unbuilt feature (an
+  expected-check-cadence model does not exist in the schema), not a
+  regression.
+- **`get_item_deployments` vs. `update_deployed_lot` permission-gate
+  discrepancy** — still present exactly as `docs/KNOWN_LIMITATIONS.md`
+  records it (`inventory.check_view OR inventory.view` vs. the metadata-
+  change guard inside the tighter-gated sibling); still deliberately
+  unadjudicated, not re-flagged as new.
+
+### Additional checks this pass
+
+- **LIKE escaping** — the module's one `.ilike()` call
+  (`equipment_check_service.py:5069`, the failed-item-search filter) still
+  passes `like_pattern(item_name)` with `escape=LIKE_ESCAPE_CHAR`.
+- **CSV export** — `export_csv` (`equipment_check.py:1432-1437`) still uses
+  `SafeCsvWriter`.
+- **SMS allowlist (Pitfall #18)** — `grep` for `SMSService`/`SmsAlert`/
+  `resolve_sms_recipients` in both service files returns 0 hits; the only
+  notification paths are in-app `NotificationLog` rows and optional email
+  (`_send_check_failure_notification`, `_send_notification`), both
+  email-first per the module's existing design, no new SMS surface added.
+- **`_send_check_failure_notification`'s recipient-email lookup**
+  (`equipment_check_service.py:4788-4794`) — `select(User.email).where(
+User.id.in_(recipient_ids), ...)` carries no explicit `organization_id`
+  filter, but `recipient_ids` is built exclusively from two already-org-
+  scoped sources earlier in the same method: the shift's own
+  `shift_officer_id` (the shift was already fetched org-scoped by the
+  caller) and a `user_positions` join explicitly filtered
+  `Role.organization_id == organization_id`. Not exploitable — the same
+  read-after-validate shape EC-8 already established as harmless elsewhere
+  in this file — noted rather than silently passed over, not raised as a
+  new finding.
+- **Frontend module location and auth wiring** — the feature's frontend now
+  lives under `frontend/src/modules/inventory/` (12 files: `pages/
+EquipmentCheck*.tsx`, `pages/MyEquipmentPage.tsx`, `pages/Equipment
+RequestsPage.tsx`, `pages/EquipmentKitsPage.tsx`, `components/
+EquipmentCheckTemplateList.tsx`, `services/equipmentCheckApi.ts`, plus
+  three `.ts` helper files). `services/equipmentCheckApi.ts` uses the shared
+  `createApiClient` factory (`withCredentials: true`, CSRF header
+  interceptor confirmed present in the factory itself) rather than a
+  hand-rolled axios instance — Pitfall #7 satisfied by construction.
+  Grepped (not read line-by-line — partial scope, noted rather than
+  assumed) all 12 files for `window.confirm`/`alert`/`prompt`,
+  `dangerouslySetInnerHTML`, the banned `.toLocale*` date methods, and raw
+  `fetch(` — zero hits across all four in every file except one comment in
+  `EquipmentCheckTemplateList.tsx` referencing a past `window.prompt` fix
+  (not a live call).
+- **`EquipmentCheckTemplateBuilder.tsx` is out of this pass's depth,
+  deliberately.** This file is the same one `AP-13-apparatus-nfc.md` has
+  been auditing across ten Codex-reviewed passes (autosave/subtree-delete
+  concurrency, not tenant isolation or auth) — re-auditing it here would
+  duplicate that rotation entry's own in-progress work rather than add
+  coverage. As of this pass, PR #2200 (AP-13 pass 9, merged `05372cb9`)
+  left **three unresolved Codex review threads** on this exact file — one
+  P1 (`moveItemToCompartment` bypasses the new `registerInFlightSave`
+  invariant), one P2 (a `handleSave` reentrancy gap), one P1 (a test mock
+  not reset per Pitfall #28) — recorded in `PROGRESS.md`'s 2026-09-03 log
+  entry for feature 13. None of the three are tenant-isolation, auth, or
+  permission defects (this feature's lens); all three are carried forward
+  under AP-13, not duplicated here.
+
+**No new findings.** No code changes this pass — every fix from pass 1/2
+verified intact, every new route/service method since pass 2 correctly
+gated and org-scoped, three new tables' migrations correct.
+
+## Completion gate (pass 3)
+
+| Check                                                             | Result                                                                                  |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                     | ✅ 0 violations                                                                         |
+| `black --check app/ tests/ alembic/`                              | ✅ 1449 files unchanged                                                                 |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.1, CI's pin) | ✅ clean                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 414 revisions, single head `e3a9c1d5b7f2`                                            |
+| `pytest tests/ -q -k "equipment_check or shift_completion"`       | ✅ 386 passed, 1 skipped (pre-existing, `pywebpush` not installed)                      |
+| `pytest tests/` (full backend suite)                              | ✅ 10439 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed |
+| `npx tsc --noEmit`                                                | ✅ 0 errors                                                                             |
+| `npx eslint .`                                                    | ✅ 0 errors                                                                             |
 
 ---
 

@@ -706,8 +706,10 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, ca
   <div>
     <div className="mb-3 flex items-center justify-between">
       <h3 className="text-theme-text-primary text-sm font-semibold">Maintenance Records</h3>
+      {/* /inventory/admin/maintenance — /inventory/maintenance matches no
+          route, so this button dropped the reader on the dashboard. */}
       {canManage && (
-        <Link to={`/inventory/maintenance?item=${itemId}`} className="btn-info btn-sm">
+        <Link to={`/inventory/admin/maintenance?item=${itemId}`} className="btn-info btn-sm">
           + Add Record
         </Link>
       )}

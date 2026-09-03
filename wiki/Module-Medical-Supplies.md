@@ -9,12 +9,12 @@ Added 2026-08-16. **Off by default.**
 > The deeper engineering reference lives in the source repository at
 > [`docs/MEDICAL_SUPPLIES_MODULE.md`](../docs/MEDICAL_SUPPLIES_MODULE.md).
 
-## Why it is separate from Gear & Uniforms
+## Why it is separate from the gear and uniform pages
 
 The two supply lines answer different questions and are usually owned by
 different people:
 
-|                  | Gear & Uniforms       | Medical Supplies             |
+|                  | Gear and uniforms     | Medical Supplies             |
 | ---------------- | --------------------- | ---------------------------- |
 | Tracked by       | Individual unit       | Quantity and expiration date |
 | Belongs to       | A named member        | The rig                      |
@@ -117,17 +117,22 @@ says so.
 > officers the full gear table; mailing the data is the same disclosure as
 > serving it, so recipients are now grouped by what they may actually see.
 
-## The gear side was renamed
+## Naming
 
-So the two are distinguishable in navigation:
+The gear side is **Inventory**, administered from **Inventory Admin**. The
+screens under it keep the vocabulary a quartermaster uses:
 
-| Was                | Now                 |
+| Screen             | Label               |
 | ------------------ | ------------------- |
-| Inventory          | **Gear & Uniforms** |
-| My Equipment       | **My Issued Gear**  |
-| Inventory Admin    | **Gear Admin**      |
-| Equipment Requests | **Gear Requests**   |
-| Equipment Kits     | **Gear Kits**       |
+| Catalogue          | **Inventory**       |
+| Administration hub | **Inventory Admin** |
+| A member's own kit | **My Issued Gear**  |
+| Member requests    | **Gear Requests**   |
+| Multi-item issue   | **Gear Kits**       |
+
+The module was briefly called "Gear & Uniforms" outright, when that was all it
+held; it now covers EMS supplies on the same catalog, so the area carries the
+category name and the gear language stays on the gear screens.
 
 **Routes and table names are unchanged**, so no existing link, bookmark or
 integration breaks.

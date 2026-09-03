@@ -74,7 +74,7 @@ test.describe('Navigation', () => {
       await expect(page).toHaveURL(/\/events/, { timeout: 10000 });
     });
 
-    test('should navigate to the Gear & Uniforms section via the Operations menu', async ({ page }) => {
+    test('should navigate to the Inventory section via the Operations menu', async ({ page }) => {
       // Signs in again with a grant the shared beforeEach does not give: the
       // fixture user has NO permissions (`signIn` sets `permissions: []`, which
       // overrides TEST_USER's list), and the gear catalogue is manager-only, so
@@ -83,12 +83,12 @@ test.describe('Navigation', () => {
       // where the row leads, and someone has to be able to see it first.
       await gotoDashboard(page, { permissions: ['inventory.manage'] });
 
-      // Gear & Uniforms is a child of the collapsible "Operations" group. The
+      // Inventory is a child of the collapsible "Operations" group. The
       // label is not "Inventory": that word covers gear and medical supplies
       // both, which are separate pages under separate permissions, so the nav
       // names the one this route actually opens.
       await navItem(page, 'Operations').click();
-      await navItem(page, 'Gear & Uniforms').click();
+      await navItem(page, 'Inventory').click();
 
       await expect(page).toHaveURL(/\/inventory/, { timeout: 10000 });
     });

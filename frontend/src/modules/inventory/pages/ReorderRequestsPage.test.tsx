@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -279,5 +279,83 @@ describe('ReorderRequestsPage', () => {
     await waitFor(() =>
       expect(mockGetReorderRequests).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'approved' }))
     );
+  });
+});
+
+/**
+ * Arriving from the inventory hub's "Needs attention" queue.
+ *
+ * Two different links land here, and they mean different things: an overdue
+ * delivery names a request that exists, while a low-stock row names a category
+ * that has no request yet — which is the whole reason it is on the queue.
+ *
+ * Own block, own resets: `vi.clearAllMocks()` leaves implementations in place,
+ * so a block that configures nothing runs on its neighbour's (CLAUDE.md #28).
+ */
+describe('ReorderRequestsPage — opened from the attention queue', () => {
+  const lowStock = {
+    category_id: 'cat-9',
+    category_name: 'Nitrile Gloves',
+    current_stock: 2,
+    threshold: 10,
+    items: [{ name: 'Nitrile Gloves L', quantity: 2 }],
+  };
+
+  beforeEach(() => {
+    mockGetReorderRequests.mockReset();
+    mockGetReorderRequests.mockResolvedValue([makeReq({ id: 'ro-7', item_name: 'SCBA Cylinders', status: 'ordered' })]);
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    mockGetLowStockItems.mockReset();
+    mockGetLowStockItems.mockResolvedValue([lowStock]);
+    mockGetVendors.mockReset();
+    mockGetVendors.mockResolvedValue([]);
+    mockCreateReorderRequest.mockReset();
+    mockCreateReorderRequest.mockResolvedValue({});
+    mockUpdateReorderRequest.mockReset();
+    mockUpdateReorderRequest.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('opens the named delivery straight on Receive stock', async () => {
+    // The queue row's action reads "Receive"; landing on a generic dialog, or
+    // on the unfiltered list, would make the reader choose again.
+    window.history.pushState({}, '', '/inventory/admin/reorder?request=ro-7');
+    renderWithRouter(<ReorderRequestsPage />);
+
+    // Scoped to the dialog: an ordered row carries a "Receive stock" button
+    // of its own, so a bare text query would pass without a dialog at all.
+    expect(await screen.findByRole('dialog', { name: 'Receive stock' })).toBeInTheDocument();
+  });
+
+  it('does nothing for a request that is no longer listed', async () => {
+    window.history.pushState({}, '', '/inventory/admin/reorder?request=gone');
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findByText('SCBA Cylinders');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens the order form pre-filled for a category that is short', async () => {
+    // A low-stock row names a category, not a request — there is nothing to
+    // open, so the useful landing is the order this officer came to place.
+    window.history.pushState({}, '', '/inventory/admin/reorder?category=cat-9');
+    renderWithRouter(<ReorderRequestsPage />);
+
+    expect(await screen.findByText('New Reorder Request')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Nitrile Gloves L')).toBeInTheDocument();
+    // 10 par less 2 on hand — the shortfall, which is what to order.
+    expect(screen.getByDisplayValue('8')).toBeInTheDocument();
+  });
+
+  it('does nothing for a category with no low-stock alert', async () => {
+    window.history.pushState({}, '', '/inventory/admin/reorder?category=cat-none');
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findByText('SCBA Cylinders');
+
+    expect(screen.queryByText('New Reorder Request')).not.toBeInTheDocument();
   });
 });

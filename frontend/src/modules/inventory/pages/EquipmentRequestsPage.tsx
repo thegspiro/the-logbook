@@ -25,6 +25,7 @@ import { REQUEST_STATUS_BADGES } from '../types';
 import { onHandQuantity } from '../utils/onHand';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
@@ -78,6 +79,15 @@ const EquipmentRequestsPage: React.FC = () => {
   useEffect(() => {
     void loadRequests();
   }, [loadRequests]);
+
+  // "Review" on the inventory hub's attention queue names the gear request it
+  // was about; without this the officer arrived at the unfiltered list.
+  useDeepLinkedRecord(
+    'request',
+    requests,
+    (request) => request.id,
+    (request) => setReviewModal({ open: true, request })
+  );
 
   useEffect(() => {
     // A review/delete can remove the only row on the current page. Return to

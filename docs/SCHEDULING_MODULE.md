@@ -989,7 +989,7 @@ The **Shift Reports** settings tab (within Scheduling Settings) provides central
 
 #### Checklist Timing Windows — moved to Inventory _(2026-08-31)_
 
-These settings are still stored under `org.settings["shift_reports"]["checklist_timing"]`, but they are **edited in Inventory**, at **Gear Admin → Equipment Checklists → Checklist settings** (`/inventory/admin/checklists/settings`), along with the rest of the checklist feature. Only the editing surface moved; the storage key and its readers are unchanged.
+These settings are still stored under `org.settings["shift_reports"]["checklist_timing"]`, but they are **edited in Inventory**, at **Inventory Admin → Equipment Checklists → Checklist settings** (`/inventory/admin/checklists/settings`), along with the rest of the checklist feature. Only the editing surface moved; the storage key and its readers are unchanged.
 
 | Setting                      | Default | Description                                            |
 | ---------------------------- | ------- | ------------------------------------------------------ |
@@ -1060,7 +1060,7 @@ Scheduling Settings (ShiftReportsSettingsPanel)
     ↓ saves to org.settings["shift_reports"]["post_shift_validation"]
 Post-shift validation
 
-Gear Admin → Checklist settings (ChecklistSettingsPage, Inventory)
+Inventory Admin → Checklist settings (ChecklistSettingsPage, Inventory)
     ↓ saves to org.settings["shift_reports"]["checklist_timing"]
 Checklist timing
 
@@ -2004,7 +2004,7 @@ the loop between the shelf (Inventory) and the truck (Equipment Checks).
 | `/inventory/checklists/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 The worklist is reached from the **Supply** tile on the Scheduling hub (which
-carries a count badge) and from the Gear Admin hub. The apparatus view is
+carries a count badge) and from the Inventory Admin hub. The apparatus view is
 reached from **My Equipment Checklists → Apparatus Inventory**.
 
 ### Schema
