@@ -36,16 +36,11 @@ export interface EmailConfig {
   cloudflareAccountId?: string;
   cloudflareApiToken?: string;
 
-  // Gmail OAuth
-  googleClientId?: string;
-  googleClientSecret?: string;
+  // Gmail / Google Workspace — signs in to smtp.gmail.com as fromEmail
   googleAppPassword?: string;
-  googleEmail?: string;
 
-  // Microsoft 365
-  microsoftTenantId?: string;
-  microsoftClientId?: string;
-  microsoftClientSecret?: string;
+  // Microsoft 365 — signs in to smtp.office365.com as fromEmail
+  microsoftAppPassword?: string;
 
   // Self-hosted SMTP
   smtpHost?: string;

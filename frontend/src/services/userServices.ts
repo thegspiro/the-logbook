@@ -9,6 +9,7 @@ import type {
   AuthSettings,
   ContactInfoSettings,
   ContactInfoUpdate,
+  EmailConnectionTestResult,
   EmailServiceSettings,
   FileStorageSettings,
   User,
@@ -455,6 +456,15 @@ export const organizationService = {
    */
   async updateEmailSettings(settings: EmailServiceSettings): Promise<EmailServiceSettings> {
     const response = await api.patch<EmailServiceSettings>('/organization/settings/email', settings);
+    return response.data;
+  },
+
+  /**
+   * Test the email configuration on the form without saving it. Redacted
+   * secrets are resolved server-side against what is already stored.
+   */
+  async testEmailSettings(settings: EmailServiceSettings): Promise<EmailConnectionTestResult> {
+    const response = await api.post<EmailConnectionTestResult>('/organization/settings/email/test', settings);
     return response.data;
   },
 

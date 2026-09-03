@@ -197,7 +197,7 @@ class TestSettingsInfrastructureRedaction:
                     "smtp_host": "mail.internal.dept.test",
                     "smtp_user": "svc-mailer",
                     "smtp_password": "hunter2",
-                    "microsoft_tenant_id": "tenant-abc",
+                    "cloudflare_account_id": "0123456789abcdef0123456789abcdef",
                 },
                 "file_storage": {
                     "platform": "s3",
@@ -234,7 +234,7 @@ class TestSettingsInfrastructureRedaction:
 
         assert stripped.email_service.smtp_host is None
         assert stripped.email_service.smtp_user is None
-        assert stripped.email_service.microsoft_tenant_id is None
+        assert stripped.email_service.cloudflare_account_id is None
         assert stripped.file_storage.s3_bucket_name is None
         assert stripped.file_storage.s3_region is None
         assert stripped.file_storage.s3_endpoint_url is None
