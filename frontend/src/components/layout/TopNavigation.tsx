@@ -264,7 +264,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
                 : []),
               ...(isModuleOn('storefront')
-                ? [{ label: 'Store Admin', path: '/store/admin', permission: 'storefront.manage' }]
+                ? [{ label: 'Store Admin', path: '/inventory/admin/store', permission: 'storefront.manage' }]
                 : []),
               { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
               DIV,

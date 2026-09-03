@@ -506,7 +506,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             ? [
                 {
                   label: 'Store Admin',
-                  path: '/store/admin',
+                  path: '/inventory/admin/store',
                   icon: Store,
                   permission: 'storefront.manage',
                 } as NavItem,

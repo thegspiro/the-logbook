@@ -991,12 +991,13 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Storefront _(documented 2026-08-10)_
 
-| URL               | Page                 | Permission          |
-| ----------------- | -------------------- | ------------------- |
-| `/store`          | Department Store     | `storefront.view`   |
-| `/store/checkout` | Review Your Order    | `storefront.view`   |
-| `/store/orders`   | My Orders            | `storefront.view`   |
-| `/store/admin`    | Store Administration | `storefront.manage` |
+| URL                      | Page                                  | Permission          |
+| ------------------------ | ------------------------------------- | ------------------- |
+| `/store`                 | Department Store                      | `storefront.view`   |
+| `/store/checkout`        | Review Your Order                     | `storefront.view`   |
+| `/store/orders`          | My Orders                             | `storefront.view`   |
+| `/inventory/admin/store` | Store Administration                  | `storefront.manage` |
+| `/store/admin`           | Redirects to `/inventory/admin/store` | —                   |
 
 > Recording an order payment is subject to the same separation-of-duties rule as
 > finance disbursement — see **Finance** above.

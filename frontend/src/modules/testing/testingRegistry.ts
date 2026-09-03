@@ -747,7 +747,13 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/store', label: 'Store', permission: 'storefront.view', module: 'storefront' },
       { path: '/store/checkout', label: 'Checkout', permission: 'storefront.view', module: 'storefront' },
       { path: '/store/orders', label: 'My orders', permission: 'storefront.view', module: 'storefront' },
-      { path: '/store/admin', label: 'Store administration', permission: 'storefront.manage', module: 'storefront' },
+      {
+        path: '/inventory/admin/store',
+        label: 'Store administration',
+        permission: 'storefront.manage',
+        module: 'storefront',
+      },
+      { path: '/store/admin', label: 'Store administration (legacy URL)', redirectsTo: '/inventory/admin/store' },
     ],
   },
   {

@@ -162,12 +162,16 @@ describe('navigation gates match the routes they target', () => {
   });
 
   it('keeps the store admin console on storefront.manage', () => {
-    // /store/admin requires storefront.manage. `checkPermission` does exact
+    // The console requires storefront.manage. `checkPermission` does exact
     // match plus module wildcard, so storefront.view does NOT imply it — a
     // view-gated row here would be a link to Access Denied for every member.
+    //
+    // It moved to /inventory/admin/store when the store came inside Inventory
+    // Administration; /store/admin still redirects there, but a nav row should
+    // point at the page rather than at a hop.
     for (const surface of NAV_SURFACES) {
       const entry = navEntry(read(surface), 'Store Admin');
-      expect(entry, `${surface}: Store Admin targets the wrong path`).toContain("path: '/store/admin'");
+      expect(entry, `${surface}: Store Admin targets the wrong path`).toContain("path: '/inventory/admin/store'");
       expect(entry, `${surface}: Store Admin is not gated on storefront.manage`).toContain(
         "permission: 'storefront.manage'"
       );
