@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -402,7 +402,13 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     // arrives by its own ordinary debounce. Every assertion below would still
     // pass, against a run that never exercised the failure this test is named
     // for. Waiting the window out first is what makes that unreachable.
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
 
     updateCheckItem.mockReset();
     let rejectFlush!: (reason: unknown) => void;
@@ -1963,7 +1969,13 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
     // its own test and can fire during this one. Draining it here, before
     // wiring up this test's own mock behaviour, keeps that unrelated retry
     // from being mistaken for the one this test controls.
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
     updateCheckItem.mockClear();
 
     let releaseFirstFlush: (() => void) | null = null;
@@ -2056,7 +2068,13 @@ describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree del
     await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
 
     // Outwait the window the cancelled timer would have fired inside.
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
 
     expect(updateCheckItem).not.toHaveBeenCalled();
   }, 10_000);
@@ -2085,7 +2103,13 @@ describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree del
     // The original timer was cancelled the moment the delete started, but
     // its patch was captured and re-armed on failure -- it still reaches
     // the server on its own (fresh) schedule.
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
     expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false });
   }, 10_000);
 
@@ -2116,7 +2140,13 @@ describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree del
 
     // Outwait the debounce window while the delete is still in flight --
     // the pre-fix timer would fire here and call updateCheckItem.
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
     expect(updateCheckItem).not.toHaveBeenCalled();
 
     releaseDelete?.();
@@ -2156,14 +2186,22 @@ describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree del
     // moving into autoSaveInFlightRef before the delete is confirmed.
     await userEvent.click(screen.getByLabelText('Delete Cab'));
     const dialog = await screen.findByRole('dialog');
-    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
     await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false }));
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
     // Radio's PATCH is still unresolved -- the DELETE must not have been
     // sent yet.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
     expect(deleteCompartment).not.toHaveBeenCalled();
 
     releaseUpdate?.();
