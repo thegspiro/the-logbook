@@ -2036,6 +2036,64 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
   }, 20_000);
 });
 
+describe('EquipmentCheckTemplateBuilder keeps savedParentByIdRef truthful after a partial-failure save', () => {
+  // handleSave batches every compartment's PATCH and every item's PATCH
+  // into one settlement. A compartment reparent can commit server-side while
+  // an unrelated item PATCH in the same batch rejects -- and if that failure
+  // stops the savedParentByIdRef refresh from running at all, the map keeps
+  // describing the pre-save hierarchy even though the server already has the
+  // new one. A later delete then compares the live (correct) hierarchy
+  // against that stale map, sees a disagreement that no longer exists, and
+  // wrongly blocks a delete the pending-reparent guard was never meant to
+  // stop.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    updateCheckItem.mockReset();
+    // Flashlight's PATCH is the one failure in this batch; every other
+    // request (including the compartment reparent) succeeds.
+    updateCheckItem.mockImplementation((itemId: string) =>
+      itemId === 'flashlight' ? Promise.reject(new Error('Validation error')) : Promise.resolve({})
+    );
+    updateEquipmentCheckTemplate.mockReset();
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+  });
+
+  it('refreshes the map for a compartment whose reparent succeeded, even though a sibling item PATCH in the same save failed', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    // Move Medical bag out of Cab -- local-only, no auto-save path -- then
+    // save. The compartment PATCH for Medical bag (parent_compartment_id:
+    // null) settles; Flashlight's item PATCH, in the same batch, rejects.
+    await user.click(await screen.findByLabelText('Move Medical bag out one level'));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(updateCompartment).toHaveBeenCalledWith('bag', expect.objectContaining({ parent_compartment_id: null }));
+    toastError.mockClear();
+
+    // Cab's live subtree no longer includes Medical bag (it was outdented
+    // locally, and a failed save does not revert local state). If
+    // savedParentByIdRef still says otherwise, the pending-reparent guard
+    // sees a disagreement that no longer exists and blocks Cab's delete with
+    // an "unsaved changes" error instead of the normal confirmation.
+    await user.click(screen.getByLabelText('Delete Cab'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Delete "Cab"/i)).toBeVisible();
+    expect(toastError).not.toHaveBeenCalledWith(expect.stringMatching(/unsaved changes/i));
+
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  });
+});
+
 describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree delete', () => {
   // AP-13 finding 4 (Codex): deleting a compartment removes its items on the
   // backend too. A debounced auto-save still pending for one of those items
@@ -2205,6 +2263,46 @@ describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree del
     expect(deleteCompartment).not.toHaveBeenCalled();
 
     releaseUpdate?.();
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  }, 10_000);
+
+  it('waits for the Save button’s own flush of a pending item auto-save before sending the compartment DELETE', async () => {
+    // flushPendingAutoSaves -- the Save button's pre-save flush of whatever
+    // debounce timer hasn't fired yet -- issues its own PATCH directly. If
+    // that request is not registered the same way a fired timer's is, it is
+    // invisible to both tracking maps a subtree delete's quiescing step
+    // reads. Save also marks `saving` only *after* this flush resolves, so
+    // nothing in the UI blocks the delete either -- the request has to be
+    // the thing that blocks it.
+    let releaseFlush: (() => void) | null = null;
+    updateCheckItem.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFlush = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    // Press Save immediately, inside the debounce window -- handleSave's
+    // flush picks up the still-pending patch and sends it directly.
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+    await waitFor(() => expect(releaseFlush).not.toBeNull());
+
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+
+    // Radio's flush PATCH is still unresolved -- the DELETE must not have
+    // been sent yet.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(deleteCompartment).not.toHaveBeenCalled();
+
+    releaseFlush?.();
     await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
   }, 10_000);
 });
