@@ -26,24 +26,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
  * route exists to drive it. Listed rather than silently tolerated so the two
  * broken buttons stay visible; remove an entry when its screen ships.
  */
-const KNOWN_MISSING_ROUTES = [
-  '/grants/donations/new',
-  '/grants/opportunities/new',
-  // Surfaced when the scan below learned to read template literals, on
-  // 2026-09-03. Both are the same shape as the two above — a control wired to
-  // a screen nobody built — and both predate that change by a long way.
-  //
-  // `/apparatus/:id/archive` (ApparatusDetailHeader): the Archive button
-  // navigates to the *API* path. Archiving takes a disposal method, date and
-  // sale details (`ApparatusArchive`), so the fix is an archive form calling
-  // `apparatusService.archiveApparatus`, not a redirect.
-  //
-  // `/meetings/:id` (ElectionDetailPage): a meeting record has no detail
-  // screen. `/minutes/:minutesId` is not it — that takes a *minutes* id, and
-  // MinutesPage lists meetings without linking to one.
-  '/apparatus/X/archive',
-  '/meetings/X',
-];
+const KNOWN_MISSING_ROUTES = ['/grants/donations/new', '/grants/opportunities/new'];
 
 const collectSourceFiles = (dir: string): string[] => {
   const found: string[] = [];

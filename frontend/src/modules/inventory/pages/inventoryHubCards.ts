@@ -159,7 +159,10 @@ export const INVENTORY_HUB_CARDS: InventoryHubCard[] = [
     id: 'items',
     view: 'inventory',
     label: 'All Items',
-    description: 'Every item on the books, across all types',
+    // Not "across all types": /inventory/admin/items excludes medical stock,
+    // which has its own screen and its own card above. A card must not promise
+    // more than the list it opens.
+    description: 'Gear, PPE, uniforms and equipment — EMS supplies have their own screen',
     path: '/inventory/admin/items',
     icon: Box,
     section: 'Catalog',

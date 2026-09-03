@@ -415,6 +415,109 @@ class TestLinkManagement:
         )
         assert remaining.scalars().all() == []
 
+    async def test_a_checklist_deleted_after_validation_leaves_no_orphan_template(
+        self, db_session, monkeypatch
+    ):
+        """A race, not a client error: the id was valid when checked.
+
+        ``_validated_check_ids`` runs one query before any write. If the
+        checklist it approved is deleted before the link write actually
+        lands — two officers acting on the same org's checklists
+        concurrently — the FK insert fails. The template and its links are
+        one transaction (neither commits alone), so the failure must not
+        leave a checklist-less orphan for a retry to duplicate, and the
+        error must be attributed correctly rather than assumed from the
+        exception type alone.
+
+        Simulated by deleting the checklist from inside a wrapped
+        ``_replace_equipment_check_links`` — standing in for the moment a
+        concurrent delete would land, between validation and the write —
+        since a real concurrent-delete race cannot be made deterministic in
+        a test.
+        """
+        org = await _org(db_session)
+        linked = await _check_template(db_session, org, "Now You See It")
+
+        service = SchedulingService(db_session)
+        real_replace = service._replace_equipment_check_links
+
+        async def _replace_then_vanish(template, organization_id, wanted):
+            await db_session.delete(linked)
+            await db_session.flush()
+            return await real_replace(template, organization_id, wanted)
+
+        monkeypatch.setattr(
+            service, "_replace_equipment_check_links", _replace_then_vanish
+        )
+
+        created, error = await service.create_template(
+            org.id,
+            {
+                "name": "Day Shift",
+                "start_time_of_day": "07:00",
+                "end_time_of_day": "19:00",
+                "duration_hours": 12.0,
+                "equipment_check_template_ids": [linked.id],
+            },
+            None,
+        )
+        assert created is None
+        assert error == "Equipment checklist not found"
+
+        remaining = await db_session.execute(
+            select(ShiftTemplate).where(ShiftTemplate.organization_id == org.id)
+        )
+        assert remaining.scalars().all() == []
+
+    async def test_an_unrelated_integrity_error_is_not_misreported(
+        self, db_session, monkeypatch
+    ):
+        """Only the confirmed missing-checklist case gets that message.
+
+        An ``IntegrityError`` whose referenced checklist is, on re-check,
+        still there must not be attributed to a missing checklist — that
+        would hide whatever the real failure was behind a plausible-sounding
+        wrong one.
+        """
+        org = await _org(db_session)
+        linked = await _check_template(db_session, org, "Still Here")
+        # create_template's own failure path below calls rollback(), which
+        # (join_transaction_mode="create_savepoint") unwinds to the last
+        # commit — settling org/linked here first is what stands in for them
+        # having been created in an earlier, already-committed request, the
+        # way they would be in production.
+        await db_session.commit()
+
+        service = SchedulingService(db_session)
+        real_replace = service._replace_equipment_check_links
+
+        async def _replace_then_fail_integrity(template, organization_id, wanted):
+            await real_replace(template, organization_id, wanted)
+            from sqlalchemy.exc import IntegrityError
+
+            raise IntegrityError(
+                "INSERT ...", {}, Exception("not really a checklist FK")
+            )
+
+        monkeypatch.setattr(
+            service, "_replace_equipment_check_links", _replace_then_fail_integrity
+        )
+
+        created, error = await service.create_template(
+            org.id,
+            {
+                "name": "Day Shift",
+                "start_time_of_day": "07:00",
+                "end_time_of_day": "19:00",
+                "duration_hours": 12.0,
+                "equipment_check_template_ids": [linked.id],
+            },
+            None,
+        )
+        assert created is None
+        assert error != "Equipment checklist not found"
+        assert "not really a checklist FK" in error
+
     async def test_update_omitting_the_key_leaves_links_alone(self, db_session):
         """An omitted key means "leave this alone" (pitfall #1)."""
         org = await _org(db_session)

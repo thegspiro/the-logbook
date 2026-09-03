@@ -1136,6 +1136,13 @@ async def list_orders(
     search: Optional[str] = Query(None),
     submitted_within_hours: Optional[int] = Query(None, ge=1, le=168),
     open_only: bool = Query(False),
+    exclude_cancelled: bool = Query(
+        False,
+        description=(
+            "Hide cancelled orders, matching the admin hub's "
+            "pending-verification queue"
+        ),
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -1152,6 +1159,7 @@ async def list_orders(
         search=search,
         submitted_within_hours=submitted_within_hours,
         open_only=open_only,
+        exclude_cancelled=exclude_cancelled,
         page=page,
         page_size=page_size,
     )

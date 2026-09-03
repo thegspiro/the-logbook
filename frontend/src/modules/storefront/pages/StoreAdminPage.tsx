@@ -18,7 +18,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ArrowLeft, CalendarClock, Clock3, Loader2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { AdminHubFrame } from '../../../components/admin';
+import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
@@ -110,6 +110,18 @@ const StoreAdminPage: React.FC = () => {
     },
     [searchParams, setSearchParams]
   );
+
+  // The one filter that does travel in the URL. The frame's attention queue
+  // links in from outside the page ("Verify payments"), so its filter cannot
+  // be local state the way the overview's hand-offs below are — arriving on an
+  // unfiltered order list leaves the counted work to be found by eye. A value
+  // the Orders tab does not offer is ignored rather than forwarded to the API.
+  const paymentParam = searchParams.get('payment') ?? '';
+  // `hasOwnProperty`, not `in`: `?payment=toString` walks the prototype chain
+  // and would be forwarded to the API as a payment_status nothing matches.
+  const urlPaymentFilter = Object.prototype.hasOwnProperty.call(PAYMENT_STATUS_LABELS, paymentParam)
+    ? paymentParam
+    : '';
 
   // The overview's hand-off into a pre-filtered Orders tab. These stay local
   // rather than joining `?tab=` in the URL: they are one click's worth of
@@ -441,17 +453,32 @@ const StoreAdminPage: React.FC = () => {
         {activeTab === 'catalog' && <StoreCatalogTab />}
         {activeTab === 'orders' && (
           <StoreOrdersTab
-            key={`${ordersStatusFilter}:${ordersPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
+            key={`${ordersStatusFilter}:${ordersPaymentFilter || urlPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
             onChanged={handleChanged}
             initialStatusFilter={ordersStatusFilter}
-            initialPaymentFilter={ordersPaymentFilter}
+            initialPaymentFilter={ordersPaymentFilter || urlPaymentFilter}
             initialOrderId={ordersDetailId}
             initialSubmittedWithinHours={ordersRecentHours}
             initialOpenOnly={ordersOpenOnly}
           />
         )}
         {activeTab === 'payments' && <StorePaymentsTab onChanged={handleChanged} />}
-        {activeTab === 'settings' && <StoreSettingsTab onChanged={handleChanged} />}
+        {activeTab === 'settings' && (
+          <div className="space-y-8">
+            <StoreSettingsTab onChanged={handleChanged} />
+            {/* The frame's three open headline slots. The store's registry
+                offers six metrics and defaults to three, so without this an
+                admin could never reach Pending verification, Ready for pickup
+                or Active items — every other module's admin page carries the
+                same control. */}
+            <AdminMetricsSettings
+              moduleKey="storefront"
+              moduleLabel="Department Store"
+              permission="storefront.manage"
+              onSaved={() => setFrameToken((token) => token + 1)}
+            />
+          </div>
+        )}
       </div>
     </AdminHubFrame>
   );

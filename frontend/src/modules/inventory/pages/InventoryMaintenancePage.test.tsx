@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -9,6 +9,7 @@ const mockGetItems = vi.fn();
 const mockGetItemMaintenanceHistory = vi.fn();
 const mockCreateMaintenanceRecord = vi.fn();
 const mockUpdateItem = vi.fn();
+const mockGetItem = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -17,6 +18,7 @@ vi.mock('../../../services/api', () => ({
     getItemMaintenanceHistory: (...a: unknown[]) => mockGetItemMaintenanceHistory(...a) as unknown,
     createMaintenanceRecord: (...a: unknown[]) => mockCreateMaintenanceRecord(...a) as unknown,
     updateItem: (...a: unknown[]) => mockUpdateItem(...a) as unknown,
+    getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
   },
 }));
 
@@ -180,5 +182,79 @@ describe('InventoryMaintenancePage', () => {
 
     await user.click(screen.getByRole('button', { name: /Maintenance History/ }));
     expect(await screen.findByText(/Select an item from the Due Items tab/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * Arriving from an item's inspections tab via "+ Add Record".
+ *
+ * Own block with its own resets: `vi.clearAllMocks()` clears calls but not
+ * implementations, so a block that configures nothing inherits its
+ * neighbour's (CLAUDE.md #28). renderWithRouter mounts a BrowserRouter that
+ * reads window.location, so the URL is the fixture and has to be put back.
+ */
+describe('InventoryMaintenancePage — opened for one named item', () => {
+  beforeEach(() => {
+    mockGetMaintenanceDueItems.mockReset();
+    mockGetMaintenanceDueItems.mockResolvedValue([]);
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockGetItemMaintenanceHistory.mockReset();
+    mockGetItemMaintenanceHistory.mockResolvedValue([]);
+    mockGetItem.mockReset();
+    mockGetItem.mockResolvedValue(makeItem({ id: 'far-off', name: 'Spare Nozzle' }));
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('opens the maintenance form for an item the lists do not carry', async () => {
+    // This page loads what is due within 90 days plus what is in maintenance.
+    // An item whose next inspection is further out is in neither, so it has to
+    // be fetched by id or the link lands on a page with nothing selected.
+    window.history.pushState({}, '', '/inventory/admin/maintenance?item=far-off');
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await waitFor(() => expect(mockGetItem).toHaveBeenCalledWith('far-off'));
+    expect(await screen.findByText(/Spare Nozzle/)).toBeInTheDocument();
+  });
+
+  it('consumes the parameter so Back does not reopen the form', async () => {
+    window.history.pushState({}, '', '/inventory/admin/maintenance?item=far-off');
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await waitFor(() => expect(window.location.search).toBe(''));
+  });
+
+  it('stays quiet when the item no longer exists', async () => {
+    // A 404 is the expected case: it may have been retired between the link
+    // rendering and being followed, and a working page beats an error about a
+    // record nobody holds.
+    mockGetItem.mockRejectedValue({ response: { status: 404, data: { detail: 'Not found' } } });
+    window.history.pushState({}, '', '/inventory/admin/maintenance?item=gone');
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await waitFor(() => expect(mockGetItem).toHaveBeenCalledWith('gone'));
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('reports an operational failure rather than pretending the item is gone', async () => {
+    // Offline, a 403, a 500 — the officer is left on a generic page with no
+    // form and, the parameter being unchanged, no retry this visit. Silence
+    // there is indistinguishable from a record that was simply retired.
+    mockGetItem.mockRejectedValue({ response: { status: 500, data: { detail: 'boom' } } });
+    window.history.pushState({}, '', '/inventory/admin/maintenance?item=far-off');
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+  });
+
+  it('asks for nothing when no item is named', async () => {
+    window.history.pushState({}, '', '/inventory/admin/maintenance');
+    renderWithRouter(<InventoryMaintenancePage />);
+
+    await waitFor(() => expect(mockGetMaintenanceDueItems).toHaveBeenCalled());
+    expect(mockGetItem).not.toHaveBeenCalled();
   });
 });
