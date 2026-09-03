@@ -1308,6 +1308,89 @@ the generic Documents API, distinct from its existing authority on the
 facility-specific delete route. Not mirrored to `CHANGELOG.md` (no code
 change).
 
+### FAC-31 — P1 (access control, TOCTOU) — FAC-29's lock protected the validation step, but committed before the reference it validated for was ever inserted — ✅ FIXED
+
+**Found by Codex review of the FAC-29 commit.** FAC-29 locked the `Document`
+row `_validate_shared_document_reference` reads, but validating the
+reference and actually filing it are two separate steps:
+`_validate_shared_document_reference` locks the document and (for a
+folderless document) assigns it a facility folder; the caller
+(`create_facility_document`/`create_facility_photo`) inserts the
+`FacilityDocument`/`FacilityPhoto` row that records the reference only
+_after_ that function returns. The function's own `await db.commit()` at the
+end of the folder-assignment branch released the lock immediately — before
+the row the lock was supposed to protect even existed.
+
+**What that reopens:** a concurrent `delete_document` can acquire the lock
+in the gap between that commit and the caller's insert, run its
+facility-reference existence check, see nothing (because the reference truly
+has not been filed yet), delete the document and its backing file, and
+commit — all while the original request is mid-flight. The original request
+then proceeds to insert a `FacilityDocument`/`FacilityPhoto` row whose
+`file_path` points at a document that no longer exists: FAC-29's own race,
+reopened one step later in the same sequence it was meant to close, and with
+FAC-26's permission gate never even engaged (no reference existed yet for it
+to protect).
+
+**Where:** `backend/app/api/v1/endpoints/facilities.py`
+(`_validate_shared_document_reference`, `create_facility_document`,
+`create_facility_photo`).
+
+**Fix:** stop committing inside `_validate_shared_document_reference`.
+Flushing (not committing) the folder assignment keeps the document's `FOR
+UPDATE` lock held for the rest of the request, across both the
+`ensure_facility_folder` call and the caller's own
+`FacilityDocument`/`FacilityPhoto` insert, in the one transaction the
+endpoint's `get_db` dependency already commits once at the end (or rolls
+back whole, on any failure in between). The lock is now released only when
+the reference has either been filed in the same transaction or never will
+be.
+
+**Regression test:** `tests/test_facility_document_reference_race.py`,
+`TestReferenceInsertStaysUnderTheDocumentLock`. Proving this needed more than
+a stale-read comparison (unlike FAC-29's tests): the fix's whole effect is
+that a concurrent session genuinely _blocks_ on the still-held lock rather
+than resolving a stale value, and a plain sequential `await` between two
+independent sessions cannot observe a block. The test runs the deleting
+session's `delete_document` as a background task while the creating
+session's transaction is still open and checks whether it has completed
+after a short pause: pre-fix, it completes immediately (the lock was already
+released) and the creator goes on to file a reference to what is now a
+deleted document; post-fix, it is still pending (genuinely blocked on the
+lock), and only proceeds — now correctly refused by FAC-26's permission
+check, since the reference exists by the time it resumes — once the creator
+finishes and commits. Confirmed to fail against pre-fix code (`git stash`
+isolating the source change, reproducing a real dangling reference in the
+database) and pass post-fix.
+
+**Mirrored to** `CHANGELOG.md`.
+
+### FAC-33 — P1, test-only (CLAUDE.md "Fix All Errors") — the two-session test fixture's teardown swallowed any rollback failure with a blanket `except Exception: pass` — ✅ FIXED
+
+**Found by Codex review of the FAC-29 commit.**
+`test_facility_document_reference_race.py`'s `two_sessions` fixture wrapped
+each session's teardown `rollback()` in `try/except Exception: pass`. Per
+CLAUDE.md's "Fix All Errors" policy, silently discarding a runtime failure
+hides a broken connection or an unreleased transaction until some later,
+unrelated test fails or hangs for no apparent reason — exactly the class of
+bug this file's own subject matter (lock lifetimes across two real sessions)
+makes plausible to hit here of all places.
+
+**Verified before fixing, per the file's own guidance:** ran both a clean
+session's `rollback()` and one on an already-`close()`d session against this
+backend (MariaDB via the async driver this app uses) — neither raises.
+There is no known-benign exception to narrow the catch to; the blanket catch
+was pure risk with no corresponding case it was protecting against.
+
+**Where:** `backend/tests/test_facility_document_reference_race.py`
+(`two_sessions` fixture).
+
+**Fix:** removed the `try/except` entirely. A rollback failure during
+teardown now fails the test that triggered it, in the same way any other
+uncaught exception would.
+
+**Mirrored to** `CHANGELOG.md`.
+
 ## Verified good ✅ (re-confirmed this pass)
 
 - **Auth coverage 98/98** — exact grep count unchanged since pass 2

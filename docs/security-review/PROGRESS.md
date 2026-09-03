@@ -57,8 +57,41 @@ permission-model design decision (should the generic Documents API honor a
 facility-specific action grant distinct from its existing authority on the
 facility-specific delete route?), not a mechanical fix — flagged per
 CLAUDE.md's fix-vs-flag discipline. See `docs/security-review/FAC-12-facilities.md`
-(FAC-30) for the full reasoning. Rotation row 12 stays ⏳ (awaiting this PR's
-merge).
+(FAC-30) for the full reasoning.
+
+**Codex review of the FAC-29 commit (`b21380b8`) found three more issues,
+being fixed on this same PR/branch:**
+
+**FAC-31 (P1, access control/TOCTOU, fixed):** FAC-29's lock protected
+`_validate_shared_document_reference`'s document read, but the function
+committed right after assigning a folder — releasing the lock before the
+caller (`create_facility_document`/`create_facility_photo`) ever inserted
+the `FacilityDocument`/`FacilityPhoto` row the lock was meant to protect. A
+concurrent `delete_document` could land in that exact gap, see no reference
+yet (none had been filed), delete the document, and let the original request
+file a reference to nothing the moment both finished — FAC-29's own race,
+reopened one step later in the same sequence. Fixed by flushing instead of
+committing inside the validation helper, so the lock now spans the folder
+assignment and the caller's own reference insert, released only by the
+endpoint's single final commit (or a full rollback on failure). New
+regression test (`TestReferenceInsertStaysUnderTheDocumentLock`) runs the
+competing delete as a background task against a still-open transaction to
+prove a genuine lock _block_, not just a stale read — confirmed to reproduce
+a real dangling reference pre-fix (`git stash`) and close it post-fix.
+
+**FAC-33 (P1, test-only, fixed):** the two-session test fixture's teardown
+swallowed any `rollback()` failure with a blanket `except Exception: pass`.
+Verified empirically that no known-benign exception occurs in practice
+against this backend; removed the blanket catch per CLAUDE.md's "Fix All
+Errors" policy.
+
+**FAC-32 (P2, reliability/deadlock)** still in progress on this branch — see
+the next log entry.
+
+Local completion gate green so far for FAC-31/33: flake8/black/isort clean
+on changed files, scoped facilities/documents suites and the full backend
+suite (10047 passed / 21 skipped, environment-only skips) pass with zero
+regressions. Rotation row 12 stays ⏳ (awaiting this PR's merge).
 
 ---
 

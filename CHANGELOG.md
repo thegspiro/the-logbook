@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: FAC-29's locking read protected reference validation, but released the lock before the reference it validated for was ever inserted (2026-09-03)
+
+**Fixed**
+
+- **FAC-31 — `_validate_shared_document_reference` committed after
+  assigning a folder, releasing the document's `FOR UPDATE` lock before the
+  caller (`create_facility_document`/`create_facility_photo`) ever inserted
+  the `FacilityDocument`/`FacilityPhoto` row the lock was meant to protect.**
+  A concurrent `delete_document` could acquire the lock in that gap, find no
+  reference yet (because none had been filed), delete the document, and let
+  the original request file a reference to nothing the moment both
+  finished — FAC-29's own race, reopened one step later. Fixed by no longer
+  committing inside the validation helper (flushing instead); the lock now
+  stays held across the folder assignment and the caller's reference
+  insert, released only by the endpoint's own single commit (or a full
+  rollback on failure).
+- New regression test in `tests/test_facility_document_reference_race.py`
+  (`TestReferenceInsertStaysUnderTheDocumentLock`), using a background task
+  against a still-open transaction to prove the concurrent side genuinely
+  _blocks_ on the held lock rather than merely reading a stale value.
+  Confirmed to reproduce a real dangling reference against pre-fix code
+  (`git stash` isolating the source change) and to close it post-fix.
+- **FAC-33 (test-only) — the two-session test fixture's teardown swallowed
+  any rollback failure with a blanket `except Exception: pass`.** Verified
+  no known-benign exception occurs in practice against this backend; removed
+  the blanket catch per CLAUDE.md's "Fix All Errors" policy so a broken
+  connection or unreleased transaction fails the test that caused it instead
+  of being silently hidden.
+
 ### Security: the facility-document-reference check and creation-side validation were each a plain SELECT, vulnerable to a stale REPEATABLE READ snapshot (2026-09-03)
 
 **Fixed**

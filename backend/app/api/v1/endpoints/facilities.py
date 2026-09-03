@@ -159,6 +159,21 @@ async def _validate_shared_document_reference(
     somewhere else keeps that placement; re-parenting another module's document
     because a facility happens to reference it would be the more surprising
     behaviour, and the reference is still validated either way.
+
+    FAC-31 (Codex, on top of FAC-29): this function does not itself file the
+    reference -- it only validates and, for a folderless document, assigns a
+    folder. The caller (``create_facility_document``/``create_facility_photo``)
+    inserts the actual ``FacilityDocument``/``FacilityPhoto`` row *after* this
+    returns. FAC-29's lock only protects a step that ends before the row it
+    protects even exists: committing here (as this used to) releases the
+    document's ``FOR UPDATE`` lock immediately, and a concurrent
+    ``delete_document`` can then land in the gap before the caller's insert,
+    see no reference yet (because it truly does not exist yet), delete the
+    document, and let the caller file a reference to nothing the moment both
+    finish. Not committing keeps the lock held across the whole sequence: it
+    is released only when the caller's own create commits (or the request
+    fails and the session rolls back), by which point the reference row has
+    either been inserted in the same transaction or never will be.
     """
     if not file_path.startswith("document:"):
         raise HTTPException(
@@ -196,7 +211,13 @@ async def _validate_shared_document_reference(
             organization_id, str(facility.id), facility.name
         )
         document.folder_id = folder.id
-        await db.commit()
+        # FAC-31: flush, never commit -- a commit here would release the
+        # document's FOR UPDATE lock before the caller has actually filed
+        # the reference, reopening the exact race FAC-29 closed. The
+        # caller's own create_document/create_photo commits once, after
+        # both this folder assignment and the reference insert are pending
+        # in the same transaction.
+        await db.flush()
 
 
 def _facility_response_for(facility, current_user: User) -> FacilityResponse:

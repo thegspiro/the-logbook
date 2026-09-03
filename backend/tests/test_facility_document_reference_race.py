@@ -30,11 +30,14 @@ can never demonstrate cross-transaction visibility) to force the exact
 interleaving. Every row created is torn down explicitly at the end.
 """
 
+import asyncio
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
 
+from app.api.v1.endpoints.facilities import _validate_shared_document_reference
 from app.core.database import database_manager
 from app.models.document import Document
 from app.models.facilities import (
@@ -53,17 +56,25 @@ pytestmark = pytest.mark.integration
 async def two_sessions(_initialize_database):
     """Two independent AsyncSessions, each its own real connection and
     transaction -- required to demonstrate cross-transaction visibility,
-    which the shared savepoint-based ``db_session`` fixture cannot do."""
+    which the shared savepoint-based ``db_session`` fixture cannot do.
+
+    FAC-33 (Codex): teardown used to swallow every rollback failure with a
+    blanket ``except Exception: pass``. Verified empirically (both against a
+    clean session and one whose connection was already closed) that
+    ``rollback()`` raises nothing in either case against this backend --
+    there is no known-benign exception to narrow the catch to. Per
+    CLAUDE.md's "Fix All Errors" policy, a rollback failure here means a
+    broken connection or an unreleased transaction from the test itself, and
+    must surface as a test failure rather than be hidden until some later,
+    unrelated test fails or hangs.
+    """
     factory = database_manager.session_factory
     sessions = [factory(), factory()]
     try:
         yield sessions
     finally:
         for session in sessions:
-            try:
-                await session.rollback()
-            except Exception:
-                pass
+            await session.rollback()
             await session.close()
 
 
@@ -233,6 +244,126 @@ class TestCreateReferenceValidationIsALockingRead:
             # read, deleter's commit started a fresh implicit one) --
             # release them before a third session tears the rows down, or
             # cleanup deadlocks against this test's own connections.
+            await creator.rollback()
+            await deleter.rollback()
+            await _teardown_org(*ids)
+
+
+class TestReferenceInsertStaysUnderTheDocumentLock:
+    """FAC-31 (Codex, on top of FAC-29): validating a reference and actually
+    filing it are two separate steps -- ``_validate_shared_document_reference``
+    locks and (for a folderless document) assigns a folder, but the
+    ``FacilityDocument``/``FacilityPhoto`` row that records the reference is
+    only inserted afterward, by the caller
+    (``create_facility_document``/``create_facility_photo``). FAC-29's lock
+    protects the validation step; if that step commits on its own, the lock
+    is released before the reference the caller is about to file even
+    exists, and a concurrent delete can land in exactly that gap.
+
+    Proving the fix needs one session to actually *block* on the other's row
+    lock while it is held, not just resolve a stale value -- a plain
+    sequential ``await`` between two independent sessions cannot observe a
+    block (nothing else could be running for it to block against). This test
+    runs the deleting session's ``delete_document`` as a background task
+    while the creator's transaction is still open, and inspects whether it
+    has completed after a short pause -- long enough to observe a lock wait,
+    short enough not to be mistaken for one. Whichever path is taken, the
+    single invariant asserted at the end is the one FAC-31 exists to
+    protect: a ``FacilityDocument``/``FacilityPhoto`` row is never left
+    pointing at a document that no longer exists.
+    """
+
+    async def test_a_concurrent_delete_cannot_land_between_validate_and_insert(
+        self, two_sessions
+    ):
+        creator, deleter = two_sessions
+        ids = await _make_org_facility_document(
+            creator, f"fcvfd-race-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id = ids
+        try:
+            creator_user = SimpleNamespace(organization_id=org_id)
+
+            # Step 1: exactly what create_facility_document/create_facility_photo
+            # do before they insert the reference row -- validate, and (this
+            # document has no folder yet) assign one.
+            await _validate_shared_document_reference(
+                creator, f"document:{document_id}", creator_user, str(facility_id)
+            )
+
+            # Step 2: a second, real session races the gap between that
+            # validation and the reference the creator is about to file.
+            # current_user=None means the deleter's own facility-reference
+            # permission check (FAC-26) fails closed if it ever sees a
+            # reference -- it should not need that check to matter here,
+            # because at this instant no reference has been filed yet.
+            delete_task = asyncio.create_task(
+                DocumentsService(deleter).delete_document(document_id, org_id)
+            )
+            await asyncio.sleep(0.5)
+
+            if not delete_task.done():
+                # Fixed behaviour: the creator's transaction never committed
+                # inside validation (FAC-31), so the FOR UPDATE lock taken
+                # there is still held -- the deleter is genuinely blocked on
+                # it. Finish the creator's flow (file the reference, then
+                # commit once) to release the lock, exactly as
+                # create_facility_document does.
+                creator.add(
+                    FacilityDocument(
+                        organization_id=org_id,
+                        facility_id=facility_id,
+                        file_path=f"document:{document_id}",
+                        file_name="policy.pdf",
+                    )
+                )
+                await creator.commit()
+                # The deleter unblocks, now sees the just-filed reference,
+                # and (current_user=None) is refused by FAC-26 rather than
+                # being allowed to delete a referenced document.
+                with pytest.raises(PermissionError):
+                    await asyncio.wait_for(delete_task, timeout=10)
+                # The deleter's transaction is left open on its own
+                # PermissionError -- release it before teardown.
+                await deleter.rollback()
+            else:
+                # Pre-fix behaviour: validation's own commit already
+                # released the lock, so the deleter proceeded immediately.
+                # With no reference on file yet, FAC-26 never even
+                # triggers -- the delete succeeds unconditionally, out from
+                # under the request that is about to file a reference to
+                # this document.
+                assert delete_task.result() is True
+                creator.add(
+                    FacilityDocument(
+                        organization_id=org_id,
+                        facility_id=facility_id,
+                        file_path=f"document:{document_id}",
+                        file_name="policy.pdf",
+                    )
+                )
+                await creator.commit()
+
+            # The invariant, regardless of which path was taken above: any
+            # surviving facility_document reference must point at a document
+            # that still exists.
+            verifier = database_manager.session_factory()
+            try:
+                remaining = await verifier.execute(
+                    select(FacilityDocument).where(
+                        FacilityDocument.organization_id == org_id
+                    )
+                )
+                reference = remaining.scalar_one_or_none()
+                if reference is not None:
+                    still_there = await verifier.get(Document, str(document_id))
+                    assert still_there is not None, (
+                        "a facility_document row references a document that "
+                        "no longer exists -- FAC-31's race reopened"
+                    )
+            finally:
+                await verifier.close()
+        finally:
             await creator.rollback()
             await deleter.rollback()
             await _teardown_org(*ids)
