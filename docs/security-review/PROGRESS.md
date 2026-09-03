@@ -16,27 +16,25 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2210](https://github.com/thegspiro/the-logbook/pull/2210)** (branch
-`claude/security-review-scheduling`) — Feature 15, Scheduling, pass 3. 1
-fix, 1 finding (SCH-12, LOW), revised across three rounds of Codex review —
-each round found a real gap in the last, all corrected in the same PR:
-scope (the baseline commit excluded its own scheduling content; then 8 more
-frontend files plus a third migration were still unread after the first
-correction), then SCH-12 itself getting progressively tightened (bare
-`except Exception` → `except IntegrityError` → a fully atomic
-create-template-and-links transaction with the specific missing checklist
-confirmed before the error message is chosen, once Codex showed the
-narrower fixes still left a committed-but-incomplete template briefly
-observable to concurrent requests). New `equipment_check_template_ids`
-client-supplied FK list
-verified correctly org-validated before write; two new migrations verified
-schema-safe; the one scheduling-relevant MCP tool file
-(`app/mcp/tools/scheduling.py`) read in full and confirmed org-scoped,
-visibility-gated and bounded (the wider MCP surface is out of this
-feature's scope and already tracked in `KNOWN_LIMITATIONS.md`). Full
-completion gate green, including frontend vitest + build (run this
-revision after Codex noted they were missing). Rotation row 15 → ⏳
-awaiting PR merge. Next: 16 Events & requests, once this PR merges.
+**[#2212](https://github.com/thegspiro/the-logbook/pull/2212)** (branch
+`claude/security-review-scheduling-sch12-followup`) — Feature 15,
+Scheduling, pass 3, SCH-12 follow-up. #2210 (the pass-3 PR itself) merged
+at its second-round state — the owner merged it while a third round of
+Codex review was still in progress, before that round's fix could be
+pushed to it (CLAUDE.md pitfall #24: never reuse a branch whose PR has
+merged, so the fix moved to a fresh branch/PR off current `main` instead
+of stacking onto the merged one). This PR carries SCH-12's third-round fix
+forward: `create_template` is now fully atomic (the template and its
+checklist links commit together, in one transaction, so neither is ever
+observable to a concurrent request before both are ready) rather than
+committing the template first and compensating for a link-write failure
+after the fact. See the Log entries below for the full three-round history.
+Full completion gate green (including frontend vitest + build). Rotation
+row 15 stays ⏳ awaiting merge. Next: 16 Events & requests, once this PR
+merges.
+
+**[#2210](https://github.com/thegspiro/the-logbook/pull/2210)** ✅ merged
+2026-09-03 — Feature 15, Scheduling, pass 3 (rounds 1–2 of Codex review).
 
 ---
 
@@ -177,8 +175,17 @@ the old bypass-validation trick to stand in for). Also updated
 `create_template` now calls it unconditionally. Full gate re-run: flake8
 /black/isort clean, migrations still single-head (414 revisions), 805/805
 scheduling-scoped and 10487/10487 full backend suite pass (+1 each over
-the prior round). Findings doc and Open PR row updated. Pushed to PR
-#2210. Next: 16 Events & requests, once this PR merges.
+the prior round).
+
+**PR #2210 merged (at the second-round state, `c2e66b2c`) before this fix
+could be pushed to it** — the owner merged while this third round was
+still being addressed. Per CLAUDE.md pitfall #24, the merged branch is not
+reused: this fix moved to a new branch off current `main` and a new PR,
+**[#2212](https://github.com/thegspiro/the-logbook/pull/2212)**, which
+also updates this doc's Log and Open PR entries to point at itself. Full
+suite re-run once more against the new base (10549/10549, main's own
+count having moved since #2210 merged other work too). Next: 16 Events &
+requests, once #2212 merges.
 
 ### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) — no new findings, PR pending
 
