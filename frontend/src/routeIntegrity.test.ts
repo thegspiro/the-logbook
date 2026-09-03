@@ -58,16 +58,47 @@ interface NavTarget {
   target: string;
 }
 
+/**
+ * A template literal's *shape* is checkable even though its value is not.
+ *
+ * The scan below used to skip any target containing `${`, on the reasoning
+ * that an interpolated path "has no fixed value to compare against a route
+ * pattern". Half true, and the missing half cost two live links: the inventory
+ * hub's work queue pointed at `` `/inventory/admin/items/${item.id}` `` and
+ * `` `/inventory/admin/reorder/${delivery.id}` ``, neither of which any route
+ * declares, and both silently redirected to the dashboard.
+ *
+ * Substituting a placeholder for each interpolation turns the literal into a
+ * path of the right shape, which `:id` route patterns match happily —
+ * `/inventory/items/${id}` becomes `/inventory/items/X` and matches
+ * `/inventory/items/:id`, while `/inventory/admin/items/${id}` becomes a
+ * two-plus-segment path under an exact-match route and fails, as it should.
+ *
+ * Two known limits, both accepted: a literal that *begins* with an
+ * interpolation has no resolvable prefix and is skipped, and an interpolation
+ * that expands to more than one segment would be reported as dead when it is
+ * not. Neither shape appears here — interpolations in this codebase are ids.
+ */
+const INTERPOLATION_PLACEHOLDER = 'X';
+const resolveTemplate = (raw: string): string | null => {
+  if (raw.startsWith('${')) return null;
+  return raw.replace(/\$\{[^}]*\}/g, INTERPOLATION_PLACEHOLDER);
+};
+
 const navTargets: NavTarget[] = [];
 for (const file of files) {
   const relative = path.relative(SRC, file);
   fs.readFileSync(file, 'utf8')
     .split('\n')
     .forEach((line, index) => {
-      // Only literal in-app paths are checkable; a template literal carrying an
-      // interpolation has no fixed value to compare against a route pattern.
-      for (const match of line.matchAll(/(?:\bto=|navigate\(|<Navigate\s+to=)\s*\{?\s*['"`](\/[^'"`$\n]*)['"`]/g)) {
-        navTargets.push({ file: relative, line: index + 1, target: match[1] ?? '' });
+      // `href:` is here alongside the router's own props because the hub's
+      // attention queue builds its links as data before rendering them —
+      // which is exactly where the two dead paths above were hiding.
+      for (const match of line.matchAll(
+        /(?:\bto=|\bhref:\s*|navigate\(|<Navigate\s+to=)\s*\{?\s*['"`](\/[^'"`\n]*)['"`]/g
+      )) {
+        const resolved = resolveTemplate(match[1] ?? '');
+        if (resolved !== null) navTargets.push({ file: relative, line: index + 1, target: resolved });
       }
     });
 }
@@ -86,6 +117,36 @@ describe('route integrity', () => {
     // assertion below while checking nothing at all.
     expect(declaredRoutes.size).toBeGreaterThan(100);
     expect(navTargets.length).toBeGreaterThan(100);
+  });
+
+  it('reads interpolated targets rather than skipping them', () => {
+    // The whole point of the template-literal support: the two dead links on
+    // the inventory hub were interpolated, so the scan walked past them for as
+    // long as it only looked at plain strings. A floor rather than an exact
+    // count — this grows with the codebase — but a real one, since the figure
+    // was zero before.
+    const interpolated = navTargets.filter((nav) => nav.target.includes(INTERPOLATION_PLACEHOLDER));
+    expect(interpolated.length, 'the template-literal scan matched nothing at all').toBeGreaterThan(20);
+  });
+
+  it('judges an interpolated target by its shape', () => {
+    // Pins the substitution itself. Without this the resolver could return
+    // something matching every route — or nothing — and every assertion above
+    // would still pass.
+    const shapeOf = (raw: string) => {
+      const resolved = resolveTemplate(raw);
+      return resolved === null ? null : matchers.some((matcher) => matcher.test(pathOf(resolved)));
+    };
+
+    // One segment under a `:id` route — reachable, and the corrected target
+    // of the hub's maintenance row.
+    expect(shapeOf('/inventory/items/${item.id}?tab=inspections')).toBe(true);
+    // The same id under an exact-match route — the dead form it replaced.
+    expect(shapeOf('/inventory/admin/items/${item.id}')).toBe(false);
+    // A query parameter is not a segment, so this stays reachable.
+    expect(shapeOf('/inventory/admin/reorder?request=${delivery.id}')).toBe(true);
+    // No resolvable prefix, so deliberately not judged either way.
+    expect(shapeOf('${base}/items')).toBeNull();
   });
 
   it('has no navigation target that falls through to the catch-all', () => {

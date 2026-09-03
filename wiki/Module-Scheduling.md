@@ -930,7 +930,7 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 A new **Shift Reports** sub-tab within Scheduling Settings provides centralized configuration for the shift completion report workflow, including post-shift validation, form section toggles, apparatus-specific skills/tasks, and rating scale customization.
 
-> **Checklist timing moved (2026-08-31).** The Checklist Timing section left this panel with the rest of the equipment-checklist feature and is now at **Gear Admin → Equipment Checklists → Checklist settings**. The values are still stored under `org.settings["shift_reports"]["checklist_timing"]` — only the editing surface moved — and this panel no longer reads or writes them.
+> **Checklist timing moved (2026-08-31).** The Checklist Timing section left this panel with the rest of the equipment-checklist feature and is now at **Inventory Admin → Equipment Checklists → Checklist settings**. The values are still stored under `org.settings["shift_reports"]["checklist_timing"]` — only the editing surface moved — and this panel no longer reads or writes them.
 
 **Settings stored in `org.settings["shift_reports"]`:**
 

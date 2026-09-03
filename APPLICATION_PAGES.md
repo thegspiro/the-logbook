@@ -443,7 +443,28 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Inventory Admin Hub (`/inventory/admin`)
 
-Requires `inventory.manage` permission. Dashboard with summary stats (total items, low stock, overdue checkouts, pending requests) and navigation to admin sub-pages.
+Requires `inventory.manage`. Titled **Inventory Administration**, reached from
+the nav as **Inventory Admin**. The launching point for whoever runs the
+department's stock — gear, PPE, uniforms and EMS supplies, which share one
+catalog partitioned by `InventoryCategory.item_type`.
+
+Body, top to bottom: a **Needs attention** queue of record-level work (each row
+links to the record itself, not to a list); a **supply-line** row — PPE &
+Turnout Gear and Uniforms, both opening `/inventory/admin/items` filtered by
+`item_type`, plus EMS Supplies opening `/medical-supplies`; then the card wall
+grouped as Catalog, Issuance & Members, Requests & Approvals, Readiness &
+Compliance, Department Store, and Setup & Tools.
+
+> **Every card carries the gate of the route it targets**, from the registry in
+> `modules/inventory/pages/inventoryHubCards.ts`, and a section with no visible
+> cards is not rendered. This matters where a department splits the role:
+> `checkPermission` is exact match plus module wildcard, so `inventory.manage`
+> implies neither `inventory.view_medical` nor `inventory.check_*`. The seeded
+> Quartermaster holds no check grant, so the checklist cards do not appear for
+> them; the seeded EMS Supply Officer holds no `inventory.manage`, and reaches
+> Medical Supplies and the checklists from the Operations nav group instead.
+> `inventoryHubCards.test.ts` resolves each card's route gate out of the route
+> source and fails if a card ever advertises more than its route accepts.
 
 ### Inventory Admin Pages
 
@@ -970,12 +991,13 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Storefront _(documented 2026-08-10)_
 
-| URL               | Page                 | Permission          |
-| ----------------- | -------------------- | ------------------- |
-| `/store`          | Department Store     | `storefront.view`   |
-| `/store/checkout` | Review Your Order    | `storefront.view`   |
-| `/store/orders`   | My Orders            | `storefront.view`   |
-| `/store/admin`    | Store Administration | `storefront.manage` |
+| URL                      | Page                                  | Permission          |
+| ------------------------ | ------------------------------------- | ------------------- |
+| `/store`                 | Department Store                      | `storefront.view`   |
+| `/store/checkout`        | Review Your Order                     | `storefront.view`   |
+| `/store/orders`          | My Orders                             | `storefront.view`   |
+| `/inventory/admin/store` | Store Administration                  | `storefront.manage` |
+| `/store/admin`           | Redirects to `/inventory/admin/store` | —                   |
 
 > Recording an order payment is subject to the same separation-of-duties rule as
 > finance disbursement — see **Finance** above.

@@ -1328,6 +1328,27 @@ export interface InventorySummary {
   total_items: number;
   items_by_status: Record<string, number>;
   items_by_condition: Record<string, number>;
+  /**
+   * Active item counts per item type, medical excluded, keyed by the enum
+   * value — the supply-line cards on the inventory hub.
+   *
+   * A row count, unlike `total_items` above, which sums quantities: these
+   * numbers sit on cards that link straight to the items list filtered by the
+   * same type, and that list reports rows.
+   *
+   * Empty for a caller the API serves the member-scoped summary to, which has
+   * no breakdown. Empty means "no breakdown", never "no items".
+   */
+  items_by_type: Record<string, number>;
+  /**
+   * Active non-medical items, counted as rows so the figure matches the
+   * listing at `/inventory/admin/items` — which carves medical stock out with
+   * the same predicate, and which `total_items` does not agree with because it
+   * sums quantities across every type, medical included.
+   *
+   * 0 for a caller the API serves the member-scoped summary to.
+   */
+  non_medical_items: number;
   total_value: number;
   active_checkouts: number;
   overdue_checkouts: number;

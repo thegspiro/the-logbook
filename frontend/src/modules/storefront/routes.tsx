@@ -5,7 +5,7 @@
  */
 
 import React, { Suspense } from 'react';
-import { Route } from 'react-router';
+import { Navigate, Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
@@ -62,8 +62,14 @@ export const getStorefrontRoutes = () => {
         }
       />
 
+      {/* The admin console lives inside Inventory Administration: the store
+          sells the uniforms the inventory module tracks, and it is the same
+          officer's job. It is declared here rather than in the inventory
+          module's routes so the page stays with its own module — and keeps
+          its own gates, which are orthogonal to the inventory ones. A
+          department can run either without the other. */}
       <Route
-        path="/store/admin"
+        path="/inventory/admin/store"
         element={
           <ProtectedRoute
             requiredPermission="storefront.manage"
@@ -76,6 +82,11 @@ export const getStorefrontRoutes = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* The console's old address, kept for bookmarks. Unwrapped, like the
+          other redirects in the app: the target route carries the gate, and
+          refusing here would only change which page says no. */}
+      <Route path="/store/admin" element={<Navigate to="/inventory/admin/store" replace />} />
     </React.Fragment>
   );
 };

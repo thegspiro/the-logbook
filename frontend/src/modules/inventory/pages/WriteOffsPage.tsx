@@ -13,6 +13,7 @@ import type { WriteOffRequestItem } from '../types';
 import { REQUEST_STATUS_BADGES } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
@@ -45,6 +46,15 @@ const WriteOffsPage: React.FC = () => {
   useEffect(() => {
     void loadWriteOffs();
   }, [loadWriteOffs]);
+
+  // "Review" on the inventory hub's attention queue names the write-off it
+  // was about; without this the officer arrived at the unfiltered list.
+  useDeepLinkedRecord(
+    'request',
+    writeOffs,
+    (writeOff) => writeOff.id,
+    (writeOff) => setReviewModal({ open: true, item: writeOff })
+  );
 
   const handleReview = async (decision: 'approved' | 'denied') => {
     if (!reviewModal.item) return;

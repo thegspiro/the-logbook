@@ -4,7 +4,7 @@
  * Displays active and overdue inventory checkouts with check-in capability.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import toast from 'react-hot-toast';
 import { Package, AlertTriangle, RefreshCw, ArrowDownToLine, Clock, Search, CalendarClock } from 'lucide-react';
@@ -14,6 +14,7 @@ import { MobileCheckoutCard } from '../components/ux/MobileCheckoutCard';
 import { RETURN_CONDITION_OPTIONS } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { useDeepLinkedRecord } from '../hooks/useDeepLinkedRecord';
 import { formatDateCustom, getTodayLocalDate } from '../utils/dateFormatting';
 
 type TabView = 'active' | 'overdue';
@@ -64,6 +65,21 @@ export const InventoryCheckoutsPage: React.FC = () => {
   useEffect(() => {
     void fetchCheckouts();
   }, [fetchCheckouts]);
+
+  // "Check in" on the inventory hub's attention queue names the loan it was
+  // about. Both lists are searched, and the tab holding the match is selected
+  // before the modal opens — landing on the check-in dialog over the wrong tab
+  // would leave a confusing list behind it once the dialog closes.
+  const allCheckouts = useMemo(() => [...overdueCheckouts, ...activeCheckouts], [overdueCheckouts, activeCheckouts]);
+  useDeepLinkedRecord(
+    'checkout',
+    allCheckouts,
+    (checkout) => checkout.checkout_id,
+    (checkout) => {
+      setActiveTab(overdueCheckouts.some((o) => o.checkout_id === checkout.checkout_id) ? 'overdue' : 'active');
+      setCheckInModal({ open: true, checkoutId: checkout.checkout_id, itemName: checkout.item_name });
+    }
+  );
 
   const handleCheckIn = async () => {
     if (!checkInModal.checkoutId) return;

@@ -1058,6 +1058,18 @@ class InventorySummary(BaseModel):
     total_items: int
     items_by_status: Dict[str, int]
     items_by_condition: Dict[str, int]
+    #: Active item counts per ``ItemType``, medical excluded, keyed by the enum
+    #: value. Defaulted rather than required: this route also serves
+    #: ``get_user_inventory_summary`` to members, whose payload has no such
+    #: key, and a required field would turn that into a 500 on a page they are
+    #: entitled to. An empty mapping means "no breakdown for this caller",
+    #: never "no items".
+    items_by_type: Dict[str, int] = Field(default_factory=dict)
+    #: Active non-medical items, counted as *rows* so the figure matches the
+    #: listing at ``/inventory/items``, which excludes medical stock. Defaulted
+    #: for the same reason as ``items_by_type`` above; 0 means "not reported
+    #: for this caller".
+    non_medical_items: int = 0
     total_value: float
     active_checkouts: int
     overdue_checkouts: int

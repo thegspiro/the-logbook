@@ -69,6 +69,167 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replaced. Settings → Email now reports that the settings changed and asks
   for another test instead.
 
+### Inventory Administration follow-ups (2026-09-03)
+
+**Fixed**
+
+- **The Archive button on an apparatus went to the dashboard.** It navigated to
+  `/apparatus/:id/archive` — the _API_ path, which matches no route, so it fell
+  through the router's catch-all and left the apparatus in service with no
+  error. Archiving takes a disposal record (method, date, and buyer details for
+  a sale), so it is now a form posting to `apparatusService.archiveApparatus`.
+  Sale fields are dropped for a truck that was scrapped or donated, rather than
+  filing a buyer nobody can explain later.
+- **An election's linked meeting was a link to nowhere.** There is no meeting
+  detail screen, so naming the meeting cost the reader their place. It is text
+  now; the "(change)" control is unaffected.
+- **The clearance queue's "Review" landed on a list without the member.** A
+  departure clearance is created _after_ the drop has already made the member
+  inactive, and the members list is active-only — so the one person the queue
+  links to was the one it filtered out. `GET /inventory/members-summary` takes
+  an additive `userId` that keeps that member in the result whatever their
+  status, still org-scoped.
+- **"Verify payments" opened every order.** The store's attention row now
+  carries `payment=pending_verification` in its URL and the admin page seeds
+  the Orders tab from it, restoring the filter the old "To verify" tile
+  supplied. A value the tab does not offer is ignored rather than forwarded.
+- **The "All Items" card promised more than its list.** It described every type
+  and its (never-rendered) figure was `total_items`, which sums quantities
+  across every type including medical, while `/inventory/admin/items` excludes
+  medical and reports rows. `GET /inventory/summary` gained an additive,
+  defaulted `non_medical_items` counted with the same predicate the listing
+  uses, and the card now shows it.
+- **The store's old address broke the mobile-coverage check.** `/store/admin`
+  was added as a redirect but never entered in the route-coverage manifest.
+
+### The gear admin hub is now Inventory Administration (2026-09-03)
+
+**Changed**
+
+- **The area is named for what it holds.** It had four names — "Gear &
+  Uniforms Administration" on the hub, "Gear Admin" in the navigation, "Gear &
+  Uniforms" in the module registry, "Inventory" in the command palette, and
+  "Back to Logistics Admin" on the store's back-link. It is **Inventory**
+  throughout now, administered from **Inventory Admin**. Screens that really
+  are about gear keep the quartermaster's vocabulary — My Issued Gear, Gear
+  Requests, Gear Kits. Labels only: no route, permission key, module key or API
+  value changed, so no link, bookmark or integration breaks.
+- **The hub opens on the three supply lines a department staffs.** PPE &
+  Turnout Gear and Uniforms open the catalogue filtered to that item type;
+  **EMS Supplies** opens Medical Supplies, which the hub previously did not
+  link to at all — despite gear, uniforms and EMS stock sharing one catalog,
+  partitioned by `inventory_categories.item_type`. Below them the cards are
+  regrouped by what the officer is doing: Catalog, Issuance & Members, Requests
+  & Approvals, Readiness & Compliance, Department Store, Setup & Tools.
+- **`GET /inventory/summary` gained `items_by_type`.** Additive and defaulted,
+  so the member-scoped branch of that route keeps validating. Counted as rows
+  rather than summed quantities, deliberately unlike `total_items`, so the
+  number on a supply-line card matches the list it opens.
+- **The Department Store admin console moved inside Inventory
+  Administration**, at `/inventory/admin/store`; `/store/admin` redirects there
+  for bookmarks. It also stopped being the one administration page outside the
+  shared frame — it now renders the same header, metrics row and attention
+  queue as Members, Training, Events and Inventory, which meant giving the
+  store a spec in the admin-hub registry (six metrics, plus a queue for a
+  reported payment nobody verified, money the matcher could not settle, and an
+  order window closed but never handed out). Its six tabs are now selected by
+  `?tab=`, so the hub can link at Catalog, Orders or Payments directly. No
+  migration.
+
+**Fixed**
+
+- **Cards on the hub no longer promise pages the viewer cannot open.** Every
+  card now carries the gate of the route it targets, and a section with no
+  visible cards is not rendered. `checkPermission` is exact match plus module
+  wildcard, so `inventory.manage` implies neither `inventory.view_medical` nor
+  `inventory.check_*` — which means the seeded Quartermaster, who holds
+  `inventory.manage` and no check grant, was being shown Equipment Checklists
+  and Check Reports and refused by both. A test resolves each route's real gate
+  out of the route source and fails on any card that advertises more than its
+  route accepts.
+- **Two links in the hub's "Needs attention" queue went to the dashboard.**
+  `/inventory/admin/items/{id}` and `/inventory/admin/reorder/{id}` matched no
+  route, so the catch-all swallowed them. The maintenance row now opens the
+  item on its inspections tab and the overdue delivery opens its own request.
+- **"Review" and "Check in" now open the record they name.** None of the six
+  pages that queue linked to read the id it passed them, so every action landed
+  on an unfiltered list to be searched by eye. An id naming a record nobody
+  still holds is a no-op rather than an error — somebody else may have resolved
+  it between the queue rendering and the click.
+- **The route-integrity check now reads interpolated link targets.** It skipped
+  every template literal, which is why the two dead links above shipped. It now
+  substitutes a placeholder per interpolation and judges the resulting shape,
+  which surfaced three more: `/inventory/maintenance` (fixed here), and
+  `/apparatus/{id}/archive` and `/meetings/{id}`, both screens that were never
+  built — recorded in the checker's known-missing list with the reasoning
+  rather than silently tolerated.
+- **`/inventory/admin/items` reads `item_type` from the URL**, mirroring how it
+  already reads `vendor_id`, so a filtered catalogue is a shareable link. An
+  unrecognized type degrades to the unfiltered list instead of a 400.
+
+### Security: closes the gap in pass 9's own per-write registration invariant — a save-operation-level lock, not a sixth pairwise patch (2026-09-03)
+
+A Codex review of pass 9's own PR found that per-write registration
+(`registerInFlightSave`) cannot, by itself, close every race between a
+subtree delete and an in-progress Save: `handleSave` is a sequence of
+awaited steps (flush, the template's own PATCH, then the compartment/item
+update batch) with real gaps between them where nothing is on the wire yet —
+so a delete confirmed inside one of those gaps sees both tracking maps
+correctly empty and proceeds, only for the next step to PATCH rows it just
+removed. Fixed with a new `saveOperationActive` flag, set on `handleSave`'s
+very first line and cleared in a `finally` spanning the whole function, that
+`deleteCompartment` checks before anything else. This also closes, as a side
+effect, the compartment-level in-flight tracking gap pass 9 had explicitly
+flagged and left open.
+
+**Fixed**
+
+- **AP-13 finding 1, pass 10 (P2, frontend) — `deleteCompartment` could
+  proceed in the gap between two of `handleSave`'s own awaited steps, where
+  neither `autoSavePendingRef` nor `autoSaveInFlightRef` had anything
+  registered yet**: reproduced live by deferring the template's own PATCH
+  (a real `await` already in `handleSave`) to hold it in the window right
+  after the pre-save flush resolves and before the update batch is even
+  built — a delete confirmed in that window proceeded immediately, and the
+  batch's PATCHes then fired against rows it had just removed. Fixed with a
+  save-operation-level lock (`saveOperationActive`) spanning `handleSave`'s
+  entire async span, checked by `deleteCompartment` before anything else and
+  also used to disable every delete affordance while a save is active.
+
+### Security: one canonical invariant replacing four pairwise rounds on the autosave/subtree-delete interaction (2026-09-03)
+
+A fifth Codex round on the same `EquipmentCheckTemplateBuilder.tsx`
+subsystem found two more gaps in the shape the previous four rounds (below)
+had each closed one instance of and missed the next. Rather than a sixth
+pairwise patch, replaced the ad-hoc tracking with one documented invariant
+and a single registration point every write path goes through.
+
+**Fixed**
+
+- **AP-13 finding 1, pass 9 (P2, frontend) — `flushPendingAutoSaves` (the
+  Save button's pre-save flush of a still-pending debounced edit) issued
+  its PATCH directly, never registering it anywhere a subtree delete's
+  quiescing step could see**: invisible to both tracking maps, in the
+  window before Save marks itself in progress — so a delete triggered while
+  a flush-issued PATCH was on the wire wasn't blocked on it at all. Fixed by
+  routing every item-PATCH-issuing write path (a fired debounce timer, this
+  flush, and Save's own per-item batch) through one new helper,
+  `registerInFlightSave`, rather than three call sites each managing the
+  tracking map by hand.
+- **AP-13 finding 2, pass 9 (P2, frontend) — a partial-failure Save skipped
+  the reparent-guard's server-truth-map refresh for a compartment whose own
+  update had already succeeded**: `handleSave` batched every compartment
+  and item update into one `Promise.all`, which rejects on the first
+  failure regardless of what else in the batch already committed
+  server-side — so if a compartment's reparent PATCH fulfilled while an
+  unrelated item's PATCH in the same batch rejected, the map never learned
+  about the reparent that had, in fact, already reached the server. A later
+  delete could then wrongly block (or, the inverse, wrongly allow) based on
+  a hierarchy comparison against a map that no longer matched the server's
+  actual state. Fixed by switching to two `Promise.allSettled` groups and
+  refreshing the map for every compartment PATCH that fulfilled,
+  unconditionally, before any batch failure is surfaced.
+
 ### Email settings: Gmail and Microsoft 365 now actually send; OAuth fields removed (2026-09-03)
 
 **Fixed**

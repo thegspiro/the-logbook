@@ -87,7 +87,7 @@ export interface ResourceTypeDefaults {
 /**
  * The half of org.settings["shift_reports"] that Scheduling still owns.
  *
- * Its sibling `checklist_timing` is edited in Inventory (Gear Admin → Checklist
+ * Its sibling `checklist_timing` is edited in Inventory (Inventory Admin → Checklist
  * Settings) and is deliberately absent here. The panel saves by sending this
  * object under `shift_reports`, and the settings endpoint deep-merges, so a key
  * this type does not carry is a key this panel cannot overwrite — which is what

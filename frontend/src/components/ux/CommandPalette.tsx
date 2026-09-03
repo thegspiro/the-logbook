@@ -112,7 +112,7 @@ const COMMANDS: CommandItem[] = [
     path: '/store',
     icon: Package,
     section: 'Navigation',
-    // Same reasoning as Gear & Uniforms above: the route requires
+    // Same reasoning as Inventory above: the route requires
     // storefront.view, so offering it ungated makes the palette a route to
     // Access Denied. The route carries `requiredModule` too, so a department
     // with the store switched off must not be offered it either.

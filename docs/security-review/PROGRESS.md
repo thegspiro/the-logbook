@@ -16,69 +16,123 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
-Apparatus & NFC, passes 3–7. Pass 3: AP-8 fixed —
-`CheckTemplateCompartment.children` had the same inverted self-referential
-`remote_side` shape FAC-16 found and fixed on `DocumentFolder.children`
-(flagged there as a sibling instance, out of scope for Facilities) —
-reproduced live (three-level fixture, delete_compartment's own cascade)
-before fixing. `TrainingCategory.subcategories` has the same shape and
-remains flagged, out of scope for this feature. Also corrected a stale
-`docs/app-review/apparatus.md` entry (AP2-2) that still read OPEN though the
-code has validated all four FKs since before pass 1. Pass 4 (same PR, in
-response to a Codex review of the AP-8 fix commit): three more findings, all
-surfaced by AP-8's cascade going from no-op to genuinely effective, exactly
-the pattern the Facilities pass (PR #2198) went through — AP-9 (P1, clone
-endpoint 500s on nested templates, plus a co-discovered duplicate-clone bug
-in the same code), AP-10 (P1, `create_template` had no in-template/in-org
-validation on a client-supplied `parent_compartment_id`, unlike
-`add_compartment`/`update_compartment`), AP-11 (P2, frontend delete
-confirmation and local-state removal didn't account for the descendants
-the backend now cascade-deletes). All three reproduced live against the
-current fixed code before being called findings, and regression-tested
-failing pre-fix / passing post-fix via `git stash`. Pass 5 (same PR, a
-second Codex review of the pass-4 commit): two more findings — AP-12 (P1,
-`delete_compartment` cascaded off a stale REPEATABLE READ snapshot, the
-exact concurrency race FAC-40 already fixed once on `DocumentFolder`/
-`delete_folder`; fixed with FAC-40's own locking-walk + explicit-bulk-delete
+**[#2203](https://github.com/thegspiro/the-logbook/pull/2203)** (branch
+`claude/security-review-equipment-check-shifts`) — Feature 14, Equipment
+check & shifts, pass 3, plus Step 0 bookkeeping for PR #2200's merge. No
+fixes, no findings — every pass-1/2 fix re-verified intact, ten new routes
+(the module's move from Scheduling to Inventory, catalog linking, bulk
+item add/delete, compartment replace/clone/reorder, sealed-container
+support) read in full and confirmed correctly org-scoped and gated. Three
+new tables' migrations checked, no Pitfall #2 exposure. Full completion
+gate green. Rotation row 14 → ⏳ awaiting PR merge. Next: 15 Scheduling,
+once this PR merges.
 
-- `passive_deletes=True` pattern, adapted to this model's `SET NULL` vs.
-  `CASCADE` FK actions) and AP-13 (P1, frontend — AP-11's own descendant
-  computation trusted the browser's hierarchy, which can be ahead of what's
-  saved since reparenting has no auto-save path; fixed by tracking
-  last-known-server parent linkage and blocking the delete on disagreement).
-  Both reproduced live (two real, independently-committing database sessions
-  for AP-12; a component test reproducing the actual data-loss scenario for
-  AP-13) before being called findings, and regression-tested failing pre-fix /
-  passing post-fix via `git stash`. Pass 6 (same PR, a third Codex review, this
-  time of the pass-5 fix commits): two more findings — AP-14 (P1, multi-tenant
-  isolation — the pass-5 locking subtree walk had no template/org boundary, so
-  a dangling cross-template `parent_compartment_id` from before AP-10's
-  validation shipped could let deleting a compartment in one template destroy
-  a compartment in another; fixed with the same fail-closed pattern
-  `delete_folder` uses for cross-org references) and AP-15 (P2, frontend — the
-  pass-5 `deleteCompartment` fix left descendant items' pending debounced
-  auto-saves running after their compartment was deleted, so a stale timer
-  could 404 against a removed item and, worse, abort an unrelated Save pressed
-  in the same window; fixed by cancelling those timers before the delete
-  call). Both reproduced live before being called findings, and
-  regression-tested failing pre-fix / passing post-fix via `git stash`. Pass
-  7 (same PR, a fourth Codex round on the same chain): AP-16 (P2, data
-  completeness — `clone_template`'s root-down walk silently drops a
-  compartment whose parent lies outside the source template, the same
-  dangling-link shape AP-14 guards delete against; fixed the same way,
-  fail-closed rather than committing an incomplete clone), plus four
-  Codex-caught regressions in this rotation's own pass-6 fixes to
-  `deleteCompartment`'s auto-save cancellation (a stale entry left in the
-  pending-reparent guard's map after a successful delete; a mock not reset
-  between tests; canceling auto-saves before vs. after the delete call each
-  leaving a different failure window open) — the auto-save fix took two
-  more rounds to converge on capturing and cancelling every timer
-  synchronously before the delete request is sent, then discarding or
-  re-arming the captured patches depending on whether the delete succeeded.
-  All reproduced live or via a test failing against the specific prior
-  state, all regression-tested failing pre-fix / passing post-fix. See the
-  log entry below for the full writeup once merged.
+---
+
+### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) — no new findings, PR pending
+
+Third pass. Pass 2's baseline commit (`d1f43285`) is no longer reachable in
+this worktree's shallow history, and five months of `main` sit between it
+and this pass — most notably the 2026-08-31 move of equipment checklists
+from Scheduling to the **Inventory** module (permission strings renamed
+`equipment_check.*` → `inventory.check_*`; frontend moved to
+`frontend/src/modules/inventory/`; API paths and backend file names
+unchanged). Re-derived the route inventory from current code rather than
+relying on the (unavailable) diff-from-baseline shortcut passes 1/2 used:
+`equipment_check.py` grew from 47 to **57** routes (10 new — catalog
+linking, bulk item add/delete with idempotency, compartment
+replace/clone/reorder, item reorder, check seals), `shift_completion.py`
+unchanged at 21/21.
+
+All 10 new routes and their service methods read in full: catalog linking
+(`suggest_inventory_matches`/`link_inventory_items`) validates both the
+template and every linked `inventory_item_id` in-org before writing; the
+bulk add/delete paths lock their parent compartment and validate item FKs
+before the first write, with a durable, payload-hash-checked idempotency
+ledger; `replace_compartments`/`clone_compartment` validate before
+destroying and resolve exclusively through already-org-scoped rows. Three
+new tables' migrations (bulk-request ledger ×2, sealed-container support)
+checked against their models — nullable/`ondelete` correct on all three, no
+Pitfall #2 exposure. Every pass-1/2 fix (EC-1, EC-2/EC2-3/EC2-4, EC-4, EC-6,
+EC-9, EC-10, EC-12, EC-13, EC-14) re-verified intact at its current
+location. `EquipmentCheckTemplateBuilder.tsx` deliberately left to AP-13's
+own in-progress rotation entry rather than duplicated here — its three
+outstanding Codex threads (recorded in this file's feature-13 entry above)
+are autosave/concurrency findings, not tenant-isolation or auth defects,
+which is this feature's lens.
+
+**No findings, no code changes.** Full completion gate run and green:
+`flake8`/`black`/`isort` (9.0.1, CI's pin) clean on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 414 revisions, single head; scoped
+pytest (`-k "equipment_check or shift_completion"`) 386 passed; full backend
+suite 10439 passed, 21 skipped (pre-existing), 0 failed; `tsc --noEmit` and
+`eslint .` both 0 errors. Full write-up:
+`docs/security-review/EC-14-equipment-check-shifts.md` pass 3.
+
+---
+
+### 2026-09-03 — Feature 13 (Apparatus & NFC, pass 9) ✅ merged — PR #2200
+
+`05372cb9`. Merged cleanly by the repo owner (`thegspiro`) at 14:35:58Z — no
+merge conflict, base `main` unaffected. Checked `pull_request_read` (`get`,
+`get_reviews`, `get_comments`, `get_review_comments`) for outstanding
+feedback: **three review threads are still unresolved**, all from a second
+Codex pass (on commit `026567c32d`, 14:11:55Z) that landed 24 minutes before
+the owner's merge and was never responded to in-thread:
+
+- P1 — `moveItemToCompartment` (`EquipmentCheckTemplateBuilder.tsx:504`)
+  issues a fourth direct item PATCH that bypasses `registerInFlightSave`, so
+  pass 9's new invariant is not actually total: a cross-compartment move
+  racing a subtree delete of the source/destination compartment is still
+  unguarded.
+- P2 — `handleSave`'s reentrancy: `saving` is only set after the pending-
+  autosave flush, so a double-click during a slow flush can start two
+  concurrent `handleSave` calls; the first to finish clears `saving` while
+  the second is still mid-batch, re-enabling compartment deletion and
+  reopening the PATCH/DELETE race pass 9 closed for the single-call case
+  (`EquipmentCheckTemplateBuilder.tsx:2230`).
+- P1 — a new pass-9 test doesn't reset `updateEquipmentCheckTemplate` before
+  installing its `mockImplementationOnce`, so per CLAUDE.md Pitfall #28 a
+  leftover mock config from an earlier block could let it pass without
+  exercising the save gap it claims to test
+  (`EquipmentCheckTemplateBuilder.test.tsx:2399`).
+
+One earlier thread (a P2 on the same file/line, opened by the first Codex
+pass at 13:26:03Z) _was_ addressed in-thread by the owner and is marked
+resolved. These three are not — not fixed in code, not replied to, not
+resolved. They are carried forward as open items against `AP-13-apparatus-
+nfc.md` for whichever future pass picks feature 13 back up (this iteration's
+scope is Step 0 bookkeeping only; feature 13's own findings doc is left
+untouched per this iteration's instructions). Rotation row 13 → ✅ for this
+pass. Next: 14 Equipment check & shifts.
+
+### 2026-09-03 — Feature 13 (Apparatus & NFC, passes 3–8) ✅ merged (mid-round) — PR #2199
+
+`21bdf140` merged by the repo owner directly, before pass 9's fix (below)
+landed — the same mid-round-merge shape #2195 and #2191 hit earlier in this
+rotation. Per CLAUDE.md Pitfall #24, pass 9 continued on a fresh branch/PR
+(#2200) rather than reusing the dead branch; see the Open PR entry above.
+
+This PR closed AP-8 (P1, data integrity — `CheckTemplateCompartment.children`
+had the same inverted self-referential `remote_side` shape FAC-16 found and
+fixed on `DocumentFolder.children`, reproduced live with a three-level
+fixture before fixing) through AP-16 (P2, data completeness —
+`clone_template`'s root-down walk silently dropped a compartment whose
+parent lay outside the source template) across six further Codex rounds
+(passes 4–8) on the same `EquipmentCheckTemplateBuilder.tsx`
+autosave/subtree-delete subsystem: AP-9/AP-10/AP-11 (pass 4, surfaced by
+AP-8's cascade going from no-op to genuinely effective), AP-12/AP-13 (pass
+5, `delete_compartment`'s stale-snapshot cascade race and the frontend's
+pending-reparent delete guard), AP-14/AP-15 (pass 6, the pass-5 locking walk's
+missing template/org boundary and a descendant auto-save left running past
+a delete), AP-16 plus four regressions in the rotation's own pass-6 fixes
+(pass 7), and two more gaps in the same guard — in-flight (not just
+pending) auto-saves, and `savedParentByIdRef` never refreshed after a bulk
+replace (pass 8). Every finding reproduced live before being called one,
+and regression-tested failing pre-fix / passing post-fix. Full detail in
+`docs/security-review/AP-13-apparatus-nfc.md` (passes 3–8) and the merged
+PR itself, not duplicated here. Rotation row 13 stays 🔄 — pass 9 (the
+invariant that supersedes this whole pairwise chain) continues under #2200.
 
 ---
 
@@ -7902,8 +7956,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | 🔄     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
