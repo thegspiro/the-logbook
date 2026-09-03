@@ -873,19 +873,38 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!(await confirm({ title: 'Delete compartment', message: msg, confirmLabel: 'Delete', cancelLabel: 'Keep it' })))
       return;
 
-    // AP-13 finding 4 (Codex): the backend cascade is about to delete every
-    // item in this subtree too. A descendant item can have a debounced
-    // auto-save still pending (scheduleAutoSaveItem's 1.5s timer) at the
-    // moment its compartment is removed -- left alone, that timer fires
-    // anyway, calls updateCheckItem against an id the delete just removed,
-    // 404s, and flips the global indicator to "Save failed" for an item the
-    // user never touched. Worse, pressing Save inside that same window
-    // flushes the same doomed patch through flushPendingAutoSaves -- the
-    // *first* thing handleSave does, before any other edit is sent -- so one
-    // stale item id aborts saving everything else in the request too.
-    // Cancel (not flush) every pending timer for this subtree's items before
-    // the delete call: their compartment is gone, there is nothing left to
-    // save them into.
+    if (comp.id) {
+      try {
+        await ensureDraftBeforeStructureEdit();
+        await equipmentCheckService.deleteCompartment(comp.id);
+        toast.success('Compartment deleted');
+      } catch (err: unknown) {
+        // AP-15 follow-up (Codex): cancelling pending auto-saves has to wait
+        // until *after* the delete actually succeeds. Doing it up front (the
+        // original AP-15 fix) meant a failed delete -- a network error, or
+        // the AP-14 cross-template 400 -- left the compartment and its items
+        // still on screen with their edits' auto-saves already cancelled and
+        // forgotten: settleAutoSaveStatus would report them "saved" when
+        // they will now never be sent at all.
+        toast.error(getErrorMessage(err, 'Failed to delete compartment'));
+        return;
+      }
+    }
+
+    // AP-13 finding 4 / AP-15 (Codex): the backend cascade just deleted every
+    // item in this subtree too (or, for an unsaved local-only compartment,
+    // there was never a backend item to autosave in the first place). A
+    // descendant item can have a debounced auto-save still pending
+    // (scheduleAutoSaveItem's 1.5s timer) at this point -- left alone, that
+    // timer fires anyway, calls updateCheckItem against an id that no longer
+    // exists, 404s, and flips the global indicator to "Save failed" for an
+    // item the user never touched. Worse, pressing Save inside that same
+    // window flushes the same doomed patch through flushPendingAutoSaves --
+    // the *first* thing handleSave does, before any other edit is sent -- so
+    // one stale item id aborts saving everything else in the request too.
+    // Cancel (not flush) every pending timer for this subtree's items now
+    // that the delete has actually succeeded: their compartment is gone,
+    // there is nothing left to save them into.
     for (const item of [...comp.items, ...descendantComps.flatMap((c) => c.items)]) {
       if (!item.id) continue;
       const pending = autoSavePendingRef.current.get(item.id);
@@ -896,16 +915,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
     settleAutoSaveStatus();
 
-    if (comp.id) {
-      try {
-        await ensureDraftBeforeStructureEdit();
-        await equipmentCheckService.deleteCompartment(comp.id);
-        toast.success('Compartment deleted');
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to delete compartment'));
-        return;
-      }
-    }
+    // AP-13 finding 5 (Codex): savedParentByIdRef must drop every id this
+    // delete just removed, or a *second* delete of a still-surviving
+    // ancestor -- in the same session, no reload in between -- compares its
+    // live subtree against a server-truth map that still lists the
+    // already-deleted rows as descendants. That permanent mismatch trips the
+    // AP-13 pending-reparent guard for a delete with nothing pending at all,
+    // blocking every further compartment delete until the page reloads.
+    if (comp.id) savedParentByIdRef.current.delete(comp.id);
+    for (const id of descendantIds) savedParentByIdRef.current.delete(id);
+
     setCompartments((prev) => prev.filter((c, i) => i !== idx && !(c.id !== undefined && descendantIds.has(c.id))));
     markDirty();
   };
