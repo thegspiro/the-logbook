@@ -94,7 +94,11 @@ export const getInventoryRoutes = () => {
       <Route
         path="/inventory/admin"
         element={
-          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.manage', 'inventory.check_manage', 'storefront.manage']}
+          >
             <Suspense fallback={null}>
               <InventoryAdminHub />
             </Suspense>
