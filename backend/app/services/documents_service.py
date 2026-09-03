@@ -1430,7 +1430,13 @@ class DocumentsService:
     ) -> Optional[DocumentFolder]:
         """Locking read for one facility's own folder, under the root above.
 
-        Same reuse/testability rationale as ``_lock_facilities_root``.
+        Same reuse/testability rationale as ``_lock_facilities_root``. Used
+        by ``ensure_facility_folder``'s slow path only (FAC-45) -- the fast
+        path's own existence check goes through ``_peek_facility_folder`` /
+        ``_lock_folder_by_id`` instead, specifically because this method's
+        ``.with_for_update()`` takes a gap lock when nothing matches, and
+        the slow path is the only place that gap lock is safe to take (see
+        FAC-45's docstring on ``ensure_facility_folder``).
         """
         result = await self.db.execute(
             select(DocumentFolder)
@@ -1438,6 +1444,56 @@ class DocumentsService:
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
             .order_by(DocumentFolder.id)
             .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _peek_facility_folder(
+        self, facilities_root_id: str, facility_id_str: str
+    ) -> Optional[DocumentFolder]:
+        """Non-locking existence check for one facility's own folder.
+
+        FAC-45 (Codex, on top of FAC-43): used only by
+        ``ensure_facility_folder``'s fast path, paired with
+        ``_lock_folder_by_id`` below. Unlike ``_peek_facilities_root``, a
+        stale "not found" here is not automatically harmless on its own --
+        a facility folder is an ordinary (``is_system=False``) folder, and
+        can in principle be deleted -- but this method is never the thing
+        deciding whether to create one: a "not found" here always falls
+        through to the slow path's own locking, double-checked re-read
+        (``_lock_facility_folder``, under the organization lock), which is
+        unaffected by this method's staleness. What this peek exists to
+        avoid is calling a ``.with_for_update()`` lookup that might match
+        nothing (and therefore take a gap lock) before that organization
+        lock is acquired -- see the docstring on ``ensure_facility_folder``
+        for the deadlock that creates.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == facilities_root_id)
+            .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_folder_by_id(self, folder_id: str) -> Optional[DocumentFolder]:
+        """Locking read for one already-known folder row, by primary key.
+
+        FAC-45: a point lookup on the clustered index, used by
+        ``ensure_facility_folder``'s fast path once ``_peek_facility_folder``
+        has already confirmed a specific row's id -- as opposed to
+        ``_lock_facility_folder``'s (parent_id, slug) lookup, which can take
+        a gap lock when nothing matches. Locking by an id already known to
+        (recently) exist all but eliminates that risk: a nonexistent,
+        freshly-generated UUID has nothing else contending for its specific
+        gap, unlike the (parent_id, slug) scan, where every concurrent
+        first-time creator under the same root is scanning and potentially
+        gap-locking the same shared range.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.id == folder_id)
             .with_for_update()
         )
         return result.scalar_one_or_none()
@@ -1554,19 +1610,52 @@ class DocumentsService:
         method's own docstring is the safety argument (a system folder can
         be neither moved nor deleted, so a stale peek can only under-report
         existence, never hand back a wrong id, and an under-report safely
-        falls through to the slow path's locking re-check). The per-facility
-        lock below -- the one two callers *for the same facility* actually
-        need to serialize on -- is unchanged.
+        falls through to the slow path's locking re-check).
+
+        FAC-45 (Codex, on top of FAC-43): the fast path's *per-facility*
+        lock (immediately below) still called ``_lock_facility_folder`` --
+        a locking (``FOR UPDATE``) lookup -- unconditionally too, even when
+        nothing matches. When nothing matches, InnoDB takes a **gap lock**
+        to guard the range instead of a record lock, and unlike a record
+        lock, a gap lock is compatible with another transaction's gap lock
+        on the same range. That opened a genuine deadlock, not just a
+        contention window, the first time two requests raced to create the
+        *same* brand-new facility's folder: both take a (mutually
+        compatible) gap lock here on the fast path before either reaches
+        the organization lock below; the first to reach it wins, re-locks
+        (this same query, now a real INSERT target) and tries to insert --
+        which needs an *insert-intention* lock that **does** conflict with
+        the other transaction's still-held gap lock; that other transaction
+        is itself blocked waiting for the organization lock the first one
+        holds. Classic deadlock cycle, reliably reproduced live (five runs)
+        with two real sessions racing to create the same never-before-seen
+        facility's folder -- InnoDB kills one side outright
+        (``OperationalError`` 1213), an unhandled 500 for one of two
+        legitimate concurrent requests.
+
+        Fixed the same way as FAC-43 fixed the root: peek first
+        (``_peek_facility_folder``, no lock, so nothing here can ever take a
+        gap lock before the organization mutex), and only take an actual
+        lock (``_lock_folder_by_id``, a point lookup by the id the peek just
+        found) once existence is confirmed. A stale "not found" here isn't
+        the safety argument FAC-43's root peek relies on -- a facility
+        folder genuinely can be deleted, unlike the root -- but it doesn't
+        need to be: "not found" simply falls through to the slow path,
+        exactly like every other missing-folder case already does, where
+        the double-checked, organization-locked re-read is authoritative
+        regardless of what this peek saw.
         """
         facility_id_str = str(facility_id)
 
         facilities_root = await self._peek_facilities_root(organization_id)
         if facilities_root is not None:
-            facility_folder = await self._lock_facility_folder(
+            peeked_folder = await self._peek_facility_folder(
                 facilities_root.id, facility_id_str
             )
-            if facility_folder is not None:
-                return facility_folder
+            if peeked_folder is not None:
+                facility_folder = await self._lock_folder_by_id(peeked_folder.id)
+                if facility_folder is not None:
+                    return facility_folder
 
         org = await self.db.scalar(
             select(Organization)

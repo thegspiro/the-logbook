@@ -145,9 +145,11 @@ class TestFolderCreationIsLocked:
         The fast path must use ``_peek_facilities_root`` (a plain read --
         see that method's own docstring for why this is safe: a system
         folder can be neither moved nor deleted, so a stale peek can only
-        under-report existence, never hand back a wrong id) instead. The
-        per-facility lock (``_lock_facility_folder``) is unaffected and
-        stays required -- this test only guards the root.
+        under-report existence, never hand back a wrong id) instead. This
+        test only guards the root; see
+        ``test_ensure_facility_folder_fast_path_does_not_take_a_locking_read_on_a_missing_facility_folder``
+        below for the analogous guard on the per-facility check (FAC-45,
+        which changed it too, for a different reason).
         """
         source = inspect.getsource(DocumentsService.ensure_facility_folder)
         fast_path, _, _slow_path = source.partition("org = await self.db.scalar(")
@@ -160,6 +162,42 @@ class TestFolderCreationIsLocked:
             "ensure_facility_folder's fast path must not take an exclusive "
             "lock on the shared facilities-root row -- FAC-43 regressed "
             "(this serializes unrelated facilities' uploads on one row)"
+        )
+
+    def test_ensure_facility_folder_fast_path_does_not_take_a_locking_read_on_a_missing_facility_folder(
+        self,
+    ):
+        """FAC-45 (Codex, on top of FAC-43): the fast path's per-facility
+        check still called ``_lock_facility_folder`` -- a locking
+        (``FOR UPDATE``) lookup -- unconditionally, including when nothing
+        matches yet. A locking read that matches nothing takes an InnoDB
+        *gap* lock, and gap locks are mutually compatible -- so two requests
+        racing to create the *same* brand-new facility's folder could both
+        take that gap lock on the fast path, before either reached the
+        organization lock below, then deadlock (one insert's
+        insert-intention lock against the other's still-held gap lock,
+        while that other transaction waits on the organization lock the
+        first one holds). Confirmed live with real concurrent sessions.
+
+        Fixed the same way FAC-43 fixed the root: peek first
+        (``_peek_facility_folder``, no lock), and only take an actual lock
+        (``_lock_folder_by_id``, a point lookup by an id the peek already
+        confirmed) once existence is known -- so the fast path never issues
+        a locking lookup that could match nothing before the organization
+        lock is acquired.
+        """
+        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        fast_path, _, _slow_path = source.partition("org = await self.db.scalar(")
+        assert "_peek_facility_folder(" in fast_path, (
+            "ensure_facility_folder's fast path must confirm the facility "
+            "folder's existence with the non-locking _peek_facility_folder "
+            "before ever taking a lock on it -- FAC-45 regressed"
+        )
+        assert "_lock_facility_folder(" not in fast_path, (
+            "ensure_facility_folder's fast path must not call "
+            "_lock_facility_folder (a locking read that can match nothing "
+            "and take a gap lock) -- FAC-45 regressed, reopening the "
+            "same-facility concurrent-creation deadlock"
         )
 
 

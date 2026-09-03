@@ -1470,6 +1470,173 @@ class TestEnsureFacilityFolderFastPathSkipsTheOrganizationLock:
                 await cleanup.close()
 
 
+class TestConcurrentFirstTimeFacilityFolderCreationDoesNotDeadlock:
+    """FAC-45 (Codex, on top of FAC-43): FAC-43's fast path stopped locking
+    the shared root, but still called ``_lock_facility_folder`` --
+    ``.with_for_update()`` -- unconditionally on the per-facility check, even
+    when nothing matches. A ``FOR UPDATE`` lookup that matches nothing takes
+    a *gap* lock, and unlike a record lock, a gap lock is compatible with
+    another transaction's gap lock on the same range. That opened a genuine
+    deadlock the first time two requests raced to create the *same*
+    brand-new facility's folder: both take a (mutually compatible) gap lock
+    on the fast path before either reaches the organization lock below;
+    whichever reaches the organization lock first re-locks (now for real,
+    as an INSERT target) and tries to insert -- which needs an
+    insert-intention lock that *does* conflict with the other transaction's
+    still-held gap lock, and that other transaction is itself blocked
+    waiting for the organization lock the first one holds. InnoDB detects
+    the cycle and kills one side with an unhandled ``OperationalError``
+    (1213) -- a 500 for one of two entirely legitimate concurrent requests.
+
+    Fixed the same way FAC-43 fixed the root: peek first
+    (``_peek_facility_folder``, no lock), and only take an actual lock
+    (``_lock_folder_by_id``, a point lookup by the id the peek just found)
+    once existence is confirmed -- so the fast path never takes a
+    ``.with_for_update()`` lookup that could match nothing before the
+    organization lock is acquired.
+
+    Relying on natural ``asyncio.gather`` scheduling alone to force the two
+    calls into the exact interleaving that deadlocks was found, in ad hoc
+    testing against pre-fix code, to reproduce it only intermittently (~60%
+    of runs) -- asyncio's own scheduling sometimes lets one call finish and
+    commit before the other has issued its first query at all, which isn't
+    a race. So this test forces the interleaving explicitly: both calls are
+    held at the point where each has just confirmed the target facility's
+    folder does not exist yet (``_peek_facility_folder``, patched once,
+    hoisted above the ``gather`` per CLAUDE.md Pitfall #22) until *both*
+    have reached it, then released together -- guaranteeing they contend for
+    the organization lock, and whatever comes after it, simultaneously,
+    every run.
+    """
+
+    async def test_two_concurrent_first_creations_both_succeed(self, two_sessions):
+        locker, caller = two_sessions
+        slug = f"fcvfd-fac45-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        locker.add(org)
+        await locker.flush()
+        facility_type = FacilityType(
+            organization_id=None, name="Station", is_system=True
+        )
+        facility_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        locker.add_all([facility_type, facility_status])
+        await locker.flush()
+        # A decoy facility, whose folder is created (and committed) up
+        # front purely to bring the shared root into existence -- the
+        # target facility's own folder is deliberately left uncreated, so
+        # both concurrent calls below race to create it for the first time.
+        decoy_facility = Facility(
+            organization_id=org.id,
+            name="Decoy Station",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        target_facility = Facility(
+            organization_id=org.id,
+            name="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        locker.add_all([decoy_facility, target_facility])
+        await locker.commit()
+        org_id, decoy_id, target_id, facility_type_id, status_id = (
+            org.id,
+            decoy_facility.id,
+            target_facility.id,
+            facility_type.id,
+            facility_status.id,
+        )
+        try:
+            setup = database_manager.session_factory()
+            try:
+                await DocumentsService(setup).ensure_facility_folder(
+                    org_id, str(decoy_id), "Decoy Station"
+                )
+                await setup.commit()
+            finally:
+                await setup.close()
+
+            async def create(session):
+                docs = DocumentsService(session)
+                folder = await docs.ensure_facility_folder(
+                    org_id, str(target_id), "Station 1"
+                )
+                await session.commit()
+                return folder
+
+            # Two-party barrier: hold each call at the instant it has
+            # confirmed (via the real, unmodified _peek_facility_folder)
+            # that the target facility's folder does not exist yet, until
+            # both have arrived -- then release both together, forcing them
+            # to contend for the organization lock (and, pre-fix, the gap
+            # lock this bug was about) at the same moment, every run.
+            reached = 0
+            reached_lock = asyncio.Lock()
+            both_reached = asyncio.Event()
+            original_peek = DocumentsService._peek_facility_folder
+
+            async def barriered_peek(self, facilities_root_id, facility_id_str):
+                nonlocal reached
+                result = await original_peek(self, facilities_root_id, facility_id_str)
+                async with reached_lock:
+                    reached += 1
+                    if reached >= 2:
+                        both_reached.set()
+                await both_reached.wait()
+                return result
+
+            # Patched once, hoisted above the gather -- both concurrently
+            # running calls share this single active patch (CLAUDE.md
+            # Pitfall #22: never enter the same patch() from two
+            # concurrently running coroutines).
+            with patch.object(
+                DocumentsService, "_peek_facility_folder", barriered_peek
+            ):
+                folder_1, folder_2 = await asyncio.wait_for(
+                    asyncio.gather(create(locker), create(caller)), timeout=15
+                )
+            assert folder_1 is not None
+            assert folder_2 is not None
+            # Both callers must resolve to the SAME row -- not just "no
+            # exception" but the actual get-or-create invariant this method
+            # exists to guarantee (FAC-6): no duplicate facility folder.
+            assert folder_1.id == folder_2.id
+            assert folder_1.slug == f"facility-{target_id}"
+        finally:
+            await locker.rollback()
+            await caller.rollback()
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.organization_id == org_id
+                    )
+                )
+                await cleanup.execute(
+                    Facility.__table__.delete().where(
+                        Facility.id.in_([decoy_id, target_id])
+                    )
+                )
+                await cleanup.execute(
+                    FacilityType.__table__.delete().where(
+                        FacilityType.id == facility_type_id
+                    )
+                )
+                await cleanup.execute(
+                    FacilityStatus.__table__.delete().where(
+                        FacilityStatus.id == status_id
+                    )
+                )
+                await cleanup.execute(
+                    Organization.__table__.delete().where(Organization.id == org_id)
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()
+
+
 class TestEnsureFacilityFolderFastPathDoesNotLockTheSharedRoot:
     """FAC-43 (Codex, on top of FAC-42): FAC-42's fast path stopped taking
     the organization-row lock once a facility's folder already existed, but

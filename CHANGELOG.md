@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: FAC-43's fast path could deadlock two concurrent first-time creations of the same facility's folder (2026-09-03)
+
+**Fixed**
+
+- **FAC-45 (P2, correctness — deadlock) — `ensure_facility_folder`'s fast
+  path (FAC-43) still called `_lock_facility_folder` unconditionally for
+  the per-facility check**, including when the target facility's folder
+  does not exist yet. A `FOR UPDATE` lookup that matches nothing takes an
+  InnoDB **gap lock**, and unlike a record lock, a gap lock is _compatible_
+  with another transaction's gap lock on the same range — so two requests
+  racing to create the _same_ brand-new facility's folder could both take
+  that gap lock before either reached the organization lock, then
+  deadlock: whichever won the organization lock's INSERT needed an
+  insert-intention lock conflicting with the other's still-held gap lock,
+  while that other transaction waited on the organization lock the winner
+  held. InnoDB killed one side outright (`OperationalError` 1213) — an
+  unhandled 500 for one of two entirely legitimate concurrent requests.
+- Fixed the same way as FAC-43 fixed the root: peek first
+  (`_peek_facility_folder`, no lock — a "not found" falls straight through
+  to the slow path, same as every other missing-folder case), and only
+  lock an actual row (`_lock_folder_by_id`, a primary-key point lookup)
+  once the peek has confirmed it exists. The slow path's own
+  `_lock_facility_folder` call is untouched — it was never part of the
+  deadlock, since only one transaction can be past the organization lock
+  at a time.
+- Reproduced live with genuine concurrent sessions (`asyncio.gather`, no
+  artificial staging): two real sessions racing to create the same
+  never-before-seen facility's folder hit the deadlock in 5/5 runs
+  pre-fix, and succeeded 8/8 runs post-fix (both resolving to the same
+  folder row — no duplicate). The committed regression test forces the
+  interleaving deterministically, since natural scheduling alone
+  reproduced the pre-fix deadlock only intermittently (~60% of runs);
+  confirmed to fail against pre-fix code and pass post-fix, five repeated
+  runs with no flakiness.
+
 ### Security: FAC-42's fast path still locked the shared facilities-root row unconditionally; a related over-locking finding in the same helper flagged rather than fixed (2026-09-03)
 
 **Fixed**
@@ -39,26 +74,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Flagged, not fixed**
 
-- **FAC-44 (P3, scalability/contention) — `_lock_facilities_root`'s own
-  query can incidentally lock an unrelated, already-existing facility's
-  folder row while scanning for the root.** Its `WHERE` clause
-  (`organization_id` + `slug` + `is_system`) is only indexed on the first
-  column; under InnoDB REPEATABLE READ with `FOR UPDATE`, MySQL must
-  examine — and lock — every org-scoped `document_folders` row in ascending
-  primary-key order until it finds one matching all three predicates. Since
+- **FAC-44 (P3, scalability/contention) — two `document_folders` lookups
+  (`_lock_facilities_root` and, per a Codex finding on the FAC-43 commit,
+  `_lock_facility_folder`) can each incidentally lock an unrelated,
+  already-existing folder row while scanning for their actual target.**
+  Both `WHERE` clauses are indexed only on their first column
+  (`organization_id`, `parent_id` respectively) — `slug` (and, for the
+  root, `is_system`) is not — so under InnoDB REPEATABLE READ with `FOR
+UPDATE`, MySQL must examine — and lock — every candidate row in ascending
+  primary-key order until it finds one matching every predicate. Since
   these primary keys are random UUIDs, not monotonic, that order has no
-  relationship to which folder is the root, so a facility folder whose UUID
-  happens to sort below the root's gets swept into the lock too. This can
-  only occur during the already-rare slow (creation) path — the fast path
-  fixed by FAC-43 above no longer calls this method at all — so the
-  practical exposure is small, but it is the same underlying class of
+  relationship to which row is the actual target, so a sibling row whose
+  UUID happens to sort below it gets swept into the lock too. Both are now
+  reachable only from the already-rare slow (creation) path — FAC-43 and
+  FAC-45 (below) each removed the fast path's own call to one of them — so
+  the practical exposure is small, but it is the same underlying class of
   defect as the already-flagged FAC-41 (an unindexed predicate forcing a
-  broader-than-intended lock scan), on a sibling method, discovered while
-  verifying FAC-43. The fix shape is the same as FAC-41's recommendation: a
-  schema-level index or lookup key that makes the root a direct point
-  lookup rather than a scan, out of scope for this pass. See
-  `docs/security-review/FAC-12-facilities.md` (FAC-44) for the full
-  reasoning.
+  broader-than-intended lock scan), on two sibling methods. The fix shape
+  is the same as FAC-41's recommendation: a schema-level index or lookup
+  key that makes each a direct point lookup rather than a scan, out of
+  scope for this pass. See `docs/security-review/FAC-12-facilities.md`
+  (FAC-44) for the full reasoning.
 
 ### Security: ensure_facility_folder took an exclusive organization-row lock unconditionally, serializing unrelated facility uploads org-wide (2026-09-03)
 
