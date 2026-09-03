@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +17,7 @@ const {
   deleteCheckItem,
   replaceCompartments,
   addCompartment,
+  deleteCompartment,
   createEquipmentCheckTemplate,
   updateEquipmentCheckTemplate,
   toastSuccess,
@@ -33,6 +34,7 @@ const {
   deleteCheckItem: vi.fn(),
   replaceCompartments: vi.fn(),
   addCompartment: vi.fn(),
+  deleteCompartment: vi.fn(),
   createEquipmentCheckTemplate: vi.fn(),
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
     replaceCompartments: (...args: unknown[]) => replaceCompartments(...args),
     addCompartment: (...args: unknown[]) => addCompartment(...args),
+    deleteCompartment: (...args: unknown[]) => deleteCompartment(...args),
     createEquipmentCheckTemplate: (...args: unknown[]) => createEquipmentCheckTemplate(...args),
     updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
@@ -174,6 +177,10 @@ async function confirm(label: string | RegExp) {
  * viewport set by one `describe` survives into the next one unless it is set
  * again. Tests that depend on a width should say which one they mean.
  */
+// The autosave debounce in EquipmentCheckTemplateBuilder. Mirrored here so a
+// test that has to outwait it says why, rather than carrying a bare number.
+const AUTOSAVE_DEBOUNCE_MS = 1500;
+
 const VIEWPORT_WIDTHS = { phone: 390, tablet: 900, laptop: 1440 } as const;
 
 const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
@@ -382,6 +389,27 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     // edit, backwards for a retry of an older one. The member's latest change
     // silently reverted on the automatic retry.
     mockViewport('laptop');
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Radio selection checkbox' });
+
+    // Drain before arming, not tolerate afterwards. A debounce timer left
+    // running by an earlier test in this file fires up to AUTOSAVE_DEBOUNCE_MS
+    // into this one, and if it lands *after* the one-shot below is installed
+    // it consumes the deferred rejection: the flush then succeeds on the
+    // resolved fallback, the retry path never runs, `rejectFlush` rejects
+    // some other test's request whose error is swallowed, and the level edit
+    // arrives by its own ordinary debounce. Every assertion below would still
+    // pass, against a run that never exercised the failure this test is named
+    // for. Waiting the window out first is what makes that unreachable.
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
+
     updateCheckItem.mockReset();
     let rejectFlush!: (reason: unknown) => void;
     updateCheckItem.mockImplementationOnce(
@@ -391,29 +419,35 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
         })
     );
     updateCheckItem.mockResolvedValue({});
-    const user = userEvent.setup();
-    renderBuilder();
+
+    // Filtered rather than counted or indexed: a debounce timer left running
+    // by an earlier test in this file can land its own patch among these, so
+    // neither the number of writes nor the position of any one of them is
+    // stable. Both assertions below are about which *type* edit reached the
+    // server, which is the thing this test is actually about.
+    //
+    // The count form is what took main red on 2026-09-02. It held for as long
+    // as the flush happened to win its race with the 1.5s autosave debounce,
+    // and under `--coverage` — which is how CI runs this suite, and only CI —
+    // the run is slow enough that the timer lands first and a second write
+    // appears. Passing without coverage and failing with it is the signature.
+    const typeWrites = (): Record<string, unknown>[] =>
+      (updateCheckItem.mock.calls as unknown[][])
+        .map((call) => call[1] as Record<string, unknown> | undefined)
+        .filter((patch): patch is Record<string, unknown> => patch?.check_type !== undefined);
 
     // Laptop width: the row carries its own type buttons and a selection
     // checkbox; `Edit Radio` is the phone editor's label (pitfall #28a).
-    await screen.findByRole('button', { name: 'Radio selection checkbox' });
     fireEvent.click(screen.getAllByRole('button', { name: 'Count' })[0] as HTMLElement);
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
-    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledTimes(1));
-    expect(updateCheckItem.mock.calls[0]?.[1]).toMatchObject({ check_type: 'count' });
+    await waitFor(() => expect(typeWrites()).toContainEqual(expect.objectContaining({ check_type: 'count' })));
 
     // The newer edit, made while the flush is still in the air.
     fireEvent.click(screen.getAllByRole('button', { name: 'Level' })[0] as HTMLElement);
     rejectFlush({ response: { data: { detail: 'Item is locked' } } });
 
-    // Filtered rather than indexed: a debounce timer left running by an
-    // earlier test in this file can land its own patch in between, and the
-    // assertion is about which *type* edit survives the retry.
-    const typeWrites = (): Record<string, unknown>[] =>
-      (updateCheckItem.mock.calls as unknown[][])
-        .map((call) => call[1] as Record<string, unknown> | undefined)
-        .filter((patch): patch is Record<string, unknown> => patch?.check_type !== undefined);
-    await waitFor(() => expect(typeWrites().length).toBeGreaterThan(1), { timeout: 8000 });
+    const countWrites = typeWrites().length;
+    await waitFor(() => expect(typeWrites().length).toBeGreaterThan(countWrites), { timeout: 8000 });
     const written = typeWrites();
     expect(written[written.length - 1]).toMatchObject({ check_type: 'level' });
   }, 20_000);
@@ -963,8 +997,19 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
 describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // AP-13 finding 6 (Codex): vi.clearAllMocks() clears call history but
+    // leaves a queued mockResolvedValueOnce/mockRejectedValueOnce and a
+    // prior mockImplementation in place (CLAUDE.md Pitfall #28) -- reset each
+    // mock before installing this block's default, so a one-shot result a
+    // test queues and never consumes can't leak into the next test's run of
+    // this same default.
+    getTemplate.mockReset();
     getTemplate.mockResolvedValue(structuredClone(template));
+    deleteCheckItem.mockReset();
     deleteCheckItem.mockResolvedValue(undefined);
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+    updateEquipmentCheckTemplate.mockReset();
     updateEquipmentCheckTemplate.mockImplementation((_id: string, payload: { is_active: boolean }) =>
       Promise.resolve({ ...structuredClone(template), isActive: payload.is_active })
     );
@@ -1009,6 +1054,90 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     await confirm('Delete');
     await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('radio'));
     expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
+  });
+
+  it('deletes the whole nested subtree, in the confirmation and in local state, when a parent compartment is removed', async () => {
+    // AP-13 finding 3: the backend cascade-deletes descendants (AP-8), so
+    // the confirmation must count the whole subtree, not just Cab's own 2
+    // items, and Medical bag -- Cab's nested child -- must not linger as an
+    // orphaned top-level row once Cab is gone.
+    renderBuilder();
+
+    const deleteCab = await screen.findByLabelText('Delete Cab');
+    await userEvent.click(deleteCab);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/1 nested compartment/i)).toBeVisible();
+    expect(within(dialog).getByText(/2 items total/i)).toBeVisible();
+
+    await confirm('Delete');
+
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+    // The backend's own cascade removes Medical bag server-side; the
+    // frontend must not also issue a separate delete for it.
+    expect(deleteCompartment).toHaveBeenCalledTimes(1);
+
+    expect(screen.queryByLabelText('Actions for Cab')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Actions for Medical bag')).not.toBeInTheDocument();
+  });
+
+  it('blocks deleting a compartment whose subtree has an unsaved reparent (AP-13 finding 2)', async () => {
+    // Compartments have no auto-save path -- parent_compartment_id is only
+    // ever persisted by Save (handleSave) -- so moving Medical bag out of
+    // Cab here is a *local-only* edit. The backend still has Medical bag
+    // parented under Cab. If Cab's delete were allowed to proceed off the
+    // client's own (now-stale-relative-to-the-backend) subtree computation,
+    // the confirmation would undersell what's about to be destroyed and the
+    // backend's cascade would delete Medical bag anyway -- silently losing
+    // an edit the user was in the middle of saving.
+    renderBuilder();
+
+    const outdentBag = await screen.findByLabelText('Move Medical bag out one level');
+    await userEvent.click(outdentBag);
+
+    const deleteCab = screen.getByLabelText('Delete Cab');
+    await userEvent.click(deleteCab);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/unsaved changes/i)));
+    // No confirmation dialog, and no delete call -- the block happens before
+    // either, not as a cancel-in-place-of-them.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCompartment).not.toHaveBeenCalled();
+    // The pending reparent itself must survive the blocked attempt: Medical
+    // bag is still on screen, still outdented (not silently reverted or
+    // dropped), ready for the user to hit Save and try again.
+    expect(screen.getByLabelText('Actions for Medical bag')).toBeVisible();
+    expect(screen.getByLabelText('Actions for Cab')).toBeVisible();
+  });
+
+  it('does not falsely block deleting a surviving ancestor after a descendant was already deleted (AP-13 finding 5)', async () => {
+    // The AP-13 finding-2 fix compares the live subtree against
+    // savedParentByIdRef, a last-known-server parent map. Deleting Medical
+    // bag (a leaf, no descendants of its own) must remove its entry from
+    // that map too -- left behind, a later delete of Cab (Medical bag's
+    // former, still-live parent) would compute Medical bag as a server-side
+    // descendant that the live (already-bag-less) computation disagrees
+    // with, tripping the pending-reparent guard for a delete with nothing
+    // actually pending.
+    renderBuilder();
+
+    const deleteBag = await screen.findByLabelText('Delete Medical bag');
+    await userEvent.click(deleteBag);
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('bag'));
+    expect(screen.queryByLabelText('Actions for Medical bag')).not.toBeInTheDocument();
+
+    deleteCompartment.mockClear();
+    const deleteCab = screen.getByLabelText('Delete Cab');
+    await userEvent.click(deleteCab);
+
+    // Must reach the normal confirmation -- not the "unsaved changes" block
+    // -- and actually call the backend.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Delete "Cab"/i)).toBeVisible();
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+    expect(toastError).not.toHaveBeenCalledWith(expect.stringMatching(/unsaved changes/i));
   });
 
   it('sends draft and publish state explicitly', async () => {
@@ -1601,7 +1730,7 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
     // the template holding the preset twice.
     await waitFor(() => expect(updateEquipmentCheckTemplate).toHaveBeenCalled());
     expect(addCompartment).not.toHaveBeenCalled();
-  });
+  }, 15_000);
 
   it('marks the template unsaved so the preset is not lost on navigation', async () => {
     // The JSON and CSV import branches marked it; the vehicle preset did not.
@@ -1840,7 +1969,13 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
     // its own test and can fire during this one. Draining it here, before
     // wiring up this test's own mock behaviour, keeps that unrelated retry
     // from being mistaken for the one this test controls.
-    await new Promise((resolve) => setTimeout(resolve, 1700));
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
     updateCheckItem.mockClear();
 
     let releaseFirstFlush: (() => void) | null = null;
@@ -1893,5 +2028,438 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
         .map(([, patch]) => patch);
       expect(patches[patches.length - 1]).toEqual({ is_required: true });
     });
+    // Spends AUTOSAVE_DEBOUNCE_MS draining before it starts, then waits out
+    // two more real debounce windows. That does not fit vitest's 5s default,
+    // and it was only ever passing because it landed just under it — 4.7s on
+    // an idle machine. Under `--coverage`, which is how CI runs this suite,
+    // it tips over and the job fails on a timeout rather than an assertion.
+  }, 20_000);
+});
+
+describe('EquipmentCheckTemplateBuilder keeps savedParentByIdRef truthful after a partial-failure save', () => {
+  // handleSave batches every compartment's PATCH and every item's PATCH
+  // into one settlement. A compartment reparent can commit server-side while
+  // an unrelated item PATCH in the same batch rejects -- and if that failure
+  // stops the savedParentByIdRef refresh from running at all, the map keeps
+  // describing the pre-save hierarchy even though the server already has the
+  // new one. A later delete then compares the live (correct) hierarchy
+  // against that stale map, sees a disagreement that no longer exists, and
+  // wrongly blocks a delete the pending-reparent guard was never meant to
+  // stop.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    updateCheckItem.mockReset();
+    // Flashlight's PATCH is the one failure in this batch; every other
+    // request (including the compartment reparent) succeeds.
+    updateCheckItem.mockImplementation((itemId: string) =>
+      itemId === 'flashlight' ? Promise.reject(new Error('Validation error')) : Promise.resolve({})
+    );
+    updateEquipmentCheckTemplate.mockReset();
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
   });
+
+  it('refreshes the map for a compartment whose reparent succeeded, even though a sibling item PATCH in the same save failed', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    // Move Medical bag out of Cab -- local-only, no auto-save path -- then
+    // save. The compartment PATCH for Medical bag (parent_compartment_id:
+    // null) settles; Flashlight's item PATCH, in the same batch, rejects.
+    await user.click(await screen.findByLabelText('Move Medical bag out one level'));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(updateCompartment).toHaveBeenCalledWith('bag', expect.objectContaining({ parent_compartment_id: null }));
+    toastError.mockClear();
+
+    // Cab's live subtree no longer includes Medical bag (it was outdented
+    // locally, and a failed save does not revert local state). If
+    // savedParentByIdRef still says otherwise, the pending-reparent guard
+    // sees a disagreement that no longer exists and blocks Cab's delete with
+    // an "unsaved changes" error instead of the normal confirmation.
+    await user.click(screen.getByLabelText('Delete Cab'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Delete "Cab"/i)).toBeVisible();
+    expect(toastError).not.toHaveBeenCalledWith(expect.stringMatching(/unsaved changes/i));
+
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree delete', () => {
+  // AP-13 finding 4 (Codex): deleting a compartment removes its items on the
+  // backend too. A debounced auto-save still pending for one of those items
+  // must not fire afterward — left alone, the timer calls updateCheckItem
+  // for an id the delete just removed, 404s, and (per the flushing-suite
+  // above) can abort an unrelated Save pressed inside the same window.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+  });
+
+  it('cancels a pending item auto-save when the item’s compartment is deleted inside the debounce window', async () => {
+    mockViewport('laptop');
+    renderBuilder();
+
+    // Queues a debounced auto-save for Radio (a Cab item) via the same bulk
+    // toolbar path the flushing-suite above uses.
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    // Delete Cab -- Radio's compartment -- inside the same debounce window,
+    // well before the queued auto-save would otherwise fire.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+
+    // Outwait the window the cancelled timer would have fired inside.
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
+
+    expect(updateCheckItem).not.toHaveBeenCalled();
+  }, 10_000);
+
+  it('preserves a pending item auto-save when the compartment delete itself fails (AP-13 finding 8)', async () => {
+    // Cancelling a pending auto-save has to wait until the delete actually
+    // succeeds -- a failed delete (network error, or the AP-14
+    // cross-template 400) must not have already thrown away the edit's only
+    // remaining chance to be saved.
+    deleteCompartment.mockRejectedValueOnce(new Error('Network Error'));
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+
+    // Cab (and Radio's pending edit) are still here -- the failed delete
+    // must not have removed either.
+    expect(screen.getByLabelText('Actions for Cab')).toBeVisible();
+
+    // The original timer was cancelled the moment the delete started, but
+    // its patch was captured and re-armed on failure -- it still reaches
+    // the server on its own (fresh) schedule.
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
+    expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false });
+  }, 10_000);
+
+  it('never lets a pending auto-save fire while the compartment delete is in flight (AP-13 finding 12)', async () => {
+    // Cancelling a subtree's pending auto-saves only *after* awaiting the
+    // delete (finding 8's own fix) left a window: if the DELETE takes
+    // longer than the remaining debounce, the timer can fire mid-flight,
+    // start its own PATCH, and race the DELETE to the server. The timer
+    // must be cancelled synchronously, before the delete request is even
+    // sent -- so it can never fire during the await, regardless of how long
+    // the request takes.
+    let releaseDelete: (() => void) | null = null;
+    deleteCompartment.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseDelete = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+
+    // Outwait the debounce window while the delete is still in flight --
+    // the pre-fix timer would fire here and call updateCheckItem.
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
+    expect(updateCheckItem).not.toHaveBeenCalled();
+
+    releaseDelete?.();
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Compartment deleted'));
+
+    // Cab is gone, and nothing ever reached updateCheckItem for its item.
+    expect(screen.queryByLabelText('Actions for Cab')).not.toBeInTheDocument();
+    expect(updateCheckItem).not.toHaveBeenCalled();
+  }, 10_000);
+
+  it('waits for an in-flight item auto-save before sending the compartment DELETE (AP-13 finding 1)', async () => {
+    // Finding 12's fix cancels a *pending* timer synchronously before the
+    // delete starts -- but if the debounce window elapses while the
+    // confirmation dialog is still open (the user leaves it up), the timer
+    // has already fired: scheduleAutoSaveItem moved the request out of
+    // autoSavePendingRef and into autoSaveInFlightRef before the user ever
+    // clicks Delete. The doomed-item capture loop only inspected
+    // autoSavePendingRef, so that in-flight PATCH was invisible to it --
+    // left unawaited, it could settle after the DELETE, reporting "Save
+    // failed" for an item the delete had already removed (or racing it
+    // outright).
+    let releaseUpdate: (() => void) | null = null;
+    updateCheckItem.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseUpdate = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    // Open the confirmation dialog and leave it open past the debounce
+    // window -- the queued auto-save fires while the dialog is still up,
+    // moving into autoSaveInFlightRef before the delete is confirmed.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    const dialog = await screen.findByRole('dialog');
+    // A real (unmocked) timer firing here can update component state
+    // (autoSaveInFlightRef bookkeeping, the "Saving…" indicator) outside
+    // Testing Library's act() boundary -- wrapped so that update is flushed
+    // before the assertions below run against it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    });
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false }));
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    // Radio's PATCH is still unresolved -- the DELETE must not have been
+    // sent yet.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(deleteCompartment).not.toHaveBeenCalled();
+
+    releaseUpdate?.();
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  }, 10_000);
+
+  it('waits for the Save button’s own flush of a pending item auto-save before sending the compartment DELETE', async () => {
+    // flushPendingAutoSaves -- the Save button's pre-save flush of whatever
+    // debounce timer hasn't fired yet -- issues its own PATCH directly.
+    // Originally closed (pass 9) by registering that PATCH the same way a
+    // fired timer's is; superseded (pass 10, AP-13) by saveOperationActive,
+    // which is already true by the time this flush even starts (it is set on
+    // handleSave's very first line, before the flush runs) -- so the delete
+    // affordance is disabled for this whole window regardless of whether any
+    // individual request inside it is separately registered.
+    let releaseFlush: (() => void) | null = null;
+    updateCheckItem.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFlush = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    // Press Save immediately, inside the debounce window -- handleSave's
+    // flush picks up the still-pending patch and sends it directly.
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+    await waitFor(() => expect(releaseFlush).not.toBeNull());
+
+    // Delete Cab is disabled for the whole span of the save -- clicking it
+    // here does nothing, and no confirmation dialog appears.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCompartment).not.toHaveBeenCalled();
+
+    releaseFlush?.();
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Draft saved'));
+
+    // Once the save has actually finished, deleting Cab works normally
+    // again -- the lock does not outlive the operation it guards.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  }, 10_000);
+});
+
+describe('EquipmentCheckTemplateBuilder refreshes savedParentByIdRef after a bulk replace', () => {
+  // AP-13 finding 2 (Codex, follow-up): replaceAllCompartments (vehicle
+  // preset apply / JSON import / CSV import) never refreshed
+  // savedParentByIdRef with the newly-persisted ids the backend hands back.
+  // The AP-13 pending-reparent delete guard's `knownIds` filter treats an id
+  // with no entry in that map as "nothing to compare, don't block" -- so an
+  // unsaved indent of one of these brand-new rows under another, followed by
+  // a delete of the parent, bypassed the guard entirely: the backend
+  // cascade only removes the still-top-level parent (the reparent was never
+  // saved), the child survives in the database, and the frontend hides it
+  // locally as if the whole subtree were gone -- until the next reload
+  // brings it back.
+  const vehicleTemplate = { ...template, templateType: 'vehicle' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(vehicleTemplate));
+    replaceCompartments.mockReset();
+    replaceCompartments.mockImplementation((_templateId: unknown, payload: unknown) =>
+      Promise.resolve(
+        (payload as { name: string }[]).map((comp, idx) => ({
+          id: `saved-${idx}`,
+          name: comp.name,
+          items: [],
+        }))
+      )
+    );
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+    // 'Edit Radio' (the preset trigger's own precondition, per the existing
+    // "replacing a saved template's contents" suite above) is a phone-only
+    // label -- the mobile row tap opens an edit sheet, where laptop's row
+    // reads 'Collapse …' instead (CLAUDE.md Pitfall #28a). The row overflow
+    // menu used to reparent/delete below is not viewport-gated, unlike the
+    // desktop-only indent icon, so phone works for the whole flow.
+    mockViewport('phone');
+  });
+
+  it('keeps the unsaved-reparent delete guard covering rows a bulk replace just persisted', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await screen.findByRole('button', { name: 'Edit Radio' });
+    await user.click(screen.getByRole('button', { name: /Vehicle preset/ }));
+    await user.click(await screen.findByRole('button', { name: /Engine \/ Pumper/ }));
+    await user.click(await screen.findByRole('button', { name: 'Load preset' }));
+    await waitFor(() => expect(replaceCompartments).toHaveBeenCalledTimes(1));
+
+    // Cab & Exterior (saved-0) and Engine Compartment (saved-1) are now both
+    // top-level, freshly-persisted rows. Reparent Engine Compartment under
+    // Cab & Exterior via the row menu's "Stored inside" select -- unsaved,
+    // local-only, exactly like the indent button does on a wider screen.
+    const engineTrigger = await screen.findByLabelText('Actions for Engine Compartment');
+    await user.click(engineTrigger);
+    const engineMenu = engineTrigger.closest('details') as HTMLElement;
+    await user.selectOptions(within(engineMenu).getByLabelText(/current destination Top level/i), 'saved-0');
+
+    // Unsaved local reparent -- the backend still has Engine Compartment as
+    // top-level. Deleting Cab & Exterior now must be blocked, or its
+    // (locally-nested) child is destroyed on screen with nothing telling the
+    // backend to actually remove it.
+    const cabTrigger = await screen.findByLabelText('Actions for Cab & Exterior');
+    await user.click(cabTrigger);
+    const cabMenu = cabTrigger.closest('details') as HTMLElement;
+    await user.click(within(cabMenu).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCompartment).not.toHaveBeenCalled();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder blocks a delete for the whole span of a save', () => {
+  // Pass 9 (AP-13) made every item PATCH register itself into
+  // autoSaveInFlightRef, including the Save button's own pre-save flush. But
+  // handleSave is a *sequence* of awaited steps -- flush, then the template's
+  // own PATCH, then the compartment/item update batch -- and there is a real
+  // gap between the flush resolving (and deregistering) and the update batch
+  // even being built, let alone registered. A delete confirmed inside that
+  // gap sees both tracking maps empty and proceeds immediately; handleSave
+  // then goes on to PATCH rows the delete just removed. Registering each
+  // write more carefully cannot close this on its own, because the gap is
+  // between writes, not inside one -- closing it needs the whole operation
+  // locked, not another per-write registration point.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+  });
+
+  it('does not let a compartment delete proceed in the gap between the Save flush and its update batch', async () => {
+    // The template's own PATCH sits between the flush (which the pass-9 fix
+    // already registers) and the compartment/item update batch (which
+    // registers each of its own requests) -- deferring it opens exactly the
+    // gap Codex found, using a real await already in the production code
+    // rather than a fake timer.
+    let releaseTemplateUpdate: (() => void) | null = null;
+    updateEquipmentCheckTemplate.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseTemplateUpdate = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    // Queue a debounced edit on Radio so the flush this test is about to
+    // trigger actually has something to send, matching the real shape of the
+    // race: a flush PATCH that completes cleanly, followed by a batch that
+    // has not been issued yet.
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    // The flush's PATCH for Radio resolves on its own (not deferred) --
+    // confirming it settled proves the gap this test targets is *after* the
+    // flush, not during it.
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false }));
+    // handleSave is now paused on the template's own PATCH, before it has
+    // built or issued a single request in the compartment/item batch.
+    await waitFor(() => expect(releaseTemplateUpdate).not.toBeNull());
+
+    // Attempt to delete Cab inside this gap. The delete buttons are disabled
+    // while a save is active, so a real click does nothing; the assertions
+    // below confirm neither the confirmation dialog nor the backend call
+    // ever happen, from either that or the function-level guard.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCompartment).not.toHaveBeenCalled();
+
+    // Let Save proceed. Its update batch issues PATCHes for both of Cab's
+    // items -- if the delete above had gone through, these would be firing
+    // against rows the backend just removed.
+    releaseTemplateUpdate?.();
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('flashlight', expect.anything()));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Draft saved'));
+    expect(deleteCompartment).not.toHaveBeenCalled();
+
+    // Once the save has fully finished, deleting Cab works exactly as
+    // normal -- the lock does not outlive the operation it guards.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  }, 10_000);
 });

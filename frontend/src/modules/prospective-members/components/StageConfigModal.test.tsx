@@ -871,4 +871,82 @@ describe('StageConfigModal', () => {
     expect(screen.getByText('Multi-Signer Approval')).toBeInTheDocument();
     expect(screen.getByText('Medical Screening')).toBeInTheDocument();
   });
+
+  // =========================================================================
+  // Election Package Field Defaults (MP-08 pass 4)
+  //
+  // create_election_package reads an absent `package_fields` as "capture
+  // everything" so an *existing* pipeline's data collection never narrows
+  // silently. But that same fallback meant a brand-new, never-configured
+  // election stage over-captured PII (phone/address/DOB) that
+  // ElectionVoteConfig displays as unchecked. These assert the new stage
+  // gets the UI's own displayed defaults persisted, while an existing
+  // stage being edited keeps its (absent) package_fields untouched.
+  // =========================================================================
+
+  it('gives the Membership Vote preset the same field selection ElectionVoteConfig displays as checked', async () => {
+    const user = userEvent.setup();
+    render(<StageConfigModal {...defaultProps} />);
+
+    await user.click(screen.getByText('Membership Vote'));
+
+    await user.click(screen.getByText('Add Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage_type: 'election_vote',
+        config: expect.objectContaining({
+          package_fields: {
+            include_email: true,
+            include_phone: false,
+            include_address: false,
+            include_date_of_birth: false,
+            include_documents: true,
+            include_stage_history: true,
+          },
+        }) as unknown,
+      })
+    );
+  });
+
+  it('does not inject package_fields defaults when editing an existing election-vote stage that never had them', async () => {
+    const user = userEvent.setup();
+    const editingStage = {
+      id: 'stage-1',
+      pipeline_id: 'pipeline-1',
+      name: 'Membership Vote',
+      description: '',
+      stage_type: 'election_vote' as const,
+      config: {
+        voting_method: 'simple_majority',
+        victory_condition: 'majority',
+        eligible_voter_roles: ['member'],
+        anonymous_voting: true,
+        // No package_fields — the shape of any stage saved before this field
+        // existed, which the backend must keep reading as "capture everything".
+      },
+      sort_order: 0,
+      is_required: true,
+      notify_prospect_on_completion: false,
+      public_visible: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+
+    render(<StageConfigModal {...defaultProps} editingStage={editingStage} />);
+
+    // Untouched: the checkboxes render the UI's defaults locally, but nothing
+    // has written them back into the saved config yet.
+    expect(screen.getByLabelText('Include phone number')).not.toBeChecked();
+
+    await user.click(screen.getByText('Update Stage'));
+
+    expect(defaultProps.onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stage_type: 'election_vote',
+      })
+    );
+    const saved = defaultProps.onSave.mock.calls[0]?.[0] as PipelineStageCreate;
+    expect('package_fields' in saved.config).toBe(false);
+  });
 });

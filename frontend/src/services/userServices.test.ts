@@ -485,6 +485,20 @@ describe('organizationService', () => {
     });
   });
 
+  // ── testEmailSettings ────────────────────────────────────────────────
+  describe('testEmailSettings', () => {
+    it('should POST the form to /organization/settings/email/test', async () => {
+      const settings = { enabled: true, platform: 'gmail', google_app_password: '••••••••' };
+      const outcome = { success: true, message: 'SMTP connection successful', details: {} };
+      mockPost.mockResolvedValue({ data: outcome });
+
+      const result = await organizationService.testEmailSettings(settings as never);
+
+      expect(mockPost).toHaveBeenCalledWith('/organization/settings/email/test', settings);
+      expect(result).toEqual(outcome);
+    });
+  });
+
   // ── updateFileStorageSettings ────────────────────────────────────────
   describe('updateFileStorageSettings', () => {
     it('should PATCH to /organization/settings/file-storage', async () => {

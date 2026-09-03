@@ -100,14 +100,19 @@ ALLOWED_DOCUMENT_MIME_TYPES = {
 @router.get("/folders", response_model=FoldersListResponse)
 async def list_folders(
     parent_id: str | None = None,
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("documents.view")),
 ):
     """List document folders the current user can access"""
     service = DocumentsService(db)
     parent_uuid = _parse_uuid_or_400(parent_id, "parent_id") if parent_id else None
-    folders = await service.get_folders(
-        current_user.organization_id, parent_uuid, current_user=current_user
+    folders, total = await service.get_folders(
+        current_user.organization_id,
+        parent_uuid,
+        current_user=current_user,
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
     return {
@@ -118,7 +123,9 @@ async def list_folders(
             }
             for f in folders
         ],
-        "total": len(folders),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
     }
 
 
@@ -135,10 +142,43 @@ async def create_folder(
     """Create a new document folder"""
     service = DocumentsService(db)
     folder_data = folder.model_dump(exclude_none=True)
+    # create_folder's DOC-6 FK validation (in the service, below) only
+    # confirms a supplied parent_id belongs to the caller's organization --
+    # not that the caller can access that parent, and not that they can
+    # *write* to it. require_write: a read-admitting permission (e.g.
+    # facilities.view_sensitive) must not authorize injecting a new folder
+    # into that parent. Mirrors the destination checks upload_document and
+    # update_document apply.
+    parent_id = folder_data.get("parent_id")
+    if parent_id:
+        parent = await service.get_folder_by_id(parent_id, current_user.organization_id)
+        if parent is None:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        if not await service.can_access_folder(
+            parent, current_user.organization_id, current_user, require_write=True
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to create a folder here",
+            )
     async with handle_service_errors("Unable to create folder"):
         result = await service.create_folder(
             current_user.organization_id, folder_data, current_user.id
         )
+    await log_audit_event(
+        db=db,
+        event_type="folder_created",
+        event_category="documents",
+        severity="info",
+        event_data={
+            "folder_id": str(result.id),
+            "name": result.name,
+            "parent_id": str(result.parent_id) if result.parent_id else None,
+            "visibility": result.visibility.value,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return result
 
 
@@ -151,11 +191,46 @@ async def update_folder(
 ):
     """Update a document folder"""
     service = DocumentsService(db)
+    existing = ensure_found(
+        await service.get_folder_by_id(folder_id, current_user.organization_id),
+        "Folder",
+    )
+    # A folder's own required_permissions is the one rule documents.manage's
+    # org-wide grant does not override (see _folder_admits_user). require_write:
+    # a read-admitting permission (e.g. facilities.view_sensitive) must not
+    # by itself authorize renaming or reparenting a sensitive-gated folder --
+    # only a write-tier permission from that same list does.
+    if not await service.can_access_folder(
+        existing, current_user.organization_id, current_user, require_write=True
+    ):
+        raise HTTPException(status_code=404, detail="Folder not found")
     # exclude_unset, not exclude_none: this is an update payload, so an
     # explicit null (clearing parent_id/owner_user_id) must survive to the
     # service as "clear this field", not be dropped as if never sent
     # (CLAUDE.md pitfall #1's update-path mirror image).
     update_data = folder.model_dump(exclude_unset=True)
+    # The check above authorizes only the folder's *current* ancestry.
+    # DocumentsService.update_folder's DOC-6 FK validation on a reassigned
+    # parent_id only confirms the new parent is in the caller's organization,
+    # not that the caller can write to it. Mirrors update_document's own
+    # destination check. Moving *out* to root (parent_id: null) needs no
+    # destination check.
+    new_parent_id = update_data.get("parent_id")
+    if new_parent_id is not None and str(new_parent_id) != str(
+        existing.parent_id or ""
+    ):
+        destination = await service.get_folder_by_id(
+            new_parent_id, current_user.organization_id
+        )
+        if destination is None:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        if not await service.can_access_folder(
+            destination, current_user.organization_id, current_user, require_write=True
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to move a folder into this parent",
+            )
     # Wrapped so a service-layer ValueError (an out-of-org parent/owner id,
     # DOC-6, or a cyclic parent) returns 400 rather than 500, matching
     # create_folder.
@@ -164,6 +239,15 @@ async def update_folder(
             folder_id, current_user.organization_id, update_data
         )
     result = ensure_found(updated, "Folder")
+    await log_audit_event(
+        db=db,
+        event_type="folder_updated",
+        event_category="documents",
+        severity="info",
+        event_data={"folder_id": str(folder_id), "fields": list(update_data.keys())},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return result
 
 
@@ -175,9 +259,39 @@ async def delete_folder(
 ):
     """Delete a document folder and all its documents"""
     service = DocumentsService(db)
-    success = await service.delete_folder(folder_id, current_user.organization_id)
+    existing = ensure_found(
+        await service.get_folder_by_id(folder_id, current_user.organization_id),
+        "Folder",
+    )
+    # Same folder-ACL boundary as update_folder above, require_write for the
+    # same reason: without it a documents.manage holder holding only a
+    # folder's read-tier required_permissions (e.g. facilities.view_sensitive)
+    # could delete a sensitive-gated facility folder outright -- cascading to
+    # every document and backing file beneath it.
+    if not await service.can_access_folder(
+        existing, current_user.organization_id, current_user, require_write=True
+    ):
+        raise HTTPException(status_code=404, detail="Folder not found")
+    # A service-layer ValueError here means delete_folder's cross-organization
+    # or descendant-ACL cascade guard tripped -- return 400 rather than 500.
+    async with handle_service_errors("Unable to delete folder"):
+        success = await service.delete_folder(
+            folder_id, current_user.organization_id, current_user
+        )
     if not success:
         raise HTTPException(status_code=404, detail="Folder not found")
+    # A folder delete cascades to every descendant folder and document (and
+    # their backing files) — the same destructive weight as document_deleted,
+    # which already carries this severity.
+    await log_audit_event(
+        db=db,
+        event_type="folder_deleted",
+        event_category="documents",
+        severity="warning",
+        event_data={"folder_id": str(folder_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ============================================
@@ -203,15 +317,16 @@ async def list_documents(
             await service.get_folder_by_id(folder_uuid, current_user.organization_id),
             "Folder",
         )
-        if not service.can_access_folder(folder, current_user):
+        if not await service.can_access_folder(
+            folder, current_user.organization_id, current_user
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this folder",
             )
 
-    # Restrict the listing to folders the caller may access (None = leadership,
-    # no restriction) so a folder-less listing can't surface documents from
-    # restricted/owner-only folders.
+    # Restrict the listing to folders whose full ancestry admits the caller so
+    # a folder-less listing can't surface documents from restricted trees.
     accessible = await service.accessible_folder_ids(
         current_user.organization_id, current_user
     )
@@ -268,7 +383,9 @@ async def upload_document(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
             )
-        if not service.can_access_folder(folder, current_user):
+        if not await service.can_access_folder(
+            folder, current_user.organization_id, current_user, require_write=True
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to upload to this folder",
@@ -522,10 +639,49 @@ async def update_document(
 ):
     """Update a document's metadata"""
     service = DocumentsService(db)
+    existing = ensure_found(
+        await service.get_document_by_id(document_id, current_user.organization_id),
+        "Document",
+    )
+    # documents.manage is an org-wide administrative grant, but a document's
+    # containing folder can carry its own narrower ACL (required_permissions,
+    # leadership/owner/role visibility) -- the same boundary can_access_document
+    # already enforces on GET and download. require_write: a folder's
+    # required_permissions can include a read-only entry (e.g. a facility
+    # folder's facilities.view_sensitive), and that must not by itself
+    # authorize moving a document out of the folder or deleting it below --
+    # only a write-tier permission from that same list does.
+    if not await service.can_access_document(
+        existing, current_user.organization_id, current_user, require_write=True
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
     # exclude_unset, not exclude_none: an explicit null (clearing folder_id to
     # move a document to org level) must reach the service as a clear, not be
     # silently dropped (CLAUDE.md pitfall #1's update-path mirror image).
     update_data = doc.model_dump(exclude_unset=True)
+    # The check above authorizes only the document's *current* folder. A move
+    # into a new, non-null folder is a destination the caller may have no
+    # write access to at all -- documents.manage authorizes moving documents
+    # in general, not writing into a specific ACL-gated folder. Mirrors
+    # upload_document's own destination check. Moving *out* to unfiled
+    # (folder_id: null) needs no destination check -- there is no destination
+    # folder to authorize.
+    new_folder_id = update_data.get("folder_id")
+    if new_folder_id is not None and str(new_folder_id) != str(
+        existing.folder_id or ""
+    ):
+        destination = await service.get_folder_by_id(
+            new_folder_id, current_user.organization_id
+        )
+        if destination is None:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        if not await service.can_access_folder(
+            destination, current_user.organization_id, current_user, require_write=True
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to move a document into this folder",
+            )
     # Wrapped so a service-layer ValueError (an out-of-org folder_id, DOC-6)
     # returns 400 rather than 500.
     async with handle_service_errors("Unable to update document"):
@@ -534,6 +690,18 @@ async def update_document(
         )
     result = ensure_found(updated, "Document")
     await service.attach_document_names(current_user.organization_id, [result])
+    await log_audit_event(
+        db=db,
+        event_type="document_updated",
+        event_category="documents",
+        severity="info",
+        event_data={
+            "document_id": str(document_id),
+            "fields": list(update_data.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return result
 
 
@@ -545,7 +713,24 @@ async def delete_document(
 ):
     """Delete a document"""
     service = DocumentsService(db)
-    success = await service.delete_document(document_id, current_user.organization_id)
+    existing = ensure_found(
+        await service.get_document_by_id(document_id, current_user.organization_id),
+        "Document",
+    )
+    # Same folder-ACL boundary as update_document above, require_write for the
+    # same reason: documents.manage plus only a folder's read-tier permission
+    # must not be able to destroy a document sitting in that folder.
+    if not await service.can_access_document(
+        existing, current_user.organization_id, current_user, require_write=True
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
+    # A service-layer PermissionError here means the document is referenced
+    # by a facility and the caller lacks facilities.delete/.manage -- the
+    # facility API's own action-specific delete gate (FAC-26).
+    async with handle_service_errors("Unable to delete document"):
+        success = await service.delete_document(
+            document_id, current_user.organization_id, current_user
+        )
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
     await log_audit_event(
@@ -571,4 +756,4 @@ async def get_documents_summary(
 ):
     """Get documents module summary statistics"""
     service = DocumentsService(db)
-    return await service.get_summary(current_user.organization_id)
+    return await service.get_summary(current_user.organization_id, current_user)

@@ -101,6 +101,20 @@ CLOSED_PROSPECT_STATUSES = frozenset(
 )
 
 
+# ProspectElectionPackage.status is a five-state contract, only two of whose
+# states a caller may set directly through the generic update endpoint:
+# "draft" (default, still being assembled) and "ready" (coordinator marks it
+# ready for a ballot). The other three are derived and system-only —
+# assign_package_to_election sets "added_to_ballot", and election_service
+# tallies the vote to set "elected"/"not_elected" — the same shape as
+# ProspectStatus.TRANSFERRED above: a status the system derives must not be
+# forgeable, or clearable, through the generic update.
+ELECTION_PACKAGE_CALLER_STATUSES = frozenset({"draft", "ready"})
+ELECTION_PACKAGE_SYSTEM_STATUSES = frozenset(
+    {"added_to_ballot", "elected", "not_elected"}
+)
+
+
 # The detailed duplicate-match message names the existing member and their
 # email. /transfer redacts it deliberately (see transfer_prospect); the
 # completion paths must too — /approve-step is reachable by any member holding
@@ -179,10 +193,7 @@ class MembershipPipelineService:
         query = (
             select(MembershipPipeline)
             .where(MembershipPipeline.organization_id == organization_id)
-            .options(
-                selectinload(MembershipPipeline.steps),
-                selectinload(MembershipPipeline.prospects),
-            )
+            .options(selectinload(MembershipPipeline.steps))
             .order_by(
                 MembershipPipeline.is_default.desc(), MembershipPipeline.created_at
             )
@@ -190,7 +201,29 @@ class MembershipPipelineService:
         if not include_templates:
             query = query.where(MembershipPipeline.is_template.is_(False))
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        pipelines = list(result.scalars().all())
+
+        # Count prospects per pipeline with one aggregate query instead of
+        # eager-loading the full `prospects` relationship — a years-old
+        # pipeline can carry thousands of historical applicants, and the
+        # endpoint only ever calls len() on the collection. Materializing
+        # every full ProspectiveMember row (all PII columns included) on
+        # every GET /pipelines was an unbounded read with no caller benefit.
+        # `prospect_count` is a non-mapped attribute, same pattern as
+        # `pipeline_name` on ProspectiveMember (see get_prospect above).
+        for p in pipelines:
+            p.prospect_count = 0
+        if pipelines:
+            counts_result = await self.db.execute(
+                select(ProspectiveMember.pipeline_id, func.count(ProspectiveMember.id))
+                .where(ProspectiveMember.pipeline_id.in_([p.id for p in pipelines]))
+                .group_by(ProspectiveMember.pipeline_id)
+            )
+            counts = dict(counts_result.all())
+            for p in pipelines:
+                p.prospect_count = counts.get(p.id, 0)
+
+        return pipelines
 
     async def get_pipeline(
         self, pipeline_id: str, organization_id: str
@@ -251,6 +284,7 @@ class MembershipPipelineService:
                 await self._assert_email_template_in_org(
                     step_data.get("email_template_id"), organization_id
                 )
+                await self._assert_form_in_org(step_data.get("config"), organization_id)
                 step = MembershipPipelineStep(
                     id=generate_uuid(),
                     pipeline_id=pipeline.id,
@@ -417,6 +451,22 @@ class MembershipPipelineService:
             label="email template",
         )
 
+    async def _assert_form_in_org(
+        self, config: Optional[Dict[str, Any]], organization_id: str
+    ) -> None:
+        # A step's config.form_id is a client-supplied FK to an org-scoped
+        # Form. This must reject the write *before* the step is persisted —
+        # _ensure_membership_form_integration (below) runs afterward, only
+        # best-effort stamps the form's integration_type, and logs-and-returns
+        # rather than raising when its own org-scoped lookup fails, so it
+        # cannot be relied on to gate a cross-tenant form_id out of storage.
+        from app.models.forms import Form
+
+        form_id = config.get("form_id") if isinstance(config, dict) else None
+        await assert_in_org(
+            self.db, Form, form_id, organization_id, allow_none=True, label="form"
+        )
+
     async def add_step(
         self, pipeline_id: str, organization_id: str, data: Dict[str, Any]
     ) -> Optional[MembershipPipelineStep]:
@@ -428,6 +478,7 @@ class MembershipPipelineService:
         await self._assert_email_template_in_org(
             data.get("email_template_id"), organization_id
         )
+        await self._assert_form_in_org(data.get("config"), organization_id)
 
         # Determine sort_order if not provided
         if "sort_order" not in data or data["sort_order"] is None:
@@ -493,6 +544,8 @@ class MembershipPipelineService:
             await self._assert_email_template_in_org(
                 data.get("email_template_id"), organization_id
             )
+        if "config" in data:
+            await self._assert_form_in_org(data.get("config"), organization_id)
 
         # Capture the old form_id before applying updates so we can clean up
         # the integration if the step is being reassigned to a different form.
@@ -4461,30 +4514,36 @@ class MembershipPipelineService:
         if not doc:
             return False
 
+        # Remove the stored file from disk *before* dropping the DB row and
+        # committing. A missing file (already cleaned up, e.g. by a prior
+        # partial failure) is not an error — nothing to remove. A file that
+        # exists but can't be removed (permissions, transient FS error) must
+        # raise rather than be swallowed: the DB row is the only record that
+        # this PII-carrying file still needs cleaning up, so it must survive
+        # a failed removal for a retry instead of being deleted alongside it.
+        stored_path = doc.file_path
+        if stored_path:
+            import os
+
+            if os.path.exists(stored_path):
+                try:
+                    await asyncio.to_thread(os.remove, stored_path)
+                except OSError as exc:
+                    logger.error(
+                        f"Failed to remove prospect document file {stored_path}: {exc}"
+                    )
+                    raise ValueError(
+                        "Could not delete the document file; please try again"
+                    ) from exc
+
         await self._log_activity(
             prospect_id=prospect_id,
             action="document_deleted",
             details={"document_type": doc.document_type, "file_name": doc.file_name},
             performed_by=deleted_by,
         )
-
-        # Remove the stored file from disk before dropping the DB row so the
-        # two stay consistent. Best-effort: a missing file must not block the
-        # metadata deletion.
-        stored_path = doc.file_path
         await self.db.delete(doc)
         await self.db.commit()
-
-        if stored_path:
-            import os
-
-            try:
-                if os.path.exists(stored_path):
-                    await asyncio.to_thread(os.remove, stored_path)
-            except OSError as exc:
-                logger.warning(
-                    f"Failed to remove prospect document file {stored_path}: {exc}"
-                )
 
         return True
 
@@ -4493,9 +4552,20 @@ class MembershipPipelineService:
     # =========================================================================
 
     async def get_election_package(
-        self, prospect_id: str, organization_id: str
+        self,
+        prospect_id: str,
+        organization_id: str,
+        *,
+        lock_for_update: bool = False,
     ) -> Optional[ProspectElectionPackage]:
-        """Get the election package for a prospect"""
+        """Get the election package for a prospect.
+
+        ``lock_for_update`` makes this the locking read a status-changing
+        caller (assign_package_to_election) must use — see CLAUDE.md
+        Pitfall #27: the row has to be locked *and* the check that decides
+        whether to write has to be the locking read itself, not a plain
+        SELECT taken before the lock.
+        """
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
@@ -4506,6 +4576,8 @@ class MembershipPipelineService:
             .order_by(ProspectElectionPackage.created_at.desc())
             .limit(1)
         )
+        if lock_for_update:
+            query = query.with_for_update()
         result = await self.db.execute(query)
         return result.scalars().first()
 
@@ -4543,50 +4615,184 @@ class MembershipPipelineService:
             if not any(str(s.id) == str(step_id) for s in steps):
                 raise ValueError("Step does not belong to the selected pipeline")
 
-        # Eagerly load documents so the snapshot captures attached files
-        doc_query = (
-            select(ProspectDocument)
-            .where(ProspectDocument.prospect_id == prospect_id)
-            .order_by(ProspectDocument.created_at)
-        )
-        doc_result = await self.db.execute(doc_query)
-        documents = list(doc_result.scalars().all())
+        # The election-vote stage's config.package_fields (ElectionVoteConfig
+        # on the frontend) lets a coordinator opt specific PII out of the
+        # snapshot — but nothing on the backend ever read it, so every flag
+        # was silently ignored and the full set was captured regardless
+        # (CLAUDE.md Pitfall #19: a config switch shipped with no reader).
+        # A step whose config was never touched has no package_fields key at
+        # all, so `package_fields is None` here preserves the prior
+        # capture-everything behavior for every pipeline that hasn't
+        # configured this — this only takes effect where a coordinator has
+        # actually saved field choices.
+        #
+        # Resolved from a step, never trusted as *given* by the client:
+        # step_id is optional and, even when supplied, is only checked above
+        # for being *some* step of the (also client-overridable)
+        # effective_pipeline — not for being an election_vote step at all.
+        # Trusting it directly let a caller silently defeat a coordinator's
+        # configured PII minimization just by omitting step_id or naming a
+        # different step, with no error and no sign anything was skipped
+        # (MP-08 pass 4 Codex).
+        #
+        # Preferred source: prospect.current_step. `current_step_id` is
+        # server-only — set by create_prospect/advance_prospect/regress_prospect,
+        # protected from the generic update path (_PROSPECT_PROTECTED_FIELDS)
+        # — so it names the stage the applicant has actually, currently
+        # reached with nothing here for a client to steer. That distinction
+        # matters once a pipeline has *more than one* election_vote step
+        # (add_step has no uniqueness constraint on step_type, so this is a
+        # reachable configuration): the first-found step below can be an
+        # earlier, more permissive stage than the one this package is
+        # actually for, silently over-capturing PII the applicant's real
+        # stage was configured to exclude (MP-08 round 2 Codex).
+        election_step = None
+        current_step = prospect.current_step
+        effective_steps = effective_pipeline.steps if effective_pipeline else []
+        if (
+            current_step is not None
+            and current_step.step_type == PipelineStepType.ELECTION_VOTE
+            and any(str(s.id) == str(current_step.id) for s in effective_steps)
+        ):
+            election_step = current_step
+
+        # MP-08 pass 4 round 2 (Codex, second finding): advanceApplicant
+        # (frontend) commits the stage advance, then makes a *separate*
+        # request to create the package, naming the stage it just entered as
+        # step_id — between those two requests, current_step can change again
+        # (a regression, or another advance landing in the gap). If that
+        # happens, the policy above would already be resolved from the new
+        # current_step while the package below still stored the *request's*
+        # stale step_id verbatim — labeling the package for one stage while a
+        # different stage's package_fields actually governed the snapshot.
+        # Reject rather than silently mixing the two: this only fires when a
+        # step_id was supplied AND current_step is itself the election_vote
+        # step whose policy just governed (never for the "named step isn't
+        # the pipeline's election step" case the pass-4 tests cover, and
+        # never when step_id is omitted). The caller re-fetches and retries,
+        # which is correct — the applicant genuinely moved.
+        if (
+            election_step is current_step
+            and step_id is not None
+            and str(step_id) != str(current_step.id)
+        ):
+            raise ValueError(
+                "The applicant's pipeline stage changed since this request "
+                "was made. Refresh the applicant and try again."
+            )
+
+        # MP-08 pass 4 round 4 (Codex): before guessing by sort_order, prefer
+        # a caller-supplied step_id if it names an election_vote step of
+        # this exact pipeline — a check not performed above. MP-5 already
+        # confirmed step_id belongs to the pipeline; it never checked
+        # step_type, so the guess below used to discard that validated
+        # information even when it was the one signal actually naming the
+        # stage this package is for. This matters for the same race MP-24
+        # guards on the current_step-governed side: advanceApplicant (the
+        # only frontend caller) sends step_id as the election_vote stage the
+        # applicant just entered, and if a second advance moves current_step
+        # past every election_vote stage before this request lands, the old
+        # fallback discarded that step_id and guessed whichever
+        # election_vote step sorts first — which can be an earlier, more
+        # permissive stage than the one the applicant, and this request,
+        # actually just passed through. A step_id naming a real, in-pipeline
+        # step of the *wrong* type (the pass-4 "wrong step_id" case) is left
+        # alone here and still falls through to the guess below — this only
+        # trusts step_id once it is confirmed to be an election_vote step,
+        # never merely because MP-5 accepted it as *some* step of the
+        # pipeline.
+        if election_step is None and step_id is not None:
+            named_step = next(
+                (s for s in effective_steps if str(s.id) == str(step_id)),
+                None,
+            )
+            if (
+                named_step is not None
+                and named_step.step_type == PipelineStepType.ELECTION_VOTE
+            ):
+                election_step = named_step
+
+        # Fallback for when neither the prospect's current step nor a
+        # type-checked step_id identifies an election_vote step in the
+        # governing pipeline — e.g. a package requested with step_id omitted
+        # after the applicant already advanced past every vote stage, or a
+        # caller-supplied pipeline_id override with no matching current step
+        # or step_id. Preserves the pass-4 behavior (and is exact whenever a
+        # pipeline has only one election_vote step, the overwhelmingly
+        # common case); a pipeline with several such steps and no current
+        # step or step_id match here remains ambiguous — see
+        # docs/security-review/MP-08-membership-pipeline.md.
+        if election_step is None:
+            election_step = next(
+                (
+                    s
+                    for s in effective_steps
+                    if s.step_type == PipelineStepType.ELECTION_VOTE
+                    and isinstance(s.config, dict)
+                    and isinstance(s.config.get("package_fields"), dict)
+                ),
+                None,
+            )
+
+        package_fields: Optional[Dict[str, Any]] = None
+        if (
+            election_step
+            and isinstance(election_step.config, dict)
+            and isinstance(election_step.config.get("package_fields"), dict)
+        ):
+            package_fields = election_step.config["package_fields"]
+
+        def _field_enabled(key: str, default: bool) -> bool:
+            if package_fields is None:
+                return True
+            value = package_fields.get(key, default)
+            return bool(value) if isinstance(value, bool) else default
+
+        include_documents = _field_enabled("include_documents", True)
+        include_stage_history = _field_enabled("include_stage_history", True)
+
+        # Eagerly load documents so the snapshot captures attached files —
+        # skipped entirely when the stage config excludes them.
+        documents: List[ProspectDocument] = []
+        if include_documents:
+            doc_query = (
+                select(ProspectDocument)
+                .where(ProspectDocument.prospect_id == prospect_id)
+                .order_by(ProspectDocument.created_at)
+            )
+            doc_result = await self.db.execute(doc_query)
+            documents = list(doc_result.scalars().all())
 
         # Build stage history from completed step progress, in pipeline order —
         # `step_progress` comes back in whatever order the database hands it
         # over, which put the stages of an election package's summary in an
         # arbitrary sequence for the members reading it before a vote.
         stage_history: List[Dict[str, Any]] = []
-        for sp in sorted(
-            prospect.step_progress or [],
-            key=lambda p: (p.step.sort_order if p.step else 0, p.created_at),
-        ):
-            if sp.status == StepProgressStatus.COMPLETED and sp.step:
-                stage_history.append(
-                    {
-                        "stage_name": sp.step.name,
-                        "completed_at": (
-                            str(sp.completed_at) if sp.completed_at else None
-                        ),
-                    }
-                )
+        if include_stage_history:
+            for sp in sorted(
+                prospect.step_progress or [],
+                key=lambda p: (p.step.sort_order if p.step else 0, p.created_at),
+            ):
+                if sp.status == StepProgressStatus.COMPLETED and sp.step:
+                    stage_history.append(
+                        {
+                            "stage_name": sp.step.name,
+                            "completed_at": (
+                                str(sp.completed_at) if sp.completed_at else None
+                            ),
+                        }
+                    )
 
-        # Build applicant snapshot — capture all relevant prospect data
-        # so the election package is self-contained even if the prospect
-        # record is later modified.
+        # Build applicant snapshot — capture all relevant prospect data so
+        # the election package is self-contained even if the prospect record
+        # is later modified. Fields with a package_fields toggle (email,
+        # phone, address, date of birth, documents, stage history) are
+        # included per that configuration; fields with no toggle on the
+        # stage-config UI (name, interest reason, notes, ...) are always
+        # captured, unaffected by this.
         snapshot: Dict[str, Any] = {
             "first_name": prospect.first_name,
             "last_name": prospect.last_name,
-            "email": prospect.email,
-            "phone": prospect.phone,
-            "mobile": prospect.mobile,
-            "date_of_birth": (
-                str(prospect.date_of_birth) if prospect.date_of_birth else None
-            ),
-            "address_street": prospect.address_street,
-            "address_city": prospect.address_city,
-            "address_state": prospect.address_state,
-            "address_zip": prospect.address_zip,
             "interest_reason": prospect.interest_reason,
             "referral_source": prospect.referral_source,
             "desired_membership_type": prospect.desired_membership_type,
@@ -4601,6 +4807,20 @@ class MembershipPipelineService:
             ],
             "stage_history": stage_history,
         }
+        if _field_enabled("include_email", True):
+            snapshot["email"] = prospect.email
+        if _field_enabled("include_phone", False):
+            snapshot["phone"] = prospect.phone
+            snapshot["mobile"] = prospect.mobile
+        if _field_enabled("include_address", False):
+            snapshot["address_street"] = prospect.address_street
+            snapshot["address_city"] = prospect.address_city
+            snapshot["address_state"] = prospect.address_state
+            snapshot["address_zip"] = prospect.address_zip
+        if _field_enabled("include_date_of_birth", False):
+            snapshot["date_of_birth"] = (
+                str(prospect.date_of_birth) if prospect.date_of_birth else None
+            )
 
         pkg = ProspectElectionPackage(
             id=generate_uuid(),
@@ -4652,11 +4872,42 @@ class MembershipPipelineService:
         updated_by: Optional[str] = None,
     ) -> Optional[ProspectElectionPackage]:
         """Update an election package for a prospect"""
-        pkg = await self.get_election_package(prospect_id, organization_id)
+        # Locked for the same reason as assign_package_to_election (CLAUDE.md
+        # Pitfall #27): the state-machine check just below reads pkg.status
+        # to decide whether the write is allowed, so the read and the
+        # decision must be the same locking statement. An unlocked read here
+        # would let this method's status reset (e.g. "added_to_ballot" ->
+        # "ready") race a concurrent assign, validating against a stale
+        # snapshot of pkg.status and reopening the exact compounding
+        # scenario that state-machine check exists to prevent.
+        pkg = await self.get_election_package(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not pkg:
             return None
 
         applied = dict(updates)
+
+        # ELECTION_PACKAGE_SYSTEM_STATUSES are derived, not chosen (see the
+        # constant's docstring above) — this generic update must not become
+        # a second, unguarded path to set or clear them, the same class of
+        # bug MP-9 fixed for ProspectStatus.TRANSFERRED. Without this, a
+        # caller could reset an already-assigned package from
+        # "added_to_ballot" back to "ready" and call assign again, landing
+        # the same applicant on a second ballot with no race required.
+        if applied.get("status") is not None:
+            if (
+                applied["status"] not in ELECTION_PACKAGE_CALLER_STATUSES
+                or pkg.status in ELECTION_PACKAGE_SYSTEM_STATUSES
+            ):
+                raise ValueError(
+                    "Package status can only be set to 'draft' or 'ready' "
+                    "here. 'added_to_ballot', 'elected' and 'not_elected' "
+                    "are set automatically — by assigning the package to an "
+                    "election or tallying the vote — and cannot be set or "
+                    "reverted through this update."
+                )
+
         if isinstance(applied.get("package_config"), dict):
             # Merge into existing config to avoid wiping previously stored
             # keys (documents, stage_summary, etc.) — a partial config dict
@@ -4732,8 +4983,20 @@ class MembershipPipelineService:
 
         Raises ValueError if the package is not ready or the election is
         not in DRAFT status.
+
+        Locking: two concurrent assignment calls for the same package (to
+        the same election or, worse, two different ones) would otherwise
+        both read status == "ready" before either commits, and both append
+        a ballot item — landing the applicant on two ballots with the
+        second write to pkg.election_id silently overwriting the first
+        (CLAUDE.md Pitfall #27). The package row is the one thing both
+        calls contend on, so it is locked here and the "ready" check below
+        runs against that locked read rather than a plain SELECT taken
+        before the lock.
         """
-        pkg = await self.get_election_package(prospect_id, organization_id)
+        pkg = await self.get_election_package(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not pkg:
             raise ValueError("Election package not found")
 
@@ -4752,11 +5015,17 @@ class MembershipPipelineService:
                 f"(current: '{pkg.status}')"
             )
 
+        # Also lock the election row: two different packages assigned to the
+        # same election concurrently would otherwise race the same
+        # read-modify-write on ballot_items, and the loser's ballot item
+        # would be silently lost to the last commit rather than appended.
         election_result = await self.db.execute(
-            select(Election).where(
+            select(Election)
+            .where(
                 Election.id == election_id,
                 Election.organization_id == organization_id,
             )
+            .with_for_update()
         )
         election = election_result.scalars().first()
         if not election:
@@ -5516,19 +5785,32 @@ class MembershipPipelineService:
         result = await self.db.execute(query)
         links = list(result.scalars().all())
 
+        # Batch-fetch every referenced Event/User once instead of a query per
+        # link (was a 2N+1 shape — one Event and, when set, one User lookup
+        # per row).
+        event_ids = {link.event_id for link in links if link.event_id}
+        events_by_id: Dict[str, Event] = {}
+        if event_ids:
+            events_result = await self.db.execute(
+                select(Event).where(Event.id.in_(event_ids))
+            )
+            events_by_id = {e.id: e for e in events_result.scalars().all()}
+
+        linker_ids = {link.linked_by for link in links if link.linked_by}
+        linkers_by_id: Dict[str, User] = {}
+        if linker_ids:
+            linkers_result = await self.db.execute(
+                select(User).where(User.id.in_(linker_ids))
+            )
+            linkers_by_id = {u.id: u for u in linkers_result.scalars().all()}
+
         enriched: List[Dict[str, Any]] = []
         for link in links:
-            event_result = await self.db.execute(
-                select(Event).where(Event.id == link.event_id)
-            )
-            event = event_result.scalar_one_or_none()
+            event = events_by_id.get(link.event_id)
 
             linker_name = None
             if link.linked_by:
-                linker_result = await self.db.execute(
-                    select(User).where(User.id == link.linked_by)
-                )
-                linker = linker_result.scalar_one_or_none()
+                linker = linkers_by_id.get(link.linked_by)
                 if linker:
                     linker_name = f"{linker.first_name} {linker.last_name}".strip()
 

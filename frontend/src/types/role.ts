@@ -2,7 +2,7 @@
  * Role and Permission type definitions
  */
 
-import type { NotificationPreferences } from './user';
+import type { NotificationPreferences, ProfileVisibility } from './user';
 import type { UserStatus } from '../constants/enums';
 
 export interface Role {
@@ -66,6 +66,12 @@ export interface UserWithRoles {
       }>
     | undefined;
   notification_preferences?: NotificationPreferences | undefined;
+  /**
+   * The member's own visibility choice, defaults applied. Present for the
+   * member themselves and for members-managers; `null` for anyone else — what
+   * a colleague chose to hide is itself private.
+   */
+  profile_visibility?: ProfileVisibility | null | undefined;
   roles: Role[];
 }
 

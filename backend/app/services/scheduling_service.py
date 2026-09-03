@@ -886,23 +886,34 @@ class SchedulingService:
         end_date: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
+        open_to_all_only: bool = False,
     ) -> Tuple[List[Shift], int]:
-        """Get shifts with date filtering and pagination"""
+        """Get shifts with date filtering and pagination.
+
+        ``open_to_all_only`` keeps just the shifts flagged
+        ``open_to_all_members`` — the set every eligible member can see
+        without evaluating their rank or qualifications.
+        """
         query = select(Shift).where(Shift.organization_id == str(organization_id))
 
         if start_date:
             query = query.where(Shift.shift_date >= start_date)
         if end_date:
             query = query.where(Shift.shift_date <= end_date)
+        if open_to_all_only:
+            query = query.where(Shift.open_to_all_members.is_(True))
 
         # Count
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        # Paginated results
+        # Paginated results. The id breaks ties between shifts sharing a
+        # date and start time, so a page boundary never repeats or skips one.
         query = (
-            query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+            query.order_by(
+                Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
+            )
             .offset(skip)
             .limit(limit)
         )
@@ -962,7 +973,9 @@ class SchedulingService:
             Shift.shift_date >= start_date,
             Shift.shift_date <= end_date,
         )
-        query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+        query = query.order_by(
+            Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
+        )
         candidates = list((await self.db.execute(query)).scalars().all())
         if not candidates:
             return [], 0
@@ -2115,16 +2128,29 @@ class SchedulingService:
     # Summary & Reporting
     # ============================================
 
-    async def get_summary(self, organization_id: UUID) -> Dict[str, Any]:
-        """Get scheduling summary statistics"""
-        today = date.today()
+    async def get_summary(
+        self, organization_id: UUID, open_to_all_only: bool = False
+    ) -> Dict[str, Any]:
+        """Get scheduling summary statistics.
+
+        ``open_to_all_only`` counts only shifts flagged ``open_to_all_members``
+        — the set every eligible member can see — so a caller confined to
+        that view gets figures for it rather than for the whole roster.
+
+        "This week" and "this month" are the department's local periods:
+        near a boundary the server's UTC date is the wrong day for a
+        department in another timezone.
+        """
+        from app.utils.org_timezone import resolve_scheduling_timezone
+
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = datetime.now(tz).date()
+        scope = [Shift.organization_id == str(organization_id)]
+        if open_to_all_only:
+            scope.append(Shift.open_to_all_members.is_(True))
 
         # Total shifts
-        total_result = await self.db.execute(
-            select(func.count(Shift.id)).where(
-                Shift.organization_id == str(organization_id)
-            )
-        )
+        total_result = await self.db.execute(select(func.count(Shift.id)).where(*scope))
         total_shifts = total_result.scalar() or 0
 
         # Shifts this week
@@ -2132,7 +2158,7 @@ class SchedulingService:
         week_end = week_start + timedelta(days=6)
         week_result = await self.db.execute(
             select(func.count(Shift.id))
-            .where(Shift.organization_id == str(organization_id))
+            .where(*scope)
             .where(Shift.shift_date >= week_start)
             .where(Shift.shift_date <= week_end)
         )
@@ -2148,7 +2174,7 @@ class SchedulingService:
             next_month_first = first_of_month.replace(month=first_of_month.month + 1)
         month_result = await self.db.execute(
             select(func.count(Shift.id))
-            .where(Shift.organization_id == str(organization_id))
+            .where(*scope)
             .where(Shift.shift_date >= first_of_month)
             .where(Shift.shift_date < next_month_first)
         )
@@ -2158,7 +2184,7 @@ class SchedulingService:
         hours_result = await self.db.execute(
             select(func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0))
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
-            .where(Shift.organization_id == str(organization_id))
+            .where(*scope)
             .where(Shift.shift_date >= first_of_month)
             .where(Shift.shift_date < next_month_first)
         )
@@ -6035,9 +6061,12 @@ class SchedulingService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        # Paginated results
+        # Paginated results. The id breaks ties between shifts sharing a
+        # date and start time, so a page boundary never repeats or skips one.
         query = (
-            query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+            query.order_by(
+                Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
+            )
             .offset(skip)
             .limit(limit)
         )

@@ -549,10 +549,12 @@ class ApparatusService:
         total = count_result.scalar()
 
         # Main query
+        # The id breaks ties between apparatus sharing a unit number, so an
+        # offset page never repeats or skips one.
         query = (
             select(Apparatus)
             .where(and_(*conditions))
-            .order_by(Apparatus.unit_number)
+            .order_by(Apparatus.unit_number, Apparatus.id)
             .offset(skip)
             .limit(limit)
         )
@@ -1249,7 +1251,11 @@ class ApparatusService:
             select(ApparatusMaintenance)
             .where(and_(*conditions))
             .options(selectinload(ApparatusMaintenance.maintenance_type))
-            .order_by(desc(ApparatusMaintenance.created_at))
+            # The id breaks ties between records created in one tick, so an
+            # offset page never repeats or skips one.
+            .order_by(
+                desc(ApparatusMaintenance.created_at), desc(ApparatusMaintenance.id)
+            )
             .offset(skip)
             .limit(limit)
         )

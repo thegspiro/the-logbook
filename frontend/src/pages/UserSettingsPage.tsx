@@ -35,21 +35,48 @@ import { useAuthStore } from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import type { PasswordChangeData } from '../types/auth';
-import type { UserProfileUpdate, EmergencyContact, ConsentItem } from '../types/user';
+import type {
+  UserProfileUpdate,
+  EmergencyContact,
+  ConsentItem,
+  ContactInfoSettings,
+  ProfileVisibilityField,
+} from '../types/user';
+import { PROFILE_VISIBILITY_FIELDS } from '../types/user';
 import type { UserWithRoles } from '../types/role';
+import { useProfileVisibility } from '../hooks/useProfileVisibility';
+import { VisibilityControl } from '../components/member-profile/VisibilityControl';
+import { orgHidesField } from '../utils/profileVisibility';
+import { SaveStatusPill } from '../components/settings/SaveStatusPill';
+import { SettingsPanelHead } from '../components/settings/SettingsPanelHead';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
 
-type TabType = 'account' | 'password' | 'security' | 'emergency' | 'appearance' | 'notifications' | 'app';
+type TabType = 'account' | 'password' | 'security' | 'privacy' | 'emergency' | 'appearance' | 'notifications' | 'app';
 
-const TAB_IDS: TabType[] = ['account', 'password', 'security', 'emergency', 'appearance', 'notifications', 'app'];
+const TAB_IDS: TabType[] = [
+  'account',
+  'password',
+  'security',
+  'privacy',
+  'emergency',
+  'appearance',
+  'notifications',
+  'app',
+];
 
 const SECTIONS: SettingsSection<TabType>[] = [
   { key: 'account', label: 'Account', icon: User, description: 'Your name, contact details, and photo' },
   { key: 'password', label: 'Password', icon: Lock, description: 'Change the password you sign in with' },
   { key: 'security', label: 'Security', icon: ShieldCheck, description: 'Two-factor authentication and sessions' },
+  {
+    key: 'privacy',
+    label: 'Privacy',
+    icon: EyeOff,
+    description: 'What other members can see, and your privacy choices',
+  },
   { key: 'emergency', label: 'Emergency Contacts', icon: Heart, description: 'Who the department calls for you' },
   { key: 'appearance', label: 'Appearance', icon: Palette, description: 'Theme and display preferences' },
   { key: 'notifications', label: 'Notifications', icon: Bell, description: 'How and when the department reaches you' },
@@ -116,7 +143,7 @@ export const UserSettingsPage: React.FC = () => {
   };
 
   // Profile state
-  const [_profile, setProfile] = useState<UserWithRoles | null>(null);
+  const [profile, setProfile] = useState<UserWithRoles | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [downloadingData, setDownloadingData] = useState(false);
@@ -149,11 +176,17 @@ export const UserSettingsPage: React.FC = () => {
   const [savingContacts, setSavingContacts] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
-  // Load user profile
+  // Load user profile. A failure is remembered rather than swallowed: the
+  // Privacy section must not offer switches over values it could not show,
+  // so it needs to know the difference between "nothing on file" and "could
+  // not load".
+  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
+  const [profileReloadToken, setProfileReloadToken] = useState(0);
   useEffect(() => {
     if (!user?.id) return;
     const loadProfile = async () => {
       setLoadingProfile(true);
+      setProfileLoadFailed(false);
       try {
         const data = await userService.getUserWithRoles(user.id);
         setProfile(data);
@@ -176,13 +209,14 @@ export const UserSettingsPage: React.FC = () => {
           data.emergency_contacts?.length ? data.emergency_contacts.map((ec: EmergencyContact) => ({ ...ec })) : []
         );
       } catch {
-        // Profile load failure is non-critical for other tabs
+        // Non-critical for the other sections; Privacy reads the flag.
+        setProfileLoadFailed(true);
       } finally {
         setLoadingProfile(false);
       }
     };
     void loadProfile();
-  }, [user?.id]);
+  }, [user?.id, profileReloadToken]);
 
   // Load notification preferences from backend
   useEffect(() => {
@@ -287,11 +321,11 @@ export const UserSettingsPage: React.FC = () => {
     }
   };
 
-  // Loaded for Notifications as well as Security: the SMS consent is the gate
+  // Loaded for Notifications as well as Privacy: the SMS consent is the gate
   // that actually decides whether texts are sent, so the member has to be able
   // to grant it from the screen where they go looking for text messages.
   useEffect(() => {
-    if (activeTab !== 'security' && activeTab !== 'notifications') return;
+    if (activeTab !== 'privacy' && activeTab !== 'notifications') return;
     userService
       .getMyConsents()
       .then(setConsents)
@@ -299,6 +333,71 @@ export const UserSettingsPage: React.FC = () => {
         // Section renders empty on failure; toggling still surfaces errors.
       });
   }, [activeTab]);
+
+  // What other members may see of this member's contact block. Fetched when
+  // the Privacy section opens; saved on every switch, whole object each time.
+  const privacy = useProfileVisibility({ enabled: activeTab === 'privacy' });
+
+  // The department's ceiling over the three work fields, so a switch that is
+  // on does not read as "visible" while the department has it off for all.
+  const [orgContactVisibility, setOrgContactVisibility] = useState<ContactInfoSettings | null>(null);
+  useEffect(() => {
+    if (activeTab !== 'privacy') return;
+    let cancelled = false;
+    userService
+      .checkContactInfoEnabled()
+      .then((settings) => {
+        if (!cancelled) setOrgContactVisibility(settings);
+      })
+      .catch(() => {
+        if (!cancelled) setOrgContactVisibility(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
+
+  // The switches write the whole object, so they stay off until both the
+  // stored choice and the profile values under them are on hand — a member
+  // must never enable a field they cannot see.
+  const privacyControlsBlocked = privacy.loadError || profileLoadFailed || !profile;
+  const retryPrivacyLoads = () => {
+    privacy.reload();
+    setProfileReloadToken((n) => n + 1);
+  };
+
+  const PROFILE_VISIBILITY_LABELS: Record<ProfileVisibilityField, string> = {
+    email: 'Work email',
+    personal_email: 'Personal email',
+    phone: 'Phone',
+    mobile: 'Mobile',
+    address: 'Mailing address',
+  };
+  // The current value under each switch, read from the loaded profile rather
+  // than the Account form so an unsaved edit there is not shown as shared.
+  const profileVisibilityValue = (field: ProfileVisibilityField): string => {
+    switch (field) {
+      case 'email':
+        return profile?.email ?? '';
+      case 'personal_email':
+        return profile?.personal_email ?? '';
+      case 'phone':
+        return profile?.phone ?? '';
+      case 'mobile':
+        return profile?.mobile ?? '';
+      case 'address':
+        return [
+          profile?.address_street,
+          [profile?.address_city, profile?.address_state].filter(Boolean).join(', '),
+          profile?.address_zip,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+      default:
+        return '';
+    }
+  };
 
   const smsConsent = consents.find((c) => c.consent_type === 'sms_notifications');
   // Absent row means never asked, which the backend treats as a refusal.
@@ -944,6 +1043,70 @@ export const UserSettingsPage: React.FC = () => {
                   }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Privacy Tab — what other members see, the optional consents, and
+              the member's own data. These used to sit under Security, which
+              is where nobody looks for "can Smith see my phone number". */}
+          {activeTab === 'privacy' && (
+            <div className="space-y-6">
+              <div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <SettingsPanelHead
+                    title="Profile visibility"
+                    description="Choose which of your contact details other members can see on your profile and in the member directory. Leadership can always see everything."
+                  />
+                  <SaveStatusPill state={privacy.saveState} />
+                </div>
+                {privacy.loading || loadingProfile ? (
+                  <div className="text-theme-text-muted py-4 text-sm">Loading…</div>
+                ) : privacyControlsBlocked ? (
+                  <div className="alert-danger" role="alert">
+                    <p className="text-theme-alert-danger-text text-sm">
+                      Couldn&apos;t load what you currently share, so the switches are off until it loads.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={retryPrivacyLoads}
+                      className="btn-secondary mt-3 text-sm font-medium"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : (
+                  <div className="divide-theme-surface-border divide-y">
+                    {PROFILE_VISIBILITY_FIELDS.map((field) => {
+                      const value = profileVisibilityValue(field);
+                      return (
+                        <div key={field} className="flex items-center justify-between gap-4 py-3.5">
+                          <div className="min-w-0">
+                            <p className="text-theme-text-primary text-sm font-medium">
+                              {PROFILE_VISIBILITY_LABELS[field]}
+                            </p>
+                            <p className="text-theme-text-muted mt-0.5 text-[13px] break-words">
+                              {value || 'Nothing on file'}
+                            </p>
+                          </div>
+                          <VisibilityControl
+                            field={field}
+                            label={PROFILE_VISIBILITY_LABELS[field]}
+                            visible={privacy.visibility[field]}
+                            mode="toggle"
+                            orgHidden={orgHidesField(field, orgContactVisibility)}
+                            disabled={!privacy.ready || privacy.savingField === field}
+                            onChange={(next) => void privacy.setField(field, next)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-theme-text-muted mt-3 text-[13px]">
+                  The department can also turn work email, phone and mobile off for everyone. Your date of birth and
+                  emergency contacts are never shown to other members.
+                </p>
+              </div>
 
               <div className="border-theme-surface-border border-t pt-6">
                 <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Privacy Choices</h2>
@@ -962,7 +1125,7 @@ export const UserSettingsPage: React.FC = () => {
                           checked={consent.granted === true}
                           disabled={savingConsent === consent.consent_type}
                           onChange={(e) => void handleConsentToggle(consent.consent_type, e.target.checked)}
-                          className="mt-1 h-4 w-4"
+                          className="form-checkbox mt-0.5"
                         />
                         <span>
                           <span className="text-theme-text-primary block text-sm font-medium">

@@ -16,9 +16,1930 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+**#2200** (branch `claude/apparatus-nfc-outstanding-write-invariant`) —
+Feature 13, Apparatus & NFC, pass 9. Redirect of #2199 (merged by the repo
+owner mid-round, before this pass's fix landed) per CLAUDE.md Pitfall #24 —
+branched fresh off `origin/main` at `f77cab7f` rather than reusing the dead
+branch. A fifth Codex round on the same `EquipmentCheckTemplateBuilder.tsx`
+autosave/subtree-delete subsystem passes 5–8 had already been through found
+two more gaps in the same shape (AP-13 finding 1: `flushPendingAutoSaves`
+issued PATCHes without registering them anywhere a delete's quiescing step
+could see; AP-13 finding 2: a partial-failure `handleSave` batch skipped the
+`savedParentByIdRef` refresh for a compartment whose own PATCH had already
+succeeded). Rather than a sixth pairwise patch — the same shape as the
+Facilities PR's FAC-32→FAC-34→FAC-35 lock-ordering saga — this pass states
+one canonical invariant (before a subtree delete proceeds, no id in that
+subtree may have an outstanding server write or unresolved local hierarchy
+change) and routes every item-PATCH-issuing write path through one
+registration point (`registerInFlightSave`) rather than three call sites
+each remembering to update the tracking maps themselves. Also trimmed
+review-chronology narration ("AP-13 finding N", "Codex", "three rounds") out
+of the production comments per AGENTS.md/CLAUDE.md comment policy, and fixed
+an unrelated `act()` test-hygiene issue Codex flagged in two pass-7/8 tests
+in the same file. Both new findings reproduced live (pre-fix files restored
+from `origin/main` against the new tests, confirmed failing, then passing
+post-fix) before being called findings. Full writeup:
+`docs/security-review/AP-13-apparatus-nfc.md` pass 9.
 
 ---
+
+### 2026-09-03 — Feature 13 (Apparatus & NFC, passes 3–8) ✅ merged (mid-round) — PR #2199
+
+`21bdf140` merged by the repo owner directly, before pass 9's fix (below)
+landed — the same mid-round-merge shape #2195 and #2191 hit earlier in this
+rotation. Per CLAUDE.md Pitfall #24, pass 9 continued on a fresh branch/PR
+(#2200) rather than reusing the dead branch; see the Open PR entry above.
+
+This PR closed AP-8 (P1, data integrity — `CheckTemplateCompartment.children`
+had the same inverted self-referential `remote_side` shape FAC-16 found and
+fixed on `DocumentFolder.children`, reproduced live with a three-level
+fixture before fixing) through AP-16 (P2, data completeness —
+`clone_template`'s root-down walk silently dropped a compartment whose
+parent lay outside the source template) across six further Codex rounds
+(passes 4–8) on the same `EquipmentCheckTemplateBuilder.tsx`
+autosave/subtree-delete subsystem: AP-9/AP-10/AP-11 (pass 4, surfaced by
+AP-8's cascade going from no-op to genuinely effective), AP-12/AP-13 (pass
+5, `delete_compartment`'s stale-snapshot cascade race and the frontend's
+pending-reparent delete guard), AP-14/AP-15 (pass 6, the pass-5 locking walk's
+missing template/org boundary and a descendant auto-save left running past
+a delete), AP-16 plus four regressions in the rotation's own pass-6 fixes
+(pass 7), and two more gaps in the same guard — in-flight (not just
+pending) auto-saves, and `savedParentByIdRef` never refreshed after a bulk
+replace (pass 8). Every finding reproduced live before being called one,
+and regression-tested failing pre-fix / passing post-fix. Full detail in
+`docs/security-review/AP-13-apparatus-nfc.md` (passes 3–8) and the merged
+PR itself, not duplicated here. Rotation row 13 stays 🔄 — pass 9 (the
+invariant that supersedes this whole pairwise chain) continues under #2200.
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2198 (FAC-29 through FAC-45)
+
+`bcbffabc` merged. This PR was the second facilities-followup (continuing
+pass 3's concurrency investigation after #2195 merged mid-round, per
+CLAUDE.md Pitfall #24), and closes out feature 12: 14 findings fixed
+(FAC-29, FAC-31 through FAC-40, FAC-42, FAC-43, FAC-45) and 3 correctly
+flagged as design/tradeoff decisions rather than mechanical fixes (FAC-30,
+FAC-41, FAC-44). The fixed set is almost entirely TOCTOU races and
+lock-ordering deadlocks in `facilities.py`/`documents_service.py`'s
+shared-document-reference and folder-locking paths — each reproduced live
+with real concurrent sessions before being called a finding, per this
+rotation's standing discipline, and each fix carries a regression test
+confirmed failing pre-fix (`git stash`) and passing post-fix. Full detail
+is in `docs/security-review/FAC-12-facilities.md` and the PR itself, not
+duplicated here. Rotation row 12 → ✅.
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2195 (FAC-24 through FAC-28)
+
+`38410c86` merged (by the repo owner directly, mid-round — see the FAC-29
+entry above) pass 3's continuation through FAC-28. #2191 merged (`f5e800f1`)
+while this round's own fix (FAC-24) was in progress — its last pushed commit
+(`910c27e6`, FAC-18/19/20/21) did not include FAC-24, which Codex found on
+that same merged PR's sweep after the merge. Per CLAUDE.md Pitfall #24, that
+work continued on a new branch (`claude/security-review-facilities-followup`)
+and this PR rather than reusing the dead `claude/security-review-facilities`
+or reopening the merged one. #2194's separate, urgent post-merge fix
+(FAC-22, FAC-23) — an unrelated cascade-delete bug found and merged to
+`main` while this PR was open — claimed the FAC-22/FAC-23 numbers first;
+this PR's own finding was renumbered FAC-22 → **FAC-24** once the collision
+surfaced during the merge of `origin/main` into this branch.
+
+**FAC-24 (P1, access control, fixed):**
+`can_access_folder`/`can_access_document` — the one shared predicate every
+FAC-14 through FAC-21 mutation check relies on — admitted a caller who held
+only a folder's **read-only** `required_permissions` entry
+(`facilities.view_sensitive`), letting a caller holding `documents.manage` +
+that one read-tier grant (the seeded **treasurer** role's exact shape, no
+facilities write permission at all) unfile/move/delete a sensitive document
+or rename/reparent/delete/create-under the sensitive folder tree — bypassing
+every one of FAC-14 through FAC-21's checks at once, since they all reuse
+this same predicate. Fixed with a new `require_write` mode on the predicate
+(filters `required_permissions` to write-tier entries — the
+`.view`/`.view_*` vs. everything-else convention already used throughout
+`core/permissions.py` — before matching), applied at every mutation-gating
+site the FAC-14–21 sweep enumerated, including the descendant-ACL check
+inside a folder-delete cascade. Also closed a dangling reference the same
+audit surfaced: deleting a shared document (directly or via a folder
+cascade) left a facility's own `"document:<uuid>"` reference to it pointing
+at nothing; now cleaned up in the same transaction. Plus two doc corrections
+Codex found on the same round: the FAC-16 write-up claimed a
+`root → child → grandchild → document` regression-test cascade the actual
+fixture didn't build (fixed by extending the fixture, not narrowing the
+claim), and `CHANGELOG.md`'s FAC-13 entry over-broadly named the seeded
+`quartermaster` role among those refused generic-Documents-module access,
+when quartermaster never held the `documents.view` that path requires (fixed
+by scoping that specific claim to the three roles that do). Full completion
+gate green, 10029/10029 full backend suite (+12 for FAC-24's regression
+tests over the 10017 baseline `main` carried at fork time).
+
+**`origin/main` merged into that branch** (bringing in #2194's since-merged
+FAC-22/FAC-23 fix — same two functions, `update_folder`/`delete_folder`,
+this PR also touched) with the conflict resolved by keeping both sets of
+changes: #2194's `is_system` checks and this PR's own `require_write`/
+permission-tier changes coexist in the merged `update_folder`/
+`delete_folder`. Full backend suite re-run green against the merged code.
+
+**FAC-25 (P1, access control, fixed), Codex review of the FAC-24 commit:**
+`POST /documents/upload`'s folder-destination check was the one
+mutation site FAC-24's sweep missed — still called `can_access_folder` with
+no `require_write=True`, so the treasurer-shaped caller FAC-24 closed
+everywhere else could still upload directly into a sensitive facility
+folder. Fixed by passing `require_write=True` there too.
+
+**FAC-26 (P1, access control, fixed), Codex review of the same commit:**
+deleting a shared document (directly, or via a folder cascade) cleaned up
+its `FacilityDocument` reference without checking the facility-specific
+delete permission — the generic `DELETE /documents/{document_id}` requires
+only `documents.manage`, but the facility module's own document-delete
+route reserves deletion for `facilities.delete`/`.manage` specifically, and
+`permission_matches_any_write` treats `facilities.edit` (present in a
+folder's `required_permissions` alongside `.manage`) as write-capable — so a
+`documents.manage` + `facilities.edit` (no `facilities.delete`) caller could
+delete a shared document and its facility reference through the generic
+endpoint. Fixed by threading `current_user` through `delete_document`
+(mirroring `delete_folder`'s existing optional param) and gating the
+reference cleanup's actual deletion on `facilities.delete`/`.manage` when a
+reference exists — fails closed (`PermissionError` → 403), blocking the
+whole delete rather than leaving a dangling reference; proceeds normally
+when there's no reference to protect.
+
+**FAC-27 (P2, data integrity, fixed), Codex review, same commit's own
+neighboring code:** the facility-reference cleanup exact-matched a canonical
+`document:{uuid}` string it built itself; `_validate_shared_document_reference`
+validates the UUID suffix with `UUID(...)` (accepting far more forms —
+mixed case, brace-wrapped) but stores the original string unchanged, so a
+valid reference in any other accepted form was left dangling. Fixed by
+re-parsing every stored `"document:%"` reference's UUID suffix and comparing
+the parsed value instead of an exact string match.
+
+**FAC-28 (P2, data integrity, fixed), same round:** the cleanup swept
+`FacilityDocument` rows only; `FacilityPhoto.file_path` is validated and
+stored through the identical path (`create_facility_photo` ->
+`_validate_shared_document_reference`), so a photo reference dangled the
+same way. Fixed by making the match/delete logic model-agnostic and running
+it against both tables in the same transaction, gated by the same
+permission FAC-26 added.
+
+**Also this round:** a one-line fix for a `LIKE` call FAC-27/28 added with
+no `escape=LIKE_ESCAPE_CHAR` (CLAUDE.md Pitfall #25 — `test_like_escaping.py`
+caught it in CI).
+
+Full completion gate green across all rounds (final: 10th commit `38410c86`,
+targeted + `-k "facilities or documents"` suites green, no regressions).
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2194 (FAC-22, FAC-23 — urgent, out-of-rotation post-merge fix)
+
+`claude/security-facilities-system-folder-delete-fix` — **urgent,
+out-of-rotation fix, not routine feature work.** PR #2191 (Feature 12,
+Facilities, pass 3 — full history below) merged before Codex's P1 finding
+on its final commit (`910c27e6`) could be addressed on that branch;
+reusing a merged branch's name is prohibited (CLAUDE.md Pitfall #24), so
+the fix landed on a fresh branch off `main`. FAC-22 (CRITICAL): FAC-16's
+correction of `DocumentFolder.children`'s self-referential relationship
+(within #2191) made the folder-delete cascade genuinely destructive, and
+`delete_folder` never checked `existing.is_system` before invoking it — so
+any `documents.manage` holder could delete a system root such as "Member
+Files" outright and cascade-destroy every member's subfolder and document
+beneath it in one request. Reproduced against pre-fix code before fixing;
+fixed in the service layer (`PermissionError` → 403, checked before any
+subtree walk begins); two new regression tests
+(`TestDeleteFolderRefusesSystemFolder`), confirmed to fail pre-fix and
+pass post-fix. Full completion gate green, 10019/10019 full backend suite,
+no regressions. **FAC-23 (CRITICAL, same PR):** a further Codex review of
+the FAC-22 fix commit, still before the PR merged, found a two-step bypass
+of it — `update_folder` never checked `is_system` before applying a
+reparent, so a system folder could be moved underneath an ordinary, freely
+deletable folder and then destroyed by deleting that folder instead; the
+delete cascade's subtree walk checked cross-org membership (FAC-20) and
+each descendant's own ACL (FAC-21) but never a descendant's `is_system`.
+Reproduced end to end against pre-fix code before fixing (two-step bypass:
+reparent, then delete the ordinary folder — silently destroyed the system
+folder, its descendant, and its document); fixed with two independent
+changes — `update_folder` now refuses (400) to reparent a system folder,
+and `delete_folder`'s subtree walk now refuses (400) if any descendant is a
+system folder regardless of how it got there. Four new regression tests
+(`TestUpdateFolderRefusesReparentingSystemFolder`,
+`TestDeleteFolderRefusesReparentedSystemFolderInSubtree`), confirmed to
+fail pre-fix and pass post-fix. Full completion gate green, 10023/10023
+full backend suite (+4 over FAC-22's 10019), no regressions. See
+`docs/security-review/FAC-12-facilities.md` (FAC-22 and FAC-23 sections, at
+the top) for full detail. Rotation row 12 was left unmodified by this fix:
+both FAC-22 and FAC-23 were post-merge fixes on top of an already-merged
+pass, not a new rotation pass — the row-12 → ✅ flip is #2195's own merge to
+record, per the same convention this row followed for every other PR.
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2191 (FAC-13 through FAC-21)
+
+`f5e800f1` merged pass 3's work through FAC-21: one HIGH finding flagged
+(FAC-13: facility-file folder access over-restricted for three
+established-baseline categories — Photos, Maintenance Records, Inspection
+Reports; Blueprints & Permits' classification is separately undecided —
+needs an owner decision, not auto-fixed) and eight P1/P2/MED findings fixed
+same-day across six Codex review rounds of the PR's own fix commits and
+write-up: FAC-14 (documents.manage bypassing a document's own folder ACL on
+the generic update/delete routes), FAC-15 (the same bypass on a document
+_move_'s destination folder, missed by FAC-14's fix), FAC-16 (the identical
+bypass on the folder-mutation routes themselves — rename/reparent/delete of
+the target folder — which also uncovered and fixed a pre-existing bug where
+deleting a folder with descendants silently orphaned them instead of
+cascading; two sibling relationships elsewhere in the codebase flagged with
+the same shape, not fixed, out of scope), FAC-17 (`get_facility_folders`'s
+return value never satisfied its own declared `FoldersListResponse`, so
+response-model validation 500'd on every real HTTP call — direct-Python-call
+tests never exercised FastAPI's response cycle, so it went uncaught; fixed,
+and re-covered with a real ASGI request), FAC-18 (the same
+destination-not-checked shape as FAC-15 on folder reparenting's new parent,
+missed by FAC-16's fix), FAC-19 (the identical gap on folder creation's
+parent), FAC-20 (a defense-in-depth guard so the now-working folder-delete
+cascade cannot follow a cross-organization `parent_id`, even though no
+current write path can create one), and FAC-21 (the delete cascade checked
+only the folder named in the request, never any descendant's own
+`required_permissions` — found by Codex on the FAC-18/19/20 fix commit
+itself, after a systematic sweep of every remaining folder/document route in
+`documents.py` had already (wrongly) concluded no further instance of this
+bug class remained; every descendant is now checked too). Plus two
+doc-accuracy corrections (stale comments claiming a now-false
+"facilities.view-only sees the folders" invariant), and a
+separately-diagnosed, separately-fixed CI failure (two of an earlier round's
+own regression test classes were missing `@pytest.mark.integration`, so the
+DB-less "Backend Unit Tests" job tried to run them against no MySQL and
+errored on all 8; traced to root cause during FAC-17's investigation, fixed
+by a concurrent commit (`acc4e29d`) rebased onto — now marked and deselected
+there correctly). Full completion gate green at merge time: 10017/10017
+full backend suite (+13 total across FAC-17's, FAC-18/19/20's, and FAC-21's
+regression tests, over the pre-round-4 baseline of 10004), and the exact CI
+unit-test filter (`-m "not integration and not slow and not docker"`) 8474
+passed/0 errors (was 8472 passed/8 errors before `acc4e29d`).
+
+A further Codex round landed on the merged PR's own sweep after the merge —
+FAC-24 (originally numbered FAC-22; renumbered to avoid colliding with
+#2194's own FAC-22/FAC-23, above, once the two branches were merged), the
+write-vs-read permission-tier gap underlying every FAC-14–21 check —
+recorded in the "Open PR" section above as a new PR/branch per
+CLAUDE.md Pitfall #24, since the merged branch can no longer be pushed to.
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) — 0 fixed (2 doc-accuracy corrections), 1 HIGH flagged
+
+Prior art (`docs/module-audit/facilities.md`, `docs/app-review/facilities.md`,
+this doc's own pass 1/pass 2) re-read in full; no open findings inherited —
+all re-verified intact against current code. Enumerated 98/98 routes by
+exact grep count (`require_permission(\|require_all_permissions(` matches
+`^@router\.` 1:1), 0 bare `get_current_user`, unchanged since pass 2 — no
+new route landed. Backend/frontend diff since pass 2's merge reviewed in
+full (small: an `include_inactive` list param + `usage_count` on the three
+lookup-table endpoints for the new settings screen; larger on the frontend,
+already-landed `window.confirm` removal and stale-response-race fixes,
+re-verified clean, no new gap).
+
+This pass's specific brief was to check whether PR #2160 (the DOC-5
+folder-ACL fix from feature 10, which touched `facilities.py` by wiring
+`current_user` into `get_facility_sub_folders`) left a facilities-specific
+gap, without re-deriving the mechanism DOC-10's own pass 3 already verified
+sound. It did: **FAC-13 (HIGH, correctness/access, not a leak, flagged)** —
+`ensure_facility_folder` stamps the shared `facilities` folder root, every
+per-facility folder, and **all six** sub-folders (not just the two
+genuinely sensitive ones, Insurance & Leases and Capital Projects) with the
+same `facilities.view_sensitive`/`.edit`/`.manage` requirement. That stamp
+existed since 2026-08-27 but was inert until #2160 wired enforcement
+(2026-09-02); because folder authorization ANDs every ancestor, a caller
+admitted only at baseline `facilities.view` — secretary, quartermaster,
+safety officer, training officer, by FAC-5's own design — now gets an
+**empty** folder list for every facility, including the non-sensitive
+Photos/Maintenance/Inspection categories they're meant to see (Blueprints &
+Permits' classification is separately undecided — see below).
+Verified empirically against the real `can_access_folder` code path (not a
+reimplementation): a `facilities.view`-only caller is refused a
+sensitive-stamped folder, a `facilities.manage` caller is admitted.
+Fail-closed, so not a security leak — a functional regression a permission
+tier can no longer do the file-viewing part of its job. Flagged rather than
+fixed: a correct narrowing needs a new "any facilities access" permission
+tier (simply clearing `required_permissions` would let any `documents.view`
+holder — the default `member` position — browse these folders with zero
+facilities grant, reopening the leak the stamp exists to prevent), an owner
+call on whether Blueprints & Permits specifically should stay sensitive,
+and a migration for already-stamped rows. Corrected two now-false code
+comments that assumed the pre-#2160 behavior (`facilities.py`'s
+`get_facility_folders` docstring/comment and `test_facilities_folders.py`'s
+module docstring) — zero-behavior-change doc fixes, distinct from the
+flagged access gap itself. Mirrored to `docs/KNOWN_LIMITATIONS.md` and
+`CHANGELOG.md`. Full local completion gate green: flake8/black/isort clean
+across `app/ tests/ alembic/`, migrations validated (no schema change),
+249/249 scoped and 9992/9992 full backend suite pass (21 pre-existing
+skips), `npm run typecheck` (the real TS 7 build compiler, not bare `tsc`,
+which resolves to the 5.9 lint compiler) 0 errors, `eslint .` clean (no
+frontend code changed this pass). Findings doc:
+`docs/security-review/FAC-12-facilities.md`. PR #2191 opened and
+subscribed. Next: 13 apparatus & NFC, once #2191 merges.
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 2) — 1 fixed (FAC-14), 4 doc corrections (Codex review of PR #2191's `0231a904`)
+
+Codex reviewed pass 3's fix commit (`0231a904`, the response to the first
+Codex round — CHANGELOG/KNOWN_LIMITATIONS/FAC-12 wording corrections and a
+trimmed endpoint comment) and posted 5 new comments. All 5 independently
+verified against current code before acting on any of them; disposition
+below.
+
+**FAC-14 (HIGH, access control/IDOR, fixed).** `PATCH /documents/{document_id}`
+and `DELETE /documents/{document_id}` were gated on `documents.manage`
+alone and never called `can_access_document`/`can_access_folder` — the
+same check `get_document`/`download_document` already run — so a
+`documents.manage` holder with zero facilities permission could `PATCH`
+`{"folder_id": null}` on a facility's `facilities.view_sensitive`-gated
+document (unfiling it to org-level storage, after which any
+`documents.view` holder could read it) or `DELETE` it outright, despite
+never being authorized to view it in the first place. Confirmed
+independently by reading both routes and `_folder_admits_user` in full
+(the `required_permissions` check genuinely isn't overridden by
+`documents.manage`'s leadership bypass, so the read-side check this fix
+reuses is a real gate, not a no-op for that grant). Fixed: both routes now
+call `can_access_document` on the existing document before mutating it,
+returning 404 (matching the existing "don't confirm existence" convention)
+when it fails; a caller who holds the folder's own required permission is
+unaffected. Regression tests in
+`tests/test_documents_access.py::TestUpdateAndDeleteDocumentRespectFolderAcl`
+(4 tests: 2 bypass, 2 positive-control) — the 2 bypass tests independently
+confirmed to fail (`DID NOT RAISE HTTPException`) against the pre-fix
+routes via `git stash`, pass again once restored.
+
+**Extended, not fixed — FAC-13's remediation plan, item (3).** A second
+report showed `_validate_shared_document_reference` only relocates a
+document when currently unfiled (`folder_id is None`) — deliberately, per
+its own docstring — so a reference to an already-org-shared document
+already sitting in a weakly-protected folder is left there, and
+`GET /documents/{id}/download` authorizes purely on that folder's own ACL
+with no facility-specific check, so a default `documents.view` holder can
+already download it. Confirmed independently by re-reading the function
+and the download endpoint in full. Judged this a flag, not a same-day fix:
+unlike FAC-14's missing-call-to-an-existing-check shape, this needs an
+"is folder A's ACL at least as strong as folder B's requirement"
+comparison that doesn't exist anywhere in the codebase, and every
+candidate remedy (silent relocation, rejection, per-document
+re-authorization) reverses or extends a prior intentional design decision
+— the same "owner call" bar as the Blueprints & Permits question already
+flagged in this finding. Remediation-plan item (3) in
+`FAC-12-facilities.md` extended to describe both cases explicitly;
+mirrored to `KNOWN_LIMITATIONS.md`.
+
+**3 doc-accuracy corrections, all confirmed and applied:**
+
+- CHANGELOG.md's flagged-entry heading/body said the Facilities "Files"
+  UI section was emptied by FAC-13; a repo-wide frontend search found no
+  consumer of `GET /{facility_id}/folders` at all —
+  `FilesSection.tsx` loads via `getPhotos`/`getFacilityDocuments` and
+  stays populated. Reworded to name the actual impact (direct API clients,
+  generic Documents-module browsing/downloads).
+- The completion-gate table in `FAC-12-facilities.md` recorded a bare
+  `tsc --noEmit`, which per CLAUDE.md's own documented two-TypeScript-
+  installs setup resolves to the 5.9 lint compiler, not the 7.0.2 build
+  compiler `npm run typecheck` actually invokes. Re-ran the real gate
+  against this PR's head — 0 errors — and corrected the table to name and
+  record that command; same correction applied to this doc's own pass-3
+  log entry above, which had the identical stale claim.
+- This log entry's own pass-3 summary (line 21 as originally written)
+  still said "four non-sensitive categories" and "Photos/Blueprints/
+  Maintenance/Inspection" after a previous round had already corrected
+  `FAC-12-facilities.md`, `KNOWN_LIMITATIONS.md`, and `CHANGELOG.md` to
+  name three established-baseline categories with Blueprints & Permits
+  called out separately as undecided. Corrected here to match.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/documents.py` and `tests/test_documents_access.py`,
+migrations validated (no schema change), 253/253 scoped (`facilities or
+documents`, +4 for FAC-14's regression tests) and 9996/9996 full backend
+suite pass (21 pre-existing skips), `npm run typecheck` 0 errors, `eslint .`
+clean (no frontend code changed this round), prettier clean on the four
+markdown docs touched. Findings doc: `docs/security-review/
+FAC-12-facilities.md` (FAC-14, and FAC-13's extended remediation item 3).
+Pushed to `claude/security-review-facilities`. Rotation row 12 stays ⏳
+(awaiting PR #2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 3) — 2 fixed (FAC-15, FAC-16) plus a cascade-delete bug found and fixed while regression-testing FAC-16 (Codex review of PR #2191's `b5fdf79d`)
+
+Codex reviewed pass 3 round 2's fix commit (`b5fdf79d`, the FAC-14 fix) and
+posted 2 new comments, both on the same shape of gap FAC-14 had just closed
+on a different route. Both independently verified against current code
+before acting.
+
+**FAC-15 (P1, access control, fixed).** FAC-14's fix checked
+`can_access_document` on a document's _current_ folder before
+`update_document`/`delete_document` acted, but `update_document` never
+checked the _destination_ folder when `folder_id` changed to a new,
+non-null value — `DocumentsService.update_document` validated only
+same-organization membership (`assert_in_org`, DOC-6/XC-1), not the
+caller's access to that folder. A `documents.manage` holder with zero
+facilities permission could move a document they already had legitimate
+access to _into_ a `facilities.view_sensitive`-gated folder — the opposite
+direction from FAC-14 (write-into rather than read-out-of). Confirmed by
+reading `update_document` and `DocumentsService.update_document` in full,
+and by comparing against `upload_document`, which already resolves and
+authorizes its destination folder before saving a new upload — the pattern
+this fix mirrors. Fixed: `update_document` now resolves the destination
+folder and calls `can_access_folder` on it whenever `folder_id` is present,
+non-null, and different from the current value (403 on denial); moving out
+to unfiled needs no destination check. Regression tests in
+`tests/test_documents_access.py::TestUpdateDocumentRespectsDestinationFolderAcl`
+(3 tests: 1 bypass, 1 positive-control, 1 same-folder no-op) — the bypass
+test independently confirmed to fail (no `HTTPException` raised — the move
+silently succeeded) against the pre-fix route via `git stash`, passes again
+once restored.
+
+**FAC-16 (P1, access control/IDOR, fixed).** `PATCH`/
+`DELETE /documents/folders/{folder_id}` required only `documents.manage`
+and never checked `can_access_folder` on the target folder at all — unlike
+the read-side `get_facility_sub_folders`, which already filters through it.
+A `documents.manage` holder with zero facilities permission could rename,
+reparent, or delete a sensitive-gated facility folder outright — a full
+destructive cascade rather than FAC-14/15's single-document scope. Fixed:
+both routes now fetch the target folder and call `can_access_folder` on it
+before mutating (404 on denial, matching the "don't confirm existence"
+convention). Regression tests in
+`tests/test_documents_access.py::TestFolderMutationRespectsOwnFolderAcl`
+(5 tests: 3 bypass — rename, reparent, delete — 2 positive-control),
+independently confirmed to fail pre-fix via `git stash`, pass again once
+restored.
+
+**A second, independent bug found and fixed while writing FAC-16's
+delete-cascade positive-control test.** The test — proving an authorized
+caller's delete still cascades through a multi-level folder tree — failed
+on an `AssertionError`, not an ACL error: the child folder survived. Traced
+to `DocumentFolder.children` (`app/models/document.py`) declaring
+`remote_side=[id]` on the plural `children` relationship itself instead of
+on its singular `parent` backref — inverted from the standard
+self-referential idiom this codebase uses correctly everywhere else
+(`FacilityRoom.parent_room`, `BudgetCategory.parent`, `StorageArea.parent`,
+`Event.recurrence_parent`). Empirically confirmed with a raw fixture:
+`session.delete(parent)` did not cascade to the child; instead SQLAlchemy,
+finding no cascade-configured relationship pointing at the child, nulled
+its foreign key before issuing the `DELETE`, so the database's own
+`ON DELETE CASCADE` (confirmed present at the schema level) never fired —
+deleting a folder with descendants silently orphaned them as detached
+root folders instead of removing them, despite `delete_folder`'s own
+docstring and this pass's audit-log severity both describing a full
+destructive cascade. No production code reads `.children`/`.parent`
+directly (every call site queries `parent_id` explicitly), so fixing the
+relationship's direction changes only this cascade behavior. Fixed by
+moving `remote_side=[id]` onto the `parent` backref; re-verified with a
+three-level fixture (root → child → grandchild → document) that a delete
+now removes every row. **Not fixed, flagged:** the same inverted shape
+exists in `CheckTemplateCompartment.children` (apparatus.py) and
+`TrainingCategory.subcategories` (training.py), found by grepping every
+`remote_side` usage while diagnosing this one — out of scope for this
+feature, unverified beyond the pattern match, mirrored to
+`KNOWN_LIMITATIONS.md`.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/documents.py`, `app/models/document.py`, and
+`tests/test_documents_access.py`; migrations validated (no schema change —
+this is a relationship-mapping fix, not a column/constraint change);
+`facilities`/`documents`-scoped and 10004/10004 full backend suite pass
+(+8 over round 2's 9996, 21 pre-existing skips); `npm run typecheck` 0
+errors, `eslint .` clean (no frontend code changed this round); prettier
+clean on the markdown docs touched. Findings doc: `docs/security-review/
+FAC-12-facilities.md` (FAC-15, FAC-16). Pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 4) — 1 fixed (FAC-17); a second, unrelated CI failure investigated and traced, fixed by a concurrent commit (Codex review of PR #2191's FAC-13 write-up)
+
+Codex reviewed the FAC-13 write-up itself (round 1's finding text, which
+describes `GET /{facility_id}/folders` returning `{"folders": [], "total":
+0}` for the empty-list case) and flagged that this is not observable over
+real HTTP: `FoldersListResponse` requires `skip`/`limit`, the handler's
+single return statement never set them, and `TestFacilityFolderDocument
+CountRedaction` (the only existing coverage) calls the handler as a plain
+Python coroutine, bypassing FastAPI's response-model validation entirely.
+Independently verified: `skip: int`/`limit: int` are non-`Optional` fields
+on `FoldersListResponse`; the handler's one return path (shared by both the
+empty and populated cases) set only `folders`/`total`; a real ASGI request
+through the actual router (`httpx.AsyncClient` + `ASGITransport`,
+dependency-overriding `get_current_user`/`get_db`, the pattern already
+established in `test_equipment_check_endpoint_permissions.py`) reproduced
+the exact failure Codex described —
+`fastapi.exceptions.ResponseValidationError`, `Field required` on both
+`skip` and `limit` — on every successful call, not just the empty-list one.
+
+**FAC-17 (MED, correctness, fixed).** The return now includes `"skip": 0,
+"limit": len(sub_folders)` alongside `folders`/`total`. This route has no
+pagination parameters of its own (a facility's folder tree is a small,
+fixed set — six sub-folders), so it reports the whole unpaginated result
+rather than echoing request query params, unlike the generic, actually-
+paginated `GET /folders` in `documents.py`. Widening the response schema to
+make `skip`/`limit` optional was rejected — `FoldersListResponse` is a
+shared pagination shape with a genuinely paginated sibling caller, and
+weakening the contract there to fit one non-paginated route risks a future
+paginated caller silently omitting the fields too. New tests
+(`TestFolderRouteResponseValidation` in `test_facilities_folders.py`, 2
+tests: empty-list and populated-list) issue a real ASGI request and assert
+a 200 with `skip`/`limit` present; both independently confirmed to fail
+with `ResponseValidationError` against the pre-fix return statement via
+`git stash`, pass again once restored.
+
+**A second, unrelated CI failure investigated alongside the fix above.**
+The coordinator flagged a red "Backend Unit Tests" job on the PR's then-head
+(`489f8c9e`) and attributed it to CI's "Generated schema docs are stale"
+step, tied to round 3's `DocumentFolder.children`/`remote_side` fix.
+Verified that attribution was wrong before acting on it: the CI log showed
+that step completing with no error, and `python scripts/
+generate_schema_docs.py --check` was clean locally with no diff — consistent
+with `remote_side` being ORM-relationship metadata that carries no
+table/column/FK/index representation for that generator to reflect. Reading
+the same job's log in full found the real cause: `TestUpdateDocumentRespects
+DestinationFolderAcl` and `TestFolderMutationRespectsOwnFolderAcl` (round
+3's own FAC-15/FAC-16 regression tests) use the real `db_session` fixture,
+exactly like their sibling `TestUpdateAndDeleteDocumentRespectFolderAcl`
+(FAC-14) — but unlike that sibling and every other `db_session`-backed class
+in the file, neither carried `@pytest.mark.integration`, so the DB-less
+"Backend Unit Tests" job (`-m "not integration and not slow and not
+docker"`, no MySQL service — see its own "no DB required" comment in
+`.github/workflows/ci.yml`) tried to run them anyway and errored on all 8
+with `Can't connect to MySQL server on 'localhost'`. Before this round's own
+fix commit could land, a separate, concurrent session pushed exactly that
+fix (`acc4e29d`, "fix Backend Unit Tests CI failure -- mark two new
+DB-backed test classes integration") — this round rebased onto it rather
+than duplicating it. Re-verified post-rebase: all 8 pass unmodified against
+a real database, and are correctly deselected (not run, not errored) under
+the unit-only filter.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/facilities.py`, `tests/test_facilities_folders.py`;
+`pytest tests/ -m "not integration and not slow and not docker"` (mirrors
+CI exactly) 8474 passed/1 skipped/0 errors (was 8472 passed/8 errors before
+`acc4e29d`'s fix); `facilities`/`documents`-scoped 263 passed/1 skipped;
+full backend suite 10006/10006 passed (+2), 21 pre-existing skips — no
+regression from round 3's 10004 baseline; `generate_schema_docs.py --check`
+clean. Findings doc: `docs/security-review/FAC-12-facilities.md` (FAC-17,
+pass 3 round 4). Rebased onto and pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 5) — 3 fixed (FAC-18, FAC-19, FAC-20) plus a full sweep of every folder/document route in `documents.py` (Codex review of PR #2191's `489f8c9e`)
+
+Before starting, verified PR #2191 was still open and fetched the branch's
+current remote head — it had moved twice since `489f8c9e`: first to
+`acc4e29d` (another agent marking two DB-backed test classes
+`@pytest.mark.integration` to fix a CI failure), fast-forward merged with no
+conflict; then, mid-round, to `8b8aeabf` (a concurrent session's own round 4
+— FAC-17, the `get_facility_folders` response-model bug). The second move
+did conflict: this round's own draft had independently found and fixed the
+identical response-model bug (under a different name, with its own
+duplicate test class) as part of the same sweep. Reconciled by dropping this
+round's duplicate fix and test class entirely in favor of round 4's, keeping
+only this round's three genuinely distinct findings, and renumbering them
+(this round's draft had used FAC-17/18/19/20; round 4 had already claimed
+FAC-17) to FAC-18/19/20 so the two rounds' numbering doesn't collide. See
+`docs/security-review/FAC-12-facilities.md`'s "round 5" gate table for the
+full account.
+
+Codex reviewed round 3's fix commit (`489f8c9e`, the FAC-15/16 fixes) and
+posted 3 new comments, all the identical "destination not checked" shape
+FAC-15/16 had just closed on different routes, plus this round's own brief
+to sweep every remaining folder/document route in `documents.py` rather
+than reacting to one comment at a time. All three independently verified
+against current code before acting; the sweep found no further instance
+beyond round 4's FAC-17 (found independently by both this round's draft and
+round 4, and fixed only once).
+
+**FAC-18 (P1, access control/IDOR, fixed).** FAC-16's fix authorized only a
+folder's own (pre-move) ancestry via `can_access_folder`; reparenting it —
+`update_folder`'s `parent_id` — was validated only for same-organization
+membership (DOC-6/XC-1), never the caller's access to the _new_ parent. A
+`documents.manage` holder with zero facilities permission could reparent an
+accessible folder, and everything inside it, into a sensitive-gated
+facility tree. Fixed: `update_folder` now resolves the new parent and calls
+`can_access_folder` on it whenever `parent_id` changes to a new, non-null
+value, mirroring FAC-15's destination check exactly. Regression tests in
+`tests/test_documents_access.py::TestFolderReparentRespectsNewParentAcl`
+(3 tests: 1 bypass, 1 positive-control, 1 same-parent no-op).
+
+**FAC-19 (P2, access control/IDOR, fixed).** Same gap on `create_folder`:
+only same-organization membership was checked on a supplied `parent_id`,
+never the caller's access to it. Lower severity than FAC-18 — the injected
+folder starts empty, and `upload_document` already gates populating it —
+but still an unauthorized write into a restricted tree. Fixed: `create_folder`
+now calls `can_access_folder` on a non-null `parent_id` before creating.
+Regression tests in
+`tests/test_documents_access.py::TestFolderCreationRespectsParentAcl`
+(3 tests: 1 bypass, 1 positive-control, 1 root-level-create no-op).
+
+**FAC-20 (P1, access control/cross-tenant, defense-in-depth, fixed).**
+FAC-16's fix made `DocumentFolder.children`'s cascade actually work — but
+that cascade (and the ORM's own descendant-loading on `self.db.delete`)
+walks `parent_id` with no `organization_id` filter, unlike the file-cleanup
+subtree walk beside it. Searched every `DocumentFolder(` construction site
+in the backend: exactly two client-facing writers of `parent_id`
+(`create_folder`, `update_folder`), both validated via `assert_in_org`
+(DOC-6) today — so not currently reachable through the application — but
+`parent_id` has no _database_ constraint enforcing same-organization
+parentage, only that application-level guard on two call sites (which is
+exactly the kind of guard FAC-18/19 themselves just showed can be forgotten
+at a new call site). Fixed as defense-in-depth rather than left flagged:
+`delete_folder`'s subtree walk now checks each discovered descendant's
+`organization_id` against the caller's and raises before deleting anything
+if one doesn't match, rather than trusting the org-unaware ORM cascade.
+Regression tests in
+`tests/test_documents_access.py::TestDeleteFolderRefusesCrossOrgCascade` (a
+cross-org child constructed directly, since the guarded write paths cannot
+produce one; a same-org positive control proving the ordinary cascade is
+unaffected).
+
+All three bypass tests independently confirmed to fail against pre-fix code
+via `git stash` (`DID NOT RAISE HTTPException`/`ValueError`), pass again
+once restored, with every positive-control test in the same classes passing
+throughout (proving the tests target the fix, not an unrelated setup
+issue).
+
+**Sweep result:** every route in `documents.py` that accepts a `folder_id`/
+`parent_id` from the client, or resolves one to serve a response,
+enumerated in a table in `docs/security-review/FAC-12-facilities.md` — 12
+routes total (no copy/duplicate or bulk endpoint exists in this file). Every
+one now authorizes every folder reference it touches, source and
+destination alike. No further instance of this bug class found. **This
+conclusion turned out to be wrong** — see the round 6 entry below (FAC-21,
+found on this round's own fix commit): the sweep checked that every route
+authorizes the folder(s) _named in the request_, but `DELETE
+/folders/{folder_id}` also authorizes an entire _subtree_ it cascades
+into, and nothing in the sweep checked whether every folder _in_ that
+subtree — not just the one named — was itself authorized.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/documents.py`, `app/services/documents_service.py`,
+and `tests/test_documents_access.py`; migrations validated (no schema
+change — no model file touched this round, so `DATABASE_SCHEMA.md` had
+nothing to regenerate); 10014/10014 full backend suite pass (+8 over round
+4's 10006, 21 pre-existing skips); `npm run typecheck` 0 errors, `eslint .`
+clean (no frontend code changed this round); prettier clean on the four
+markdown docs touched. Findings doc: `docs/security-review/
+FAC-12-facilities.md` (FAC-18 through FAC-20). Pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 6) — 1 fixed (FAC-21), correcting round 5's "no further instance" conclusion (Codex review of PR #2191's `8b8aeabf`)
+
+The coordinator relayed a new Codex comment on this round's own prior
+commit (`8b8aeabf`, round 5's FAC-18/19/20 fixes) shortly after that round's
+sweep had already been written and pushed. Before acting: re-fetched the
+branch's remote head and confirmed it had not moved past `8b8aeabf` since
+the round 5 push, so no rebase was needed this time.
+
+**FAC-21 (P1, access control/IDOR, fixed).** `delete_folder`'s
+endpoint-level `can_access_folder` check (FAC-16) authorizes the folder
+named in the `DELETE` request, and — through that call's own ancestor
+walk — everything _above_ it. It never checks anything _below_ it.
+`required_permissions` is set per-folder independently; nothing enforces
+that a child folder's restrictions can only get looser than its parent's,
+so a caller admitted at an accessible parent is not necessarily admitted at
+every descendant the cascade is about to destroy. Verified this is not
+exploitable in the _current_ facility tree specifically (every facility
+folder, root through all six sub-folders, still carries the identical
+sensitive permission set per the still-open FAC-13 bug — no
+accessible-parent/inaccessible-child pair exists there yet) — but
+`required_permissions` can only be set by system code, not the API, and
+FAC-13's own eventual remediation plan is to give three of those six
+sub-folders a _weaker_ tier than their siblings, which would create this
+exact shape the day it lands. Fixed now rather than flagged, since the fix
+is mechanical (reuses the existing `_folder_admits_user` per-folder check)
+and the alternative is landing FAC-13's fix with this hole still open.
+Fixed: `delete_folder`'s subtree walk (already extended once for FAC-20's
+cross-org check) now also takes an optional `current_user` and checks each
+descendant's own `_folder_admits_user` result as it walks the tree — not a
+full ancestor re-walk per descendant, since the walk already visits every
+folder between the authorized root and each descendant, so checking each
+one's own admission is equivalent to what a full `can_access_folder` would
+compute. Raises the same `ValueError` → 400 shape as FAC-20. Regression
+tests in `tests/test_documents_access.py::
+TestDeleteFolderRefusesInaccessibleDescendant` (3 tests: 1 bypass — an
+accessible root with a sensitive child underneath, deleting the root
+400s and nothing is touched — 1 positive control proving a caller holding
+the child's own permission can still delete the whole subtree, 1 positive
+control proving the pre-FAC-21 no-`current_user` call shape still works).
+Independently confirmed failing pre-fix via `git stash` (`DID NOT RAISE
+HTTPException` — the delete silently cascaded into the sensitive child) and
+passing post-fix.
+
+Also corrected round 5's sweep table and closing claim in
+`docs/security-review/FAC-12-facilities.md` to reflect FAC-21 rather than
+silently leaving the wrong "no further instance found" conclusion standing,
+and added a note there that the sweep's own miss is itself evidence that
+"no further instance found" documents what a method found, not that none
+exist.
+
+Full local completion gate green: flake8/black/isort clean on the two
+source files and the test file; migrations validated (no schema change);
+`facilities`/`documents`-scoped 95 passed (+3); full backend suite
+10017/10017 passed (+3 over round 5's 10014), 21 pre-existing skips;
+`npm run typecheck` 0 errors, `eslint .` clean (no frontend code changed
+this round); prettier clean on the four markdown docs touched. Findings
+doc: `docs/security-review/FAC-12-facilities.md` (FAC-21). Pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
+
+### 2026-09-03 — Feature 11 (Inventory) fully closed — PR #2190 merged
+
+PR #2190 (the INV-20/INV-21 follow-up to #2188) merged. It fixed INV-20 (a
+lock-ordering deadlock the INV-18/INV-19 fix itself introduced —
+restructured `return_to_pool`/`checkin_item` to lock the item before the
+holding record, matching the other three sibling methods) and INV-21 (a
+SQLAlchemy identity-map staleness bug: the locked re-read after acquiring
+the row lock returned the same already-in-session Python object with its
+pre-lock attribute values instead of the freshly-committed ones, because a
+second `SELECT` on an identity-mapped row needs `populate_existing=True` or
+an explicit `session.refresh()` to pick up a concurrent writer's commit —
+both caught by Codex reviewing the merged #2188, both independently
+re-verified real by this rotation before landing). Feature 11 is now fully
+✅. Rotation row 11 updated accordingly. Next: 12 Facilities.
+
+### 2026-09-02 — Feature 11 doc fix — INV-20, a lock-ordering deadlock the INV-18/19 fix itself introduced
+
+PR #2188 (feature 11, Inventory, pass 3) fixed INV-18/INV-19 by adding
+`.with_for_update()` to `return_to_pool`'s `ItemIssuance` lookup and
+`checkin_item`'s `CheckOutRecord` lookup — but locked the holding record
+before the item, the opposite order from three sibling methods
+(`review_return_request`, `transfer_item_holding`, `unassign_item`) that
+lock the item first. Codex caught this on the merged PR as it was closing;
+independently verified real (a genuine circular-wait shape, not a false
+positive) and fixed by restructuring both methods to lock the item first,
+matching the other three. Landed in a follow-up PR since #2188's branch
+was already dead by the time the finding surfaced.
+
+### 2026-09-02 — Feature 11 (Inventory, pass 3) — 2 fixed (1 HIGH), 4 re-verified open
+
+Re-verified all four still-open flagged findings from pass 1/2 (INV-8,
+INV-9, INV-16, INV-17) against current code — all four unchanged, not
+re-fixed. Read the full backend diff since pass 2's merge (1,119 lines
+across `inventory.py`/`inventory_service.py`/`labels.py`/`label_service.py`)
+in full: a new dual-ledger stock model (`InventoryItem.quantity` vs.
+`InventoryLot` rows, mutually exclusive per item) that is Pitfall
+#27-correct throughout its own new code, a new `create-if-absent` catalog
+route (correctly gated and FK-validated), and a member-profile-visibility
+fix on the impact planner (an improvement, not a regression). Per this
+pass's specific brief, swept every `.with_for_update()` call site (23) and
+every `select()` of a holding/request record (30 sites) across the **whole
+file**, not just the diff, for Pitfall #27's two-part shape.
+
+**INV-18 (HIGH, fixed)** — `return_to_pool` read `ItemIssuance` with a
+plain `SELECT`, checked `is_returned`, and only afterward locked the
+`InventoryItem` row — the reverse of Pitfall #27's required order. Two
+concurrent returns of the same issuance could both pass the check before
+either committed; the second call proceeded on a stale in-memory copy and
+double-credited `item.quantity` (or a stock lot) for units physically
+returned only once. Pre-existing since before pass 2, not a new
+regression — found by widening the sweep past the diff. **INV-19 (MED,
+fixed)** — identical shape on `checkin_item`/`CheckOutRecord`: a second,
+redundant check-in was not rejected and could overwrite the first's
+recorded condition/damage_notes. Both fixed with `.with_for_update()` on
+the initial lookup, mirroring INV-10's own fix pattern exactly. Two new
+source-inspection guard tests
+(`tests/test_inventory_return_locking.py`), both confirmed failing
+pre-fix via `git stash` and passing after.
+
+Frontend scope this pass was explicitly narrowed: the diff against pass 2
+touches 91 files (~31,500 lines) under `modules/inventory/`, but that is
+almost entirely feature 14's equipment-check checklist/scan module living
+in that directory, not inventory feature work — reviewing it here would
+duplicate feature 14's own rotation slot. The files actually reviewed
+(`InventoryScanModal.tsx`, `InventoryAdminHub.tsx`, `MyEquipmentPage.tsx`,
+`EquipmentRequestsPage.tsx`, `onHand.ts`) were all already correct; no
+frontend edit was made, so `tsc`/`eslint` were not run this pass (stated
+explicitly rather than claiming a gate that didn't run). Full backend
+completion gate green: flake8/black/isort/migrations clean, 786/786
+inventory+label-scoped and 9977/9977 full backend suite pass (21
+pre-existing skips). See `INV-11-inventory.md` → "Pass 3" for the complete
+write-up. PR #2188 opened and subscribed. Next: 12 facilities, once this
+PR merges.
+
+---
+
+### 2026-09-02 — Feature 10 (Documents & legal, pass 3) ✅ merged — PR #2187
+
+Confirmed merged into `main` via a fresh `origin/main` fetch (merge commit
+`67873d77`). Rotation row 10 → ✅. Next: 11 Inventory (pass 3), now marked
+🔄.
+
+### 2026-09-02 — Feature 10 (Documents & legal, pass 3) — 1 fixed, 0 flagged (new); 2 stale-doc corrections
+
+Two unrelated, non-security-review PRs (#2160 "Normalize document system
+folder access" and #2171 "Scope document summaries to caller folder
+access") landed in this feature on 2026-09-02, just before this rotation
+reached it — both read in full as prior art and independently re-verified
+against current code, not taken on faith. #2160 fixes **DOC-5** (folder
+authorization is now hierarchical — walks every ancestor, fails closed on
+missing/cross-org/cyclic ancestry). #2171 fixes **DOC-4** (the documents
+stats summary now scopes every aggregate to the caller's accessible
+folders) — a finding this rotation's own pass 2 had left open, fixed by a
+PR neither this rotation nor #2160's author knew about. Both fixes verified
+sound: DOC-5 by reading the ancestor-walk logic directly, DOC-4 by a
+dedicated five-caller-tier test
+(`test_summary_matches_each_caller_access_scope`). `docs/KNOWN_LIMITATIONS.md`,
+`docs/module-audit/documents.md`, and `docs/app-review/documents.md` had
+been updated for DOC-5 by #2160 but still described DOC-4 as open —
+corrected in all three this pass, along with two other stale notes in
+`module-audit/documents.md` (`uploader_name`/`folder_name` dead fields and
+`get_folders` re-inlining `can_access_folder` were both already fixed by
+earlier passes and never back-corrected there).
+
+One new finding, fixed: **DOC-27 (LOW)** — folder create/update/delete and
+a document metadata edit had no audit trail (unlike
+upload/download/delete, which already log); a legal-revision edit/discard
+had none either (unlike propose/publish/revert). Added
+`folder_created`/`folder_updated`/`folder_deleted`/`document_updated` and
+`legal.revision_updated`/`legal.revision_discarded` audit events, matching
+each file's existing pattern exactly — purely additive, no behavior change.
+6 new guard tests across `test_documents_access.py` and
+`test_legal_documents.py`, each calling the endpoint function directly
+against a real `db_session` and asserting the `AuditLog` row; all 6
+confirmed failing on the intended assertion pre-fix via `git stash` of the
+two endpoint files.
+
+Re-verified still open, not re-flagged: **DOC-8** (legal revision list
+unbounded) and **DOC-9** (`get_folders` unbounded and N+1) — both unchanged
+on `main`. An unmerged branch
+(`codex/add-pagination-and-improve-folder-querying`, visible in this
+session's `git fetch` output) appears to address DOC-9 but is not on `main`
+as of this pass, so it is not credited.
+
+Completion gate: flake8/black/isort clean on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (410 revisions, single head, unchanged —
+no migration this pass); scoped suite (documents/legal/print/public-legal/
+facility-folder tests) 178 passed; full backend suite 9906 passed / 21
+skipped (pre-existing: Docker/registry unavailable, `pywebpush` not
+installed, API-contract server-mode opt-in) / 0 failed; no frontend file
+touched, so `tsc`/`eslint` were not run this pass (frontend was read for
+review only — confirmed via `git status`). Full detail in
+`DOC-10-documents-legal.md` → Pass 3. Rotation row 10 → ⏳ (awaiting PR
+merge). Next: 11 inventory, once this PR merges.
+
+### 2026-09-02 — Feature 09 doc-fix PR #2182 merged
+
+PR #2182 (docs-only follow-up to #2180, restoring the 384 lines of Pass
+1/Pass 2 history in `MS-09-medical-screening.md` that #2180's merge had
+accidentally dropped) merged into `main`. No code change, no security
+finding — bookkeeping only. Feature 09 stays ✅. Open PR row cleared.
+Rotation row 10 (Documents & legal, prefix DOC) → 🔄. Next up per the
+Rotation table.
+
+### 2026-09-02 — Feature 09 doc fix — `MS-09-medical-screening.md` lost its Pass 1/Pass 2 history on merge — PR #2182
+
+#2180's findings doc was authored with the `Write` tool and replaced the
+whole file with only the new Pass 3 section, instead of appending it above
+the pre-existing Pass 1/Pass 2 sections the way every other multi-pass
+finding doc in this rotation does it. This silently dropped 384 lines of
+prior-pass review history from `main` once #2180 merged. Caught during the
+post-commit re-read this rotation runs specifically to catch unintended
+content loss (previously this class of mistake was prettier reformatting;
+this time it was tool choice, same symptom). Since #2180 had already
+merged, the fix could not be pushed to that branch (CLAUDE.md Pitfall #24)
+— #2182 restores the dropped sections byte-identical to their pre-#2180
+form (verified via `diff`), reattached below Pass 3 with no change to the
+merged content.
+
+### 2026-09-02 — Feature 09 (Medical screening, pass 3) — 2 fixed, 1 flagged — PR #2180
+
+Byte-identical diff since pass 2's merge (`a14bf441`, PR #1952) across all
+four declared backend files and the whole `modules/medical-screening/`
+frontend directory — re-ran the full seven-dimension checklist directly
+against current code rather than trusting that. Enumerated all 14 routes
+and re-confirmed each one's auth dependency/permission string; re-traced
+every by-id query and the one create-path FK validation (`assert_in_org`)
+for org-scoping; re-confirmed no baseline position/rank grants
+`medical_screening.view`/`.manage`; re-confirmed PHI encryption
+(`EncryptedText`/`EncryptedJSON`) and SEC-00's JSON-column-sweep fix for
+`result_data` are both still intact; re-confirmed the cache-exclusion and
+module-gate wiring.
+
+Three findings, none a security exposure (no cross-tenant leak, no
+unauthenticated path, no PII widened beyond the existing permission gate):
+
+- **MS-7 (MED, flagged):** `create_record`/`update_record` place no
+  constraint between the caller and `data.user_id` — a
+  `medical_screening.manage` holder can self-create and self-clear their own
+  screening as `passed`, with `reviewed_by` tracking but not gating
+  anything. Needs a product decision (blocking self-review breaks the
+  legitimate single-administrator small-department case); mirrored to
+  `KNOWN_LIMITATIONS.md`.
+- **MS-8 (LOW, fixed):** `requirement_created`/`record_created` audit
+  events omitted the new row's own id — every sibling `_updated`/`_deleted`
+  event included it. Both now do, additive-only. Guarded by 4 new tests
+  (`test_medical_screening_create_audit_includes_id.py`), confirmed failing
+  on exactly the two intended assertions pre-fix via `git stash`.
+- **MS-9 (LOW, fixed — UI honesty, not wired):** `grace_period_days` and
+  `applies_to_roles` on a screening requirement are stored, editable, and
+  read by nothing in `get_compliance_status` — the same CLAUDE.md Pitfall
+  #19 shape already found and fixed once for a different table
+  (`compliance_configs.grace_period_days`). Same remedy applied: an honest
+  "Not enforced" notice on both fields in `ScreeningRequirementForm.tsx`,
+  not a silent behavior change (grace_period_days defaults to 30 on every
+  existing requirement, so wiring it would relax non-compliance flagging
+  installation-wide). Guarded by 3 new tests
+  (`test_medical_screening_requirement_fields_are_unwired.py`), confirmed
+  failing on the two notice-presence assertions pre-fix via `git stash`;
+  also corrected a stale/inaccurate exclusion comment in the sibling
+  `test_compliance_grace_period_is_unwired.py` that had claimed this file
+  was already a legitimate reader.
+
+Re-verified still open, not re-flagged: MS-6 (unbounded requirement/record
+lists, already mirrored to `KNOWN_LIMITATIONS.md`), the missing
+exactly-one-of `user_id`/`prospect_id` validation on create, and
+`get_compliance_status` not 404ing an unknown subject (confirmed still not
+an enumeration channel).
+
+Completion gate: flake8/black/isort clean on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (410 revisions, single head, unchanged —
+no migration); scoped suite (`-k "medical_screening or medical-screening or
+grace_period"`) 50 passed/1 skipped (pre-existing)/0 failed; full backend
+suite 9892 passed/21 skipped (pre-existing/environmental)/0 failed; `tsc
+--noEmit` 0 errors; `eslint .` 0 errors/warnings (frontend file touched:
+`ScreeningRequirementForm.tsx`, MS-9's notice text). See
+`MS-09-medical-screening.md`'s Pass 3 section for the full write-up.
+Rotation row 09 → ⏳ (awaiting PR merge). Next: 10 documents & legal.
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3/4) ✅ merged — PR #2177
+
+PR #2177 (Feature 08, Membership pipeline, pass 4 + pass 4 round 2 + pass 4
+round 3 + pass 4 round 4) merged into `main`. Recap: #2176 (pass 3's
+Codex-fix commit) merged mid-investigation of a 4th round of Codex findings
+against that same commit; per CLAUDE.md Pitfall #24 (never reuse a merged
+PR's branch — see #2173's identical precedent against #2162 in the
+elections feature), pass 4 landed as a fresh branch off `main` on this new
+PR rather than a push to the now-closed
+`claude/security-review-membership-pipeline` branch. Pass 4: 3 fixed, 1
+flagged (MP-20/21/22). Pass 4 round 2 (Codex reviewing pass 4's own fix
+commit): 1 more fixed (MP-23). Pass 4 round 3 (Codex reviewing round 2's
+fix commit): 1 more fixed, 1 refuted (MP-24 fixed; MP-25 claimed deadlock
+does not reproduce against the actual code). Pass 4 round 4 (Codex
+reviewing round 3's fix commit): 1 more fixed (MP-26, narrowing — not
+closing — the residual limitation MP-23 documented). Full detail already
+recorded below and in `MP-08-membership-pipeline.md`. CI green on the
+final head, no merge conflict, all review threads replied to/resolved.
+Rotation row 08 → ✅. Next: 09 medical screening (PHI).
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 4) — 1 fixed (Codex review of PR #2177's `0d9a981a`)
+
+Codex reviewed round 3's fix commit (`0d9a981a`, MP-24/MP-25) and posted 1
+new finding against `create_election_package`'s fallback branch — the same
+branch MP-23 (round 2) had already flagged as a documented residual
+limitation, not fixed it.
+
+**MP-26 (P2, fixed)** — the fallback branch (reached when `current_step`
+doesn't itself govern the PII policy — e.g. the applicant already advanced
+past every `election_vote` stage) discarded a caller-supplied `step_id`
+entirely and always guessed the pipeline's first-configured `election_vote`
+step by `sort_order`, even when `step_id` was already validated by MP-5
+(pass 3) to belong to the exact governing pipeline. `advanceApplicant` (the
+only frontend caller) always sends `step_id` as the stage the applicant
+just entered, so on the same race MP-24 guards on the `current_step`-side,
+the fallback could pick an earlier, more permissive stage than the one the
+request actually named and the applicant actually just passed through.
+Independently verified the fallback was exactly the unconditional
+sort-order guess Codex described, and that MP-5's own check only confirms
+pipeline membership, never `step_type` — so `step_id` needed one more check
+(is it actually an `election_vote` step?) before it could safely be trusted
+here, which is what MP-20 originally objected to trusting it for
+unconditionally. Fixed: within the fallback, a supplied `step_id` is now
+re-checked for `step_type == ELECTION_VOTE` and preferred over the
+sort-order guess when it passes; a `step_id` naming a real but wrong-type
+step still falls through unchanged (the pass-4 "wrong step_id" case is
+unaffected). MP-24's mismatch check needed no change — it only fires when
+`current_step` itself governed, never true once this fallback is reached.
+
+**Residual limitation, narrowed, not closed:** a pipeline with multiple
+`election_vote` stages where _neither_ `current_step` _nor_ a
+type-checked `step_id` identifies one (step_id omitted, or wrong type) is
+still genuinely ambiguous — `docs/KNOWN_LIMITATIONS.md` updated to reflect
+the narrower scope rather than removed, since the case isn't fully closed.
+
+Guard tests in `test_membership_pipeline_pass4_round4_codex.py` (5 tests):
+the core regression, its mirror (proving "prefer the named stage" not
+"prefer the stricter one"), a wrong-type step_id (unaffected), an omitted
+step_id (unaffected), and a single-election-vote-stage regression guard.
+The core regression assertion independently confirmed to fail against the
+pre-fix code via `git stash`; the other 4 confirmed to already pass
+unchanged against that same pre-fix code, so the fix is additive.
+
+Full completion gate clean: flake8/black/isort on `app/ tests/ alembic/`
+(1 new test file needed `black` reformatting, applied), `validate_
+migrations.py --strict` (409 revisions, single head, no schema change),
+full backend suite `pytest tests/ -q` — 9877 passed / 21 skipped
+(pre-existing/environmental) / 0 failed (baseline was 9872 before this
+commit; +5 for the new round-4 guard tests). Full detail in
+`MP-08-membership-pipeline.md` → Pass 4, round 4. Rotation row 08 → ⏳
+(awaiting PR merge/close of the currently-open review threads).
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 3) — 1 fixed, 1 refuted (Codex review of PR #2177's `da29d880`)
+
+Codex reviewed round 2's fix commit (`da29d880`, MP-23's
+`prospect.current_step` preference) and posted 2 new findings against
+`membership_pipeline_service.py`.
+
+**MP-24 (P1, fixed)** — `create_election_package` resolved its PII-policy
+from `prospect.current_step` (MP-23) but never checked the caller-supplied
+`step_id` against it. `advanceApplicant`'s two-request pattern (commit the
+advance, then a separate request to create the package naming the
+just-entered stage) leaves a window where `current_step` can move again
+before the second request lands, so the package could end up stored under
+one `step_id` while a different stage's `package_fields` actually governed
+the snapshot. Fixed: reject (`ValueError` → 400) when a supplied `step_id`
+disagrees with the `current_step` the policy was just resolved from — this
+only fires on the genuine race (never when `step_id` is omitted, and never
+for the pre-existing "named step isn't the election step" case pass 4
+already covers). Guard tests in
+`test_membership_pipeline_pass4_round3_codex.py` (3 tests); the race
+assertion independently confirmed to fail against the pre-fix code via
+`git stash`.
+
+**MP-25 (P2, refuted, no fix)** — claimed a lock-order deadlock between
+`update_election_package`'s locking read (which joins the `election`
+relationship, `lazy="joined"`, into its `SELECT ... FOR UPDATE`) and
+`ElectionService.close_election` (claimed to lock the election first, then
+write linked packages via `_sync_package_statuses`). Independently traced
+`close_election` line by line: it **commits** after locking the election
+(releasing that lock) well before `_sync_package_statuses` ever touches a
+package row, and that method's own package read isn't even a locking read —
+only its final `UPDATE` takes a row lock, in a transaction that by then holds
+no election lock at all. A lock-order deadlock needs both transactions
+holding one resource while waiting on the other simultaneously; the commit
+boundary here structurally prevents that. Documented in full — including why
+the underlying "joined eager load also locks the joined row" mechanic is
+still real and worth knowing, and why narrowing it isn't a safe same-day
+change (the eager load is load-bearing for response serialization:
+`election_title`/`election_status`/`election_end_date` read `self.election`
+synchronously) — in `MP-08-membership-pipeline.md` → Pass 4, round 3.
+
+Full completion gate clean: flake8/black/isort on `app/ tests/ alembic/`,
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change), full backend suite `pytest tests/ -q` — 9872 passed / 21 skipped /
+0 failed (baseline was 9869 before this commit; +3 for the new guard tests).
+Full detail in `MP-08-membership-pipeline.md` → Pass 4, round 3. Rotation
+row 08 → ⏳ (awaiting PR merge/close of the currently-open review threads).
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4 round 2) — 1 fixed (Codex review of PR #2177's own fix commit)
+
+Codex reviewed pass 4's fix commit (`6c9bb09e`) and posted 1 new finding
+against the `create_election_package` field-policy fix that same commit had
+just landed (MP-20). Independently re-verified against the current code —
+confirmed real.
+
+**Fixed (1):** MP-23 — MP-20's fix resolved `package_fields` policy via
+`next(...)` over the pipeline's steps, which always returns the _first_
+`election_vote`-typed step by `sort_order`. `add_step` has no uniqueness
+check on `step_type` (confirmed by reading it), so a pipeline with multiple
+`election_vote` stages is reachable, and an earlier, more permissive stage
+could silently govern a package that belongs to a later, stricter stage the
+applicant actually reached. Fixed by preferring `prospect.current_step` —
+set only by `create_prospect`/`advance_prospect`/`regress_prospect`, and
+excluded from the generic prospect-update path, so it is never
+client-controlled — when it is itself an `election_vote` step in the
+governing pipeline; falls back to MP-20's original lookup only when the
+prospect's current step isn't an `election_vote` step at all (matches pass
+4 exactly for the common single-stage case).
+
+**Residual limitation (not a new flag — an explicit boundary on the MP-23
+fix, mirrored to `KNOWN_LIMITATIONS.md`):** a pipeline with multiple
+`election_vote` stages where the prospect's current step matches none of
+them (e.g. requested after the applicant already advanced past every vote
+stage) remains genuinely ambiguous — there is no single correct "the" stage
+to resolve without a product decision on what that should mean.
+
+New guard tests: `backend/tests/test_membership_pipeline_pass4_round2_codex.py`
+(3 tests — the multi-stage regression, its mirror-direction guard, and a
+single-stage regression guard). The multi-stage assertion independently
+confirmed to fail against the pre-fix code (`git stash` on
+`membership_pipeline_service.py`) before the fix was applied. Completion
+gate clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change); full backend suite `pytest tests/ -q` — 9869 passed / 21 skipped
+(pre-existing/environmental) / 0 failed (baseline was 9866 passed before this
+PR's last commit; +3 for the new round-2 guard tests). Full detail in
+`MP-08-membership-pipeline.md` → Pass 4, round 2. Rotation row 08 → ⏳
+(awaiting PR merge). Next: 09 medical screening (PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 4) — 3 fixed, 1 flagged (Codex review on PR #2177)
+
+Codex reviewed pass 3's fix commit (merged as #2176) and posted 4 new
+findings against `membership_pipeline_service.py`. Independently re-traced
+every one against the current code (not the bot's say-so) — all 4 real.
+
+**Fixed (3, counted as 2 findings — MP-20 covers two angles of one
+mechanism):** MP-20 — `create_election_package`'s `package_fields`
+PII-minimization policy (a) was resolved from whatever `step_id` the caller
+supplied, optional and never checked for being the pipeline's actual
+`election_vote` step, so a caller could get full capture just by omitting it
+or naming a different step — fixed by deriving policy from the pipeline's
+own `election_vote`-typed step directly; and (b) a brand-new,
+never-configured election stage had no `package_fields` at all (neither
+`DEFAULT_STAGE_CONFIGS.election_vote` nor the "Membership Vote" preset set
+it), over-capturing PII the UI displays as unchecked — fixed on the
+frontend by having the "Membership Vote" preset (the only UI path that can
+produce a savable new election stage) persist the UI's own displayed
+defaults, without touching the shared `defaultStageConfig` merge path an
+existing stage's edit flow depends on for preserving its legacy
+capture-everything behavior. MP-21 — `update_election_package`'s
+status-changing path reopened the pass-3-fixed (MP-16) assignment race by
+reading the package with a plain, unlocked call instead of
+`lock_for_update=True` — locked here too, mirroring
+`assign_package_to_election` (CLAUDE.md Pitfall #27).
+
+**Flagged (1, mirrored to `KNOWN_LIMITATIONS.md`):** MP-22 — pass 3's
+document-deletion reorder (MP-18: remove file, then delete DB row + commit)
+can still lose the file if something after a successful `os.remove` fails
+(most plausibly the commit). A genuine two-sided reliability tradeoff, not a
+one-sided gap: reverting the order reopens MP-18 (an untracked orphaned PII
+file), and a full rename-to-trash/restore-on-rollback scheme is more
+machinery than a rare, retry-safe compound failure justifies as a same-day
+fix.
+
+New guard tests: `backend/tests/test_membership_pipeline_pass4_codex.py` (7
+tests) plus one fixture update in `test_membership_pipeline_pass3_codex.py`;
+`StageConfigModal.test.tsx` (+2 tests). Every new/changed assertion
+confirmed to fail against the pre-fix code via `git stash`. Completion gate
+clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, single head, no schema
+change); `tsc`/`eslint` clean on the touched frontend files; full backend
+suite 9866 passed/21 skipped (pre-existing/environmental)/0 failed. Full
+detail in `MP-08-membership-pipeline.md` → Pass 4. Rotation row 08 → ⏳
+(awaiting PR merge). Next: 09 medical screening (PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) ✅ merged — PR #2176
+
+Merged to `main` as commit `7fb9c2e9`. Rotation row 08 continued into pass 4
+above (Codex reviewed this pass's own fix commit before the next feature
+started). Next: 09 medical screening, once pass 4 merges.
+
+---
+
+### 2026-09-02 — Feature 08 (Membership pipeline, pass 3) — 5 fixed, 2 flagged (Codex review on PR #2176)
+
+The pass 3 draft (full re-verification, zero code diff since pass 2's
+byte-identical merge) concluded "no new findings." Codex's review of that
+draft found 6 real issues it had missed, plus a 7th (unbounded prospect
+reads on `/widget-summary` and `/pipelines`) restated in a review comment
+mirroring MP-10's already-flagged class. Independently re-traced every one
+against the current code (not the bot's say-so) — all 7 confirmed real.
+
+**Fixed (5):** MP-13 unvalidated cross-tenant `form_id` in step config
+(`add_step`/`update_step`/`create_pipeline`'s inline steps all now validate
+in-org before persisting, mirroring the existing `email_template_id`
+pattern); MP-14 N+1 query in `list_event_links` (batch-fetched instead of
+per-row); MP-15 election-package PII over-collection ignoring the stage's
+configured `package_fields` (CLAUDE.md Pitfall #19 — a config switch with no
+reader; wired one that preserves the prior full-capture behavior for every
+pipeline that never configured it); MP-16 election-package assignment race
+with no row lock (CLAUDE.md Pitfall #27 — locked the package and election
+rows, made the status check a locking read); MP-17 no state machine on
+election-package `status` (mirrors MP-9's fix for
+`ProspectStatus.TRANSFERRED` — system-derived states can no longer be set or
+cleared through the generic update); MP-18 document deletion could orphan
+the file on a failed `os.remove` (reordered so the file removal happens
+before the metadata commit, and a failed removal now raises instead of
+being swallowed).
+
+**Flagged (1 full + half of a 2nd, both mirrored to `KNOWN_LIMITATIONS.md`):**
+MP-19's `/widget-summary` half (unbounded prospect-row materialization for
+aggregate counts and an uncapped `details` list — same class as MP-10, a
+response-contract change to fix properly); MP-10 itself remains open,
+unchanged. MP-19's `/pipelines` half **was** fixed (aggregate count query
+instead of eager-loading every prospect row, no contract change).
+
+New guard tests: `backend/tests/test_membership_pipeline_pass3_codex.py`
+(26 tests), each independently confirmed to fail against the pre-fix code
+via `git stash` on the two changed source files. Completion gate clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, single head, no schema change); scoped
+election/membership/prospect/pipeline suite (49 files) 808 passed/0 failed;
+full backend suite 9859 passed/21 skipped (pre-existing/environmental)/0
+failed (9833 baseline + 26 new guard tests). No frontend file changed, so
+`tsc`/`eslint` were not re-run this pass. Full detail in `MP-08-membership-pipeline.md` → Pass 3. Rotation row 08 → ⏳ (awaiting PR merge). Next: 09 medical screening
+(PHI), once this PR merges.
+
+---
+
+### 2026-09-02 — Feature 07 (Users & organizations, pass 3) ✅ merged — PR #2175
+
+Merged to `main` as commit `9860bde5`. Rotation row 07 → ✅. Next: 08
+Membership pipeline.
+
+---
+
+### 2026-09-02 — Feature 07 (Users & organizations, pass 3) — 1 fixed, 1 flagged — PR #2175
+
+Full-domain diff review since pass 2's merge (PR #1949, commit `6823bece`).
+Enumerated all 62 routes across `users.py`/`organizations.py`/
+`member_status.py`/`member_leaves.py`, traced every by-id fetch for
+`organization_id` scoping and the one client-supplied FK on a create path
+for in-org validation (CLAUDE.md Pitfall #14/XC-1/XC-3) — no gap found,
+everything already correctly scoped.
+
+- **USR-7 (LOW, fixed):** `UserListResponse` declares
+  `platoon`/`member_class`/`member_status`/`compliance_exempt`, but
+  `UserService.get_users_for_organization` never populated any of the four
+  — `GET /users` silently returned the schema default for all four
+  regardless of the real column value. `PlatoonRosterPanel.tsx` reads
+  `platoon` straight from this endpoint, so every member showed as
+  unassigned. Fixed for `platoon` (the field with a real, broken consumer);
+  the other three left unset — see USR-8. Guarded by
+  `tests/test_user_list_platoon.py`, confirmed to fail pre-fix via
+  `git stash`.
+- **USR-8 (MED, flagged):** `GET /users` sends the full admin roster record
+  (username, hire date, membership number, rank, station) to every
+  `members.view` holder — every default position. A 2026-09-01/02 frontend
+  change now presents a visibly reduced "Member Directory" for
+  non-managers, implying an access boundary that doesn't exist
+  server-side: the hidden fields are still in the JSON response. Not fixed
+  — 25+ frontend files depend on the current unfiltered response for
+  legitimate purposes, so trimming it is a response-shape product
+  decision, not a drop-in. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+Completion gate clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged); scoped suite
+323 passed/1 skipped (pre-existing)/0 failed; full backend suite 9833
+passed/21 skipped (pre-existing/environmental)/0 failed; `tsc --noEmit` 0
+errors; `eslint .` 0 errors (no frontend file touched). See
+`USR-07-users-organizations.md`'s Pass 3 section for the full write-up.
+Rotation row 07 → ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) ✅ merged — PR #2173
+
+PR #2173 (round 7's continuation branch, after its predecessor #2162 merged
+mid-task) merged to `main` as merge commit `860abcc2`. Final tally across
+both PRs of this pass: 23 fixed, 5 flagged across ten Codex review rounds, 1
+re-verified open (ELEC-12). Rotation row 06 → ✅. Next: 07 users &
+organizations.
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 10) — 1 fixed, 1 flagged (ELEC-39, ELEC-40) — PR #2173
+
+Codex posted 2 findings against commit `16a62a2d5` (round 9's own fix
+commit), both about further gaps in the same vote-deduplication
+mechanism. Re-verified each independently, same standard as every prior
+round in this pass.
+
+- **ELEC-39 (P1, fixed):** `submit_ballot_with_token`'s backward-compatible
+  `choice` UUID form (write-in/approve/deny/a plain candidate id — the one
+  vote-submission branch that isn't gated to a specific voting method the
+  way `rankings`/`candidate_ids` are) still hardcoded its dedup-hash
+  discriminator to `""`, even after ELEC-37 (round 9) made
+  `cast_vote_with_token` resolve an item's `voting_method` override for the
+  same purpose. An item overriding a `simple_majority` election to
+  `approval` hashed `f"cand:{id}"` via the single-vote route and `""` via
+  the bulk route's `choice` form for the identical logical vote — reopening
+  the exact cross-route hash mismatch ELEC-37 closed for the other two
+  branches. Fixed by routing the `choice` branch through the same
+  `_dedup_discriminator(election, candidate_id, None, item=ballot_item)`
+  call already used elsewhere, instead of the literal `""`. New tests in
+  `tests/test_election_codex_round10.py` (3 tests, including one
+  end-to-end test asserting the actual **persisted** `vote_dedup_hash`
+  matches the single-vote route's — a plain unit assertion on the
+  discriminator helper alone would still pass with the bug present, since
+  that helper was already correct before this round).
+- **ELEC-40 (P1, flagged — not code-fixed):** the ELEC-38 (round 9) fix
+  narrowed the duplicate-vote pre-check's alias set on the reasoning that a
+  dropped alias is always still caught by the `vote_dedup_hash` UNIQUE
+  constraint. That reasoning assumed every existing vote's hash was
+  computed under the current, id-based convention (ELEC-34, round 7) — it
+  does not hold for a vote `cast_vote_with_token` wrote for a legacy item
+  _before_ ELEC-34 landed, since that route's stored `Vote.position` has
+  always been the item's title (ELEC-34 only changed the hash input, never
+  the column), and a pre-ELEC-34 row's hash was itself computed against
+  that title, not the item's id. On a title/id collision between two
+  ballot items, dropping the colliding title alias can therefore miss a
+  genuinely pre-ELEC-34 vote both at the pre-check AND at the UNIQUE
+  constraint, letting a second token vote again. Not code-fixed: the two
+  candidate fixes (revert the ELEC-38 narrowing, or backfill-migrate
+  existing dedup hashes to the id-based formula) trade against each other
+  or need a data migration — both are owner decisions, not something to
+  guess at during a review pass. Severity in practice is narrow (requires
+  a deliberately-or-coincidentally colliding alias pair in an election that
+  already had a pre-ELEC-34 vote). Mirrored to `docs/KNOWN_LIMITATIONS.md`,
+  correcting that entry's prior overstated "still caught by the UNIQUE
+  constraint" claim.
+
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 511
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9831
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. ELEC-39's review thread replied to and
+resolved; ELEC-40's thread replied to with the analysis above and left
+open for the PR owner, not resolved. See `ELEC-06-elections-ballots.md`'s
+Pass 3 section (ELEC-39/40) for the full write-up. Rotation row 06 remains
+⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 9) — 2 more fixed (ELEC-37, ELEC-38) — PR #2173
+
+Codex posted 2 findings against commit `8a989764c` (round 8's own fix
+commit), both about gaps in the ELEC-34 vote-deduplication mechanism.
+
+- **ELEC-37 (P1, fixed):** `cast_vote_with_token`'s dedup-hash
+  discriminator (`_dedup_discriminator`) resolved the vote's method purely
+  from `election.voting_method`, ignoring a ballot item's own
+  `voting_method` override — which `submit_ballot_with_token` already
+  resolves inline for the same purpose. An item overriding e.g. a
+  `simple_majority` election to `approval` produced `f"cand:{id}"` from the
+  bulk route and `""` from the single-vote route for the identical vote, so
+  the `vote_dedup_hash` UNIQUE constraint (the documented backstop for a
+  race that bypasses the pre-insert duplicate check) could no longer catch
+  two tokens racing on the same item through the two different routes.
+  Fixed by adding `_effective_voting_method(election, item)` (mirroring the
+  existing `_dedup_position_key` precedent for the position component) and
+  threading the matched ballot item through `_dedup_discriminator` in
+  `cast_vote_with_token`. A related TOCTOU note (the duplicate-check SELECT
+  reads before the token/election row lock refreshes the snapshot) was
+  traced and found already covered: InnoDB checks a UNIQUE index against
+  the latest committed row at INSERT time regardless of the inserting
+  transaction's snapshot, so the actual backstop is unaffected by the
+  pre-check's staleness — not a fresh instance of the ELEC-17/24 class, and
+  not changed this round; reasoning recorded in the full write-up.
+- **ELEC-38 (P2, fixed):** `ballot_item_candidate_positions()`'s title/id
+  fallback (needed so a legacy candidate stored under either alias is still
+  found) let the ELEC-34 duplicate-vote pre-check in both routes match a
+  _different_ ballot item's already-stored vote whenever one item's title
+  happened to equal another item's id — the schema enforces only unique
+  item ids, not title-vs-id uniqueness across items. Reproduced exactly as
+  reported: voting on item `{id: "budget", ...}` then item `{id: "officer",
+title: "budget", ...}` in the same bulk submission got the second vote
+  rejected as a duplicate of the first. Checked whether `Vote`/`Candidate`
+  already carry enough information to fully disambiguate two colliding
+  items — they do not (no `ballot_item_id` column on either; `Candidate.position`
+  carries the identical ambiguity) — so full candidate/vote _ownership_
+  disambiguation on a collision is flagged as a known limitation requiring
+  a schema change (`docs/KNOWN_LIMITATIONS.md`), not forced as an
+  application-only fix. The narrower, reported bug (false-positive
+  duplicate rejection) _is_ fixable without a schema change, because
+  under-matching in a duplicate pre-check is safe (a genuine repeat vote is
+  always dedup-hashed against the item's own canonical id, never its
+  title, so the UNIQUE constraint still catches it) while over-matching
+  (this bug) is not. Fixed by adding `_dedup_scoped_item_aliases(item,
+all_items)`, used only at the two duplicate-check call sites — the
+  broader alias set is left untouched everywhere it decides candidate
+  ownership/eligibility, to avoid the exact regression the original
+  function's docstring warns against.
+
+New regression tests in `tests/test_election_codex_round9.py` (new file,
+11 tests: 4 for ELEC-37, 3 end-to-end + 4 unit for ELEC-38), confirmed to
+fail pre-fix via `git stash` (the module fails to import — the helper
+functions it exercises don't exist pre-fix). Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged, no migration this round); scoped
+suite (`-k "election or ballot or vote or quorum"`) 508 passed/1 skipped
+(pre-existing)/0 failed; full backend suite 9828 passed/21 skipped
+(pre-existing/environmental)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. Both review threads replied to and resolved on
+#2173. See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-37/38)
+for the full write-up. Rotation row 06 remains ⏳ (awaiting PR #2173
+merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 8) — 1 more fixed (ELEC-36) — PR #2173
+
+Codex posted 1 finding against commit `097f1c37e` (round 7's own
+`_token_eligibility_error` fix, ELEC-33) about a bug in that fix's own
+collision-detection logic.
+
+- **ELEC-36 (P1, fixed):** when a candidate's ballot item collides with a
+  restricted plain position under _multiple_ aliases at once — a legacy
+  item (no explicit `position` field) whose `id` equals one configured
+  plain position's name and whose `title` equals a _different_ configured
+  plain position's name, both present in `election.positions` — the
+  helper computed `colliding_positions` as the set of every colliding
+  alias and then checked eligibility against `next(iter(colliding_positions))`,
+  an arbitrary member (Python set iteration order depends on hash
+  seeding), not necessarily the specific alias this vote actually needs to
+  clear. A token eligible for only one of the two colliding positions
+  could, depending on which label the arbitrary pick happened to favor,
+  have its candidate checked against the position it _is_ eligible for
+  instead of the one it is not — bypassing that position's eligibility
+  restriction entirely. Confirmed reachable: `BallotItemInput.id` accepts
+  `^[A-Za-z0-9_-]+$` (so an id like `Treasurer` is valid), `title` has no
+  overlap restriction against `id` or against `election.positions`, and
+  nothing in schema or service validation prevents both aliases from also
+  appearing in `election.positions` at once.
+
+Fixed by requiring eligibility for _every_ colliding position rather than
+one arbitrarily chosen member of the set — failing closed on which alias
+is "real" instead of guessing, in the one shared `_token_eligibility_error()`
+helper (confirmed via grep to be the only place this logic lives — exactly
+two call sites, `cast_vote_with_token` and `submit_ballot_with_token`, both
+already routed through it per ELEC-33's own goal — so the fix closes both
+routes at once). New regression tests in
+`tests/test_election_codex_round8.py`
+(`TestMultiCollisionRequiresEligibilityForEveryColludingPosition`, 3
+tests), confirmed one fails pre-fix via `git stash` (a token eligible for
+"Treasurer" but not the item's other colliding alias "Secretary" was
+wrongly accepted). Completion gate re-run clean: flake8/black/isort on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` (409 revisions,
+unchanged, no migration this round); scoped suite (`-k "election or
+ballot or vote or quorum"`) 497 passed/1 skipped (pre-existing)/0 failed;
+full backend suite 9817 passed/21 skipped (pre-existing/environmental)/0
+failed. No frontend file touched, so `tsc`/`eslint` not run. Review thread
+replied to and resolved on #2173. See `ELEC-06-elections-ballots.md`'s
+Pass 3 section (ELEC-36) for the full write-up. Rotation row 06 remains ⏳
+(awaiting PR #2173 merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, round 7 continued) — 1 more fixed (ELEC-35) — PR #2173
+
+A third finding surfaced during triage of round 7's original two (ELEC-33,
+ELEC-34, logged below) — not a new Codex post against a specific commit,
+but a gap noticed while re-reading round 6's ELEC-30 fix alongside it.
+Folded into the same PR #2173 per this rotation's "one PR at a time"
+process, since #2162 (round 7's would-be target) is closed/merged.
+
+- **ELEC-35 (P1, fixed):** round 6's ELEC-30 fix gated
+  `_member_voting_gates()` (the global membership-tier voting ban) on
+  `election.positions and election.position_eligibility` — both truthy.
+  Round 6's own fixture covered a position with an _empty rule_
+  (`position_eligibility` truthy, no restriction for that one position).
+  It did not cover an election with plain positions and **no**
+  `position_eligibility` at all (a falsy `{}`/`None`) — a distinct
+  condition under which the branch, and the tier gate inside it, never ran
+  at all. A member on a tier with `voting_eligible: False` on such an
+  election still received a token with `eligible_positions=None` — read
+  downstream as unrestricted — and could cast a counted positional vote
+  despite the tier ban already excluding them from every ballot item on
+  the same election.
+
+Fixed by moving the gate to run on `election.positions` alone,
+independent of whether `position_eligibility` is configured for any
+position — `eligible_positions` is now always a list (never left `None`)
+whenever the election defines positions, with the "no rules for this
+position" behavior (unrestricted for a tier-eligible member) preserved via
+`(election.position_eligibility or {}).get(pos)`. The downstream
+empty-ballot-prevention `qualifies` check was simplified to read
+`eligible_positions` directly rather than carrying a separate
+"unrestricted positions always qualify" carve-out that would have
+otherwise overridden a tier-banned member's now-correctly-empty snapshot
+back to "qualifies."
+
+Fix guarded by 2 new regression tests in `tests/test_election_codex_round7.py`
+(`TestTierBanAppliesWithoutAnyPositionEligibilityRules`), confirmed failing
+pre-fix via `git stash`. One pre-existing test file
+(`test_election_reopen_test_ballots.py`) needed a one-line mock fixup
+(`.settings` on a hand-built `organization` `SimpleNamespace`) since the
+tier gate now reaches that code on every election with positions, not only
+ones with `position_eligibility` configured. Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged); scoped suite (`-k "election or
+ballot or vote or quorum"`) 494 passed/1 skipped (pre-existing)/0 failed;
+full backend suite 9814 passed/21 skipped (pre-existing/environmental)/0
+failed. No frontend file touched, so `tsc`/`eslint` not run. Review thread
+replied to and resolved on #2162 (accepts both on a merged PR). See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-35) for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR #2173 merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 7) — 2 fixed — PR #2173 (follow-up to merged #2162)
+
+**PR split note:** #2162 merged (rounds 1-6, through commit `c4e0e7eb2`)
+while this round's fix was still in progress on its own branch — a race
+with this rotation's own "one PR at a time" process, not a violation of
+it: the merge happened out-of-band while round 7 review comments were
+being fetched and addressed. The two round-7 review threads were replied
+to and resolved on #2162 as normal (GitHub accepts both actions on a
+merged PR), but with the branch deleted post-merge the code fix itself
+was pushed as a new branch and opened as [#2173](https://github.com/thegspiro/the-logbook/pull/2173) —
+branched from #2162's final commit (`c4e0e7eb2`, already an ancestor of
+`main` by then) and merged forward onto current `main`, not rebased.
+
+Codex posted 2 more findings against commit `44fcbfe8e` (round 5's own fix
+commit) — both about gaps in that fix (and, for the second, round 2's
+ELEC-27 fix) specifically in the bulk ballot submission path
+(`submit_ballot_with_token`, the `/ballot/vote/bulk` route), which neither
+earlier round touched. Re-verified each against current code independently,
+same standard as all prior rounds:
+
+- **ELEC-33 (P1, fixed):** round 5's ELEC-29 fix closed the
+  position/ballot-item namespace-collision bypass in `cast_vote_with_token`
+  (single-vote route) and `lookup_ballot_by_token`, but
+  `submit_ballot_with_token` (bulk route) has the identical vulnerability
+  and was never touched: its per-item eligibility check only ever consulted
+  `eligible_item_ids`, so a token eligible for a colliding ballot item but
+  NOT eligible for the colliding restricted plain position
+  (`eligible_positions=[]`) could still submit that position's candidate
+  through the bulk route.
+- **ELEC-34 (P1, fixed):** for a legacy ballot item (no explicit
+  `position` field), the bulk route stores `Vote.position` as the item's
+  id while the single-vote route stores it as the resolved candidate's own
+  position (historically the item's title) — two different literal
+  strings for the same contest. Each route's duplicate-vote check, and
+  each route's `vote_dedup_hash` (the database UNIQUE-constraint
+  backstop), compared only against its own route's convention, so a voter
+  holding two unused tokens could cast one vote through each route and
+  have both counted. ELEC-27 (round 2) had already fixed this for
+  _historical_ NULL-position rows; these are two _current_ non-NULL rows
+  from the two live routes, which ELEC-27 never addressed.
+
+Fixed by extracting the ELEC-29 collision check into one shared
+`_token_eligibility_error()` helper used by both vote-submission routes
+(ELEC-33) — which also corrected a latent gap in the original collision
+test itself, detecting a collision via any alias in
+`ballot_item_candidate_positions(item)` rather than only whichever literal
+a given route resolved to, since the bulk route's resolved value for a
+legacy item is an id that can never equal a plain position name even
+though the item's title does. ELEC-34 fixed at two layers: widened both
+routes' duplicate-vote SELECT to match every item alias instead of a
+single literal, and normalized the `vote_dedup_hash` position component
+(new `_dedup_position_key()` helper) to the item id for a legacy item
+regardless of route, closing the residual concurrent-race gap the
+SELECT-based fix alone cannot reach.
+
+Fix guarded by 5 new regression tests in `tests/test_election_codex_round7.py`
+(new file: 2 for ELEC-33, 3 for ELEC-34), 4 of 5 confirmed failing pre-fix
+via `git stash` (the fifth is a sanity check that a fully-eligible token
+still succeeds, which passes on both sides of the fix by design).
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 492
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9812
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. Both review threads replied to and
+resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-33/34)
+for the full write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 6) — 3 fixed — PR #2162
+
+Codex posted 3 more findings against commit `67511fa77` (round 4's own fix
+commit, before round 5's `44fcbfe8e` — round 5 touched a different
+function, `cast_vote_with_token`'s candidate classification (ELEC-29), not
+this eligibility-computation code, so all three were still open).
+Re-verified each against current code independently, same standard as all
+prior rounds:
+
+- **ELEC-30 (P1, fixed):** the positional-eligibility snapshot round 4's
+  ELEC-26 added to `send_ballot_emails` appended positions to
+  `eligible_positions` with no check on the recipient's membership-tier
+  `voting_eligible` flag — the same global ban
+  `annotate_ballot_items_for_user` already applies to every ballot item
+  regardless of that item's own rules. A member on a tier with
+  `voting_eligible: False` (the shipped "probationary" tier) could still
+  receive a live token/credential good for a plain-position contest.
+- **ELEC-31 (P1, fixed):** the same positional snapshot never consulted
+  `election.voter_overrides` (the "secretary override"), which
+  `annotate_ballot_items_for_user` already treats as blanket eligibility
+  for every ballot item. An overridden recipient whose role failed a
+  restricted position's `voter_types` rule still had that position
+  excluded from `eligible_positions` — the override's contract was honored
+  for items and silently ignored for positions on the same ballot.
+- **ELEC-32 (P2, fixed):** `cast_vote_with_token`'s "mark this token fully
+  used" check measured only `eligible_positions` coverage, never
+  `eligible_item_ids` — even though the same single-vote route also
+  accepts item-scoped candidate votes and records them into the identical
+  `positions_voted` list. In a mixed simple-majority election where a
+  recipient is eligible for at least one ballot item and a strict, non-empty
+  subset of the plain positions, casting the last eligible position vote
+  first set `used=True` immediately, and the still-outstanding, legitimate
+  item vote was then rejected as "already been fully submitted."
+
+Both P1s share one root cause: the positional path was computed
+independently of, and more permissively than, the item path's two
+established gates. Fixed by extracting the item path's tier-ban and
+override checks into a new shared helper,
+`ElectionService._member_voting_gates()`, and having both the item path
+(no behavior change — same computation, one definition) and the positional
+path call it. ELEC-32 fixed by folding each eligible ballot item's
+candidate-position label(s) (via the existing `ballot_item_candidate_positions()`
+helper) into the same completion set `eligible_positions` already
+contributes to, so "ballot fully cast" requires covering both scopes at
+once regardless of which one a given vote happens to satisfy.
+
+Fix guarded by 5 new regression tests in `tests/test_election_codex_round6.py`
+(new file: 1 for ELEC-30, 2 for ELEC-31, 2 for ELEC-32), all 5 confirmed
+failing pre-fix via `git stash`. Completion gate re-run clean:
+flake8/black/isort on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (409 revisions, unchanged — no migration needed); scoped suite
+(`-k "election or ballot or vote or quorum"`) 487 passed/1 skipped
+(pre-existing)/0 failed; full backend suite 9807 passed/21 skipped
+(pre-existing/environmental)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. Both review threads replied to and resolved. See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-30/31/32) for the
+full write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 5) — 1 fixed — PR #2162
+
+Codex posted 1 more finding against commit `53c81b92a` (the state before
+round 4's `67511fa77` fix landed — round 4 did not touch this code, so it
+was still open). Re-verified against current code independently, same
+standard as all prior rounds:
+
+- **ELEC-29 (P1, fixed):** `cast_vote_with_token` classified a candidate as
+  item-scoped the moment its position resolved to _any_ ballot item (a
+  `next(...)` first-match lookup via `ballot_item_candidate_positions()`,
+  ELEC-22's helper) and, when it matched, checked only
+  `eligible_item_ids` — never `eligible_positions` — even when that same
+  position value was _also_ a plain `election.positions` entry governed by
+  `position_eligibility`. Nothing in `ElectionBase`/`ElectionUpdate`
+  (`app/schemas/election.py`) forbids a plain position colliding with a
+  ballot item's position/title/id, and `send_ballot_emails` computes
+  `eligible_item_ids` and `eligible_positions` independently — so a
+  recipient ineligible for a restricted plain position but eligible for an
+  unrestricted, same-named legacy ballot item got a token that could vote
+  for the restricted position's candidate anyway. The public
+  `/ballot/lookup` endpoint (`lookup_ballot_by_token`) had the identical
+  shape, exempting a colliding candidate from the `eligible_positions`
+  filter unconditionally. Confirmed reachable end-to-end (schema permits
+  the collision, token issuance produces the exact mismatched-scope token
+  Codex described, `Candidate.position` is a single column so the same row
+  serves both namespaces at once). Fixed at both call sites by detecting
+  the collision directly (does this position value also appear in the
+  plain `election.positions` list?) and requiring a colliding candidate to
+  clear _both_ applicable eligibility checks, rather than trusting
+  whichever scope an iteration order resolved first. `submit_ballot_with_token`
+  needed no change (it resolves votes by an explicit client-supplied
+  `ballot_item_id`, never by position classification) and the authenticated
+  `cast_vote`/`check_voter_eligibility` path was already checking both
+  namespaces unconditionally. A write-time schema rejection of the
+  collision was considered and rejected: `ElectionUpdate` fields merge
+  independently against the row's existing state, so that validation
+  belongs in the service layer against the merged effective state, not a
+  DB-unaware Pydantic model, and would risk rejecting elections already in
+  this shape.
+
+Fix guarded by 3 new regression tests in `tests/test_election_codex_round5.py`
+(new file), 2 confirmed failing pre-fix via `git stash`. Completion gate
+re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 482
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9802
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. Review thread replied to and resolved.
+See `ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-29) for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 4) — 2 fixed, 1 flagged — PR #2162
+
+Codex posted 3 more findings against commit `dab1d1baf` (the state before
+round 3's `53c81b92a` fix landed — round 3 did not touch this code, so both
+backend findings were still open). Re-verified each against current code
+independently, same standard as all prior rounds:
+
+- **ELEC-26 (P1, fixed):** `send_ballot_emails`'s "skip recipients with zero
+  eligible ballot items" check decided to skip a recipient **before**
+  `eligible_positions` (ELEC-23's snapshot) was computed. In a mixed
+  election, a recipient eligible for a plain position but ineligible for
+  every structured item was excluded outright — no token, no email — despite
+  `eligible_positions` coming back non-empty for them moments later in the
+  original code. Fixed by computing both eligibility sets first, then
+  deciding to skip only when the recipient qualifies for neither structure
+  the election actually defines.
+- **ELEC-27 (P2, fixed):** `submit_ballot_with_token`'s NULL-position
+  duplicate-vote subquery filtered on `Candidate.position == position` (the
+  item's storage value) instead of the broader `item_candidate_positions`
+  set (`ballot_item_candidate_positions()`, ELEC-22's helper) already used by
+  every other candidate-validation branch in the same method. A voter with
+  an old NULL-position vote against a title-keyed legacy candidate, plus a
+  fresh unused token, could have that vote missed by the dedup check and cast
+  a second vote for the same contest — the same shape of bug ELEC-22 fixed,
+  just in the duplicate-detection query instead of the eligibility
+  allow-list. Fixed by using `item_candidate_positions` in this subquery too.
+- **ELEC-28 (P1, flagged):** the public, token-based ballot page
+  (`BallotVotingPage.tsx`) renders and submits only `election.ballot_items`
+  — it never reads `election.positions` or calls the backend's single-vote
+  positional route (`POST /elections/ballot/vote`, confirmed unused by any
+  frontend code). So even with ELEC-23/ELEC-26 correctly issuing a mixed
+  election's position-only-eligible voters a live token, the page that token
+  opens has no way to render or submit their positional vote — and
+  submitting the visible item ballot spends the single-use token, with no
+  way back. Investigated whether a small, safe reuse of existing UI
+  (`ElectionBallot.tsx`, which does render positions) was possible: it is
+  not — that component is wired to the authenticated, non-token voting flow
+  and would need its eligibility/submission plumbing rebuilt around a token.
+  Building new ballot-rendering UI, form state, and a submission contract is
+  a product decision, not a mechanical fix, so this is flagged rather than
+  guessed at, per this rotation's own standard (ELEC-14, ELEC-16).
+
+Both fixes guarded by regression tests in `tests/test_election_codex_round4.py`
+(new file, 4 tests), each confirmed to fail pre-fix via `git stash`.
+Completion gate re-run clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 479
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9799
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched (ELEC-28 flagged, not fixed), so `tsc`/`eslint` not run. All 3
+review threads replied to and resolved. See
+`ELEC-06-elections-ballots.md`'s Pass 3 section (ELEC-26/27/28) for the full
+write-up. `KNOWN_LIMITATIONS.md` updated for ELEC-28. Rotation row 06
+remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 3) — 1 fixed, 2 docs-only — PR #2162
+
+Codex reviewed round 2's fix commit (merged with a concurrent unrelated
+commit into `dab1d1baf`) and posted 3 more findings, all P2. Re-verified
+each against current code independently, same standard as rounds 1 and 2:
+
+- **ELEC-25 (P2, fixed):** `void_manual_ballot_batch` (ELEC-18's fix, round
+  1. had the identical lock-order problem ELEC-24 fixed for
+     `attest_manual_ballot_batch` — it locked the batch before the election
+     (via a join), while election deletion locks the election before its
+     batches. A concurrent void and delete could deadlock under InnoDB, and
+     neither path retries. Fixed by locking the election first, matching the
+     order used everywhere else. Confirmed by reading `close_election` that
+     voiding does not need attestation's additional close-race protection: it
+     has no OPEN-status gate to race, and results are always computed live
+     rather than snapshotted at close, so only the lock order needed fixing.
+- **Stale `.with_for_update()` inventory (P2, docs-only):** this file's own
+  Pass 3 section in `ELEC-06-elections-ballots.md` still stated the
+  pre-round-1 count and list (10 sites) after two rounds of fixes had
+  already added four more. Corrected to the actual current count (14) with
+  a full per-site table.
+- **Mismatched finding ids between this file and the canonical doc
+  (P2, docs-only):** this file's round-1 log entry used `ELEC-19b`/`ELEC-20`
+  for what `ELEC-06-elections-ballots.md` canonically calls `ELEC-20`/
+  `ELEC-21`, and omitted `ELEC-18` (the void-race fix) entirely despite
+  claiming to enumerate all 6 of round 1's fixes. Corrected both id
+  mismatches and restored the missing `ELEC-18` entry below;
+  `CHANGELOG.md`'s matching `[Unreleased]` entry had the same wrong ids and
+  was corrected too.
+
+The one code fix is guarded by `TestVoidManualBallotBatchLocksElectionFirst`
+(3 tests, `tests/test_election_codex_round3.py`), confirmed to fail pre-fix
+via `git stash`; the two pre-existing `TestVoidManualBallotBatchLocking`
+tests in `tests/test_election_codex_round2.py` were updated for the new
+lock in their call sequence. Completion gate re-run clean: flake8/black/isort
+on `app/ tests/ alembic/`; `validate_migrations.py --strict` (409 revisions,
+unchanged — no migration needed); scoped suite (`-k "election or ballot or
+vote or quorum"`) 475 passed/1 skipped (pre-existing)/0 failed; full backend
+suite 9795 passed/21 skipped (pre-existing/environmental)/0 failed. No
+frontend file touched, so `tsc`/`eslint` not run. All 3 review threads
+replied to and resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section
+(ELEC-25) for the full write-up. Rotation row 06 remains ⏳ (awaiting PR
+merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 2) — 3 fixed — PR #2162
+
+Codex reviewed round 1's fix commit (`d07af4143`) itself and posted 3 more
+findings — 2 P1s and a P2 — specifically on those fixes, not on the
+original pass. Re-verified each against current code independently, same
+standard as round 1: **all 3 confirmed real and fixed.**
+
+- **ELEC-22 (P1, fixed):** round 1's new per-item eligibility checks
+  (ELEC-20/21) matched a candidate to its ballot item by the item's
+  `position` field or its `id` — but a legacy ballot item persisted without
+  an explicit `position` field ties its candidates by _title_ instead, a
+  convention the voting UI (`BallotVotingPage.tsx`) and
+  `check_voter_eligibility` already relied on before this review touched
+  the file. The id-only allow-list emptied every such item's candidate list
+  on `/ballot/lookup` and rejected the same candidates on both token-vote
+  routes. Fixed with a shared `ballot_item_candidate_positions()` helper
+  (position, else title-or-id) used consistently across all three call
+  sites, so the lookup filter and both submission checks agree.
+- **ELEC-23 (P1, fixed):** a candidate nominated for a plain
+  `election.positions` entry (not tied to any ballot item — the schema
+  allows both on the same election) had its eligibility checked nowhere at
+  all whenever the election also had ballot items: `send_ballot_emails`
+  unconditionally skipped snapshotting `eligible_positions` in that case,
+  and `cast_vote_with_token`'s item check is a no-op for a candidate that
+  doesn't resolve to an item. Worse in kind than ELEC-21 — that was a
+  check that fired but read the wrong field; this was no check firing at
+  all. Fixed by snapshotting `eligible_positions` whenever
+  `election.positions` has configured rules regardless of ballot items,
+  and restructuring `cast_vote_with_token` (and `lookup_ballot_by_token`)
+  so each candidate is judged by exactly one snapshot — item-scoped
+  candidates by `eligible_item_ids`, everything else by
+  `eligible_positions` — so populating the latter for mixed elections
+  can't collaterally reject legitimate item votes.
+- **ELEC-24 (P2, fixed):** ELEC-15's election-row lock in
+  `attest_manual_ballot_batch` was acquired _after_ the batch lock —
+  child-then-parent — while election deletion's `ON DELETE CASCADE` locks
+  parent-then-child. A concurrent attest and delete could deadlock under
+  InnoDB, and neither path retries. Fixed by acquiring the election lock
+  first, matching the parent-to-child order; ELEC-15's serialization
+  property (both locks still held before either check) is unchanged.
+
+All 3 fixes guarded by regression tests in `tests/test_election_codex_round3.py`
+(new file, 7 tests) plus 2 new/updated tests in the existing
+`TestAttestationLocksElection` class in `test_election_codex_round2.py`,
+each confirmed to fail pre-fix via `git stash`. Completion gate re-run
+clean: flake8/black/isort on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (409 revisions, unchanged — no migration
+needed); scoped suite (`-k "election or ballot or vote or quorum"`) 472
+passed/1 skipped (pre-existing)/0 failed; full backend suite 9792
+passed/21 skipped (pre-existing/environmental)/0 failed. No frontend file
+touched, so `tsc`/`eslint` not run. All 3 review threads replied to and
+resolved. See `ELEC-06-elections-ballots.md`'s Pass 3 section for the full
+write-up. Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3, Codex round 1) — 6 fixed, 2 flagged — PR #2162
+
+Codex reviewed this PR's initial "0 fixes, 0 new findings" write-up and
+posted 8 findings disputing it, several P1. Re-traced each against current
+code independently (not on Codex's word, same standard applied to the
+original pass) — **6 confirmed real and fixed, 2 confirmed real and
+flagged.** The diff-based "byte-identical to pass 2" scoping that produced
+the original conclusion was not itself wrong; the error was treating
+"unchanged since pass 2" as "still correct" when pass 2 had not caught these
+either:
+
+- **ELEC-13 (P2, fixed):** `6b5a82fa` (landed after pass 2's own diff
+  baseline, so missed by this pass's re-diff against that baseline) changed
+  `_reconcile_membership` to preserve `member_class`/`member_status` across
+  a switch onto a custom membership tier, for shift-eligibility reasons —
+  but `ElectionService._user_has_role_type` reads those same columns for
+  restricted-ballot eligibility, so a member moved onto a custom tier kept
+  matching `operational`/`regular` when the tier is documented to match
+  neither. Fixed by re-deriving from the _live_ `membership_type` when it's
+  an unrecognized tier, discarding the carried-over columns for eligibility
+  purposes only.
+- **ELEC-14 (P2, flagged):** `verify_vote_receipt` takes its credential as a
+  bare GET query param, not body/fragment — this pass's summary claim that
+  all 4 public token routes avoid that was wrong for this one route (pass
+  1's own table had it right). Not fixed: changing the HTTP method is a
+  public API-contract decision, not a mechanical one, given this exact GET
+  shape is documented across `wiki/`, `ARCHITECTURE.md`, and training
+  materials as a stable external endpoint.
+- **ELEC-15 (P1, fixed):** `attest_manual_ballot_batch` locked the batch but
+  read the election's status with a plain (non-locking) select;
+  `close_election` locks the election independently, so the two locks never
+  serialize against each other. Fixed by making the election read
+  `.with_for_update()` too.
+- **ELEC-16 (P2, flagged):** `list_manual_ballot_batches` is unbounded — the
+  same abuse-resistance shape as the already-flagged ELEC-12, missed when
+  this pass called the manual-ballot surface "read in full." Flagged for the
+  same reason as ELEC-12 (pagination/cap are product decisions).
+- **ELEC-17 (P1, fixed):** `_lock_token_ballot_for_submission`'s locking
+  re-selects lacked `populate_existing=True`, so with `expire_on_commit=False`
+  they returned the already-cached (pre-lock) election/token state despite
+  correctly acquiring the row lock — the identical bug class pass 2 already
+  found and fixed once in `quorum_service.py`, present here too and missed
+  by both pass 1 and pass 2.
+- **ELEC-18 (P2, fixed):** `void_manual_ballot_batch` ran plain (non-locking)
+  selects of both `ManualBallotBatch` and `Vote`, with no check for a batch
+  already voided — two concurrent voids could both load the same
+  not-yet-voided votes before either committed, both succeed, and the later
+  ORM flush would overwrite the first officer's
+  `deleted_by`/`deletion_reason`/`deleted_at`, corrupting the forensic
+  attribution the operation exists to preserve. Fixed by locking the batch
+  first (`.with_for_update()`), returning early with "already voided" if a
+  concurrent void already committed, and locking the vote select too.
+- **ELEC-20 (P1, fixed):** `submit_ballot_with_token`'s plain-candidate-UUID
+  `choice` branch didn't check `candidate.position == position` the way the
+  `rankings`/`candidate_ids` branches do, letting a crafted submission bind
+  a candidate from one ballot item onto a different item.
+- **ELEC-21 (P1, fixed):** `cast_vote_with_token` (the single-vote route)
+  checked only `eligible_positions`, which is always `None` for ballot-item
+  elections, and never checked `eligible_item_ids` — reintroducing the R-1
+  bypass on this specific route (the bulk route already enforced it). Also
+  tightened `lookup_ballot_by_token` to stop disclosing a restricted item's
+  candidates in the first place.
+
+All 6 fixes guarded by new regression tests in
+`tests/test_election_codex_round2.py` (12 tests), each confirmed to fail
+pre-fix via `git stash`. Completion gate re-run clean: flake8/black/isort on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` (409 revisions,
+unchanged — no migration needed); scoped suite (`-k "election or ballot or
+vote or quorum"`) 464 passed/1 skipped (pre-existing)/0 failed; full backend
+suite 9784 passed/21 skipped (pre-existing/environmental)/0 failed. No
+frontend file touched, so `tsc`/`eslint` not run. All 8 review threads
+replied to; the 6 fixed and 2 flagged-with-explanation threads resolved. See
+`ELEC-06-elections-ballots.md`'s Pass 3 section for the full write-up.
+Rotation row 06 remains ⏳ (awaiting PR merge).
+
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) — 0 fixes, 1 re-verified open (ELEC-12) — PR #2162
+
+Unshallowed the clone (it started shallow at 803 commits) to trace history
+past a rewritten-history boundary, the same obstacle FIN-05 pass 3 named.
+Pass 2's fix commit (`a518957e5`) is confirmed an ancestor of `origin/main`
+by `git merge-base --is-ancestor`. Diffed the full elections domain from
+there: **zero change** in `elections.py`, `election_service.py`,
+`quorum_service.py`, `models/election.py`, `schemas/election.py` (byte-
+identical to pass 2's landing state) and no elections-table migration among
+the 55 that landed since (checked by content, not filename — the one hit
+only lists `elections.view`/`elections.manage` among many permission
+strings in an unrelated cross-cutting onboarding fix). No elections-specific
+frontend change either.
+
+With nothing changed, re-verified rather than re-derived: route inventory
+re-confirmed exactly 65 routes / 56 `require_permission` / 5
+authenticated-only / 4 public by direct count; no OR-gate
+`require_permission(a, b)` call exists in the module (Pitfall #23 class,
+n/a here); baseline-grant check confirmed `DEFAULT_POSITIONS["member"]`
+carries only `elections.view`, never `elections.manage`; the manual-ballot-
+batch surface (`attest`/`void`/`list`, `election_service.py:3502-3766`) read
+in full for the first time by name in this file — org-scoped, row-locked,
+and separation-of-duties enforced in code (an officer cannot attest their
+own batch); the 4 public token routes re-read against their compensating
+controls with no drift from pass 1's description. ELEC-12 (unbounded
+`SavedBallotTemplate` list/create, LOW/MED, flagged in pass 1) re-verified
+still open and unchanged — both remedies remain product decisions, already
+mirrored in `KNOWN_LIMITATIONS.md`.
+
+**Superseded by the Codex-round entry above** — the "read in full" and
+"no drift" claims in this entry's second paragraph did not hold up; 6 real
+findings existed at the time this entry was written.
+
+Completion gate: flake8/black/isort clean on `app/ tests/ alembic/`
+(isort 9.0.1, CI's pin); `validate_migrations.py --strict` (409 revisions,
+single head); `pytest -k "election or ballot or vote or quorum"` 452
+passed/1 skipped (pre-existing)/0 failed. No frontend file touched, so
+`tsc`/`eslint` not run. See `ELEC-06-elections-ballots.md`'s Pass 3 section
+for the full write-up. Rotation row 06 → ⏳ (awaiting PR merge).
 
 ### 2026-09-02 — Feature 05 (Finance & approvals, pass 3) ✅ merged — PR #2159
 
@@ -5965,14 +7886,14 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | 🔄     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | 🔄     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |

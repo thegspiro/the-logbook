@@ -41,6 +41,40 @@ export interface ContactInfoSettings {
   show_mobile: boolean;
 }
 
+/**
+ * Which of a member's own contact fields other members may see. The member's
+ * choice; the department's `ContactInfoSettings` is a ceiling over the three
+ * work fields on top of it. Personal email and the mailing address answer to
+ * the member alone. Mirrors `ProfileVisibility` in backend/app/schemas/user.py.
+ */
+export interface ProfileVisibility {
+  email: boolean;
+  personal_email: boolean;
+  phone: boolean;
+  mobile: boolean;
+  address: boolean;
+}
+
+export type ProfileVisibilityField = keyof ProfileVisibility;
+
+/** Every field, in display order, so a loop can never miss one under `noUncheckedIndexedAccess`. */
+export const PROFILE_VISIBILITY_FIELDS: readonly ProfileVisibilityField[] = [
+  'email',
+  'personal_email',
+  'phone',
+  'mobile',
+  'address',
+];
+
+/** What a member who has never chosen gets — identical to the backend defaults. */
+export const DEFAULT_PROFILE_VISIBILITY: ProfileVisibility = {
+  email: true,
+  personal_email: false,
+  phone: true,
+  mobile: true,
+  address: false,
+};
+
 export interface MembershipIdSettings {
   enabled: boolean;
   auto_generate: boolean;
@@ -62,20 +96,22 @@ export interface DepartmentEmailSettings {
   format: DepartmentEmailFormat;
 }
 
+export interface EmailConnectionTestResult {
+  success: boolean;
+  message: string;
+  details: Record<string, unknown>;
+}
+
 export interface EmailServiceSettings {
   enabled: boolean;
   platform: string;
   // Cloudflare Email Service
   cloudflare_account_id?: string;
   cloudflare_api_token?: string;
-  // Gmail / Google Workspace
-  google_client_id?: string;
-  google_client_secret?: string;
+  // Gmail / Google Workspace — signs in to smtp.gmail.com as from_email
   google_app_password?: string;
-  // Microsoft 365
-  microsoft_tenant_id?: string;
-  microsoft_client_id?: string;
-  microsoft_client_secret?: string;
+  // Microsoft 365 — signs in to smtp.office365.com as from_email
+  microsoft_app_password?: string;
   // Self-hosted SMTP
   smtp_host?: string;
   smtp_port: number;

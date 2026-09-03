@@ -1050,6 +1050,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                 .where(Event.organization_id == str(org.id))
                 .where(Event.send_reminders == True)  # noqa: E712
                 .where(Event.is_cancelled == False)  # noqa: E712
+                # A draft is unpublished: nobody has been told about it, so
+                # nobody is reminded of it.
+                .where(Event.is_draft.isnot(True))
                 .where(Event.start_datetime > now)
                 .where(Event.start_datetime <= max_lookahead)
             )

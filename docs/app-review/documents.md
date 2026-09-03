@@ -16,7 +16,7 @@ Pass 3 verified the module clean and cleared the latent-500 over-flag (the
 - **DOC2-1 name enrichment intact**; **E712-free** in both `documents_service.py`
   and the sibling `document_service.py`.
 
-Open items unchanged and correctly deferred: **DOC-4**/**DOC-5** (owner product
+Open items at review time: **DOC-4**/**DOC-5** (owner product
 decisions in `KNOWN_LIMITATIONS.md` — the sensitive case, member personal folders,
 stays `OWNER`-visibility regardless), and the `get_folders` → `can_access_folder`
 consolidation (a drift-risk cleanup on the ACL path — left flagged rather than
@@ -61,22 +61,26 @@ Pass 1/2's future-dev item "remove or populate `uploader_name`/`folder_name` dea
 response fields" is **already resolved**: DOC2-1 (pass 2) populates both via
 `attach_document_names`. Removed from the open list below.
 
-### DOC-4 / DOC-5 — 🚩 FLAGGED (product decisions, unchanged)
+### DOC-4 / DOC-5 — historical finding (both fixed 2026-09-02)
 
-DOC-4 (summary aggregates counts across all folders incl. restricted — count-only,
-no content) and DOC-5 (per-folder ACL isn't hierarchical, so `ORGANIZATION`-visible
-apparatus/facility child folders under a `LEADERSHIP` root are directly readable)
-remain owner decisions in `KNOWN_LIMITATIONS.md`. Member personal folders stay
-`OWNER`-visibility, so the sensitive case is closed regardless.
+At the time of this pass, DOC-4 (summary aggregates counts across all
+folders incl. restricted — count-only, no content) and DOC-5 (per-folder
+ACL isn't hierarchical, so `ORGANIZATION`-visible apparatus/facility child
+folders under a `LEADERSHIP` root are directly readable) remained owner
+decisions in `KNOWN_LIMITATIONS.md`. Member personal folders stayed
+`OWNER`-visibility, so the sensitive case was closed regardless. **Both are
+now fixed** (PR #2160 for DOC-5, PR #2171 for DOC-4, re-verified by
+security review DOC-10 pass 3).
 
 ### Future development (updated)
 
-1. **DOC-5 hierarchical-ACL decision** — the one potential access gap, depending on
+1. **DOC-5 hierarchical-ACL decision (resolved 2026-09-02)** — the one potential access gap, depending on
    intent.
-2. **DOC-4 summary scoping** — scope the aggregate to accessible folders if the
-   count-leak matters.
-3. **`get_folders` should call `can_access_folder`** rather than re-inlining it
-   (drift risk).
+2. **DOC-4 summary scoping (resolved 2026-09-02)** — `get_summary` now
+   scopes every aggregate to the caller's `accessible_folder_ids`.
+3. **`get_folders` should call `can_access_folder`** rather than re-inlining
+   it (drift risk) — **resolved 2026-09-02** alongside DOC-5; it now
+   delegates to `can_access_folder` for every folder.
 
 **Completion gate (pass 3):** `flake8` 0 · `black --check` clean · `tsc --noEmit` 0
 (no frontend change) · eslint unaffected · document tests **39 passed** (all DB-free).
@@ -111,14 +115,17 @@ missing/out-of-org id yields `None`, so a name never crosses an org boundary. Th
 generalizes the MS2-4 repair (B1 medical-screening) to the documents module.
 3 tests added (`TestAttachDocumentNames`).
 
-### DOC-4 / DOC-5 — still flagged (unchanged, product decisions)
+### DOC-4 / DOC-5 — historical finding (both fixed 2026-09-02)
 
-DOC-4 (summary ignores the folder ACL — count-only, no content) and DOC-5
-(per-folder ACL isn't hierarchical, so apparatus/facility child folders under a
-`LEADERSHIP` root are directly readable) both remain owner decisions, unchanged
-from pass 1 and already in `KNOWN_LIMITATIONS.md`. Re-confirmed member **personal**
-folders are `OWNER`-visibility, so the sensitive case stays closed regardless of
-the DOC-5 decision.
+At the time of this pass, DOC-4 (summary ignores the folder ACL —
+count-only, no content) and DOC-5 (per-folder ACL isn't hierarchical, so
+apparatus/facility child folders under a `LEADERSHIP` root are directly
+readable) both remained owner decisions, unchanged from pass 1 and already
+in `KNOWN_LIMITATIONS.md`. Member **personal** folders were already
+`OWNER`-visibility, so the sensitive case was closed regardless of either
+decision. **Both subsequently resolved 2026-09-02** — DOC-5 by hierarchical
+authorization (PR #2160), DOC-4 by scoping the summary aggregate to the
+caller's accessible folders (PR #2171).
 
 ---
 
@@ -165,7 +172,7 @@ hardening, not a privilege fix. Two endpoints (`update_document`,
 `ValueError`s would have 500'd — wrapped both in the module's
 `handle_service_errors` (`ValueError → 400`), matching `create_folder`.
 
-### DOC-4 — LOW — `get_documents_summary` ignores the folder ACL — 🚩 FLAGGED (unchanged)
+### DOC-4 — LOW — `get_documents_summary` ignores the folder ACL — ✅ FIXED (2026-09-02, was 🚩 FLAGGED at this pass)
 
 `get_summary` still aggregates counts/size across the **whole org**, including
 leadership-only and member-personal folders, so a plain `documents.view` user
@@ -175,22 +182,14 @@ stats endpoint that some deployments may rely on as an org-wide total; left for
 a deliberate decision. **Not a disclosure of content**, only of aggregate
 counts.
 
-### DOC-5 — LOW — Folder ACL is per-folder, not hierarchical — 🚩 FLAGGED (needs product decision)
+### DOC-5 — LOW — Hierarchical folder ACL — ✅ FIXED (2026-09-02)
 
-`can_access_folder` inspects only a folder's own `visibility`/`allowed_roles`,
-never its ancestor chain. Apparatus/facility per-item child folders are created
-`ORGANIZATION`-visibility with no `allowed_roles`, even though their parent roots
-are `LEADERSHIP` — so any `documents.view` user can read those child folders
-directly, and the apparatus docstring's "allowed_roles restricted" claim is not
-actually coded.
-
-**This is a genuine product decision, not a clear bug:** org-visible apparatus
-and facility files may be exactly what's wanted (crews should see their rig's
-manuals). If leadership-only was intended, the fix is a hierarchical ACL that
-walks the parent chain — a larger change with performance implications on every
-folder check. Flagged for the owner to decide intent; **member personal folders
-are unaffected** (individually `OWNER`-visibility), so the sensitive case is not
-exposed. Recorded in `KNOWN_LIMITATIONS.md`.
+`can_access_folder` now walks the requested folder and every ancestor, requiring
+each folder to admit the caller and failing closed for missing, foreign, or
+cyclic ancestry. System-root ACLs are normalized so member owners and
+facility-sensitive permission holders pass their roots, while apparatus remains
+leadership-only. The apparatus docstring no longer claims an unimplemented role
+restriction.
 
 ## Verified good ✅ (re-confirmed)
 
@@ -216,21 +215,25 @@ recorded for a future frontend-shared iteration.
 
 ## Documentation
 
-`docs/module-audit/documents.md`: DOC-6 now resolved; DOC-4/DOC-5 stand.
+`docs/module-audit/documents.md`: DOC-6 resolved; DOC-5 and DOC-4 were both
+subsequently resolved on 2026-09-02 (previously this line said DOC-4
+remained open — corrected by security review DOC-10 pass 3).
 DOC-5's doc-vs-code mismatch (apparatus docstring claims a restriction that
 isn't coded) is the one active documentation inaccuracy — its resolution depends
 on the DOC-5 product decision (fix the code or fix the docstring).
 
 ## Future development
 
-1. **DOC-5 hierarchical-ACL decision** — the one item here that could be a real
+1. **DOC-5 hierarchical-ACL decision (resolved 2026-09-02)** — the one item here that could be a real
    access gap depending on intent. Decide whether apparatus/facility child
    folders should inherit their parent's `LEADERSHIP` restriction.
-2. **DOC-4 summary scoping** — scope the aggregate to accessible folders if the
-   count-leak matters.
-3. **`get_folders` should call `can_access_folder`** rather than re-inlining it
-   (drift risk).
-4. **Remove or populate `uploader_name`/`folder_name`** dead response fields.
+2. **DOC-4 summary scoping (resolved 2026-09-02)** — `get_summary` now
+   scopes every aggregate to the caller's accessible folders.
+3. **`get_folders` should call `can_access_folder`** rather than re-inlining
+   it (drift risk) — **resolved 2026-09-02** alongside DOC-5.
+4. **Remove or populate `uploader_name`/`folder_name`** dead response fields
+   — **resolved** (DOC2-1, pass 2, 2026-08-06): `attach_document_names`
+   populates both.
 
 ## Completion gate
 

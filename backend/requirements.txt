@@ -15,6 +15,13 @@ pydantic-settings==2.15.0
 slowapi==0.1.10
 
 # ============================================
+# MCP (Model Context Protocol) server — the opt-in Claude add-on
+# ============================================
+# Pulls in httpx2 (a separate distribution from the pinned httpx, they
+# coexist), sse-starlette, mcp-types, jsonschema and opentelemetry-api.
+mcp==2.1.1
+
+# ============================================
 # Database - MySQL
 # ============================================
 sqlalchemy==2.0.52

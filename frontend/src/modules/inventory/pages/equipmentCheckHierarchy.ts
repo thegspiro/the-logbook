@@ -27,6 +27,48 @@ export function descendantCompartmentIds(
   return descendants;
 }
 
+/**
+ * Descendant ids of `rootId`, walked from a flat `id -> parentCompartmentId`
+ * map rather than a live `HierarchyCompartment[]` — used to compare the
+ * *last known server* subtree against the current, possibly locally-edited
+ * one. Reparenting has no auto-save path, so the client's in-memory
+ * hierarchy can disagree with what the backend still has.
+ */
+export function descendantIdsFromParentMap(parentById: Map<string, string>, rootId: string): Set<string> {
+  const descendants = new Set<string>();
+  const pending = [rootId];
+  while (pending.length > 0) {
+    const parentId = pending.pop();
+    for (const [id, pid] of parentById) {
+      if (pid === parentId && !descendants.has(id)) {
+        descendants.add(id);
+        pending.push(id);
+      }
+    }
+  }
+  return descendants;
+}
+
+/**
+ * Rebuilds the `id -> parentCompartmentId` server-truth map
+ * (`savedParentByIdRef` in the builder) from a freshly-persisted compartment
+ * list — the initial load and any bulk replace (`replaceCompartments`, used
+ * by vehicle-preset apply / JSON import / CSV import) both hand back a
+ * complete, authoritative set of rows and should rebuild the whole map from
+ * it rather than merge into whatever it held before: a bulk replace mints
+ * new ids for every row, so entries for the old ones would otherwise sit in
+ * the map as dead weight, and a new row's id is simply absent from a merge,
+ * which is what let the pending-reparent delete guard's `knownIds` filter
+ * silently drop it instead of blocking the delete.
+ */
+export function buildParentByIdMap(compartments: HierarchyCompartment[]): Map<string, string> {
+  const parentById = new Map<string, string>();
+  for (const compartment of compartments) {
+    if (compartment.id) parentById.set(compartment.id, compartment.parentCompartmentId);
+  }
+  return parentById;
+}
+
 function compartmentPath(compartments: HierarchyCompartment[], compartment: HierarchyCompartment): string {
   const names = [compartment.name || 'Untitled'];
   const visited = new Set<string>();

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.onboarding import OnboardingStatus
 from app.models.user import Organization, User
 from app.schemas.organization import (
+    _LEGACY_EMAIL_OAUTH_FIELDS,
     ContactInfoSettings,
     DepartmentEmailSettings,
     EmailServiceSettings,
@@ -28,6 +29,14 @@ from app.schemas.organization import (
     SetupProgressSettings,
     decrypt_settings_secrets,
     encrypt_settings_secrets,
+)
+from app.utils.email_providers import (
+    EMAIL_SECRET_FIELDS,
+    REDACTED_SECRET,
+    connection_identity,
+    missing_for_enabled,
+    normalize_stored_platform,
+    required_field_message,
 )
 
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
@@ -251,8 +260,13 @@ class OrganizationService:
             show_mobile=contact_info.get("show_mobile", True),
         )
 
-        # Parse email service settings
-        email_service = settings_dict.get("email_service", {})
+        # Parse email service settings. A platform label saved before the
+        # schema validated the field is settled onto a known value first, or
+        # this read raises for that organization (see normalize_stored_platform).
+        # `or {}`: the section is optional and may be stored as null.
+        email_service = normalize_stored_platform(
+            settings_dict.get("email_service") or {}
+        )
         email_settings = (
             EmailServiceSettings(
                 **{
@@ -402,17 +416,63 @@ class OrganizationService:
         # '••••••••', so a full-settings round-trip that saves the auth section
         # back would otherwise persist the literal bullet string (encrypt skips
         # it), silently destroying the real SSO client secret and breaking login.
+        # What the client actually sent for the email secrets, before marker
+        # substitution: a fresh value is kept across an identity change, a
+        # marker or an omission is not.
+        email_incoming = settings_update.get("email_service")
+        email_submitted_secrets = (
+            {k: email_incoming.get(k) for k in EMAIL_SECRET_FIELDS}
+            if isinstance(email_incoming, dict)
+            else {}
+        )
+
         for section_key in ("email_service", "file_storage", "auth"):
             incoming = settings_update.get(section_key)
             existing = current_settings.get(section_key)
             if isinstance(incoming, dict) and isinstance(existing, dict):
                 for field, val in incoming.items():
-                    if val == "••••••••":
+                    if val == REDACTED_SECRET:
                         incoming[field] = existing.get(field)
 
         # Deep-merge so a partial PATCH of one sub-key doesn't wipe the rest of
         # its section (ORU-9). A shallow {**a, **b} would replace whole sections.
         updated_settings = _deep_merge_settings(current_settings, settings_update)
+
+        # The merge keeps every key the row already had, which is right for a
+        # partial PATCH and wrong for the OAuth client credentials the email
+        # section no longer has a field for: nothing reads them, but a merge
+        # would carry the encrypted secret forward on every save. Prune them
+        # once the section is being written anyway.
+        email_section = updated_settings.get("email_service")
+        if "email_service" in settings_update and isinstance(email_section, dict):
+            for legacy_key in _LEGACY_EMAIL_OAUTH_FIELDS:
+                email_section.pop(legacy_key, None)
+            # A saved email secret belongs to the server / account it was
+            # saved for. The identity is judged on the merged section — a
+            # partial PATCH that changes only the host still changes it —
+            # against the stored one with its platform normalized, so an
+            # upgraded row with a legacy label round-trips. On a change, every
+            # secret the client did not freshly submit is cleared rather than
+            # carried to the new server, where it would be disclosed on the
+            # next login (or, for a preset, fail every send).
+            stored_section = normalize_stored_platform(
+                current_settings.get("email_service") or {}
+            )
+            if connection_identity(
+                stored_section.get("platform"), stored_section
+            ) != connection_identity(email_section.get("platform"), email_section):
+                for field in EMAIL_SECRET_FIELDS:
+                    fresh = email_submitted_secrets.get(field)
+                    if not fresh or fresh == REDACTED_SECRET:
+                        email_section[field] = None
+            # An enabled configuration that cannot send must not save green.
+            # Checked here, on the merged section, so both the dedicated
+            # email PATCH and the full settings PATCH enforce it.
+            missing = missing_for_enabled(email_section)
+            if missing:
+                raise ValueError(
+                    required_field_message(email_section.get("platform"), missing)
+                )
 
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)
