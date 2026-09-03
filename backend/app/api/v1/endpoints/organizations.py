@@ -418,40 +418,45 @@ async def check_email_settings(
             ),
         )
 
+    # Every attempt is audited, whichever way it ends: a timed-out or crashed
+    # test still contacted a mail server with the department's credentials,
+    # and an audit trail that records only the clean outcomes would hide the
+    # attempts an investigator most wants to see.
     try:
         async with asyncio.timeout(EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS):
             success, message, details = await asyncio.get_event_loop().run_in_executor(
                 None, test_func
             )
+        details = details or {}
     except TimeoutError:
-        return EmailConnectionTestResponse(
-            success=False,
-            message=(
-                "Email connection test timed out after "
-                f"{EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS} seconds. The mail "
-                "server may be unreachable or slow to respond."
-            ),
-            details={"error": "timeout"},
+        success = False
+        message = (
+            "Email connection test timed out after "
+            f"{EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS} seconds. The mail "
+            "server may be unreachable or slow to respond."
         )
+        details = {"error": "timeout"}
     except Exception as e:
         logger.error("Error testing email settings: {}", e)
-        return EmailConnectionTestResponse(
-            success=False,
-            message=safe_error_detail(e, "Failed to test email configuration"),
-            details={"error": "internal_error"},
-        )
+        success = False
+        message = safe_error_detail(e, "Failed to test email configuration")
+        details = {"error": "internal_error"}
 
     await log_audit_event(
         db=db,
         event_type="email_settings_tested",
         event_category="administration",
         severity="info",
-        event_data={"email_platform": platform, "success": success},
+        event_data={
+            "email_platform": platform,
+            "success": success,
+            "error": details.get("error"),
+        },
         user_id=str(current_user.id),
         username=current_user.username,
     )
     return EmailConnectionTestResponse(
-        success=success, message=message, details=details or {}
+        success=success, message=message, details=details
     )
 
 

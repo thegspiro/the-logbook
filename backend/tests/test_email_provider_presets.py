@@ -8,6 +8,7 @@ that picked Gmail saved successfully and then failed every send with
 sender and the connection test now share.
 """
 
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -20,6 +21,7 @@ from app.api.v1.endpoints.organizations import (
     _administers_settings,
     _resolve_redacted_secrets,
     _smtp_login_incomplete,
+    check_email_settings,
 )
 from app.api.v1.onboarding import (
     _email_settings_from_onboarding,
@@ -1177,3 +1179,112 @@ class TestCompletionRefusesAnUnsendableSessionEmail:
 
         assert problem is not None
         assert "could not be read" in problem
+
+
+_ENDPOINT = "app.api.v1.endpoints.organizations"
+
+
+async def _run_connection_test(email_settings: EmailServiceSettings, **patches):
+    """Call the settings-screen test endpoint with the provider probe patched.
+
+    Returns the response and the audit mock, so a test can assert on what was
+    recorded as well as on what the admin was told.
+    """
+    org_service = MagicMock()
+    org_service.get_organization = AsyncMock(return_value=None)
+    audit = AsyncMock()
+    with (
+        patch(f"{_ENDPOINT}.OrganizationService", return_value=org_service),
+        patch(f"{_ENDPOINT}.log_audit_event", audit),
+        patch.multiple(_ENDPOINT, **patches),
+    ):
+        response = await check_email_settings(
+            email_settings=email_settings,
+            request=MagicMock(),
+            db=AsyncMock(),
+            current_user=SimpleNamespace(
+                id="user-1", username="chief", organization_id="org-1"
+            ),
+            _rate_limited=None,
+        )
+    return response, audit
+
+
+def _gmail_settings() -> EmailServiceSettings:
+    return EmailServiceSettings(
+        platform="gmail",
+        from_email="chief@example.org",
+        google_app_password="abcd efgh ijkl mnop",
+    )
+
+
+class TestEveryAttemptIsAudited:
+    """A test that contacted a mail server is recorded however it ended.
+
+    The timeout and crash paths used to return before the audit call, so an
+    attempt that hung against a server, or blew up inside the probe, left no
+    trace in the log that records the successful ones.
+    """
+
+    async def test_completed_test_is_audited_with_its_outcome(self):
+        response, audit = await _run_connection_test(
+            _gmail_settings(),
+            test_gmail_connection=MagicMock(return_value=(True, "Signed in", {})),
+        )
+
+        assert response.success
+        assert response.details == {}
+        audit.assert_awaited_once()
+        event = audit.await_args.kwargs
+        assert event["event_type"] == "email_settings_tested"
+        assert event["user_id"] == "user-1"
+        assert event["event_data"] == {
+            "email_platform": "gmail",
+            "success": True,
+            "error": None,
+        }
+
+    async def test_timed_out_test_is_audited(self):
+        response, audit = await _run_connection_test(
+            _gmail_settings(),
+            EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS=0.01,
+            test_gmail_connection=MagicMock(side_effect=lambda _c: time.sleep(0.2)),
+        )
+
+        assert not response.success
+        assert "timed out" in response.message
+        assert response.details == {"error": "timeout"}
+        audit.assert_awaited_once()
+        assert audit.await_args.kwargs["event_data"] == {
+            "email_platform": "gmail",
+            "success": False,
+            "error": "timeout",
+        }
+
+    async def test_crashed_test_is_audited_and_sanitized(self):
+        response, audit = await _run_connection_test(
+            _gmail_settings(),
+            test_gmail_connection=MagicMock(
+                side_effect=RuntimeError("/etc/ssl/certs: handshake failed")
+            ),
+        )
+
+        assert not response.success
+        assert "/etc/ssl" not in response.message
+        assert response.details == {"error": "internal_error"}
+        audit.assert_awaited_once()
+        assert audit.await_args.kwargs["event_data"] == {
+            "email_platform": "gmail",
+            "success": False,
+            "error": "internal_error",
+        }
+
+    async def test_nothing_attempted_is_not_audited(self):
+        response, audit = await _run_connection_test(
+            EmailServiceSettings(platform="other"),
+            test_gmail_connection=MagicMock(),
+        )
+
+        assert not response.success
+        assert "No email platform selected" in response.message
+        audit.assert_not_awaited()
