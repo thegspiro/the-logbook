@@ -16,9 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PLACEHOLDER — filled in by a follow-up commit once the PR is opened.**
-Feature 14 (Equipment check & shifts, pass 3) — no fixes, findings
-re-verified. Rotation row 14 → ⏳ awaiting PR merge. Next: 15 Scheduling,
+**[#2203](https://github.com/thegspiro/the-logbook/pull/2203)** (branch
+`claude/security-review-equipment-check-shifts`) — Feature 14, Equipment
+check & shifts, pass 3, plus Step 0 bookkeeping for PR #2200's merge. No
+fixes, no findings — every pass-1/2 fix re-verified intact, ten new routes
+(the module's move from Scheduling to Inventory, catalog linking, bulk
+item add/delete, compartment replace/clone/reorder, sealed-container
+support) read in full and confirmed correctly org-scoped and gated. Three
+new tables' migrations checked, no Pitfall #2 exposure. Full completion
+gate green. Rotation row 14 → ⏳ awaiting PR merge. Next: 15 Scheduling,
 once this PR merges.
 
 ---
