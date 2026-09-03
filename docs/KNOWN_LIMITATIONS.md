@@ -3163,10 +3163,20 @@ holder could delete a system root such as "Member Files" outright and
 destroy every member's subfolder and document beneath it in one request,
 contradicting the documented invariant that system folders cannot be
 deleted; fixed on a dedicated follow-up branch/PR per CLAUDE.md Pitfall
-#24 (FAC-22). None of FAC-14 through FAC-22 are listed here because they
-are resolved, not open limitations. The already-filed sub-case in item (3)
-above and the Blueprints & Permits classification question in item (2)
-remain open, unresolved by any of these rounds.
+#24 (FAC-22). A further Codex review of that same fix commit, still on the
+same PR before it merged, found a two-step bypass of FAC-22 itself:
+`update_folder` never checked `is_system` before applying a reparent, so a
+system folder could be moved underneath an ordinary, freely deletable
+folder and destroyed by deleting that folder instead — the delete
+cascade's subtree walk checked cross-organization membership and each
+descendant's own ACL but never a descendant's `is_system`. Fixed with two
+independent changes: `update_folder` now refuses to reparent a system
+folder, and `delete_folder`'s subtree walk now refuses if any descendant is
+a system folder regardless of how it got there (FAC-23). None of FAC-14
+through FAC-23 are listed here because they are resolved, not open
+limitations. The already-filed sub-case in item (3) above and the
+Blueprints & Permits classification question in item (2) remain open,
+unresolved by any of these rounds.
 
 ## FAC-16-adjacent — `CheckTemplateCompartment.children` and `TrainingCategory.subcategories` Likely Share the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` (2026-09-03)
 

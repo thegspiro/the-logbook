@@ -32,9 +32,26 @@ fixed in the service layer (`PermissionError` → 403, checked before any
 subtree walk begins); two new regression tests
 (`TestDeleteFolderRefusesSystemFolder`), confirmed to fail pre-fix and
 pass post-fix. Full completion gate green, 10019/10019 full backend suite,
-no regressions. See `docs/security-review/FAC-12-facilities.md` (FAC-22
-section, at the top) for full detail. Rotation row 12 is left unmodified
-by this fix (still ⏳): FAC-22 is a post-merge fix on top of an
+no regressions. **FAC-23 (CRITICAL, same PR):** a further Codex review of
+the FAC-22 fix commit, still before the PR merged, found a two-step bypass
+of it — `update_folder` never checked `is_system` before applying a
+reparent, so a system folder could be moved underneath an ordinary, freely
+deletable folder and then destroyed by deleting that folder instead; the
+delete cascade's subtree walk checked cross-org membership (FAC-20) and
+each descendant's own ACL (FAC-21) but never a descendant's `is_system`.
+Reproduced end to end against pre-fix code before fixing (two-step bypass:
+reparent, then delete the ordinary folder — silently destroyed the system
+folder, its descendant, and its document); fixed with two independent
+changes — `update_folder` now refuses (400) to reparent a system folder,
+and `delete_folder`'s subtree walk now refuses (400) if any descendant is a
+system folder regardless of how it got there. Four new regression tests
+(`TestUpdateFolderRefusesReparentingSystemFolder`,
+`TestDeleteFolderRefusesReparentedSystemFolderInSubtree`), confirmed to
+fail pre-fix and pass post-fix. Full completion gate green, 10023/10023
+full backend suite (+4 over FAC-22's 10019), no regressions. See
+`docs/security-review/FAC-12-facilities.md` (FAC-22 and FAC-23 sections, at
+the top) for full detail. Rotation row 12 is left unmodified by this fix
+(still ⏳): both FAC-22 and FAC-23 are post-merge fixes on top of an
 already-merged pass, not a new rotation pass, so the row-12 → ✅ flip stays
 the next iteration's Step 0 bookkeeping, same as it records every other
 PR's merge.

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a system folder could be reparented under an ordinary folder, then destroyed via that folder's delete (2026-09-03)
+
+**CRITICAL — a two-step bypass of the FAC-22 fix directly below, same
+unrecoverable, organization-wide data loss.** Found by Codex review of the
+FAC-22 fix commit, on the same PR before it merged.
+
+**Fixed**
+
+- **FAC-23 — `update_folder` never checked `is_system` before applying a
+  reparent, and `delete_folder`'s subtree walk never checked a descendant's
+  `is_system` either.** FAC-22 (below) closed the direct route — deleting a
+  system folder outright — but left this two-step route open: `PATCH` a
+  system folder's `parent_id` to point at an ordinary, freely deletable
+  folder, then delete that ordinary folder. The root-level `is_system` check
+  FAC-22 added only inspects the folder named in the delete request; the
+  subtree walk (which already checks cross-org membership and each
+  descendant's own access-control list) found the system folder as a
+  descendant and cascaded through it like any other row. Reproduced against
+  pre-fix code before fixing: the two-step sequence succeeded silently and
+  destroyed a system folder, its descendant, and its document. Fixed with two
+  independent changes in `DocumentsService`: `update_folder` now refuses
+  (400) to reparent a folder with `is_system == True`, and `delete_folder`'s
+  subtree walk now refuses (400) the moment any descendant it visits is a
+  system folder, regardless of how it got there. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-23) for the full writeup
+  and regression tests.
+
 ### Security: any `documents.manage` holder could delete a system folder outright, cascade-destroying an entire tree such as every member's files (2026-09-03)
 
 **CRITICAL — the most severe finding in this cascade-delete investigation:

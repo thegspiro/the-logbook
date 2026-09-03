@@ -94,6 +94,99 @@ reproduction above) and pass post-fix.
 No model file was touched, so `scripts/generate_schema_docs.py` has nothing
 to regenerate.
 
+## FAC-23 — CRITICAL (unrecoverable, org-wide data loss) — two-step bypass of FAC-22 via `update_folder`'s unchecked reparent — urgent post-merge fix, PR #2194 — ✅ FIXED
+
+**Found by Codex review of FAC-22's own fix commit (`6c0137ed`), on the same
+PR, before it merged.** FAC-22 closed the direct route — a caller can no
+longer `DELETE` a system folder outright — but left the two-step route open:
+`update_folder` never checked `is_system` before applying a reparent, and
+`delete_folder`'s subtree walk (added for FAC-20's cross-org check and
+FAC-21's descendant-ACL check) never checked `is_system` on a descendant
+either. A caller could `PATCH` a system folder's `parent_id` to point at an
+ordinary, freely deletable folder, then delete that ordinary folder — the
+root-level `is_system` check in `delete_folder` only inspects the folder
+named in the request (the ordinary one), the subtree walk finds the system
+folder as a descendant, and neither the cross-org nor the ACL check already
+in that loop stops it. The ORM cascade (`cascade="all, delete-orphan"`,
+FAC-16) then destroys the system folder and everything beneath it — the
+identical catastrophic, unrecoverable data loss FAC-22 was meant to close,
+reached one step removed.
+
+**What:** Two independent gaps, both in `app/services/documents_service.py`:
+
+1. `DocumentsService.update_folder` applied `update_data` — including a
+   reassigned `parent_id` — with no check of `folder.is_system` at all.
+2. `DocumentsService.delete_folder`'s subtree walk checks each descendant's
+   cross-organization membership (FAC-20) and its own `required_permissions`
+   ACL (FAC-21), but never `is_system` — so a system folder reached as a
+   descendant (by whatever means) was cascaded through like any other row.
+
+**Verified independently before fixing:** wrote the two-step bypass directly
+against pre-fix code — a system-flagged "Member Files" folder reparented (at
+the DB layer, standing in for what an unguarded `update_folder` would do)
+underneath an ordinary "Scratch" folder, then `delete_folder(scratch_id, ...)`
+called as an authorized `documents.manage` caller. The call raised no
+exception and destroyed the system folder, its descendant, and its document —
+confirmed with `pytest --lf` isolating just the new regression test against
+the code with the service-layer fix reverted (`git stash`): `Failed: DID NOT
+RAISE HTTPException`.
+
+**Where:** `app/services/documents_service.py`
+(`DocumentsService.update_folder`, `DocumentsService.delete_folder`).
+
+**Fix, both independent (either alone stops the reproduced bypass; both are
+kept because each closes a different way to reach the same cascade):**
+
+1. `update_folder` now raises `ValueError` (→ 400, via the endpoint's
+   existing `handle_service_errors` wrapper — no endpoint change needed) if
+   `folder.is_system` and `"parent_id"` is present in the update payload, at
+   the same layer as the existing DOC-6/DOC-20 folder-specific validation.
+   Matches the documented invariant that a system folder's location does not
+   move (`docs/TROUBLESHOOTING.md`, `docs/changelog/2026-02.md`).
+2. `delete_folder`'s subtree walk now also raises `ValueError` (→ 400, same
+   shape as the existing FAC-20/FAC-21 checks in the same loop) the moment
+   any descendant it visits has `is_system == True` — before anything is
+   deleted. This is the robust half of the fix: it holds regardless of how a
+   system folder ends up as a descendant — a row that predates fix (1), a
+   future writer that misses it, or any other path — not just the one this
+   finding demonstrated.
+
+**Regression tests** (`tests/test_documents_access.py`, mirroring the
+FAC-16/20/21/22 shape):
+
+- `TestUpdateFolderRefusesReparentingSystemFolder` — a `documents.manage`
+  caller cannot reparent a system folder (400, left exactly where it was);
+  positive controls prove renaming a system folder without touching
+  `parent_id` still works, and reparenting an ordinary folder still works.
+- `TestDeleteFolderRefusesReparentedSystemFolderInSubtree` — reproduces the
+  full two-step bypass end to end: a system folder is reparented underneath
+  an ordinary folder (at the DB layer, isolating this test from fix (1) above
+  so it verifies the `delete_folder`-side guard specifically), then deleting
+  the ordinary folder is asserted to 400 with the entire subtree — ordinary
+  folder, system folder, its descendant, and its document — surviving
+  untouched.
+
+Both new bypass tests independently confirmed to fail against pre-fix code
+via `git stash` isolating just the `documents_service.py` fix (keeping the
+new tests unstashed) — `DID NOT RAISE HTTPException` in both cases, the same
+failure mode as the live reproduction above — and to pass once the stash was
+restored. The existing `TestDeleteFolderRefusesSystemFolder` (FAC-22) suite
+re-verified unaffected by either change.
+
+## Completion gate (FAC-23, PR #2194)
+
+| Check                                   | Result                                                                              |
+| --------------------------------------- | ----------------------------------------------------------------------------------- |
+| `flake8` (changed files)                | ✅ 0 violations                                                                     |
+| `black --check` (changed files)         | ✅ clean                                                                            |
+| `isort --check-only` (changed files)    | ✅ clean                                                                            |
+| `pytest tests/test_documents_access.py` | ✅ 94 passed (+4 over FAC-22's 90)                                                  |
+| `pytest tests/` (full backend suite)    | ✅ 10023 passed (+4 over FAC-22's 10019), 21 skipped (pre-existing), no regressions |
+
+No model file was touched, so `scripts/generate_schema_docs.py` has nothing
+to regenerate, and `python scripts/validate_migrations.py --strict` has
+nothing new to validate (no schema change).
+
 ---
 
 ## Pass 3 (2026-09-03)

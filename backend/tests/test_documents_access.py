@@ -1956,6 +1956,176 @@ class TestDeleteFolderRefusesSystemFolder:
 
 
 @pytest.mark.integration
+class TestUpdateFolderRefusesReparentingSystemFolder:
+    """FAC-23 (Codex, on top of FAC-22): FAC-22 made ``delete_folder`` refuse
+    a direct delete of a system folder, but ``update_folder`` never checked
+    ``is_system`` before applying a reparent. A ``documents.manage`` holder
+    could move a system root (e.g. "Member Files") underneath an ordinary,
+    freely deletable folder via ``PATCH``, then delete that ordinary folder --
+    the root-level ``is_system`` check in ``delete_folder`` only looks at the
+    folder passed in, the subtree walk finds the system folder as a
+    descendant, and neither the cross-org nor ACL check there stops it. Same
+    unrecoverable, organization-wide data loss FAC-22 was meant to close,
+    reached in one extra step.
+    """
+
+    def _caller(self, org_id):
+        user = _user(uid="caller-1", roles=[(["documents.manage"], "admin")])
+        user.organization_id = org_id
+        user.username = "caller"
+        return user
+
+    async def _org_with_system_folder_and_ordinary_folder(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        system_root = DocumentFolder(
+            organization_id=org.id, name="Member Files", is_system=True
+        )
+        ordinary = DocumentFolder(organization_id=org.id, name="Scratch")
+        db_session.add_all([system_root, ordinary])
+        await db_session.flush()
+        return org, system_root, ordinary
+
+    async def test_reparenting_a_system_folder_is_refused(self, db_session):
+        org, system_root, ordinary = (
+            await self._org_with_system_folder_and_ordinary_folder(
+                db_session, "fcvfd-reparent-system-1"
+            )
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_folder(
+                system_root.id,
+                DocumentFolderUpdate(parent_id=ordinary.id),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 400
+
+        # Left exactly where it was -- not partially reparented before the
+        # rejection.
+        await db_session.refresh(system_root)
+        assert system_root.parent_id is None
+
+    async def test_renaming_a_system_folder_without_touching_parent_id_still_works(
+        self, db_session
+    ):
+        # Positive control: the new check keys off `"parent_id" in
+        # update_data`, not `is_system` alone -- a rename or other field
+        # update on a system folder that doesn't touch parent_id must not be
+        # blocked.
+        org, system_root, _ordinary = (
+            await self._org_with_system_folder_and_ordinary_folder(
+                db_session, "fcvfd-reparent-system-2"
+            )
+        )
+        caller = self._caller(org.id)
+
+        result = await update_folder(
+            system_root.id,
+            DocumentFolderUpdate(name="Member Files (Renamed)"),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.name == "Member Files (Renamed)"
+
+    async def test_a_non_system_folder_can_still_be_reparented_normally(
+        self, db_session
+    ):
+        # Positive control: the new check must not block the overwhelmingly
+        # common case of reparenting an ordinary folder.
+        org, system_root, ordinary = (
+            await self._org_with_system_folder_and_ordinary_folder(
+                db_session, "fcvfd-reparent-system-3"
+            )
+        )
+        caller = self._caller(org.id)
+
+        result = await update_folder(
+            ordinary.id,
+            DocumentFolderUpdate(parent_id=system_root.id),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.parent_id == system_root.id
+
+
+@pytest.mark.integration
+class TestDeleteFolderRefusesReparentedSystemFolderInSubtree:
+    """FAC-23 (Codex, on top of FAC-22): reproduces the full two-step bypass
+    end to end -- reparent a system folder underneath an ordinary folder
+    (bypassing the update_folder-layer fix above, exactly as a pre-existing
+    row or a future writer that misses that guard could), then delete the
+    ordinary folder. Before this fix, the subtree walk in ``delete_folder``
+    checked cross-org (FAC-20) and ACL (FAC-21) on every descendant but never
+    ``is_system``, so the cascade reached the system folder and everything
+    beneath it.
+    """
+
+    def _caller(self, org_id):
+        user = _user(uid="caller-1", roles=[(["documents.manage"], "admin")])
+        user.organization_id = org_id
+        user.username = "caller"
+        return user
+
+    async def test_deleting_an_ordinary_folder_cannot_cascade_into_a_reparented_system_folder(
+        self, db_session
+    ):
+        org = Organization(name="Falls Church VFD", slug="fcvfd-bypass-1")
+        db_session.add(org)
+        await db_session.flush()
+        system_root = DocumentFolder(
+            organization_id=org.id, name="Member Files", is_system=True
+        )
+        db_session.add(system_root)
+        await db_session.flush()
+        member_folder = DocumentFolder(
+            organization_id=org.id,
+            name="Doe, John",
+            parent_id=system_root.id,
+            is_system=False,
+        )
+        db_session.add(member_folder)
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id,
+            folder_id=member_folder.id,
+            name="Certification",
+            file_name="cert.pdf",
+        )
+        db_session.add(document)
+        # An ordinary folder the caller can freely delete.
+        ordinary = DocumentFolder(organization_id=org.id, name="Scratch")
+        db_session.add(ordinary)
+        await db_session.flush()
+
+        # Reparent the system folder underneath the ordinary folder --
+        # bypassing the service-layer at the DB directly, standing in for a
+        # row that predates the update_folder fix (or a future writer that
+        # misses it), so this test isolates the delete_folder-side guard.
+        system_root.parent_id = ordinary.id
+        await db_session.flush()
+
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_folder(ordinary.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 400
+
+        # Nothing in the subtree was touched -- the cascade never started.
+        for model, row_id in (
+            (DocumentFolder, ordinary.id),
+            (DocumentFolder, system_root.id),
+            (DocumentFolder, member_folder.id),
+            (Document, document.id),
+        ):
+            result = await db_session.execute(select(model).where(model.id == row_id))
+            assert result.scalar_one_or_none() is not None
+
+
+@pytest.mark.integration
 class TestFolderAndDocumentAuditLogging:
     """DOC-27: folder create/update/delete and a document metadata edit had
     no audit trail at all -- unlike document_uploaded/downloaded/deleted,
