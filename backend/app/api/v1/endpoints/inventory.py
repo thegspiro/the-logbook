@@ -2572,6 +2572,14 @@ async def get_members_inventory_summary(
     search: str | None = Query(
         None, description="Search by name, username, or membership number"
     ),
+    include_user_id: str | None = Query(
+        None,
+        alias="userId",
+        description=(
+            "Keep this member in the result whatever their status, so a link "
+            "naming a departed member's outstanding gear resolves"
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
@@ -2583,6 +2591,12 @@ async def get_members_inventory_summary(
     inventory.manage: the roster names who holds which gear, which the
     baseline member-level inventory.view must not open up.
 
+    ``userId`` additionally keeps that one member in the result even if they
+    are no longer active — a departure clearance exists precisely because
+    somebody left, and the active-only default hid the member the clearance
+    queue links to. The filter is still org-scoped, so naming another
+    department's member returns nothing rather than their gear.
+
     **Authentication required**
     **Requires permission: inventory.manage**
     """
@@ -2590,6 +2604,7 @@ async def get_members_inventory_summary(
     members = await service.get_members_inventory_summary(
         organization_id=current_user.organization_id,
         search=search,
+        include_user_id=include_user_id,
     )
     return MembersInventoryListResponse(members=members, total=len(members))
 

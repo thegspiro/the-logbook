@@ -70,6 +70,9 @@ describe('InventoryMembersPage', () => {
     mockGetUserInventory.mockResolvedValue(detail);
     mockGetMemberSizePreferences.mockResolvedValue({});
     mockCheckPermission.mockReturnValue(true);
+    // BrowserRouter reads window.history, which persists across tests in this
+    // file; a stray ?user= would leak into the next one.
+    window.history.replaceState({}, '', '/inventory/admin/members');
   });
 
   it('shows the empty state when no members are returned', async () => {
@@ -108,7 +111,39 @@ describe('InventoryMembersPage', () => {
     await screen.findByText('No Members Found');
 
     await user.type(screen.getByPlaceholderText(/Search by name/), 'Jane');
-    await waitFor(() => expect(mockGetMembersSummary).toHaveBeenLastCalledWith('Jane'));
+    await waitFor(() => expect(mockGetMembersSummary).toHaveBeenLastCalledWith('Jane', undefined));
+  });
+
+  it('asks for the member a clearance link names, active or not', async () => {
+    // The list is active-members-only, and a departure clearance is created
+    // after the drop has already made the member inactive — so without this
+    // the hub's "Review" lands on a list the named member is not in.
+    window.history.replaceState({}, '', '/inventory/admin/members?user=u-9');
+    mockGetMembersSummary.mockResolvedValue({ members: [], total: 0 });
+
+    renderWithRouter(<InventoryMembersPage />);
+
+    await waitFor(() => expect(mockGetMembersSummary).toHaveBeenCalledWith(undefined, 'u-9'));
+  });
+
+  it('keeps asking for that member after the parameter is consumed', async () => {
+    // useDeepLinkedRecord removes ?user= as soon as it resolves. Re-reading the
+    // URL on each load would drop the departed member out from under the panel
+    // the click had just expanded.
+    const user = userEvent.setup();
+    window.history.replaceState({}, '', '/inventory/admin/members?user=u-9');
+    mockGetMembersSummary.mockResolvedValue({
+      members: [makeMember({ user_id: 'u-9', full_name: 'Sam Gone' })],
+      total: 1,
+    });
+
+    renderWithRouter(<InventoryMembersPage />);
+    await screen.findByText('Sam Gone');
+    await waitFor(() => expect(window.location.search).toBe(''));
+
+    await user.type(screen.getByPlaceholderText(/Search by name/), 'Sam');
+
+    await waitFor(() => expect(mockGetMembersSummary).toHaveBeenLastCalledWith('Sam', 'u-9'));
   });
 
   it('hides management actions without the manage permission', async () => {

@@ -4,8 +4,8 @@
  * Admin page for reviewing member equipment requests (checkout, assignment).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -88,6 +88,49 @@ const EquipmentRequestsPage: React.FC = () => {
     (request) => request.id,
     (request) => setReviewModal({ open: true, request })
   );
+
+  /**
+   * ...but the hub can name a request this page is not showing.
+   *
+   * The queue links any pending request; this page shows 25 at a time. A
+   * request sitting on page two is one the hook above can never find, so the
+   * link opens nothing and leaves the reader on page one wondering.
+   *
+   * Located rather than fetched: there is no single-request endpoint, and
+   * adding one to carry this is more than the problem is worth. One bounded
+   * lookup against the list already in use finds its offset, and the hook
+   * opens it once that page has loaded. Attempted once per id — without the
+   * ref this re-runs on every page change it causes.
+   */
+  const [deepLinkParams] = useSearchParams();
+  const requestedId = deepLinkParams.get('request');
+  const locateAttemptedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!requestedId || loading) return;
+    if (requests.some((request) => request.id === requestedId)) return;
+    if (locateAttemptedFor.current === requestedId) return;
+    locateAttemptedFor.current = requestedId;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const all = await inventoryService.getEquipmentRequests({
+          ...(statusFilter ? { status: statusFilter } : {}),
+          skip: 0,
+          limit: Math.min(Math.max(total, pageSize), 500),
+        });
+        const index = (all.requests || []).findIndex((request) => request.id === requestedId);
+        if (!cancelled && index >= 0) setPage(Math.floor(index / pageSize));
+      } catch {
+        // A request we cannot place is a no-op, exactly like one already
+        // decided by somebody else between the queue rendering and the click.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedId, loading, requests, statusFilter, total]);
 
   useEffect(() => {
     // A review/delete can remove the only row on the current page. Return to
