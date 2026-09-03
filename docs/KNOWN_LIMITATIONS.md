@@ -3178,7 +3178,7 @@ limitations. The already-filed sub-case in item (3) above and the
 Blueprints & Permits classification question in item (2) remain open,
 unresolved by any of these rounds.
 
-## FAC-16-adjacent — `CheckTemplateCompartment.children` and `TrainingCategory.subcategories` Likely Share the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` (2026-09-03)
+## FAC-16-adjacent — `TrainingCategory.subcategories` Likely Shares the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` / `CheckTemplateCompartment.children` (2026-09-03, updated 2026-09-03)
 
 While diagnosing why `DocumentFolder.delete_folder`'s cascade did not
 actually remove descendant folders (see FAC-16,
@@ -3187,29 +3187,30 @@ usage in `app/models/` found two other self-referential relationships
 declared with the same inverted shape — `remote_side` placed on the plural
 collection attribute instead of on its singular backref, unlike the correct
 pattern used elsewhere (`FacilityRoom.parent_room`, `BudgetCategory.parent`,
-`StorageArea.parent`, `Event.recurrence_parent`, and now
-`DocumentFolder.children` after the FAC-16 fix):
+`StorageArea.parent`, `Event.recurrence_parent`, and now `DocumentFolder.children`
+and `CheckTemplateCompartment.children` after their fixes):
 
 - `CheckTemplateCompartment.children` (`app/models/apparatus.py`, backref
-  `"parent"`, `cascade="all, delete-orphan"`).
+  `"parent"`, `cascade="all, delete-orphan"`) — **fixed**, feature 13
+  (Apparatus & NFC), see `docs/security-review/AP-13-apparatus-nfc.md`.
+  Empirically confirmed the same failure mode as `DocumentFolder.children`
+  with a three-level fixture
+  (`test_apparatus_check_template_compartment_cascade.py`): deleting a
+  compartment with nested children (a bag inside a pack inside a
+  compartment, or any two-level nesting) left the descendants behind,
+  orphaned with a `NULL` `parent_compartment_id`, instead of removing them —
+  exactly the shape `EquipmentCheckService.delete_compartment`'s
+  `db.delete()` call relies on the relationship's own cascade to prevent.
 - `TrainingCategory.subcategories` (`app/models/training.py`, backref
   `"parent_category"` — no cascade configured, so the practical effect here
   is more likely a `parent_category_id` silently nulled to `None` on a
   parent-category delete than a failed delete, though this has not been
-  empirically confirmed).
-
-`DocumentFolder.children`'s confirmed failure mode: `session.delete()` on a
-parent with descendants proactively set each descendant's foreign key to
-`NULL` before issuing the `DELETE`, so the database's own `ON DELETE CASCADE`
-never fired — the parent was removed but its descendants survived, detached
-and orphaned rather than deleted. Not verified for the two entries above —
-each has its own cascade configuration and would need the same empirical
-multi-level-fixture check `DocumentFolder`'s fix used (a plain code read is
-not sufficient; that is exactly what missed the `DocumentFolder` instance of
-this bug for as long as it existed). Out of scope for the Facilities feature
-this was found under; apparatus and training belong to other rotation
-features. Found in `docs/security-review/FAC-12-facilities.md` (feature 12,
-pass 3, FAC-16).
+  empirically confirmed). **Still open** — belongs to the Training rotation
+  features (17/18), out of scope for feature 13. Needs the same empirical
+  multi-level-fixture check the other two used before being called a
+  confirmed finding (a plain code read is not sufficient; that is exactly
+  what missed the `DocumentFolder` and `CheckTemplateCompartment` instances
+  of this bug for as long as they existed).
 
 ## Process
 

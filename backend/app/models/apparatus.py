@@ -23,7 +23,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -2246,10 +2246,18 @@ class CheckTemplateCompartment(Base):
         cascade="all, delete-orphan",
         order_by="CheckTemplateItem.sort_order",
     )
+    # ``remote_side`` belongs on the *singular* backref (``parent``), not on
+    # ``children`` itself -- the same inverted shape FAC-16 found and fixed on
+    # ``DocumentFolder.children`` (docs/security-review/FAC-12-facilities.md).
+    # Placed on ``children`` (as this was before), it inverts the
+    # self-referential join, so SQLAlchemy proactively NULLs each descendant's
+    # ``parent_compartment_id`` before a delete runs instead of cascading to
+    # it -- confirmed live (three-level fixture, delete_compartment's own
+    # `db.delete()` cascade) in
+    # test_apparatus_check_template_compartment_cascade.py.
     children = relationship(
         "CheckTemplateCompartment",
-        backref="parent",
-        remote_side="CheckTemplateCompartment.id",
+        backref=backref("parent", remote_side=[id]),
         cascade="all, delete-orphan",
         single_parent=True,
     )
