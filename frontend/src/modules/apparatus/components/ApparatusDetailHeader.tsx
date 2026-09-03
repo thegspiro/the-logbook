@@ -5,10 +5,11 @@
  * (Edit / Archive) for the apparatus detail page.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Edit, Archive, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
+import { ArchiveApparatusModal } from './ArchiveApparatusModal';
 import type { Apparatus, ApparatusStatus } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 
@@ -17,6 +18,8 @@ interface ApparatusDetailHeaderProps {
   status: ApparatusStatus | undefined;
   id: string;
   isArchived: boolean;
+  /** Re-read the apparatus once it has been archived, so the badge updates. */
+  onArchived?: () => void;
 }
 
 export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
@@ -24,11 +27,13 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
   status,
   id,
   isArchived,
+  onArchived,
 }) => {
   const navigate = useNavigate();
   const checkPermission = useAuthStore((state) => state.checkPermission);
   const canManage = checkPermission('apparatus.manage');
   const canEdit = canManage || checkPermission('apparatus.edit');
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   return (
     <header className="bg-theme-surface-secondary border-theme-surface-border border-b px-6 py-4 backdrop-blur-xs">
@@ -79,7 +84,7 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
               )}
               {canManage && !isArchived && (
                 <button
-                  onClick={() => void navigate(`/apparatus/${id}/archive`)}
+                  onClick={() => setArchiveOpen(true)}
                   className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
                 >
                   <Archive className="h-4 w-4" />
@@ -90,6 +95,13 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
           )}
         </div>
       </div>
+      <ArchiveApparatusModal
+        isOpen={archiveOpen}
+        onClose={() => setArchiveOpen(false)}
+        onArchived={() => onArchived?.()}
+        apparatusId={id}
+        unitNumber={currentApparatus.unitNumber}
+      />
     </header>
   );
 };

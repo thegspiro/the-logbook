@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory Administration follow-ups (2026-09-03)
+
+**Fixed**
+
+- **The Archive button on an apparatus went to the dashboard.** It navigated to
+  `/apparatus/:id/archive` — the _API_ path, which matches no route, so it fell
+  through the router's catch-all and left the apparatus in service with no
+  error. Archiving takes a disposal record (method, date, and buyer details for
+  a sale), so it is now a form posting to `apparatusService.archiveApparatus`.
+  Sale fields are dropped for a truck that was scrapped or donated, rather than
+  filing a buyer nobody can explain later.
+- **An election's linked meeting was a link to nowhere.** There is no meeting
+  detail screen, so naming the meeting cost the reader their place. It is text
+  now; the "(change)" control is unaffected.
+- **The clearance queue's "Review" landed on a list without the member.** A
+  departure clearance is created _after_ the drop has already made the member
+  inactive, and the members list is active-only — so the one person the queue
+  links to was the one it filtered out. `GET /inventory/members-summary` takes
+  an additive `userId` that keeps that member in the result whatever their
+  status, still org-scoped.
+- **"Verify payments" opened every order.** The store's attention row now
+  carries `payment=pending_verification` in its URL and the admin page seeds
+  the Orders tab from it, restoring the filter the old "To verify" tile
+  supplied. A value the tab does not offer is ignored rather than forwarded.
+- **The "All Items" card promised more than its list.** It described every type
+  and its (never-rendered) figure was `total_items`, which sums quantities
+  across every type including medical, while `/inventory/admin/items` excludes
+  medical and reports rows. `GET /inventory/summary` gained an additive,
+  defaulted `non_medical_items` counted with the same predicate the listing
+  uses, and the card now shows it.
+- **The store's old address broke the mobile-coverage check.** `/store/admin`
+  was added as a redirect but never entered in the route-coverage manifest.
+
 ### The gear admin hub is now Inventory Administration (2026-09-03)
 
 **Changed**

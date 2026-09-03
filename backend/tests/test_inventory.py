@@ -876,3 +876,71 @@ class TestMembersInventorySummary:
         assert user_summary is not None
         assert user_summary["permanent_count"] >= 1
         assert user_summary["total_items"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_named_member_survives_the_active_only_filter(
+        self, db_session, setup_org_and_user
+    ):
+        """A departure clearance's member is, by definition, no longer active.
+
+        `member_status` sets the drop before it creates the clearance, so the
+        one person the clearance queue links to review is the one the
+        active-only default removes — and "Review" landed on a list they were
+        not in.
+        """
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        await db_session.execute(
+            text("UPDATE users SET status = 'dropped_voluntary' WHERE id = :id"),
+            {"id": user_id},
+        )
+        await db_session.flush()
+
+        without = await svc.get_members_inventory_summary(uuid.UUID(org_id))
+        assert all(m["user_id"] != user_id for m in without)
+
+        named = await svc.get_members_inventory_summary(
+            uuid.UUID(org_id), include_user_id=user_id
+        )
+        assert any(m["user_id"] == user_id for m in named)
+
+    @pytest.mark.asyncio
+    async def test_named_member_is_still_org_scoped(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        other_org = _uid()
+        outsider = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug, "
+                "timezone) VALUES (:id, :name, :otype, :slug, 'UTC')"
+            ),
+            {
+                "id": other_org,
+                "name": "Other Dept",
+                "otype": "fire_department",
+                "slug": f"other-{other_org[:8]}",
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, first_name, "
+                "last_name, email, password_hash, status) VALUES "
+                "(:id, :org, :un, 'Out', 'Sider', :em, 'x', 'dropped_voluntary')"
+            ),
+            {
+                "id": outsider,
+                "org": other_org,
+                "un": f"out-{outsider[:8]}",
+                "em": f"{outsider[:8]}@example.test",
+            },
+        )
+        await db_session.flush()
+
+        svc = InventoryService(db_session)
+        named = await svc.get_members_inventory_summary(
+            uuid.UUID(org_id), include_user_id=outsider
+        )
+
+        assert all(m["user_id"] != outsider for m in named)
