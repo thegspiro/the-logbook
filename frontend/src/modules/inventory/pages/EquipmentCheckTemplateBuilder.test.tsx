@@ -17,6 +17,7 @@ const {
   deleteCheckItem,
   replaceCompartments,
   addCompartment,
+  deleteCompartment,
   createEquipmentCheckTemplate,
   updateEquipmentCheckTemplate,
   toastSuccess,
@@ -33,6 +34,7 @@ const {
   deleteCheckItem: vi.fn(),
   replaceCompartments: vi.fn(),
   addCompartment: vi.fn(),
+  deleteCompartment: vi.fn(),
   createEquipmentCheckTemplate: vi.fn(),
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
     replaceCompartments: (...args: unknown[]) => replaceCompartments(...args),
     addCompartment: (...args: unknown[]) => addCompartment(...args),
+    deleteCompartment: (...args: unknown[]) => deleteCompartment(...args),
     createEquipmentCheckTemplate: (...args: unknown[]) => createEquipmentCheckTemplate(...args),
     updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
@@ -988,8 +991,19 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
 describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // AP-13 finding 6 (Codex): vi.clearAllMocks() clears call history but
+    // leaves a queued mockResolvedValueOnce/mockRejectedValueOnce and a
+    // prior mockImplementation in place (CLAUDE.md Pitfall #28) -- reset each
+    // mock before installing this block's default, so a one-shot result a
+    // test queues and never consumes can't leak into the next test's run of
+    // this same default.
+    getTemplate.mockReset();
     getTemplate.mockResolvedValue(structuredClone(template));
+    deleteCheckItem.mockReset();
     deleteCheckItem.mockResolvedValue(undefined);
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+    updateEquipmentCheckTemplate.mockReset();
     updateEquipmentCheckTemplate.mockImplementation((_id: string, payload: { is_active: boolean }) =>
       Promise.resolve({ ...structuredClone(template), isActive: payload.is_active })
     );
@@ -1034,6 +1048,90 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     await confirm('Delete');
     await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('radio'));
     expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
+  });
+
+  it('deletes the whole nested subtree, in the confirmation and in local state, when a parent compartment is removed', async () => {
+    // AP-13 finding 3: the backend cascade-deletes descendants (AP-8), so
+    // the confirmation must count the whole subtree, not just Cab's own 2
+    // items, and Medical bag -- Cab's nested child -- must not linger as an
+    // orphaned top-level row once Cab is gone.
+    renderBuilder();
+
+    const deleteCab = await screen.findByLabelText('Delete Cab');
+    await userEvent.click(deleteCab);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/1 nested compartment/i)).toBeVisible();
+    expect(within(dialog).getByText(/2 items total/i)).toBeVisible();
+
+    await confirm('Delete');
+
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+    // The backend's own cascade removes Medical bag server-side; the
+    // frontend must not also issue a separate delete for it.
+    expect(deleteCompartment).toHaveBeenCalledTimes(1);
+
+    expect(screen.queryByLabelText('Actions for Cab')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Actions for Medical bag')).not.toBeInTheDocument();
+  });
+
+  it('blocks deleting a compartment whose subtree has an unsaved reparent (AP-13 finding 2)', async () => {
+    // Compartments have no auto-save path -- parent_compartment_id is only
+    // ever persisted by Save (handleSave) -- so moving Medical bag out of
+    // Cab here is a *local-only* edit. The backend still has Medical bag
+    // parented under Cab. If Cab's delete were allowed to proceed off the
+    // client's own (now-stale-relative-to-the-backend) subtree computation,
+    // the confirmation would undersell what's about to be destroyed and the
+    // backend's cascade would delete Medical bag anyway -- silently losing
+    // an edit the user was in the middle of saving.
+    renderBuilder();
+
+    const outdentBag = await screen.findByLabelText('Move Medical bag out one level');
+    await userEvent.click(outdentBag);
+
+    const deleteCab = screen.getByLabelText('Delete Cab');
+    await userEvent.click(deleteCab);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/unsaved changes/i)));
+    // No confirmation dialog, and no delete call -- the block happens before
+    // either, not as a cancel-in-place-of-them.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCompartment).not.toHaveBeenCalled();
+    // The pending reparent itself must survive the blocked attempt: Medical
+    // bag is still on screen, still outdented (not silently reverted or
+    // dropped), ready for the user to hit Save and try again.
+    expect(screen.getByLabelText('Actions for Medical bag')).toBeVisible();
+    expect(screen.getByLabelText('Actions for Cab')).toBeVisible();
+  });
+
+  it('does not falsely block deleting a surviving ancestor after a descendant was already deleted (AP-13 finding 5)', async () => {
+    // The AP-13 finding-2 fix compares the live subtree against
+    // savedParentByIdRef, a last-known-server parent map. Deleting Medical
+    // bag (a leaf, no descendants of its own) must remove its entry from
+    // that map too -- left behind, a later delete of Cab (Medical bag's
+    // former, still-live parent) would compute Medical bag as a server-side
+    // descendant that the live (already-bag-less) computation disagrees
+    // with, tripping the pending-reparent guard for a delete with nothing
+    // actually pending.
+    renderBuilder();
+
+    const deleteBag = await screen.findByLabelText('Delete Medical bag');
+    await userEvent.click(deleteBag);
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('bag'));
+    expect(screen.queryByLabelText('Actions for Medical bag')).not.toBeInTheDocument();
+
+    deleteCompartment.mockClear();
+    const deleteCab = screen.getByLabelText('Delete Cab');
+    await userEvent.click(deleteCab);
+
+    // Must reach the normal confirmation -- not the "unsaved changes" block
+    // -- and actually call the backend.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Delete "Cab"/i)).toBeVisible();
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+    expect(toastError).not.toHaveBeenCalledWith(expect.stringMatching(/unsaved changes/i));
   });
 
   it('sends draft and publish state explicitly', async () => {
@@ -1924,4 +2022,224 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
     // an idle machine. Under `--coverage`, which is how CI runs this suite,
     // it tips over and the job fails on a timeout rather than an assertion.
   }, 20_000);
+});
+
+describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree delete', () => {
+  // AP-13 finding 4 (Codex): deleting a compartment removes its items on the
+  // backend too. A debounced auto-save still pending for one of those items
+  // must not fire afterward — left alone, the timer calls updateCheckItem
+  // for an id the delete just removed, 404s, and (per the flushing-suite
+  // above) can abort an unrelated Save pressed inside the same window.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+  });
+
+  it('cancels a pending item auto-save when the item’s compartment is deleted inside the debounce window', async () => {
+    mockViewport('laptop');
+    renderBuilder();
+
+    // Queues a debounced auto-save for Radio (a Cab item) via the same bulk
+    // toolbar path the flushing-suite above uses.
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    // Delete Cab -- Radio's compartment -- inside the same debounce window,
+    // well before the queued auto-save would otherwise fire.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+
+    // Outwait the window the cancelled timer would have fired inside.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+
+    expect(updateCheckItem).not.toHaveBeenCalled();
+  }, 10_000);
+
+  it('preserves a pending item auto-save when the compartment delete itself fails (AP-13 finding 8)', async () => {
+    // Cancelling a pending auto-save has to wait until the delete actually
+    // succeeds -- a failed delete (network error, or the AP-14
+    // cross-template 400) must not have already thrown away the edit's only
+    // remaining chance to be saved.
+    deleteCompartment.mockRejectedValueOnce(new Error('Network Error'));
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+
+    // Cab (and Radio's pending edit) are still here -- the failed delete
+    // must not have removed either.
+    expect(screen.getByLabelText('Actions for Cab')).toBeVisible();
+
+    // The original timer was cancelled the moment the delete started, but
+    // its patch was captured and re-armed on failure -- it still reaches
+    // the server on its own (fresh) schedule.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false });
+  }, 10_000);
+
+  it('never lets a pending auto-save fire while the compartment delete is in flight (AP-13 finding 12)', async () => {
+    // Cancelling a subtree's pending auto-saves only *after* awaiting the
+    // delete (finding 8's own fix) left a window: if the DELETE takes
+    // longer than the remaining debounce, the timer can fire mid-flight,
+    // start its own PATCH, and race the DELETE to the server. The timer
+    // must be cancelled synchronously, before the delete request is even
+    // sent -- so it can never fire during the await, regardless of how long
+    // the request takes.
+    let releaseDelete: (() => void) | null = null;
+    deleteCompartment.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseDelete = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+
+    // Outwait the debounce window while the delete is still in flight --
+    // the pre-fix timer would fire here and call updateCheckItem.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    expect(updateCheckItem).not.toHaveBeenCalled();
+
+    releaseDelete?.();
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Compartment deleted'));
+
+    // Cab is gone, and nothing ever reached updateCheckItem for its item.
+    expect(screen.queryByLabelText('Actions for Cab')).not.toBeInTheDocument();
+    expect(updateCheckItem).not.toHaveBeenCalled();
+  }, 10_000);
+
+  it('waits for an in-flight item auto-save before sending the compartment DELETE (AP-13 finding 1)', async () => {
+    // Finding 12's fix cancels a *pending* timer synchronously before the
+    // delete starts -- but if the debounce window elapses while the
+    // confirmation dialog is still open (the user leaves it up), the timer
+    // has already fired: scheduleAutoSaveItem moved the request out of
+    // autoSavePendingRef and into autoSaveInFlightRef before the user ever
+    // clicks Delete. The doomed-item capture loop only inspected
+    // autoSavePendingRef, so that in-flight PATCH was invisible to it --
+    // left unawaited, it could settle after the DELETE, reporting "Save
+    // failed" for an item the delete had already removed (or racing it
+    // outright).
+    let releaseUpdate: (() => void) | null = null;
+    updateCheckItem.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseUpdate = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    // Open the confirmation dialog and leave it open past the debounce
+    // window -- the queued auto-save fires while the dialog is still up,
+    // moving into autoSaveInFlightRef before the delete is confirmed.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    const dialog = await screen.findByRole('dialog');
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false }));
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    // Radio's PATCH is still unresolved -- the DELETE must not have been
+    // sent yet.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(deleteCompartment).not.toHaveBeenCalled();
+
+    releaseUpdate?.();
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  }, 10_000);
+});
+
+describe('EquipmentCheckTemplateBuilder refreshes savedParentByIdRef after a bulk replace', () => {
+  // AP-13 finding 2 (Codex, follow-up): replaceAllCompartments (vehicle
+  // preset apply / JSON import / CSV import) never refreshed
+  // savedParentByIdRef with the newly-persisted ids the backend hands back.
+  // The AP-13 pending-reparent delete guard's `knownIds` filter treats an id
+  // with no entry in that map as "nothing to compare, don't block" -- so an
+  // unsaved indent of one of these brand-new rows under another, followed by
+  // a delete of the parent, bypassed the guard entirely: the backend
+  // cascade only removes the still-top-level parent (the reparent was never
+  // saved), the child survives in the database, and the frontend hides it
+  // locally as if the whole subtree were gone -- until the next reload
+  // brings it back.
+  const vehicleTemplate = { ...template, templateType: 'vehicle' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(vehicleTemplate));
+    replaceCompartments.mockReset();
+    replaceCompartments.mockImplementation((_templateId: unknown, payload: unknown) =>
+      Promise.resolve(
+        (payload as { name: string }[]).map((comp, idx) => ({
+          id: `saved-${idx}`,
+          name: comp.name,
+          items: [],
+        }))
+      )
+    );
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+    // 'Edit Radio' (the preset trigger's own precondition, per the existing
+    // "replacing a saved template's contents" suite above) is a phone-only
+    // label -- the mobile row tap opens an edit sheet, where laptop's row
+    // reads 'Collapse …' instead (CLAUDE.md Pitfall #28a). The row overflow
+    // menu used to reparent/delete below is not viewport-gated, unlike the
+    // desktop-only indent icon, so phone works for the whole flow.
+    mockViewport('phone');
+  });
+
+  it('keeps the unsaved-reparent delete guard covering rows a bulk replace just persisted', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await screen.findByRole('button', { name: 'Edit Radio' });
+    await user.click(screen.getByRole('button', { name: /Vehicle preset/ }));
+    await user.click(await screen.findByRole('button', { name: /Engine \/ Pumper/ }));
+    await user.click(await screen.findByRole('button', { name: 'Load preset' }));
+    await waitFor(() => expect(replaceCompartments).toHaveBeenCalledTimes(1));
+
+    // Cab & Exterior (saved-0) and Engine Compartment (saved-1) are now both
+    // top-level, freshly-persisted rows. Reparent Engine Compartment under
+    // Cab & Exterior via the row menu's "Stored inside" select -- unsaved,
+    // local-only, exactly like the indent button does on a wider screen.
+    const engineTrigger = await screen.findByLabelText('Actions for Engine Compartment');
+    await user.click(engineTrigger);
+    const engineMenu = engineTrigger.closest('details') as HTMLElement;
+    await user.selectOptions(within(engineMenu).getByLabelText(/current destination Top level/i), 'saved-0');
+
+    // Unsaved local reparent -- the backend still has Engine Compartment as
+    // top-level. Deleting Cab & Exterior now must be blocked, or its
+    // (locally-nested) child is destroyed on screen with nothing telling the
+    // backend to actually remove it.
+    const cabTrigger = await screen.findByLabelText('Actions for Cab & Exterior');
+    await user.click(cabTrigger);
+    const cabMenu = cabTrigger.closest('details') as HTMLElement;
+    await user.click(within(cabMenu).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCompartment).not.toHaveBeenCalled();
+  });
 });

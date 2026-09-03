@@ -16,123 +16,87 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#2198** (branch `claude/security-review-facilities-followup2`) — Feature
-12, Facilities, pass 3 continued. #2195 merged (`38410c86`, by the repo
-owner directly) while this round's own fix (FAC-29, below) was still in
-progress on that branch. Per CLAUDE.md Pitfall #24, continuing on a fresh
-branch (`claude/security-review-facilities-followup2`, based on
-post-merge `main`) and a new PR rather than reusing the now-dead
-`claude/security-review-facilities-followup`. See the log entry below for
-#2195's own closing summary (FAC-24 through FAC-28).
+**#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
+Apparatus & NFC, passes 3–7. Pass 3: AP-8 fixed —
+`CheckTemplateCompartment.children` had the same inverted self-referential
+`remote_side` shape FAC-16 found and fixed on `DocumentFolder.children`
+(flagged there as a sibling instance, out of scope for Facilities) —
+reproduced live (three-level fixture, delete_compartment's own cascade)
+before fixing. `TrainingCategory.subcategories` has the same shape and
+remains flagged, out of scope for this feature. Also corrected a stale
+`docs/app-review/apparatus.md` entry (AP2-2) that still read OPEN though the
+code has validated all four FKs since before pass 1. Pass 4 (same PR, in
+response to a Codex review of the AP-8 fix commit): three more findings, all
+surfaced by AP-8's cascade going from no-op to genuinely effective, exactly
+the pattern the Facilities pass (PR #2198) went through — AP-9 (P1, clone
+endpoint 500s on nested templates, plus a co-discovered duplicate-clone bug
+in the same code), AP-10 (P1, `create_template` had no in-template/in-org
+validation on a client-supplied `parent_compartment_id`, unlike
+`add_compartment`/`update_compartment`), AP-11 (P2, frontend delete
+confirmation and local-state removal didn't account for the descendants
+the backend now cascade-deletes). All three reproduced live against the
+current fixed code before being called findings, and regression-tested
+failing pre-fix / passing post-fix via `git stash`. Pass 5 (same PR, a
+second Codex review of the pass-4 commit): two more findings — AP-12 (P1,
+`delete_compartment` cascaded off a stale REPEATABLE READ snapshot, the
+exact concurrency race FAC-40 already fixed once on `DocumentFolder`/
+`delete_folder`; fixed with FAC-40's own locking-walk + explicit-bulk-delete
 
-**FAC-29 (P1, access control/TOCTOU, fixed):** `_delete_facility_document_references`'s
-existence check and `_validate_shared_document_reference`'s document lookup
-(facilities.py) were each a plain SELECT — under InnoDB REPEATABLE READ,
-answering from the snapshot taken at the transaction's _first_ read, already
-stale by the time either check runs since the request has already read
-something else first. Reproduced live (two real, independently-committing
-sessions) in both directions: a deleting transaction's existence check
-missed a `FacilityDocument` reference a second transaction committed after
-the deleter's snapshot was taken (the delete would have proceeded
-unconditionally past FAC-26's permission gate); a creating transaction's
-document lookup still resolved a document a second transaction had already
-deleted and committed (it would have filed a dangling reference the moment
-both finished). Fixed with locking reads (`with_for_update()`/
-`for_update=True` — a `for_update` keyword on `get_document_by_id`, used by
-`delete_document` and `_validate_shared_document_reference` to lock the
-`Document` row they both read, and made `_match_facility_document_references`'s
-own query a locking read too), the same pattern this codebase's capacity
-checks already use (CLAUDE.md Pitfall #27). New regression tests in
-`tests/test_facility_document_reference_race.py`, two real sessions with
-deterministic ordering, confirmed to fail pre-fix and pass post-fix.
+- `passive_deletes=True` pattern, adapted to this model's `SET NULL` vs.
+  `CASCADE` FK actions) and AP-13 (P1, frontend — AP-11's own descendant
+  computation trusted the browser's hierarchy, which can be ahead of what's
+  saved since reparenting has no auto-save path; fixed by tracking
+  last-known-server parent linkage and blocking the delete on disagreement).
+  Both reproduced live (two real, independently-committing database sessions
+  for AP-12; a component test reproducing the actual data-loss scenario for
+  AP-13) before being called findings, and regression-tested failing pre-fix /
+  passing post-fix via `git stash`. Pass 6 (same PR, a third Codex review, this
+  time of the pass-5 fix commits): two more findings — AP-14 (P1, multi-tenant
+  isolation — the pass-5 locking subtree walk had no template/org boundary, so
+  a dangling cross-template `parent_compartment_id` from before AP-10's
+  validation shipped could let deleting a compartment in one template destroy
+  a compartment in another; fixed with the same fail-closed pattern
+  `delete_folder` uses for cross-org references) and AP-15 (P2, frontend — the
+  pass-5 `deleteCompartment` fix left descendant items' pending debounced
+  auto-saves running after their compartment was deleted, so a stale timer
+  could 404 against a removed item and, worse, abort an unrelated Save pressed
+  in the same window; fixed by cancelling those timers before the delete
+  call). Both reproduced live before being called findings, and
+  regression-tested failing pre-fix / passing post-fix via `git stash`. Pass
+  7 (same PR, a fourth Codex round on the same chain): AP-16 (P2, data
+  completeness — `clone_template`'s root-down walk silently drops a
+  compartment whose parent lies outside the source template, the same
+  dangling-link shape AP-14 guards delete against; fixed the same way,
+  fail-closed rather than committing an incomplete clone), plus four
+  Codex-caught regressions in this rotation's own pass-6 fixes to
+  `deleteCompartment`'s auto-save cancellation (a stale entry left in the
+  pending-reparent guard's map after a successful delete; a mock not reset
+  between tests; canceling auto-saves before vs. after the delete call each
+  leaving a different failure window open) — the auto-save fix took two
+  more rounds to converge on capturing and cancelling every timer
+  synchronously before the delete request is sent, then discarding or
+  re-arming the captured patches depending on whether the delete succeeded.
+  All reproduced live or via a test failing against the specific prior
+  state, all regression-tested failing pre-fix / passing post-fix. See the
+  log entry below for the full writeup once merged.
 
-**FAC-30 (P2, permission-model gap, flagged — not fixed):** a custom
-position granting `facilities.delete` without `.edit`/`.manage` cannot pass
-the generic Documents API's folder ACL at all. Verified pre-existing (not a
-regression from FAC-24/26 — `facilities.delete` was never in the folder's
-`required_permissions` list) and confirmed no seeded role holds this
-combination (`facilities.delete` only ever appears bundled with `.edit`
-**and** `.manage`, on three operational ranks). Closing it is a
-permission-model design decision (should the generic Documents API honor a
-facility-specific action grant distinct from its existing authority on the
-facility-specific delete route?), not a mechanical fix — flagged per
-CLAUDE.md's fix-vs-flag discipline. See `docs/security-review/FAC-12-facilities.md`
-(FAC-30) for the full reasoning.
+---
 
-**Codex review of the FAC-29 commit (`b21380b8`) found three more issues,
-being fixed on this same PR/branch:**
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2198 (FAC-29 through FAC-45)
 
-**FAC-31 (P1, access control/TOCTOU, fixed):** FAC-29's lock protected
-`_validate_shared_document_reference`'s document read, but the function
-committed right after assigning a folder — releasing the lock before the
-caller (`create_facility_document`/`create_facility_photo`) ever inserted
-the `FacilityDocument`/`FacilityPhoto` row the lock was meant to protect. A
-concurrent `delete_document` could land in that exact gap, see no reference
-yet (none had been filed), delete the document, and let the original request
-file a reference to nothing the moment both finished — FAC-29's own race,
-reopened one step later in the same sequence. Fixed by flushing instead of
-committing inside the validation helper, so the lock now spans the folder
-assignment and the caller's own reference insert, released only by the
-endpoint's single final commit (or a full rollback on failure). New
-regression test (`TestReferenceInsertStaysUnderTheDocumentLock`) runs the
-competing delete as a background task against a still-open transaction to
-prove a genuine lock _block_, not just a stale read — confirmed to reproduce
-a real dangling reference pre-fix (`git stash`) and close it post-fix.
-
-**FAC-33 (P1, test-only, fixed):** the two-session test fixture's teardown
-swallowed any `rollback()` failure with a blanket `except Exception: pass`.
-Verified empirically that no known-benign exception occurs in practice
-against this backend; removed the blanket catch per CLAUDE.md's "Fix All
-Errors" policy.
-
-**FAC-32 (P2, reliability/deadlock, fixed):** `delete_folder`'s cascade
-took the same two locks FAC-31's creator path takes (a `Document` row, then
-the `FacilityDocument`/`FacilityPhoto` reference table) in the opposite
-order — reference table first (via `_match_facility_document_references`),
-Document rows only afterward via the ORM cascade delete. Two transactions
-locking the same two resources in opposite orders is a textbook InnoDB
-deadlock. Fixed by adding `.with_for_update()` to the subtree's `Document`
-query and running it before the reference-table scan, matching the creator's
-order. A true two-session deadlock is inherently timing-sensitive to force
-on demand, so the regression test
-(`TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`) instead proves the
-concrete, engine-independent effect: with a `Document` row locked by one
-session, `delete_folder` run in a second blocks on it immediately, before
-ever reaching the reference-table scan (confirmed backwards pre-fix via
-`git stash` — the scan ran first, then it blocked much later at the cascade
-delete itself).
-
-**Codex review of the FAC-32 commit (`d0ec9194`) found one more issue, fixed
-on this same PR/branch:**
-
-**FAC-34 (P2, reliability/deadlock, fixed):** FAC-32 ordered this cascade's
-`Document` lock before the reference-table scan, matching the FAC-31 creator
-path for those two resources — but the creator path takes a _third_ shared
-lock in between, on the destination `DocumentFolder` itself
-(`ensure_facility_folder`, when filing a folderless document), and this
-cascade never explicitly locked its own subtree's `DocumentFolder` rows at
-all — only the implicit lock the folder's own `DELETE` takes at commit,
-after both of FAC-32's locks. Verified real at the SQL locking-primitive
-level with two real sessions: a locking read filtered on `Document.folder_id`
-can block a concurrent write to that same column even when it currently
-matches no rows, and — depending on which index MySQL/MariaDB's optimizer
-picks for the query, itself a function of the subtree's size and the
-table's data volume — the exact blocking mechanism varies, so a small test
-database's query plan does not reliably reproduce the cyclic wait end to end
-even though the underlying hazard is real. Fixed by locking the subtree's
-`DocumentFolder` rows first, before this cascade's Document-lock query —
-removing the dependency on that query's plan entirely, rather than
-reordering only the pair FAC-32 already covered. The two locking queries
-were extracted into `_lock_subtree_folders`/`_lock_subtree_documents` so a
-test can assert the ordering directly. New regression test
-(`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`), same
-engine-independence rationale as FAC-32's own test, confirmed against
-pre-fix code via `git stash`.
-
-Full local completion gate green: flake8/black/isort clean on changed files,
-scoped facilities/documents suites (301 passed, +1 for FAC-34) and the full
-backend suite pass with zero regressions. Rotation row 12 stays ⏳ (awaiting
-this PR's merge).
+`bcbffabc` merged. This PR was the second facilities-followup (continuing
+pass 3's concurrency investigation after #2195 merged mid-round, per
+CLAUDE.md Pitfall #24), and closes out feature 12: 14 findings fixed
+(FAC-29, FAC-31 through FAC-40, FAC-42, FAC-43, FAC-45) and 3 correctly
+flagged as design/tradeoff decisions rather than mechanical fixes (FAC-30,
+FAC-41, FAC-44). The fixed set is almost entirely TOCTOU races and
+lock-ordering deadlocks in `facilities.py`/`documents_service.py`'s
+shared-document-reference and folder-locking paths — each reproduced live
+with real concurrent sessions before being called a finding, per this
+rotation's standing discipline, and each fix carries a regression test
+confirmed failing pre-fix (`git stash`) and passing post-fix. Full detail
+is in `docs/security-review/FAC-12-facilities.md` and the PR itself, not
+duplicated here. Rotation row 12 → ✅.
 
 ---
 
@@ -7937,8 +7901,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | 🔄     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |

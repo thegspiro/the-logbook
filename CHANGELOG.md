@@ -49,6 +49,202 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   retyping it. `platform` on the settings PATCH is now validated against the
   five known values.
 
+### Security: a fourth round on the delete/autosave interaction, and a bulk-replace path that never refreshed the reparent-guard's server-truth map (2026-09-03)
+
+**Fixed**
+
+- **AP-13 finding 1 (P2, frontend) — the subtree-delete autosave-quiescing
+  step only inspected `autoSavePendingRef`, not the separate
+  `autoSaveInFlightRef` a timer moves into once it actually fires**: if the
+  delete-confirmation dialog was left open past the 1.5s debounce window,
+  the queued item auto-save had already fired and its PATCH was in flight
+  by the time the user confirmed — invisible to the doomed-item capture
+  loop, which only cancels still-pending timers. Left unawaited, that PATCH
+  could settle after the DELETE, reporting "Save failed" for an item the
+  delete had just removed, or racing it outright. Fixed by keying
+  `autoSaveInFlightRef` by item id (it was an anonymous `Set<Promise>`) so
+  the same quiescing step can find and await a doomed item's in-flight
+  request too, not just its pending timer.
+- **AP-13 finding 2 (P2, frontend) — `replaceAllCompartments` (vehicle
+  preset apply / JSON import / CSV import) never refreshed
+  `savedParentByIdRef` with the newly-persisted ids the backend hands
+  back**: the AP-13 pending-reparent delete guard treats an id absent from
+  that map as nothing to compare, not as something to block on — so an
+  unsaved indent of one of these brand-new rows under another, followed by
+  a delete of the parent, bypassed the guard entirely. The backend cascade
+  then removed only the still-top-level parent (the reparent was never
+  saved), leaving the child alive in the database and reappearing
+  unexpectedly on the next reload, though the frontend's own local state
+  showed it gone. Fixed by rebuilding the map from the bulk-replace's
+  freshly-persisted response, the same way the initial load already does
+  — extracted the shared rebuild into `buildParentByIdMap`
+  (`equipmentCheckHierarchy.ts`) so both call sites share one
+  implementation instead of two copies of the same loop.
+- Both reproduced live via a component test confirmed failing pre-fix and
+  passing post-fix. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 8) for the full writeup.
+
+### Security: a clone could silently drop a disconnected compartment, and the delete/autosave interaction took two more rounds to close for good (2026-09-03)
+
+**Fixed**
+
+- **AP-16 (P2, data completeness) — `clone_template` silently dropped a
+  compartment whose parent lay outside the source template**: the same
+  dangling cross-template reference AP-14 guards the delete path against
+  left a compartment unreachable from the clone's root-down walk, so it
+  (and its items) vanished from the clone with no error. Fixed the same
+  way AP-14 fixed delete — fail closed (400) rather than commit an
+  incomplete clone.
+- **Three more rounds on the same `deleteCompartment` auto-save
+  interaction** (AP-13/AP-15 follow-up): cancelling a pending item
+  auto-save timer against an in-flight delete has two failure directions —
+  act too early and a failed delete loses the edit for good; act too late
+  and the timer can still fire mid-flight and race the delete to the
+  server. Landed in two more corrections before converging: capture and
+  cancel every timer synchronously, before the delete request is sent, and
+  either discard the captured edits (delete succeeded) or re-arm them
+  (delete failed) using the same recovery path a failed Save already uses.
+  A related bug in the same fix (a stale entry left in the pending-reparent
+  guard's server-truth map after a successful delete, which could
+  permanently and falsely block deleting anything else) was fixed
+  alongside it, along with a test-hygiene gap (a mock not reset between
+  tests) Codex caught in the same review.
+- All reproduced live (or via a failing test against the specific prior
+  state) before being called findings, and confirmed failing pre-fix /
+  passing post-fix. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 7) for the full writeup.
+
+### Security: the compartment-delete cascade race fix had its own cross-template gap, and the builder left a stale auto-save timer running after a delete (2026-09-03)
+
+**Fixed**
+
+- **AP-14 (P1, multi-tenant isolation, CLAUDE.md Pitfall #14a/14c) — the
+  locking subtree walk added to fix AP-12 had no template or organization
+  boundary**: `add_compartment`/`update_compartment`/`create_template`
+  validate a _new or changed_ `parent_compartment_id` is same-template and
+  same-org (AP-10), but that only prevents a cross-template link from
+  being written from now on — a row persisted before that validation
+  shipped could still carry a dangling one. Left unscoped, deleting a
+  compartment in one template could reach into, and permanently destroy, a
+  compartment (and its items) belonging to a different template — in this
+  org or another org entirely. Fixed by requiring every row the walk locks
+  to belong to the same template as the one being deleted, and failing the
+  whole delete (400, nothing destroyed) the moment it finds one that
+  doesn't — the same fail-closed pattern `delete_folder` already uses for
+  cross-org folder references.
+- **AP-15 (P2, frontend, stale autosave state) — deleting a compartment
+  left its items' pending debounced auto-saves running**: a queued
+  auto-save timer for a deleted item fired anyway, called the update API
+  against an id that no longer existed, 404'd, and could flip the global
+  "saving" indicator to a false "Save failed" — or, if Save was pressed in
+  the same window, abort saving unrelated edits entirely (the flush of
+  pending auto-saves is the first thing Save does). Fixed by cancelling
+  every pending auto-save for the deleted subtree's items right before
+  issuing the delete.
+- Both reproduced live before being called findings and confirmed failing
+  pre-fix / passing post-fix via `git stash`. See
+  `docs/security-review/AP-13-apparatus-nfc.md` (pass 6) for the full
+  writeup.
+
+### Security: a compartment delete could race a concurrent reparent, on the backend and in the builder UI (2026-09-03)
+
+**Fixed**
+
+- **AP-12 (P1, data integrity, concurrency) — `delete_compartment` cascaded
+  off a stale database snapshot, the exact race this codebase's own
+  `delete_folder`/FAC-40 fix already closed once on `DocumentFolder`**:
+  under MySQL/InnoDB REPEATABLE READ, the ORM's `children` cascade
+  lazy-loaded the subtree from the transaction's snapshot, not latest
+  committed state. A descendant reparented out of the subtree by a
+  concurrent, already-committed edit was destroyed anyway; one reparented
+  in survived, orphaned (`parent_compartment_id` is `ondelete="SET NULL"`,
+  unlike `DocumentFolder.parent_id`'s `CASCADE`, so nothing at the database
+  level caught what the stale ORM walk missed). Fixed with FAC-40's own
+  pattern: a level-by-level `FOR UPDATE` locking walk that always sees
+  latest committed state, an explicit bulk delete against that
+  authoritative id set instead of the ORM's cascade, and
+  `passive_deletes=True` on `children`/`items` so the ORM never
+  independently re-derives a conflicting view. Verified live with two real,
+  independently-committing database sessions in both directions.
+- **AP-13 (P1, frontend, pending-edit staleness) — the compartment delete
+  confirmation's descendant computation (added by AP-11) trusted the
+  browser's own hierarchy, which can be ahead of what's saved**:
+  reparenting (indent/outdent/the parent picker) has no auto-save path, so
+  an unsaved move could leave the confirmation and local-state removal
+  disagreeing with what the backend's cascade would actually delete —
+  destroying a compartment the user just moved out, unsaved, or leaving one
+  moved in alive on the server after it vanished from the screen. Fixed by
+  tracking the last-known-server parent linkage and blocking the delete
+  (with a "save first" prompt) when it disagrees with the live computation,
+  rather than risking either direction.
+- Both reproduced live before being called findings (two real database
+  sessions for AP-12; a component test reproducing the actual pending-edit
+  scenario for AP-13) and confirmed failing pre-fix / passing post-fix via
+  `git stash`. See `docs/security-review/AP-13-apparatus-nfc.md` (pass 5)
+  for the full writeup.
+
+### Security: making the equipment-check compartment cascade real (AP-8) exposed three dormant bugs in code written against its old no-op behavior (2026-09-03)
+
+**Fixed**
+
+- **AP-9 (P1, functional regression) — cloning a template with nested
+  compartments 500'd** (`POST /templates/{id}/clone`): `_clone_compartment`
+  walked `.children`, which `get_template` never eager-loads, so touching it
+  outside the awaited context raised `MissingGreenlet` the moment AP-8 made
+  `children` a real relationship. A second, independent bug found in the
+  same code while fixing the first: the outer loop cloned every compartment
+  in the template's flat list as a root, then `_clone_compartment`'s own
+  `.children` walk cloned each nested one a second time — doubling every
+  nested compartment in the clone. Fixed by grouping the already-loaded flat
+  `source.compartments` collection by parent id and cloning root-down from
+  that, touching `.children` nowhere.
+- **AP-10 (P1, multi-tenant isolation, CLAUDE.md Pitfall #14c) —
+  `create_template` forwarded a client-supplied `parent_compartment_id`
+  with no validation that it belongs to the same template or organization**,
+  unlike `add_compartment`/`update_compartment`, which both already validate
+  this. With the cascade now genuinely destructive (AP-8), an unvalidated
+  cross-template (or cross-org) parent link let deleting a compartment in
+  one template cascade-delete a compartment — and all its items — actually
+  belonging to a different template, potentially in a different
+  organization. Fixed by applying the same org-scoped
+  same-template validation the other two write paths already use.
+- **AP-11 (P2, frontend/backend state mismatch) — the compartment delete
+  confirmation and local-state removal only accounted for the selected row,
+  not the descendants the backend now cascade-deletes with it**: the
+  confirmation undercounted items (missing every descendant compartment's),
+  deleted descendants lingered in the UI as orphaned top-level rows, and the
+  next Save 404'd against their already-deleted ids. Fixed by reusing the
+  module's existing `descendantCompartmentIds` hierarchy helper (the same
+  pattern Facilities' `roomTree.ts` uses for room subtrees) to fold the
+  whole subtree into both the confirmation and the local-state removal.
+- All three reproduced live against the current, fixed AP-8 code before
+  being called findings, and confirmed failing pre-fix / passing post-fix
+  via `git stash`. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 4) for the full writeup, including the maintenance query to check
+  a production database for any already-persisted cross-template
+  `parent_compartment_id` link (none found in this review's dev database,
+  which has no such data to find).
+
+### Security: deleting a nested equipment-check compartment silently orphaned its children instead of removing them (2026-09-03)
+
+**Fixed**
+
+- **AP-8 (MED, data integrity) — `CheckTemplateCompartment.children` had the
+  same inverted self-referential relationship FAC-16 found and fixed on
+  `DocumentFolder.children`**: `remote_side` was declared on the plural
+  `children` collection instead of on the singular `parent` backref, which
+  made SQLAlchemy null out each descendant's `parent_compartment_id` before
+  a parent delete rather than cascading to it. Deleting a compartment that
+  contained nested sub-compartments (a pack inside a bag inside a
+  compartment) left the nested ones behind as orphans instead of removing
+  them. Fixed by moving `remote_side` onto the `parent` backref, the same
+  correction FAC-16 applied; reproduced live with a three-level fixture
+  before and after the fix. `TrainingCategory.subcategories` has the same
+  shape and remains flagged, unconfirmed and out of scope — see
+  `docs/KNOWN_LIMITATIONS.md`.
+- See `docs/security-review/AP-13-apparatus-nfc.md` (pass 3, AP-8) for the
+  full writeup and regression test.
+
 ### Added: Claude (MCP) integration — an opt-in MCP server, off by default, that never carries personal information (2026-09-03)
 
 **Added**
