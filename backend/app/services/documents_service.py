@@ -743,7 +743,7 @@ class DocumentsService:
         rows = await self.db.execute(
             select(model.id, model.file_path).where(
                 model.organization_id == str(organization_id),
-                model.file_path.like("document:%"),
+                model.file_path.like("document:%", escape=LIKE_ESCAPE_CHAR),
             )
         )
         matched_ids: List[str] = []
