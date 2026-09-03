@@ -223,6 +223,13 @@ def register(server: Any) -> None:
                 data["category_id"], principal.organization_id, MEDICAL_ITEM_TYPES
             ):
                 raise ValueError(_MEDICAL_REORDER_REFUSED)
+        # A request that names a medical supply without linking it is still
+        # a request for a medical supply: the name is checked against the
+        # department's items and categories the way an id would be.
+        if await service.name_in_domain(
+            item_name, principal.organization_id, MEDICAL_ITEM_TYPES
+        ):
+            raise ValueError(_MEDICAL_REORDER_REFUSED)
         reorder, error = await service.create_reorder_request(
             org_uuid(principal), data, str(actor)
         )

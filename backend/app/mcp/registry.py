@@ -34,7 +34,7 @@ from app.mcp.constants import (
     MAX_ARGUMENT_CHARS,
 )
 from app.mcp.db import open_session
-from app.mcp.principal import McpPrincipal, current_principal
+from app.mcp.principal import McpPrincipal, current_principal, peek_principal
 from app.mcp.redaction import redact
 
 Gate = Literal["write", "finance", "medical_screening"]
@@ -139,7 +139,7 @@ def logbook_tool(
                 check_argument_sizes(kwargs)
             except ToolError as exc:
                 await _audit_apart(principal, tool_name, kwargs, "refused", exc)
-                raise
+                raise _audited(exc)
             # A write is recorded before it is attempted: the services it
             # calls commit for themselves, so the only way to guarantee that
             # every mutation has an audit row is to refuse the mutation when
@@ -147,9 +147,11 @@ def logbook_tool(
             if gate == "write" and not await _audit_apart(
                 principal, tool_name, kwargs, "attempted", None
             ):
-                raise ToolError(
-                    "The audit log is unavailable, so this change was not made. "
-                    "Try again later."
+                raise _audited(
+                    ToolError(
+                        "The audit log is unavailable, so this change was not made. "
+                        "Try again later."
+                    )
                 )
             # A failed call is audited through a session of its own, so
             # whatever the handler wrote before failing is discarded with
@@ -161,16 +163,16 @@ def logbook_tool(
                     await _audit(db, principal, tool_name, kwargs, "ok", None)
             except ToolError as exc:
                 await _audit_apart(principal, tool_name, kwargs, "rejected", exc)
-                raise
+                raise _audited(exc)
             except ValueError as exc:
                 # Service-layer validation: the message is written for a
                 # person and safe to relay (the same path the API takes).
                 await _audit_apart(principal, tool_name, kwargs, "rejected", exc)
-                raise ToolError(safe_error_detail(exc)) from exc
+                raise _audited(ToolError(safe_error_detail(exc))) from exc
             except Exception as exc:
                 logger.exception("MCP tool {} failed", tool_name)
                 await _audit_apart(principal, tool_name, kwargs, "error", exc)
-                raise ToolError(safe_error_detail(exc)) from exc
+                raise _audited(ToolError(safe_error_detail(exc))) from exc
             return result
 
         # The SDK builds the input schema from ``inspect.signature``, which
@@ -227,6 +229,55 @@ def _strings_in(value: Any) -> list[str]:
     if isinstance(value, (list, tuple, set, frozenset)):
         return [s for inner in value for s in _strings_in(inner)]
     return []
+
+
+AUDITED_ATTR = "_logbook_audited"
+
+
+def _audited(exc: ToolError) -> ToolError:
+    """Mark an error this wrapper has already written an audit row for.
+
+    The server audits every ``ToolError`` that leaves ``call_tool`` — the
+    SDK raises its own for an unknown tool or arguments that fail the
+    schema, before this wrapper runs — and the mark keeps it from writing a
+    second row for the ones recorded here.
+    """
+    setattr(exc, AUDITED_ATTR, True)
+    return exc
+
+
+def _already_audited(exc: BaseException) -> bool:
+    """Whether this error, or one it wraps, carries the wrapper's mark.
+
+    The SDK re-raises a tool's ``ToolError`` inside one of its own, so the
+    mark has to be looked for down the cause chain.
+    """
+    seen: Optional[BaseException] = exc
+    while seen is not None:
+        if getattr(seen, AUDITED_ATTR, False):
+            return True
+        seen = seen.__cause__ or seen.__context__
+    return False
+
+
+async def audit_rejected_dispatch(
+    tool: str, arguments: dict[str, Any], exc: ToolError
+) -> None:
+    """Record a call the SDK refused before any wrapper ran.
+
+    An unknown tool name or arguments that fail the input schema never
+    reach ``logbook_tool``; a key probing for tools it should not have
+    still leaves a trail. The name is bounded like an argument, since it
+    is the caller's text.
+    """
+    if _already_audited(exc):
+        return
+    principal = peek_principal()
+    if principal is None:
+        return
+    await _audit_apart(
+        principal, str(bound_for_audit(tool)), arguments, "rejected", exc
+    )
 
 
 def bound_for_audit(value: Any) -> Any:

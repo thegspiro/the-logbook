@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
+from app.mcp.redaction import scrub_text
 from app.mcp.registry import logbook_tool
 from app.mcp.tools._common import clamp_limit, clamp_offset, iso, page, parse_uuid
 from app.models.location import Location
@@ -59,6 +60,63 @@ def _apparatus(a: Any, locations: dict[str, str]) -> dict:
         "deficiency_since": iso(a.deficiency_since),
         "is_archived": bool(a.is_archived),
         "description": a.description,
+    }
+
+
+# Characters of a maintenance record's free text returned per row; the rest
+# is read through ``get_maintenance_record_text``. Both columns are
+# unbounded Text, so a page of records cannot carry every word of them.
+MAINTENANCE_TEXT_CHARS = 20_000
+_MAINTENANCE_TEXT_FIELDS = ("work_performed", "findings")
+
+
+def _clip(value: Any) -> tuple[Any, bool]:
+    if not isinstance(value, str):
+        return value, False
+    value = scrub_text(value)
+    if len(value) <= MAINTENANCE_TEXT_CHARS:
+        return value, False
+    return value[:MAINTENANCE_TEXT_CHARS], True
+
+
+def _chunk(text: str, offset: int) -> dict:
+    text = scrub_text(text)
+    piece = text[offset : offset + MAINTENANCE_TEXT_CHARS]
+    body = {
+        "content": piece,
+        "content_offset": offset,
+        "content_total_chars": len(text),
+        "content_has_more": offset + len(piece) < len(text),
+    }
+    if body["content_has_more"]:
+        body["next_content_offset"] = offset + len(piece)
+    return body
+
+
+def _maintenance(r: Any) -> dict:
+    work_performed, work_cut = _clip(r.work_performed)
+    findings, findings_cut = _clip(r.findings)
+    return {
+        "id": r.id,
+        "apparatus_id": r.apparatus_id,
+        "maintenance_type": getattr(getattr(r, "maintenance_type", None), "name", None),
+        "description": r.description,
+        "scheduled_date": iso(r.scheduled_date),
+        "due_date": iso(r.due_date),
+        "completed_date": iso(r.completed_date),
+        "is_completed": bool(r.is_completed),
+        "is_overdue": bool(r.is_overdue),
+        "work_performed": work_performed,
+        "work_performed_truncated": work_cut,
+        "findings": findings,
+        "findings_truncated": findings_cut,
+        "mileage_at_service": r.mileage_at_service,
+        "hours_at_service": r.hours_at_service,
+        "cost": float(r.cost) if r.cost is not None else None,
+        "vendor": r.vendor,
+        "next_due_date": iso(r.next_due_date),
+        "next_due_mileage": r.next_due_mileage,
+        "next_due_hours": r.next_due_hours,
     }
 
 
@@ -120,29 +178,31 @@ def register(server: Any) -> None:
             skip=offset,
             limit=limit,
         )
-        items = [
-            {
-                "id": r.id,
-                "apparatus_id": r.apparatus_id,
-                "maintenance_type": getattr(
-                    getattr(r, "maintenance_type", None), "name", None
-                ),
-                "description": r.description,
-                "scheduled_date": iso(r.scheduled_date),
-                "due_date": iso(r.due_date),
-                "completed_date": iso(r.completed_date),
-                "is_completed": bool(r.is_completed),
-                "is_overdue": bool(r.is_overdue),
-                "work_performed": r.work_performed,
-                "findings": r.findings,
-                "mileage_at_service": r.mileage_at_service,
-                "hours_at_service": r.hours_at_service,
-                "cost": float(r.cost) if r.cost is not None else None,
-                "vendor": r.vendor,
-                "next_due_date": iso(r.next_due_date),
-                "next_due_mileage": r.next_due_mileage,
-                "next_due_hours": r.next_due_hours,
-            }
-            for r in records
-        ]
+        items = [_maintenance(r) for r in records]
         return page(items, None, limit, offset)
+
+    @logbook_tool(server, title="Read maintenance text", module="apparatus")
+    async def get_maintenance_record_text(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        record_id: str,
+        field: str,
+        content_offset: int = 0,
+    ) -> dict:
+        """The full ``work_performed`` or ``findings`` text of one maintenance
+        record, 20,000 characters at a time. When ``content_has_more`` is
+        true, call again with ``content_offset`` set to
+        ``next_content_offset``."""
+        if field not in _MAINTENANCE_TEXT_FIELDS:
+            raise ValueError(
+                "field must be one of: " + ", ".join(_MAINTENANCE_TEXT_FIELDS)
+            )
+        content_offset = clamp_offset(content_offset)
+        record = await ApparatusService(db).get_maintenance_record(
+            str(parse_uuid(record_id, "record_id")), principal.organization_id
+        )
+        if record is None:
+            raise ValueError("Maintenance record not found")
+        body = _chunk(getattr(record, field) or "", content_offset)
+        body.update({"record_id": record.id, "field": field})
+        return body

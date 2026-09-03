@@ -9,14 +9,22 @@ which ``list_tools`` filters against the bound principal's switches; calling
 a hidden tool anyway is refused by the registry wrapper.
 """
 
+from typing import Any, Optional
+
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import Tool as MCPTool
 
 from app.core.config import settings
 from app.mcp.principal import peek_principal
-from app.mcp.registry import META_GATE, META_MODULE, gate_allows
+from app.mcp.registry import (
+    META_GATE,
+    META_MODULE,
+    audit_rejected_dispatch,
+    gate_allows,
+)
 
 SERVER_NAME = "The Logbook"
 
@@ -41,6 +49,23 @@ review — they never publish or approve anything on their own.
 
 
 class LogbookMcpServer(MCPServer):
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], context: Optional[Any] = None
+    ) -> Any:
+        """Dispatch as the SDK does, auditing what it refuses on the way.
+
+        The SDK rejects an unknown tool or arguments that fail the input
+        schema before the registry wrapper runs; those refusals are recorded
+        here so a probing key leaves the same trail as a rejected call.
+        """
+        try:
+            return await super().call_tool(name, arguments, context)
+        except UnexpectedToolError:
+            raise
+        except ToolError as exc:
+            await audit_rejected_dispatch(name, arguments, exc)
+            raise
+
     async def list_tools(self) -> list[MCPTool]:
         tools = await super().list_tools()
         principal = peek_principal()

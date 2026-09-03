@@ -156,6 +156,43 @@ class TestCreate:
         assert entry.organization_id == org_id
         assert entry.user_id == admin_id
 
+    async def test_disconnecting_revokes_the_active_key(
+        self, db_session, setup_org_and_admin
+    ):
+        """A key must not outlive the connection: left in place it would
+        work again the moment the integration was reconnected."""
+        from sqlalchemy import select
+
+        from app.api.v1.endpoints.integrations import disconnect_integration
+
+        org_id, admin_id = setup_org_and_admin
+        row = await _connect(db_session, org_id)
+        user = _user(org_id, admin_id)
+        created = await create_mcp_key(
+            McpKeyCreateRequest(name="k"),
+            request=None,
+            db=db_session,
+            current_user=user,
+        )
+        await disconnect_integration(
+            row.id, request=_request(), db=db_session, current_user=user
+        )
+        listed = await list_mcp_keys(db=db_session, current_user=user)
+        assert [(k["id"], k["is_active"]) for k in listed["keys"]] == [
+            (created["key"]["id"], False)
+        ]
+        revoked = (
+            (
+                await db_session.execute(
+                    select(AuditLog).where(AuditLog.event_type == "mcp.key_revoked")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [r.event_data["reason"] for r in revoked] == ["integration_disconnected"]
+        assert revoked[0].organization_id == org_id
+
     async def test_rotation_rolls_back_when_the_audit_entry_fails(
         self, db_session, setup_org_and_admin
     ):

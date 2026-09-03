@@ -200,6 +200,25 @@ class McpKeyService:
         await self.db.refresh(key)
         return MintedKey(plaintext=plaintext, key=key, revoked=revoked)
 
+    async def revoke_all(
+        self, organization_id: str, *, revoked_by: Optional[str]
+    ) -> list[McpServiceKey]:
+        """Revoke every unrevoked key for the organization.
+
+        Disconnecting the integration calls this: a key that outlived the
+        connection would become usable again the moment the integration was
+        reconnected, before anybody chose to issue one. Flushes but does not
+        commit, like ``revoke``.
+        """
+        now = datetime.now(timezone.utc)
+        keys = await self._unrevoked_keys(organization_id, for_update=True)
+        for key in keys:
+            key.revoked_at = now
+            key.revoked_by = revoked_by
+        if keys:
+            await self.db.flush()
+        return keys
+
     async def revoke(
         self, organization_id: str, key_id: str, *, revoked_by: Optional[str]
     ) -> Optional[McpServiceKey]:

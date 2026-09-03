@@ -2670,6 +2670,228 @@ class TestTwentySecondRoundFindings:
             )
 
 
+class TestTwentyFourthRoundFindings:
+    """Regressions for the twenty-fourth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_minutes_child_pages_are_fetched_in_sql_and_ordered_by_id(
+        self, server, org_with_members, db_session
+    ):
+        """Motions sharing an ``order`` still page without repeats or gaps,
+        and the detail never loads the whole collection to answer for a
+        one-row page."""
+        from app.models.minute import MeetingMinutes
+
+        org_id, admin_id, _ = org_with_members
+        minutes_id = str(uuid.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, created_by) VALUES (:id, :org, "
+                "'June meeting', 'business', '2027-06-01', 'approved', :by)"
+            ),
+            {"id": minutes_id, "org": org_id, "by": admin_id},
+        )
+        motion_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for mid in motion_ids:
+            await db_session.execute(
+                text(
+                    "INSERT INTO meeting_motions (id, minutes_id, `order`, motion_text) "
+                    "VALUES (:id, :minutes, 0, 'Same order')"
+                ),
+                {"id": mid, "minutes": minutes_id},
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        seen = []
+        for offset in range(3):
+            body = await _call(
+                server,
+                principal,
+                "get_minutes",
+                minutes_id=minutes_id,
+                motion_offset=offset,
+                motion_limit=1,
+            )
+            assert body["motion_total"] == 3
+            assert len(body["motions"]) == 1
+            seen.append(body["motions"][0]["id"])
+        assert seen == motion_ids
+        # The service leaves the collections unloaded for this caller.
+        from app.services.minute_service import MinuteService
+
+        row = await MinuteService(db_session).get_minutes(
+            minutes_id, uuid.UUID(org_id), restricted=True, load_children=False
+        )
+        assert "motions" not in row.__dict__
+        assert isinstance(row, MeetingMinutes)
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_calls_the_sdk_rejects_are_audited(
+        self, server, org_with_members, db_session
+    ):
+        """An unknown tool or arguments that fail the schema never reach the
+        wrapper; the server records them so a probing key leaves a trail."""
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id)
+        with bind_principal(principal):
+            with pytest.raises(ToolError, match="Unknown tool"):
+                await server.call_tool("no_such_tool", {})
+            with pytest.raises(ToolError):
+                await server.call_tool("get_member", {"member_id": ["not", "text"]})
+            # A call the wrapper itself rejects is recorded exactly once.
+            with pytest.raises(ToolError, match="Member not found"):
+                await server.call_tool("get_member", {"member_id": str(uuid.uuid4())})
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog)
+                    .where(
+                        AuditLog.event_type == "mcp.tool_call",
+                        AuditLog.organization_id == org_id,
+                    )
+                    .order_by(AuditLog.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        outcomes = [(r.event_data["tool"], r.event_data["outcome"]) for r in rows]
+        assert outcomes == [
+            ("no_such_tool", "rejected"),
+            ("get_member", "rejected"),
+            ("get_member", "rejected"),
+        ]
+        assert rows[1].event_data["arguments"] == {"member_id": ["not", "text"]}
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_naming_a_medical_supply_is_refused_without_an_id(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        category = InventoryCategory(
+            organization_id=org_id, name="Trauma supplies", item_type=ItemType.MEDICAL
+        )
+        db_session.add(category)
+        await db_session.flush()
+        db_session.add(
+            InventoryItem(
+                organization_id=org_id,
+                category_id=category.id,
+                name="Gauze rolls",
+                quantity=1,
+            )
+        )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id, access_mode="read_write")
+        for name in ("Gauze rolls", "  gauze ROLLS ", "Trauma supplies"):
+            with pytest.raises(ToolError, match="Medical supplies"):
+                await _call(
+                    server,
+                    principal,
+                    "create_reorder_request",
+                    item_name=name,
+                    quantity=2,
+                )
+        created = await _call(
+            server,
+            principal,
+            "create_reorder_request",
+            item_name="Wildland gloves",
+            quantity=2,
+        )
+        assert created["item_name"] == "Wildland gloves"
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_maintenance_text_is_bounded_and_readable_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import apparatus as apparatus_tools
+        from app.models.apparatus import (
+            Apparatus,
+            ApparatusMaintenance,
+            ApparatusMaintenanceType,
+            ApparatusStatus,
+            ApparatusType,
+            MaintenanceCategory,
+        )
+
+        org_id, admin_id, _ = org_with_members
+        kind = ApparatusType(organization_id=org_id, name="Engine", code="ENG")
+        status = ApparatusStatus(organization_id=org_id, name="In Service", code="IS")
+        db_session.add_all([kind, status])
+        await db_session.flush()
+        unit = Apparatus(
+            organization_id=org_id,
+            unit_number="E1",
+            name="Engine 1",
+            apparatus_type_id=kind.id,
+            status_id=status.id,
+        )
+        db_session.add(unit)
+        await db_session.flush()
+        mtype = ApparatusMaintenanceType(
+            organization_id=org_id,
+            name="Pump test",
+            code="PUMP",
+            category=MaintenanceCategory.INSPECTION,
+        )
+        db_session.add(mtype)
+        await db_session.flush()
+        findings = "Call the shop on 5551234567. " + "f" * 30
+        record = ApparatusMaintenance(
+            organization_id=org_id,
+            apparatus_id=unit.id,
+            maintenance_type_id=mtype.id,
+            work_performed="w" * 25,
+            findings=findings,
+        )
+        db_session.add(record)
+        await db_session.flush()
+        monkeypatch.setattr(apparatus_tools, "MAINTENANCE_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_apparatus_maintenance")
+        row = next(r for r in listed["items"] if r["id"] == record.id)
+        assert row["work_performed"] == "w" * 12
+        assert row["work_performed_truncated"] is True
+        assert len(row["findings"]) == 12
+        assert row["findings_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_maintenance_record_text",
+                record_id=record.id,
+                field="findings",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert joined.endswith("f" * 30)
+        with pytest.raises(ToolError, match="field must be one of"):
+            await _call(
+                server,
+                principal,
+                "get_maintenance_record_text",
+                record_id=record.id,
+                field="cost",
+            )
+        with pytest.raises(ToolError, match="Maintenance record not found"):
+            await _call(
+                server,
+                principal,
+                "get_maintenance_record_text",
+                record_id=str(uuid.uuid4()),
+                field="findings",
+            )
+
+
 class TestReviewFindings:
     """Regressions for the first review round on #2197."""
 

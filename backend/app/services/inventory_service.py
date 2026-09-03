@@ -6238,6 +6238,46 @@ class InventoryService:
         )
         return found is not None
 
+    async def name_in_domain(
+        self,
+        name: str,
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> bool:
+        """Does ``name`` match an item or a category filed under ``item_types``?
+
+        Case-insensitive on the trimmed name. Used where a record is named
+        rather than linked, so that naming a medical supply without its id
+        is refused the way linking it is.
+        """
+        wanted = (name or "").strip().lower()
+        if not wanted:
+            return False
+        types = list(item_types)
+        item = await self.db.scalar(
+            select(InventoryItem.id)
+            .join(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .where(
+                InventoryItem.organization_id == organization_id,
+                func.lower(InventoryItem.name) == wanted,
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(types),
+            )
+        )
+        if item is not None:
+            return True
+        category = await self.db.scalar(
+            select(InventoryCategory.id).where(
+                InventoryCategory.organization_id == organization_id,
+                func.lower(InventoryCategory.name) == wanted,
+                InventoryCategory.item_type.in_(types),
+            )
+        )
+        return category is not None
+
     async def item_in_domain(
         self,
         item_id: str,

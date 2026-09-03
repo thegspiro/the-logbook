@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import sanitize_connector_error
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import McpKeyService
@@ -633,6 +634,30 @@ async def disconnect_integration(
 
     integration.status = "available"
     integration.enabled = False
+    # A service key must not outlive the connection it was issued for: left
+    # in place it would work again the moment the integration was
+    # reconnected, before anybody chose to issue a key.
+    revoked_keys = []
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        revoked_keys = await McpKeyService(db).revoke_all(
+            str(current_user.organization_id), revoked_by=str(current_user.id)
+        )
+    for key in revoked_keys:
+        await log_audit_event(
+            db,
+            "mcp.key_revoked",
+            "integrations",
+            "warning",
+            {
+                "key_id": key.id,
+                "key_prefix": key.key_prefix,
+                "name": key.name,
+                "reason": "integration_disconnected",
+            },
+            user_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
+            ip_address=get_client_ip(request),
+        )
     await db.commit()
 
     # Audit log

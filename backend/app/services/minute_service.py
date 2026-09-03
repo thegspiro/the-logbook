@@ -220,6 +220,7 @@ class MinuteService:
         minutes_id: str,
         organization_id: UUID,
         restricted: bool = False,
+        load_children: bool = True,
     ) -> Optional[MeetingMinutes]:
         """Get a single meeting minutes record with all relationships.
 
@@ -227,16 +228,23 @@ class MinuteService:
         result to approved, non-executive minutes — unpublished drafts and
         closed executive-session minutes return None (→ 404) so their existence
         isn't revealed. Internal/manage callers use the default (see all).
+
+        ``load_children=False`` leaves the motions and action items unloaded
+        for a caller that pages them with queries of its own; the returned
+        row must not have those attributes read.
         """
+        options = [selectinload(MeetingMinutes.template)]
+        if load_children:
+            options = [
+                selectinload(MeetingMinutes.motions),
+                selectinload(MeetingMinutes.action_items),
+                *options,
+            ]
         query = (
             select(MeetingMinutes)
             .where(MeetingMinutes.id == minutes_id)
             .where(MeetingMinutes.organization_id == str(organization_id))
-            .options(
-                selectinload(MeetingMinutes.motions),
-                selectinload(MeetingMinutes.action_items),
-                selectinload(MeetingMinutes.template),
-            )
+            .options(*options)
         )
         if restricted:
             query = query.where(

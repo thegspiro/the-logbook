@@ -190,6 +190,44 @@ def _minutes_summary(m: Any, motion_count: int, action_item_count: int) -> dict:
     }
 
 
+# Child rows are ordered with the id as a tie-breaker: ``order`` and
+# ``created_at`` are not unique, and an offset over an unstable order would
+# let a continuation page repeat or skip a row.
+_MOTION_ORDER = (Motion.order, Motion.id)
+_ACTION_ITEM_ORDER = (ActionItem.created_at, ActionItem.id)
+
+
+async def _child_page(
+    db: AsyncSession, model: Any, order: tuple, minutes_id: str, offset: int, limit: int
+) -> tuple[list, int]:
+    """One page of ``model`` rows for a set of minutes, and the total."""
+    total = (
+        await db.execute(
+            select(func.count())
+            .select_from(model)
+            .where(model.minutes_id == minutes_id)
+        )
+    ).scalar_one()
+    rows = await db.execute(
+        select(model)
+        .where(model.minutes_id == minutes_id)
+        .order_by(*order)
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(rows.scalars().all()), int(total)
+
+
+async def _child_by_id(
+    db: AsyncSession, model: Any, minutes_id: str, child_id: str
+) -> Any:
+    return (
+        await db.execute(
+            select(model).where(model.minutes_id == minutes_id, model.id == child_id)
+        )
+    ).scalar_one_or_none()
+
+
 async def _counts_by_minutes(
     db: AsyncSession, model: Any, minutes_ids: list[str]
 ) -> dict[str, int]:
@@ -445,16 +483,23 @@ def register(server: Any) -> None:
         attendee_offset = clamp_offset(attendee_offset)
         attendee_limit = clamp_limit(attendee_limit)
         m = await MinuteService(db).get_minutes(
-            str(minutes_id), org_uuid(principal), restricted=True
+            str(minutes_id), org_uuid(principal), restricted=True, load_children=False
         )
         if m is None:
             raise ValueError("Minutes not found or not published")
-        all_motions = list(m.motions or [])
-        motions_page = all_motions[motion_offset : motion_offset + motion_limit]
-        all_action_items = list(m.action_items or [])
-        action_items_page = all_action_items[
-            action_item_offset : action_item_offset + action_item_limit
-        ]
+        # Only the requested pages are fetched: a set of minutes with many
+        # motions must not be materialized in full to answer for one.
+        motions_page, motion_total = await _child_page(
+            db, Motion, _MOTION_ORDER, m.id, motion_offset, motion_limit
+        )
+        action_items_page, action_item_total = await _child_page(
+            db,
+            ActionItem,
+            _ACTION_ITEM_ORDER,
+            m.id,
+            action_item_offset,
+            action_item_limit,
+        )
         # ``attendees`` is untyped JSON: a list on every write path, but a
         # stray scalar is shown rather than dropped.
         all_attendees = (
@@ -473,7 +518,7 @@ def register(server: Any) -> None:
         # Finance content needs the switch *and* the Finance module: turning
         # the module off must stop its data reaching Claude by every path.
         share_finance = principal.expose_finance and principal.module_enabled("finance")
-        body = _minutes_summary(m, len(all_motions), len(all_action_items))
+        body = _minutes_summary(m, motion_total, action_item_total)
         truncated_fields: list[str] = []
         texts: dict[str, Any] = {}
         for field in _MINUTES_TEXT_FIELDS:
@@ -505,14 +550,13 @@ def register(server: Any) -> None:
                 < len(visible_sections),
                 "motions": [_motion(mo, movers) for mo in motions_page],
                 "motion_offset": motion_offset,
-                "motion_total": len(all_motions),
-                "motions_has_more": motion_offset + len(motions_page)
-                < len(all_motions),
+                "motion_total": motion_total,
+                "motions_has_more": motion_offset + len(motions_page) < motion_total,
                 "action_items": [_action_item(ai) for ai in action_items_page],
                 "action_item_offset": action_item_offset,
-                "action_item_total": len(all_action_items),
+                "action_item_total": action_item_total,
                 "action_items_has_more": action_item_offset + len(action_items_page)
-                < len(all_action_items),
+                < action_item_total,
             }
         )
         if share_finance:
@@ -540,7 +584,7 @@ def register(server: Any) -> None:
         again with ``content_offset`` set to ``next_content_offset``."""
         content_offset = clamp_offset(content_offset)
         m = await MinuteService(db).get_minutes(
-            str(minutes_id), org_uuid(principal), restricted=True
+            str(minutes_id), org_uuid(principal), restricted=True, load_children=False
         )
         if m is None:
             raise ValueError("Minutes not found or not published")
@@ -563,10 +607,9 @@ def register(server: Any) -> None:
             # By id, not ``order``: the column is not unique, and a motion
             # that shares its order with another could never be read.
             prefix, motion_id = field.split(":", 1)
-            matches = [mo for mo in (m.motions or []) if mo.id == motion_id]
-            if not matches:
+            motion = await _child_by_id(db, Motion, m.id, motion_id)
+            if motion is None:
                 raise ValueError(f"No motion with id {motion_id!r}")
-            motion = matches[0]
             text = (
                 motion.motion_text
                 if prefix == "motion_text"
@@ -574,10 +617,10 @@ def register(server: Any) -> None:
             )
         elif field.startswith("action_item:"):
             item_id = field[len("action_item:") :]
-            matches = [ai for ai in (m.action_items or []) if ai.id == item_id]
-            if not matches:
+            item = await _child_by_id(db, ActionItem, m.id, item_id)
+            if item is None:
                 raise ValueError(f"No action item with id {item_id!r}")
-            text = matches[0].description
+            text = item.description
         elif field in _MINUTES_TEXT_FIELDS:
             text = getattr(m, field)
         else:
