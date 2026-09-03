@@ -15,6 +15,15 @@ of birth, emergency contacts, photos, membership or certification numbers,
 login names, or medical results. Members are identified by name, rank,
 station and position.
 
+The connection is a department-level integration, not a member. Within the
+modules a department has switched on, it reads operational records the way
+the responsible officer does — training and certification status for every
+member, who holds which piece of gear, what is low or overdue — minus the
+personal information above. That is the decision a department makes when
+it connects the integration and issues a key; the switches below cover the
+areas that carry money, health information or a schedule members do not
+all see.
+
 ---
 
 ## What Claude can do with it

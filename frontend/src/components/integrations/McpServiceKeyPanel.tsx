@@ -47,6 +47,10 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
 
   const [status, setStatus] = useState<McpStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  // Set when the status request fails. The issue form stays hidden until a
+  // status has actually loaded: issuing on an unknown status would skip the
+  // "replace the current key?" confirmation and silently revoke a working key.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [keyName, setKeyName] = useState('Claude');
   const [expiry, setExpiry] = useState('90');
   const [issuing, setIssuing] = useState(false);
@@ -59,12 +63,20 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
   const load = useCallback(async () => {
     try {
       setStatus(await integrationsService.getMcpStatus());
+      setLoadError(null);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to load the Claude (MCP) status'));
+      const message = getErrorMessage(err, 'Failed to load the Claude (MCP) status');
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // The one-time plaintext arrives with the issue response; unmounting the
+  // panel while it is in flight would lose the only copy after the backend
+  // has already revoked the previous key.
+  const busy = issuing || revoking;
 
   useEffect(() => {
     void load();
@@ -146,7 +158,14 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
             </p>
           </div>
         </div>
-        <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          title={busy ? 'Wait for the current request to finish' : undefined}
+          className="text-theme-text-muted hover:text-theme-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Close"
+        >
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -184,6 +203,27 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
               </p>
             )}
           </div>
+
+          {loadError && !status && (
+            <div className="alert-error flex items-start gap-2" role="alert" data-testid="mcp-status-error">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">
+                  The key status could not be loaded, so a key cannot be issued or revoked right now.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoading(true);
+                    void load();
+                  }}
+                  className="mt-2 text-xs underline"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          )}
 
           {issued && (
             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3" data-testid="mcp-issued-key">
@@ -225,48 +265,50 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
             </div>
           )}
 
-          <div>
-            <p className={labelClass}>Current key</p>
-            {status?.active_key ? (
-              <div className="bg-theme-surface-secondary flex flex-wrap items-center justify-between gap-3 rounded-lg p-3">
-                <div className="min-w-0">
-                  <p className="text-theme-text-primary text-sm font-medium">
-                    {status.active_key.name}{' '}
-                    <span className="text-theme-text-muted font-mono text-xs">{status.active_key.key_prefix}…</span>
-                  </p>
-                  <p className="text-theme-text-muted text-xs">
-                    Issued {status.active_key.created_at ? formatDateTime(status.active_key.created_at, tz) : '—'}
-                    {' · '}
-                    {status.active_key.expires_at
-                      ? `expires ${formatDateTime(status.active_key.expires_at, tz)}`
-                      : 'never expires'}
-                    {' · '}
-                    {status.active_key.last_used_at
-                      ? `last used ${formatDateTime(status.active_key.last_used_at, tz)}`
-                      : 'not used yet'}
-                  </p>
+          {status && (
+            <div>
+              <p className={labelClass}>Current key</p>
+              {status.active_key ? (
+                <div className="bg-theme-surface-secondary flex flex-wrap items-center justify-between gap-3 rounded-lg p-3">
+                  <div className="min-w-0">
+                    <p className="text-theme-text-primary text-sm font-medium">
+                      {status.active_key.name}{' '}
+                      <span className="text-theme-text-muted font-mono text-xs">{status.active_key.key_prefix}…</span>
+                    </p>
+                    <p className="text-theme-text-muted text-xs">
+                      Issued {status.active_key.created_at ? formatDateTime(status.active_key.created_at, tz) : '—'}
+                      {' · '}
+                      {status.active_key.expires_at
+                        ? `expires ${formatDateTime(status.active_key.expires_at, tz)}`
+                        : 'never expires'}
+                      {' · '}
+                      {status.active_key.last_used_at
+                        ? `last used ${formatDateTime(status.active_key.last_used_at, tz)}`
+                        : 'not used yet'}
+                    </p>
+                  </div>
+                  {canIssue && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleRevoke();
+                      }}
+                      disabled={revoking}
+                      className="rounded-lg bg-red-800/10 px-3 py-1.5 text-sm text-red-800 transition-colors hover:bg-red-800/20 disabled:opacity-50 dark:text-red-300"
+                    >
+                      {revoking ? 'Revoking…' : 'Revoke'}
+                    </button>
+                  )}
                 </div>
-                {canIssue && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleRevoke();
-                    }}
-                    disabled={revoking}
-                    className="rounded-lg bg-red-800/10 px-3 py-1.5 text-sm text-red-800 transition-colors hover:bg-red-800/20 disabled:opacity-50 dark:text-red-300"
-                  >
-                    {revoking ? 'Revoking…' : 'Revoke'}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p className="text-theme-text-secondary text-sm">
-                No active key. Claude cannot connect until one is issued.
-              </p>
-            )}
-          </div>
+              ) : (
+                <p className="text-theme-text-secondary text-sm">
+                  No active key. Claude cannot connect until one is issued.
+                </p>
+              )}
+            </div>
+          )}
 
-          {canIssue ? (
+          {!status ? null : canIssue ? (
             <form
               className="space-y-3"
               onSubmit={(e) => {

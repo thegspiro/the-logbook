@@ -146,10 +146,11 @@ def register(server: Any) -> None:
         offset: int = 0,
     ) -> dict:
         """Shifts between two dates (YYYY-MM-DD, inclusive), each with its
-        apparatus, station, seat list and who is assigned to each seat. Times
-        are the department's local clock times. Unless the department shares
-        its full schedule with Claude, only shifts open to all members are
-        listed."""
+        apparatus, station, seat list and who is assigned to each seat.
+        ``start_time`` and ``end_time`` are UTC instants with an offset;
+        convert them to the department's timezone before presenting them.
+        Unless the department shares its full schedule with Claude, only
+        shifts open to all members are listed."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         shifts, total = await SchedulingService(db).get_shifts(

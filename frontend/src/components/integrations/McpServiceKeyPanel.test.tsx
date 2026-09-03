@@ -148,6 +148,46 @@ describe('McpServiceKeyPanel', () => {
     expect(screen.getByText(/Only a member holding/)).toBeInTheDocument();
   });
 
+  it('keeps issuing closed when the status cannot be loaded', async () => {
+    const user = userEvent.setup();
+    mockGetMcpStatus.mockReset();
+    mockGetMcpStatus.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(statusWithKey);
+
+    renderWithRouter(<McpServiceKeyPanel onClose={vi.fn()} />);
+    await screen.findByTestId('mcp-status-error');
+    expect(screen.queryByTestId('mcp-issue-key')).not.toBeInTheDocument();
+    expect(screen.queryByText(/No active key/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('Try again'));
+    await screen.findByTestId('mcp-issue-key');
+    expect(screen.getByText('Claude Code')).toBeInTheDocument();
+    expect(screen.queryByTestId('mcp-status-error')).not.toBeInTheDocument();
+  });
+
+  it('does not let the panel close while a key is being issued', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    let finish: (value: unknown) => void = () => undefined;
+    mockCreateMcpKey.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+
+    renderWithRouter(<McpServiceKeyPanel onClose={onClose} />);
+    await screen.findByTestId('mcp-issue-key');
+    await user.click(screen.getByTestId('mcp-issue-key'));
+
+    const close = screen.getByLabelText('Close');
+    expect(close).toBeDisabled();
+    await user.click(close);
+    expect(onClose).not.toHaveBeenCalled();
+
+    finish({ key: activeKey, plaintext: 'logbook_mcp_abcdefgh_secret', revoked: [] });
+    await screen.findByTestId('mcp-issued-key');
+    expect(screen.getByLabelText('Close')).toBeEnabled();
+  });
+
   it('reports a failed issue without crashing', async () => {
     const user = userEvent.setup();
     mockCreateMcpKey.mockRejectedValueOnce(new Error('nope'));

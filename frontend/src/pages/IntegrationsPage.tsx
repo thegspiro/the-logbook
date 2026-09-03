@@ -54,6 +54,7 @@ import {
   type SalesforcePreviewResult,
   type CalcomBooking,
 } from '../services/api';
+import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ConnectionStatus } from '../constants/enums';
 import { formatDateTime } from '../utils/dateFormatting';
@@ -389,6 +390,11 @@ const IntegrationsPage: React.FC = () => {
   const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
   const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
   const [showMcpPanel, setShowMcpPanel] = useState(false);
+  // A delegated key manager cannot list integrations (that needs
+  // integrations.manage), so the Claude (MCP) card never renders for them.
+  // The status endpoint accepts their permission; it decides whether the
+  // service key card is shown instead.
+  const [delegatedMcp, setDelegatedMcp] = useState<McpStatus | null>(null);
 
   const loadIntegrations = useCallback(async () => {
     try {
@@ -400,6 +406,22 @@ const IntegrationsPage: React.FC = () => {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (canManage || !canIssueKeys) return;
+    let cancelled = false;
+    void integrationsService
+      .getMcpStatus()
+      .then((status) => {
+        if (!cancelled) setDelegatedMcp(status);
+      })
+      .catch(() => {
+        if (!cancelled) setDelegatedMcp(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, canIssueKeys]);
 
   useEffect(() => {
     void loadIntegrations();
@@ -443,6 +465,8 @@ const IntegrationsPage: React.FC = () => {
   const availableCount = integrations.filter((i) => i.status === 'available').length;
 
   const selectedIntegration = showConnectModal ? integrations.find((i) => i.id === showConnectModal) : null;
+  const showDelegatedMcpCard =
+    delegatedMcp?.enabled === true && !integrations.some((i) => i.integration_type === 'claude-mcp');
 
   // ``integration`` seeds the non-secret fields from what is already stored.
   // Without it, reopening the form on a live PayPal connection would show the
@@ -1442,6 +1466,30 @@ const IntegrationsPage: React.FC = () => {
 
         {/* Integration Cards */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {showDelegatedMcpCard && (
+            <div className="card p-6" data-testid="integration-card-claude-mcp-delegated">
+              <div className="mb-4 flex items-start space-x-3">
+                <div className="rounded-lg bg-orange-500/10 p-2 text-orange-700 dark:text-orange-400">
+                  <KeyRound className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">Claude (MCP)</h3>
+                  <p className="text-theme-text-muted text-sm">
+                    Connected. You can issue or revoke the department&apos;s service key.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowMcpPanel(!showMcpPanel)}
+                  className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  <span>Service key</span>
+                </button>
+              </div>
+            </div>
+          )}
           {filteredIntegrations.map((integration) => {
             const ui = getUI(integration.integration_type);
             const activation = isActivation(integration.integration_type);
@@ -1563,9 +1611,10 @@ const IntegrationsPage: React.FC = () => {
 
         {/* Claude (MCP) service key panel */}
         {showMcpPanel &&
-          integrations.some((i) => i.integration_type === 'claude-mcp' && i.status === ConnectionStatus.CONNECTED) && (
-            <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} />
-          )}
+          (showDelegatedMcpCard ||
+            integrations.some(
+              (i) => i.integration_type === 'claude-mcp' && i.status === ConnectionStatus.CONNECTED
+            )) && <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} />}
 
         {/* Cal.com Bookings Panel */}
         {showBookingsPanel &&
@@ -1851,7 +1900,7 @@ const IntegrationsPage: React.FC = () => {
             </div>
           )}
 
-        {filteredIntegrations.length === 0 && (
+        {filteredIntegrations.length === 0 && !showDelegatedMcpCard && (
           <div className="py-12 text-center">
             <Plug className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
             <p className="text-theme-text-secondary text-lg">No integrations match your search</p>

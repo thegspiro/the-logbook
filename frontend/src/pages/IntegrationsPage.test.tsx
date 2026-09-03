@@ -635,6 +635,36 @@ describe('IntegrationsPage', () => {
       expect(within(card).queryByText('Disconnect')).not.toBeInTheDocument();
     });
 
+    it('reaches the service key panel when the integrations list is forbidden', async () => {
+      const user = userEvent.setup();
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
+      mockGetIntegrations.mockRejectedValue(new Error('403'));
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-claude-mcp-delegated');
+      expect(screen.queryByText('No integrations match your search')).not.toBeInTheDocument();
+      await user.click(within(card).getByText('Service key'));
+      expect(await screen.findByTestId('mcp-key-panel')).toBeInTheDocument();
+    });
+
+    it('shows no delegated card when the integration is not connected', async () => {
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'integrations.mcp_keys');
+      mockGetIntegrations.mockRejectedValue(new Error('403'));
+      mockGetMcpStatus.mockResolvedValue({
+        enabled: false,
+        endpoint_path: '/api/mcp',
+        access_mode: 'read_only',
+        expose_finance: false,
+        expose_medical_screening: false,
+        expose_full_schedule: false,
+        active_key: null,
+      });
+
+      renderPage();
+      await screen.findByText('No integrations match your search');
+      expect(screen.queryByTestId('integration-card-claude-mcp-delegated')).not.toBeInTheDocument();
+    });
+
     it('opens the service key panel from a connected card', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([mcpConnected]);
