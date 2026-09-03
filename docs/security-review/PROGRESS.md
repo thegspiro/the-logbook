@@ -16,21 +16,140 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#2195** (branch `claude/security-review-facilities-followup`) — Feature 12,
-Facilities, pass 3 continued. #2191 merged (`f5e800f1`) while this round's
-own fix (FAC-24, below) was in progress — its last pushed commit
+**#2198** (branch `claude/security-review-facilities-followup2`) — Feature
+12, Facilities, pass 3 continued. #2195 merged (`38410c86`, by the repo
+owner directly) while this round's own fix (FAC-29, below) was still in
+progress on that branch. Per CLAUDE.md Pitfall #24, continuing on a fresh
+branch (`claude/security-review-facilities-followup2`, based on
+post-merge `main`) and a new PR rather than reusing the now-dead
+`claude/security-review-facilities-followup`. See the log entry below for
+#2195's own closing summary (FAC-24 through FAC-28).
+
+**FAC-29 (P1, access control/TOCTOU, fixed):** `_delete_facility_document_references`'s
+existence check and `_validate_shared_document_reference`'s document lookup
+(facilities.py) were each a plain SELECT — under InnoDB REPEATABLE READ,
+answering from the snapshot taken at the transaction's _first_ read, already
+stale by the time either check runs since the request has already read
+something else first. Reproduced live (two real, independently-committing
+sessions) in both directions: a deleting transaction's existence check
+missed a `FacilityDocument` reference a second transaction committed after
+the deleter's snapshot was taken (the delete would have proceeded
+unconditionally past FAC-26's permission gate); a creating transaction's
+document lookup still resolved a document a second transaction had already
+deleted and committed (it would have filed a dangling reference the moment
+both finished). Fixed with locking reads (`with_for_update()`/
+`for_update=True` — a `for_update` keyword on `get_document_by_id`, used by
+`delete_document` and `_validate_shared_document_reference` to lock the
+`Document` row they both read, and made `_match_facility_document_references`'s
+own query a locking read too), the same pattern this codebase's capacity
+checks already use (CLAUDE.md Pitfall #27). New regression tests in
+`tests/test_facility_document_reference_race.py`, two real sessions with
+deterministic ordering, confirmed to fail pre-fix and pass post-fix.
+
+**FAC-30 (P2, permission-model gap, flagged — not fixed):** a custom
+position granting `facilities.delete` without `.edit`/`.manage` cannot pass
+the generic Documents API's folder ACL at all. Verified pre-existing (not a
+regression from FAC-24/26 — `facilities.delete` was never in the folder's
+`required_permissions` list) and confirmed no seeded role holds this
+combination (`facilities.delete` only ever appears bundled with `.edit`
+**and** `.manage`, on three operational ranks). Closing it is a
+permission-model design decision (should the generic Documents API honor a
+facility-specific action grant distinct from its existing authority on the
+facility-specific delete route?), not a mechanical fix — flagged per
+CLAUDE.md's fix-vs-flag discipline. See `docs/security-review/FAC-12-facilities.md`
+(FAC-30) for the full reasoning.
+
+**Codex review of the FAC-29 commit (`b21380b8`) found three more issues,
+being fixed on this same PR/branch:**
+
+**FAC-31 (P1, access control/TOCTOU, fixed):** FAC-29's lock protected
+`_validate_shared_document_reference`'s document read, but the function
+committed right after assigning a folder — releasing the lock before the
+caller (`create_facility_document`/`create_facility_photo`) ever inserted
+the `FacilityDocument`/`FacilityPhoto` row the lock was meant to protect. A
+concurrent `delete_document` could land in that exact gap, see no reference
+yet (none had been filed), delete the document, and let the original request
+file a reference to nothing the moment both finished — FAC-29's own race,
+reopened one step later in the same sequence. Fixed by flushing instead of
+committing inside the validation helper, so the lock now spans the folder
+assignment and the caller's own reference insert, released only by the
+endpoint's single final commit (or a full rollback on failure). New
+regression test (`TestReferenceInsertStaysUnderTheDocumentLock`) runs the
+competing delete as a background task against a still-open transaction to
+prove a genuine lock _block_, not just a stale read — confirmed to reproduce
+a real dangling reference pre-fix (`git stash`) and close it post-fix.
+
+**FAC-33 (P1, test-only, fixed):** the two-session test fixture's teardown
+swallowed any `rollback()` failure with a blanket `except Exception: pass`.
+Verified empirically that no known-benign exception occurs in practice
+against this backend; removed the blanket catch per CLAUDE.md's "Fix All
+Errors" policy.
+
+**FAC-32 (P2, reliability/deadlock, fixed):** `delete_folder`'s cascade
+took the same two locks FAC-31's creator path takes (a `Document` row, then
+the `FacilityDocument`/`FacilityPhoto` reference table) in the opposite
+order — reference table first (via `_match_facility_document_references`),
+Document rows only afterward via the ORM cascade delete. Two transactions
+locking the same two resources in opposite orders is a textbook InnoDB
+deadlock. Fixed by adding `.with_for_update()` to the subtree's `Document`
+query and running it before the reference-table scan, matching the creator's
+order. A true two-session deadlock is inherently timing-sensitive to force
+on demand, so the regression test
+(`TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`) instead proves the
+concrete, engine-independent effect: with a `Document` row locked by one
+session, `delete_folder` run in a second blocks on it immediately, before
+ever reaching the reference-table scan (confirmed backwards pre-fix via
+`git stash` — the scan ran first, then it blocked much later at the cascade
+delete itself).
+
+**Codex review of the FAC-32 commit (`d0ec9194`) found one more issue, fixed
+on this same PR/branch:**
+
+**FAC-34 (P2, reliability/deadlock, fixed):** FAC-32 ordered this cascade's
+`Document` lock before the reference-table scan, matching the FAC-31 creator
+path for those two resources — but the creator path takes a _third_ shared
+lock in between, on the destination `DocumentFolder` itself
+(`ensure_facility_folder`, when filing a folderless document), and this
+cascade never explicitly locked its own subtree's `DocumentFolder` rows at
+all — only the implicit lock the folder's own `DELETE` takes at commit,
+after both of FAC-32's locks. Verified real at the SQL locking-primitive
+level with two real sessions: a locking read filtered on `Document.folder_id`
+can block a concurrent write to that same column even when it currently
+matches no rows, and — depending on which index MySQL/MariaDB's optimizer
+picks for the query, itself a function of the subtree's size and the
+table's data volume — the exact blocking mechanism varies, so a small test
+database's query plan does not reliably reproduce the cyclic wait end to end
+even though the underlying hazard is real. Fixed by locking the subtree's
+`DocumentFolder` rows first, before this cascade's Document-lock query —
+removing the dependency on that query's plan entirely, rather than
+reordering only the pair FAC-32 already covered. The two locking queries
+were extracted into `_lock_subtree_folders`/`_lock_subtree_documents` so a
+test can assert the ordering directly. New regression test
+(`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`), same
+engine-independence rationale as FAC-32's own test, confirmed against
+pre-fix code via `git stash`.
+
+Full local completion gate green: flake8/black/isort clean on changed files,
+scoped facilities/documents suites (301 passed, +1 for FAC-34) and the full
+backend suite pass with zero regressions. Rotation row 12 stays ⏳ (awaiting
+this PR's merge).
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2195 (FAC-24 through FAC-28)
+
+`38410c86` merged (by the repo owner directly, mid-round — see the FAC-29
+entry above) pass 3's continuation through FAC-28. #2191 merged (`f5e800f1`)
+while this round's own fix (FAC-24) was in progress — its last pushed commit
 (`910c27e6`, FAC-18/19/20/21) did not include FAC-24, which Codex found on
-that same merged PR's sweep after the merge. Per CLAUDE.md Pitfall #24,
-continuing on a new branch (`claude/security-review-facilities-followup`)
-and a new PR rather than pushing to the now-dead
-`claude/security-review-facilities` or reopening the merged one. See the log
-entries below for #2191's own closing summary (FAC-13 through FAC-21) and
-#2194's separate, urgent post-merge fix (FAC-22, FAC-23) — an unrelated
-cascade-delete bug found and merged to `main` while this PR was open, which
-happened to claim the FAC-22/FAC-23 numbers first; this PR's own finding
-below was renumbered FAC-22 → **FAC-24** once the collision surfaced during
-the merge of `origin/main` into this branch, to keep every id unique across
-the two parallel fixes.
+that same merged PR's sweep after the merge. Per CLAUDE.md Pitfall #24, that
+work continued on a new branch (`claude/security-review-facilities-followup`)
+and this PR rather than reusing the dead `claude/security-review-facilities`
+or reopening the merged one. #2194's separate, urgent post-merge fix
+(FAC-22, FAC-23) — an unrelated cascade-delete bug found and merged to
+`main` while this PR was open — claimed the FAC-22/FAC-23 numbers first;
+this PR's own finding was renumbered FAC-22 → **FAC-24** once the collision
+surfaced during the merge of `origin/main` into this branch.
 
 **FAC-24 (P1, access control, fixed):**
 `can_access_folder`/`can_access_document` — the one shared predicate every
@@ -60,14 +179,60 @@ by scoping that specific claim to the three roles that do). Full completion
 gate green, 10029/10029 full backend suite (+12 for FAC-24's regression
 tests over the 10017 baseline `main` carried at fork time).
 
-**`origin/main` merged into this branch** (bringing in #2194's since-merged
-FAC-22/FAC-23 fix, below — same two functions, `update_folder`/
-`delete_folder`, this PR also touches) with the conflict resolved by keeping
-both sets of changes: #2194's `is_system` checks and this PR's own
-`require_write`/permission-tier changes coexist in the merged
-`update_folder`/`delete_folder`. Full backend suite re-run green against the
-merged code (see completion gate below for the count). Rotation row 12
-stays ⏳ (awaiting this PR's merge).
+**`origin/main` merged into that branch** (bringing in #2194's since-merged
+FAC-22/FAC-23 fix — same two functions, `update_folder`/`delete_folder`,
+this PR also touched) with the conflict resolved by keeping both sets of
+changes: #2194's `is_system` checks and this PR's own `require_write`/
+permission-tier changes coexist in the merged `update_folder`/
+`delete_folder`. Full backend suite re-run green against the merged code.
+
+**FAC-25 (P1, access control, fixed), Codex review of the FAC-24 commit:**
+`POST /documents/upload`'s folder-destination check was the one
+mutation site FAC-24's sweep missed — still called `can_access_folder` with
+no `require_write=True`, so the treasurer-shaped caller FAC-24 closed
+everywhere else could still upload directly into a sensitive facility
+folder. Fixed by passing `require_write=True` there too.
+
+**FAC-26 (P1, access control, fixed), Codex review of the same commit:**
+deleting a shared document (directly, or via a folder cascade) cleaned up
+its `FacilityDocument` reference without checking the facility-specific
+delete permission — the generic `DELETE /documents/{document_id}` requires
+only `documents.manage`, but the facility module's own document-delete
+route reserves deletion for `facilities.delete`/`.manage` specifically, and
+`permission_matches_any_write` treats `facilities.edit` (present in a
+folder's `required_permissions` alongside `.manage`) as write-capable — so a
+`documents.manage` + `facilities.edit` (no `facilities.delete`) caller could
+delete a shared document and its facility reference through the generic
+endpoint. Fixed by threading `current_user` through `delete_document`
+(mirroring `delete_folder`'s existing optional param) and gating the
+reference cleanup's actual deletion on `facilities.delete`/`.manage` when a
+reference exists — fails closed (`PermissionError` → 403), blocking the
+whole delete rather than leaving a dangling reference; proceeds normally
+when there's no reference to protect.
+
+**FAC-27 (P2, data integrity, fixed), Codex review, same commit's own
+neighboring code:** the facility-reference cleanup exact-matched a canonical
+`document:{uuid}` string it built itself; `_validate_shared_document_reference`
+validates the UUID suffix with `UUID(...)` (accepting far more forms —
+mixed case, brace-wrapped) but stores the original string unchanged, so a
+valid reference in any other accepted form was left dangling. Fixed by
+re-parsing every stored `"document:%"` reference's UUID suffix and comparing
+the parsed value instead of an exact string match.
+
+**FAC-28 (P2, data integrity, fixed), same round:** the cleanup swept
+`FacilityDocument` rows only; `FacilityPhoto.file_path` is validated and
+stored through the identical path (`create_facility_photo` ->
+`_validate_shared_document_reference`), so a photo reference dangled the
+same way. Fixed by making the match/delete logic model-agnostic and running
+it against both tables in the same transaction, gated by the same
+permission FAC-26 added.
+
+**Also this round:** a one-line fix for a `LIKE` call FAC-27/28 added with
+no `escape=LIKE_ESCAPE_CHAR` (CLAUDE.md Pitfall #25 — `test_like_escaping.py`
+caught it in CI).
+
+Full completion gate green across all rounds (final: 10th commit `38410c86`,
+targeted + `-k "facilities or documents"` suites green, no regressions).
 
 ---
 
