@@ -717,6 +717,43 @@ class DocumentsService:
             document_ids, organization_id, current_user
         )
 
+        # FAC-40 (Codex): explicitly delete exactly the Document rows the
+        # locking scan above found, rather than relying on the ORM's
+        # ``documents`` cascade (triggered by ``db.delete(folder)`` below) to
+        # independently rediscover the same set. That cascade lazy-loads
+        # ``folder.documents`` via a *plain* SELECT, which -- unlike
+        # ``_lock_subtree_documents`` above -- answers from this
+        # transaction's REPEATABLE READ snapshot (established at
+        # ``get_folder_by_id``, this method's first read), not the latest
+        # committed state. A document moved into this folder by a
+        # concurrent, already-committed transaction after that snapshot was
+        # taken is invisible to the ORM's lazy-load, so it is never queued
+        # for cascade deletion -- yet it *is* visible to the locking scan
+        # (locking reads always see latest committed), so its file was
+        # already removed and its facility reference already stripped
+        # above. ``Document.folder_id`` is ``ondelete="SET NULL"`` at the DB
+        # level (not CASCADE), so once the folder row itself is deleted,
+        # that orphaned survivor's ``folder_id`` is simply set to NULL by
+        # the database -- a live, unreferenced, file-less "document" row
+        # left behind. Reproduced live with two real, independently
+        # -committing sessions (move a document into the folder between the
+        # deleter's first read and its locking scan): the row survived,
+        # `folder_id` NULL, exactly this defect. Deleting explicitly here,
+        # from the same authoritative set the file/reference cleanup above
+        # already used, closes it regardless of what the ORM's own
+        # (possibly stale) view of ``folder.documents`` contains -- see
+        # ``DocumentFolder.documents``'s ``passive_deletes=True`` (models/
+        # document.py) for the other half: without it, that same staleness
+        # can cut the other way too (a document that *moved out* of this
+        # folder after the snapshot, and so is correctly absent from
+        # ``document_ids`` here, would otherwise still be cascade-deleted by
+        # the ORM's own stale collection -- deleting a live document that no
+        # longer belongs to this folder at all).
+        if document_ids:
+            await self.db.execute(
+                sa_delete(Document).where(Document.id.in_(document_ids))
+            )
+
         await self.db.delete(folder)
         await self.db.commit()
 

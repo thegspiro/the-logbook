@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: delete_folder's ORM cascade could orphan a document moved in, or destroy one moved out, mid-transaction; a related over-locking finding flagged rather than fixed (2026-09-03)
+
+**Fixed**
+
+- **FAC-40 (P1, data integrity) — `delete_folder`'s document-removal step
+  relied on the ORM's own `cascade="all, delete-orphan"`, which lazy-loads
+  the folder's documents via a plain (snapshot-bound) SELECT, not the
+  locking scan (`_lock_subtree_documents`, FAC-32) the rest of the cleanup
+  already trusts.** Under InnoDB REPEATABLE READ, that staleness cuts both
+  ways: a document moved into the folder by a concurrent, already-committed
+  transaction after the deleting transaction's snapshot was taken is
+  invisible to the ORM's lazy-load and never queued for cascade deletion —
+  yet it _is_ visible to the locking scan, so its file and facility
+  reference were already removed; since `Document.folder_id` is
+  `ondelete="SET NULL"` (not CASCADE) at the DB level, the survivor's
+  `folder_id` is just nulled when the folder is deleted, leaving a live,
+  file-less, unreferenced row behind. The opposite direction is just as
+  real: a document moved _out_ of the folder before the delete is still
+  present in the ORM's stale collection and gets cascade-deleted anyway,
+  destroying a document that by then belongs to a different, live folder.
+  Reproduced live, both directions, with two real, independently-committing
+  sessions.
+- Fixed with two parts, both independently confirmed necessary: `delete_folder`
+  now explicitly deletes the subtree's `Document` rows from the locking
+  scan's own authoritative result (before deleting the folder), and
+  `DocumentFolder.documents` is now `passive_deletes=True` so the ORM never
+  independently re-derives (and potentially disagrees with) that set at
+  all. Only one call site in the codebase ever deletes a `DocumentFolder`
+  via the ORM, so this relationship-level change has exactly one caller to
+  reason about.
+- Two new regression tests (`TestDeleteFolderExplicitlyDeletesTheLockedDocuments`),
+  one per direction. Both confirmed to fail against pre-fix code (`git
+stash`) and pass post-fix, three repeated runs with no flakiness.
+
+**Flagged, not fixed**
+
+- **FAC-41 (P2, scalability/contention) — locking a single document's
+  facility reference for deletion locks _every_ facility-document/photo
+  reference row in the organization**, because the per-row match (parsing
+  each stored reference's UUID suffix) happens in Python after the query
+  returns, not in a `WHERE` clause `organization_id` alone is selective
+  enough to avoid — and `file_path` carries no index. Reproduced live:
+  locking a reference to one document blocked a concurrent, unrelated
+  insert of a reference to a _different_ document in the same org. The
+  natural lighter fix (an unlocked broad scan to find matching row IDs,
+  then a narrow locked query by those IDs) was evaluated and rejected on
+  correctness grounds, not effort grounds: the unlocked first step is bound
+  by the same REPEATABLE READ snapshot FAC-29 already had to defeat, so it
+  can silently miss a reference filed after that snapshot but before the
+  scan runs — reopening FAC-29's exact, previously-P1 vulnerability rather
+  than merely narrowing a lock. A genuinely narrow, still-safe fix needs the
+  locking predicate itself to be index-satisfied, which needs a schema
+  change (a canonicalized, indexed reference-document column) — a bigger,
+  cross-cutting change more appropriately scoped as its own reviewed pass.
+  See `docs/security-review/FAC-12-facilities.md` (FAC-41) for the full
+  reasoning and the recommended future fix.
+
 ### Security: full-file sweep after a third Codex round found more instances of the fixed-sleep pattern FAC-37/FAC-38 had just fixed (2026-09-03)
 
 **Fixed (test-only)**

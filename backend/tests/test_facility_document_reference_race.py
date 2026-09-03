@@ -1150,3 +1150,206 @@ class TestUpdateDocumentLocksTheFolderBeforeTheDocument:
             await _teardown_org(
                 org_id, facility_id, document_id, facility_type_id, status_id
             )
+
+
+class TestDeleteFolderExplicitlyDeletesTheLockedDocuments:
+    """FAC-40 (Codex, on top of FAC-32/34): ``delete_folder``'s own
+    ``_lock_subtree_documents`` -- a locking read -- always sees the latest
+    committed state of the subtree, which is why FAC-32's file/reference
+    cleanup, driven from its result, is correct. The actual removal of the
+    ``Document`` rows themselves, though, used to rely entirely on the
+    ORM's own ``cascade="all, delete-orphan"`` on ``DocumentFolder.documents``,
+    triggered by ``db.delete(folder)``. That cascade lazy-loads
+    ``folder.documents`` via a *plain* SELECT -- unlike the locking scan, a
+    plain SELECT answers from this transaction's REPEATABLE READ snapshot,
+    established at ``get_folder_by_id``, this method's first read -- not
+    the latest committed state.
+
+    That staleness cuts both ways:
+
+    - A document moved *into* the folder by a concurrent, already-committed
+      transaction after the snapshot was taken is invisible to the ORM's
+      lazy-load, so it is never queued for cascade deletion. It *is*
+      visible to the locking scan, though, so its file was already removed
+      from disk and its facility reference already stripped by the time
+      the folder itself is deleted -- and since ``Document.folder_id`` is
+      ``ondelete="SET NULL"`` at the DB level (not CASCADE), the database
+      just nulls that survivor's ``folder_id`` rather than deleting it: a
+      live, file-less, unreferenced "document" row left behind.
+    - A document moved *out* of the folder before the delete is still
+      visible in the ORM's stale collection (which still reflects the old,
+      pre-move ``folder_id``) and could be cascade-deleted by it anyway --
+      destroying a document that, by the time of the actual delete, belongs
+      to a completely different, still-live folder.
+
+    Fixed by deleting the subtree's ``Document`` rows explicitly, from the
+    locking scan's own authoritative result -- the same set FAC-32's
+    reference cleanup already trusts -- and by marking
+    ``DocumentFolder.documents`` ``passive_deletes=True`` (models/
+    document.py) so the ORM's own, snapshot-stale cascade never
+    independently re-derives (and potentially disagrees with) that set at
+    all. Verified empirically that both correctness directions actually
+    depended on both halves of the fix: reverting just the explicit delete
+    reproduces the first bullet; reverting just ``passive_deletes=True``
+    (with the explicit delete still in place) reproduces the second.
+    """
+
+    async def test_document_moved_into_the_folder_mid_transaction_is_deleted_not_orphaned(
+        self, two_sessions
+    ):
+        deleter, mover = two_sessions
+        slug = f"fcvfd-fac40-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        deleter.add(org)
+        await deleter.flush()
+        target_folder = DocumentFolder(
+            organization_id=org.id, name="Target Folder", is_system=False
+        )
+        other_folder = DocumentFolder(
+            organization_id=org.id, name="Other Folder", is_system=False
+        )
+        deleter.add_all([target_folder, other_folder])
+        await deleter.flush()
+        document = Document(
+            organization_id=org.id,
+            name="Moved In",
+            file_name="moved-in.pdf",
+            file_path="/tmp/fac40-moved-in-does-not-need-to-exist.pdf",
+            folder_id=other_folder.id,
+        )
+        deleter.add(document)
+        await deleter.commit()
+        org_id, target_folder_id, other_folder_id, document_id = (
+            org.id,
+            target_folder.id,
+            other_folder.id,
+            document.id,
+        )
+        try:
+            docs_deleter = DocumentsService(deleter)
+            # Establishes the deleter's REPEATABLE READ snapshot -- exactly
+            # what delete_folder's own first read (get_folder_by_id) does --
+            # *before* the document is moved into the target folder.
+            folder = await docs_deleter.get_folder_by_id(target_folder_id, org_id)
+            assert folder is not None
+
+            # A second, real, independently-committing session moves the
+            # document into the target folder after that snapshot.
+            result = await mover.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            doc = result.scalar_one()
+            doc.folder_id = target_folder_id
+            await mover.commit()
+
+            deleted = await docs_deleter.delete_folder(
+                target_folder_id, org_id, current_user=None
+            )
+            assert deleted is True
+
+            verifier = database_manager.session_factory()
+            try:
+                still_there = await verifier.get(Document, str(document_id))
+                assert still_there is None, (
+                    "a document moved into the folder mid-transaction "
+                    "survived the delete as an orphaned, folder_id=NULL "
+                    "row -- FAC-40 regressed"
+                )
+            finally:
+                await verifier.close()
+        finally:
+            await deleter.rollback()
+            await mover.rollback()
+            await _teardown_org_folder(*[org_id, target_folder_id, document_id])
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.id == other_folder_id
+                    )
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()
+
+    async def test_document_moved_out_of_the_folder_mid_transaction_survives(
+        self, two_sessions
+    ):
+        deleter, mover = two_sessions
+        slug = f"fcvfd-fac40b-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        deleter.add(org)
+        await deleter.flush()
+        target_folder = DocumentFolder(
+            organization_id=org.id, name="Target Folder", is_system=False
+        )
+        other_folder = DocumentFolder(
+            organization_id=org.id, name="Other Folder", is_system=False
+        )
+        deleter.add_all([target_folder, other_folder])
+        await deleter.flush()
+        document = Document(
+            organization_id=org.id,
+            name="Moved Out",
+            file_name="moved-out.pdf",
+            file_path="/tmp/fac40-moved-out-does-not-need-to-exist.pdf",
+            folder_id=target_folder.id,
+        )
+        deleter.add(document)
+        await deleter.commit()
+        org_id, target_folder_id, other_folder_id, document_id = (
+            org.id,
+            target_folder.id,
+            other_folder.id,
+            document.id,
+        )
+        try:
+            docs_deleter = DocumentsService(deleter)
+            folder = await docs_deleter.get_folder_by_id(target_folder_id, org_id)
+            assert folder is not None
+
+            # A second, real, independently-committing session moves the
+            # document OUT of the target folder after that snapshot -- it
+            # now belongs to a different, still-live folder.
+            result = await mover.execute(
+                select(Document).where(Document.id == document_id)
+            )
+            doc = result.scalar_one()
+            doc.folder_id = other_folder_id
+            await mover.commit()
+
+            deleted = await docs_deleter.delete_folder(
+                target_folder_id, org_id, current_user=None
+            )
+            assert deleted is True
+
+            verifier = database_manager.session_factory()
+            try:
+                still_there = await verifier.get(Document, str(document_id))
+                assert still_there is not None, (
+                    "a document that moved to a different, live folder "
+                    "before the delete was destroyed anyway -- the ORM's "
+                    "own stale cascade re-deleted it -- FAC-40 regressed"
+                )
+                assert str(still_there.folder_id) == str(other_folder_id)
+            finally:
+                await verifier.close()
+        finally:
+            await deleter.rollback()
+            await mover.rollback()
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    Document.__table__.delete().where(Document.id == document_id)
+                )
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.id.in_([target_folder_id, other_folder_id])
+                    )
+                )
+                await cleanup.execute(
+                    Organization.__table__.delete().where(Organization.id == org_id)
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()

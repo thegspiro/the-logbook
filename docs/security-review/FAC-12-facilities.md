@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep) — pass 3 continued)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix — pass 3 continued)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -1965,6 +1965,189 @@ several fixed sleeps removed.
 (module-level note only — no behavioral change).
 
 **Mirrored to** `CHANGELOG.md`.
+
+### FAC-40 — P1 (data integrity) — a document moved into (or out of) a folder mid-transaction could survive its deletion as an orphan, or be destroyed after it had already moved elsewhere — ✅ FIXED
+
+**Found by Codex review of the FAC-39 sweep commit (`c78e3190`), at
+`documents_service.py:703`.** `delete_folder`'s own locking scan
+(`_lock_subtree_documents`, FAC-32) is a locking read — it always sees the
+latest committed state of the subtree, which is exactly why the file-path
+and facility-reference cleanup driven from its result (FAC-26/32) is
+correct even against a concurrent move. The actual removal of the
+`Document` rows, though, never used that result at all: it relied entirely
+on the ORM's own `cascade="all, delete-orphan"` on
+`DocumentFolder.documents`, triggered by `await self.db.delete(folder)`.
+That cascade lazy-loads `folder.documents` via a **plain** SELECT — and
+unlike the locking scan, a plain SELECT answers from this transaction's
+REPEATABLE READ snapshot, established at `get_folder_by_id` (this method's
+first read), not the latest committed state.
+
+That staleness cuts in both directions, and both are real:
+
+- **Moved in, survives.** A document moved into the folder by a
+  concurrent, already-committed transaction after the snapshot was taken is
+  invisible to the ORM's lazy-load, so it is never queued for cascade
+  deletion. It **is** visible to the locking scan, so its file was already
+  removed from disk and its facility reference already stripped by the time
+  the folder itself is deleted. `Document.folder_id` is
+  `ondelete="SET NULL"` at the DB level (not CASCADE), so deleting the
+  parent folder row just nulls that survivor's `folder_id` — a live,
+  file-less, unreferenced "document" row left behind.
+- **Moved out, destroyed anyway.** A document moved _out_ of the folder
+  before the delete is still present in the ORM's stale collection (which
+  still reflects the pre-move `folder_id`) and gets cascade-deleted by it
+  regardless — destroying a document that, by the time of the actual
+  delete, belongs to a completely different, still-live folder. Codex's
+  report named only the first direction; this second one surfaced during
+  this fix's own verification and is the same root cause.
+
+**Reproduced live**, both directions, with two real, independently
+-committing sessions: session A (the deleter) establishes its snapshot via
+`get_folder_by_id` exactly as `delete_folder` does, session B moves a
+document into (respectively, out of) the target folder and commits, then
+session A runs `delete_folder`. Pre-fix: the moved-in document survived
+with `folder_id` NULL; the moved-out document was deleted even though it
+now belonged to `other_folder`.
+
+**Where:** `backend/app/services/documents_service.py` (`delete_folder`)
+and `backend/app/models/document.py` (`DocumentFolder.documents`).
+
+**Fix, two parts, both required (verified each is load-bearing
+independently — see below):**
+
+1. `delete_folder` now explicitly deletes the subtree's `Document` rows
+   from the locking scan's own result (`sa_delete(Document).where(Document.id.in_(document_ids))`,
+   run before `db.delete(folder)`) — the same authoritative, always-latest
+   set FAC-32's file/reference cleanup already trusts, rather than a
+   second, independent (and potentially disagreeing) rediscovery of it.
+2. `DocumentFolder.documents` is now declared `passive_deletes=True`, so
+   the ORM never lazy-loads (and cascades against) its own, snapshot-stale
+   view of the collection when the folder is deleted at all — the explicit
+   delete above is the sole authority for which documents are removed.
+   Confirmed empirically that part 1 alone is not sufficient: with the
+   explicit delete in place but `passive_deletes` reverted, the moved-out
+   document was still wrongly destroyed by the ORM's own independent (and
+   stale) cascade running alongside it.
+
+Only `delete_folder` ever calls `db.delete()` on a `DocumentFolder`
+(confirmed by grep), so this relationship-level behavior change has
+exactly one call site to reason about.
+
+**Regression tests:** `tests/test_facility_document_reference_race.py`,
+new `TestDeleteFolderExplicitlyDeletesTheLockedDocuments`, two tests (one
+per direction). Both confirmed to fail against pre-fix code (`git stash`
+isolating just the `documents_service.py`/`document.py` fix, test changes
+kept) — the moved-in test on the survivor still existing, the moved-out
+test on the live document having been destroyed — and pass post-fix, three
+repeated runs with no flakiness.
+
+**Mirrored to** `CHANGELOG.md`.
+
+### FAC-41 — P2 (scalability/contention), FLAGGED — locking a single document's facility reference locks every facility-document/photo reference row in the organization
+
+**Found by Codex review of the same commit, at `documents_service.py:878`
+(`_match_facility_document_references`).** The locking query
+(`SELECT ... WHERE organization_id = :org AND file_path LIKE 'document:%' FOR UPDATE`)
+filters only on `organization_id` and a `document:%` prefix — the actual
+per-row match (parsing each stored reference's UUID suffix, FAC-27) happens
+in Python **after** the query returns, not in the `WHERE` clause. Neither
+`organization_id` nor `file_path` LIKE is sufficient to make this a narrow,
+index-satisfied lookup: `organization_id` is indexed but not selective
+enough on its own, and `file_path` carries no index at all — so under
+InnoDB REPEATABLE READ, `FOR UPDATE` locks every row it examines while
+scanning the `organization_id` range, not just the rows the LIKE/Python
+filter ultimately keeps.
+
+**Reproduced live**: locking the reference to one document (`doc_a`, via
+the real `_match_facility_document_references`) blocked a concurrent,
+completely unrelated `INSERT` of a **new** reference to a **different**
+document (`doc_b`) in the **same organization** — confirmed with two real
+sessions, the insert genuinely blocked (not merely slow) and unblocked only
+once the locking transaction committed. This is a real liveness/scalability
+problem, worsening as an org's facility-document count grows: deleting one
+document momentarily serializes every concurrent facility-reference
+create/update/delete in that organization behind it. It is not itself a
+correctness or data-loss bug the way FAC-40 was.
+
+**Why this is flagged rather than fixed with the lighter two-query
+approach:** the natural-looking lighter fix — an unlocked, broad scan to
+find which specific row IDs match by parsed UUID, then a second, narrow
+`.with_for_update()` query filtered by those exact IDs — does **not**
+actually work, and applying it would have been a genuine, silent
+regression, not a smaller-scope fix. The reasoning:
+
+- Under REPEATABLE READ, a transaction's snapshot is fixed at its **first**
+  read, for its **entire** duration — not reset or advanced by later
+  queries within the same transaction. The "unlocked broad scan" step is
+  still bound by that same, possibly-long-stale snapshot (the caller's own
+  earlier reads, e.g. the endpoint's document fetch, an auth dependency's
+  user lookup — exactly the shape FAC-29 was created to close).
+- If a reference to the target document was filed by a concurrent,
+  already-committed transaction sometime after this transaction's snapshot
+  was established but before the unlocked scan runs, that scan — by
+  construction — does not see it. The second, ID-scoped locking query never
+  even looks for it, because its ID was never discovered. Net effect: the
+  exact FAC-29 vulnerability ("a creating transaction's reference could be
+  missed by a deleting transaction's existence check, letting the delete
+  proceed unconditionally past the permission gate") is silently
+  reintroduced, just relocated from a single query into the first half of a
+  two-query pair. This is not a narrow timing coincidence to accept as
+  residual risk — it is the identical, previously-P1, already-fixed-once
+  window, reopened by the very technique meant to narrow the lock.
+- Narrowing the `WHERE` clause of a **single** locking query (e.g. adding
+  `file_path.in_(...)` with literal values) does not solve the underlying
+  mechanism either: `file_path` has no index (confirmed against the model),
+  so InnoDB still has to scan and lock every row in the `organization_id`
+  range to evaluate any additional predicate against it, regardless of how
+  selective that predicate is. A genuinely narrow, single-query, still-safe
+  lock requires the predicate itself to be **index-satisfied** — which
+  needs a schema change (e.g. a canonicalized, indexed reference-document
+  column populated on every write, letting the locking query become
+  `WHERE document_id_normalized IN (target_ids)` directly against an
+  index — Codex's own "heavier option"). That is a bigger, cross-cutting
+  change (new column, backfill migration, every writer updated to populate
+  it, FAC-27's format-tolerance semantics reconsidered against it) more
+  appropriately scoped as its own reviewed change than folded into this
+  finding under this rotation's per-feature discipline.
+
+**Where:** `backend/app/services/documents_service.py`
+(`_match_facility_document_references`) — not modified.
+
+**Recommendation for a future pass:** add a normalized, indexed
+`document_id` column to `FacilityDocument`/`FacilityPhoto` (populated by
+`_validate_shared_document_reference` on write, backfilled by migration for
+existing rows), and change the locking query to filter on it directly. That
+closes the scalability gap without touching FAC-29's guarantee, since it
+stays a single locking read the whole time — it only changes what makes
+that read narrow.
+
+**Mirrored to** `CHANGELOG.md`.
+
+## Completion gate (pass 3, round 13 — Codex review of `c78e3190`, FAC-40 fixed, FAC-41 flagged)
+
+| Check                                                                                                                                              | Result                                                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                      | ✅ 0 violations                                                                 |
+| `black --check app/ tests/ alembic/`                                                                                                               | ✅ clean                                                                        |
+| `isort --check-only app/ tests/ alembic/`                                                                                                          | ✅ clean                                                                        |
+| `pytest tests/test_facility_document_reference_race.py`                                                                                            | ✅ 10 passed (+2, FAC-40's two regression tests), 3 repeated runs, no flakiness |
+| `pytest tests/test_documents_access.py tests/test_facility_folder_access.py tests/test_facilities_permissions.py tests/test_facilities_folders.py` | ✅ 150 passed                                                                   |
+| `pytest tests/ -k "facilities or documents"`                                                                                                       | ✅ 303 passed, 1 skipped (pre-existing)                                         |
+| `pytest tests/` (full backend suite)                                                                                                               | ✅ 10053 passed, 21 skipped (pre-existing Docker/optional-dependency skips)     |
+
+**FAC-40's two regression tests independently confirmed against pre-fix
+code:** `git stash` isolating just the `documents_service.py`/`document.py`
+fix (test changes kept) — both tests in
+`TestDeleteFolderExplicitlyDeletesTheLockedDocuments` fail (the moved-in
+test on the survivor row still existing; the moved-out test on the live
+document having been destroyed); `git stash pop` restored the fix and all
+10 tests in the file passed, three repeated runs with no flakiness.
+
+**FAC-41's org-wide lock reproduced live** with two real,
+independently-committing sessions, confirmed blocking, before deciding
+whether/how to fix — see the write-up above for why the lighter fix was
+rejected on correctness grounds (not scope/time grounds) rather than
+applied.
 
 ## Completion gate (pass 3, round 12 — Codex review, third round on the same file, FAC-39 full-file sweep)
 
