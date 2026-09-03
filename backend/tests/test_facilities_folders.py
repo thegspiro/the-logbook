@@ -17,6 +17,13 @@ usually do not: every facility folder is now stamped with the sensitive
 permission set, so a plain `facilities.view` holder gets an empty folder
 list from the real `get_facility_sub_folders`, not the populated one this
 mock hands it.
+
+FAC-17: the classes above call the plain Python handler directly and assert
+on the returned dict, which bypasses FastAPI's response-model validation
+entirely. `TestFolderRouteResponseValidation` below instead drives the route
+through a real ASGI request, because the returned dict was missing the
+`skip`/`limit` keys `FoldersListResponse` requires -- invisible to a
+direct-call test, and a 500 on every real HTTP call.
 """
 
 import inspect

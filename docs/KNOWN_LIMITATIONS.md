@@ -3143,8 +3143,20 @@ _move_'s destination folder (FAC-15) and on the folder-mutation routes
 themselves — rename/reparent/delete of the target folder (FAC-16), the
 latter of which also uncovered and fixed a pre-existing bug where deleting a
 folder with descendants silently orphaned them instead of cascading (see
-FAC-16 and the entry below). None of FAC-14/15/16 are listed here because
-they are resolved, not open limitations.
+FAC-16 and the entry below). A further round of Codex review fixed an
+unrelated response-model bug that turned every successful call to
+`GET /{facility_id}/folders` into a 500 (FAC-17). A final round of Codex
+review on the same commit, plus a systematic sweep of every remaining
+folder/document route in the file, found and fixed the identical
+destination-not-checked shape on folder reparenting (`update_folder`'s
+`parent_id`, FAC-18) and folder creation (`create_folder`'s `parent_id`,
+FAC-19), and added a defense-in-depth guard so the now-working
+folder-delete cascade cannot follow a cross-organization `parent_id` even
+if one is ever written outside the two guarded write paths (FAC-20). None
+of FAC-14 through FAC-20 are listed here because they are resolved, not
+open limitations. The already-filed sub-case in item (3) above and the
+Blueprints & Permits classification question in item (2) remain open,
+unresolved by any of these rounds.
 
 ## FAC-16-adjacent — `CheckTemplateCompartment.children` and `TrainingCategory.subcategories` Likely Share the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` (2026-09-03)
 

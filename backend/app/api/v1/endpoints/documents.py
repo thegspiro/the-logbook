@@ -142,6 +142,25 @@ async def create_folder(
     """Create a new document folder"""
     service = DocumentsService(db)
     folder_data = folder.model_dump(exclude_none=True)
+    # FAC-17 (Codex round 4 on FAC-14/15/16): create_folder's DOC-6 FK
+    # validation (in the service, below) only confirms a supplied parent_id
+    # belongs to the caller's organization -- not that the caller can access
+    # that parent. Without this, a documents.manage holder with no facilities
+    # grant could inject a new child folder into a sensitive-gated facility
+    # tree they cannot even read. Mirrors the destination check upload_document
+    # and update_document (FAC-15) already apply.
+    parent_id = folder_data.get("parent_id")
+    if parent_id:
+        parent = await service.get_folder_by_id(parent_id, current_user.organization_id)
+        if parent is None:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        if not await service.can_access_folder(
+            parent, current_user.organization_id, current_user
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to create a folder here",
+            )
     async with handle_service_errors("Unable to create folder"):
         result = await service.create_folder(
             current_user.organization_id, folder_data, current_user.id
@@ -192,6 +211,31 @@ async def update_folder(
     # service as "clear this field", not be dropped as if never sent
     # (CLAUDE.md pitfall #1's update-path mirror image).
     update_data = folder.model_dump(exclude_unset=True)
+    # FAC-17 (Codex round 4 on FAC-14/15/16): the can_access_folder check
+    # above authorizes only the folder's *current* ancestry.
+    # DocumentsService.update_folder's DOC-6 FK validation on a reassigned
+    # parent_id only confirms the new parent is in the caller's organization,
+    # not that the caller can access it. Without this, a documents.manage
+    # holder with no facilities grant could reparent an accessible folder --
+    # and everything inside it -- into a sensitive-gated facility tree they
+    # cannot access. Mirrors FAC-15's destination check on update_document.
+    # Moving *out* to root (parent_id: null) needs no destination check.
+    new_parent_id = update_data.get("parent_id")
+    if new_parent_id is not None and str(new_parent_id) != str(
+        existing.parent_id or ""
+    ):
+        destination = await service.get_folder_by_id(
+            new_parent_id, current_user.organization_id
+        )
+        if destination is None:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        if not await service.can_access_folder(
+            destination, current_user.organization_id, current_user
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to move a folder into this parent",
+            )
     # Wrapped so a service-layer ValueError (an out-of-org parent/owner id,
     # DOC-6, or a cyclic parent) returns 400 rather than 500, matching
     # create_folder.
@@ -232,7 +276,13 @@ async def delete_folder(
         existing, current_user.organization_id, current_user
     ):
         raise HTTPException(status_code=404, detail="Folder not found")
-    success = await service.delete_folder(folder_id, current_user.organization_id)
+    # FAC-17/21: a service-layer ValueError here means delete_folder's
+    # cross-organization or descendant-ACL cascade guard tripped -- return
+    # 400 rather than 500.
+    async with handle_service_errors("Unable to delete folder"):
+        success = await service.delete_folder(
+            folder_id, current_user.organization_id, current_user
+        )
     if not success:
         raise HTTPException(status_code=404, detail="Folder not found")
     # A folder delete cascades to every descendant folder and document (and

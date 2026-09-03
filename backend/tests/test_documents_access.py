@@ -8,13 +8,16 @@ visibility, and the allowed-roles restriction, plus the permission/role
 collection helpers. Pure logic; no DB.
 """
 
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.orm import selectinload
 
 from app.api.v1.endpoints.documents import (
     _parse_uuid_or_400,
@@ -1442,6 +1445,419 @@ class TestFolderMutationRespectsOwnFolderAcl:
         ):
             result = await db_session.execute(select(model).where(model.id == row_id))
             assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.integration
+class TestFolderCreationRespectsParentAcl:
+    """FAC-19 (Codex round 4 on FAC-14/15/16, finding B): ``create_folder``'s
+    DOC-6 FK validation on a supplied ``parent_id`` only confirms the parent
+    belongs to the caller's organization -- not that the caller can access
+    it. A ``documents.manage`` holder with no facilities grant could
+    therefore inject a new child folder into a sensitive-gated facility tree
+    they cannot even read, the same "destination not checked" shape as
+    FAC-15/FAC-16 but for folder creation.
+    """
+
+    async def _org_with_sensitive_parent(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        parent = DocumentFolder(
+            organization_id=org.id,
+            name="Insurance & Leases",
+            required_permissions=["facilities.view_sensitive"],
+        )
+        db_session.add(parent)
+        await db_session.flush()
+        return org, parent
+
+    async def _caller(self, db_session, org_id, *, facilities_permission=False):
+        # A real row, not a SimpleNamespace stand-in: a successful
+        # create_folder inserts `created_by` as an FK to `users.id`, which a
+        # synthetic id would violate. The position/user_positions rows are
+        # inserted via raw SQL rather than `user.positions.append(...)`,
+        # which touches the (unloaded) collection attribute directly and
+        # trips AsyncSession's synchronous-lazy-load guard (MissingGreenlet)
+        # -- the same reason test_training_member_visibility.py's
+        # `_grant_officer_position` helper does the same.
+        perms = ["documents.manage"]
+        if facilities_permission:
+            perms.append("facilities.view_sensitive")
+        user = User(organization_id=org_id, username="caller", email="caller@x.test")
+        db_session.add(user)
+        await db_session.flush()
+        position_id = str(uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO positions (id, organization_id, name, slug, "
+                "permissions) VALUES (:i, :o, :n, :s, :p)"
+            ),
+            {
+                "i": position_id,
+                "o": org_id,
+                "n": "Admin",
+                "s": "admin",
+                "p": json.dumps(perms),
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO user_positions (user_id, position_id) " "VALUES (:u, :p)"
+            ),
+            {"u": user.id, "p": position_id},
+        )
+        await db_session.flush()
+        # FAC-16/17: can_access_folder reads user.roles (a synonym for the
+        # async `positions` relationship) -- production's get_current_user
+        # always hands over a user with it eager-loaded via selectinload
+        # (auth_service.get_user_from_token); mirror that here.
+        result = await db_session.execute(
+            select(User).options(selectinload(User.positions)).where(User.id == user.id)
+        )
+        return result.scalar_one()
+
+    async def test_documents_manage_alone_cannot_create_inside_a_sensitive_folder(
+        self, db_session
+    ):
+        org, parent = await self._org_with_sensitive_parent(
+            db_session, "fcvfd-create-1"
+        )
+        caller = await self._caller(db_session, org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await create_folder(
+                DocumentFolderCreate(name="Injected", parent_id=parent.id),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 403
+
+        result = await db_session.execute(
+            select(DocumentFolder).where(DocumentFolder.name == "Injected")
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_caller_with_the_parents_own_permission_can_still_create_inside_it(
+        self, db_session
+    ):
+        org, parent = await self._org_with_sensitive_parent(
+            db_session, "fcvfd-create-2"
+        )
+        caller = await self._caller(db_session, org.id, facilities_permission=True)
+
+        result = await create_folder(
+            DocumentFolderCreate(name="Renewal", parent_id=parent.id),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.parent_id == parent.id
+
+    async def test_a_root_level_create_needs_no_parent_check(self, db_session):
+        org = Organization(name="Falls Church VFD", slug="fcvfd-create-3")
+        db_session.add(org)
+        await db_session.flush()
+        caller = await self._caller(db_session, org.id)
+
+        result = await create_folder(
+            DocumentFolderCreate(name="General"),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.parent_id is None
+
+
+@pytest.mark.integration
+class TestFolderReparentRespectsNewParentAcl:
+    """FAC-18 (Codex round 4 on FAC-14/15/16, finding A): the can_access_folder
+    check ``update_folder`` runs (FAC-16) authorizes only the folder's
+    *current* ancestry. ``DocumentsService.update_folder``'s DOC-6 FK
+    validation on a reassigned ``parent_id`` only confirms the new parent is
+    in the caller's organization -- not that the caller can access it. A
+    ``documents.manage`` holder with no facilities grant could therefore
+    reparent an accessible folder -- and everything inside it -- into a
+    sensitive-gated facility tree they cannot access. Mirrors FAC-15's
+    destination check on ``update_document``.
+    """
+
+    async def _org_with_movable_and_sensitive_parent(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        movable = DocumentFolder(organization_id=org.id, name="Renewals")
+        sensitive_parent = DocumentFolder(
+            organization_id=org.id,
+            name="Insurance & Leases",
+            required_permissions=["facilities.view_sensitive"],
+        )
+        db_session.add_all([movable, sensitive_parent])
+        await db_session.flush()
+        return org, movable, sensitive_parent
+
+    def _caller(self, org_id, *, facilities_permission=False):
+        perms = ["documents.manage"]
+        if facilities_permission:
+            perms.append("facilities.view_sensitive")
+        user = _user(uid="caller-1", roles=[(perms, "admin")])
+        user.organization_id = org_id
+        user.username = "caller"
+        return user
+
+    async def test_documents_manage_alone_cannot_move_a_folder_into_a_sensitive_parent(
+        self, db_session
+    ):
+        org, movable, sensitive_parent = (
+            await self._org_with_movable_and_sensitive_parent(
+                db_session, "fcvfd-reparent-1"
+            )
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_folder(
+                movable.id,
+                DocumentFolderUpdate(parent_id=sensitive_parent.id),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 403
+
+        # Left exactly where it was -- not partially reparented before the
+        # destination ACL check runs.
+        await db_session.refresh(movable)
+        assert movable.parent_id is None
+
+    async def test_caller_with_the_new_parents_permission_can_still_move_it(
+        self, db_session
+    ):
+        org, movable, sensitive_parent = (
+            await self._org_with_movable_and_sensitive_parent(
+                db_session, "fcvfd-reparent-2"
+            )
+        )
+        caller = self._caller(org.id, facilities_permission=True)
+
+        result = await update_folder(
+            movable.id,
+            DocumentFolderUpdate(parent_id=sensitive_parent.id),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.parent_id == sensitive_parent.id
+
+    async def test_moving_to_the_same_parent_needs_no_destination_check(
+        self, db_session
+    ):
+        org, movable, sensitive_parent = (
+            await self._org_with_movable_and_sensitive_parent(
+                db_session, "fcvfd-reparent-3"
+            )
+        )
+        movable.parent_id = sensitive_parent.id
+        await db_session.flush()
+        # Holds the sensitive parent's own permission so the FAC-16 check on
+        # movable's *current* ancestry (which now includes sensitive_parent)
+        # admits the caller; only the destination re-check under test here.
+        caller = self._caller(org.id, facilities_permission=True)
+
+        result = await update_folder(
+            movable.id,
+            DocumentFolderUpdate(name="Renamed", parent_id=sensitive_parent.id),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.name == "Renamed"
+        assert result.parent_id == sensitive_parent.id
+
+
+@pytest.mark.integration
+class TestDeleteFolderRefusesCrossOrgCascade:
+    """FAC-20 (Codex round 4 on FAC-16, finding C): the FAC-16 fix made the
+    ``children`` cascade (``cascade="all, delete-orphan"``) actually work --
+    but it walks ``parent_id`` with no organization_id filter, exactly like
+    the ORM would when ``self.db.delete(folder)`` loads descendants to
+    cascade through them. ``parent_id`` carries no same-org DB constraint;
+    assert_in_org (DOC-6) is an application-level guard on the two
+    client-facing writers of this column, not a schema constraint. A row
+    that somehow carries a cross-organization ``parent_id`` -- written before
+    that guard existed, or by any future writer that forgets it -- would
+    have its cascade reach into another tenant's rows. This constructs that
+    row directly (bypassing the service layer, the only way to get such a
+    row into the database at all) and asserts delete_folder refuses rather
+    than cascading into it.
+    """
+
+    async def test_a_cross_org_child_aborts_the_delete_instead_of_cascading(
+        self, db_session
+    ):
+        org_a = Organization(name="Org A", slug="fcvfd-cascade-a")
+        org_b = Organization(name="Org B", slug="fcvfd-cascade-b")
+        db_session.add_all([org_a, org_b])
+        await db_session.flush()
+
+        parent = DocumentFolder(organization_id=org_a.id, name="Parent")
+        db_session.add(parent)
+        await db_session.flush()
+        # A row the application itself can never create (assert_in_org/DOC-6
+        # blocks this on both create_folder and update_folder) -- standing in
+        # for stale data or a future writer that skips the guard.
+        cross_org_child = DocumentFolder(
+            organization_id=org_b.id, name="Should stay put", parent_id=parent.id
+        )
+        db_session.add(cross_org_child)
+        await db_session.flush()
+        cross_org_child_id = cross_org_child.id
+
+        service = DocumentsService(db_session)
+        with pytest.raises(ValueError, match="cross-organization"):
+            await service.delete_folder(parent.id, org_a.id)
+
+        # Neither row was touched -- the cascade never started.
+        for row_id in (parent.id, cross_org_child_id):
+            result = await db_session.execute(
+                select(DocumentFolder).where(DocumentFolder.id == row_id)
+            )
+            assert result.scalar_one_or_none() is not None
+
+    async def test_a_same_org_subtree_still_deletes_normally(self, db_session):
+        # Positive control: the new check must not block the overwhelmingly
+        # common case of a subtree that is entirely within one organization.
+        org = Organization(name="Falls Church VFD", slug="fcvfd-cascade-c")
+        db_session.add(org)
+        await db_session.flush()
+        parent = DocumentFolder(organization_id=org.id, name="Parent")
+        db_session.add(parent)
+        await db_session.flush()
+        child = DocumentFolder(
+            organization_id=org.id, name="Child", parent_id=parent.id
+        )
+        db_session.add(child)
+        await db_session.flush()
+        child_id = child.id
+
+        service = DocumentsService(db_session)
+        assert await service.delete_folder(parent.id, org.id) is True
+
+        for row_id in (parent.id, child_id):
+            result = await db_session.execute(
+                select(DocumentFolder).where(DocumentFolder.id == row_id)
+            )
+            assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.integration
+class TestDeleteFolderRefusesInaccessibleDescendant:
+    """FAC-21 (Codex, round 6 on FAC-16/20): the endpoint's own
+    ``can_access_folder`` check authorizes only the folder being deleted --
+    via that call's own ancestor walk, everything *above* it too -- but never
+    anything *below* it. ``required_permissions`` is set per-folder with no
+    rule that a descendant must be at least as permissive as its parent, so a
+    caller admitted at the root of a subtree is not necessarily admitted at
+    every node inside it. A ``documents.manage`` holder with no facilities
+    grant could delete an accessible parent folder and cascade-destroy a
+    more-restricted descendant nested beneath it that they could never have
+    accessed (or deleted) directly.
+    """
+
+    async def _org_with_accessible_root_and_sensitive_child(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        root = DocumentFolder(organization_id=org.id, name="General")
+        db_session.add(root)
+        await db_session.flush()
+        sensitive_child = DocumentFolder(
+            organization_id=org.id,
+            name="Insurance & Leases",
+            parent_id=root.id,
+            required_permissions=["facilities.view_sensitive"],
+        )
+        db_session.add(sensitive_child)
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id,
+            folder_id=sensitive_child.id,
+            name="Policy",
+            file_name="policy.pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+        return org, root, sensitive_child, document
+
+    def _caller(self, org_id, *, facilities_permission=False):
+        perms = ["documents.manage"]
+        if facilities_permission:
+            perms.append("facilities.view_sensitive")
+        user = _user(uid="caller-1", roles=[(perms, "admin")])
+        user.organization_id = org_id
+        user.username = "caller"
+        return user
+
+    async def test_deleting_an_accessible_root_cannot_cascade_into_a_sensitive_child(
+        self, db_session
+    ):
+        org, root, sensitive_child, document = (
+            await self._org_with_accessible_root_and_sensitive_child(
+                db_session, "fcvfd-descendant-1"
+            )
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_folder(root.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 400
+
+        # Nothing in the subtree was touched -- the cascade never started.
+        for model, row_id in (
+            (DocumentFolder, root.id),
+            (DocumentFolder, sensitive_child.id),
+            (Document, document.id),
+        ):
+            result = await db_session.execute(select(model).where(model.id == row_id))
+            assert result.scalar_one_or_none() is not None
+
+    async def test_a_caller_with_every_descendants_permission_can_still_delete_it(
+        self, db_session
+    ):
+        # Positive control, and proof the cascade still works end to end for
+        # an authorized caller.
+        org, root, sensitive_child, document = (
+            await self._org_with_accessible_root_and_sensitive_child(
+                db_session, "fcvfd-descendant-2"
+            )
+        )
+        caller = self._caller(org.id, facilities_permission=True)
+
+        await delete_folder(root.id, db=db_session, current_user=caller)
+
+        for model, row_id in (
+            (DocumentFolder, root.id),
+            (DocumentFolder, sensitive_child.id),
+            (Document, document.id),
+        ):
+            result = await db_session.execute(select(model).where(model.id == row_id))
+            assert result.scalar_one_or_none() is None
+
+    async def test_a_uniformly_accessible_subtree_still_deletes_normally(
+        self, db_session
+    ):
+        # A second positive control at the service layer: no current_user
+        # passed at all (the pre-FAC-21 call shape) must not regress -- the
+        # descendant-ACL check is skip-if-absent, not fail-if-absent, since
+        # no client-facing caller today can reach delete_folder without one.
+        org = Organization(name="Falls Church VFD", slug="fcvfd-descendant-3")
+        db_session.add(org)
+        await db_session.flush()
+        parent = DocumentFolder(organization_id=org.id, name="Parent")
+        db_session.add(parent)
+        await db_session.flush()
+        child = DocumentFolder(
+            organization_id=org.id, name="Child", parent_id=parent.id
+        )
+        db_session.add(child)
+        await db_session.flush()
+
+        service = DocumentsService(db_session)
+        assert await service.delete_folder(parent.id, org.id) is True
 
 
 @pytest.mark.integration

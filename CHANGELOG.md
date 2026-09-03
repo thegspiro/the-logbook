@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a folder delete could cascade-destroy a more-restricted descendant the caller could never access directly (2026-09-03)
+
+**Fixed**
+
+- **FAC-21 — `DELETE /documents/folders/{folder_id}` authorized only the
+  folder named in the request, never any descendant the cascade was about
+  to destroy.** `required_permissions` is set per folder independently —
+  nothing requires a child folder's restrictions to be at least as loose as
+  its parent's — so a `documents.manage` holder admitted at an accessible
+  parent folder could delete it and cascade-destroy a more-restricted
+  descendant nested beneath it, one they could never have accessed or
+  deleted directly. Not exploitable in the current facility tree specifically
+  (every facility folder currently carries the identical sensitive
+  permission set, a separate open issue — see FAC-13 above), but
+  `required_permissions` can only be set by system code, and FAC-13's own
+  eventual fix would create exactly this shape. `delete_folder`'s subtree
+  walk now also checks every descendant's own access before deleting
+  anything, aborting the whole delete if any descendant refuses the
+  caller — the same "abort before deleting" shape FAC-20's cross-organization
+  guard already uses. See `docs/security-review/FAC-12-facilities.md`
+  (FAC-21) for the full writeup and regression tests.
+
+### Security: `documents.manage` could still bypass a folder's ACL on folder creation and reparenting; the folder-delete cascade had no defense against a cross-organization link (2026-09-03)
+
+**Fixed**
+
+- **FAC-18 — `PATCH /documents/folders/{folder_id}` checked only the
+  target folder's own ACL, not the ACL of a _new parent_ on reparenting.**
+  The prior fix (FAC-16, `can_access_folder` on the folder being moved)
+  authorized only that folder's pre-move ancestry; reassigning `parent_id`
+  to a new, non-null folder was validated only for same-organization
+  membership (DOC-6), never for the caller's own access to that new parent.
+  A `documents.manage` holder with no facilities grant at all could
+  therefore reparent an accessible folder — and everything inside it — into
+  a `facilities.view_sensitive`-gated tree. `update_folder` now resolves
+  the new parent and calls `can_access_folder` on it whenever `parent_id`
+  changes to a new, non-null value, mirroring FAC-15's destination check on
+  `update_document`. Moving to root needs no destination check.
+- **FAC-19 — `POST /documents/folders` never checked the supplied parent's
+  ACL either.** Same gap on folder creation: a `documents.manage` holder
+  with no facilities grant could create a new child folder directly under a
+  sensitive-gated facility folder they cannot even read. `create_folder`
+  now calls `can_access_folder` on a non-null `parent_id` before creating.
+- **FAC-20 — the folder-delete cascade FAC-16 fixed to actually work walks
+  `parent_id` with no organization filter.** Not currently reachable — the
+  only two client-facing writers of `parent_id` (`create_folder`,
+  `update_folder`) both validate same-organization membership — but
+  `parent_id` carries no _database_ constraint enforcing that, only an
+  application-level guard on those two call sites. Added a defense-in-depth
+  check to `delete_folder`'s subtree walk: it now aborts with a clean error
+  instead of deleting anything if it ever discovers a descendant belonging
+  to a different organization than the folder being deleted, rather than
+  trusting the ORM cascade (which has no org awareness of its own) to never
+  encounter one.
+- See `docs/security-review/FAC-12-facilities.md` (FAC-18 through FAC-20)
+  for the full writeup, the systematic sweep of every remaining
+  folder/document route in `documents.py`, and regression tests.
+
 ### Fixed: `GET /{facility_id}/folders` 500'd on every real HTTP call because its return value never matched its own declared response schema (2026-09-03)
 
 **Fixed**
