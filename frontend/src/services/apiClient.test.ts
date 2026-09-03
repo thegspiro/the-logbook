@@ -231,6 +231,44 @@ describe('apiClient — background revalidation of a stale entry', () => {
     expect(calls).toBe(2);
   });
 
+  it('does not cache a bypassed read that was issued before logout cleared the cache', async () => {
+    // SEC: a user-triggered refresh sets _skipCache, and that is the request
+    // most likely to still be in flight when someone signs out on a shared
+    // terminal. Cache keys carry no organization or user identity, so a
+    // response from the previous session must not become the next session's
+    // cached answer.
+    let release: (() => void) | undefined;
+    let calls = 0;
+
+    withAdapter((config) => {
+      calls += 1;
+      const ok = (data: unknown) => ({ data, status: 200, statusText: 'OK', headers: {}, config });
+      if (calls === 1) {
+        return new Promise((resolve) => {
+          release = () => resolve(ok({ org: 'first' }));
+        });
+      }
+      return Promise.resolve(ok({ org: 'second' }));
+    });
+
+    // The refresh bypasses the cache on the way out, as the medical-supplies
+    // page's explicit refresh does.
+    const refresh = api.get('/inventory/items', { ...{ _skipCache: true } });
+    // The request interceptor is async, so the adapter has not necessarily run
+    // yet -- without this the release below is a no-op and the refresh hangs.
+    while (!release) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    clearCache();
+    release?.();
+    await refresh;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The next session's read must reach the network.
+    const next = await api.get('/inventory/items');
+    expect(next.data).toEqual({ org: 'second' });
+    expect(calls).toBe(2);
+  });
+
   it('does not repopulate the cache with a response issued before logout cleared it', async () => {
     // SEC: cache keys carry no user identity, so clearCache() on logout is the
     // only thing between one member's responses and the next member to sign in

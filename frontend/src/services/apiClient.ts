@@ -61,11 +61,21 @@ api.interceptors.request.use(
     // Skip cache for requests explicitly marked (e.g. background revalidation)
     // and for endpoints carrying sensitive/PII data (HIPAA compliance).
     const skipCache = (config as unknown as Record<string, unknown>)._skipCache === true;
-    if (method === 'GET' && !skipCache && config.url && isCacheable(config.url)) {
-      const key = getCacheKey(config.url, config.params as Record<string, unknown> | undefined);
-      // Stamped on issue, checked on the write below: a foreground GET still in
-      // flight when logout purges the cache must not repopulate it either.
+    const cacheableGet = method === 'GET' && !!config.url && isCacheable(config.url);
+
+    // SEC: stamped for EVERY cacheable GET, `_skipCache` included. That flag
+    // says "do not read from the cache", not "write to it unchecked" -- and a
+    // bypassed read is exactly the kind a user-triggered refresh issues, which
+    // is the request most likely to still be in flight when they log out. An
+    // unstamped response is cached unconditionally by the write below, so
+    // leaving the bypass path unstamped defeated the guard for the requests
+    // that most needed it.
+    if (cacheableGet) {
       (config as unknown as Record<string, unknown>)._cacheGeneration = cacheGeneration();
+    }
+
+    if (cacheableGet && !skipCache && config.url) {
+      const key = getCacheKey(config.url, config.params as Record<string, unknown> | undefined);
       const cached = getCached(key);
 
       if (cached) {
@@ -232,7 +242,12 @@ api.interceptors.response.use(
     ) {
       const key = getCacheKey(response.config.url, response.config.params as Record<string, unknown> | undefined);
       const issuedAt = (response.config as unknown as Record<string, unknown>)._cacheGeneration;
-      setCacheAtGeneration(key, response.data, typeof issuedAt === 'number' ? issuedAt : cacheGeneration());
+      // SEC: fail closed. An unstamped response is one we cannot prove was
+      // issued in this cache era, and defaulting to the current one would
+      // permit exactly the post-logout write the stamp exists to stop.
+      if (typeof issuedAt === 'number') {
+        setCacheAtGeneration(key, response.data, issuedAt);
+      }
     }
 
     // Invalidate related cache entries after mutations
