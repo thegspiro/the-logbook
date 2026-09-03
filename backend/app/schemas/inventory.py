@@ -1065,6 +1065,11 @@ class InventorySummary(BaseModel):
     #: entitled to. An empty mapping means "no breakdown for this caller",
     #: never "no items".
     items_by_type: Dict[str, int] = Field(default_factory=dict)
+    #: Active non-medical items, counted as *rows* so the figure matches the
+    #: listing at ``/inventory/items``, which excludes medical stock. Defaulted
+    #: for the same reason as ``items_by_type`` above; 0 means "not reported
+    #: for this caller".
+    non_medical_items: int = 0
     total_value: float
     active_checkouts: int
     overdue_checkouts: int

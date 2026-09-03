@@ -123,6 +123,42 @@ async def test_omits_retired_and_uncategorized_items(db_session):
     assert summary["items_by_type"] == {"ppe": 1}
 
 
+async def test_non_medical_items_counts_the_rows_the_listing_shows(db_session):
+    """The "All Items" card's figure has to equal ``len`` of its destination.
+
+    ``total_items`` cannot be that figure twice over: it sums quantities, and
+    it includes medical stock that ``GET /items`` carves out. An uncategorized
+    item has no domain, so the listing keeps it — and so does this count.
+    """
+    org = await _org(db_session)
+    ppe = await _category(db_session, org, ItemType.PPE)
+    medical = await _category(db_session, org, ItemType.MEDICAL)
+    await _item(db_session, org, ppe, quantity=7)
+    await _item(db_session, org, medical, quantity=3)
+    await _item(db_session, org, None)
+    await _item(db_session, org, ppe, active=False)
+
+    summary = await InventoryService(db_session).get_inventory_summary(org.id)
+
+    # One PPE row plus one uncategorized row. Not 10 (the quantity sum), not
+    # 3 (which would count the medical row), not 1 (which would drop the
+    # uncategorized one the way `items_by_type` does).
+    assert summary["non_medical_items"] == 2
+    assert summary["total_items"] == 11
+
+
+async def test_non_medical_items_ignores_another_organizations_stock(db_session):
+    mine = await _org(db_session, "Mine NM FD")
+    theirs = await _org(db_session, "Theirs NM FD")
+    await _item(db_session, mine, await _category(db_session, mine, ItemType.PPE))
+    await _item(db_session, theirs, await _category(db_session, theirs, ItemType.PPE))
+    await _item(db_session, theirs, None)
+
+    summary = await InventoryService(db_session).get_inventory_summary(mine.id)
+
+    assert summary["non_medical_items"] == 1
+
+
 async def test_does_not_count_another_organizations_items(db_session):
     mine = await _org(db_session, "Mine FD")
     theirs = await _org(db_session, "Theirs FD")
@@ -159,4 +195,7 @@ async def test_member_summary_still_validates_against_the_schema(db_session):
     )
 
     assert "items_by_type" not in summary
-    assert InventorySummary(**summary).items_by_type == {}
+    assert "non_medical_items" not in summary
+    validated = InventorySummary(**summary)
+    assert validated.items_by_type == {}
+    assert validated.non_medical_items == 0

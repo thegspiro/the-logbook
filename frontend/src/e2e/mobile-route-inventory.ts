@@ -1177,7 +1177,8 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     path: '/store/admin',
     source: 'src/modules/storefront/routes.tsx',
     coverage: 'exempt',
-    detail: 'legacy redirect to /inventory/admin/store, which is inventoried above; renders no UI of its own',
+    detail:
+      'bookmark redirect to /inventory/admin/store, which is inventoried; it renders no UI of its own, so there is nothing at this path to measure',
   },
   {
     path: '/testing',
