@@ -1918,23 +1918,28 @@ class TestFifteenthRoundFindings:
             ),
             {"id": minutes_id, "org": org_id, "by": admin_id},
         )
-        await db_session.execute(
-            text(
-                "INSERT INTO meeting_motions (id, minutes_id, `order`, motion_text, "
-                "discussion_notes) VALUES (:id, :minutes, 1, 'Buy a new pump', :notes)"
-            ),
-            {"id": str(uuid.uuid4()), "minutes": minutes_id, "notes": discussion},
-        )
+        motion_id = str(uuid.uuid4())
+        # Two motions with the same ``order``: the column is not unique, so
+        # a motion has to be addressed by id.
+        for mid, notes in ((motion_id, discussion), (str(uuid.uuid4()), "short")):
+            await db_session.execute(
+                text(
+                    "INSERT INTO meeting_motions (id, minutes_id, `order`, "
+                    "motion_text, discussion_notes) VALUES "
+                    "(:id, :minutes, 0, 'Buy a new pump', :notes)"
+                ),
+                {"id": mid, "minutes": minutes_id, "notes": notes},
+            )
         await db_session.flush()
         monkeypatch.setattr(meeting_tools, "MINUTES_TEXT_CHARS", 10)
         principal = _principal(org_id, admin_id)
         listed = await _call(server, principal, "list_minutes")
         summary = next(m for m in listed["items"] if m["id"] == minutes_id)
-        assert summary["motion_count"] == 1
+        assert summary["motion_count"] == 2
         assert summary["action_item_count"] == 0
         body = await _call(server, principal, "get_minutes", minutes_id=minutes_id)
-        assert body["motion_count"] == 1
-        motion = body["motions"][0]
+        assert body["motion_count"] == 2
+        motion = next(mo for mo in body["motions"] if mo["id"] == motion_id)
         assert motion["discussion_notes"] == "d" * 10
         assert motion["discussion_truncated"] is True
         pieces = []
@@ -1945,7 +1950,7 @@ class TestFifteenthRoundFindings:
                 principal,
                 "get_minutes_text",
                 minutes_id=minutes_id,
-                field="motion:1",
+                field=f"motion:{motion_id}",
                 content_offset=offset,
             )
             pieces.append(chunk["content"])
@@ -1953,14 +1958,137 @@ class TestFifteenthRoundFindings:
                 break
             offset = chunk["next_content_offset"]
         assert "".join(pieces) == discussion
-        with pytest.raises(ToolError, match="No motion with order"):
+        with pytest.raises(ToolError, match="No motion with id"):
             await _call(
                 server,
                 principal,
                 "get_minutes_text",
                 minutes_id=minutes_id,
-                field="motion:9",
+                field=f"motion:{uuid.uuid4()}",
             )
+
+
+class TestSixteenthRoundFindings:
+    """Regressions for the sixteenth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_built_in_finance_sections_follow_the_finance_switch(
+        self, server, org_with_members, db_session
+    ):
+        """The trustee template's trust-fund, financial-review and audit
+        sections carry figures without the word "treasurer" in them."""
+        from app.models.minute import DEFAULT_TRUSTEE_SECTIONS
+
+        org_id, admin_id, _ = org_with_members
+        minutes_id = str(uuid.uuid4())
+        sections = [
+            {**sec, "content": f"{sec['key']} content"}
+            for sec in DEFAULT_TRUSTEE_SECTIONS
+        ]
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, sections, created_by) VALUES (:id, :org, "
+                "'Trustees', 'trustee', '2026-10-01', 'approved', :sections, :by)"
+            ),
+            {
+                "id": minutes_id,
+                "org": org_id,
+                "sections": json.dumps(sections),
+                "by": admin_id,
+            },
+        )
+        await db_session.flush()
+        finance_keys = {
+            "treasurer_report",
+            "financial_review",
+            "trust_fund_report",
+            "audit_report",
+        }
+        all_keys = {sec["key"] for sec in DEFAULT_TRUSTEE_SECTIONS}
+        assert finance_keys <= all_keys
+        without = await _call(
+            server,
+            _principal(org_id, admin_id),
+            "get_minutes",
+            minutes_id=minutes_id,
+            section_limit=50,
+        )
+        assert {s["key"] for s in without["sections"]} == all_keys - finance_keys
+        with_finance = await _call(
+            server,
+            _principal(org_id, admin_id, expose_finance=True),
+            "get_minutes",
+            minutes_id=minutes_id,
+            section_limit=50,
+        )
+        assert {s["key"] for s in with_finance["sections"]} == all_keys
+        for key in ("trust_fund_report", "audit_report"):
+            with pytest.raises(ToolError, match="No section named"):
+                await _call(
+                    server,
+                    _principal(org_id, admin_id),
+                    "get_minutes_text",
+                    minutes_id=minutes_id,
+                    field=f"section:{key}",
+                )
+
+    def test_custom_finance_sections_are_recognised_by_name(self):
+        from app.mcp.tools.meetings import _is_finance_section
+
+        for section in (
+            {"key": "custom_3", "title": "Trust Fund Update"},
+            {"key": "custom_4", "title": "Dues collected"},
+            {"key": "custom_5", "title": "Budget"},
+            {"key": "trust_fund_report", "title": "Report"},
+        ):
+            assert _is_finance_section(section), section
+        for section in (
+            {"key": "old_business", "title": "Old Business"},
+            {"key": "custom_6", "title": "Training report"},
+            "not a dict",
+        ):
+            assert not _is_finance_section(section), section
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_agenda_is_bounded_and_readable_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import meetings as meeting_tools
+
+        org_id, admin_id, _ = org_with_members
+        minutes_id = str(uuid.uuid4())
+        agenda = "a" * 25
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, agenda, created_by) VALUES (:id, :org, "
+                "'January meeting', 'business', '2027-01-01', 'approved', :agenda, :by)"
+            ),
+            {"id": minutes_id, "org": org_id, "agenda": agenda, "by": admin_id},
+        )
+        await db_session.flush()
+        monkeypatch.setattr(meeting_tools, "MINUTES_TEXT_CHARS", 10)
+        principal = _principal(org_id, admin_id)
+        body = await _call(server, principal, "get_minutes", minutes_id=minutes_id)
+        assert body["agenda"] == "a" * 10
+        assert body["truncated_fields"] == ["agenda"]
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field="agenda",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        assert "".join(pieces) == agenda
 
 
 class TestReviewFindings:

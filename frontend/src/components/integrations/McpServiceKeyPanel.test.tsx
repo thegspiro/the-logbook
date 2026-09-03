@@ -226,6 +226,27 @@ describe('McpServiceKeyPanel', () => {
     expect(screen.getByRole('button', { name: 'Revoke' })).toBeEnabled();
   });
 
+  it('reports its busy state to the parent while a key is being issued', async () => {
+    const user = userEvent.setup();
+    const onBusyChange = vi.fn();
+    let finish: (value: unknown) => void = () => undefined;
+    mockCreateMcpKey.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+
+    renderWithRouter(<McpServiceKeyPanel onClose={vi.fn()} onBusyChange={onBusyChange} />);
+    await screen.findByTestId('mcp-issue-key');
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+    await user.click(screen.getByTestId('mcp-issue-key'));
+    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+
+    finish({ key: activeKey, plaintext: 'logbook_mcp_abcdefgh_secret', revoked: [] });
+    await screen.findByTestId('mcp-issued-key');
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+  });
+
   it('reports a failed issue without crashing', async () => {
     const user = userEvent.setup();
     mockCreateMcpKey.mockRejectedValueOnce(new Error('nope'));

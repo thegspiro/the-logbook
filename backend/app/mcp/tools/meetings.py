@@ -28,16 +28,31 @@ from app.services.meetings_service import MeetingsService
 from app.services.minute_service import MinuteService
 from app.utils.sql_ordering import nulls_last_asc
 
-# Section keys and title words that carry the treasurer's figures. Minutes
-# written with the dynamic-section format keep the treasurer's report inside
-# ``sections`` rather than the legacy column, so the finance switch has to be
-# applied to the array as well as to the column.
-_FINANCE_SECTION_MARKERS = ("treasurer", "financ", "budget")
+# Minutes written with the dynamic-section format keep the money inside
+# ``sections`` rather than the legacy treasurer column, so the finance switch
+# has to be applied to the array as well as to the column. The built-in
+# templates' finance-bearing sections are named outright (the trustee
+# template's trust-fund and audit reports carry figures without a word of
+# "treasurer" in them); the markers catch a department's own sections.
+_FINANCE_SECTION_KEYS = frozenset(
+    {"treasurer_report", "financial_review", "trust_fund_report", "audit_report"}
+)
+_FINANCE_SECTION_MARKERS = (
+    "treasurer",
+    "financ",
+    "budget",
+    "trust fund",
+    "trust_fund",
+    "audit",
+    "dues",
+)
 
 
 def _is_finance_section(section: Any) -> bool:
     if not isinstance(section, dict):
         return False
+    if str(section.get("key") or "") in _FINANCE_SECTION_KEYS:
+        return True
     haystack = " ".join(
         str(section.get(field) or "") for field in ("key", "title")
     ).lower()
@@ -56,6 +71,7 @@ def _sections(m: Any, expose_finance: bool) -> list:
 MINUTES_TEXT_CHARS = 20_000
 # The free-text columns ``get_minutes`` returns, in the order it lists them.
 _MINUTES_TEXT_FIELDS = (
+    "agenda",
     "old_business",
     "new_business",
     "chief_report",
@@ -83,6 +99,7 @@ def _clip(value: Any) -> tuple[Any, bool]:
 def _motion(mo: Any, movers: dict[str, str]) -> dict:
     discussion, cut = _clip(mo.discussion_notes)
     return {
+        "id": mo.id,
         "order": mo.order,
         "motion_text": mo.motion_text,
         "moved_by": movers.get(mo.moved_by or "", mo.moved_by),
@@ -335,7 +352,6 @@ def register(server: Any) -> None:
                 "adjourned_at": iso(m.adjourned_at),
                 "attendees": m.attendees,
                 "quorum_count": m.quorum_count,
-                "agenda": m.agenda,
                 **texts,
                 "sections": sections_page,
                 "section_offset": section_offset,
@@ -373,8 +389,8 @@ def register(server: Any) -> None:
         """One piece of text from approved minutes, 20,000 characters at a
         time: ``field`` is a report or business field named by ``get_minutes``
         (old_business, chief_report, treasurer_report, ...),
-        ``section:<key>`` for a dynamic section, or ``motion:<order>`` for a
-        motion's discussion notes. When ``content_has_more`` is true, call
+        ``section:<key>`` for a dynamic section, or ``motion:<id>`` for a
+        motion's discussion notes (the ``id`` on each motion). When ``content_has_more`` is true, call
         again with ``content_offset`` set to ``next_content_offset``."""
         content_offset = clamp_offset(content_offset)
         m = await MinuteService(db).get_minutes(
@@ -398,10 +414,12 @@ def register(server: Any) -> None:
                 raise ValueError(f"No section named {key!r}")
             text = matches[0].get("content")
         elif field.startswith("motion:"):
-            order = field[len("motion:") :]
-            matches = [mo for mo in (m.motions or []) if str(mo.order) == order]
+            # By id, not ``order``: the column is not unique, and a motion
+            # that shares its order with another could never be read.
+            motion_id = field[len("motion:") :]
+            matches = [mo for mo in (m.motions or []) if mo.id == motion_id]
             if not matches:
-                raise ValueError(f"No motion with order {order!r}")
+                raise ValueError(f"No motion with id {motion_id!r}")
             text = matches[0].discussion_notes
         elif field in _MINUTES_TEXT_FIELDS:
             text = getattr(m, field)
@@ -413,7 +431,7 @@ def register(server: Any) -> None:
                         *_MINUTES_TEXT_FIELDS,
                         "treasurer_report",
                         "section:<key>",
-                        "motion:<order>",
+                        "motion:<id>",
                     )
                 )
             )

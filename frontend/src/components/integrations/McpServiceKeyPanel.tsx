@@ -25,6 +25,9 @@ import { useConfirm } from '../../contexts/ConfirmContext';
 
 interface McpServiceKeyPanelProps {
   onClose: () => void;
+  /** Reports whether a request whose response must be rendered is in flight,
+   *  so the parent can hold the control that would unmount this panel. */
+  onBusyChange?: ((busy: boolean) => void) | undefined;
 }
 
 // Value → days. `lifetime` is the explicit no-expiry option the department asked for.
@@ -48,7 +51,7 @@ const apiOrigin = (): string => {
   }
 };
 
-export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose }) => {
+export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose, onBusyChange }) => {
   const { checkPermission } = useAuthStore();
   const canIssue = checkPermission('integrations.mcp_keys');
   const tz = useTimezone();
@@ -89,6 +92,11 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
   // panel while it is in flight would lose the only copy after the backend
   // has already revoked the previous key.
   const busy = issuing || revoking;
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
 
   useEffect(() => {
     void load();

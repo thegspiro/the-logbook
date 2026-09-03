@@ -182,6 +182,70 @@ class TestCreate:
         listed = await list_mcp_keys(db=db_session, current_user=user)
         assert [k["is_active"] for k in listed["keys"]] == [True]
 
+    async def test_rotation_is_refused_when_the_audit_entry_is_not_written(
+        self, db_session, setup_org_and_admin
+    ):
+        """``log_audit_event`` swallows its own failure and returns ``None``;
+        a key change must not be acknowledged on that return."""
+        from unittest.mock import AsyncMock, patch
+
+        org_id, admin_id = setup_org_and_admin
+        await _connect(db_session, org_id)
+        user = _user(org_id, admin_id)
+        await create_mcp_key(
+            McpKeyCreateRequest(name="first"),
+            request=None,
+            db=db_session,
+            current_user=user,
+        )
+        with (
+            patch(
+                "app.api.v1.endpoints.mcp_keys.log_audit_event",
+                AsyncMock(return_value=None),
+            ),
+            pytest.raises(HTTPException) as excinfo,
+        ):
+            await create_mcp_key(
+                McpKeyCreateRequest(name="second"),
+                request=None,
+                db=db_session,
+                current_user=user,
+            )
+        assert excinfo.value.status_code == 503
+        assert "audit log is unavailable" in excinfo.value.detail
+        listed = await list_mcp_keys(db=db_session, current_user=user)
+        assert [(k["name"], k["is_active"]) for k in listed["keys"]] == [
+            ("first", True)
+        ]
+
+    async def test_revocation_is_refused_when_the_audit_entry_is_not_written(
+        self, db_session, setup_org_and_admin
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        org_id, admin_id = setup_org_and_admin
+        await _connect(db_session, org_id)
+        user = _user(org_id, admin_id)
+        created = await create_mcp_key(
+            McpKeyCreateRequest(name="only"),
+            request=None,
+            db=db_session,
+            current_user=user,
+        )
+        with (
+            patch(
+                "app.api.v1.endpoints.mcp_keys.log_audit_event",
+                AsyncMock(return_value=None),
+            ),
+            pytest.raises(HTTPException) as excinfo,
+        ):
+            await revoke_mcp_key(
+                created["key"]["id"], request=None, db=db_session, current_user=user
+            )
+        assert excinfo.value.status_code == 503
+        listed = await list_mcp_keys(db=db_session, current_user=user)
+        assert [k["is_active"] for k in listed["keys"]] == [True]
+
     async def test_returns_plaintext_once_and_rotates(
         self, db_session, setup_org_and_admin
     ):

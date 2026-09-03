@@ -390,6 +390,13 @@ const IntegrationsPage: React.FC = () => {
   const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
   const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
   const [showMcpPanel, setShowMcpPanel] = useState(false);
+  // While the panel is issuing or revoking a key its response carries the
+  // one-time plaintext; closing it then would lose the only copy.
+  const [mcpPanelBusy, setMcpPanelBusy] = useState(false);
+  const toggleMcpPanel = () => {
+    if (mcpPanelBusy) return;
+    setShowMcpPanel((open) => !open);
+  };
   // A delegated key manager cannot list integrations (that needs
   // integrations.manage), so the Claude (MCP) card never renders for them.
   // The status endpoint accepts their permission; it decides whether the
@@ -1489,8 +1496,10 @@ const IntegrationsPage: React.FC = () => {
               </div>
               <div className="flex justify-end">
                 <button
-                  onClick={() => setShowMcpPanel(!showMcpPanel)}
-                  className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                  onClick={toggleMcpPanel}
+                  disabled={mcpPanelBusy}
+                  title={mcpPanelBusy ? 'Wait for the current key request to finish' : undefined}
+                  className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
                   <span>Service key</span>
@@ -1547,8 +1556,10 @@ const IntegrationsPage: React.FC = () => {
                     integration.integration_type === 'claude-mcp' &&
                     (canManage || canIssueKeys) && (
                       <button
-                        onClick={() => setShowMcpPanel(!showMcpPanel)}
-                        className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                        onClick={toggleMcpPanel}
+                        disabled={mcpPanelBusy}
+                        title={mcpPanelBusy ? 'Wait for the current key request to finish' : undefined}
+                        className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
                       >
                         <KeyRound className="h-3.5 w-3.5" />
                         <span>Service key</span>
@@ -1622,7 +1633,7 @@ const IntegrationsPage: React.FC = () => {
           (showDelegatedMcpCard ||
             integrations.some(
               (i) => i.integration_type === 'claude-mcp' && i.status === ConnectionStatus.CONNECTED
-            )) && <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} />}
+            )) && <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} onBusyChange={setMcpPanelBusy} />}
 
         {/* Cal.com Bookings Panel */}
         {showBookingsPanel &&

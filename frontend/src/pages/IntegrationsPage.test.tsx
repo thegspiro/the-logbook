@@ -665,6 +665,50 @@ describe('IntegrationsPage', () => {
       expect(screen.queryByTestId('integration-card-claude-mcp-delegated')).not.toBeInTheDocument();
     });
 
+    it('holds the Service key toggle while the panel is issuing a key', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpConnected]);
+      let finish: (value: unknown) => void = () => undefined;
+      mockCreateMcpKey.mockReturnValue(
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+      );
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      const toggle = within(card).getByRole('button', { name: /Service key/ });
+      await user.click(toggle);
+      await screen.findByTestId('mcp-issue-key');
+      await user.click(screen.getByTestId('mcp-issue-key'));
+
+      // Closing the panel now would unmount the only place the one-time
+      // plaintext can be rendered.
+      expect(toggle).toBeDisabled();
+      await user.click(toggle);
+      expect(screen.getByTestId('mcp-key-panel')).toBeInTheDocument();
+
+      finish({
+        key: {
+          id: 'key-1',
+          name: 'Claude',
+          key_prefix: 'logbook_mcp_abcdefgh',
+          expires_at: null,
+          last_used_at: null,
+          revoked_at: null,
+          created_at: '2026-09-03T10:00:00Z',
+          created_by: 'admin-1',
+          is_active: true,
+        },
+        plaintext: 'logbook_mcp_abcdefgh_secret',
+        revoked: [],
+        endpoint_path: '/api/mcp',
+      });
+      await screen.findByTestId('mcp-issued-key');
+      expect(toggle).toBeEnabled();
+    });
+
     it('opens the service key panel from a connected card', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([mcpConnected]);

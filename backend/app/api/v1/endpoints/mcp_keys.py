@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,6 +84,25 @@ async def _integration_row(
     return result.scalar_one_or_none()
 
 
+async def _require_audit_entry(db: AsyncSession, entry: Any, action: str) -> None:
+    """Refuse to commit a key change that left no audit entry.
+
+    ``log_audit_event`` swallows its own failure and returns ``None`` so an
+    audit outage does not break ordinary requests; a key change is the one
+    place that trade goes the other way, since a key rotated without a
+    record is exactly what the record exists to catch.
+    """
+    if entry is not None:
+        return
+    await db.rollback()
+    logger.error("MCP key {} without an audit entry; change rolled back", action)
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="The audit log is unavailable, so the key was not changed. "
+        "Try again later.",
+    )
+
+
 @router.get("/status")
 async def get_mcp_status(
     db: AsyncSession = Depends(get_db),
@@ -149,7 +169,7 @@ async def create_mcp_key(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(exc)
         )
 
-    await log_audit_event(
+    entry = await log_audit_event(
         db,
         "mcp.key_created",
         "integrations",
@@ -165,6 +185,7 @@ async def create_mcp_key(
         organization_id=org_id,
         ip_address=_ip(request),
     )
+    await _require_audit_entry(db, entry, "issued")
     await db.commit()
     return {
         "key": _key_to_dict(minted.key),
@@ -189,7 +210,7 @@ async def revoke_mcp_key(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Key not found"
         )
-    await log_audit_event(
+    entry = await log_audit_event(
         db,
         "mcp.key_revoked",
         "integrations",
@@ -199,5 +220,6 @@ async def revoke_mcp_key(
         organization_id=org_id,
         ip_address=_ip(request),
     )
+    await _require_audit_entry(db, entry, "revoked")
     await db.commit()
     return {"key": _key_to_dict(key)}
