@@ -2,6 +2,7 @@
 
 from typing import Any, Optional
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
@@ -15,8 +16,10 @@ from app.mcp.tools._common import (
     page,
     parse_date,
 )
+from app.models.meeting import ActionItemStatus, MeetingActionItem
 from app.services.meetings_service import MeetingsService
 from app.services.minute_service import MinuteService
+from app.utils.sql_ordering import nulls_last_asc
 
 # Section keys and title words that carry the treasurer's figures. Minutes
 # written with the dynamic-section format keep the treasurer's report inside
@@ -68,7 +71,8 @@ def register(server: Any) -> None:
         offset: int = 0,
     ) -> dict:
         """Meetings on or after ``from_date`` (YYYY-MM-DD): title, type,
-        date and times, location, status and agenda."""
+        date and times, location, status and agenda. ``start_time`` and
+        ``end_time`` are the department's local clock times, not UTC."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         meetings, total = await MeetingsService(db).get_meetings(
@@ -100,10 +104,37 @@ def register(server: Any) -> None:
         return page(items, total, limit, offset)
 
     @logbook_tool(server, title="Open action items", module="minutes")
-    async def list_open_action_items(db: AsyncSession, principal: McpPrincipal) -> dict:
-        """Action items still open or in progress across all meetings, with
-        assignee name, due date and priority."""
-        items = await MeetingsService(db).get_open_action_items(org_uuid(principal))
+    async def list_open_action_items(
+        db: AsyncSession, principal: McpPrincipal, limit: int = 50, offset: int = 0
+    ) -> dict:
+        """Action items still open or in progress across all meetings, soonest
+        due first (undated last), with assignee name, due date and priority.
+        Paged; ``total`` counts every open item."""
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
+        criteria = (
+            MeetingActionItem.organization_id == principal.organization_id,
+            MeetingActionItem.status.in_(
+                [ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]
+            ),
+        )
+        total = (
+            await db.execute(
+                select(func.count()).select_from(MeetingActionItem).where(*criteria)
+            )
+        ).scalar_one()
+        rows = await db.execute(
+            select(MeetingActionItem)
+            .where(*criteria)
+            .order_by(
+                *nulls_last_asc(MeetingActionItem.due_date),
+                MeetingActionItem.created_at.asc(),
+                MeetingActionItem.id,
+            )
+            .offset(offset)
+            .limit(limit)
+        )
+        items = list(rows.scalars().all())
         names = await member_names(
             db, principal.organization_id, (i.assigned_to for i in items)
         )
@@ -120,7 +151,7 @@ def register(server: Any) -> None:
             }
             for i in items
         ]
-        return {"items": rendered, "total": len(rendered)}
+        return page(rendered, total, limit, offset)
 
     @logbook_tool(server, title="List published minutes", module="minutes")
     async def list_minutes(

@@ -20,6 +20,7 @@ from app.mcp.tools._common import (
 )
 from app.models.training import TrainingRecord, TrainingStatus
 from app.services.training_service import TrainingService
+from app.utils.sql_ordering import nulls_last_desc
 
 
 def _record(record: TrainingRecord, member_name: Optional[str]) -> dict:
@@ -142,7 +143,7 @@ def register(server: Any) -> None:
                 TrainingRecord.user_id == uid,
             )
             .order_by(
-                TrainingRecord.completion_date.desc().nulls_last(),
+                *nulls_last_desc(TrainingRecord.completion_date),
                 TrainingRecord.created_at.desc(),
             )
             .offset(offset)

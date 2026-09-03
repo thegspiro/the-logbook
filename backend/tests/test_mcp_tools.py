@@ -8,6 +8,7 @@ them, with a principal bound.
 """
 
 import json
+import re
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -36,6 +37,18 @@ from app.models.inventory import (
     InventoryCategory,
     InventoryItem,
     ItemType,
+)
+from app.models.medical_screening import (
+    ScreeningRecord,
+    ScreeningRequirement,
+    ScreeningStatus,
+    ScreeningType,
+)
+from app.models.meeting import (
+    ActionItemStatus,
+    Meeting,
+    MeetingActionItem,
+    MeetingType,
 )
 from app.models.training import (
     Shift,
@@ -338,45 +351,6 @@ class TestSecondReviewRound:
             end_date=(date.today() + timedelta(days=7)).isoformat(),
         )
         assert body == {"items": [], "total": 0, "has_more": False}
-
-    @pytest.mark.usefixtures("_use_test_session")
-    async def test_expiring_screenings_are_members_only(self, server, org_with_members):
-        from unittest.mock import AsyncMock, patch
-
-        from app.schemas.medical_screening import ExpiringScreening
-
-        org_id, admin_id, _ = org_with_members
-        rows = [
-            ExpiringScreening(
-                record_id="r1",
-                screening_type="physical",
-                user_id="u1",
-                user_name="Sam Rivera",
-                expiration_date=date.today(),
-                days_until_expiration=0,
-            ),
-            ExpiringScreening(
-                record_id="r2",
-                screening_type="physical",
-                prospect_id="p1",
-                prospect_name="Applicant",
-                expiration_date=date.today(),
-                days_until_expiration=0,
-            ),
-        ]
-        with patch(
-            "app.mcp.tools.medical.MedicalScreeningService.get_expiring_soon",
-            AsyncMock(return_value=rows),
-        ):
-            body = await _call(
-                server,
-                _principal(org_id, admin_id, expose_medical_screening=True),
-                "list_expiring_screenings",
-            )
-        assert [i["member_name"] for i in body["items"]] == ["Sam Rivera"]
-        assert all(
-            "prospect_id" not in i and "prospect_name" not in i for i in body["items"]
-        )
 
 
 class TestAttendeeVisibility:
@@ -1046,6 +1020,165 @@ class TestScheduleVisibility:
             end_date=day.isoformat(),
         )
         assert len(open_shifts["items"]) == 2
+
+
+class TestEighthRoundFindings:
+    """Regressions for the eighth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_expiring_screenings_are_members_only_and_paged(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        requirement = ScreeningRequirement(
+            organization_id=org_id,
+            name="Annual physical",
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+        )
+        db_session.add(requirement)
+        await db_session.flush()
+        for days, user_id, status in (
+            (5, member_id, ScreeningStatus.PASSED),
+            (3, admin_id, ScreeningStatus.COMPLETED),
+            (4, None, ScreeningStatus.PASSED),  # an applicant's record
+            (2, member_id, ScreeningStatus.SCHEDULED),  # not yet held
+        ):
+            db_session.add(
+                ScreeningRecord(
+                    organization_id=org_id,
+                    requirement_id=requirement.id,
+                    user_id=user_id,
+                    screening_type=ScreeningType.PHYSICAL_EXAM,
+                    status=status,
+                    expiration_date=date.today() + timedelta(days=days),
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id, expose_medical_screening=True)
+        first = await _call(
+            server, principal, "list_expiring_screenings", days=30, limit=1
+        )
+        assert first["total"] == 2
+        assert first["has_more"] is True
+        assert first["days"] == 30
+        (row,) = first["items"]
+        assert row["member_name"] == "Admin User"
+        assert row["requirement_name"] == "Annual physical"
+        assert row["screening_type"] == "physical_exam"
+        assert row["days_until_expiration"] == 3
+        assert set(row) == {
+            "record_id",
+            "member_id",
+            "member_name",
+            "screening_type",
+            "requirement_name",
+            "expiration_date",
+            "days_until_expiration",
+        }
+        rest = await _call(
+            server, principal, "list_expiring_screenings", days=30, limit=1, offset=1
+        )
+        assert [r["member_id"] for r in rest["items"]] == [member_id]
+        assert rest["has_more"] is False
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_open_action_items_are_paged_undated_last(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        meeting = Meeting(
+            organization_id=org_id,
+            title="Monthly business meeting",
+            meeting_type=MeetingType.BUSINESS,
+            meeting_date=date.today(),
+        )
+        db_session.add(meeting)
+        await db_session.flush()
+        closed = next(
+            s
+            for s in ActionItemStatus
+            if s not in (ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS)
+        )
+        for label, due, status in (
+            ("Order hose", 2, ActionItemStatus.OPEN),
+            ("Undated", None, ActionItemStatus.IN_PROGRESS),
+            ("Fix bay door", 1, ActionItemStatus.OPEN),
+            ("Done already", 0, closed),
+        ):
+            db_session.add(
+                MeetingActionItem(
+                    organization_id=org_id,
+                    meeting_id=meeting.id,
+                    description=label,
+                    status=status,
+                    due_date=(
+                        date.today() + timedelta(days=due) if due is not None else None
+                    ),
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        first = await _call(server, principal, "list_open_action_items", limit=2)
+        assert [i["description"] for i in first["items"]] == [
+            "Fix bay door",
+            "Order hose",
+        ]
+        assert first["total"] == 3
+        assert first["has_more"] is True
+        rest = await _call(
+            server, principal, "list_open_action_items", limit=2, offset=2
+        )
+        assert [i["description"] for i in rest["items"]] == ["Undated"]
+        assert rest["has_more"] is False
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_member_training_records_put_undated_records_last(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, member_id = org_with_members
+        for name, completed in (("Undated", None), ("Dated", date.today())):
+            db_session.add(
+                TrainingRecord(
+                    organization_id=org_id,
+                    user_id=member_id,
+                    course_name=name,
+                    training_type=TrainingType.CERTIFICATION,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=completed,
+                    hours_completed=1.0,
+                )
+            )
+        await db_session.flush()
+        body = await _call(
+            server,
+            _principal(org_id, admin_id),
+            "list_member_training_records",
+            member_id=member_id,
+        )
+        assert [r["course_name"] for r in body["items"]] == ["Dated", "Undated"]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_reorder_request_refuses_a_name_the_column_cannot_hold(
+        self, server, org_with_members
+    ):
+        org_id, admin_id, _ = org_with_members
+        with pytest.raises(ToolError, match="item_name"):
+            await _call(
+                server,
+                _principal(org_id, admin_id, access_mode="read_write"),
+                "create_reorder_request",
+                item_name="x" * 300,
+                quantity=1,
+            )
+
+    async def test_draft_event_description_names_only_accepted_types(self, server):
+        from app.models.event import EventType
+
+        description = server._tool_manager.get_tool("create_event_draft").description
+        listed = re.search(r"is one of (.+?);", description, re.S).group(1)
+        names = [n.strip() for n in re.split(r",|\bor\b", listed) if n.strip()]
+        assert names
+        assert set(names) == {e.value for e in EventType}
 
 
 class TestReviewFindings:

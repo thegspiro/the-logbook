@@ -12,6 +12,7 @@ rather than create an unattributed row.
 from typing import Any, Optional
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
@@ -27,11 +28,21 @@ from app.models.event import EventType
 from app.models.inventory import MEDICAL_ITEM_TYPES, ReorderUrgency
 from app.models.user import User
 from app.schemas.event import EventCreate
+from app.schemas.inventory import ReorderRequestCreate
 from app.services.event_service import EventService
 from app.services.inventory_service import InventoryService
 from app.services.meetings_service import MeetingsService
 
 _PRIORITIES = {"normal": 0, "high": 1, "urgent": 2}
+
+
+def _validation_message(exc: ValidationError) -> str:
+    """A request schema's errors as one line naming each field."""
+    return "; ".join(
+        f"{'.'.join(str(p) for p in err['loc']) or 'input'}: {err['msg']}"
+        for err in exc.errors()
+    )
+
 
 # Medical stock has its own module and officer; the inventory tools never
 # show it, so a reorder must not be able to reach it either.
@@ -77,8 +88,9 @@ def register(server: Any) -> None:
     ) -> dict:
         """Create an event as an unpublished draft for an officer to review and
         publish. Times are ISO-8601 (UTC unless an offset is given).
-        ``event_type`` is one of the department's event types such as
-        training, business_meeting, drill, fundraiser, social or other."""
+        ``event_type`` is one of training, business_meeting, public_education,
+        social, fundraiser, ceremony, recruitment or other; a drill is
+        ``training``."""
         try:
             EventType(event_type)
         except ValueError:
@@ -176,6 +188,18 @@ def register(server: Any) -> None:
             raise ValueError("urgency must be low, normal, high or critical")
         if quantity <= 0:
             raise ValueError("quantity must be at least 1")
+        # The API's request schema owns the field bounds (item_name is a
+        # VARCHAR(255); notes is free text); validating through it keeps
+        # this path from writing what the endpoint would have refused.
+        try:
+            ReorderRequestCreate(
+                item_name=item_name.strip(),
+                quantity_requested=quantity,
+                urgency=urgency_value.value,
+                notes=notes or None,
+            )
+        except ValidationError as exc:
+            raise ValueError(_validation_message(exc))
         actor = await _actor(db, principal)
         data: dict[str, Any] = {
             "item_name": item_name.strip(),
@@ -183,8 +207,6 @@ def register(server: Any) -> None:
             "urgency": urgency_value,
             "notes": notes or None,
         }
-        if not data["item_name"]:
-            raise ValueError("item_name is required")
         service = InventoryService(db)
         if item_id:
             data["item_id"] = str(parse_uuid(item_id, "item_id"))
