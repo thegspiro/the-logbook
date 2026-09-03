@@ -20,6 +20,7 @@ from app.api.v1.endpoints.organizations import (
     _resolve_redacted_secrets,
     _smtp_login_incomplete,
 )
+from app.api.v1.onboarding import _email_settings_from_onboarding
 from app.schemas.organization import (
     _EMAIL_SECRET_FIELDS,
     _LEGACY_EMAIL_OAUTH_FIELDS,
@@ -1043,3 +1044,33 @@ class TestSaveBindsSecretsAndRefusesUnsendable:
         await self._save(org, {"modules": {"events": False}})
 
         assert org.settings["modules"] == {"events": False}
+
+
+class TestOnboardingEmailMapping:
+    def test_gmail_config_maps_to_the_settings_shape(self):
+        mapped = _email_settings_from_onboarding(
+            "gmail",
+            {"fromEmail": "chief@example.org", "googleAppPassword": "ab cd"},
+        )
+
+        assert mapped["enabled"] is True
+        assert mapped["platform"] == "gmail"
+        assert mapped["google_app_password"] == "ab cd"
+        assert "smtp_host" not in mapped
+        assert missing_for_enabled(mapped) is None
+
+    def test_whitespace_app_password_is_reported_at_save_time(self):
+        # The session save runs missing_for_enabled on this mapping and
+        # returns 400, so completion never sees a config it must disable.
+        mapped = _email_settings_from_onboarding(
+            "microsoft",
+            {"fromEmail": "a@dept.example", "microsoftAppPassword": "   "},
+        )
+
+        assert missing_for_enabled(mapped) == "microsoft_app_password"
+
+    def test_skip_persists_disabled(self):
+        mapped = _email_settings_from_onboarding("other", {})
+
+        assert mapped["enabled"] is False
+        assert missing_for_enabled(mapped) is None

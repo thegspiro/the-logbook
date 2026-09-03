@@ -129,12 +129,12 @@ const EmailConfiguration: React.FC = () => {
       }
     }
 
-    if (emailPlatform === 'gmail' && !config.googleAppPassword) {
+    if (emailPlatform === 'gmail' && !config.googleAppPassword?.trim()) {
       toast.error('Please enter your Google App Password');
       return;
     }
 
-    if (emailPlatform === 'microsoft' && !config.microsoftAppPassword) {
+    if (emailPlatform === 'microsoft' && !config.microsoftAppPassword?.trim()) {
       toast.error('Please enter your Microsoft 365 App Password');
       return;
     }
@@ -212,12 +212,12 @@ const EmailConfiguration: React.FC = () => {
       }
     }
 
-    if (emailPlatform === 'gmail' && !config.googleAppPassword) {
+    if (emailPlatform === 'gmail' && !config.googleAppPassword?.trim()) {
       toast.error('Please enter your Google App Password');
       return;
     }
 
-    if (emailPlatform === 'microsoft' && !config.microsoftAppPassword) {
+    if (emailPlatform === 'microsoft' && !config.microsoftAppPassword?.trim()) {
       toast.error('Please enter your Microsoft 365 App Password');
       return;
     }
