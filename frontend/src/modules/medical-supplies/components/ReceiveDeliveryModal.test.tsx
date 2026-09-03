@@ -4,12 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
 const mockReceiveDelivery = vi.fn();
+const mockGetItems = vi.fn();
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
   medicalSuppliesService: {
     receiveDelivery: (...args: unknown[]) => mockReceiveDelivery(...args) as unknown,
+    getItems: (...args: unknown[]) => mockGetItems(...args) as unknown,
   },
 }));
 
@@ -29,23 +31,33 @@ vi.mock('react-hot-toast', () => ({
 
 import { ReceiveDeliveryModal } from './ReceiveDeliveryModal';
 
-const items = [
-  { id: 'item-1', name: '4x4 Gauze' },
-  { id: 'item-2', name: 'Epi 1:1000' },
-] as never;
+const renderModal = () => renderWithRouter(<ReceiveDeliveryModal onClose={vi.fn()} onSaved={vi.fn()} />);
 
-const renderModal = () => renderWithRouter(<ReceiveDeliveryModal items={items} onClose={vi.fn()} onSaved={vi.fn()} />);
+const chooseItem = async (input: HTMLElement, name: string, id: string) => {
+  mockGetItems.mockImplementation(({ search }: { search?: string }) =>
+    Promise.resolve({ items: search === name ? [{ id, name }] : [], total: 1, skip: 0, limit: 20 })
+  );
+  await userEvent.type(input, name);
+  await userEvent.click(await screen.findByRole('option', { name }));
+};
 
 describe('ReceiveDeliveryModal', () => {
   beforeEach(() => {
+    // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls but
+    // leaves implementations AND any unconsumed mockRejectedValueOnce still
+    // queued, so a failure-path test that returns before consuming its one-shot
+    // hands it to whichever test calls that mock next -- and the picker's own
+    // search tests arm exactly those. (CLAUDE.md pitfall #28.)
+    [mockReceiveDelivery, mockGetItems, mockToastError, mockToastSuccess].forEach((mock) => mock.mockReset());
     vi.clearAllMocks();
     mockReceiveDelivery.mockResolvedValue([]);
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 20 });
   });
 
   it('records a complete line', async () => {
     renderModal();
 
-    await userEvent.selectOptions(screen.getByLabelText(/^Item/), 'item-1');
+    await chooseItem(screen.getByLabelText(/^Item/), '4x4 Gauze', 'item-1');
     await userEvent.type(screen.getByLabelText('Qty'), '12');
     await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
 
@@ -61,12 +73,11 @@ describe('ReceiveDeliveryModal', () => {
     // only found out by recounting.
     renderModal();
 
-    await userEvent.selectOptions(screen.getByLabelText(/^Item/), 'item-1');
+    await chooseItem(screen.getByLabelText(/^Item/), '4x4 Gauze', 'item-1');
     await userEvent.type(screen.getByLabelText('Qty'), '12');
 
     await userEvent.click(screen.getByRole('button', { name: 'Add line' }));
-    const itemSelects = screen.getAllByLabelText(/^Item/);
-    await userEvent.selectOptions(itemSelects[1] as HTMLElement, 'item-2');
+    await chooseItem(screen.getByRole('combobox'), 'Epi 1:1000', 'item-2');
 
     await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
 
@@ -89,7 +100,7 @@ describe('ReceiveDeliveryModal', () => {
     // actually touched are held to the completeness rule.
     renderModal();
 
-    await userEvent.selectOptions(screen.getByLabelText(/^Item/), 'item-1');
+    await chooseItem(screen.getByLabelText(/^Item/), '4x4 Gauze', 'item-1');
     await userEvent.type(screen.getByLabelText('Qty'), '12');
     await userEvent.click(screen.getByRole('button', { name: 'Add line' }));
 
@@ -107,5 +118,84 @@ describe('ReceiveDeliveryModal', () => {
 
     expect(mockReceiveDelivery).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('at least one line'));
+  });
+
+  it('selects a delivery item through the server even when it is not on the table page', async () => {
+    renderModal();
+
+    await chooseItem(screen.getByLabelText(/^Item/), 'Record 250 supply', 'item-250');
+    await userEvent.type(screen.getByLabelText('Qty'), '3');
+    await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
+
+    await waitFor(() => expect(mockReceiveDelivery).toHaveBeenCalled());
+    expect(mockGetItems).toHaveBeenCalledWith({ search: 'Record 250 supply', active_only: true, limit: 20 });
+    expect(mockReceiveDelivery).toHaveBeenCalledWith([
+      expect.objectContaining({ inventory_item_id: 'item-250', quantity: 3 }),
+    ]);
+  });
+
+  describe('the catalog picker', () => {
+    it('says a search failed rather than reporting an empty catalog', async () => {
+      // "No matching items." is a claim about the department's catalog. A
+      // network, auth or server failure is not that, and the toast saying
+      // otherwise is gone seconds later -- leaving an officer to conclude the
+      // supply does not exist and abandon the delivery.
+      mockGetItems.mockRejectedValue(new Error('offline'));
+
+      renderModal();
+      await userEvent.type(screen.getByLabelText(/^Item/), 'gauze');
+
+      expect(await screen.findByText('Could not search the catalog.')).toBeInTheDocument();
+      expect(screen.queryByText('No matching items.')).not.toBeInTheDocument();
+    });
+
+    it('selects the highlighted result with the keyboard', async () => {
+      // It announces itself as a combobox; the native <select> it replaced
+      // supported arrow keys and Enter. Without them Enter reaches the delivery
+      // form and trips its missing-item validation instead of choosing a row.
+      mockGetItems.mockResolvedValue({
+        items: [
+          { id: 'item-1', name: '4x4 Gauze' },
+          { id: 'item-2', name: 'Trauma Shears' },
+        ],
+        total: 2,
+        skip: 0,
+        limit: 20,
+      });
+
+      renderModal();
+      const input = screen.getByLabelText(/^Item/);
+      await userEvent.type(input, 'a');
+      await screen.findByRole('option', { name: 'Trauma Shears' });
+
+      await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+
+      expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Trauma Shears' })).not.toBeInTheDocument();
+    });
+
+    it('reaches matches beyond the first page', async () => {
+      // Item names are not unique, so a department can legitimately have more
+      // matches than one page -- and every one of them has to be selectable.
+      mockGetItems.mockImplementation(({ limit }: { limit?: number }) =>
+        Promise.resolve({
+          items: Array.from({ length: Math.min(limit ?? 20, 21) }, (_unused, index) => ({
+            id: `item-${index}`,
+            name: `Gauze ${index}`,
+          })),
+          total: 21,
+          skip: 0,
+          limit: limit ?? 20,
+        })
+      );
+
+      renderModal();
+      await userEvent.type(screen.getByLabelText(/^Item/), 'gauze');
+      expect(await screen.findByRole('button', { name: /Show more \(20 of 21\)/ })).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /Show more/ }));
+
+      expect(await screen.findByRole('option', { name: 'Gauze 20' })).toBeInTheDocument();
+    });
   });
 });

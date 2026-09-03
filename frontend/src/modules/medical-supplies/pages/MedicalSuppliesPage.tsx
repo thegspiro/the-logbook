@@ -9,7 +9,7 @@
  * know what is about to lapse before they want an inventory count.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import {
@@ -41,6 +41,7 @@ import { EXPIRY_WINDOW_DAYS } from '../types';
 import { onHandQuantity } from '../../inventory/utils/onHand';
 
 type Tab = 'expiring' | 'stock';
+const PAGE_SIZE = 200;
 
 /** Severity of a dated lot, by how long is left on it. */
 function expiryTone(days: number | undefined): string {
@@ -91,35 +92,53 @@ const MedicalSuppliesPage: React.FC = () => {
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [expiring, setExpiring] = useState<ExpiringLot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [page, setPage] = useState(0);
+  const [itemPage, setItemPage] = useState({ total: 0, skip: 0, limit: PAGE_SIZE });
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
+  // Monotonic request id. Clicking Next and then editing the filter starts two
+  // loads; without this both commit, and if the older one lands last the table
+  // shows rows that do not match the visible filter while `page` and
+  // `itemPage.skip` disagree -- a state the Previous button cannot recover from,
+  // because decrementing page 0 is a no-op.
+  const loadId = useRef(0);
+
   const load = useCallback(async () => {
-    setIsLoading(true);
+    const requestId = ++loadId.current;
+    setIsFetching(true);
     try {
       const [summaryData, itemsData, categoryData, expiringData] = await Promise.all([
         medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS),
         medicalSuppliesService.getItems({
           search: search || undefined,
           category_id: categoryFilter || undefined,
-          limit: 200,
+          skip: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
         }),
         medicalSuppliesService.getCategories(),
         medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS),
       ]);
+      if (requestId !== loadId.current) return;
       setSummary(summaryData);
       setItems(itemsData.items);
+      setItemPage({ total: itemsData.total, skip: itemsData.skip, limit: itemsData.limit });
       setCategories(categoryData);
       setExpiring(expiringData);
     } catch (err: unknown) {
+      if (requestId !== loadId.current) return;
       toast.error(getErrorMessage(err, 'Failed to load medical supplies'));
     } finally {
-      setIsLoading(false);
+      if (requestId === loadId.current) {
+        setIsLoading(false);
+        setIsFetching(false);
+      }
     }
-  }, [search, categoryFilter]);
+  }, [search, categoryFilter, page]);
 
   useEffect(() => {
     void load();
@@ -334,7 +353,10 @@ const MedicalSuppliesPage: React.FC = () => {
               <input
                 type="search"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(0);
+                }}
                 placeholder="Search supplies"
                 aria-label="Search medical supplies"
                 className="form-input w-full pl-9"
@@ -342,7 +364,10 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => {
+                setCategoryFilter(e.target.value);
+                setPage(0);
+              }}
               aria-label="Filter by category"
               className="form-input w-auto"
             >
@@ -437,6 +462,36 @@ const MedicalSuppliesPage: React.FC = () => {
               </table>
             </div>
           )}
+
+          {itemPage.total > 0 && (
+            <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={isFetching || itemPage.skip === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <p className="text-theme-text-muted text-sm" aria-live="polite">
+                Showing {formatNumber(itemPage.skip + 1)}–
+                {formatNumber(Math.min(itemPage.skip + items.length, itemPage.total))} of {formatNumber(itemPage.total)}
+              </p>
+              <button
+                type="button"
+                className="btn-secondary"
+                // Disabled while a page is in flight, and bounded by the known
+                // total. The enabled state otherwise came from the *previous*
+                // response, so a second activation before this one landed
+                // stepped past the last page -- skip=400 on a 201-item catalog,
+                // an empty table and a range reading "Showing 401-201 of 201".
+                disabled={isFetching || itemPage.skip + itemPage.limit >= itemPage.total}
+                onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </section>
       )}
 
@@ -453,9 +508,7 @@ const MedicalSuppliesPage: React.FC = () => {
         <MedicalItemFormModal categories={categories} onClose={() => setShowItemModal(false)} onSaved={handleSaved} />
       )}
 
-      {showDeliveryModal && (
-        <ReceiveDeliveryModal items={items} onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />
-      )}
+      {showDeliveryModal && <ReceiveDeliveryModal onClose={() => setShowDeliveryModal(false)} onSaved={handleSaved} />}
     </div>
   );
 };
