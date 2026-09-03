@@ -16,9 +16,11 @@ from app.mcp.tools._common import (
     org_uuid,
     page,
     parse_date,
+    parse_uuid,
 )
 from app.models.meeting import (
     ActionItemStatus,
+    Meeting,
     MeetingActionItem,
     MeetingStatus,
     MeetingType,
@@ -97,15 +99,17 @@ def _clip(value: Any) -> tuple[Any, bool]:
 
 
 def _motion(mo: Any, movers: dict[str, str]) -> dict:
-    discussion, cut = _clip(mo.discussion_notes)
+    motion_text, text_cut = _clip(mo.motion_text)
+    discussion, discussion_cut = _clip(mo.discussion_notes)
     return {
         "id": mo.id,
         "order": mo.order,
-        "motion_text": mo.motion_text,
+        "motion_text": motion_text,
+        "motion_text_truncated": text_cut,
         "moved_by": movers.get(mo.moved_by or "", mo.moved_by),
         "seconded_by": movers.get(mo.seconded_by or "", mo.seconded_by),
         "discussion_notes": discussion,
-        "discussion_truncated": cut,
+        "discussion_truncated": discussion_cut,
         "status": iso(mo.status),
         "votes_for": mo.votes_for,
         "votes_against": mo.votes_against,
@@ -174,7 +178,9 @@ def register(server: Any) -> None:
     ) -> dict:
         """Meetings on or after ``from_date`` (YYYY-MM-DD): title, type,
         date and times, location, status and agenda. ``start_time`` and
-        ``end_time`` are the department's local clock times, not UTC."""
+        ``end_time`` are the department's local clock times, not UTC. An
+        agenda is cut at 20,000 characters (``agenda_truncated``);
+        ``get_meeting_agenda`` reads the rest."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         # The service drops a filter it cannot parse, which would turn a
@@ -203,23 +209,51 @@ def register(server: Any) -> None:
             skip=offset,
             limit=limit,
         )
-        items = [
-            {
-                "id": m.id,
-                "title": m.title,
-                "meeting_type": iso(m.meeting_type),
-                "meeting_date": iso(m.meeting_date),
-                "start_time": iso(m.start_time),
-                "end_time": iso(m.end_time),
-                "location": m.location,
-                # A free-text name as entered on the meeting, not a member id.
-                "called_by": m.called_by,
-                "status": iso(m.status),
-                "agenda": m.agenda,
-            }
-            for m in meetings
-        ]
+        items = []
+        for m in meetings:
+            agenda, cut = _clip(m.agenda)
+            items.append(
+                {
+                    "id": m.id,
+                    "title": m.title,
+                    "meeting_type": iso(m.meeting_type),
+                    "meeting_date": iso(m.meeting_date),
+                    "start_time": iso(m.start_time),
+                    "end_time": iso(m.end_time),
+                    "location": m.location,
+                    # A free-text name as entered on the meeting, not a
+                    # member id.
+                    "called_by": m.called_by,
+                    "status": iso(m.status),
+                    "agenda": agenda,
+                    "agenda_truncated": cut,
+                }
+            )
         return page(items, total, limit, offset)
+
+    @logbook_tool(server, title="Read meeting agenda", module="minutes")
+    async def get_meeting_agenda(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        meeting_id: str,
+        content_offset: int = 0,
+    ) -> dict:
+        """A meeting's agenda, 20,000 characters at a time. When
+        ``content_has_more`` is true, call again with ``content_offset`` set
+        to ``next_content_offset``."""
+        content_offset = clamp_offset(content_offset)
+        result = await db.execute(
+            select(Meeting).where(
+                Meeting.id == str(parse_uuid(meeting_id, "meeting_id")),
+                Meeting.organization_id == principal.organization_id,
+            )
+        )
+        meeting = result.scalar_one_or_none()
+        if meeting is None:
+            raise ValueError("Meeting not found")
+        body = _chunk(meeting.agenda or "", content_offset)
+        body.update({"meeting_id": meeting.id, "title": meeting.title})
+        return body
 
     @logbook_tool(server, title="Open action items", module="minutes")
     async def list_open_action_items(
@@ -389,8 +423,9 @@ def register(server: Any) -> None:
         """One piece of text from approved minutes, 20,000 characters at a
         time: ``field`` is a report or business field named by ``get_minutes``
         (old_business, chief_report, treasurer_report, ...),
-        ``section:<key>`` for a dynamic section, or ``motion:<id>`` for a
-        motion's discussion notes (the ``id`` on each motion). When ``content_has_more`` is true, call
+        ``section:<key>`` for a dynamic section, ``motion:<id>`` for a
+        motion's discussion notes or ``motion_text:<id>`` for its wording
+        (the ``id`` on each motion). When ``content_has_more`` is true, call
         again with ``content_offset`` set to ``next_content_offset``."""
         content_offset = clamp_offset(content_offset)
         m = await MinuteService(db).get_minutes(
@@ -413,14 +448,19 @@ def register(server: Any) -> None:
             if not matches:
                 raise ValueError(f"No section named {key!r}")
             text = matches[0].get("content")
-        elif field.startswith("motion:"):
+        elif field.startswith(("motion:", "motion_text:")):
             # By id, not ``order``: the column is not unique, and a motion
             # that shares its order with another could never be read.
-            motion_id = field[len("motion:") :]
+            prefix, motion_id = field.split(":", 1)
             matches = [mo for mo in (m.motions or []) if mo.id == motion_id]
             if not matches:
                 raise ValueError(f"No motion with id {motion_id!r}")
-            text = matches[0].discussion_notes
+            motion = matches[0]
+            text = (
+                motion.motion_text
+                if prefix == "motion_text"
+                else motion.discussion_notes
+            )
         elif field in _MINUTES_TEXT_FIELDS:
             text = getattr(m, field)
         else:
@@ -432,6 +472,7 @@ def register(server: Any) -> None:
                         "treasurer_report",
                         "section:<key>",
                         "motion:<id>",
+                        "motion_text:<id>",
                     )
                 )
             )

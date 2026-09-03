@@ -350,7 +350,7 @@ class TestSecondReviewRound:
             start_date=date.today().isoformat(),
             end_date=(date.today() + timedelta(days=7)).isoformat(),
         )
-        assert body == {"items": [], "total": 0, "has_more": False}
+        assert body == {"items": [], "limit": 50, "has_more": False}
 
 
 class TestAttendeeVisibility:
@@ -2089,6 +2089,145 @@ class TestSixteenthRoundFindings:
                 break
             offset = chunk["next_content_offset"]
         assert "".join(pieces) == agenda
+
+
+class TestSeventeenthRoundFindings:
+    """Regressions for the seventeenth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_open_shifts_are_returned_a_page_at_a_time(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        days = [date.today() + timedelta(days=n) for n in (1, 2, 3)]
+        for day in days:
+            start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+            db_session.add(
+                Shift(
+                    organization_id=org_id,
+                    shift_date=day,
+                    start_time=start.replace(hour=8),
+                    end_time=start.replace(hour=12),
+                    min_staffing=2,
+                    open_to_all_members=True,
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        window = {"start_date": days[0].isoformat(), "end_date": days[-1].isoformat()}
+        first = await _call(server, principal, "list_open_shifts", limit=2, **window)
+        assert [s["shift_date"] for s in first["items"]] == [
+            days[0].isoformat(),
+            days[1].isoformat(),
+        ]
+        assert first["limit"] == 2
+        assert first["has_more"] is True
+        rest = await _call(
+            server,
+            principal,
+            "list_open_shifts",
+            limit=2,
+            cursor=first["next_cursor"],
+            **window,
+        )
+        assert [s["shift_date"] for s in rest["items"]] == [days[2].isoformat()]
+        assert rest["has_more"] is False
+        assert "next_cursor" not in rest
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_motion_text_is_bounded_and_readable_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import meetings as meeting_tools
+
+        org_id, admin_id, _ = org_with_members
+        minutes_id, motion_id = str(uuid.uuid4()), str(uuid.uuid4())
+        wording = "m" * 25
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, created_by) VALUES (:id, :org, "
+                "'February meeting', 'business', '2027-02-01', 'approved', :by)"
+            ),
+            {"id": minutes_id, "org": org_id, "by": admin_id},
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_motions (id, minutes_id, `order`, motion_text) "
+                "VALUES (:id, :minutes, 1, :wording)"
+            ),
+            {"id": motion_id, "minutes": minutes_id, "wording": wording},
+        )
+        await db_session.flush()
+        monkeypatch.setattr(meeting_tools, "MINUTES_TEXT_CHARS", 10)
+        principal = _principal(org_id, admin_id)
+        body = await _call(server, principal, "get_minutes", minutes_id=minutes_id)
+        motion = body["motions"][0]
+        assert motion["motion_text"] == "m" * 10
+        assert motion["motion_text_truncated"] is True
+        assert motion["discussion_truncated"] is False
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field=f"motion_text:{motion_id}",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        assert "".join(pieces) == wording
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_meeting_agendas_are_previewed_and_readable_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import meetings as meeting_tools
+
+        org_id, admin_id, _ = org_with_members
+        agenda = "1. Call to order 5551234567 " + "x" * 30
+        meeting = Meeting(
+            organization_id=org_id,
+            title="Agenda meeting",
+            meeting_type=MeetingType.BUSINESS,
+            meeting_date=date.today(),
+            agenda=agenda,
+        )
+        db_session.add(meeting)
+        await db_session.flush()
+        monkeypatch.setattr(meeting_tools, "MINUTES_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_meetings")
+        row = next(m for m in listed["items"] if m["id"] == meeting.id)
+        assert len(row["agenda"]) == 12
+        assert row["agenda_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_meeting_agenda",
+                meeting_id=meeting.id,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert joined.endswith("x" * 30)
+        assert chunk["title"] == "Agenda meeting"
+        with pytest.raises(ToolError, match="Meeting not found"):
+            await _call(
+                server, principal, "get_meeting_agenda", meeting_id=str(uuid.uuid4())
+            )
 
 
 class TestReviewFindings:

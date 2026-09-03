@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import IntegrationsPage from './IntegrationsPage';
@@ -684,10 +684,14 @@ describe('IntegrationsPage', () => {
       await user.click(screen.getByTestId('mcp-issue-key'));
 
       // Closing the panel now would unmount the only place the one-time
-      // plaintext can be rendered.
+      // plaintext can be rendered; so would disconnecting the integration.
       expect(toggle).toBeDisabled();
       await user.click(toggle);
       expect(screen.getByTestId('mcp-key-panel')).toBeInTheDocument();
+      const disconnect = within(card).getByRole('button', { name: /Disconnect/ });
+      expect(disconnect).toBeDisabled();
+      await user.click(disconnect);
+      expect(mockDisconnectIntegration).not.toHaveBeenCalled();
 
       finish({
         key: {
@@ -706,7 +710,10 @@ describe('IntegrationsPage', () => {
         endpoint_path: '/api/mcp',
       });
       await screen.findByTestId('mcp-issued-key');
-      expect(toggle).toBeEnabled();
+      // The panel reloads its status after issuing; the hold lifts when that
+      // request settles, not when the plaintext appears.
+      await waitFor(() => expect(toggle).toBeEnabled());
+      expect(within(card).getByRole('button', { name: /Disconnect/ })).toBeEnabled();
     });
 
     it('opens the service key panel from a connected card', async () => {

@@ -617,6 +617,7 @@ const IntegrationsPage: React.FC = () => {
 
   const handleDisconnect = async (integrationId: string) => {
     const integration = integrations.find((i) => i.id === integrationId);
+    if (mcpPanelBusy && integration?.integration_type === 'claude-mcp') return;
     const activation = integration ? isActivation(integration.integration_type) : false;
     try {
       await integrationsService.disconnectIntegration(integrationId);
@@ -1603,6 +1604,14 @@ const IntegrationsPage: React.FC = () => {
                         onClick={() => {
                           void handleDisconnect(integration.id);
                         }}
+                        // Disconnecting the Claude integration unmounts the key
+                        // panel; mid-issue that would lose the one-time plaintext.
+                        disabled={mcpPanelBusy && integration.integration_type === 'claude-mcp'}
+                        title={
+                          mcpPanelBusy && integration.integration_type === 'claude-mcp'
+                            ? 'Wait for the current key request to finish'
+                            : undefined
+                        }
                         className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
                       >
                         <Settings className="h-3.5 w-3.5" />

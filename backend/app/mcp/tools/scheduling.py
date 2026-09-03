@@ -206,15 +206,17 @@ def register(server: Any) -> None:
         principal: McpPrincipal,
         start_date: str,
         end_date: str,
+        limit: int = 50,
         cursor: Optional[str] = None,
     ) -> dict:
         """Shifts in the window (at most a year) that still have an unfilled
         seat, with the seats and current assignments so the gaps can be
         named. Unless the department shares its full schedule with Claude,
-        only shifts open to all members are listed. A very busy window is
-        examined a few hundred shifts at a time: when ``has_more`` is true,
+        only shifts open to all members are listed. At most ``limit`` shifts
+        are returned per call, soonest first: when ``has_more`` is true,
         call again with the same dates and ``cursor`` set to
         ``next_cursor``."""
+        limit = clamp_limit(limit)
         start = parse_date(start_date, "start_date")
         end = parse_date(end_date, "end_date")
         if start is None or end is None:
@@ -247,19 +249,28 @@ def register(server: Any) -> None:
         candidates = list(rows.scalars().all())
         truncated = len(candidates) > MAX_OPEN_SHIFT_CANDIDATES
         candidates = candidates[:MAX_OPEN_SHIFT_CANDIDATES]
-        shifts = await SchedulingService(db).filter_shifts_with_open_positions(
-            org_uuid(principal), candidates
+        shifts = list(
+            await SchedulingService(db).filter_shifts_with_open_positions(
+                org_uuid(principal), candidates
+            )
         )
-        items = await _render(db, principal, list(shifts))
+        # The batch is examined in full but rendered a page at a time: each
+        # shift carries its seats and assignments, so a busy window could
+        # otherwise answer with hundreds of them at once.
+        shown = shifts[:limit]
+        items = await _render(db, principal, shown)
         body: dict[str, Any] = {
             "items": items,
-            "total": len(items),
-            "has_more": truncated,
+            "limit": limit,
+            "has_more": truncated or len(shifts) > limit,
         }
-        if truncated and candidates:
-            # A keyset cursor on the last examined row: it advances within a
-            # date as well as across dates, so a day with more shifts than
-            # the cap cannot trap the continuation.
+        # A keyset cursor on the last row handed back — or, when the whole
+        # batch fitted, on the last row examined. It advances within a date
+        # as well as across dates, so a day with more shifts than either
+        # bound cannot trap the continuation.
+        if len(shifts) > limit:
+            body["next_cursor"] = _cursor_for(shown[-1])
+        elif truncated and candidates:
             body["next_cursor"] = _cursor_for(candidates[-1])
         return body
 
