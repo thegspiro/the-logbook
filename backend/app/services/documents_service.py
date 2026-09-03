@@ -1034,20 +1034,51 @@ class DocumentsService:
         # is in-org so a document can't be moved into another org's folder.
         # None is allowed (moves the document to org level).
         if "folder_id" in update_data:
+            new_folder_id = update_data["folder_id"]
             await assert_in_org(
                 self.db,
                 DocumentFolder,
-                update_data["folder_id"],
+                new_folder_id,
                 organization_id,
                 allow_none=True,
                 label="folder",
             )
+            if new_folder_id:
+                # FAC-36 (Codex, on top of FAC-35): moving a document into a
+                # folder writes an FK onto the Document row -- a "canonical
+                # lock order" resource pair, see the module-level note above.
+                # Lock the destination DocumentFolder first, or this flush
+                # can deadlock against _validate_shared_document_reference
+                # (facilities.py), which always locks the destination folder
+                # before it ever locks the Document row.
+                await self._lock_destination_folder(new_folder_id)
+                # Re-fetch under lock now that the folder is locked first --
+                # the plain read above is stale for locking purposes.
+                document = await self.get_document_by_id(
+                    document_id, organization_id, for_update=True
+                )
+                if not document:
+                    return None
 
         apply_updates(document, update_data)
 
         await self.db.commit()
         await self.db.refresh(document)
         return document
+
+    async def _lock_destination_folder(self, folder_id: UUID) -> None:
+        """FAC-36: lock a single ``DocumentFolder`` row, for_update.
+
+        A standalone method -- like ``_lock_subtree_folders`` above -- purely
+        so a test can patch-and-track it. See ``update_document``'s FAC-36
+        comment for why this has to run before the Document row is ever
+        locked.
+        """
+        await self.db.execute(
+            select(DocumentFolder.id)
+            .where(DocumentFolder.id == str(folder_id))
+            .with_for_update()
+        )
 
     async def delete_document(
         self,

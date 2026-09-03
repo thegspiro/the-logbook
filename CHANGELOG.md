@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: the generic document-move endpoint was the third call site FAC-35's total lock order missed (2026-09-03)
+
+**Fixed**
+
+- **FAC-36 — `DocumentsService.update_document` (the generic
+  `PATCH /documents/{id}` handler) wrote a client-supplied `folder_id`
+  directly onto the `Document` row without ever explicitly locking the
+  destination `DocumentFolder` first.** FAC-35 declared a canonical
+  `DocumentFolder` → `Document` → reference-table lock order and brought
+  `_validate_shared_document_reference` and `delete_folder` into line with
+  it, but missed this third call site. The only lock this path took on the
+  destination folder was the implicit one InnoDB's own row-then-FK-check
+  order takes for the `UPDATE` at commit — which lands _after_ this
+  transaction has already (implicitly) locked the `Document` row being
+  written, i.e. Document-then-Folder, the opposite of the declared order and
+  of what `_validate_shared_document_reference` now always does. A document
+  moved into the same facility folder a concurrent facility-reference filing
+  (or folder deletion) is touching could deadlock: each side holding the
+  resource the other is waiting on.
+- Fixed by locking the destination `DocumentFolder` first (extracted into
+  `_lock_destination_folder`, matching the `_lock_subtree_folders`/
+  `_lock_subtree_documents` "extract for testability" pattern), only when
+  `folder_id` is actually being set to a real folder, then re-fetching the
+  `Document` row under `for_update=True` before applying the update. The
+  existing "document not found returns `None`" precedence is unchanged.
+- New regression test (`TestUpdateDocumentLocksTheFolderBeforeTheDocument`):
+  proves the update blocks on an already-held destination-folder lock and
+  never explicitly locks the `Document` row until after that lock is
+  released — the differentiator that actually distinguishes pre- and
+  post-fix behavior, since both remain "not done" after a short pause
+  either way (pre-fix blocks later, inside the implicit FK-check lock at
+  commit, which is not directly observable). Confirmed against pre-fix code
+  (`git stash`).
+
+**Also fixed (test-only, found in the same review round)**
+
+- **FAC-37 — a fixed 0.5s sleep in the existing
+  `TestReferenceInsertStaysUnderTheDocumentLock` (FAC-31's regression test)
+  could let a slow-CI run pass for the wrong reason**, if the deleting
+  task's own preliminary query was still in flight (or not yet issued) when
+  the delay expired. Replaced with an event set the moment the deleter
+  issues its actual locking read, removing the query-latency ambiguity the
+  fixed delay left open.
+
 ### Security: FAC-34's cascade reorder left the creator path locking `Document` and `DocumentFolder` in the opposite order (2026-09-03)
 
 **Fixed**

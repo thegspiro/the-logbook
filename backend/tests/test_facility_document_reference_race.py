@@ -340,6 +340,20 @@ class TestReferenceInsertStaysUnderTheDocumentLock:
     single invariant asserted at the end is the one FAC-31 exists to
     protect: a ``FacilityDocument``/``FacilityPhoto`` row is never left
     pointing at a document that no longer exists.
+
+    FAC-37 (Codex): a fixed sleep between starting ``delete_task`` and
+    checking ``delete_task.done()`` is a race against the deleter's own
+    query latency, not just against the lock -- on a slow CI database, the
+    deleter's preliminary (non-locking) query can still be in flight, or not
+    yet even issued, when the sleep expires. The test would then take the
+    "not yet done" branch for the wrong reason and still pass (a delayed
+    pre-fix delete raises the same ``PermissionError`` once it eventually
+    runs), without ever actually having proven the lock held. Synchronizing
+    on an event set the moment the deleter issues its locking read
+    (``get_document_by_id(..., for_update=True)``) removes that ambiguity:
+    once the event fires, the deleter has genuinely reached the point where
+    a held lock -- not query latency -- is the only thing that can still be
+    blocking it.
     """
 
     async def test_a_concurrent_delete_cannot_land_between_validate_and_insert(
@@ -366,10 +380,29 @@ class TestReferenceInsertStaysUnderTheDocumentLock:
             # permission check (FAC-26) fails closed if it ever sees a
             # reference -- it should not need that check to matter here,
             # because at this instant no reference has been filed yet.
-            delete_task = asyncio.create_task(
-                DocumentsService(deleter).delete_document(document_id, org_id)
-            )
-            await asyncio.sleep(0.5)
+            document_lock_attempted = asyncio.Event()
+            deleter_service = DocumentsService(deleter)
+            original_get_document_by_id = deleter_service.get_document_by_id
+
+            async def _tracking_get_document_by_id(*args, **kwargs):
+                if kwargs.get("for_update"):
+                    document_lock_attempted.set()
+                return await original_get_document_by_id(*args, **kwargs)
+
+            with patch.object(
+                deleter_service,
+                "get_document_by_id",
+                _tracking_get_document_by_id,
+            ):
+                delete_task = asyncio.create_task(
+                    deleter_service.delete_document(document_id, org_id)
+                )
+                # FAC-37: wait for the deleter to actually reach its locking
+                # read -- not a fixed sleep from task creation -- then give
+                # it a brief moment to either resolve (pre-fix, nothing was
+                # holding the lock) or genuinely block on it (post-fix).
+                await asyncio.wait_for(document_lock_attempted.wait(), timeout=10)
+                await asyncio.sleep(0.2)
 
             if not delete_task.done():
                 # Fixed behaviour: the creator's transaction never committed
@@ -890,6 +923,109 @@ class TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar:
                     await creator_task
             await creator.rollback()
             await cascade.rollback()
+            await _teardown_org(
+                org_id, facility_id, document_id, facility_type_id, status_id
+            )
+
+
+class TestUpdateDocumentLocksTheFolderBeforeTheDocument:
+    """FAC-36 (Codex, on top of FAC-35): the generic ``PATCH /documents/{id}``
+    move path (``update_document``) writes ``folder_id`` directly onto the
+    ``Document`` row. Pre-fix, it never explicitly locked the destination
+    ``DocumentFolder`` at all -- the only lock it took on that folder was the
+    implicit one InnoDB's own row-then-FK-check order takes for the ``UPDATE``
+    at commit, which lands *after* this transaction has already (implicitly)
+    locked the ``Document`` row being written. Document-then-Folder is the
+    opposite of the canonical order documented at the top of this module
+    (DocumentFolder, then Document, then the reference table) and the
+    opposite of what ``_validate_shared_document_reference`` (facilities.py)
+    always does now, per FAC-35 -- the same two-way-deadlock shape FAC-35
+    fixed on that call site, reopened here on this one.
+
+    Proving the fix needs the destination folder already locked by another
+    session and confirming ``update_document`` blocks on it -- genuinely,
+    and *before* it ever explicitly locks the Document row for the write --
+    rather than merely completing eventually (which the old ordering also
+    does, just via InnoDB's implicit FK-check lock at commit, a step this
+    test cannot instrument directly).
+    """
+
+    async def test_update_document_locks_the_folder_before_the_document(
+        self, two_sessions
+    ):
+        cascade, updater = two_sessions
+        ids = await _make_org_facility_document_with_folder(
+            cascade, f"fcvfd-fac36-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id, folder_id = ids
+        updater_task = None
+        try:
+            # What _validate_shared_document_reference's ensure_facility_folder
+            # call (or delete_folder's _lock_subtree_folders) takes on this
+            # exact row before either of those ever locks a Document.
+            await cascade.execute(
+                select(DocumentFolder.id)
+                .where(DocumentFolder.id == folder_id)
+                .with_for_update()
+            )
+
+            document_lock_reached = asyncio.Event()
+            updater_service = DocumentsService(updater)
+            original_get_document_by_id = updater_service.get_document_by_id
+
+            async def _tracking_get_document_by_id(*args, **kwargs):
+                if kwargs.get("for_update"):
+                    document_lock_reached.set()
+                return await original_get_document_by_id(*args, **kwargs)
+
+            with patch.object(
+                updater_service,
+                "get_document_by_id",
+                _tracking_get_document_by_id,
+            ):
+                updater_task = asyncio.create_task(
+                    updater_service.update_document(
+                        document_id, org_id, {"folder_id": str(folder_id)}
+                    )
+                )
+                await asyncio.sleep(0.5)
+
+                # Still blocked, and -- the fix's whole point -- not yet
+                # having issued its own Document-lock query. Pre-fix, this
+                # assertion is vacuous (that query is never issued at all
+                # from this path), which is exactly why the *post*-release
+                # assertion below is the one that actually distinguishes
+                # the two: pre-fix, it never fires, whether blocked or not.
+                assert not updater_task.done(), (
+                    "update_document should still be blocked on the "
+                    "already-locked destination DocumentFolder"
+                )
+                assert not document_lock_reached.is_set(), (
+                    "update_document locked the Document row before the "
+                    "destination DocumentFolder -- FAC-36's lock order "
+                    "regressed"
+                )
+
+                # Release the folder lock; the update should now run to
+                # completion without deadlocking.
+                await cascade.commit()
+                result = await asyncio.wait_for(updater_task, timeout=10)
+                assert result is not None
+                assert str(result.folder_id) == str(folder_id)
+                assert document_lock_reached.is_set(), (
+                    "update_document never explicitly locked the "
+                    "destination-folder-then-Document pair -- FAC-36's fix "
+                    "is missing"
+                )
+
+            await updater.commit()
+        finally:
+            if updater_task is not None and not updater_task.done():
+                updater_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await updater_task
+            await cascade.rollback()
+            await updater.rollback()
             await _teardown_org(
                 org_id, facility_id, document_id, facility_type_id, status_id
             )

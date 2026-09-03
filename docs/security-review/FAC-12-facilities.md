@@ -1769,6 +1769,108 @@ caught two now-updated unit tests in `test_facilities_permissions.py` that
 assumed `ensure_facility_folder` was skipped for an already-filed document —
 see FAC-35's write-up above for why that assumption changed.
 
+### FAC-36 — P2 (reliability, lock-ordering deadlock) — the generic `PATCH /documents/{id}` move path was the third call site FAC-35's total order missed — ✅ FIXED
+
+**Found by Codex review of the FAC-35 commit (`b651b5cc`… now `5a1420f4`).**
+FAC-35 declared a canonical order — `DocumentFolder`, then `Document`, then
+the `FacilityDocument`/`FacilityPhoto` reference table — and brought
+`_validate_shared_document_reference` and `delete_folder` into line with it.
+But a third call site touches two of these three resources too:
+`DocumentsService.update_document`, the generic `PATCH /documents/{id}`
+handler, writes a client-supplied `folder_id` directly onto the `Document`
+row whenever a caller moves a document into a folder. It never explicitly
+locked the destination `DocumentFolder` at all — the only lock it took on
+that folder was the implicit one InnoDB's own row-then-FK-check order takes
+for the `UPDATE` at commit, which lands _after_ this transaction has already
+(implicitly) locked the `Document` row being written. Document-then-Folder
+is the opposite of FAC-35's declared order and the opposite of what
+`_validate_shared_document_reference` now always does: a document moved by
+this generic endpoint into the same facility folder a concurrent facility
+reference is being filed into (or a concurrent `delete_folder` is deleting)
+can hold the `Document` lock while waiting on the folder, while the other
+side holds the folder lock while waiting on the `Document` — the same
+two-way-deadlock shape FAC-35 closed on the other two call sites, reopened
+here on a third.
+
+**Where:** `backend/app/services/documents_service.py` (`update_document`).
+
+**Fix:** lock the destination `DocumentFolder` first — before the `Document`
+row is ever locked — matching FAC-35's canonical order. Extracted into
+`_lock_destination_folder`, the same "extract so a test can patch-and-track
+it" pattern as `_lock_subtree_folders`/`_lock_subtree_documents`. Only
+runs when `folder_id` is actually being set to a real folder (clearing it to
+`None`, i.e. moving a document to org level, references no parent row and
+needs no lock); the document is then re-fetched under `for_update=True` so
+the write proceeds against a genuinely locked row rather than the earlier
+plain read. The existing "not found returns `None`" precedence for the
+target document itself is unchanged — that check still runs first, before
+any folder validation or locking.
+
+**Regression test:**
+`tests/test_facility_document_reference_race.py`,
+`TestUpdateDocumentLocksTheFolderBeforeTheDocument`. Same shape as
+`TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery`: with the
+destination folder already locked by one session, `update_document` run in
+a second, real session blocks on it and — the differentiator that actually
+proves the fix, since both the pre- and post-fix code remain "not done"
+after a short pause either way (pre-fix blocks later, inside `db.commit()`'s
+own implicit FK-check lock, not observable from outside) — never explicitly
+locks the `Document` row via `get_document_by_id(for_update=True)` until
+_after_ the folder lock is released. Confirmed against pre-fix code via
+`git stash`: the post-release assertion that the explicit lock was ever
+taken fails (it never fires pre-fix, whether blocked or not), and the test
+passes clean post-fix.
+
+**Mirrored to** `CHANGELOG.md`.
+
+### FAC-37 — LOW, test-only (Codex, flaky-test risk) — a fixed 0.5s sleep could let a slow-CI run of an existing regression test pass for the wrong reason — ✅ FIXED
+
+**Found by Codex review of the same commit.**
+`TestReferenceInsertStaysUnderTheDocumentLock` (FAC-31's regression test)
+started a `delete_document` background task, slept a fixed 0.5 seconds, and
+branched on whether the task had finished to decide which assertions to run.
+On a slow CI database, the deleter's own _preliminary_, non-locking query
+could still be in flight — or not yet even issued — when that fixed delay
+expired: the test would then take the "still blocked" branch for the wrong
+reason (query latency, not a held lock), and a delayed pre-fix delete would
+go on to raise the very `PermissionError` the test expects once it finally
+ran, letting the test pass without ever having actually exercised the lock.
+
+**Where:** `backend/tests/test_facility_document_reference_race.py`
+(`TestReferenceInsertStaysUnderTheDocumentLock`).
+
+**Fix:** replaced the fixed sleep with an event set the instant the deleter
+issues its own locking read (`get_document_by_id(..., for_update=True)`),
+via the same instance-level patch-and-track technique the rest of this file
+already uses. The test now waits for that event before deciding whether the
+task is blocked, plus a short, fixed 0.2s grace period purely to let a
+genuinely blocked task's `await` settle — the ambiguous window (query
+latency) is gone; the only thing left that can still be "not done" at that
+point is a held lock.
+
+**Mirrored to** `CHANGELOG.md`.
+
+## Completion gate (pass 3, round 10 — Codex review of `5a1420f4`, FAC-36/FAC-37)
+
+| Check                                                   | Result                                     |
+| ------------------------------------------------------- | ------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                           | ✅ 0 violations                            |
+| `black --check app/ tests/ alembic/`                    | ✅ clean                                   |
+| `isort --check-only app/ tests/ alembic/`               | ✅ clean                                   |
+| `pytest tests/test_facility_document_reference_race.py` | ✅ 8 passed (+1, FAC-36's regression test) |
+| `pytest tests/test_documents_access.py`                 | ✅ 114 passed                              |
+| `pytest tests/ -k "facilities or documents"`            | ✅ 301 passed, 1 skipped (pre-existing)    |
+
+**FAC-36's regression test independently confirmed against pre-fix code:**
+`git stash` isolating just the `documents_service.py` fix (test file
+changes kept) —
+`TestUpdateDocumentLocksTheFolderBeforeTheDocument::test_update_document_locks_the_folder_before_the_document`
+fails on its post-release assertion that `update_document` ever explicitly
+locked the `Document` row via `get_document_by_id(for_update=True)` (it
+never does, pre-fix — the deadlock hazard was in InnoDB's own implicit
+FK-check lock at commit, not observable through that call); `git stash pop`
+restored the fix and the file's 8 tests all passed.
+
 ## Verified good ✅ (re-confirmed this pass)
 
 - **Auth coverage 98/98** — exact grep count unchanged since pass 2
