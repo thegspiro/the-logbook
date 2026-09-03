@@ -7,21 +7,70 @@ interface EmailSettingsSectionProps {
   emailSettings: EmailServiceSettings;
   onEmailSettingsChange: React.Dispatch<React.SetStateAction<EmailServiceSettings>>;
   savingEmail: boolean;
+  testingEmail: boolean;
   emailPasswordVisible: boolean;
   onTogglePasswordVisible: () => void;
   onSave: () => void;
+  onTest: () => void;
   profileName: string | undefined;
 }
+
+/**
+ * The hosted platforms are plain SMTP submission behind an App Password. The
+ * account that signs in is the account the mail is sent from, so the From
+ * address doubles as the login and the only platform-specific field is the
+ * password. Host, port and encryption are fixed by the provider and resolved
+ * on the backend.
+ */
+const APP_PASSWORD_PLATFORMS: Record<
+  'gmail' | 'microsoft',
+  {
+    heading: string;
+    passwordField: 'google_app_password' | 'microsoft_app_password';
+    passwordLabel: string;
+    placeholder: string;
+    help: string;
+    helpHref: string;
+    helpLinkLabel: string;
+  }
+> = {
+  gmail: {
+    heading: 'Gmail / Google Workspace',
+    passwordField: 'google_app_password',
+    passwordLabel: 'Google App Password',
+    placeholder: 'xxxx xxxx xxxx xxxx',
+    help: 'Signs in to smtp.gmail.com as the From address. Turn on 2-Step Verification for that Google account, then create an App Password for "Mail".',
+    helpHref: 'https://myaccount.google.com/apppasswords',
+    helpLinkLabel: 'Create a Google App Password',
+  },
+  microsoft: {
+    heading: 'Microsoft 365',
+    passwordField: 'microsoft_app_password',
+    passwordLabel: 'Microsoft 365 App Password',
+    placeholder: 'App password for the sending mailbox',
+    help: 'Signs in to smtp.office365.com as the From address. SMTP AUTH must be enabled for that mailbox in Exchange Online; if the account uses multi-factor sign-in, create an App Password for it.',
+    helpHref: 'https://account.microsoft.com/security',
+    helpLinkLabel: 'Microsoft account security settings',
+  },
+};
 
 const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
   emailSettings,
   onEmailSettingsChange,
   savingEmail,
+  testingEmail,
   emailPasswordVisible,
   onTogglePasswordVisible,
   onSave,
+  onTest,
   profileName,
 }) => {
+  const appPasswordPlatform =
+    emailSettings.platform === 'gmail' || emailSettings.platform === 'microsoft'
+      ? APP_PASSWORD_PLATFORMS[emailSettings.platform]
+      : null;
+  const busy = savingEmail || testingEmail;
+
   return (
     <div className="space-y-6">
       <div>
@@ -85,7 +134,9 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
       {/* Common fields */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="text-theme-text-muted mb-1 block text-xs">From Email Address</label>
+          <label className="text-theme-text-muted mb-1 block text-xs">
+            {appPasswordPlatform ? 'Account Email Address (sends from and signs in as)' : 'From Email Address'}
+          </label>
           <input
             type="email"
             value={emailSettings.from_email || ''}
@@ -107,96 +158,48 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
       </div>
 
       {/* Platform-specific fields */}
-      {emailSettings.platform === 'gmail' && (
+      {appPasswordPlatform && (
         <div className="border-theme-surface-border space-y-4 border-t pt-4">
-          <p className="text-theme-text-primary text-sm font-medium">Gmail / Google Workspace</p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="text-theme-text-muted mb-1 block text-xs">Google Client ID</label>
-              <input
-                type="text"
-                value={emailSettings.google_client_id || ''}
-                onChange={(e) => onEmailSettingsChange((s) => ({ ...s, google_client_id: e.target.value }))}
-                placeholder="123456789-abc.apps.googleusercontent.com"
-                className="form-input"
-              />
-            </div>
-            <div>
-              <label className="text-theme-text-muted mb-1 block text-xs">Google Client Secret</label>
-              <div className="relative">
-                <input
-                  type={emailPasswordVisible ? 'text' : 'password'}
-                  value={emailSettings.google_client_secret || ''}
-                  onChange={(e) => onEmailSettingsChange((s) => ({ ...s, google_client_secret: e.target.value }))}
-                  placeholder="GOCSPX-xxxxxxxxxxxxx"
-                  className="form-input pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={onTogglePasswordVisible}
-                  className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-2 -translate-y-1/2"
-                >
-                  {emailPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-          </div>
+          <p className="text-theme-text-primary text-sm font-medium">{appPasswordPlatform.heading}</p>
           <div>
-            <label className="text-theme-text-muted mb-1 block text-xs">App Password (alternative to OAuth)</label>
-            <input
-              type="password"
-              value={emailSettings.google_app_password || ''}
-              onChange={(e) => onEmailSettingsChange((s) => ({ ...s, google_app_password: e.target.value }))}
-              placeholder="xxxx xxxx xxxx xxxx"
-              className="form-input sm:w-1/2"
-            />
-          </div>
-        </div>
-      )}
-
-      {emailSettings.platform === 'microsoft' && (
-        <div className="border-theme-surface-border space-y-4 border-t pt-4">
-          <p className="text-theme-text-primary text-sm font-medium">Microsoft 365 / Azure AD</p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="text-theme-text-muted mb-1 block text-xs">Tenant ID</label>
-              <input
-                type="text"
-                value={emailSettings.microsoft_tenant_id || ''}
-                onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_tenant_id: e.target.value }))}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="form-input"
-              />
-            </div>
-            <div>
-              <label className="text-theme-text-muted mb-1 block text-xs">Client ID (Application ID)</label>
-              <input
-                type="text"
-                value={emailSettings.microsoft_client_id || ''}
-                onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_client_id: e.target.value }))}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="form-input"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-theme-text-muted mb-1 block text-xs">Client Secret</label>
+            <label htmlFor="email-app-password" className="text-theme-text-muted mb-1 block text-xs">
+              {appPasswordPlatform.passwordLabel}
+            </label>
             <div className="relative sm:w-1/2">
               <input
+                id="email-app-password"
                 type={emailPasswordVisible ? 'text' : 'password'}
-                value={emailSettings.microsoft_client_secret || ''}
-                onChange={(e) => onEmailSettingsChange((s) => ({ ...s, microsoft_client_secret: e.target.value }))}
-                placeholder="Client secret value"
+                autoComplete="off"
+                value={emailSettings[appPasswordPlatform.passwordField] || ''}
+                onChange={(e) =>
+                  onEmailSettingsChange((s) => ({ ...s, [appPasswordPlatform.passwordField]: e.target.value }))
+                }
+                placeholder={appPasswordPlatform.placeholder}
                 className="form-input pr-10"
               />
               <button
                 type="button"
                 onClick={onTogglePasswordVisible}
+                aria-label={emailPasswordVisible ? 'Hide password' : 'Show password'}
                 className="text-theme-text-muted hover:text-theme-text-primary absolute top-1/2 right-2 -translate-y-1/2"
               >
                 {emailPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+          </div>
+          <div className="text-theme-text-muted flex items-start gap-2 text-xs">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              {appPasswordPlatform.help}{' '}
+              <a
+                href={appPasswordPlatform.helpHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-theme-accent-blue underline"
+              >
+                {appPasswordPlatform.helpLinkLabel}
+              </a>
+            </span>
           </div>
         </div>
       )}
@@ -313,11 +316,21 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
         </div>
       )}
 
-      {/* Save */}
-      <div className="flex justify-end pt-2">
+      {/* Test + Save */}
+      <div className="flex flex-wrap justify-end gap-2 pt-2">
         <button
+          type="button"
+          onClick={onTest}
+          disabled={busy || emailSettings.platform === 'other'}
+          className="btn-secondary inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {testingEmail && <Loader2 className="h-4 w-4 animate-spin" />}
+          {testingEmail ? 'Testing...' : 'Test Connection'}
+        </button>
+        <button
+          type="button"
           onClick={onSave}
-          disabled={savingEmail}
+          disabled={busy}
           className="btn-info inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
         >
           {savingEmail && <Loader2 className="h-4 w-4 animate-spin" />}

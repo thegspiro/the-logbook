@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.onboarding import OnboardingStatus
 from app.models.user import Organization, User
 from app.schemas.organization import (
+    _LEGACY_EMAIL_OAUTH_FIELDS,
     ContactInfoSettings,
     DepartmentEmailSettings,
     EmailServiceSettings,
@@ -413,6 +414,16 @@ class OrganizationService:
         # Deep-merge so a partial PATCH of one sub-key doesn't wipe the rest of
         # its section (ORU-9). A shallow {**a, **b} would replace whole sections.
         updated_settings = _deep_merge_settings(current_settings, settings_update)
+
+        # The merge keeps every key the row already had, which is right for a
+        # partial PATCH and wrong for the OAuth client credentials the email
+        # section no longer has a field for: nothing reads them, but a merge
+        # would carry the encrypted secret forward on every save. Prune them
+        # once the section is being written anyway.
+        email_section = updated_settings.get("email_service")
+        if "email_service" in settings_update and isinstance(email_section, dict):
+            for legacy_key in _LEGACY_EMAIL_OAUTH_FIELDS:
+                email_section.pop(legacy_key, None)
 
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)

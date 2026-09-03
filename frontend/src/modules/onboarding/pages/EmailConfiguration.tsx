@@ -21,15 +21,11 @@ interface EmailConfig {
   cloudflareAccountId?: string;
   cloudflareApiToken?: string;
 
-  // Gmail/Google Workspace
-  googleClientId?: string;
-  googleClientSecret?: string;
+  // Gmail/Google Workspace — signs in to smtp.gmail.com as fromEmail
   googleAppPassword?: string;
 
-  // Microsoft 365
-  microsoftTenantId?: string;
-  microsoftClientId?: string;
-  microsoftClientSecret?: string;
+  // Microsoft 365 — signs in to smtp.office365.com as fromEmail
+  microsoftAppPassword?: string;
 
   // Self-hosted SMTP
   smtpHost?: string;
@@ -60,7 +56,6 @@ const EmailConfiguration: React.FC = () => {
   });
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
-  const [useOAuth, setUseOAuth] = useState(true);
 
   // API request hooks - separate instances for test and save
   const {
@@ -134,8 +129,13 @@ const EmailConfiguration: React.FC = () => {
       }
     }
 
-    if (emailPlatform === 'gmail' && !useOAuth && !config.googleAppPassword) {
+    if (emailPlatform === 'gmail' && !config.googleAppPassword) {
       toast.error('Please enter your Google App Password');
+      return;
+    }
+
+    if (emailPlatform === 'microsoft' && !config.microsoftAppPassword) {
+      toast.error('Please enter your Microsoft 365 App Password');
       return;
     }
 
@@ -146,10 +146,7 @@ const EmailConfiguration: React.FC = () => {
       // Test email connection with real API call
       const response = await apiClient.testEmailConnection({
         platform: emailPlatform || 'other',
-        config: {
-          ...config,
-          authMethod: useOAuth ? 'oauth' : 'smtp',
-        },
+        config: { ...config },
       });
 
       setTestingConnection(false);
@@ -215,8 +212,13 @@ const EmailConfiguration: React.FC = () => {
       }
     }
 
-    if (emailPlatform === 'gmail' && !useOAuth && !config.googleAppPassword) {
+    if (emailPlatform === 'gmail' && !config.googleAppPassword) {
       toast.error('Please enter your Google App Password');
+      return;
+    }
+
+    if (emailPlatform === 'microsoft' && !config.microsoftAppPassword) {
+      toast.error('Please enter your Microsoft 365 App Password');
       return;
     }
 
@@ -226,10 +228,7 @@ const EmailConfiguration: React.FC = () => {
         // Passwords, API keys, and secrets will be encrypted server-side
         const response = await apiClient.saveEmailConfig({
           platform: emailPlatform || 'other',
-          config: {
-            ...config,
-            authMethod: useOAuth ? 'oauth' : 'smtp',
-          },
+          config: { ...config },
         });
 
         if (response.error) {
@@ -272,139 +271,51 @@ const EmailConfiguration: React.FC = () => {
       case 'gmail':
         return (
           <>
-            {/* OAuth vs App Password Toggle */}
             <div className="alert-info mb-6">
-              <div className="mb-4 flex items-start space-x-3">
+              <div className="flex items-start space-x-3">
                 <AlertCircle aria-hidden="true" className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" />
                 <div>
-                  <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Choose Authentication Method</p>
+                  <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Gmail / Google Workspace</p>
                   <p className="text-theme-alert-info-text text-sm">
-                    OAuth 2.0 is recommended for better security. App Password is simpler but less secure.
+                    The Logbook signs in to smtp.gmail.com as the From address above using a Google App Password. 2-Step
+                    Verification must be turned on for that account.
                   </p>
                 </div>
               </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setUseOAuth(true)}
-                  aria-pressed={useOAuth}
-                  className={`flex-1 rounded-lg px-4 py-3 font-medium transition-all ${
-                    useOAuth
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
-                  }`}
-                >
-                  OAuth 2.0 (Recommended)
-                </button>
-                <button
-                  onClick={() => setUseOAuth(false)}
-                  aria-pressed={!useOAuth}
-                  className={`flex-1 rounded-lg px-4 py-3 font-medium transition-all ${
-                    !useOAuth
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
-                  }`}
-                >
-                  App Password
-                </button>
-              </div>
             </div>
 
-            {useOAuth ? (
-              <>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                      Google Client ID
-                    </label>
-                    <input
-                      type="text"
-                      value={config.googleClientId || ''}
-                      onChange={(e) => handleInputChange('googleClientId', e.target.value)}
-                      placeholder="123456789-abc.apps.googleusercontent.com"
-                      className="form-input placeholder-theme-text-muted py-3"
-                    />
-                  </div>
+            <div>
+              <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                Google App Password <span className="text-theme-accent-red">*</span>
+              </label>
+              <input
+                type="password"
+                autoComplete="off"
+                value={config.googleAppPassword || ''}
+                onChange={(e) => handleInputChange('googleAppPassword', e.target.value)}
+                placeholder="xxxx xxxx xxxx xxxx"
+                className="form-input placeholder-theme-text-muted py-3"
+              />
+            </div>
 
-                  <div>
-                    <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                      Google Client Secret
-                    </label>
-                    <input
-                      type="password"
-                      value={config.googleClientSecret || ''}
-                      onChange={(e) => handleInputChange('googleClientSecret', e.target.value)}
-                      placeholder="GOCSPX-xxxxxxxxxxxxx"
-                      className="form-input placeholder-theme-text-muted py-3"
-                    />
-                  </div>
-                </div>
-
-                <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
-                  <p className="text-theme-text-primary mb-2 font-medium">How to get OAuth credentials:</p>
-                  <ol className="list-inside list-decimal space-y-1">
-                    <li>Go to Google Cloud Console</li>
-                    <li>Create a new project or select existing</li>
-                    <li>Enable Gmail API</li>
-                    <li>Create OAuth 2.0 credentials</li>
-                    <li>Copy Client ID and Client Secret here</li>
-                  </ol>
-                  <a
-                    href="https://console.cloud.google.com/apis/credentials"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-theme-alert-info-icon hover:text-theme-alert-info-title mt-2 inline-block underline"
-                  >
-                    Open Google Cloud Console →
-                  </a>
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">Gmail Address</label>
-                  <input
-                    type="email"
-                    value={config.fromEmail || ''}
-                    onChange={(e) => handleInputChange('fromEmail', e.target.value)}
-                    placeholder="notifications@yourdomain.com"
-                    className="form-input placeholder-theme-text-muted py-3"
-                  />
-                </div>
-
-                <div className="mt-4">
-                  <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                    Google App Password <span className="text-theme-accent-red">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={config.googleAppPassword || ''}
-                    onChange={(e) => handleInputChange('googleAppPassword', e.target.value)}
-                    placeholder="xxxx xxxx xxxx xxxx"
-                    className="form-input placeholder-theme-text-muted py-3"
-                  />
-                </div>
-
-                <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
-                  <p className="text-theme-text-primary mb-2 font-medium">How to create an App Password:</p>
-                  <ol className="list-inside list-decimal space-y-1">
-                    <li>Enable 2-Factor Authentication on your Google account</li>
-                    <li>Go to Google Account Security settings</li>
-                    <li>Select "App passwords"</li>
-                    <li>Generate a new app password for "Mail"</li>
-                    <li>Copy the 16-character password here</li>
-                  </ol>
-                  <a
-                    href="https://myaccount.google.com/apppasswords"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-theme-alert-info-icon hover:text-theme-alert-info-title mt-2 inline-block underline"
-                  >
-                    Create App Password →
-                  </a>
-                </div>
-              </>
-            )}
+            <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
+              <p className="text-theme-text-primary mb-2 font-medium">How to create an App Password:</p>
+              <ol className="list-inside list-decimal space-y-1">
+                <li>Enable 2-Step Verification on the Google account</li>
+                <li>Go to Google Account Security settings</li>
+                <li>Select "App passwords"</li>
+                <li>Generate a new app password for "Mail"</li>
+                <li>Copy the 16-character password here</li>
+              </ol>
+              <a
+                href="https://myaccount.google.com/apppasswords"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-theme-alert-info-icon hover:text-theme-alert-info-title mt-2 inline-block underline"
+              >
+                Create App Password →
+              </a>
+            </div>
           </>
         );
 
@@ -415,71 +326,45 @@ const EmailConfiguration: React.FC = () => {
               <div className="flex items-start space-x-3">
                 <AlertCircle aria-hidden="true" className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" />
                 <div>
-                  <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Microsoft 365 / Azure AD Setup</p>
+                  <p className="text-theme-alert-info-title mb-1 text-sm font-medium">Microsoft 365 / Outlook</p>
                   <p className="text-theme-alert-info-text text-sm">
-                    You'll need admin access to your Microsoft 365 tenant to configure email integration.
+                    The Logbook signs in to smtp.office365.com as the From address above. SMTP AUTH must be enabled for
+                    that mailbox in Exchange Online; if the account uses multi-factor sign-in, create an App Password
+                    for it.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                  Tenant ID <span className="text-theme-accent-red">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={config.microsoftTenantId || ''}
-                  onChange={(e) => handleInputChange('microsoftTenantId', e.target.value)}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="form-input placeholder-theme-text-muted py-3"
-                />
-              </div>
-
-              <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                  Client ID (Application ID) <span className="text-theme-accent-red">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={config.microsoftClientId || ''}
-                  onChange={(e) => handleInputChange('microsoftClientId', e.target.value)}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="form-input placeholder-theme-text-muted py-3"
-                />
-              </div>
-
-              <div>
-                <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
-                  Client Secret <span className="text-theme-accent-red">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={config.microsoftClientSecret || ''}
-                  onChange={(e) => handleInputChange('microsoftClientSecret', e.target.value)}
-                  placeholder="Client secret value"
-                  className="form-input placeholder-theme-text-muted py-3"
-                />
-              </div>
+            <div>
+              <label className="text-theme-text-secondary mb-2 block text-sm font-semibold">
+                Microsoft 365 App Password <span className="text-theme-accent-red">*</span>
+              </label>
+              <input
+                type="password"
+                autoComplete="off"
+                value={config.microsoftAppPassword || ''}
+                onChange={(e) => handleInputChange('microsoftAppPassword', e.target.value)}
+                placeholder="App password for the sending mailbox"
+                className="form-input placeholder-theme-text-muted py-3"
+              />
             </div>
 
             <div className="bg-theme-surface-secondary text-theme-text-secondary mt-4 rounded-lg p-4 text-sm">
-              <p className="text-theme-text-primary mb-2 font-medium">How to set up Azure AD app:</p>
+              <p className="text-theme-text-primary mb-2 font-medium">How to set up the mailbox:</p>
               <ol className="list-inside list-decimal space-y-1">
-                <li>Go to Azure Portal → Azure Active Directory</li>
-                <li>App registrations → New registration</li>
-                <li>Note the Tenant ID and Application (client) ID</li>
-                <li>Certificates & secrets → New client secret</li>
-                <li>API permissions → Add Microsoft Graph Mail.Send</li>
+                <li>In the Microsoft 365 admin center, open the sending mailbox</li>
+                <li>Under Mail → Email apps, make sure "Authenticated SMTP" is enabled</li>
+                <li>If the account uses multi-factor sign-in, create an App Password from its security settings</li>
+                <li>Paste that password here</li>
               </ol>
               <a
-                href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
+                href="https://account.microsoft.com/security"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-theme-alert-info-icon hover:text-theme-alert-info-title mt-2 inline-block underline"
               >
-                Open Azure Portal →
+                Microsoft account security →
               </a>
             </div>
           </>

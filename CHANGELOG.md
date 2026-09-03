@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Email settings: Gmail and Microsoft 365 now actually send; OAuth fields removed (2026-09-03)
+
+**Fixed**
+
+- **Choosing Gmail or Microsoft 365 in Settings → Email (or in onboarding)
+  saved a configuration that could never send.** The form stored the
+  credentials under `google_*` / `microsoft_*` keys and
+  `EmailService._get_smtp_config` read only the `smtp_*` keys, so the sender
+  resolved no host at all and every message for that department failed with
+  "SMTP host and from_email are required" — after a green "Email settings
+  saved" toast, and in preference to a working global `SMTP_*` configuration,
+  because the org section wins whenever `enabled` is true. Reproduced against
+  the real `EmailService` before fixing. Both platforms are ordinary SMTP
+  submission behind an App Password, so the host, port, encryption and login
+  are now fixed by a preset in `app/utils/email_providers.py`
+  (`smtp.gmail.com` / `smtp.office365.com`, 587, STARTTLS, login = From
+  address) and resolved there by **both** the sender and the connection test,
+  which had previously known the Gmail host while the sender did not.
+
+**Removed**
+
+- **Gmail OAuth Client ID / Client Secret and Microsoft Tenant / Client ID /
+  Client Secret** from `EmailServiceSettings`, the settings form and the
+  onboarding form. No refresh token was ever obtained or stored and no
+  XOAUTH2 or Graph send path exists, so the fields were decorative; the
+  onboarding test reported them "valid" on string format alone. Stored rows
+  still carrying them (encrypted) are ignored on read and pruned the next
+  time the email section is saved. `microsoft_app_password` is new; Gmail
+  keeps `google_app_password`.
+
+**Added**
+
+- **Test Connection on Settings → Email** (`POST
+/organization/settings/email/test`, `settings.manage`, rate-limited). Signs
+  in to the provider without saving; a redacted `••••••••` secret is resolved
+  against the stored value so an admin can test what is saved without
+  retyping it. `platform` on the settings PATCH is now validated against the
+  five known values.
+
 ### Security: a system folder could be reparented under an ordinary folder, then destroyed via that folder's delete (2026-09-03)
 
 **CRITICAL — a two-step bypass of the FAC-22 fix directly below, same

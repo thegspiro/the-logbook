@@ -30,8 +30,8 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import get_optional_current_user
 from app.api.v1.email_test_helper import (
     test_cloudflare_email,
-    test_gmail_oauth,
-    test_microsoft_oauth,
+    test_gmail_connection,
+    test_microsoft_connection,
     test_smtp_connection,
 )
 from app.core.database import get_db
@@ -260,7 +260,8 @@ class EmailTestRequest(BaseModel):
     """Request model for testing email configuration"""
 
     platform: str = Field(
-        ..., description="Email platform: gmail, microsoft, selfhosted, other"
+        ...,
+        description="Email platform: gmail, microsoft, selfhosted, cloudflare, other",
     )
     config: dict[str, Any] = Field(..., description="Email configuration")
 
@@ -313,7 +314,8 @@ class EmailConfigRequest(BaseModel):
     """Request model for saving email configuration"""
 
     platform: str = Field(
-        ..., description="Email platform: gmail, microsoft, selfhosted, other"
+        ...,
+        description="Email platform: gmail, microsoft, selfhosted, cloudflare, other",
     )
     config: dict[str, Any] = Field(..., description="Email configuration")
 
@@ -729,12 +731,8 @@ async def _persist_session_data_to_org(
                 "from_email": raw_config.get("fromEmail"),
                 "from_name": raw_config.get("fromName"),
                 "use_tls": raw_config.get("smtpEncryption", "tls") != "none",
-                "google_client_id": raw_config.get("googleClientId"),
-                "google_client_secret": raw_config.get("googleClientSecret"),
                 "google_app_password": raw_config.get("googleAppPassword"),
-                "microsoft_tenant_id": raw_config.get("microsoftTenantId"),
-                "microsoft_client_id": raw_config.get("microsoftClientId"),
-                "microsoft_client_secret": raw_config.get("microsoftClientSecret"),
+                "microsoft_app_password": raw_config.get("microsoftAppPassword"),
                 "cloudflare_account_id": raw_config.get("cloudflareAccountId"),
                 "cloudflare_api_token": raw_config.get("cloudflareApiToken"),
             }
@@ -1361,7 +1359,8 @@ async def verify_email_configuration(
     Test email configuration without saving it
 
     Tests SMTP connection, authentication, and validates email settings.
-    Supports Gmail, Microsoft 365, self-hosted SMTP, and other email platforms.
+    Gmail and Microsoft 365 are tested as SMTP submission with an App Password;
+    self-hosted SMTP as entered; Cloudflare through its API.
 
     Requires a valid onboarding session to prevent unauthenticated SSRF.
 
@@ -1386,11 +1385,11 @@ async def verify_email_configuration(
 
     try:
         if platform == "gmail":
-            # Test Gmail configuration (OAuth or app password)
-            test_func = partial(test_gmail_oauth, config)
+            # Gmail: SMTP submission with an App Password
+            test_func = partial(test_gmail_connection, config)
         elif platform == "microsoft":
-            # Test Microsoft 365 configuration (OAuth)
-            test_func = partial(test_microsoft_oauth, config)
+            # Microsoft 365: SMTP submission with an App Password
+            test_func = partial(test_microsoft_connection, config)
         elif platform == "cloudflare":
             # Test Cloudflare Email Service API token
             test_func = partial(test_cloudflare_email, config)

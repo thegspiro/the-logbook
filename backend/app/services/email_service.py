@@ -35,6 +35,7 @@ from app.services.email_theme import (
     build_shell,
     colourway_context,
 )
+from app.utils.email_providers import resolve_smtp_settings
 
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
@@ -522,17 +523,16 @@ class EmailService:
             decrypted = decrypt_settings_secrets(self.organization.settings)
             org_email_config = decrypted.get("email_service", {})
             if org_email_config.get("enabled"):
-                encryption = org_email_config.get("smtp_encryption", "tls")
+                # Gmail and Microsoft 365 store only an App Password; the
+                # host, port and login are the provider's, resolved here so
+                # the sender and the connection test cannot disagree again.
+                connection = resolve_smtp_settings(org_email_config)
                 return {
-                    "host": org_email_config.get("smtp_host"),
-                    "port": org_email_config.get("smtp_port", 587),
-                    "user": org_email_config.get("smtp_user"),
-                    "password": org_email_config.get("smtp_password"),
+                    **connection,
                     "from_email": org_email_config.get("from_email"),
                     "from_name": org_email_config.get(
                         "from_name", self.organization.name
                     ),
-                    "encryption": encryption,
                 }
 
         # Fall back to global settings
