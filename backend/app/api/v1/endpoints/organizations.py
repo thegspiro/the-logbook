@@ -49,7 +49,11 @@ from app.schemas.organization import (
 )
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
-from app.utils.email_providers import REDACTED_SECRET, connection_identity
+from app.utils.email_providers import (
+    REDACTED_SECRET,
+    connection_identity,
+    normalize_stored_platform,
+)
 
 router = APIRouter()
 
@@ -294,6 +298,9 @@ def _resolve_redacted_secrets(
     the saved credential to that host. In that case the marker resolves to
     nothing and the test reports the password as missing.
     """
+    # The stored platform may be a legacy label the read path presents as
+    # selfhosted; compare like with like or an unchanged form never matches.
+    stored = normalize_stored_platform(stored)
     if connection_identity(submitted.platform, submitted.model_dump()) != (
         connection_identity(stored.get("platform"), stored)
     ):

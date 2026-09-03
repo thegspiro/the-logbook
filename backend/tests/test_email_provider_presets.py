@@ -31,6 +31,7 @@ from app.services.organization_service import OrganizationService
 from app.utils.email_providers import (
     EMAIL_PLATFORMS,
     PROVIDER_SMTP_PRESETS,
+    is_valid_email,
     missing_for_enabled,
     normalize_app_password,
     normalize_stored_platform,
@@ -615,6 +616,26 @@ class TestRedactedSecretsResolveAgainstStore:
         assert resolved.smtp_password is None
         assert resolved.google_app_password is None
 
+    def test_legacy_platform_label_still_matches_the_saved_server(self):
+        stored = {
+            "platform": "sendgrid",
+            "smtp_host": "smtp.sendgrid.net",
+            "smtp_port": 587,
+            "smtp_user": "apikey",
+            "smtp_encryption": "tls",
+            "smtp_password": "saved-pw",
+        }
+        submitted = EmailServiceSettings(
+            platform="selfhosted",
+            smtp_host="smtp.sendgrid.net",
+            smtp_port=587,
+            smtp_user="apikey",
+            smtp_encryption="tls",
+            smtp_password="••••••••",
+        )
+
+        assert _resolve_redacted_secrets(submitted, stored).smtp_password == "saved-pw"
+
     def test_placeholder_with_nothing_saved_resolves_to_none(self):
         submitted = EmailServiceSettings(
             platform="microsoft", microsoft_app_password="••••••••"
@@ -686,15 +707,44 @@ class TestEnabledConfigurationMustBeAbleToSend:
             "enabled": True,
             "platform": "selfhosted",
             "smtp_host": "h",
+            "from_email": "alerts@dept.example",
             "smtp_user": "svc",
         }
 
         assert missing_for_enabled(config) == "smtp_password"
 
     def test_anonymous_relay_is_complete(self):
-        config = {"enabled": True, "platform": "selfhosted", "smtp_host": "relay"}
+        config = {
+            "enabled": True,
+            "platform": "selfhosted",
+            "smtp_host": "relay",
+            "from_email": "alerts@dept.example",
+        }
 
         assert missing_for_enabled(config) is None
+
+    def test_malformed_account_address_is_rejected(self):
+        # The address is the SMTP login; "not-an-email" fails authentication.
+        config = {
+            "enabled": True,
+            "platform": "gmail",
+            "from_email": "not-an-email",
+            "google_app_password": "pw",
+        }
+
+        assert missing_for_enabled(config) == "from_email"
+
+    def test_selfhosted_needs_a_valid_from_address_too(self):
+        # _smtp_connect refuses to send without one.
+        config = {"enabled": True, "platform": "selfhosted", "smtp_host": "h"}
+
+        assert missing_for_enabled(config) == "from_email"
+
+    def test_is_valid_email(self):
+        assert is_valid_email("chief@example.org")
+        assert not is_valid_email("not-an-email")
+        assert not is_valid_email("")
+        assert not is_valid_email(None)
 
     def test_complete_preset_configuration_passes(self):
         config = {
@@ -848,6 +898,102 @@ class TestSaveBindsSecretsAndRefusesUnsendable:
         )
 
         assert org.settings["email_service"]["smtp_password"] is None
+
+    async def test_partial_patch_changing_the_host_clears_the_omitted_password(self):
+        # The full settings PATCH can send only smtp_host. The deep merge
+        # would otherwise carry the stored password to the new host, where
+        # the next login discloses it.
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": False,
+                    "platform": "selfhosted",
+                    "smtp_host": "mail.dept.example",
+                    "smtp_user": "svc",
+                    "smtp_password": "enc:saved",
+                    "from_email": "alerts@dept.example",
+                }
+            }
+        )
+
+        await self._save(org, {"email_service": {"smtp_host": "attacker.example"}})
+
+        assert org.settings["email_service"]["smtp_host"] == "attacker.example"
+        assert org.settings["email_service"]["smtp_password"] is None
+
+    async def test_partial_patch_of_an_unrelated_field_keeps_the_password(self):
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": False,
+                    "platform": "selfhosted",
+                    "smtp_host": "mail.dept.example",
+                    "smtp_password": "enc:saved",
+                }
+            }
+        )
+
+        await self._save(org, {"email_service": {"from_name": "Renamed"}})
+
+        assert org.settings["email_service"]["smtp_password"] == "enc:saved"
+
+    async def test_fresh_password_survives_an_identity_change(self):
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": False,
+                    "platform": "selfhosted",
+                    "smtp_host": "mail.dept.example",
+                    "smtp_password": "enc:saved",
+                }
+            }
+        )
+
+        await self._save(
+            org,
+            {"email_service": {"smtp_host": "new.example", "smtp_password": "fresh"}},
+        )
+
+        assert org.settings["email_service"]["smtp_password"].startswith("enc:")
+        assert org.settings["email_service"]["smtp_password"] != "enc:saved"
+
+    async def test_legacy_platform_row_round_trips_with_a_marker(self):
+        # The read path presents "sendgrid" as "selfhosted"; an unchanged
+        # save must compare like with like and keep the stored password.
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": True,
+                    "platform": "sendgrid",
+                    "smtp_host": "smtp.sendgrid.net",
+                    "smtp_port": 587,
+                    "smtp_user": "apikey",
+                    "smtp_encryption": "tls",
+                    "smtp_password": "enc:saved",
+                    "from_email": "alerts@dept.example",
+                }
+            }
+        )
+
+        await self._save(
+            org,
+            {
+                "email_service": {
+                    "enabled": True,
+                    "platform": "selfhosted",
+                    "smtp_host": "smtp.sendgrid.net",
+                    "smtp_port": 587,
+                    "smtp_user": "apikey",
+                    "smtp_encryption": "tls",
+                    "smtp_password": "••••••••",
+                    "from_email": "alerts@dept.example",
+                    "from_name": "Dept",
+                }
+            },
+        )
+
+        assert org.settings["email_service"]["smtp_password"] == "enc:saved"
+        assert org.settings["email_service"]["platform"] == "selfhosted"
 
     async def test_full_settings_patch_is_gated_too(self):
         # The invariant lives in the service, so PATCH /settings with an

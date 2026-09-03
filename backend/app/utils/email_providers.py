@@ -14,6 +14,10 @@ failed every real send.
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
+
+_EMAIL_ADAPTER = TypeAdapter(EmailStr)
+
 
 @dataclass(frozen=True)
 class SmtpPreset:
@@ -84,8 +88,29 @@ def connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
     )
 
 
+# Secret fields that authenticate to the connection identity. When the
+# identity changes on a write, any of these not freshly submitted is cleared
+# rather than carried forward to the new server or account.
+EMAIL_SECRET_FIELDS = (
+    "google_app_password",
+    "microsoft_app_password",
+    "smtp_password",
+    "cloudflare_api_token",
+)
+
+
+def is_valid_email(value: Any) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        _EMAIL_ADAPTER.validate_python(value)
+    except ValidationError:
+        return False
+    return True
+
+
 REQUIRED_FIELD_LABELS = {
-    "from_email": "the account email address",
+    "from_email": "a valid account email address",
     "google_app_password": "a Google App Password",
     "microsoft_app_password": "a Microsoft 365 App Password",
     "smtp_host": "an SMTP host",
@@ -108,7 +133,9 @@ def missing_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
     platform = email_config.get("platform")
     preset = PROVIDER_SMTP_PRESETS.get(platform) if isinstance(platform, str) else None
     if preset is not None:
-        if not email_config.get("from_email"):
+        # The address doubles as the SMTP login, so a malformed one fails
+        # authentication rather than just delivery.
+        if not is_valid_email(email_config.get("from_email")):
             return "from_email"
         if normalize_app_password(email_config.get(preset.password_field)) is None:
             return preset.password_field
@@ -116,6 +143,8 @@ def missing_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
     if platform == "selfhosted":
         if not email_config.get("smtp_host"):
             return "smtp_host"
+        if not is_valid_email(email_config.get("from_email")):
+            return "from_email"
         # A username with no password is a credential that was not restored
         # (the server changed under a redacted marker); an anonymous relay
         # with no username is still a complete configuration.
