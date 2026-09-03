@@ -698,7 +698,15 @@ export const SettingsPage: React.FC = () => {
       toast.success('Email settings saved');
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      toast.error(status === 403 ? 'Permission denied.' : 'Failed to save email settings.');
+      // A 400 names the field an enabled platform still needs; show it
+      // rather than a generic failure the admin cannot act on.
+      toast.error(
+        status === 403
+          ? 'Permission denied.'
+          : status === 400
+            ? getErrorMessage(err, 'Failed to save email settings.')
+            : 'Failed to save email settings.'
+      );
     } finally {
       setSavingEmail(false);
     }

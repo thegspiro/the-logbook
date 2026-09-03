@@ -17,6 +17,7 @@ import pytest
 # them as tests if they were bound in this namespace.
 import app.api.v1.email_test_helper as email_test_helper
 from app.api.v1.endpoints.organizations import (
+    _missing_for_enabled,
     _resolve_redacted_secrets,
     _smtp_login_incomplete,
 )
@@ -644,3 +645,69 @@ class TestUnrestorablePasswordIsNotTestedAsAnonymous:
         )
 
         assert not _smtp_login_incomplete(resolved)
+
+
+class TestEnabledPresetRequiresAppPassword:
+    def test_enabled_gmail_without_password_is_rejected(self):
+        submitted = EmailServiceSettings(
+            enabled=True, platform="gmail", from_email="chief@example.org"
+        )
+
+        assert _missing_for_enabled(submitted, {}) == "google_app_password"
+
+    def test_enabled_microsoft_without_password_is_rejected(self):
+        submitted = EmailServiceSettings(
+            enabled=True, platform="microsoft", from_email="a@dept.example"
+        )
+
+        assert _missing_for_enabled(submitted, {}) == "microsoft_app_password"
+
+    def test_enabled_preset_without_account_email_is_rejected(self):
+        submitted = EmailServiceSettings(
+            enabled=True, platform="gmail", google_app_password="pw"
+        )
+
+        assert _missing_for_enabled(submitted, {}) == "from_email"
+
+    def test_redacted_marker_counts_only_when_something_is_stored(self):
+        submitted = EmailServiceSettings(
+            enabled=True,
+            platform="gmail",
+            from_email="chief@example.org",
+            google_app_password="••••••••",
+        )
+
+        assert _missing_for_enabled(submitted, {}) == "google_app_password"
+        assert _missing_for_enabled(submitted, {"google_app_password": "saved"}) is None
+
+    def test_complete_configuration_passes(self):
+        submitted = EmailServiceSettings(
+            enabled=True,
+            platform="gmail",
+            from_email="chief@example.org",
+            google_app_password="pw",
+        )
+
+        assert _missing_for_enabled(submitted, {}) is None
+
+    def test_disabled_configuration_may_be_incomplete(self):
+        # Disabled is the "configure later" state onboarding records; it must
+        # stay saveable with nothing filled in.
+        submitted = EmailServiceSettings(enabled=False, platform="gmail")
+
+        assert _missing_for_enabled(submitted, {}) is None
+
+    def test_other_platforms_are_not_gated_here(self):
+        submitted = EmailServiceSettings(enabled=True, platform="selfhosted")
+
+        assert _missing_for_enabled(submitted, {}) is None
+
+    def test_read_path_still_accepts_an_enabled_row_without_password(self):
+        # Write-only: an OAuth-era row is enabled with no App Password and
+        # must still build on read so the admin can reach the screen.
+        settings = EmailServiceSettings(
+            enabled=True, platform="gmail", from_email="chief@example.org"
+        )
+
+        assert settings.enabled
+        assert settings.google_app_password is None
