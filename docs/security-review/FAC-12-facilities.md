@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix — pass 3 continued)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3), [#2194](https://github.com/thegspiro/the-logbook/pull/2194) (FAC-22, FAC-23, urgent post-merge fix), [#2195](https://github.com/thegspiro/the-logbook/pull/2195) (FAC-24 through FAC-28, pass 3 continued, merged), [#2198](https://github.com/thegspiro/the-logbook/pull/2198) (FAC-29 through FAC-33 fixed, FAC-30 flagged; FAC-34 fixed; FAC-35 fixed — the total-order fix superseding FAC-32/34; FAC-36 fixed — the third call site FAC-35 flagged for revisit; FAC-37/FAC-38 fixed (test-only); FAC-39 fixed (test-only, full-file sweep); FAC-40 fixed — delete_folder ORM-cascade staleness; FAC-41 flagged — org-wide reference lock, needs a schema-level fix; FAC-42 fixed — ensure_facility_folder's unconditional org lock — pass 3 continued)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -2122,6 +2122,96 @@ stays a single locking read the whole time — it only changes what makes
 that read narrow.
 
 **Mirrored to** `CHANGELOG.md`.
+
+### FAC-42 — P2 (liveness/performance) — `ensure_facility_folder` took an exclusive organization-row lock unconditionally, even when nothing needed creating — ✅ FIXED
+
+**Found by Codex review of the FAC-40 commit (`9306051e`), at
+`facilities.py:230`.** `ensure_facility_folder`'s get-or-create locks the
+organization's single `Organization` row to serialize concurrent
+first-accesses across the org's facilities (Pitfall #27) — necessary while
+a facility's folder might still need creating, since two concurrent
+"missing" observations would otherwise both insert one. But the lock was
+taken **unconditionally**, before ever checking whether creation was
+needed at all — and creation happens exactly once per facility, ever, so
+every call after that first one takes an exclusive lock on the org's one
+row for no reason. Per FAC-31, `_validate_shared_document_reference` (the
+only caller) holds whatever this method locks until the caller's own
+reference insert commits — so every facility document/photo upload in an
+organization was briefly serializing on that single row, even for
+completely unrelated facilities and documents, a real lock-wait risk under
+concurrent bulk uploads.
+
+**Where:** `backend/app/services/documents_service.py`
+(`ensure_facility_folder`, plus two new extracted helpers).
+
+**Fix:** split into a fast path and a slow path. The fast path takes the
+same (pre-existing) locking reads for `facilities_root`/`facility_folder`
+— extracted into `_lock_facilities_root`/`_lock_facility_folder` so both
+paths share one implementation — but never touches the `Organization` row;
+if both already exist, it returns immediately. Only when something is
+actually missing does execution fall through to the slow path, which locks
+the organization row and **re-checks both folders again** under that lock
+(double-checked locking) before creating — a concurrent transaction may
+have created what was missing while this call computed the fast path. That
+re-check is why the lock's own safety property is unchanged: two callers
+that could actually race on a _create_ still serialize on it exactly as
+before; only callers who need nothing built at all now skip it entirely.
+
+**Reproduced live** with two real, independently-committing sessions: with
+a facility's folder pre-created and committed, one session holds the
+`Organization` row's exclusive lock (uncommitted); a second session's
+`ensure_facility_folder` call for that same, already-existing facility
+completed within a bounded wait despite the held lock — pre-fix, the
+identical scenario timed out, confirmed genuinely blocked on the
+organization row.
+
+**Regression tests:**
+
+- `tests/test_facility_document_reference_race.py`,
+  `TestEnsureFacilityFolderFastPathSkipsTheOrganizationLock` — the live,
+  two-session reproduction above as a permanent test. Confirmed to fail
+  against pre-fix code (`git stash`, timing out on the bounded wait) and
+  pass post-fix.
+- `tests/test_facilities_folders.py`, `TestFolderCreationIsLocked` —
+  updated `test_ensure_facility_folder_also_locks_both_existence_checks`
+  (a source-inspection test predating this fix) to check the combined
+  source of `ensure_facility_folder` and the two newly-extracted helpers,
+  since the extraction moved two of the three `with_for_update()` calls
+  out of the method's own source without changing the underlying
+  invariant the test protects; confirmed to fail against pre-fix code
+  (`AttributeError`, since the helpers are part of the fix's own
+  refactor and do not exist without it) and pass post-fix. Added
+  `test_ensure_facility_folder_fast_path_skips_the_organization_lock`, a
+  second source-inspection test asserting the fast path (the portion of
+  the method's source before the organization lock is acquired) contains
+  no `with_for_update()` call at all.
+
+**Verified:** `pytest tests/test_facility_document_reference_race.py
+tests/test_facilities_folders.py` — 19 passed, three repeated runs with no
+flakiness. Full backend suite re-run clean (see the completion gate
+below).
+
+**Mirrored to** `CHANGELOG.md`.
+
+## Completion gate (pass 3, round 14 — Codex review of `9306051e`, FAC-42)
+
+| Check                                                                                                                                                                                             | Result                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                                     | ✅ 0 violations                                                             |
+| `black --check app/ tests/ alembic/`                                                                                                                                                              | ✅ clean                                                                    |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                                         | ✅ clean                                                                    |
+| `pytest tests/test_facility_document_reference_race.py tests/test_facilities_folders.py`                                                                                                          | ✅ 19 passed (+2, FAC-42's two new tests), 3 repeated runs, no flakiness    |
+| `pytest tests/test_facility_document_reference_race.py tests/test_facilities_folders.py tests/test_facility_folder_access.py tests/test_facilities_permissions.py tests/test_documents_access.py` | ✅ 161 passed                                                               |
+| `pytest tests/ -k "facilities or documents"`                                                                                                                                                      | ✅ 304 passed, 1 skipped (pre-existing)                                     |
+| `pytest tests/` (full backend suite)                                                                                                                                                              | ✅ 10055 passed, 21 skipped (pre-existing Docker/optional-dependency skips) |
+
+**FAC-42's regression tests independently confirmed against pre-fix
+code:** `git stash` isolating just the `documents_service.py` fix (test
+changes kept) — the live two-session test times out on its bounded wait
+(genuinely blocked on the organization lock); the source-inspection test
+fails with `AttributeError` (the extracted helpers do not exist pre-fix).
+`git stash pop` restored the fix and all 19 tests in the two files passed,
+three repeated runs with no flakiness.
 
 ## Completion gate (pass 3, round 13 — Codex review of `c78e3190`, FAC-40 fixed, FAC-41 flagged)
 

@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: ensure_facility_folder took an exclusive organization-row lock unconditionally, serializing unrelated facility uploads org-wide (2026-09-03)
+
+**Fixed**
+
+- **FAC-42 — `ensure_facility_folder`'s get-or-create locks the
+  organization's single row to serialize concurrent creates (Pitfall #27),
+  but took that lock unconditionally, before ever checking whether
+  creation was needed** — even though a facility's folder is created
+  exactly once, ever. Per FAC-31, the only caller
+  (`_validate_shared_document_reference`) holds whatever this method locks
+  until its own reference insert commits, so every facility document/photo
+  upload in an organization was briefly serializing on that one row, even
+  for completely unrelated facilities and documents — a real lock-wait
+  risk under concurrent bulk uploads.
+- Fixed with a fast/slow split: a fast path takes the same, pre-existing
+  folder-level locking reads (now extracted into
+  `_lock_facilities_root`/`_lock_facility_folder`) without ever touching
+  the organization row, returning immediately if both already exist; only
+  a genuinely missing folder falls through to a slow path that locks the
+  organization row and re-checks both folders again under that lock
+  (double-checked locking) before creating. Two concurrent callers that
+  could actually race on a create still serialize exactly as before; only
+  callers who need nothing built at all now skip the lock entirely.
+- Reproduced live with two real sessions (one holding the org lock, one
+  calling `ensure_facility_folder` for an already-existing facility) —
+  pre-fix, genuinely blocked; post-fix, completes despite the held lock.
+  New regression test plus an updated source-inspection test (whose
+  `with_for_update()` count assertion the extraction moved code out from
+  under); both confirmed to fail against pre-fix code and pass post-fix.
+
 ### Security: delete_folder's ORM cascade could orphan a document moved in, or destroy one moved out, mid-transaction; a related over-locking finding flagged rather than fixed (2026-09-03)
 
 **Fixed**

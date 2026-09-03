@@ -75,14 +75,61 @@ class TestFolderCreationIsLocked:
         already created and committed one while this one waited for the
         lock -- the exact shape demonstrated in CLAUDE.md Pitfall #27's own
         two-transaction trace. Both existence checks must be locking reads
-        too, not just the organization row."""
-        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        too, not just the organization row.
+
+        FAC-42 (Codex): the two existence checks were extracted into
+        ``_lock_facilities_root``/``_lock_facility_folder`` so
+        ``ensure_facility_folder`` could call them from a fast path that
+        skips the organization lock entirely when both already exist (the
+        organization lock is needed only while something might still need
+        creating -- see that method's own FAC-42 docstring paragraph).
+        ``inspect.getsource`` on ``ensure_facility_folder`` alone no longer
+        sees the extracted calls' own ``with_for_update()`` text, so this
+        checks the combined source of the method and both helpers, which is
+        what actually runs during a genuine get-or-create -- the underlying
+        invariant this test protects (three locking reads before any
+        creation, so two concurrent first-accesses cannot both decide
+        nothing exists) is unchanged, only which function's source contains
+        each locking read.
+        """
+        source = "".join(
+            inspect.getsource(fn)
+            for fn in (
+                DocumentsService.ensure_facility_folder,
+                DocumentsService._lock_facilities_root,
+                DocumentsService._lock_facility_folder,
+            )
+        )
         assert source.count("with_for_update()") >= 3, (
-            "ensure_facility_folder locks fewer than 3 reads (organization + "
+            "ensure_facility_folder (plus the two locking-read helpers it "
+            "calls) has fewer than 3 locking reads (organization + "
             "facilities_root + facility_folder) -- the organization lock "
             "alone does not make the facility-folder existence checks see "
             "latest-committed data, so two concurrent first-accesses can "
             "still both decide no folder exists and both create one"
+        )
+
+    def test_ensure_facility_folder_fast_path_skips_the_organization_lock(self):
+        """FAC-42 (Codex): the organization lock is genuinely needed only
+        while something might still need creating. Every call after a
+        facility's folder already exists -- the overwhelming majority,
+        since this only creates once per facility ever -- must not take an
+        *exclusive* lock on the org's single row regardless: per FAC-31,
+        the caller holds whatever this method returns/locks until its own
+        reference insert commits, so an unconditional org lock here would
+        serialize every facility document/photo upload in an organization
+        behind one row, even for completely unrelated facilities.
+        """
+        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        fast_path, _, slow_path = source.partition("org = await self.db.scalar(")
+        assert slow_path, (
+            "expected to find the organization-row lock acquisition to "
+            "split the method into a fast and slow path"
+        )
+        assert "with_for_update()" not in fast_path, (
+            "ensure_facility_folder's fast path (before the organization "
+            "lock is acquired) must not itself take the organization lock "
+            "-- FAC-42 regressed"
         )
 
 

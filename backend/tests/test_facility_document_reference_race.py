@@ -1353,3 +1353,118 @@ class TestDeleteFolderExplicitlyDeletesTheLockedDocuments:
                 await cleanup.commit()
             finally:
                 await cleanup.close()
+
+
+class TestEnsureFacilityFolderFastPathSkipsTheOrganizationLock:
+    """FAC-42 (Codex, on top of FAC-31): ``ensure_facility_folder`` used to
+    take an *exclusive* lock on the organization's single row
+    unconditionally, before ever checking whether a facility's folder
+    already existed -- even though creation only ever happens once per
+    facility, ever. Per FAC-31, the caller
+    (``_validate_shared_document_reference``) holds whatever this method
+    locks until its own reference insert commits, so every facility
+    document/photo upload in an organization was briefly serializing on
+    that one row, even for completely unrelated facilities and documents --
+    a real lock-wait risk under concurrent bulk uploads.
+
+    Fixed with a fast path that takes the same (pre-existing) folder-level
+    locking reads, but never touches the organization row at all when both
+    already exist; only a genuinely missing folder falls through to the
+    organization-locked, double-checked-locking create path.
+    """
+
+    async def test_fast_path_completes_without_the_organization_lock(
+        self, two_sessions
+    ):
+        locker, caller = two_sessions
+        slug = f"fcvfd-fac42-{uuid.uuid4().hex[:12]}"
+        org = Organization(name="Race Test VFD", slug=slug)
+        locker.add(org)
+        await locker.flush()
+        facility_type = FacilityType(
+            organization_id=None, name="Station", is_system=True
+        )
+        facility_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        locker.add_all([facility_type, facility_status])
+        await locker.flush()
+        facility = Facility(
+            organization_id=org.id,
+            name="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        locker.add(facility)
+        await locker.commit()
+        org_id, facility_id, facility_type_id, status_id = (
+            org.id,
+            facility.id,
+            facility_type.id,
+            facility_status.id,
+        )
+        call_task = None
+        try:
+            # Pre-create the facility folder, in its own committed
+            # transaction, so the call under test takes the fast path.
+            setup = database_manager.session_factory()
+            try:
+                await DocumentsService(setup).ensure_facility_folder(
+                    org_id, str(facility_id), "Station 1"
+                )
+                await setup.commit()
+            finally:
+                await setup.close()
+
+            # Locker holds the Organization row's exclusive lock,
+            # uncommitted -- exactly what a genuinely-creating call would
+            # hold for the rest of its own transaction.
+            await locker.execute(
+                select(Organization).where(Organization.id == org_id).with_for_update()
+            )
+
+            # The caller's own call, for the SAME already-existing facility
+            # folder, must complete despite locker's still-open lock -- if
+            # it still took the organization lock unconditionally, this
+            # would time out.
+            call_task = asyncio.create_task(
+                DocumentsService(caller).ensure_facility_folder(
+                    org_id, str(facility_id), "Station 1"
+                )
+            )
+            result = await asyncio.wait_for(call_task, timeout=5)
+            assert result is not None
+            assert result.slug == f"facility-{facility_id}"
+        finally:
+            if call_task is not None and not call_task.done():
+                call_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await call_task
+            await locker.rollback()
+            await caller.rollback()
+            cleanup = database_manager.session_factory()
+            try:
+                await cleanup.execute(
+                    DocumentFolder.__table__.delete().where(
+                        DocumentFolder.organization_id == org_id
+                    )
+                )
+                await cleanup.execute(
+                    Facility.__table__.delete().where(Facility.id == facility_id)
+                )
+                await cleanup.execute(
+                    FacilityType.__table__.delete().where(
+                        FacilityType.id == facility_type_id
+                    )
+                )
+                await cleanup.execute(
+                    FacilityStatus.__table__.delete().where(
+                        FacilityStatus.id == status_id
+                    )
+                )
+                await cleanup.execute(
+                    Organization.__table__.delete().where(Organization.id == org_id)
+                )
+                await cleanup.commit()
+            finally:
+                await cleanup.close()

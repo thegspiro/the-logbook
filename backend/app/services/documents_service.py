@@ -1404,6 +1404,44 @@ class DocumentsService:
     # Per-Facility Folder Management
     # ============================================
 
+    async def _lock_facilities_root(
+        self, organization_id: UUID
+    ) -> Optional[DocumentFolder]:
+        """Locking read for the org's 'Facility Files' system folder.
+
+        A standalone method purely so ``ensure_facility_folder`` can call it
+        from both its fast (no creation needed) and slow (creation-guarded)
+        paths without duplicating the query, and so a test can
+        patch-and-track it.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.organization_id == str(organization_id))
+            .where(DocumentFolder.slug == FOLDER_FACILITIES)
+            .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def _lock_facility_folder(
+        self, facilities_root_id: str, facility_id_str: str
+    ) -> Optional[DocumentFolder]:
+        """Locking read for one facility's own folder, under the root above.
+
+        Same reuse/testability rationale as ``_lock_facilities_root``.
+        """
+        result = await self.db.execute(
+            select(DocumentFolder)
+            .where(DocumentFolder.parent_id == facilities_root_id)
+            .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def ensure_facility_folder(
         self, organization_id: UUID, facility_id: str, facility_display_name: str
     ) -> DocumentFolder:
@@ -1440,7 +1478,45 @@ class DocumentsService:
         even though a concurrent transaction already created and committed
         one while this one waited for the lock. Both existence checks below
         are therefore locking reads too, not just the organization row.
+
+        FAC-42 (Codex): the organization lock above is genuinely needed only
+        while something might still need creating -- every call after a
+        facility's folder already exists (the overwhelming majority, since
+        this only creates once per facility ever) does not touch a single
+        new row, yet used to take an *exclusive* lock on the org's one
+        ``Organization`` row regardless, unconditionally, before ever
+        checking whether creation was needed. Per FAC-31, the caller
+        (``_validate_shared_document_reference``) holds whatever this method
+        returns/locks until its own reference insert commits -- so every
+        facility document/photo upload in an organization was briefly
+        serializing on that single row, even for completely unrelated
+        facilities and documents, a real lock-wait risk under concurrent
+        bulk uploads.
+
+        Fixed with a fast/slow split: the fast path takes the same *folder*
+        locking reads as before (still required -- see the paragraph above;
+        this is not new locking, it is the pre-existing per-folder lock),
+        without ever touching the organization row, and returns immediately
+        if both already exist. Only when something is actually missing does
+        this fall through to the slow path, which locks the organization row
+        and re-checks both folders *again* under that lock (double-checked
+        locking) before creating -- a concurrent transaction may have
+        created what was missing while this one computed the fast path.
+        That re-check is why the org lock's own safety property is
+        unchanged: any two callers that could actually race on a *create*
+        still serialize on it exactly as before; only callers who need
+        nothing built at all now skip it entirely.
         """
+        facility_id_str = str(facility_id)
+
+        facilities_root = await self._lock_facilities_root(organization_id)
+        if facilities_root is not None:
+            facility_folder = await self._lock_facility_folder(
+                facilities_root.id, facility_id_str
+            )
+            if facility_folder is not None:
+                return facility_folder
+
         org = await self.db.scalar(
             select(Organization)
             .where(Organization.id == str(organization_id))
@@ -1449,17 +1525,9 @@ class DocumentsService:
         if org is None:
             raise ValueError("Organization not found")
 
-        # Find the 'facilities' system folder
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.organization_id == str(organization_id))
-            .where(DocumentFolder.slug == FOLDER_FACILITIES)
-            .where(DocumentFolder.is_system.is_(True))
-            .order_by(DocumentFolder.id)
-            .limit(1)
-            .with_for_update()
-        )
-        facilities_root = result.scalar_one_or_none()
+        # Re-check under the org lock -- a concurrent transaction may have
+        # created either row between the fast-path check above and here.
+        facilities_root = await self._lock_facilities_root(organization_id)
 
         if not facilities_root:
             from app.models.document import SYSTEM_FOLDERS
@@ -1483,17 +1551,9 @@ class DocumentsService:
             await self.db.flush()
             await self.db.refresh(facilities_root)
 
-        # Check if this facility already has a folder
-        facility_id_str = str(facility_id)
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.parent_id == facilities_root.id)
-            .where(DocumentFolder.slug == f"facility-{facility_id_str}")
-            .order_by(DocumentFolder.id)
-            .limit(1)
-            .with_for_update()
+        facility_folder = await self._lock_facility_folder(
+            facilities_root.id, facility_id_str
         )
-        facility_folder = result.scalar_one_or_none()
 
         if not facility_folder:
             facility_folder = DocumentFolder(
