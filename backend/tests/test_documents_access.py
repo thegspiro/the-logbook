@@ -1174,6 +1174,274 @@ class TestUpdateAndDeleteDocumentRespectFolderAcl:
         assert result.scalar_one_or_none() is None
 
 
+class TestUpdateDocumentRespectsDestinationFolderAcl:
+    """FAC-15 (Codex follow-up on FAC-14, round 3): the FAC-14 fix above
+    authorizes only the document's *current* folder via ``can_access_document``.
+    ``DocumentsService.update_document`` only checks that a reassigned
+    ``folder_id`` belongs to the caller's own organization (DOC-6/XC-1) --
+    not that the caller can actually access that destination folder. A
+    ``documents.manage`` holder with no facilities grant at all could
+    therefore move a document they already have access to *into* a
+    sensitive-gated facility folder (e.g. Insurance & Leases), injecting
+    content into a folder they have no read/write access to -- the opposite
+    direction from FAC-14 (write-into rather than read-out-of).
+    """
+
+    async def _org_with_source_and_sensitive_destination(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        source = DocumentFolder(organization_id=org.id, name="General")
+        db_session.add(source)
+        destination = DocumentFolder(
+            organization_id=org.id,
+            name="Insurance & Leases",
+            required_permissions=["facilities.view_sensitive"],
+        )
+        db_session.add(destination)
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id,
+            folder_id=source.id,
+            name="Memo",
+            file_name="memo.pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+        return org, source, destination, document
+
+    def _caller(self, org_id, *, facilities_permission=False):
+        perms = ["documents.manage"]
+        if facilities_permission:
+            perms.append("facilities.view_sensitive")
+        user = _user(uid="caller-1", roles=[(perms, "admin")])
+        user.organization_id = org_id
+        user.username = "caller"
+        return user
+
+    async def test_documents_manage_alone_cannot_move_into_a_sensitive_folder(
+        self, db_session
+    ):
+        org, source, destination, document = (
+            await self._org_with_source_and_sensitive_destination(
+                db_session, "fcvfd-dest-1"
+            )
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_document(
+                document.id,
+                DocumentUpdate(folder_id=destination.id),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 403
+
+        # The document must be left in its original folder, not partially
+        # moved before the destination ACL check runs.
+        await db_session.refresh(document)
+        assert document.folder_id == source.id
+
+    async def test_caller_with_the_destination_folders_permission_can_move_it(
+        self, db_session
+    ):
+        # Positive control: the fix must not block a caller who genuinely
+        # holds the destination folder's required permission.
+        org, source, destination, document = (
+            await self._org_with_source_and_sensitive_destination(
+                db_session, "fcvfd-dest-2"
+            )
+        )
+        caller = self._caller(org.id, facilities_permission=True)
+
+        result = await update_document(
+            document.id,
+            DocumentUpdate(folder_id=destination.id),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.folder_id == destination.id
+
+    async def test_moving_to_the_same_folder_needs_no_destination_check(
+        self, db_session
+    ):
+        # folder_id unchanged (e.g. a caller re-sending the current value
+        # alongside an unrelated field edit) must not be treated as a move.
+        org, source, _destination, document = (
+            await self._org_with_source_and_sensitive_destination(
+                db_session, "fcvfd-dest-3"
+            )
+        )
+        caller = self._caller(org.id)
+
+        result = await update_document(
+            document.id,
+            DocumentUpdate(name="Renamed memo", folder_id=source.id),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.name == "Renamed memo"
+        assert result.folder_id == source.id
+
+
+class TestFolderMutationRespectsOwnFolderAcl:
+    """FAC-16 (Codex follow-up on FAC-14, round 3): ``update_folder`` and
+    ``delete_folder`` require only ``documents.manage`` and never checked
+    ``can_access_folder`` on the *target folder itself* -- unlike
+    ``update_document``/``delete_document`` (FAC-14) and the read-side
+    ``get_facility_sub_folders``. A documents.manage holder with no
+    facilities grant at all could rename, reparent, or delete the sensitive
+    facility folder tree outright, even though the folder's own
+    ``required_permissions`` explicitly excludes them -- a full destructive
+    cascade (every descendant folder, document, and backing file) rather
+    than a single document.
+    """
+
+    async def _org_with_sensitive_folder(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        other_folder = DocumentFolder(organization_id=org.id, name="Other")
+        db_session.add(other_folder)
+        folder = DocumentFolder(
+            organization_id=org.id,
+            name="Insurance & Leases",
+            required_permissions=["facilities.view_sensitive"],
+        )
+        db_session.add(folder)
+        await db_session.flush()
+        child = DocumentFolder(
+            organization_id=org.id, name="Renewals", parent_id=folder.id
+        )
+        db_session.add(child)
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id,
+            folder_id=folder.id,
+            name="Policy",
+            file_name="policy.pdf",
+        )
+        child_document = Document(
+            organization_id=org.id,
+            folder_id=child.id,
+            name="Renewal notice",
+            file_name="renewal.pdf",
+        )
+        db_session.add_all([document, child_document])
+        await db_session.flush()
+        return org, other_folder, folder, child, document, child_document
+
+    def _caller(self, org_id, *, facilities_permission=False):
+        perms = ["documents.manage"]
+        if facilities_permission:
+            perms.append("facilities.view_sensitive")
+        user = _user(uid="caller-1", roles=[(perms, "admin")])
+        user.organization_id = org_id
+        user.username = "caller"
+        return user
+
+    async def test_documents_manage_alone_cannot_rename_a_sensitive_folder(
+        self, db_session
+    ):
+        org, _other, folder, _child, _doc, _child_doc = (
+            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-1")
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_folder(
+                folder.id,
+                DocumentFolderUpdate(name="Renamed"),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 404
+
+        await db_session.refresh(folder)
+        assert folder.name == "Insurance & Leases"
+
+    async def test_documents_manage_alone_cannot_reparent_a_sensitive_folder(
+        self, db_session
+    ):
+        org, other_folder, folder, _child, _doc, _child_doc = (
+            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-2")
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_folder(
+                folder.id,
+                DocumentFolderUpdate(parent_id=other_folder.id),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 404
+
+        await db_session.refresh(folder)
+        assert folder.parent_id is None
+
+    async def test_documents_manage_alone_cannot_delete_a_sensitive_folder(
+        self, db_session
+    ):
+        org, _other, folder, child, document, child_document = (
+            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-3")
+        )
+        caller = self._caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_folder(folder.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 404
+
+        # Nothing in the subtree was touched -- the cascade never started.
+        for model, row_id in (
+            (DocumentFolder, folder.id),
+            (DocumentFolder, child.id),
+            (Document, document.id),
+            (Document, child_document.id),
+        ):
+            result = await db_session.execute(select(model).where(model.id == row_id))
+            assert result.scalar_one_or_none() is not None
+
+    async def test_caller_with_the_folders_own_permission_can_still_rename_it(
+        self, db_session
+    ):
+        org, _other, folder, _child, _doc, _child_doc = (
+            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-4")
+        )
+        caller = self._caller(org.id, facilities_permission=True)
+
+        result = await update_folder(
+            folder.id,
+            DocumentFolderUpdate(name="Renamed"),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.name == "Renamed"
+
+    async def test_caller_with_the_folders_own_permission_can_still_delete_it(
+        self, db_session
+    ):
+        # Positive control, and proof the cascade still works as intended for
+        # an authorized caller: the folder, its child folder, and both
+        # documents are all gone afterward.
+        org, _other, folder, child, document, child_document = (
+            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-5")
+        )
+        caller = self._caller(org.id, facilities_permission=True)
+
+        await delete_folder(folder.id, db=db_session, current_user=caller)
+
+        for model, row_id in (
+            (DocumentFolder, folder.id),
+            (DocumentFolder, child.id),
+            (Document, document.id),
+            (Document, child_document.id),
+        ):
+            result = await db_session.execute(select(model).where(model.id == row_id))
+            assert result.scalar_one_or_none() is None
+
+
 @pytest.mark.integration
 class TestFolderAndDocumentAuditLogging:
     """DOC-27: folder create/update/delete and a document metadata edit had
@@ -1194,6 +1462,13 @@ class TestFolderAndDocumentAuditLogging:
         )
         db_session.add(user)
         await db_session.flush()
+        # FAC-16: update_folder/delete_folder now call can_access_folder,
+        # which reads user.roles (a synonym for the async `positions`
+        # relationship). Production's get_current_user always hands over a
+        # user with that relationship eager-loaded via selectinload
+        # (auth_service.get_user_from_token) -- outside that path, touching
+        # it lazily raises MissingGreenlet, so mirror the eager load here.
+        await db_session.refresh(user, attribute_names=["positions"])
         return user
 
     async def _last_event(self, db_session, event_type):

@@ -37,6 +37,48 @@ folder or a too-weak sub-folder, and a migration — not a one-line loosening
 `docs/security-review/FAC-12-facilities.md` (FAC-13) for the full reasoning
 and why a naive fix would reopen a broader leak.
 
+### Security: `documents.manage` could still bypass a folder's ACL on a document _move_'s destination, and on the folder-mutation routes themselves; a folder delete with descendants silently orphaned them instead of cascading (2026-09-03)
+
+**Fixed**
+
+- **FAC-15 — `PATCH /documents/{document_id}` checked only the document's
+  source folder, not its destination, on a move.** The prior fix
+  (`can_access_document` on the document's existing folder) left the
+  opposite direction open: reassigning `folder_id` to a new, non-null value
+  was validated only for same-organization membership, never for the
+  caller's own access to that destination. A `documents.manage` holder with
+  no facilities grant at all could move a document they already had access
+  to _into_ a `facilities.view_sensitive`-gated folder. `update_document`
+  now resolves the destination folder and calls `can_access_folder` on it
+  whenever `folder_id` changes to a new, non-null value, mirroring the check
+  `upload_document` already applies to a new upload's destination. Moving
+  out to unfiled needs no destination check.
+- **FAC-16 — `PATCH`/`DELETE /documents/folders/{folder_id}` never checked
+  the target folder's own ACL at all.** Both required only
+  `documents.manage` and mutated the folder directly — unlike the read-side
+  `get_facility_sub_folders`, which already filters through
+  `can_access_folder`. A `documents.manage` holder with no facilities grant
+  could rename, reparent, or delete a sensitive-gated facility folder
+  outright. Both routes now call `can_access_folder` on the target folder
+  before mutating it.
+- **A related, independent bug found while regression-testing FAC-16's
+  delete path: deleting a folder with descendant folders silently orphaned
+  them instead of cascading.** `DocumentFolder.children`'s self-referential
+  relationship had `remote_side` on the wrong attribute (the plural
+  collection instead of its singular backref), which caused SQLAlchemy to
+  proactively null out each descendant's foreign key before the delete ran
+  — so the database's own `ON DELETE CASCADE` never fired, and a folder tree
+  survived as detached, orphaned root folders instead of being removed.
+  Fixed by correcting the relationship to the standard self-referential
+  pattern used correctly elsewhere in this codebase; verified with a
+  three-level fixture that a delete now removes the entire subtree. Two
+  other relationships share the same inverted shape
+  (`CheckTemplateCompartment.children`, `TrainingCategory.subcategories`) —
+  flagged, not fixed, as out of scope for this feature; see
+  `docs/KNOWN_LIMITATIONS.md`.
+- See `docs/security-review/FAC-12-facilities.md` (FAC-15, FAC-16) for the
+  full writeup and regression tests.
+
 ### Security: `documents.manage` could bypass a document's own folder ACL through the generic update/delete routes (2026-09-03)
 
 **Fixed**

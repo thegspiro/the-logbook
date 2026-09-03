@@ -172,6 +172,21 @@ async def update_folder(
 ):
     """Update a document folder"""
     service = DocumentsService(db)
+    existing = ensure_found(
+        await service.get_folder_by_id(folder_id, current_user.organization_id),
+        "Folder",
+    )
+    # FAC-16 (Codex follow-up on FAC-14): documents.manage is an org-wide
+    # mutation grant, but a folder's own required_permissions is the one rule
+    # it does not override (see _folder_admits_user). Without this, a
+    # documents.manage holder with no facilities grant at all could rename or
+    # reparent a sensitive-gated facility folder -- the same folder-ACL
+    # bypass FAC-14 closed on the document side, here on the folder itself.
+    # Mirrors the read-side check get_facility_sub_folders already applies.
+    if not await service.can_access_folder(
+        existing, current_user.organization_id, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Folder not found")
     # exclude_unset, not exclude_none: this is an update payload, so an
     # explicit null (clearing parent_id/owner_user_id) must survive to the
     # service as "clear this field", not be dropped as if never sent
@@ -205,6 +220,18 @@ async def delete_folder(
 ):
     """Delete a document folder and all its documents"""
     service = DocumentsService(db)
+    existing = ensure_found(
+        await service.get_folder_by_id(folder_id, current_user.organization_id),
+        "Folder",
+    )
+    # FAC-16 (Codex follow-up on FAC-14): same folder-ACL boundary as
+    # update_folder above. Without this, a documents.manage holder with no
+    # facilities grant at all could delete a sensitive-gated facility folder
+    # outright -- cascading to every document and backing file beneath it.
+    if not await service.can_access_folder(
+        existing, current_user.organization_id, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Folder not found")
     success = await service.delete_folder(folder_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -588,6 +615,29 @@ async def update_document(
     # move a document to org level) must reach the service as a clear, not be
     # silently dropped (CLAUDE.md pitfall #1's update-path mirror image).
     update_data = doc.model_dump(exclude_unset=True)
+    # FAC-15 (Codex follow-up on FAC-14): the check above authorizes only the
+    # document's *current* folder. A move into a new, non-null folder is a
+    # destination the caller may have no rights to at all -- documents.manage
+    # authorizes moving documents in general, not writing into a specific
+    # sensitive-gated folder. Mirrors upload_document's own destination check.
+    # Moving *out* to unfiled (folder_id: null) needs no destination check --
+    # there is no destination folder to authorize.
+    new_folder_id = update_data.get("folder_id")
+    if new_folder_id is not None and str(new_folder_id) != str(
+        existing.folder_id or ""
+    ):
+        destination = await service.get_folder_by_id(
+            new_folder_id, current_user.organization_id
+        )
+        if destination is None:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        if not await service.can_access_folder(
+            destination, current_user.organization_id, current_user
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to move a document into this folder",
+            )
     # Wrapped so a service-layer ValueError (an out-of-org folder_id, DOC-6)
     # returns 400 rather than 500.
     async with handle_service_errors("Unable to update document"):

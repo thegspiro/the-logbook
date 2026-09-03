@@ -3137,8 +3137,47 @@ FAC-13; the already-filed sub-case surfaced in a later Codex review round
 of the same pass). A related but distinct gap — `documents.manage` alone
 bypassing a document's own folder ACL through the _generic_ update/delete
 routes, independent of this facility-specific over-restriction — was found
-in the same review round and fixed (FAC-14, same doc); it is not listed
-here because it is resolved, not an open limitation.
+in the same review round and fixed (FAC-14, same doc). Two further Codex
+follow-ups found and fixed in the next round: the same bypass on a document
+_move_'s destination folder (FAC-15) and on the folder-mutation routes
+themselves — rename/reparent/delete of the target folder (FAC-16), the
+latter of which also uncovered and fixed a pre-existing bug where deleting a
+folder with descendants silently orphaned them instead of cascading (see
+FAC-16 and the entry below). None of FAC-14/15/16 are listed here because
+they are resolved, not open limitations.
+
+## FAC-16-adjacent — `CheckTemplateCompartment.children` and `TrainingCategory.subcategories` Likely Share the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` (2026-09-03)
+
+While diagnosing why `DocumentFolder.delete_folder`'s cascade did not
+actually remove descendant folders (see FAC-16,
+`docs/security-review/FAC-12-facilities.md`), a grep of every `remote_side`
+usage in `app/models/` found two other self-referential relationships
+declared with the same inverted shape — `remote_side` placed on the plural
+collection attribute instead of on its singular backref, unlike the correct
+pattern used elsewhere (`FacilityRoom.parent_room`, `BudgetCategory.parent`,
+`StorageArea.parent`, `Event.recurrence_parent`, and now
+`DocumentFolder.children` after the FAC-16 fix):
+
+- `CheckTemplateCompartment.children` (`app/models/apparatus.py`, backref
+  `"parent"`, `cascade="all, delete-orphan"`).
+- `TrainingCategory.subcategories` (`app/models/training.py`, backref
+  `"parent_category"` — no cascade configured, so the practical effect here
+  is more likely a `parent_category_id` silently nulled to `None` on a
+  parent-category delete than a failed delete, though this has not been
+  empirically confirmed).
+
+`DocumentFolder.children`'s confirmed failure mode: `session.delete()` on a
+parent with descendants proactively set each descendant's foreign key to
+`NULL` before issuing the `DELETE`, so the database's own `ON DELETE CASCADE`
+never fired — the parent was removed but its descendants survived, detached
+and orphaned rather than deleted. Not verified for the two entries above —
+each has its own cascade configuration and would need the same empirical
+multi-level-fixture check `DocumentFolder`'s fix used (a plain code read is
+not sufficient; that is exactly what missed the `DocumentFolder` instance of
+this bug for as long as it existed). Out of scope for the Facilities feature
+this was found under; apparatus and training belong to other rotation
+features. Found in `docs/security-review/FAC-12-facilities.md` (feature 12,
+pass 3, FAC-16).
 
 ## Process
 

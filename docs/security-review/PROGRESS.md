@@ -17,16 +17,23 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 #2191 (`claude/security-review-facilities`) — Feature 12, Facilities, pass
-3, complete and ready for review. Two HIGH findings: FAC-13 (facility-file
-folder access over-restricted for three established-baseline categories —
-Photos, Maintenance Records, Inspection Reports; Blueprints & Permits'
-classification is separately undecided — flagged, needs an owner decision,
-not auto-fixed) and FAC-14 (a distinct, opposite-direction bypass on the
-generic document update/delete routes, found by Codex reviewing this PR's
-own fix commit and fixed same-day) plus two doc-accuracy corrections (stale
-comments claiming a now-false "facilities.view-only sees the folders"
-invariant). Full completion gate green. Rotation row 12 → ⏳ (awaiting this
-PR's merge).
+3, complete and ready for review. One HIGH finding flagged (FAC-13:
+facility-file folder access over-restricted for three established-baseline
+categories — Photos, Maintenance Records, Inspection Reports; Blueprints &
+Permits' classification is separately undecided — needs an owner decision,
+not auto-fixed) and three P1 findings fixed same-day across two Codex
+review rounds of this PR's own fix commits: FAC-14 (documents.manage
+bypassing a document's own folder ACL on the generic update/delete routes),
+FAC-15 (the same bypass on a document _move_'s destination folder, missed
+by FAC-14's fix), and FAC-16 (the identical bypass on the folder-mutation
+routes themselves — rename/reparent/delete of the target folder — which
+also uncovered and fixed a pre-existing bug where deleting a folder with
+descendants silently orphaned them instead of cascading; two sibling
+relationships elsewhere in the codebase flagged with the same shape, not
+fixed, out of scope). Plus two doc-accuracy corrections (stale comments
+claiming a now-false "facilities.view-only sees the folders" invariant).
+Full completion gate green, 10004/10004 full backend suite (+8 for FAC-15/
+FAC-16's regression tests). Rotation row 12 → ⏳ (awaiting this PR's merge).
 
 ---
 
@@ -164,6 +171,92 @@ markdown docs touched. Findings doc: `docs/security-review/
 FAC-12-facilities.md` (FAC-14, and FAC-13's extended remediation item 3).
 Pushed to `claude/security-review-facilities`. Rotation row 12 stays ⏳
 (awaiting PR #2191's merge).
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3 round 3) — 2 fixed (FAC-15, FAC-16) plus a cascade-delete bug found and fixed while regression-testing FAC-16 (Codex review of PR #2191's `b5fdf79d`)
+
+Codex reviewed pass 3 round 2's fix commit (`b5fdf79d`, the FAC-14 fix) and
+posted 2 new comments, both on the same shape of gap FAC-14 had just closed
+on a different route. Both independently verified against current code
+before acting.
+
+**FAC-15 (P1, access control, fixed).** FAC-14's fix checked
+`can_access_document` on a document's _current_ folder before
+`update_document`/`delete_document` acted, but `update_document` never
+checked the _destination_ folder when `folder_id` changed to a new,
+non-null value — `DocumentsService.update_document` validated only
+same-organization membership (`assert_in_org`, DOC-6/XC-1), not the
+caller's access to that folder. A `documents.manage` holder with zero
+facilities permission could move a document they already had legitimate
+access to _into_ a `facilities.view_sensitive`-gated folder — the opposite
+direction from FAC-14 (write-into rather than read-out-of). Confirmed by
+reading `update_document` and `DocumentsService.update_document` in full,
+and by comparing against `upload_document`, which already resolves and
+authorizes its destination folder before saving a new upload — the pattern
+this fix mirrors. Fixed: `update_document` now resolves the destination
+folder and calls `can_access_folder` on it whenever `folder_id` is present,
+non-null, and different from the current value (403 on denial); moving out
+to unfiled needs no destination check. Regression tests in
+`tests/test_documents_access.py::TestUpdateDocumentRespectsDestinationFolderAcl`
+(3 tests: 1 bypass, 1 positive-control, 1 same-folder no-op) — the bypass
+test independently confirmed to fail (no `HTTPException` raised — the move
+silently succeeded) against the pre-fix route via `git stash`, passes again
+once restored.
+
+**FAC-16 (P1, access control/IDOR, fixed).** `PATCH`/
+`DELETE /documents/folders/{folder_id}` required only `documents.manage`
+and never checked `can_access_folder` on the target folder at all — unlike
+the read-side `get_facility_sub_folders`, which already filters through it.
+A `documents.manage` holder with zero facilities permission could rename,
+reparent, or delete a sensitive-gated facility folder outright — a full
+destructive cascade rather than FAC-14/15's single-document scope. Fixed:
+both routes now fetch the target folder and call `can_access_folder` on it
+before mutating (404 on denial, matching the "don't confirm existence"
+convention). Regression tests in
+`tests/test_documents_access.py::TestFolderMutationRespectsOwnFolderAcl`
+(5 tests: 3 bypass — rename, reparent, delete — 2 positive-control),
+independently confirmed to fail pre-fix via `git stash`, pass again once
+restored.
+
+**A second, independent bug found and fixed while writing FAC-16's
+delete-cascade positive-control test.** The test — proving an authorized
+caller's delete still cascades through a multi-level folder tree — failed
+on an `AssertionError`, not an ACL error: the child folder survived. Traced
+to `DocumentFolder.children` (`app/models/document.py`) declaring
+`remote_side=[id]` on the plural `children` relationship itself instead of
+on its singular `parent` backref — inverted from the standard
+self-referential idiom this codebase uses correctly everywhere else
+(`FacilityRoom.parent_room`, `BudgetCategory.parent`, `StorageArea.parent`,
+`Event.recurrence_parent`). Empirically confirmed with a raw fixture:
+`session.delete(parent)` did not cascade to the child; instead SQLAlchemy,
+finding no cascade-configured relationship pointing at the child, nulled
+its foreign key before issuing the `DELETE`, so the database's own
+`ON DELETE CASCADE` (confirmed present at the schema level) never fired —
+deleting a folder with descendants silently orphaned them as detached
+root folders instead of removing them, despite `delete_folder`'s own
+docstring and this pass's audit-log severity both describing a full
+destructive cascade. No production code reads `.children`/`.parent`
+directly (every call site queries `parent_id` explicitly), so fixing the
+relationship's direction changes only this cascade behavior. Fixed by
+moving `remote_side=[id]` onto the `parent` backref; re-verified with a
+three-level fixture (root → child → grandchild → document) that a delete
+now removes every row. **Not fixed, flagged:** the same inverted shape
+exists in `CheckTemplateCompartment.children` (apparatus.py) and
+`TrainingCategory.subcategories` (training.py), found by grepping every
+`remote_side` usage while diagnosing this one — out of scope for this
+feature, unverified beyond the pattern match, mirrored to
+`KNOWN_LIMITATIONS.md`.
+
+Full local completion gate green: flake8/black/isort clean on
+`app/api/v1/endpoints/documents.py`, `app/models/document.py`, and
+`tests/test_documents_access.py`; migrations validated (no schema change —
+this is a relationship-mapping fix, not a column/constraint change);
+`facilities`/`documents`-scoped and 10004/10004 full backend suite pass
+(+8 over round 2's 9996, 21 pre-existing skips); `npm run typecheck` 0
+errors, `eslint .` clean (no frontend code changed this round); prettier
+clean on the markdown docs touched. Findings doc: `docs/security-review/
+FAC-12-facilities.md` (FAC-15, FAC-16). Pushed to
+`claude/security-review-facilities`. Rotation row 12 stays ⏳ (awaiting PR
+#2191's merge).
 
 ### 2026-09-03 — Feature 11 (Inventory) fully closed — PR #2190 merged
 

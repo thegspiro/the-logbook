@@ -286,6 +286,154 @@ folder's own `required_permissions` can still do both.
 caller each, both in `documents.py`, so this fix has no effect on those
 other modules.
 
+### FAC-15 — P1 (access control, write-side) — `PATCH /documents/{document_id}` authorized only the document's _source_ folder on a move, never the _destination_ — ✅ FIXED
+
+**Found by Codex review of FAC-14's own fix commit (`b5fdf79d`).** FAC-14
+closed the read-direction gap (a `documents.manage`-only caller moving or
+deleting a document out of a folder they cannot access). It left the mirror
+image open: `update_document` called `can_access_document` against the
+document's **existing** folder only, and `DocumentsService.update_document`
+validated a reassigned `folder_id` solely via `assert_in_org` (DOC-6/XC-1 —
+same organization, nothing about the caller's own access to that folder).
+Nothing on the write path checked whether the caller could access the
+**destination** folder at all.
+
+**Impact:** a `documents.manage` holder with zero facilities permission could
+`PATCH` the `folder_id` of a document they already have legitimate access to
+(e.g. an ordinary org-level memo) so that it points at a
+`facilities.view_sensitive`-gated folder (Insurance & Leases, Capital
+Projects) — injecting arbitrary content into a folder ACL'd against them.
+The opposite direction from FAC-14 (write-into rather than read-out-of), but
+the same root cause: a folder's `required_permissions` is meant to gate both
+directions of movement across its boundary, and only one direction was
+checked.
+
+**Verified independently:** read `update_document` (`documents.py`) and
+`DocumentsService.update_document` (`documents_service.py`) in full post-FAC-14
+and confirmed no call to `can_access_folder` exists anywhere in the reassigned-
+`folder_id` path. Compared against `upload_document`
+(`documents.py:330-347`), which already resolves the destination folder and
+calls `can_access_folder` before saving a new upload — the correct pattern
+this fix mirrors, confirming the gap was an inconsistency between two routes
+rather than a missing capability.
+
+**Fix:** `update_document` now resolves the destination folder and calls
+`can_access_folder` on it whenever `folder_id` is present in the update
+payload, non-null, and different from the document's current `folder_id` —
+matching `upload_document`'s own check (404 if the folder doesn't resolve in
+the org, 403 if it resolves but the caller can't access it). Moving _out_ of
+a folder to unfiled (`folder_id: null`) needs no destination check — FAC-14's
+source-folder check already covers that direction, and there is no
+destination folder to authorize. Re-sending the same `folder_id` alongside an
+unrelated field edit is treated as no move, not a destination check.
+
+**Regression test:**
+`tests/test_documents_access.py::TestUpdateDocumentRespectsDestinationFolderAcl`
+— proves a `documents.manage`-only caller cannot move an accessible document
+into a sensitive-gated folder (403, document left in its original folder);
+a positive control proves a caller holding the destination folder's own
+permission still can; a third test proves re-sending the unchanged
+`folder_id` needs no destination grant. Independently confirmed failing
+pre-fix via `git stash` (the bypass test raised no `HTTPException` — the move
+silently succeeded) and passing post-fix.
+
+### FAC-16 — P1 (access control, IDOR) — `PATCH`/`DELETE /documents/folders/{folder_id}` never checked `can_access_folder` on the target folder itself — ✅ FIXED
+
+**Found by Codex review of FAC-14's own fix commit (`b5fdf79d`).** FAC-14 and
+FAC-15 both closed gaps on the _document_ mutation routes. The _folder_
+mutation routes had the identical shape of bug, one level up the tree:
+`update_folder` and `delete_folder` (`documents.py`) were gated only on
+`documents.manage` and never called `can_access_folder` on the folder being
+renamed, reparented, or deleted — even though a folder's own
+`required_permissions` is exactly the rule `documents.manage`'s leadership
+bypass is not supposed to override (`_folder_admits_user`,
+`documents_service.py:214-239`). The read-side equivalent
+(`get_facility_sub_folders`) already filters every folder it returns through
+this same check; the two folder-mutation routes had no equivalent gate at
+all.
+
+**Impact:** a `documents.manage` holder with zero facilities permission could
+rename or reparent a sensitive-gated facility folder (Insurance & Leases,
+Capital Projects), or delete it outright — a full destructive cascade
+(every descendant folder, every document in the subtree, and their backing
+files) rather than the single document FAC-14 was scoped to. More severe
+than FAC-14/FAC-15: a delete here is irreversible and destroys data the
+caller was never entitled to see, not merely relocate.
+
+**Verified independently:** read `update_folder`/`delete_folder`
+(`documents.py`) and their `DocumentsService` implementations in full and
+confirmed neither called `can_access_folder`, `can_access_document`, or any
+other ACL check against the target folder before mutating — only the
+`documents.manage` permission dependency and (for `update_folder`) FK
+validation on a _reassigned_ `parent_id`/`owner_user_id`. Confirmed
+`delete_folder`'s cascade claim empirically (see below).
+
+**Fix:** both routes now fetch the target folder and call `can_access_folder`
+on it before proceeding, returning 404 (not 403) on denial — consistent with
+FAC-14/FAC-15 and with `can_access_document`'s existing "don't confirm
+existence to a caller who can't see it" behavior. A caller who holds the
+folder's own `required_permissions` is unaffected.
+
+**A second, independent bug found while writing this fix's cascade-delete
+regression test — also fixed here:** `DocumentFolder.children`
+(`app/models/document.py`) declared `remote_side=[id]` directly on the
+plural `children` relationship rather than on its singular `parent` backref
+— inverted from the standard SQLAlchemy self-referential idiom used
+correctly elsewhere in this codebase (`FacilityRoom.parent_room`,
+`BudgetCategory.parent`, `StorageArea.parent`, `Event.recurrence_parent` all
+place `remote_side` on the singular side). Empirically confirmed the effect
+with a raw multi-level fixture: `db.delete(parent)` did **not** cascade to a
+child folder; instead, because SQLAlchemy no longer recognized any
+cascade-configured relationship pointing at the child, it proactively set the
+child's `parent_id` to `NULL` before issuing the `DELETE` — so the DB's own
+`ON DELETE CASCADE` (confirmed present at the schema level,
+`fk_document_folders_parent_id_document_folders`, `DELETE_RULE=CASCADE`)
+never even fired, since the child no longer referenced the parent by the
+time the row was removed. Net effect: deleting a folder with descendants
+silently detached them as orphaned root-level folders — retaining their own
+`required_permissions` and documents, unreachable through normal navigation
+(`can_access_folder` fails closed on missing ancestry) but still present and
+still queryable in the database — rather than actually deleting them, despite
+`delete_folder`'s own docstring and this pass's audit-log severity both
+describing a full destructive cascade. No production code reads
+`DocumentFolder.children`/`.parent` directly (grep-confirmed; every existing
+call site — `get_facility_sub_folders`, `_creates_cycle`, `delete_folder`'s
+own subtree walk — queries `parent_id` explicitly), so the only observable
+effect of the relationship's direction is this cascade behavior, and
+correcting it changes nothing else. Fixed by moving `remote_side=[id]` onto
+the `parent` backref (`backref=backref("parent", remote_side=[id])`),
+matching the pattern used correctly elsewhere in this codebase; re-verified
+with a three-level fixture (root → child → grandchild → document) that a
+delete now removes every row.
+
+**Not fixed here, flagged for a future pass:** the same inverted-`remote_side`
+shape exists in two other, unrelated modules —
+`CheckTemplateCompartment.children` (`app/models/apparatus.py:2248`) and
+`TrainingCategory.subcategories` (`app/models/training.py:181`) — found by
+grepping every `remote_side` usage in `app/models/` for comparison while
+diagnosing this one. Both are outside this feature's scope (apparatus and
+training belong to other rotation features) and unverified beyond the
+pattern match; each needs the same empirical cascade-delete check this
+finding used before assuming the fix transfers directly.
+
+**Regression test:**
+`tests/test_documents_access.py::TestFolderMutationRespectsOwnFolderAcl` —
+proves a `documents.manage`-only caller cannot rename, reparent, or delete a
+sensitive-gated folder (all three 404, and the delete-attempt test confirms
+the entire subtree — folder, child folder, and both documents — is
+untouched, not partially cascaded); two positive-control tests prove a
+caller holding the folder's own permission can still rename it and can still
+delete it, with the delete test asserting the full three-level cascade
+(folder, child folder, and both documents) actually completes. Independently
+confirmed failing pre-fix via `git stash` (the three bypass tests raised no
+`HTTPException`) and passing post-fix; the positive-control delete test also
+served as the reproduction case for the cascade bug above (it failed with an
+`AssertionError` — the child folder survived — before that fix, distinct
+from the `HTTPException`-based ACL failures).
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md` (the two flagged sibling
+relationships) and `CHANGELOG.md`.
+
 ## Verified good ✅ (re-confirmed this pass)
 
 - **Auth coverage 98/98** — exact grep count unchanged since pass 2
