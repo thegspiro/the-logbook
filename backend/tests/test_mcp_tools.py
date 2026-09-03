@@ -4459,3 +4459,43 @@ class TestThirtiethRoundFindings:
         # the page, however many requirements are on it.
         assert len(statements) == short_page
         assert short_page <= 3
+        # The preload carries only the columns the checks read, and stops
+        # at the earliest window on the page: these are annual
+        # requirements, so records older than a year are not loaded.
+        preload = next(
+            str(stmt) for stmt in statements if "training_records" in str(stmt)
+        )
+        assert "training_records.notes" not in preload
+        assert "training_records.completion_date >=" in preload
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_requirement_progress_preload_is_unbounded_for_certifications(
+        self, org_with_members, db_session
+    ):
+        from app.models.training import (
+            RequirementFrequency,
+            RequirementType,
+            TrainingRequirement,
+        )
+        from app.services.training_service import TrainingService
+
+        annual = TrainingRequirement(
+            requirement_type=RequirementType.HOURS,
+            frequency=RequirementFrequency.ANNUAL,
+            required_hours=2,
+        )
+        cert = TrainingRequirement(
+            requirement_type=RequirementType.CERTIFICATION,
+            frequency=RequirementFrequency.ANNUAL,
+        )
+        biannual = TrainingRequirement(
+            requirement_type=RequirementType.HOURS,
+            frequency=RequirementFrequency.BIANNUAL,
+            required_hours=2,
+        )
+        today = date(2026, 9, 3)
+        assert TrainingService._earliest_window_start([annual], today) == date(
+            2026, 1, 1
+        )
+        assert TrainingService._earliest_window_start([annual, cert], today) is None
+        assert TrainingService._earliest_window_start([annual, biannual], today) is None

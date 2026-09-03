@@ -6,7 +6,7 @@ Business logic for training management including courses, records, requirements,
 
 import calendar
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -31,6 +31,22 @@ from app.services.training_waiver_service import (
     adjust_required,
     fetch_user_waivers,
     get_rolling_period_months,
+)
+
+# What a requirement check reads from a completed record; the preload that
+# serves a page of checks loads these and nothing else.
+_PROGRESS_RECORD_COLUMNS = (
+    TrainingRecord.id,
+    TrainingRecord.organization_id,
+    TrainingRecord.user_id,
+    TrainingRecord.status,
+    TrainingRecord.course_id,
+    TrainingRecord.course_name,
+    TrainingRecord.training_type,
+    TrainingRecord.completion_date,
+    TrainingRecord.expiration_date,
+    TrainingRecord.hours_completed,
+    TrainingRecord.certification_number,
 )
 
 
@@ -601,7 +617,7 @@ class TrainingService:
         organization_id: UUID,
         waivers: Optional[List[WaiverPeriod]] = None,
         requirement: Optional[TrainingRequirement] = None,
-        completed_records: Optional[List[TrainingRecord]] = None,
+        completed_records: Optional[Sequence[Any]] = None,
     ) -> RequirementProgress:
         """
         Check a user's progress towards a specific requirement.
@@ -615,9 +631,10 @@ class TrainingService:
 
         *requirement* is the already-loaded row for *requirement_id*, and
         *completed_records* the member's completed records in this
-        organization; a caller checking a page of requirements passes both
-        so the check reads nothing further. Without them the check queries
-        for what it needs, as it always has.
+        organization (any objects carrying the record's attributes — the
+        page preload passes plain rows); a caller checking a page of
+        requirements passes both so the check reads nothing further.
+        Without them the check queries for what it needs, as it always has.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
@@ -665,7 +682,7 @@ class TrainingService:
                 str(user_id),
             )
 
-        def _in_window(record: TrainingRecord) -> bool:
+        def _in_window(record: Any) -> bool:
             if not (start_date and end_date):
                 return True
             return (
@@ -673,7 +690,7 @@ class TrainingService:
                 and start_date <= record.completion_date <= end_date
             )
 
-        async def _all_completed() -> List[TrainingRecord]:
+        async def _all_completed() -> List[Any]:
             """The member's completed records, from the preloaded set or a
             query; the frequency window is not applied here."""
             if completed_records is not None:
@@ -687,7 +704,7 @@ class TrainingService:
             )
             return list(result.scalars().all())
 
-        async def _windowed() -> List[TrainingRecord]:
+        async def _windowed() -> List[Any]:
             """Completed records in the evaluation window."""
             if completed_records is not None:
                 return [r for r in completed_records if _in_window(r)]
@@ -975,15 +992,22 @@ class TrainingService:
         )
         # One read of the member's completed records serves every
         # requirement on the page; each check then filters in memory
-        # instead of issuing its own queries.
-        records_result = await self.db.execute(
-            select(TrainingRecord).where(
-                TrainingRecord.user_id == str(user_id),
-                TrainingRecord.organization_id == str(organization_id),
-                TrainingRecord.status == TrainingStatus.COMPLETED,
-            )
+        # instead of issuing its own queries. Only the columns the checks
+        # read are loaded (never notes or attachments), and the read is cut
+        # at the earliest window any requirement on the page evaluates —
+        # unless one of them judges certifications, which count however old.
+        preload = select(*_PROGRESS_RECORD_COLUMNS).where(
+            TrainingRecord.user_id == str(user_id),
+            TrainingRecord.organization_id == str(organization_id),
+            TrainingRecord.status == TrainingStatus.COMPLETED,
         )
-        completed = list(records_result.scalars().all())
+        earliest = self._earliest_window_start(requirements, date.today())
+        if earliest is not None:
+            preload = preload.where(TrainingRecord.completion_date >= earliest)
+        # Plain rows, not ORM instances: the checks only read attributes,
+        # and a partial entity load would collide with any full copy of the
+        # same record already in the session.
+        completed = list((await self.db.execute(preload)).all())
         progress_list = []
         for req in requirements:
             progress = await self.check_requirement_progress(
@@ -996,6 +1020,38 @@ class TrainingService:
             )
             progress_list.append(progress)
         return progress_list
+
+    @classmethod
+    def _earliest_window_start(
+        cls, requirements: List[TrainingRequirement], today: date
+    ) -> Optional[date]:
+        """The earliest completion date any of ``requirements`` can count.
+
+        ``None`` when some requirement counts records regardless of the
+        frequency window — a certification, or a biannual hours requirement
+        whose expired-certificate override looks at every record — or when a
+        requirement's own window is open-ended.
+        """
+        from app.models.training import RequirementType
+        from app.services.training_compliance import recency_cutoff
+
+        starts = []
+        for req in requirements:
+            req_type = getattr(req.requirement_type, "value", req.requirement_type)
+            freq = getattr(req.frequency, "value", req.frequency)
+            if req_type == RequirementType.CERTIFICATION.value or (
+                req_type == RequirementType.HOURS.value
+                and freq == RequirementFrequency.BIANNUAL.value
+            ):
+                return None
+            start, end = cls._get_date_window(req, today)
+            cutoff = recency_cutoff(req, today)
+            if cutoff is not None:
+                start = cutoff if start is None else max(start, cutoff)
+            if start is None or end is None:
+                return None
+            starts.append(start)
+        return min(starts) if starts else None
 
     async def get_applicable_requirements(
         self, user_id: UUID, organization_id: UUID, year: Optional[int] = None
