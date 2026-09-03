@@ -787,6 +787,7 @@ class DocumentsService:
         limit: int = 100,
         accessible_folder_ids: Optional[Set[str]] = None,
         defer_content: bool = False,
+        human_authored_only: bool = False,
     ) -> Tuple[List[Document], int]:
         """Get documents with filtering and pagination.
 
@@ -798,8 +799,15 @@ class DocumentsService:
         *defer_content* leaves ``content_html`` (a LONGTEXT) unloaded, for a
         caller that renders metadata only; touching the attribute afterwards
         would lazy-load it, which an async caller must not do.
+
+        *human_authored_only* excludes every document the system generated
+        (``source_type`` set — property-return reports, filed minutes and
+        the like), whose bodies carry structured member data a text scrub
+        cannot recognise.
         """
         query = select(Document).where(Document.organization_id == str(organization_id))
+        if human_authored_only:
+            query = query.where(Document.source_type.is_(None))
 
         if folder_id:
             query = query.where(Document.folder_id == str(folder_id))

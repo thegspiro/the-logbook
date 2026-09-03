@@ -1667,6 +1667,82 @@ class TestThirteenthRoundFindings:
             )
 
 
+class TestFourteenthRoundFindings:
+    """Regressions for the fourteenth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_generated_documents_are_never_exposed(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        report_id, sog_id = str(uuid.uuid4()), str(uuid.uuid4())
+        for did, name, source in (
+            (report_id, "Property return - S. Rivera", "property_return_report"),
+            (sog_id, "SOG 3", None),
+        ):
+            await db_session.execute(
+                text(
+                    "INSERT INTO documents (id, organization_id, name, document_type, "
+                    "status, version, source_type, content_html) VALUES "
+                    "(:id, :org, :name, 'uploaded', 'active', 1, :source, '<p>x</p>')"
+                ),
+                {"id": did, "org": org_id, "name": name, "source": source},
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_documents")
+        assert [d["name"] for d in listed["items"]] == ["SOG 3"]
+        with pytest.raises(ToolError, match="Document not found"):
+            await _call(server, principal, "get_document", document_id=report_id)
+        assert (await _call(server, principal, "get_document", document_id=sog_id))[
+            "name"
+        ] == "SOG 3"
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_minutes_pieces_cannot_reassemble_a_number(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import meetings as meeting_tools
+
+        org_id, admin_id, _ = org_with_members
+        minutes_id = str(uuid.uuid4())
+        report = "Reach the chief on 5551234567 after hours"
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, chief_report, created_by) VALUES "
+                "(:id, :org, 'November meeting', 'business', '2026-11-01', "
+                "'approved', :chief, :by)"
+            ),
+            {"id": minutes_id, "org": org_id, "chief": report, "by": admin_id},
+        )
+        await db_session.flush()
+        monkeypatch.setattr(
+            meeting_tools, "MINUTES_TEXT_CHARS", 22
+        )  # inside the number
+        principal = _principal(org_id, admin_id)
+        summary = await _call(server, principal, "get_minutes", minutes_id=minutes_id)
+        assert "5551234567" not in summary["chief_report"]
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field="chief_report",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert "[phone removed]" in joined
+
+
 class TestReviewFindings:
     """Regressions for the first review round on #2197."""
 

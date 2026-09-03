@@ -125,6 +125,7 @@ def register(server: Any) -> None:
             limit=limit,
             accessible_folder_ids=open_ids,
             defer_content=True,
+            human_authored_only=True,
         )
         return page([_document(d, False) for d in docs], total, limit, offset)
 
@@ -145,6 +146,12 @@ def register(server: Any) -> None:
             parse_uuid(document_id, "document_id"), org_uuid(principal)
         )
         if doc is None or doc.status != DocumentStatus.ACTIVE:
+            raise ValueError("Document not found")
+        # A generated document (a property-return report, filed minutes)
+        # embeds structured member data — an address, a membership number, a
+        # separation reason — that a text scrub cannot recognise. Only what a
+        # person uploaded or wrote in the app is available here.
+        if doc.source_type is not None:
             raise ValueError("Document not found")
         if doc.folder_id is not None:
             open_ids = await _open_folder_ids(db, principal.organization_id)

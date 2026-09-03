@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
+from app.mcp.redaction import scrub_text
 from app.mcp.registry import GATE_MESSAGES, logbook_tool
 from app.mcp.tools._common import (
     clamp_limit,
@@ -64,13 +65,22 @@ _MINUTES_TEXT_FIELDS = (
 
 
 def _clip(value: Any) -> tuple[Any, bool]:
-    """``value`` cut to ``MINUTES_TEXT_CHARS`` and whether it was cut."""
-    if not isinstance(value, str) or len(value) <= MINUTES_TEXT_CHARS:
+    """``value`` cut to ``MINUTES_TEXT_CHARS`` and whether it was cut.
+
+    Scrubbed before it is cut, and ``_chunk`` measures its offsets over the
+    same scrubbed text, so a number or address can never be split across
+    the cut and reassembled from the pieces.
+    """
+    if not isinstance(value, str):
+        return value, False
+    value = scrub_text(value)
+    if len(value) <= MINUTES_TEXT_CHARS:
         return value, False
     return value[:MINUTES_TEXT_CHARS], True
 
 
 def _chunk(text: str, offset: int) -> dict:
+    text = scrub_text(text)
     piece = text[offset : offset + MINUTES_TEXT_CHARS]
     body = {
         "content": piece,
