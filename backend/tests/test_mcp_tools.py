@@ -726,6 +726,20 @@ class TestAuditBounding:
         value = {"search": "engine 3", "limit": 10, "tags": ["a", "b"]}
         assert bound_for_audit(value) == value
 
+    def test_dict_keys_are_cut_like_values(self):
+        """A schema-rejected call carries the client's property names into
+        the audit row, so a key is bounded the same way a value is."""
+        long_key = "k" * (AUDIT_ARGUMENT_CHARS * 3)
+        bounded = bound_for_audit({long_key: "v", "nested": {long_key: 1}})
+        key, nested_key = (
+            next(k for k in bounded if k != "nested"),
+            next(iter(bounded["nested"])),
+        )
+        assert key == nested_key
+        assert key.endswith(f"[{AUDIT_ARGUMENT_CHARS * 3} chars]")
+        assert len(key) < AUDIT_ARGUMENT_CHARS + 40
+        assert bounded[key] == "v"
+
     def test_argument_size_check_walks_nested_values(self):
         check_argument_sizes({"ok": "x" * MAX_ARGUMENT_CHARS, "n": 3})
         with pytest.raises(ToolError, match="tags is too long"):

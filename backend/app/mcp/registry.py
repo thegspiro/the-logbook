@@ -284,8 +284,11 @@ def bound_for_audit(value: Any) -> Any:
     """Shrink ``value`` to what an audit row should carry.
 
     Strings are cut to ``AUDIT_ARGUMENT_CHARS`` with a marker, and lists and
-    dicts keep their first ``AUDIT_ARGUMENT_ITEMS`` entries, recursively. The
-    row then has a size bound independent of what the client sent.
+    dicts keep their first ``AUDIT_ARGUMENT_ITEMS`` entries, recursively. A
+    dict's keys are cut the same way as its values: a call the schema
+    rejects reaches the audit with whatever property names the client
+    chose. The row then has a size bound independent of what the client
+    sent.
     """
     if isinstance(value, str):
         if len(value) <= AUDIT_ARGUMENT_CHARS:
@@ -293,7 +296,13 @@ def bound_for_audit(value: Any) -> Any:
         return f"{value[:AUDIT_ARGUMENT_CHARS]}… [{len(value)} chars]"
     if isinstance(value, dict):
         items = list(value.items())
-        bounded = {k: bound_for_audit(v) for k, v in items[:AUDIT_ARGUMENT_ITEMS]}
+        # Two over-long keys sharing a prefix and a length collapse into
+        # one entry; the row is a bounded summary, and the key count
+        # marker below still says how many there were.
+        bounded = {
+            bound_for_audit(k) if isinstance(k, str) else k: bound_for_audit(v)
+            for k, v in items[:AUDIT_ARGUMENT_ITEMS]
+        }
         if len(items) > AUDIT_ARGUMENT_ITEMS:
             bounded["…"] = f"[{len(items)} keys]"
         return bounded
