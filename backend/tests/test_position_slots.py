@@ -186,6 +186,7 @@ class TestWritePathWiring:
 
         db = MagicMock()
         db.add = MagicMock()
+        db.flush = AsyncMock()
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
         db.rollback = AsyncMock()
