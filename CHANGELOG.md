@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a clone could silently drop a disconnected compartment, and the delete/autosave interaction took two more rounds to close for good (2026-09-03)
+
+**Fixed**
+
+- **AP-16 (P2, data completeness) — `clone_template` silently dropped a
+  compartment whose parent lay outside the source template**: the same
+  dangling cross-template reference AP-14 guards the delete path against
+  left a compartment unreachable from the clone's root-down walk, so it
+  (and its items) vanished from the clone with no error. Fixed the same
+  way AP-14 fixed delete — fail closed (400) rather than commit an
+  incomplete clone.
+- **Three more rounds on the same `deleteCompartment` auto-save
+  interaction** (AP-13/AP-15 follow-up): cancelling a pending item
+  auto-save timer against an in-flight delete has two failure directions —
+  act too early and a failed delete loses the edit for good; act too late
+  and the timer can still fire mid-flight and race the delete to the
+  server. Landed in two more corrections before converging: capture and
+  cancel every timer synchronously, before the delete request is sent, and
+  either discard the captured edits (delete succeeded) or re-arm them
+  (delete failed) using the same recovery path a failed Save already uses.
+  A related bug in the same fix (a stale entry left in the pending-reparent
+  guard's server-truth map after a successful delete, which could
+  permanently and falsely block deleting anything else) was fixed
+  alongside it, along with a test-hygiene gap (a mock not reset between
+  tests) Codex caught in the same review.
+- All reproduced live (or via a failing test against the specific prior
+  state) before being called findings, and confirmed failing pre-fix /
+  passing post-fix. See `docs/security-review/AP-13-apparatus-nfc.md`
+  (pass 7) for the full writeup.
+
 ### Security: the compartment-delete cascade race fix had its own cross-template gap, and the builder left a stale auto-save timer running after a delete (2026-09-03)
 
 **Fixed**

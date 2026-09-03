@@ -1,12 +1,150 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–6)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3), 2026-09-03 (pass 4), 2026-09-03 (pass 5), 2026-09-03 (pass 6), 2026-09-03 (pass 7) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1), [#2199](https://github.com/thegspiro/the-logbook/pull/2199) (passes 3–7)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py` (new),
 `api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 7 (2026-09-03) — a fourth Codex round on the same fix chain: one new finding (AP-16), plus four review-caught regressions in pass-5/6's own fixes, all fixed
+
+**Trigger.** Codex kept reviewing each fix as it was pushed, and this pass
+covers what it found across pass 6's two commits and this pass's own
+follow-ups. One is a genuinely new, distinct finding (AP-16, in
+`clone_template`, not touched by any prior pass). The other four are
+Codex catching real regressions in code _this rotation itself_ had just
+written (three in the `deleteCompartment` autosave-cancellation logic
+across two of its own fix attempts, one a test-isolation gap in a test
+this rotation added) — recorded here rather than silently folded into
+earlier passes' write-ups, because CLAUDE.md's "fix all errors" standard
+applies to a reviewer's own code exactly as it does to anyone else's, and
+because the sequence is itself the lesson: cancelling a timer against an
+in-flight async operation has two failure directions (act too early, lose
+the edit on failure; act too late, race the in-flight request), and only
+capturing-and-deferring, synchronously, before the async call starts,
+closes both at once. All five reproduced live before being called
+findings (or, for the three already-covered-by-a-test regressions,
+confirmed by writing a test that failed against the specific prior
+attempt), all have a regression test confirmed failing pre-fix and passing
+post-fix.
+
+### AP-16 — P2 (data completeness) — `clone_template` silently drops a compartment whose parent lies outside the source template — ✅ FIXED
+
+**What:** `clone_template`'s root-down walk (AP-9) groups
+`source.compartments` by `parent_compartment_id` and recurses from `None`.
+A compartment whose `parent_compartment_id` points at a row outside this
+template — the same dangling cross-template reference AP-14 guards the
+delete path against, simulating a row persisted before AP-10's create-time
+validation shipped — is grouped under a key the walk never visits, since
+that key names a compartment that isn't part of this template at all. It
+is silently omitted from the clone: no error, no indication the resulting
+checklist is missing a compartment and whatever items it held.
+
+**Where:** `backend/app/services/equipment_check_service.py`,
+`clone_template`'s `_clone_subtree` walk.
+
+**Failure scenario, reproduced live:** built a two-compartment source
+template where one compartment's `parent_compartment_id` pointed at a
+compartment belonging to a _different_ template, then called
+`clone_template`. Pre-fix, the call succeeded and returned a clone with
+exactly one compartment — the disconnected one silently missing, with
+nothing in the response or logs indicating a compartment had been dropped.
+
+**Impact:** data completeness, not destruction — the _original_ template
+is untouched; a clone is simply incomplete, and the clone endpoint's normal
+2xx response gives the caller no reason to suspect anything is missing. A
+department cloning a checklist to a new apparatus could deploy an
+incomplete inspection with a compartment quietly gone.
+
+**Fix:** the same choice AP-14 made for delete, applied here to create —
+fail closed rather than commit an incomplete result. After the walk, the
+number of compartments actually visited is compared against
+`len(source.compartments)`; a mismatch raises `ValueError` (already caught
+by the endpoint's existing `try`/`except ValueError` → 400), aborting the
+whole clone.
+
+### AP-13/AP-15 follow-up — four Codex-caught regressions across two rounds of the same `deleteCompartment` autosave-cancellation fix — ✅ ALL FIXED
+
+Tracked together because they are one fix converging on its final shape,
+not four independent discoveries — each numbered informally in code
+comments and commit messages as it landed (findings 5, 6, 8, 12), kept
+here under one heading rather than split into four more top-level AP
+numbers for what is a single evolving correction to one function.
+
+- **Finding 5 (P2, frontend) — `savedParentByIdRef` was never pruned after
+  a successful delete.** The AP-13 pending-reparent guard compares the live
+  subtree against this last-known-server map; deleting a leaf descendant
+  left its entry behind, so a _later_ delete of a still-live ancestor
+  compared against a map that still listed the already-deleted row as a
+  descendant — a permanent, false "unsaved changes" block on every further
+  delete until the page reloaded. Fixed by removing the deleted
+  compartment and every descendant id from the map right after a
+  successful delete.
+- **Finding 6 (P1, test hygiene) — the pre-existing "remaining mutation
+  regressions" test block's `beforeEach` installed mock defaults after
+  only `vi.clearAllMocks()`**, which does not clear a queued
+  `mockResolvedValueOnce`/`mockRejectedValueOnce` or a prior
+  `mockImplementation` (CLAUDE.md Pitfall #28). Not a product bug, but a
+  real risk of order-dependent test results the moment a test in that
+  block queues a one-shot result and doesn't consume it. Fixed by adding
+  `mockReset()` before each default, matching this file's own established
+  pattern elsewhere.
+- **Finding 8 (P2, frontend) — the original AP-15 fix cancelled pending
+  auto-saves _before_ the backend delete call.** A failed delete (network
+  error, or AP-14's new cross-template 400) left the compartment and its
+  edited items still on screen with their auto-saves already cancelled and
+  forgotten — the edit would never be retried, with nothing on screen
+  indicating that. First fix: move the cancellation to run only _after_ a
+  successful delete.
+- **Finding 12 (P2, frontend) — finding 8's own fix reopened a narrower
+  race.** Cancelling only after `await`ing the delete left a window where,
+  if the delete took longer than the remaining debounce interval, the
+  timer could fire _while the delete was still in flight_, start its own
+  `updateCheckItem` call, and race the `DELETE` to the server — the same
+  "Save failed"-for-a-correctly-deleted-item symptom finding 8 was meant
+  to close, reopened from the other direction. **Final fix (closes both
+  directions at once):** capture every pending timer's item id and patch,
+  and cancel it, _synchronously_, before the delete request is even sent —
+  so no timer can ever fire during the `await`, regardless of how long the
+  request takes — then either discard the captured patches (delete
+  succeeded) or re-arm them via `scheduleAutoSaveItem(..., { asFallback:
+true })` (delete failed), the same recovery mechanism
+  `flushPendingAutoSaves` already uses for its own failed flush.
+
+## Guard tests added (pass 7)
+
+- `backend/tests/test_apparatus_check_template_clone_cascade.py` —
+  `TestCloneTemplateRejectsDisconnectedCompartments` (AP-16). Fails
+  pre-fix (clone succeeds, disconnected compartment silently dropped),
+  passes post-fix.
+- `frontend/src/modules/inventory/pages/EquipmentCheckTemplateBuilder.test.tsx`
+  — `'does not falsely block deleting a surviving ancestor after a
+descendant was already deleted (AP-13 finding 5)'`, the "remaining
+  mutation regressions" block's `beforeEach` now resetting each mock
+  (finding 6), `'preserves a pending item auto-save when the compartment
+delete itself fails (AP-13 finding 8)'`, and `'never lets a pending
+auto-save fire while the compartment delete is in flight (AP-13 finding
+12)'`. Each confirmed failing against the specific prior state it fixes
+  and passing against the final fix.
+
+## Completion gate (pass 7)
+
+| Check                                                                           | Result                                                                                  |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                   | ✅ 0 violations                                                                         |
+| `black --check app/ tests/ alembic/`                                            | ✅ clean                                                                                |
+| `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                                                                |
+| `python3 scripts/validate_migrations.py --strict`                               | ✅ single head, no schema change                                                        |
+| `pytest tests/ -k "apparatus or nfc or evoc or equipment_check or compartment"` | ✅ 578 passed, 1 skipped (pre-existing optional-dependency skip)                        |
+| `pytest tests/` (full backend suite)                                            | ✅ 10070 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep skips), 0 failed |
+| `tsc --noEmit`                                                                  | ✅ 0 errors                                                                             |
+| `eslint .` (full frontend)                                                      | ✅ 0 errors                                                                             |
+| `vitest run EquipmentCheckTemplateBuilder.test.tsx`                             | ✅ 85 passed                                                                            |
+| `vitest run src/modules/inventory` (full module)                                | ✅ 685 passed (49 files)                                                                |
 
 ---
 

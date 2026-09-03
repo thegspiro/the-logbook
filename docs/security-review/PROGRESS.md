@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
-Apparatus & NFC, passes 3–6. Pass 3: AP-8 fixed —
+Apparatus & NFC, passes 3–7. Pass 3: AP-8 fixed —
 `CheckTemplateCompartment.children` had the same inverted self-referential
 `remote_side` shape FAC-16 found and fixed on `DocumentFolder.children`
 (flagged there as a sibling instance, out of scope for Facilities) —
@@ -62,8 +62,23 @@ exact concurrency race FAC-40 already fixed once on `DocumentFolder`/
   could 404 against a removed item and, worse, abort an unrelated Save pressed
   in the same window; fixed by cancelling those timers before the delete
   call). Both reproduced live before being called findings, and
-  regression-tested failing pre-fix / passing post-fix via `git stash`. See
-  the log entry below for the full writeup once merged.
+  regression-tested failing pre-fix / passing post-fix via `git stash`. Pass
+  7 (same PR, a fourth Codex round on the same chain): AP-16 (P2, data
+  completeness — `clone_template`'s root-down walk silently drops a
+  compartment whose parent lies outside the source template, the same
+  dangling-link shape AP-14 guards delete against; fixed the same way,
+  fail-closed rather than committing an incomplete clone), plus four
+  Codex-caught regressions in this rotation's own pass-6 fixes to
+  `deleteCompartment`'s auto-save cancellation (a stale entry left in the
+  pending-reparent guard's map after a successful delete; a mock not reset
+  between tests; canceling auto-saves before vs. after the delete call each
+  leaving a different failure window open) — the auto-save fix took two
+  more rounds to converge on capturing and cancelling every timer
+  synchronously before the delete request is sent, then discarding or
+  re-arming the captured patches depending on whether the delete succeeded.
+  All reproduced live or via a test failing against the specific prior
+  state, all regression-tested failing pre-fix / passing post-fix. See the
+  log entry below for the full writeup once merged.
 
 ---
 
