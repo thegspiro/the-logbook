@@ -144,17 +144,19 @@ cleanly. 6 unit tests added (`test_apparatus_service.py`): foreign type/status/
 station/evoc/maintenance-type each rejected, plus a no-change path that makes no
 extra query.
 
-### AP2-2 — LOW — Dangling (non-projected) FKs still unvalidated — 🚩 OPEN
+### AP2-2 — LOW — Dangling (non-projected) FKs still unvalidated — ✅ FIXED (security-review AP-13, pass 3, 2026-09-03)
 
-The FKs that are **not** eager-loaded into any response — so they can only dangle,
-not leak — remain unvalidated on create _and_ update: `apparatus.required_evoc_level_id`
+The FKs that are **not** eager-loaded into any response — so they could only dangle,
+not leak — were left unvalidated on create _and_ update: `apparatus.required_evoc_level_id`
 (SET NULL, not projected), `maintenance.component_id` / `maintenance.service_provider_id`,
 and `component_note.service_provider_id`. These are the same integrity-only XC-1
-shape pass 1 hardened in other modules (MSG-2, GF-6) as defense-in-depth. Left
-open rather than fixed in this iteration to keep the change scoped to the
-confirmed read-leak set; recommend a follow-up sweep validating them via the
-shared `assert_in_org` on both paths. No disclosure risk in the interim (nothing
-reads them back cross-tenant).
+shape pass 1 hardened in other modules (MSG-2, GF-6) as defense-in-depth.
+Left open at the time this doc was originally written, to keep that
+iteration's change scoped to the confirmed read-leak set. **Since fixed** —
+`apparatus_service.py` now validates all four via `assert_in_org` on both the
+create and update path for each (see the `# AP2-2` comments at the call
+sites); confirmed by reading the current code rather than assumed from this
+doc, which had drifted (see `docs/security-review/AP-13-apparatus-nfc.md`).
 
 ### MS2-4 class checked — not present here
 

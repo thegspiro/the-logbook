@@ -1,12 +1,164 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838) (pass 1)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py` (new),
 `api/v1/endpoints/nfc_tags.py` (5 routes — corrected in pass 2, see below), `services/nfc_tag_service.py` (new)
 **Frontend:** `modules/apparatus`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 3 (2026-09-03) — one fixed (a live-reproduced cascade bug flagged by the Facilities pass), one stale-doc correction, rest re-verified unchanged
+
+**Trigger.** The rotation's Facilities pass (feature 12, FAC-16,
+`docs/security-review/FAC-12-facilities.md`) found and fixed
+`DocumentFolder.children` declaring `remote_side` on the plural collection
+instead of on its singular `parent` backref — an inversion that made
+SQLAlchemy null out every descendant's foreign key before a parent delete
+instead of cascading to it. That pass flagged two sibling relationships with
+the identical shape as out of scope for Facilities:
+`CheckTemplateCompartment.children` (this feature, model file
+`app/models/apparatus.py`) and `TrainingCategory.subcategories` (Training,
+rotation features 17/18). This pass picked up the first.
+
+**Diff scope.** `git diff` from pass 2's merge (`1c71d8e1`) to this pass's
+start (`bcbffabc`) touches only two files in this feature's declared domain:
+`api/v1/endpoints/apparatus.py` (+1 line — `get_apparatus_folders` now passes
+`current_user` through to `get_apparatus_sub_folders`, landed as part of the
+Facilities pass's `documents.py` folder-ACL sweep, already correctly
+`can_access_folder`-gated — verified below, not a finding) and
+`models/apparatus.py` (+35/-2, entirely `EquipmentCheckTemplate`/
+`EquipmentCheckBulkDeleteRequest` additions belonging to feature 14's own
+rotation slot, not touched here). `nfc_tags.py`, `nfc_tag_service.py`,
+`apparatus_service.py`, `evoc_level_service.py`, and
+`driver_exception_service.py` are byte-identical to pass 2. Given that, this
+pass did not re-read all ~8,000 lines cover to cover — three prior passes
+(module audit, 4 app-review Tier B rounds, and AP-13 passes 1–2) already
+did — but re-ran the checklist's mechanical checks fresh rather than citing
+them: an AST walk confirming 88/5 routes still carry a `Depends` clause
+each, a grep confirming all 4 `.ilike()` call sites in `apparatus_service.py`
+still pass `escape=LIKE_ESCAPE_CHAR`, a grep confirming every `ondelete="SET
+NULL"` FK in `models/apparatus.py`/`models/nfc_tag.py` (36 sites) still pairs
+with `nullable=True`, and spot-reads of `get_apparatus`, `NfcTagService.get_tag`/
+`resolve_tag`/`check_in` re-confirming org-scoping by reading the current
+code, not by re-citing the pass-2 table.
+
+### AP-8 — MED (data integrity) — `CheckTemplateCompartment.children` had FAC-16's exact inverted self-referential shape — ✅ FIXED
+
+**What:** `children = relationship("CheckTemplateCompartment", backref="parent",
+remote_side="CheckTemplateCompartment.id", cascade="all, delete-orphan",
+single_parent=True)` declared `remote_side` on the plural `children`
+collection instead of on the singular `parent` backref — the standard
+SQLAlchemy adjacency-list pattern puts it on the many-to-one side
+(`backref=backref("parent", remote_side=[id])`), and every other
+self-referential relationship in this codebase (`FacilityRoom.parent_room`,
+`BudgetCategory.parent`, `StorageArea.parent`, `Event.recurrence_parent`,
+and `DocumentFolder.children` after FAC-16) follows it. Inverted, SQLAlchemy
+proactively sets each descendant's FK to `NULL` before a parent delete is
+issued, so the database's own cascade never fires.
+
+**Where:** `backend/app/models/apparatus.py:2249` (pre-fix).
+
+**Failure scenario, reproduced live before being called a finding (not
+inferred from reading the model — the same discipline the FAC-16 writeup
+demanded of itself):** built a real three-level compartment hierarchy
+(root → child → grandchild) against a live test database, then deleted the
+root exactly the way `EquipmentCheckService.delete_compartment` does —
+`await self.db.delete(compartment)`, a pure ORM cascade delete with no
+database-level fallback (`parent_compartment_id` is `ondelete="SET NULL"`,
+not `CASCADE`). Pre-fix, the child compartment survived the delete,
+orphaned with `parent_compartment_id` set to `NULL` instead of removed —
+confirmed with an assertion failure, not a code read. A department that
+nests equipment inside a container inside a compartment (the feature's own
+docstring example: "a pack inside a bag inside a compartment") and later
+deletes the outer compartment is left with orphaned inner containers/items
+still counted in template content and still reachable by id, instead of the
+delete they asked for.
+
+**Impact:** data integrity, not access control — an authorized user
+performing an authorized delete gets silent data corruption rather than the
+result they asked for. Scoped to nested compartments specifically; a
+flat (non-nested) compartment tree, the overwhelmingly common case, deletes
+correctly either way since there is no child to orphan.
+
+**Fix:** moved `remote_side` onto the `parent` backref
+(`backref=backref("parent", remote_side=[id])`), the identical correction
+FAC-16 applied to `DocumentFolder.children`. Behavior-neutral for every
+existing single-level compartment (no `parent`/`children` traversal changes
+for a tree with no grandchildren); the only path that read data differently
+is the newly-correct cascade-delete of a nested compartment.
+
+**Related, correctly left open:** `TrainingCategory.subcategories`
+(`app/models/training.py`) has the same inverted-`remote_side` shape but no
+`cascade` configured on it at all, so its likely failure mode is a silently
+nulled `parent_category_id` rather than a failed delete — a different
+mechanism that has not been empirically confirmed the way this finding and
+FAC-16 both were. It belongs to the Training rotation features (17/18), not
+Apparatus & NFC; fixing it here would be exactly the kind of "convenient to
+fix while I'm here" scope creep this rotation's discipline exists to avoid,
+and a plain code read is not sufficient evidence to call it a confirmed
+finding — that is precisely what let both now-fixed instances of this bug
+stand for as long as they did. `docs/KNOWN_LIMITATIONS.md` updated to reflect
+this fix and narrow the remaining flag to `TrainingCategory` alone.
+
+### Doc correction — AP2-2 (`docs/app-review/apparatus.md`) claimed 🚩 OPEN; the code has validated all four FKs since before pass 1
+
+`app-review/apparatus.md`'s AP2-2 entry (dated 2026-08-06, pass 1 of that
+earlier review track) still read 🚩 OPEN, while `AP-13-apparatus-nfc.md`'s
+own pass-2 "Scope" section already claimed the fix landed ("AP2-1/AP2-2 (XC-1
+FK classes) still closed"). Read the current code directly rather than
+trusting either doc: `apparatus_service.py` validates all four —
+`required_evoc_level_id` (`create_apparatus`/`update_apparatus`),
+`component_id`/`service_provider_id` on maintenance records
+(`create_maintenance_record`/`update_maintenance_record`), and
+`service_provider_id` on component notes (`add_component_note`/
+`update_component_note`) — each via `assert_in_org`, each marked with an
+`# AP2-2` comment at the call site. Corrected the stale doc rather than
+re-reporting a fixed finding as new.
+
+### Verified good ✅ (re-confirmed this pass, mechanism named)
+
+- **Route auth coverage 88/88 (`apparatus.py`) + 5/5 (`nfc_tags.py`)** — fresh
+  AST walk this pass (not a re-citation), same result as pass 2.
+- **`get_apparatus_folders` → `get_apparatus_sub_folders`** now threads
+  `current_user` through to `can_access_folder` (the same predicate FAC-14
+  through FAC-26 hardened) — read `can_access_folder`/`_folder_admits_user`
+  directly: apparatus's own folders set no `required_permissions` (unlike
+  Facilities' sensitive folders), so access is governed by the folder's
+  `visibility`/`allowed_roles` plus the route's own
+  `apparatus.view`/`.manage` gate — nothing for `required_permissions` to
+  bypass, so this is the intended shared-model behavior, not a gap FAC-14's
+  class would apply to.
+- **LIKE escaping** — all 4 `.ilike()` sites in `apparatus_service.py` pass
+  `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`, confirmed by direct read.
+- **`SET NULL` nullability** — all 36 `ondelete="SET NULL"` FKs across
+  `models/apparatus.py`/`models/nfc_tag.py` pair with `nullable=True`,
+  confirmed by grep + read of every multi-line declaration.
+- **NFC card UIDs remain hash-only** — `NfcTagResponse` exposes only
+  `uid_preview`, never a hash or raw UID; unchanged since pass 2.
+- **List endpoints are either bounded (`page_size` capped at 100 on
+  `list_apparatus`/`list_maintenance_records`) or naturally bounded by
+  org headcount** (`list_nfc_tags`, driver-exception lists, approver list —
+  one row per member/exception, not attacker-growable) — considered and not
+  a finding, not merely unexamined.
+- **No `SafeCsvWriter`-bypass risk** — no CSV export exists in this feature's
+  backend files.
+- **Driver-exception separation of duties, EVOC eligibility, NFC hashing** —
+  unchanged files, re-confirmed by spot-read against this pass's specific
+  claims rather than re-cited wholesale.
+
+## Completion gate (pass 3)
+
+| Check                                                                           | Result                                                           |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                   | ✅ 0 violations                                                  |
+| `black --check app/ tests/ alembic/`                                            | ✅ clean                                                         |
+| `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                                         |
+| `python3 scripts/validate_migrations.py --strict`                               | ✅ single head, no schema change                                 |
+| `pytest tests/ -k "apparatus or nfc or evoc or equipment_check or compartment"` | ✅ 568 passed, 1 skipped (pre-existing optional-dependency skip) |
+| `tsc --noEmit` / `eslint .`                                                     | n/a this pass — no frontend change                               |
 
 ---
 

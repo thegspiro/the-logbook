@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: deleting a nested equipment-check compartment silently orphaned its children instead of removing them (2026-09-03)
+
+**Fixed**
+
+- **AP-8 (MED, data integrity) — `CheckTemplateCompartment.children` had the
+  same inverted self-referential relationship FAC-16 found and fixed on
+  `DocumentFolder.children`**: `remote_side` was declared on the plural
+  `children` collection instead of on the singular `parent` backref, which
+  made SQLAlchemy null out each descendant's `parent_compartment_id` before
+  a parent delete rather than cascading to it. Deleting a compartment that
+  contained nested sub-compartments (a pack inside a bag inside a
+  compartment) left the nested ones behind as orphans instead of removing
+  them. Fixed by moving `remote_side` onto the `parent` backref, the same
+  correction FAC-16 applied; reproduced live with a three-level fixture
+  before and after the fix. `TrainingCategory.subcategories` has the same
+  shape and remains flagged, unconfirmed and out of scope — see
+  `docs/KNOWN_LIMITATIONS.md`.
+- See `docs/security-review/AP-13-apparatus-nfc.md` (pass 3, AP-8) for the
+  full writeup and regression test.
+
 ### Security: FAC-43's fast path could deadlock two concurrent first-time creations of the same facility's folder (2026-09-03)
 
 **Fixed**
