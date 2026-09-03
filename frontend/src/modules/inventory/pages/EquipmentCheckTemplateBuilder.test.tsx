@@ -2268,12 +2268,13 @@ describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree del
 
   it('waits for the Save button’s own flush of a pending item auto-save before sending the compartment DELETE', async () => {
     // flushPendingAutoSaves -- the Save button's pre-save flush of whatever
-    // debounce timer hasn't fired yet -- issues its own PATCH directly. If
-    // that request is not registered the same way a fired timer's is, it is
-    // invisible to both tracking maps a subtree delete's quiescing step
-    // reads. Save also marks `saving` only *after* this flush resolves, so
-    // nothing in the UI blocks the delete either -- the request has to be
-    // the thing that blocks it.
+    // debounce timer hasn't fired yet -- issues its own PATCH directly.
+    // Originally closed (pass 9) by registering that PATCH the same way a
+    // fired timer's is; superseded (pass 10, AP-13) by saveOperationActive,
+    // which is already true by the time this flush even starts (it is set on
+    // handleSave's very first line, before the flush runs) -- so the delete
+    // affordance is disabled for this whole window regardless of whether any
+    // individual request inside it is separately registered.
     let releaseFlush: (() => void) | null = null;
     updateCheckItem.mockImplementationOnce(
       () =>
@@ -2292,17 +2293,19 @@ describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree del
     fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
     await waitFor(() => expect(releaseFlush).not.toBeNull());
 
+    // Delete Cab is disabled for the whole span of the save -- clicking it
+    // here does nothing, and no confirmation dialog appears.
     await userEvent.click(screen.getByLabelText('Delete Cab'));
-    await confirm('Delete');
-
-    // Radio's flush PATCH is still unresolved -- the DELETE must not have
-    // been sent yet.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(deleteCompartment).not.toHaveBeenCalled();
 
     releaseFlush?.();
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Draft saved'));
+
+    // Once the save has actually finished, deleting Cab works normally
+    // again -- the lock does not outlive the operation it guards.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
     await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
   }, 10_000);
 });
@@ -2378,4 +2381,85 @@ describe('EquipmentCheckTemplateBuilder refreshes savedParentByIdRef after a bul
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(deleteCompartment).not.toHaveBeenCalled();
   });
+});
+
+describe('EquipmentCheckTemplateBuilder blocks a delete for the whole span of a save', () => {
+  // Pass 9 (AP-13) made every item PATCH register itself into
+  // autoSaveInFlightRef, including the Save button's own pre-save flush. But
+  // handleSave is a *sequence* of awaited steps -- flush, then the template's
+  // own PATCH, then the compartment/item update batch -- and there is a real
+  // gap between the flush resolving (and deregistering) and the update batch
+  // even being built, let alone registered. A delete confirmed inside that
+  // gap sees both tracking maps empty and proceeds immediately; handleSave
+  // then goes on to PATCH rows the delete just removed. Registering each
+  // write more carefully cannot close this on its own, because the gap is
+  // between writes, not inside one -- closing it needs the whole operation
+  // locked, not another per-write registration point.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    deleteCompartment.mockReset();
+    deleteCompartment.mockResolvedValue(undefined);
+  });
+
+  it('does not let a compartment delete proceed in the gap between the Save flush and its update batch', async () => {
+    // The template's own PATCH sits between the flush (which the pass-9 fix
+    // already registers) and the compartment/item update batch (which
+    // registers each of its own requests) -- deferring it opens exactly the
+    // gap Codex found, using a real await already in the production code
+    // rather than a fake timer.
+    let releaseTemplateUpdate: (() => void) | null = null;
+    updateEquipmentCheckTemplate.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseTemplateUpdate = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    // Queue a debounced edit on Radio so the flush this test is about to
+    // trigger actually has something to send, matching the real shape of the
+    // race: a flush PATCH that completes cleanly, followed by a batch that
+    // has not been issued yet.
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    // The flush's PATCH for Radio resolves on its own (not deferred) --
+    // confirming it settled proves the gap this test targets is *after* the
+    // flush, not during it.
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false }));
+    // handleSave is now paused on the template's own PATCH, before it has
+    // built or issued a single request in the compartment/item batch.
+    await waitFor(() => expect(releaseTemplateUpdate).not.toBeNull());
+
+    // Attempt to delete Cab inside this gap. The delete buttons are disabled
+    // while a save is active, so a real click does nothing; the assertions
+    // below confirm neither the confirmation dialog nor the backend call
+    // ever happen, from either that or the function-level guard.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCompartment).not.toHaveBeenCalled();
+
+    // Let Save proceed. Its update batch issues PATCHes for both of Cab's
+    // items -- if the delete above had gone through, these would be firing
+    // against rows the backend just removed.
+    releaseTemplateUpdate?.();
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('flashlight', expect.anything()));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Draft saved'));
+    expect(deleteCompartment).not.toHaveBeenCalled();
+
+    // Once the save has fully finished, deleting Cab works exactly as
+    // normal -- the lock does not outlive the operation it guards.
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  }, 10_000);
 });
