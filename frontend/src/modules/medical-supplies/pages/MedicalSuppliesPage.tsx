@@ -162,9 +162,13 @@ const MedicalSuppliesPage: React.FC = () => {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [itemsFilterKey, setItemsFilterKey] = useState<string | null>(null);
+
+  const filterKey = `${search}\u0000${categoryFilter}`;
 
   const loadSections = useCallback(
     async (sections: Section[], { bypassCache = false }: { bypassCache?: boolean } = {}) => {
+      const requestedFilterKey = `${search}\u0000${categoryFilter}`;
       setLoading((current) => ({ ...current, ...Object.fromEntries(sections.map((section) => [section, true])) }));
 
       const options = bypassCache ? { bypassCache: true } : undefined;
@@ -203,7 +207,10 @@ const MedicalSuppliesPage: React.FC = () => {
             });
             setLoaded((current) => ({ ...current, [section]: true }));
             if (section === 'summary') setSummary(value as MedicalSupplySummary);
-            if (section === 'items') setItems((value as { items: InventoryItem[] }).items);
+            if (section === 'items') {
+              setItems((value as { items: InventoryItem[] }).items);
+              setItemsFilterKey(requestedFilterKey);
+            }
             if (section === 'categories') setCategories(value as InventoryCategory[]);
             if (section === 'expiring') setExpiring(value as ExpiringLot[]);
           } catch (reason: unknown) {
@@ -451,7 +458,7 @@ const MedicalSuppliesPage: React.FC = () => {
       )}
 
       {tab === 'expiring' ? (
-        loading.expiring ? (
+        loading.expiring && !loaded.expiring ? (
           <SkeletonCard />
         ) : (
           <section aria-label="Expiring stock">
@@ -542,7 +549,7 @@ const MedicalSuppliesPage: React.FC = () => {
             </select>
           </div>
 
-          {loading.items ? (
+          {loading.items && itemsFilterKey !== filterKey ? (
             <SkeletonCard />
           ) : loaded.items && items.length === 0 ? (
             <EmptyState

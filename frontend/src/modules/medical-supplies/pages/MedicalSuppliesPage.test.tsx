@@ -519,6 +519,29 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.queryByText('Nothing expiring')).not.toBeInTheDocument();
     });
 
+    it('keeps retained rows on screen while a retry of the same query runs', async () => {
+      // The banner promises "showing previously loaded data" -- a skeleton over
+      // those rows while a slow retry runs breaks that promise at exactly the
+      // moment the data is being relied on. A retry asks the same question the
+      // rows already answer, unlike a filter change, which does not.
+      mockGetExpiringLots
+        .mockResolvedValueOnce([expiringLot()])
+        .mockRejectedValueOnce(new Error('Lots unavailable'))
+        .mockImplementation(() => new Promise(() => {}));
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Refresh medical supplies' }));
+      await screen.findByText('Showing previously loaded data');
+
+      // The retry hangs. The rows it is retrying stay put.
+      await user.click(screen.getByRole('button', { name: 'Retry expiring stock' }));
+      await waitFor(() => expect(mockGetExpiringLots).toHaveBeenCalledTimes(3));
+      expect(screen.getByText('4x4 Gauze')).toBeInTheDocument();
+    });
+
     it('keeps the search box mounted while the item list reloads', async () => {
       // Skeletoning the whole section unmounted the focused input on the first
       // keystroke, so every character after it was typed into nothing until the
