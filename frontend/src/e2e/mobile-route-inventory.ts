@@ -1174,6 +1174,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/store/admin',
+    source: 'src/modules/storefront/routes.tsx',
+    coverage: 'exempt',
+    detail: 'legacy redirect to /inventory/admin/store, which is inventoried above; renders no UI of its own',
+  },
+  {
     path: '/testing',
     source: 'src/modules/testing/routes.tsx',
     coverage: 'ratchet',
