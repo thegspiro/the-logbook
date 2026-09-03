@@ -4361,16 +4361,44 @@ class TestThirtiethRoundFindings:
             completed_date=date.today() - timedelta(days=300),
             expiration_date=date.today() + timedelta(days=5),
         )
+        # The later pass names no requirement: the summary correlates by
+        # screening type, so it still supersedes the waiver.
         later_pass = ScreeningRecord(
             organization_id=org_id,
             user_id=member_id,
-            requirement_id=fitness.id,
+            requirement_id=None,
             screening_type=ScreeningType.FITNESS_ASSESSMENT,
             status=ScreeningStatus.PASSED,
             completed_date=date.today() - timedelta(days=20),
             expiration_date=date.today() + timedelta(days=345),
         )
-        db_session.add_all([current_waiver, old_waiver, later_pass])
+        # Two same-day drug screenings: the newer-created one is current,
+        # whatever their ids say.
+        same_day = date.today() - timedelta(days=30)
+        drug_ids = sorted(str(uuid.uuid4()) for _ in range(2))
+        older_created = ScreeningRecord(
+            id=drug_ids[1],
+            organization_id=org_id,
+            user_id=member_id,
+            screening_type=ScreeningType.DRUG_SCREENING,
+            status=ScreeningStatus.WAIVED,
+            completed_date=same_day,
+            expiration_date=date.today() + timedelta(days=7),
+            created_at=datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc),
+        )
+        newer_created = ScreeningRecord(
+            id=drug_ids[0],
+            organization_id=org_id,
+            user_id=member_id,
+            screening_type=ScreeningType.DRUG_SCREENING,
+            status=ScreeningStatus.PASSED,
+            completed_date=same_day,
+            expiration_date=date.today() + timedelta(days=300),
+            created_at=datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc),
+        )
+        db_session.add_all(
+            [current_waiver, old_waiver, later_pass, older_created, newer_created]
+        )
         await db_session.flush()
         body = await _call(
             server,
