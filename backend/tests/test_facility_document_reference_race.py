@@ -576,6 +576,18 @@ class TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery:
     engine-independence rationale as FAC-32's own test:
     ``_lock_subtree_documents`` (the extracted FAC-32 query) must never be
     reached while this cascade is still blocked on the FAC-34 folder lock.
+
+    FAC-35 note: this test manually replicates the *pre-FAC-35* creator's
+    lock sequence (Document, then DocumentFolder) by driving
+    ``get_document_by_id``/``ensure_facility_folder`` directly rather than
+    calling ``_validate_shared_document_reference`` -- the real function no
+    longer takes locks in that order (it now locks the folder first, like
+    this cascade). That does not make this test stale: it still proves
+    ``delete_folder``'s own behaviour -- blocking on a folder any other
+    session holds, before ever issuing a Document query -- independent of
+    which order that other session acquired its own locks in.
+    ``TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar`` below proves
+    the same thing driven through the real, now-fixed creator function.
     """
 
     async def test_delete_folder_blocks_on_the_folder_lock_before_any_document_query(
@@ -641,6 +653,241 @@ class TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery:
                 cascade_task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await cascade_task
+            await creator.rollback()
+            await cascade.rollback()
+            await _teardown_org(
+                org_id, facility_id, document_id, facility_type_id, status_id
+            )
+
+
+class TestCreatorLocksTheFolderBeforeTheDocument:
+    """FAC-35: the total-order fix that supersedes FAC-32/34's pairwise
+    reorderings. FAC-34 fixed ``delete_folder``'s cascade to lock
+    ``DocumentFolder`` before ``Document`` -- but never touched the creator
+    path, which (at the time) locked ``Document`` first and
+    ``DocumentFolder`` second, via ``ensure_facility_folder``. Two paths
+    taking the same two locks in opposite orders is exactly the deadlock
+    FAC-32 closed for the Document/reference-table pair, reopened here for
+    the Document/DocumentFolder pair: a cascade that has already locked the
+    destination folder, and a creator that has already locked the document
+    being filed into it, can each be waiting on the resource the other
+    holds.
+
+    This class proves the creator side of the fix directly, driving the
+    real ``_validate_shared_document_reference`` (not a manually
+    reconstructed lock sequence) and asserting it blocks on a
+    cascade-held ``DocumentFolder`` lock *before* it ever issues its
+    ``Document`` lock query -- the mirror image of
+    ``TestDeleteFolderLocksTheDestinationFolderBeforeAnyDocumentQuery``
+    above, which proves the same thing for the cascade side.
+    """
+
+    async def test_creator_blocks_on_a_cascade_held_folder_before_locking_the_document(
+        self, two_sessions
+    ):
+        cascade, creator = two_sessions
+        ids = await _make_org_facility_document_with_folder(
+            cascade, f"fcvfd-fac35-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id, folder_id = ids
+        creator_task = None
+        try:
+            # Cascade side: lock the destination folder, exactly as
+            # delete_folder's own _lock_subtree_folders does for a subtree
+            # that includes it.
+            await DocumentsService(cascade)._lock_subtree_folders({str(folder_id)})
+
+            document_lock_reached = asyncio.Event()
+            original_get_document_by_id = DocumentsService.get_document_by_id
+
+            async def _tracking_get_document_by_id(self, *args, **kwargs):
+                if kwargs.get("for_update"):
+                    document_lock_reached.set()
+                return await original_get_document_by_id(self, *args, **kwargs)
+
+            creator_user = SimpleNamespace(organization_id=org_id)
+
+            # Patched at the class level -- _validate_shared_document_reference
+            # builds its own DocumentsService(db) internally, so there is no
+            # instance to patch.object() before it exists. Only the creator
+            # coroutine below ever calls this method while the patch is
+            # active (the cascade side already finished its own locking
+            # call above), so this does not run afoul of CLAUDE.md pitfall
+            # #22 (two coroutines concurrently entering the same patch).
+            with patch.object(
+                DocumentsService, "get_document_by_id", _tracking_get_document_by_id
+            ):
+                creator_task = asyncio.create_task(
+                    _validate_shared_document_reference(
+                        creator,
+                        f"document:{document_id}",
+                        creator_user,
+                        str(facility_id),
+                    )
+                )
+                await asyncio.sleep(0.5)
+
+                # The fix's whole point: the creator path is still blocked,
+                # and blocked *before* it ever issued the Document lock
+                # query -- not merely blocked somewhere, which the pre-fix
+                # order also produced (just later, after the Document lock
+                # had already been taken).
+                assert not creator_task.done(), (
+                    "_validate_shared_document_reference should still be "
+                    "blocked on the cascade-held destination DocumentFolder"
+                )
+                assert not document_lock_reached.is_set(), (
+                    "_validate_shared_document_reference locked the "
+                    "Document row before the destination DocumentFolder -- "
+                    "FAC-35's lock order regressed"
+                )
+
+                # Release the folder lock; the creator path should now run
+                # to completion without deadlocking.
+                await cascade.commit()
+                await asyncio.wait_for(creator_task, timeout=10)
+                assert document_lock_reached.is_set()
+        finally:
+            if creator_task is not None and not creator_task.done():
+                creator_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await creator_task
+            await cascade.rollback()
+            await creator.rollback()
+            await _teardown_org(
+                org_id, facility_id, document_id, facility_type_id, status_id
+            )
+
+
+class TestCascadeBlocksOnACreatorThatHoldsOnlyTheFolderSoFar:
+    """FAC-35, the other direction -- and the one that has to be built as a
+    genuinely paused interleaving, not a sequential "let the creator finish,
+    then start the cascade" setup. A creator that has *already fully run*
+    holds both locks by the time the cascade starts, regardless of which
+    order it acquired them in -- so a test shaped that way cannot tell the
+    fixed ordering apart from the broken one (confirmed empirically: an
+    earlier version of this test, built that way and driven through the
+    real pre-fix creator, passed against pre-fix code too, because
+    ``delete_folder``'s own FAC-34 ordering was never in question here).
+
+    What actually needs proving is the state that only exists *during* the
+    post-fix creator's sequence and never during the pre-fix one: the
+    creator holding the destination ``DocumentFolder`` lock while it has
+    not yet even issued its own ``Document`` lock query. Pre-fix, the
+    creator locks the ``Document`` row first, so this state never occurs --
+    by the time it would hold the folder, it already holds the document
+    too, at which point ``delete_folder`` racing in can be trapped by the
+    Document lock while never having reached its own folder lock (the exact
+    mechanism FAC-34 identified, from the other side). Post-fix, this state
+    always exists, briefly, between ``ensure_facility_folder`` returning and
+    ``get_document_by_id(for_update=True)`` being called -- paused here with
+    a patched, event-gated ``get_document_by_id`` so the window is
+    deterministic instead of a race against real query latency.
+    """
+
+    async def test_cascade_blocks_on_the_folder_while_the_creator_has_not_yet_locked_its_document(
+        self, two_sessions
+    ):
+        creator, cascade = two_sessions
+        ids = await _make_org_facility_document_with_folder(
+            creator, f"fcvfd-fac35-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, facility_id, document_id, facility_type_id, status_id, folder_id = ids
+        creator_task = None
+        cascade_task = None
+        try:
+            creator_user = SimpleNamespace(organization_id=org_id)
+
+            # Pause the creator path the moment it is about to lock the
+            # Document row (for_update=True) -- post-fix, this is strictly
+            # after ensure_facility_folder has already locked the
+            # destination DocumentFolder; pre-fix, this is the creator's
+            # very first locking call, before it has touched any folder.
+            about_to_lock_document = asyncio.Event()
+            proceed_to_document_lock = asyncio.Event()
+            original_get_document_by_id = DocumentsService.get_document_by_id
+
+            async def _paused_get_document_by_id(self, *args, **kwargs):
+                if kwargs.get("for_update"):
+                    about_to_lock_document.set()
+                    await proceed_to_document_lock.wait()
+                return await original_get_document_by_id(self, *args, **kwargs)
+
+            with patch.object(
+                DocumentsService, "get_document_by_id", _paused_get_document_by_id
+            ):
+                creator_task = asyncio.create_task(
+                    _validate_shared_document_reference(
+                        creator,
+                        f"document:{document_id}",
+                        creator_user,
+                        str(facility_id),
+                    )
+                )
+                await asyncio.wait_for(about_to_lock_document.wait(), timeout=10)
+
+                document_query_reached = asyncio.Event()
+                cascade_service = DocumentsService(cascade)
+                original_lock_documents = cascade_service._lock_subtree_documents
+
+                async def _tracking_lock_documents(*args, **kwargs):
+                    document_query_reached.set()
+                    return await original_lock_documents(*args, **kwargs)
+
+                with patch.object(
+                    cascade_service,
+                    "_lock_subtree_documents",
+                    _tracking_lock_documents,
+                ):
+                    cascade_task = asyncio.create_task(
+                        cascade_service.delete_folder(
+                            folder_id, org_id, current_user=None
+                        )
+                    )
+                    await asyncio.sleep(0.5)
+
+                    # Post-fix: the creator holds only the destination
+                    # DocumentFolder so far (paused before its own Document
+                    # lock) -- delete_folder must still block on that folder
+                    # and never reach its Document-lock query. Pre-fix, the
+                    # creator holds no folder lock yet at this pause point
+                    # (it pauses on its *first* locking call, before
+                    # ensure_facility_folder ever runs) -- nothing blocks
+                    # delete_folder here, and it runs straight through to
+                    # (and past) the Document-lock query, which is exactly
+                    # the assertion below catching the pre-fix order.
+                    assert not cascade_task.done(), (
+                        "delete_folder should still be blocked on the "
+                        "creator-held destination DocumentFolder, even "
+                        "though the creator has not yet locked its own "
+                        "Document row"
+                    )
+                    assert not document_query_reached.is_set(), (
+                        "delete_folder issued its Document-lock query while "
+                        "racing a creator that -- post-fix -- holds only "
+                        "the destination DocumentFolder lock so far -- "
+                        "FAC-35's lock order regressed"
+                    )
+
+                    # Let the creator proceed to lock (and file) its
+                    # document, then commit -- releasing both locks so the
+                    # cascade can complete.
+                    proceed_to_document_lock.set()
+                    await asyncio.wait_for(creator_task, timeout=10)
+                    await creator.commit()
+
+                    deleted = await asyncio.wait_for(cascade_task, timeout=10)
+                    assert deleted is True
+                    assert document_query_reached.is_set()
+        finally:
+            if cascade_task is not None and not cascade_task.done():
+                cascade_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await cascade_task
+            if creator_task is not None and not creator_task.done():
+                creator_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await creator_task
             await creator.rollback()
             await cascade.rollback()
             await _teardown_org(

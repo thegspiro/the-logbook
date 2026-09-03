@@ -54,6 +54,37 @@ FACILITY_SENSITIVE_PERMISSIONS = [
     "facilities.manage",
 ]
 
+# ============================================================================
+# FAC-35: canonical lock order for facility document/photo references
+# ============================================================================
+# Two independent code paths mutate the same three resources concurrently --
+# facilities.py's ``_validate_shared_document_reference`` (the creator path,
+# reached from ``create_facility_document``/``create_facility_photo``) and
+# this file's ``delete_folder`` (the deletion cascade). Any path that needs
+# more than one of these locked at once MUST acquire them in exactly this
+# order -- a total order across all three, not just the pair a given change
+# happens to touch:
+#
+#   1. DocumentFolder   -- e.g. ``ensure_facility_folder``,
+#                           ``_lock_subtree_folders``
+#   2. Document          -- e.g. ``get_document_by_id(for_update=True)``,
+#                           ``_lock_subtree_documents``
+#   3. FacilityDocument / FacilityPhoto reference table -- e.g. the caller's
+#                           insert after ``_validate_shared_document_reference``
+#                           returns, or ``_match_facility_document_references``/
+#                           ``_delete_facility_document_references``
+#
+# FAC-29/31/32/34 each closed one *pairwise* conflict between two of these
+# three resources without checking the fix against every other path that
+# touches the same state, and each reordering opened a new conflict with the
+# pair it hadn't considered (FAC-32 vs FAC-34: Document/reference-table vs
+# Document/DocumentFolder; FAC-34 vs the creator path: DocumentFolder/Document
+# ordered oppositely by the two sides). FAC-35 (docs/security-review/
+# FAC-12-facilities.md) is the total-order fix that supersedes all of them --
+# a new call site touching two or more of these three resources follows this
+# order, it does not invent its own.
+# ============================================================================
+
 
 def _get_user_permissions(user: User) -> Set[str]:
     """Collect a user's effective permissions.
@@ -617,10 +648,17 @@ class DocumentsService:
 
         # FAC-34 (Codex, on top of FAC-32): lock the subtree's DocumentFolder
         # rows themselves *first* -- before the Document lock below, not
-        # after. Filing a folderless document (facilities.py,
-        # _validate_shared_document_reference) locks the Document row, then
-        # (ensure_facility_folder) the destination DocumentFolder, and only
-        # then flushes `document.folder_id` onto it. That flush is an UPDATE
+        # after. At the time this was fixed, filing a folderless document
+        # (facilities.py, _validate_shared_document_reference) locked the
+        # Document row, then (ensure_facility_folder) the destination
+        # DocumentFolder, and only then flushed `document.folder_id` onto it
+        # -- the opposite order from this cascade, below. FAC-35 (see the
+        # module-level "canonical lock order" note above) reordered that
+        # creator path to match this one -- DocumentFolder, then Document,
+        # then the reference table -- rather than reordering this cascade
+        # again; this comment keeps the original mechanism explanation
+        # because the *reason* the folder has to come first is unchanged,
+        # only which side conformed to it. That flush is an UPDATE
         # against the `folder_id` secondary index -- and a concurrent
         # locking SELECT filtered on that same column (the FAC-32
         # Document-lock query below) can take a gap/next-key lock at the

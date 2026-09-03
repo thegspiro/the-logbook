@@ -174,6 +174,30 @@ async def _validate_shared_document_reference(
     is released only when the caller's own create commits (or the request
     fails and the session rolls back), by which point the reference row has
     either been inserted in the same transaction or never will be.
+
+    FAC-35 (Codex, on top of FAC-34): lock order. This function, and
+    ``delete_folder``'s deletion cascade in ``documents_service.py``, both
+    touch the same three resources -- a ``Document`` row, its destination
+    ``DocumentFolder``, and the ``FacilityDocument``/``FacilityPhoto``
+    reference table -- and FAC-29/31/32/34 each closed one *pairwise*
+    ordering conflict between two of those three without checking it against
+    the third. This function now resolves and locks the destination
+    ``DocumentFolder`` (via ``ensure_facility_folder``) *before* it ever
+    locks the ``Document`` row, matching the canonical order documented at
+    the top of ``documents_service.py`` (DocumentFolder, then Document, then
+    the reference table) -- the same order ``delete_folder`` already used
+    after FAC-34. Resolving the folder unconditionally, rather than only
+    when a preliminary read says the document is folderless, is deliberate:
+    a document's ``folder_id`` is client-writable through the generic
+    ``PATCH /documents/{id}`` endpoint (including back to ``NULL``), so an
+    unlocked peek taken before the document is locked could go stale in the
+    gap and this function would decide "no folder needed" from a value that
+    changed under it -- reopening the exact defect ``FACILITY_SENSITIVE_PERMISSIONS``
+    exists to close (a facility reference left pointing at an org-level,
+    unfiled document). Locking the destination folder unconditionally
+    removes that window entirely: the later "assign or not" decision is
+    still made from the ``Document`` row's own locked, authoritative read,
+    exactly as before.
     """
     if not file_path.startswith("document:"):
         raise HTTPException(
@@ -187,6 +211,24 @@ async def _validate_shared_document_reference(
         ) from exc
     organization_id = UUID(str(current_user.organization_id))
     documents = DocumentsService(db)
+
+    # FAC-35: DocumentFolder locked first -- see this function's own
+    # docstring and the canonical-order note atop documents_service.py.
+    # get_facility is itself a plain (non-locking) read, but that's fine: the
+    # only decision that hangs on the facility resolving is "does this
+    # request get to reference it at all", which service.create_document/
+    # create_photo re-validates (assert_in_org) before the reference row is
+    # ever inserted -- this lookup is not the security boundary, ensure_facility_folder's
+    # own locking is (Pitfall #27 shape, documented on that method).
+    facility = await FacilitiesService(db).get_facility(
+        facility_id, str(organization_id), include_relations=False
+    )
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    folder = await documents.ensure_facility_folder(
+        organization_id, str(facility.id), facility.name
+    )
+
     # FAC-29 (Codex): for_update=True locks the same row DocumentsService
     # .delete_document locks before it deletes -- filing a reference here and
     # deleting the document there are a read-then-write racing on this one
@@ -202,14 +244,6 @@ async def _validate_shared_document_reference(
         raise HTTPException(status_code=404, detail="Document not found")
 
     if document.folder_id is None:
-        facility = await FacilitiesService(db).get_facility(
-            facility_id, str(organization_id), include_relations=False
-        )
-        if facility is None:
-            raise HTTPException(status_code=404, detail="Facility not found")
-        folder = await documents.ensure_facility_folder(
-            organization_id, str(facility.id), facility.name
-        )
         document.folder_id = folder.id
         # FAC-31: flush, never commit -- a commit here would release the
         # document's FOR UPDATE lock before the caller has actually filed
