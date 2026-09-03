@@ -29,7 +29,7 @@ a document body can carry either however its field is named.
 """
 
 import re
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 DENIED_FIELDS: frozenset[str] = frozenset(
     {
@@ -142,22 +142,50 @@ _PHONE_FORMATTED_RE = re.compile(
     r")(?![\w-])"
 )
 _PHONE_BARE_RE = re.compile(r"(?<![\w-])\+?\d{10,11}(?![\w-])")
-# A value that is one token — letters, digits and the punctuation found in
-# asset tags, serial numbers and barcodes — is an identifier, not prose.
-# Anything else (spaces, markup, sentence punctuation) is text somebody
-# wrote, and a bare ten- or eleven-digit run inside it is scrubbed.
-_IDENTIFIER_RE = re.compile(r"^[\w.\-/+#:]+$")
 EMAIL_PLACEHOLDER = "[email removed]"
 PHONE_PLACEHOLDER = "[phone removed]"
 
+# Fields whose value is an identifier by definition — an asset tag, a
+# serial number, a barcode — where a ten-digit run *is* the value rather
+# than a phone number typed into prose. Only these keep a bare run; every
+# other string, including a free-text field whose whole value is the
+# number and any string with no field name at all, has it scrubbed. The
+# decision is made by field, never by the shape of the value, because
+# "5551234567" alone looks the same in a description and in a barcode.
+IDENTIFIER_FIELDS: frozenset[str] = frozenset(
+    {
+        "id",
+        "asset_tag",
+        "serial_number",
+        "barcode",
+        "sku",
+        "upc",
+        "vin",
+        "key_prefix",
+        "purchase_order",
+        "license_plate",
+    }
+)
+IDENTIFIER_SUFFIXES: tuple[str, ...] = ("_id", "_number", "_code", "_tag", "_sku")
 
-def scrub_text(text: str) -> str:
-    """Replace email addresses and phone numbers inside free text."""
+
+def is_identifier_field(name: str) -> bool:
+    key = name.lower()
+    return key in IDENTIFIER_FIELDS or key.endswith(IDENTIFIER_SUFFIXES)
+
+
+def scrub_text(text: str, *, identifier: bool = False) -> str:
+    """Replace email addresses and phone numbers inside free text.
+
+    ``identifier`` says the value came from an identifier field (see
+    ``IDENTIFIER_FIELDS``); a bare digit run is then left alone. Formatted
+    numbers and email addresses are replaced either way.
+    """
     if "@" in text:
         text = _EMAIL_RE.sub(EMAIL_PLACEHOLDER, text)
     if any(ch.isdigit() for ch in text):
         text = _PHONE_FORMATTED_RE.sub(PHONE_PLACEHOLDER, text)
-        if not _IDENTIFIER_RE.match(text):
+        if not identifier:
             text = _PHONE_BARE_RE.sub(PHONE_PLACEHOLDER, text)
     return text
 
@@ -170,16 +198,23 @@ def redact(value: Any) -> Any:
     scrubbed; everything else is returned as-is. Dict keys that are not
     strings are kept.
     """
+    return _redact(value, None)
+
+
+def _redact(value: Any, field: Optional[str]) -> Any:
     if isinstance(value, dict):
         return {
-            key: redact(inner)
+            key: _redact(inner, key if isinstance(key, str) else None)
             for key, inner in value.items()
             if not (isinstance(key, str) and is_denied_field(key))
         }
     if isinstance(value, (list, tuple, set, frozenset)):
-        return [redact(inner) for inner in value]
+        # An element of a list has no field name, so it is prose.
+        return [_redact(inner, None) for inner in value]
     if isinstance(value, str):
-        return scrub_text(value)
+        return scrub_text(
+            value, identifier=field is not None and is_identifier_field(field)
+        )
     return value
 
 

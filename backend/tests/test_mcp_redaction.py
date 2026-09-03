@@ -119,6 +119,7 @@ class TestScrubText:
             ("555-123-4567", "[phone removed]"),
             ("+1 555 123 4567", "[phone removed]"),
             ("call 5551234567 now", "call [phone removed] now"),
+            ("5551234567", "[phone removed]"),  # a note that is only the number
             ("<p>5551234567</p>", "<p>[phone removed]</p>"),
             ("Reach me: 5551234567.", "Reach me: [phone removed]."),
             ("5551234567,15551234567", "[phone removed],[phone removed]"),
@@ -133,11 +134,8 @@ class TestScrubText:
     @pytest.mark.parametrize(
         "text",
         [
-            "5551234567",  # a bare digit run alone is an asset tag, not prose
             "SN-1234567890",
             "0012345678901",  # a 13-digit barcode is longer than any phone number
-            "LOT/2026/1234567890",
-            "#1234567890",
             "PO 202609031234 shipped",
             "Engine 1 pumps 1500 gpm; unit 2024",
             "ext 4567",
@@ -145,8 +143,23 @@ class TestScrubText:
             "ISO 9001-2015",
         ],
     )
-    def test_identifiers_and_quantities_survive(self, text):
+    def test_quantities_and_codes_survive_in_prose(self, text):
         assert redact({"description": text}) == {"description": text}
+
+    @pytest.mark.parametrize(
+        "field",
+        ["asset_tag", "serial_number", "barcode", "unit_number", "apparatus_id"],
+    )
+    def test_identifier_fields_keep_a_bare_digit_run(self, field):
+        """The field decides, not the shape: the same ten digits are an
+        asset tag here and a phone number in a description."""
+        assert redact({field: "5551234567"}) == {field: "5551234567"}
+        assert redact({field: "LOT/2026/1234567890"}) == {field: "LOT/2026/1234567890"}
+
+    def test_a_string_without_a_field_is_prose(self):
+        assert redact(["5551234567"]) == ["[phone removed]"]
+        assert redact({"tags": ["5551234567"]}) == {"tags": ["[phone removed]"]}
+        assert redact("5551234567") == "[phone removed]"
 
     def test_strings_are_scrubbed_at_every_depth(self):
         value = {"items": [{"body": "x@y.io", "nested": {"t": "555-123-4567"}}]}
