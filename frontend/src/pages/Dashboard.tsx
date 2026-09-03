@@ -613,6 +613,29 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Message rows the member has acted on, re-applied to every inbox response.
+  //
+  // markMessageRead and acknowledgeMessage deliberately leave the row on
+  // screen -- see markMessageRead for why -- so a post-mutation refetch is not
+  // available as the fix here the way it is for the shift, event, notification
+  // and persistent-message paths: getInbox asks for include_read: false, so a
+  // fresh read would drop the very row the design keeps. Without this overlay
+  // an inbox read that started before the mutation restores the unread or
+  // unacknowledged row when it lands, and for an acknowledgement that means
+  // asking the member to acknowledge again something the server has recorded.
+  //
+  // Refs rather than state: this is applied at the point a response is stored,
+  // and must not itself trigger a render.
+  const locallyReadMessages = useRef(new Set<string>());
+  const locallyAcknowledgedMessages = useRef(new Set<string>());
+
+  const applyLocalMessageState = (list: InboxMessage[]): InboxMessage[] =>
+    list.map((m) => {
+      if (locallyAcknowledgedMessages.current.has(m.id)) return { ...m, is_read: true, is_acknowledged: true };
+      if (locallyReadMessages.current.has(m.id)) return { ...m, is_read: true };
+      return m;
+    });
+
   // `only` retries a single subrequest. A retry also skips the loading flag,
   // for the reason given on loadMyShifts.
   const loadDeptMessages = async (only?: 'inbox' | 'unread' | 'both') => {
@@ -637,7 +660,8 @@ const Dashboard: React.FC = () => {
       wantUnread ? messagesService.getUnreadCount() : Promise.resolve(null),
     ]);
     if (wantInbox) {
-      if (inboxResult.status === 'fulfilled' && inboxResult.value) setDeptMessages(inboxResult.value);
+      if (inboxResult.status === 'fulfilled' && inboxResult.value)
+        setDeptMessages(applyLocalMessageState(inboxResult.value));
       setInboxError(inboxResult.status === 'rejected');
     }
     if (wantUnread) {
@@ -670,9 +694,14 @@ const Dashboard: React.FC = () => {
       // A message that requires acknowledgment stays "pending" until it is
       // acknowledged, so reading it must not drop the unread count.
       const msg = deptMessages.find((m) => m.id === msgId);
+      locallyReadMessages.current.add(msgId);
       setDeptMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, is_read: true } : m)));
       if (msg && !msg.requires_acknowledgment) {
         setDeptMsgUnread((prev) => Math.max(0, prev - 1));
+        // The overlay cannot carry a scalar, so the count is re-read from the
+        // server instead: an older getUnreadCount lands with the pre-mutation
+        // tally and puts the badge back up.
+        void runFresh('messages:unread', () => loadDeptMessages('unread'));
       }
     } catch {
       toast.error('Failed to mark message as read');
@@ -683,8 +712,10 @@ const Dashboard: React.FC = () => {
     setAcknowledgingId(msgId);
     try {
       await messagesService.acknowledge(msgId);
+      locallyAcknowledgedMessages.current.add(msgId);
       setDeptMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, is_read: true, is_acknowledged: true } : m)));
       setDeptMsgUnread((prev) => Math.max(0, prev - 1));
+      void runFresh('messages:unread', () => loadDeptMessages('unread'));
       toast.success('Message acknowledged');
     } catch {
       toast.error('Failed to acknowledge message');
@@ -697,6 +728,11 @@ const Dashboard: React.FC = () => {
     try {
       await messagesService.updateMessage(msgId, { is_active: false });
       setDeptMessages((prev) => prev.filter((m) => m.id !== msgId));
+      // An inbox read that started before this one still carries the message,
+      // so it puts the cleared row back when it lands. Queued behind it, like
+      // the signup and RSVP paths, so the read that lands last is the one that
+      // knows the message is inactive.
+      void runFresh('messages:inbox', () => loadDeptMessages('inbox'));
       toast.success('Persistent message cleared');
     } catch {
       toast.error('Failed to clear message');
@@ -1021,6 +1057,9 @@ const Dashboard: React.FC = () => {
       await notificationsService.markMyNotificationRead(logId);
       setNotifications((prev) => prev.filter((n) => n.id !== logId));
       decrementUnread();
+      // Same reason as clearPersistentMessage: a notifications read that
+      // started before this one restores the row it just removed.
+      void runFresh('notifications', () => loadNotifications(true));
     } catch {
       toast.error('Failed to mark notification as read');
     }
