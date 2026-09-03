@@ -140,6 +140,17 @@ def logbook_tool(
             except ToolError as exc:
                 await _audit_apart(principal, tool_name, kwargs, "refused", exc)
                 raise
+            # A write is recorded before it is attempted: the services it
+            # calls commit for themselves, so the only way to guarantee that
+            # every mutation has an audit row is to refuse the mutation when
+            # the row cannot be written. The outcome row follows as usual.
+            if gate == "write" and not await _audit_apart(
+                principal, tool_name, kwargs, "attempted", None
+            ):
+                raise ToolError(
+                    "The audit log is unavailable, so this change was not made. "
+                    "Try again later."
+                )
             # A failed call is audited through a session of its own, so
             # whatever the handler wrote before failing is discarded with
             # its session and never committed alongside the audit row.
@@ -244,7 +255,7 @@ def bound_for_audit(value: Any) -> Any:
     return value
 
 
-Outcome = Literal["ok", "refused", "rejected", "error"]
+Outcome = Literal["attempted", "ok", "refused", "rejected", "error"]
 
 
 async def _audit_apart(
@@ -252,14 +263,15 @@ async def _audit_apart(
     tool: str,
     arguments: dict[str, Any],
     outcome: Outcome,
-    exc: BaseException,
-) -> None:
-    """Record a call that did not succeed, in a session of its own."""
+    exc: Optional[BaseException],
+) -> bool:
+    """Record a call in a session of its own; True if the row was written."""
     try:
         async with open_session() as db:
-            await _audit(db, principal, tool, arguments, outcome, exc)
+            return await _audit(db, principal, tool, arguments, outcome, exc)
     except Exception:
-        logger.exception("MCP audit entry for failed {} could not be written", tool)
+        logger.exception("MCP audit entry for {} could not be written", tool)
+        return False
 
 
 def _reason(exc: BaseException) -> str:
@@ -281,11 +293,14 @@ async def _audit(
     arguments: dict[str, Any],
     outcome: Outcome,
     exc: Optional[BaseException],
-) -> None:
-    # Best effort: a failed audit write must not turn a successful read into
-    # an error for the client, but it must be visible in the logs. The
-    # outcome and a bounded reason are recorded so a key that keeps probing
-    # for ids it should not have leaves a trail, not silence.
+) -> bool:
+    """Write one ``mcp.tool_call`` row; True if it was committed.
+
+    Best effort for a read: a failed audit write must not turn a successful
+    read into an error for the client, but it must be visible in the logs.
+    The outcome and a bounded reason are recorded so a key that keeps
+    probing for ids it should not have leaves a trail, not silence.
+    """
     try:
         payload: dict[str, Any] = {
             "tool": tool,
@@ -297,16 +312,21 @@ async def _audit(
         }
         if exc is not None:
             payload["reason"] = bound_for_audit(_reason(exc))
-        await log_audit_event(
+        entry = await log_audit_event(
             db,
             "mcp.tool_call",
             "integrations",
-            "info" if outcome == "ok" else "warning",
+            "info" if outcome in ("ok", "attempted") else "warning",
             payload,
             organization_id=principal.organization_id,
             user_id=principal.issued_by_user_id,
             ip_address=principal.client_ip,
         )
+        if entry is None:
+            logger.error("MCP audit entry for {} was not written", tool)
+            return False
         await db.commit()
+        return True
     except Exception:
         logger.exception("MCP audit entry for {} could not be written", tool)
+        return False

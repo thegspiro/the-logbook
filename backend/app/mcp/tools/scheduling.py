@@ -265,5 +265,9 @@ def register(server: Any) -> None:
 
     @logbook_tool(server, title="Scheduling summary", module="scheduling")
     async def get_scheduling_summary(db: AsyncSession, principal: McpPrincipal) -> dict:
-        """Counts of upcoming, open and recent shifts for the department."""
-        return await SchedulingService(db).get_summary(org_uuid(principal))
+        """Counts of scheduled shifts and hours worked. Unless the department
+        shares its full schedule with Claude, the figures cover only shifts
+        open to all members, like the shift listings."""
+        return await SchedulingService(db).get_summary(
+            org_uuid(principal), open_to_all_only=not principal.expose_full_schedule
+        )

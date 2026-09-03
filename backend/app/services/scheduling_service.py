@@ -2123,16 +2123,22 @@ class SchedulingService:
     # Summary & Reporting
     # ============================================
 
-    async def get_summary(self, organization_id: UUID) -> Dict[str, Any]:
-        """Get scheduling summary statistics"""
+    async def get_summary(
+        self, organization_id: UUID, open_to_all_only: bool = False
+    ) -> Dict[str, Any]:
+        """Get scheduling summary statistics.
+
+        ``open_to_all_only`` counts only shifts flagged ``open_to_all_members``
+        — the set every eligible member can see — so a caller confined to
+        that view gets figures for it rather than for the whole roster.
+        """
         today = date.today()
+        scope = [Shift.organization_id == str(organization_id)]
+        if open_to_all_only:
+            scope.append(Shift.open_to_all_members.is_(True))
 
         # Total shifts
-        total_result = await self.db.execute(
-            select(func.count(Shift.id)).where(
-                Shift.organization_id == str(organization_id)
-            )
-        )
+        total_result = await self.db.execute(select(func.count(Shift.id)).where(*scope))
         total_shifts = total_result.scalar() or 0
 
         # Shifts this week
@@ -2140,7 +2146,7 @@ class SchedulingService:
         week_end = week_start + timedelta(days=6)
         week_result = await self.db.execute(
             select(func.count(Shift.id))
-            .where(Shift.organization_id == str(organization_id))
+            .where(*scope)
             .where(Shift.shift_date >= week_start)
             .where(Shift.shift_date <= week_end)
         )
@@ -2156,7 +2162,7 @@ class SchedulingService:
             next_month_first = first_of_month.replace(month=first_of_month.month + 1)
         month_result = await self.db.execute(
             select(func.count(Shift.id))
-            .where(Shift.organization_id == str(organization_id))
+            .where(*scope)
             .where(Shift.shift_date >= first_of_month)
             .where(Shift.shift_date < next_month_first)
         )
@@ -2166,7 +2172,7 @@ class SchedulingService:
         hours_result = await self.db.execute(
             select(func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0))
             .join(Shift, ShiftAttendance.shift_id == Shift.id)
-            .where(Shift.organization_id == str(organization_id))
+            .where(*scope)
             .where(Shift.shift_date >= first_of_month)
             .where(Shift.shift_date < next_month_first)
         )

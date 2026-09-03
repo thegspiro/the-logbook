@@ -23,6 +23,7 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
+from app.models.minute import ActionItem, Motion
 from app.services.meetings_service import MeetingsService
 from app.services.minute_service import MinuteService
 from app.utils.sql_ordering import nulls_last_asc
@@ -79,6 +80,22 @@ def _clip(value: Any) -> tuple[Any, bool]:
     return value[:MINUTES_TEXT_CHARS], True
 
 
+def _motion(mo: Any, movers: dict[str, str]) -> dict:
+    discussion, cut = _clip(mo.discussion_notes)
+    return {
+        "order": mo.order,
+        "motion_text": mo.motion_text,
+        "moved_by": movers.get(mo.moved_by or "", mo.moved_by),
+        "seconded_by": movers.get(mo.seconded_by or "", mo.seconded_by),
+        "discussion_notes": discussion,
+        "discussion_truncated": cut,
+        "status": iso(mo.status),
+        "votes_for": mo.votes_for,
+        "votes_against": mo.votes_against,
+        "votes_abstain": mo.votes_abstain,
+    }
+
+
 def _chunk(text: str, offset: int) -> dict:
     text = scrub_text(text)
     piece = text[offset : offset + MINUTES_TEXT_CHARS]
@@ -93,7 +110,7 @@ def _chunk(text: str, offset: int) -> dict:
     return body
 
 
-def _minutes_summary(m: Any) -> dict:
+def _minutes_summary(m: Any, motion_count: int, action_item_count: int) -> dict:
     return {
         "id": m.id,
         "title": m.title,
@@ -103,9 +120,28 @@ def _minutes_summary(m: Any) -> dict:
         "status": iso(m.status),
         "approved_at": iso(m.approved_at),
         "quorum_met": m.quorum_met,
-        "motion_count": len(m.motions or []),
-        "action_item_count": len(m.action_items or []),
+        "motion_count": motion_count,
+        "action_item_count": action_item_count,
     }
+
+
+async def _counts_by_minutes(
+    db: AsyncSession, model: Any, minutes_ids: list[str]
+) -> dict[str, int]:
+    """Rows of ``model`` (Motion or ActionItem) per minutes id, in one query.
+
+    The listing defers the minutes bodies and does not load the children, so
+    the headline counts come from a grouped count rather than from
+    ``len(m.motions)``, which would load every motion on the page.
+    """
+    if not minutes_ids:
+        return {}
+    rows = await db.execute(
+        select(model.minutes_id, func.count())
+        .where(model.minutes_id.in_(minutes_ids))
+        .group_by(model.minutes_id)
+    )
+    return {minutes_id: int(count) for minutes_id, count in rows.all()}
 
 
 def register(server: Any) -> None:
@@ -238,8 +274,16 @@ def register(server: Any) -> None:
             skip=offset,
             limit=limit,
             restricted=True,
+            summary_only=True,
         )
-        return page([_minutes_summary(m) for m in rows], None, limit, offset)
+        ids = [m.id for m in rows]
+        motions = await _counts_by_minutes(db, Motion, ids)
+        action_items = await _counts_by_minutes(db, ActionItem, ids)
+        items = [
+            _minutes_summary(m, motions.get(m.id, 0), action_items.get(m.id, 0))
+            for m in rows
+        ]
+        return page(items, None, limit, offset)
 
     @logbook_tool(server, title="Get published minutes", module="minutes")
     async def get_minutes(
@@ -252,10 +296,10 @@ def register(server: Any) -> None:
         """One set of approved minutes: reports, business, announcements,
         motions with their votes, action items and the dynamic sections
         (``section_offset`` / ``section_limit`` page them). Every piece of
-        text is cut at 20,000 characters; ``truncated_fields`` and a
-        section's ``content_truncated`` say which were, and
-        ``get_minutes_text`` reads the rest. The treasurer's report is
-        included only when finance sharing is on."""
+        text is cut at 20,000 characters; ``truncated_fields``, a section's
+        ``content_truncated`` and a motion's ``discussion_truncated`` say
+        which were, and ``get_minutes_text`` reads the rest. The
+        treasurer's report is included only when finance sharing is on."""
         section_offset = clamp_offset(section_offset)
         section_limit = clamp_limit(section_limit)
         m = await MinuteService(db).get_minutes(
@@ -271,7 +315,7 @@ def register(server: Any) -> None:
         # Finance content needs the switch *and* the Finance module: turning
         # the module off must stop its data reaching Claude by every path.
         share_finance = principal.expose_finance and principal.module_enabled("finance")
-        body = _minutes_summary(m)
+        body = _minutes_summary(m, len(m.motions or []), len(m.action_items or []))
         truncated_fields: list[str] = []
         texts: dict[str, Any] = {}
         for field in _MINUTES_TEXT_FIELDS:
@@ -298,20 +342,7 @@ def register(server: Any) -> None:
                 "section_total": len(visible_sections),
                 "sections_has_more": section_offset + len(sections_page)
                 < len(visible_sections),
-                "motions": [
-                    {
-                        "order": mo.order,
-                        "motion_text": mo.motion_text,
-                        "moved_by": movers.get(mo.moved_by or "", mo.moved_by),
-                        "seconded_by": movers.get(mo.seconded_by or "", mo.seconded_by),
-                        "discussion_notes": mo.discussion_notes,
-                        "status": iso(mo.status),
-                        "votes_for": mo.votes_for,
-                        "votes_against": mo.votes_against,
-                        "votes_abstain": mo.votes_abstain,
-                    }
-                    for mo in (m.motions or [])
-                ],
+                "motions": [_motion(mo, movers) for mo in (m.motions or [])],
                 "action_items": [
                     {
                         "description": ai.description,
@@ -341,10 +372,10 @@ def register(server: Any) -> None:
     ) -> dict:
         """One piece of text from approved minutes, 20,000 characters at a
         time: ``field`` is a report or business field named by ``get_minutes``
-        (old_business, chief_report, treasurer_report, ...) or
-        ``section:<key>`` for a dynamic section. When ``content_has_more`` is
-        true, call again with ``content_offset`` set to
-        ``next_content_offset``."""
+        (old_business, chief_report, treasurer_report, ...),
+        ``section:<key>`` for a dynamic section, or ``motion:<order>`` for a
+        motion's discussion notes. When ``content_has_more`` is true, call
+        again with ``content_offset`` set to ``next_content_offset``."""
         content_offset = clamp_offset(content_offset)
         m = await MinuteService(db).get_minutes(
             str(minutes_id), org_uuid(principal), restricted=True
@@ -366,13 +397,24 @@ def register(server: Any) -> None:
             if not matches:
                 raise ValueError(f"No section named {key!r}")
             text = matches[0].get("content")
+        elif field.startswith("motion:"):
+            order = field[len("motion:") :]
+            matches = [mo for mo in (m.motions or []) if str(mo.order) == order]
+            if not matches:
+                raise ValueError(f"No motion with order {order!r}")
+            text = matches[0].discussion_notes
         elif field in _MINUTES_TEXT_FIELDS:
             text = getattr(m, field)
         else:
             raise ValueError(
                 "field must be one of: "
                 + ", ".join(
-                    (*_MINUTES_TEXT_FIELDS, "treasurer_report", "section:<key>")
+                    (
+                        *_MINUTES_TEXT_FIELDS,
+                        "treasurer_report",
+                        "section:<key>",
+                        "motion:<order>",
+                    )
                 )
             )
         body = _chunk(text if isinstance(text, str) else "", content_offset)

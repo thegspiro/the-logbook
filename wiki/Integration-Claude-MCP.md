@@ -40,7 +40,7 @@ Read tools, always available once connected:
 | Inventory  | `get_inventory_summary`, `list_low_stock_items`, `list_inventory_items`, `list_overdue_checkouts` — gear, uniforms and equipment; **never medical supplies**                                                                                                 |
 | Apparatus  | `list_apparatus`, `get_fleet_summary`, `list_apparatus_maintenance`                                                                                                                                                                                          |
 | Facilities | `list_facilities`, `get_facilities_counts`                                                                                                                                                                                                                   |
-| Meetings   | `list_meetings`, `list_open_action_items`, `list_minutes`, `get_minutes`, `get_minutes_text` — **approved, non-executive minutes only**; long text is read in 20,000-character pieces                                                                        |
+| Meetings   | `list_meetings`, `list_open_action_items`, `list_minutes`, `get_minutes`, `get_minutes_text` — **approved, non-executive minutes only**; long text, including a motion's discussion notes, is read in 20,000-character pieces                                |
 | Documents  | `list_documents`, `get_document` — **active documents in folders every member can read**, uploaded or written by a person — reports the system generated (a property-return report, filed minutes) are never listed; text is read in 20,000-character pieces |
 | Elections  | `list_elections`, `get_election_results` — results only after an election closes                                                                                                                                                                             |
 
@@ -138,8 +138,11 @@ stdio-to-HTTP bridge (such as `mcp-remote`) that passes the
   (`mcp.tool_call`) with the key id, the tool, its arguments (redacted, and
   cut to 200 characters per value so the audit table cannot grow by the size
   of every payload a client sends), the outcome, the reason when it did not
-  succeed, and the client IP. Key issue and revocation are `mcp.key_created`
-  and `mcp.key_revoked`.
+  succeed, and the client IP. A write tool records an `attempted` row
+  before it changes anything and refuses the change if that row cannot be
+  written, so no mutation is ever made without an audit trail; a read still
+  answers when the audit log is down, and logs the failure. Key issue and
+  revocation are `mcp.key_created` and `mcp.key_revoked`.
 - **Medical supplies are a separate domain.** The Medical Supplies module
   has its own page and officer, and the inventory API keeps its stock out
   of the gear listing. The inventory tools and `create_reorder_request` do

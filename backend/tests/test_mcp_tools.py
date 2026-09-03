@@ -1743,6 +1743,226 @@ class TestFourteenthRoundFindings:
         assert "[phone removed]" in joined
 
 
+class TestFifteenthRoundFindings:
+    """Regressions for the fifteenth review round on #2197."""
+
+    async def _audit_outcomes(self, db_session, org_id):
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog)
+                    .where(
+                        AuditLog.event_type == "mcp.tool_call",
+                        AuditLog.organization_id == org_id,
+                    )
+                    .order_by(AuditLog.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [(r.event_data["tool"], r.event_data["outcome"]) for r in rows]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_write_is_refused_when_the_audit_log_cannot_be_written(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        """A mutation without an audit row is never made: the services commit
+        for themselves, so the row is written first and its failure refuses
+        the call."""
+        from unittest.mock import AsyncMock
+
+        from app.mcp import registry
+        from app.models.event import Event
+
+        org_id, admin_id, _ = org_with_members
+        monkeypatch.setattr(registry, "log_audit_event", AsyncMock(return_value=None))
+        principal = _principal(org_id, admin_id, access_mode="read_write")
+        start = datetime.now(timezone.utc) + timedelta(days=3)
+        with pytest.raises(ToolError, match="audit log is unavailable"):
+            await _call(
+                server,
+                principal,
+                "create_event_draft",
+                title="Unaudited drill",
+                start_datetime=start.isoformat(),
+                end_datetime=(start + timedelta(hours=2)).isoformat(),
+            )
+        created = (
+            await db_session.execute(
+                select(Event).where(
+                    Event.organization_id == org_id, Event.title == "Unaudited drill"
+                )
+            )
+        ).scalar_one_or_none()
+        assert created is None
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_write_records_the_attempt_and_then_the_outcome(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        principal = _principal(org_id, admin_id, access_mode="read_write")
+        start = datetime.now(timezone.utc) + timedelta(days=3)
+        await _call(
+            server,
+            principal,
+            "create_event_draft",
+            title="Audited drill",
+            start_datetime=start.isoformat(),
+            end_datetime=(start + timedelta(hours=2)).isoformat(),
+        )
+        with pytest.raises(ToolError, match="event_type must be one of"):
+            await _call(
+                server,
+                principal,
+                "create_event_draft",
+                title="Bad drill",
+                start_datetime=start.isoformat(),
+                end_datetime=(start + timedelta(hours=2)).isoformat(),
+                event_type="parade",
+            )
+        assert await self._audit_outcomes(db_session, org_id) == [
+            ("create_event_draft", "attempted"),
+            ("create_event_draft", "ok"),
+            ("create_event_draft", "attempted"),
+            ("create_event_draft", "rejected"),
+        ]
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_reads_still_succeed_when_the_audit_log_is_down(
+        self, server, org_with_members, monkeypatch
+    ):
+        from unittest.mock import AsyncMock
+
+        from app.mcp import registry
+
+        org_id, admin_id, _ = org_with_members
+        monkeypatch.setattr(registry, "log_audit_event", AsyncMock(return_value=None))
+        profile = await _call(
+            server, _principal(org_id, admin_id), "get_department_profile"
+        )
+        assert profile["id"] == org_id
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_scheduling_summary_follows_the_schedule_switch(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        day = date.today()
+        start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        for open_to_all in (True, False):
+            db_session.add(
+                Shift(
+                    organization_id=org_id,
+                    shift_date=day,
+                    start_time=start.replace(hour=8 if open_to_all else 18),
+                    end_time=start.replace(hour=12 if open_to_all else 22),
+                    min_staffing=2,
+                    open_to_all_members=open_to_all,
+                )
+            )
+        await db_session.flush()
+        confined = await _call(
+            server, _principal(org_id, admin_id), "get_scheduling_summary"
+        )
+        assert confined["shifts_scheduled"] == 1
+        assert confined["shifts_scheduled_this_week"] == 1
+        assert confined["shifts_scheduled_this_month"] == 1
+        full = await _call(
+            server,
+            _principal(org_id, admin_id, expose_full_schedule=True),
+            "get_scheduling_summary",
+        )
+        assert full["shifts_scheduled"] == 2
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_fiscal_years_are_paged(self, server, org_with_members, db_session):
+        from app.models.finance import FiscalYear
+
+        org_id, admin_id, _ = org_with_members
+        for year in (2024, 2025, 2026):
+            db_session.add(
+                FiscalYear(
+                    organization_id=org_id,
+                    name=f"FY{year}",
+                    start_date=date(year, 1, 1),
+                    end_date=date(year, 12, 31),
+                    created_by=admin_id,
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id, expose_finance=True)
+        first = await _call(server, principal, "list_fiscal_years", limit=2)
+        assert first["total"] == 3
+        assert first["has_more"] is True
+        assert [fy["name"] for fy in first["items"]] == ["FY2026", "FY2025"]
+        rest = await _call(server, principal, "list_fiscal_years", limit=2, offset=2)
+        assert [fy["name"] for fy in rest["items"]] == ["FY2024"]
+        assert rest["has_more"] is False
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_motion_discussion_is_bounded_and_readable_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import meetings as meeting_tools
+
+        org_id, admin_id, _ = org_with_members
+        minutes_id = str(uuid.uuid4())
+        discussion = "d" * 25
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_minutes (id, organization_id, title, meeting_type, "
+                "meeting_date, status, created_by) VALUES (:id, :org, "
+                "'December meeting', 'business', '2026-12-01', 'approved', :by)"
+            ),
+            {"id": minutes_id, "org": org_id, "by": admin_id},
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO meeting_motions (id, minutes_id, `order`, motion_text, "
+                "discussion_notes) VALUES (:id, :minutes, 1, 'Buy a new pump', :notes)"
+            ),
+            {"id": str(uuid.uuid4()), "minutes": minutes_id, "notes": discussion},
+        )
+        await db_session.flush()
+        monkeypatch.setattr(meeting_tools, "MINUTES_TEXT_CHARS", 10)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_minutes")
+        summary = next(m for m in listed["items"] if m["id"] == minutes_id)
+        assert summary["motion_count"] == 1
+        assert summary["action_item_count"] == 0
+        body = await _call(server, principal, "get_minutes", minutes_id=minutes_id)
+        assert body["motion_count"] == 1
+        motion = body["motions"][0]
+        assert motion["discussion_notes"] == "d" * 10
+        assert motion["discussion_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field="motion:1",
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        assert "".join(pieces) == discussion
+        with pytest.raises(ToolError, match="No motion with order"):
+            await _call(
+                server,
+                principal,
+                "get_minutes_text",
+                minutes_id=minutes_id,
+                field="motion:9",
+            )
+
+
 class TestReviewFindings:
     """Regressions for the first review round on #2197."""
 

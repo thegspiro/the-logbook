@@ -10,7 +10,7 @@ from uuid import UUID
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import defer, selectinload
 
 from app.core.utils import generate_uuid
 from app.models.event import Event
@@ -255,21 +255,47 @@ class MinuteService:
         skip: int = 0,
         limit: int = 50,
         restricted: bool = False,
+        summary_only: bool = False,
     ) -> List[MeetingMinutes]:
         """List meeting minutes with filtering.
 
         ``restricted=True`` (a caller without ``minutes.manage``) confines the
         listing to approved, non-executive minutes regardless of the requested
         status/meeting-type filters.
+
+        ``summary_only=True`` leaves the body columns (the reports, the
+        sections JSON, attendees) unloaded and does not load motions or
+        action items, for a caller that renders headings only; the returned
+        rows must not have those attributes read.
         """
-        query = (
-            select(MeetingMinutes)
-            .where(MeetingMinutes.organization_id == str(organization_id))
-            .options(
+        query = select(MeetingMinutes).where(
+            MeetingMinutes.organization_id == str(organization_id)
+        )
+        if summary_only:
+            query = query.options(
+                *(
+                    defer(getattr(MeetingMinutes, name))
+                    for name in (
+                        "agenda",
+                        "old_business",
+                        "new_business",
+                        "treasurer_report",
+                        "chief_report",
+                        "committee_reports",
+                        "announcements",
+                        "notes",
+                        "sections",
+                        "attendees",
+                        "header_config",
+                        "footer_config",
+                    )
+                )
+            )
+        else:
+            query = query.options(
                 selectinload(MeetingMinutes.motions),
                 selectinload(MeetingMinutes.action_items),
             )
-        )
 
         if meeting_type:
             query = query.where(MeetingMinutes.meeting_type == meeting_type)

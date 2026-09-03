@@ -2,7 +2,7 @@
 
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams
@@ -15,7 +15,7 @@ from app.mcp.tools._common import (
     page,
     parse_uuid,
 )
-from app.models.finance import BudgetCategory
+from app.models.finance import BudgetCategory, FiscalYear
 from app.services.finance_service import FinanceService
 
 
@@ -25,10 +25,22 @@ def _money(value: Any) -> Optional[float]:
 
 def register(server: Any) -> None:
     @logbook_tool(server, title="List fiscal years", gate="finance", module="finance")
-    async def list_fiscal_years(db: AsyncSession, principal: McpPrincipal) -> dict:
-        """Fiscal years, newest first, with their dates and status."""
+    async def list_fiscal_years(
+        db: AsyncSession, principal: McpPrincipal, limit: int = 50, offset: int = 0
+    ) -> dict:
+        """Fiscal years, newest first, with their dates and status. Paged;
+        ``total`` counts every fiscal year."""
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
+        total = (
+            await db.execute(
+                select(func.count())
+                .select_from(FiscalYear)
+                .where(FiscalYear.organization_id == principal.organization_id)
+            )
+        ).scalar_one()
         years = await FinanceService(db).list_fiscal_years(
-            principal.organization_id, PaginationParams(skip=0, limit=100)
+            principal.organization_id, PaginationParams(skip=offset, limit=limit)
         )
         items = [
             {
@@ -41,7 +53,7 @@ def register(server: Any) -> None:
             }
             for fy in years
         ]
-        return {"items": items, "total": len(items)}
+        return page(items, total, limit, offset)
 
     @logbook_tool(server, title="Budget summary", gate="finance", module="finance")
     async def get_budget_summary(
