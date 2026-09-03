@@ -472,8 +472,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/inventory/admin',
         label: 'Inventory administration hub',
-        permission: 'inventory.manage',
-        module: 'inventory',
+        anyPermission: ['inventory.manage', 'inventory.check_manage', 'storefront.manage'],
       },
       { path: '/inventory/admin/setup', label: 'Inventory setup', permission: 'inventory.manage', module: 'inventory' },
       { path: '/inventory/admin/items', label: 'Admin — items', permission: 'inventory.manage', module: 'inventory' },

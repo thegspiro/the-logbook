@@ -149,6 +149,7 @@ describe('EventDetailPage', () => {
   describe('Loading State', () => {
     it('should display loading spinner initially', () => {
       vi.mocked(eventService.getEvent).mockImplementation(() => new Promise(() => {}));
+      vi.mocked(eventService.getEventAttendees).mockImplementation(() => new Promise(() => {}));
 
       renderWithRouter(<EventDetailPage />);
 

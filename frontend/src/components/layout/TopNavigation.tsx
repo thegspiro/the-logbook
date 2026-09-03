@@ -260,11 +260,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               ...(isModuleOn('training')
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
-              ...(isModuleOn('inventory')
-                ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
-                : []),
-              ...(isModuleOn('storefront')
-                ? [{ label: 'Store Admin', path: '/inventory/admin/store', permission: 'storefront.manage' }]
+              ...(isModuleOn('inventory') || isModuleOn('storefront')
+                ? [
+                    {
+                      label: 'Inventory Administration',
+                      path: '/inventory/admin',
+                      anyPermission: ['inventory.manage', 'inventory.check_manage', 'storefront.manage'],
+                    },
+                  ]
                 : []),
               { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
               DIV,

@@ -1206,22 +1206,23 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
   });
 
   it('preserves preset test instructions and reports the loaded locations', async () => {
+    const user = userEvent.setup();
     renderNewBuilder();
     // Settle the mount-time apparatus-options fetch, as above.
     await screen.findByRole('button', { name: 'Details' });
 
     // Template type lives in the details drawer now.
-    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    await user.click(screen.getByRole('button', { name: 'Details' }));
     fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Close template details' }));
-    fireEvent.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
-    fireEvent.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
+    await user.click(screen.getByRole('button', { name: 'Close template details' }));
+    await user.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
+    await user.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
 
     // The crew view is docked in the rail rather than behind a modal.
-    fireEvent.click(screen.getByRole('button', { name: 'Crew view' }));
+    await user.click(screen.getByRole('button', { name: 'Crew view' }));
     expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Before publishing' }));
+    await user.click(screen.getByRole('button', { name: 'Before publishing' }));
     expect(screen.getByText(/locations, \d+ with items/)).toBeVisible();
   }, 20_000);
 

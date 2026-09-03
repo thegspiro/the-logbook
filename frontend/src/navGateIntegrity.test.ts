@@ -161,24 +161,42 @@ describe('navigation gates match the routes they target', () => {
     }
   });
 
-  it('keeps the store admin console on storefront.manage', () => {
-    // The console requires storefront.manage. `checkPermission` does exact
-    // match plus module wildcard, so storefront.view does NOT imply it — a
-    // view-gated row here would be a link to Access Denied for every member.
-    //
-    // It moved to /inventory/admin/store when the store came inside Inventory
-    // Administration; /store/admin still redirects there, but a nav row should
-    // point at the page rather than at a hop.
+  it('uses the shared administration hub for every inventory and store administrator', () => {
+    const expectedPermissions = ['inventory.manage', 'inventory.check_manage', 'storefront.manage'];
+    const sources = routeSources();
+    const hubGate = routeGate(sources, '/inventory/admin');
+    expect(hubGate).toEqual({
+      permissions: expectedPermissions,
+      module: null,
+      exists: true,
+    });
+    const canOpenHub = (granted: readonly string[]) =>
+      hubGate.permissions.some((permission) => granted.includes(permission));
+    for (const permission of expectedPermissions) {
+      expect(canOpenHub([permission]), `${permission} cannot open the hub`).toBe(true);
+    }
+    expect(canOpenHub([]), 'a user with no administrative grant can open the hub').toBe(false);
+    expect(canOpenHub(['storefront.view']), 'the storefront browse grant can open the hub').toBe(false);
+
+    // The hub spans modules, but every destination retains its own module
+    // boundary: inventory and checklist tools cannot be exposed by enabling
+    // only the storefront, and the store console cannot be exposed by
+    // enabling only inventory.
+    expect(routeGate(sources, '/inventory/admin/items').module).toBe('inventory');
+    expect(routeGate(sources, '/inventory/admin/checklists').module).toBe('inventory');
+    expect(routeGate(sources, '/inventory/admin/store').module).toBe('storefront');
+
     for (const surface of NAV_SURFACES) {
-      const entry = navEntry(read(surface), 'Store Admin');
-      expect(entry, `${surface}: Store Admin targets the wrong path`).toContain("path: '/inventory/admin/store'");
-      expect(entry, `${surface}: Store Admin is not gated on storefront.manage`).toContain(
-        "permission: 'storefront.manage'"
-      );
-      expect(entry, `${surface}: Store Admin is offered on the browse grant`).not.toContain('storefront.view');
+      const source = read(surface);
+      const entry = navEntry(source, 'Inventory Administration');
+      expect(entry, `${surface}: administration entry targets the wrong path`).toContain("path: '/inventory/admin'");
+      for (const permission of expectedPermissions) {
+        expect(entry, `${surface}: administration entry omits ${permission}`).toContain(`'${permission}'`);
+      }
+      expect(source, `${surface}: redundant Store Admin entry remains`).not.toContain("label: 'Store Admin'");
     }
 
-    // The bottom bar is member-facing and must not offer the console at all.
+    // The bottom bar is member-facing and must not offer either admin entry.
     expect(
       read('components/layout/BottomNavigation.tsx'),
       'BottomNavigation offers the store admin console'

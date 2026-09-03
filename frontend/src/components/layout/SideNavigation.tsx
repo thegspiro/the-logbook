@@ -492,23 +492,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 } as NavItem,
               ]
             : []),
-          ...(isModuleOn('inventory')
+          ...(isModuleOn('inventory') || isModuleOn('storefront')
             ? [
                 {
-                  label: 'Inventory Admin',
+                  label: 'Inventory Administration',
                   path: '/inventory/admin',
                   icon: Package,
-                  permission: 'inventory.manage',
-                } as NavItem,
-              ]
-            : []),
-          ...(isModuleOn('storefront')
-            ? [
-                {
-                  label: 'Store Admin',
-                  path: '/inventory/admin/store',
-                  icon: Store,
-                  permission: 'storefront.manage',
+                  anyPermission: ['inventory.manage', 'inventory.check_manage', 'storefront.manage'],
                 } as NavItem,
               ]
             : []),
