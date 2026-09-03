@@ -16,6 +16,33 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+#2194 (`claude/security-facilities-system-folder-delete-fix`) — **urgent,
+out-of-rotation fix, not routine feature work.** PR #2191 (Feature 12,
+Facilities, pass 3 — full history below) merged before Codex's P1 finding
+on its final commit (`910c27e6`) could be addressed on that branch;
+reusing a merged branch's name is prohibited (CLAUDE.md Pitfall #24), so
+the fix lands on a fresh branch off `main`. FAC-22 (CRITICAL): FAC-16's
+correction of `DocumentFolder.children`'s self-referential relationship
+(within #2191) made the folder-delete cascade genuinely destructive, and
+`delete_folder` never checked `existing.is_system` before invoking it — so
+any `documents.manage` holder could delete a system root such as "Member
+Files" outright and cascade-destroy every member's subfolder and document
+beneath it in one request. Reproduced against pre-fix code before fixing;
+fixed in the service layer (`PermissionError` → 403, checked before any
+subtree walk begins); two new regression tests
+(`TestDeleteFolderRefusesSystemFolder`), confirmed to fail pre-fix and
+pass post-fix. Full completion gate green, 10019/10019 full backend suite,
+no regressions. See `docs/security-review/FAC-12-facilities.md` (FAC-22
+section, at the top) for full detail. Rotation row 12 is left unmodified
+by this fix (still ⏳): FAC-22 is a post-merge fix on top of an
+already-merged pass, not a new rotation pass, so the row-12 → ✅ flip stays
+the next iteration's Step 0 bookkeeping, same as it records every other
+PR's merge.
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) ✅ merged — PR #2191
+
 #2191 (`claude/security-review-facilities`) — Feature 12, Facilities, pass
 3, complete and ready for review. One HIGH finding flagged (FAC-13:
 facility-file folder access over-restricted for three established-baseline

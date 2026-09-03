@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: any `documents.manage` holder could delete a system folder outright, cascade-destroying an entire tree such as every member's files (2026-09-03)
+
+**CRITICAL — the most severe finding in this cascade-delete investigation:
+unrecoverable, organization-wide data loss from a single request, by a
+permission held broadly across the org.** Fixed on a dedicated, urgent
+follow-up PR after Codex flagged it on the merged commit that shipped the
+other fixes below.
+
+**Fixed**
+
+- **FAC-22 — `DELETE /documents/folders/{folder_id}` checked the caller's
+  folder ACL but never checked whether the target was a system folder.**
+  FAC-16 (below) corrected `DocumentFolder.children`'s self-referential
+  relationship so the folder-delete cascade genuinely deletes a folder's
+  subtree instead of merely orphaning it. Before that fix, the missing
+  `is_system` check was latent — a delete on a folder with descendants
+  didn't destroy anything. After it, any `documents.manage` holder — an
+  org-wide, broadly-held permission — could delete a system root such as
+  "Member Files" outright and cascade-destroy every member's subfolder and
+  document beneath it in one request, directly contradicting the
+  documented invariant that system folders cannot be deleted
+  (`docs/TROUBLESHOOTING.md`, `docs/changelog/2026-02.md`). Reproduced
+  against pre-fix code before fixing: the delete succeeded silently and
+  destroyed a system folder, its descendant, and its document. Fixed in
+  `DocumentsService.delete_folder`, which now refuses (403) the moment it
+  loads a folder with `is_system == True`, before any subtree walk or
+  delete begins. See `docs/security-review/FAC-12-facilities.md` (FAC-22)
+  for the full writeup and regression tests.
+
 ### Security: a folder delete could cascade-destroy a more-restricted descendant the caller could never access directly (2026-09-03)
 
 **Fixed**

@@ -3152,11 +3152,21 @@ destination-not-checked shape on folder reparenting (`update_folder`'s
 `parent_id`, FAC-18) and folder creation (`create_folder`'s `parent_id`,
 FAC-19), and added a defense-in-depth guard so the now-working
 folder-delete cascade cannot follow a cross-organization `parent_id` even
-if one is ever written outside the two guarded write paths (FAC-20). None
-of FAC-14 through FAC-20 are listed here because they are resolved, not
-open limitations. The already-filed sub-case in item (3) above and the
-Blueprints & Permits classification question in item (2) remain open,
-unresolved by any of these rounds.
+if one is ever written outside the two guarded write paths (FAC-20). A
+further round found the delete cascade checked only the folder named in
+the request, never any descendant's own `required_permissions` (FAC-21).
+And, after PR #2191 (carrying FAC-14 through FAC-21) had already merged,
+a Codex finding on its final commit caught the most severe instance of
+this family: `delete_folder` never checked `is_system`, so — now that
+FAC-16 made the cascade genuinely destructive — any `documents.manage`
+holder could delete a system root such as "Member Files" outright and
+destroy every member's subfolder and document beneath it in one request,
+contradicting the documented invariant that system folders cannot be
+deleted; fixed on a dedicated follow-up branch/PR per CLAUDE.md Pitfall
+#24 (FAC-22). None of FAC-14 through FAC-22 are listed here because they
+are resolved, not open limitations. The already-filed sub-case in item (3)
+above and the Blueprints & Permits classification question in item (2)
+remain open, unresolved by any of these rounds.
 
 ## FAC-16-adjacent — `CheckTemplateCompartment.children` and `TrainingCategory.subcategories` Likely Share the Same Inverted Self-Referential Cascade Bug as the (Now-Fixed) `DocumentFolder.children` (2026-09-03)
 
