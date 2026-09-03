@@ -1816,12 +1816,28 @@ class InventoryService:
         Use this instead of get_item_by_id when the caller intends to
         mutate the item's status, condition, quantity, or assignment
         fields, to prevent concurrent-modification races.
+
+        populate_existing=True is required, not cosmetic: several callers
+        (batch_return's per-scan candidate lookup, via _lookup_by_item_id /
+        lookup_by_code) already loaded this same InventoryItem, unlocked,
+        earlier in the same session/transaction. SQLAlchemy's identity map
+        returns that cached Python object for a second SELECT on the same
+        primary key and, by default, does NOT overwrite its already-loaded
+        attributes with the row this locking SELECT just fetched -- even
+        though the locking SELECT itself does see the latest committed data
+        at the SQL level (InnoDB locking reads bypass the REPEATABLE READ
+        snapshot). Without populate_existing, the lock is acquired but the
+        in-memory item.quantity / quantity_issued / status / condition the
+        caller then reads and mutates is the stale pre-lock copy, silently
+        defeating the whole point of locking. Confirmed empirically against
+        this app's own AsyncSession/model setup (SQLAlchemy 2.0.52).
         """
         result = await self.db.execute(
             select(InventoryItem)
             .where(InventoryItem.id == str(item_id))
             .where(InventoryItem.organization_id == str(organization_id))
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
@@ -2560,22 +2576,59 @@ class InventoryService:
     ) -> Tuple[bool, Optional[str]]:
         """Return issued units back to the pool."""
         try:
-            # Lock the issuance row itself: without this, two concurrent
-            # returns of the same issuance (a double-tap submit, or two
-            # officers processing the same physical return) can both pass
-            # the is_returned/quantity check before either commits, so the
-            # second call double-credits item.quantity from a stale
-            # in-memory read instead of seeing the first return's result
-            # (Pitfall #27 — the same shape review_return_request's INV-10
+            # item_id is immutable on an issuance once created, so a plain,
+            # unlocked read of it is safe -- it exists only to say which item
+            # to lock first. review_return_request, transfer_item_holding and
+            # unassign_item all lock the InventoryItem row before locking the
+            # holding record; locking the ItemIssuance row first here instead
+            # would put this method's lock order backwards relative to those,
+            # which is a real InnoDB deadlock risk when two such methods race
+            # on the same item + holding pair (one method waiting on the lock
+            # the other already holds, in both directions at once).
+            peek = await self.db.execute(
+                select(ItemIssuance.item_id)
+                .where(ItemIssuance.id == str(issuance_id))
+                .where(ItemIssuance.organization_id == str(organization_id))
+            )
+            peek_item_id = peek.scalar_one_or_none()
+            if not peek_item_id:
+                return False, "Issuance record not found"
+
+            # Lock the item row before modifying pool counts to prevent
+            # concurrent returns from losing updates via read-modify-write
+            item = await self._get_item_locked(
+                UUID(str(peek_item_id)), UUID(str(organization_id))
+            )
+            if not item:
+                return False, "Associated pool item not found"
+
+            # Now lock and re-read the issuance itself, with the item already
+            # held: two concurrent returns of the same issuance (a double-tap
+            # submit, or two officers processing the same physical return)
+            # must not both pass the is_returned/quantity check before either
+            # commits, or the second proceeds on a stale in-memory copy and
+            # double-credits item.quantity for units returned only once
+            # (Pitfall #27 -- the same shape review_return_request's INV-10
             # fix closed on its own request row).
+            #
+            # populate_existing=True is required here specifically because
+            # batch_return names this same issuance row with an earlier,
+            # unlocked SELECT before delegating to this method (see its
+            # comment) -- without it, this locking SELECT still acquires the
+            # lock but the identity map hands back that earlier, stale
+            # ItemIssuance object instead of refreshing it from the row this
+            # query just fetched, so is_returned can read False even though
+            # the row was returned (and committed) by another transaction
+            # while this one waited on the lock. Confirmed empirically; see
+            # _get_item_locked's docstring for the mechanism.
             result = await self.db.execute(
                 select(ItemIssuance)
                 .where(ItemIssuance.id == str(issuance_id))
                 .where(ItemIssuance.organization_id == str(organization_id))
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
             issuance = result.scalar_one_or_none()
-
             if not issuance:
                 return False, "Issuance record not found"
 
@@ -2591,14 +2644,6 @@ class InventoryService:
 
             # Capture user_id for auto-archive check
             issuance_user_id = str(issuance.user_id)
-
-            # Lock the item row before modifying pool counts to prevent
-            # concurrent returns from losing updates via read-modify-write
-            item = await self._get_item_locked(
-                UUID(str(issuance.item_id)), UUID(str(organization_id))
-            )
-            if not item:
-                return False, "Associated pool item not found"
 
             await self._return_units_to_stock(
                 issuance,
@@ -2788,22 +2833,60 @@ class InventoryService:
     ) -> Tuple[bool, Optional[str]]:
         """Check in an item"""
         try:
-            # Lock the checkout row itself: without this, two concurrent
-            # check-ins of the same checkout (a double-tap submit, or two
-            # officers processing the same physical return) can both pass
-            # the is_returned check before either commits, so the second
-            # call silently re-records a check-in — with its own condition
-            # and damage_notes — over the first's already-committed result
-            # instead of being rejected (Pitfall #27, same shape as
-            # return_to_pool's INV-10-style fix).
+            # item_id is immutable on a checkout once created, so a plain,
+            # unlocked read of it is safe -- it exists only to say which item
+            # to lock first. review_return_request, transfer_item_holding and
+            # unassign_item all lock the InventoryItem row before locking the
+            # holding record; locking the CheckOutRecord row first here
+            # instead would put this method's lock order backwards relative
+            # to those, which is a real InnoDB deadlock risk when two such
+            # methods race on the same item + holding pair (one method
+            # waiting on the lock the other already holds, in both
+            # directions at once).
+            peek = await self.db.execute(
+                select(CheckOutRecord.item_id)
+                .where(CheckOutRecord.id == str(checkout_id))
+                .where(CheckOutRecord.organization_id == str(organization_id))
+            )
+            peek_item_id = peek.scalar_one_or_none()
+            if not peek_item_id:
+                return False, "Checkout record not found"
+
+            # Lock the item row before mutating status/condition to prevent
+            # concurrent checkout/checkin from creating inconsistent state
+            item = await self._get_item_locked(UUID(str(peek_item_id)), organization_id)
+            if not item:
+                return False, "Associated item not found"
+
+            # Now lock and re-read the checkout itself, with the item already
+            # held: two concurrent check-ins of the same checkout (a
+            # double-tap submit, or two officers processing the same
+            # physical return) must not both pass the is_returned check
+            # before either commits, or the second silently re-records a
+            # check-in -- with its own condition and damage_notes -- over
+            # the first's already-committed result instead of being
+            # rejected (Pitfall #27, same shape as return_to_pool's
+            # INV-10-style fix).
+            #
+            # populate_existing=True is required here specifically because
+            # batch_return names this same checkout row with an earlier,
+            # unlocked SELECT before delegating to this method (see its
+            # comment) -- without it, this locking SELECT still acquires the
+            # lock but the identity map hands back that earlier, stale
+            # CheckOutRecord object instead of refreshing it from the row
+            # this query just fetched, so is_returned can read False even
+            # though the row was checked in (and committed) by another
+            # transaction while this one waited on the lock. Confirmed
+            # empirically; see _get_item_locked's docstring for the
+            # mechanism.
             result = await self.db.execute(
                 select(CheckOutRecord)
                 .where(CheckOutRecord.id == str(checkout_id))
                 .where(CheckOutRecord.organization_id == str(organization_id))
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
             checkout = result.scalar_one_or_none()
-
             if not checkout:
                 return False, "Checkout record not found"
 
@@ -2821,13 +2904,6 @@ class InventoryService:
             checkout.is_returned = True
             checkout.is_overdue = False
 
-            # Lock the item row before mutating status/condition to prevent
-            # concurrent checkout/checkin from creating inconsistent state
-            item = await self._get_item_locked(
-                UUID(str(checkout.item_id)), organization_id
-            )
-            if not item:
-                return False, "Associated item not found"
             item.condition = return_condition
 
             item.status = self._status_from_condition(item.condition)
@@ -4285,7 +4361,16 @@ class InventoryService:
                     )
                     continue
 
-                # Check if checked out to this user
+                # Check if checked out to this user. Deliberately not locked
+                # here: checkin_item now locks the item first and only then
+                # locks+re-validates this checkout row itself, which is the
+                # correct order relative to review_return_request/
+                # transfer_item_holding/unassign_item (item before holding
+                # record). Locking it here first, before item, would put
+                # this branch's lock order backwards again -- the very
+                # inconsistency fixed on checkin_item itself. This read only
+                # has to name which checkout row to hand off; a stale id
+                # here is caught by checkin_item's own locked re-check.
                 checkout_result = await self.db.execute(
                     select(CheckOutRecord)
                     .where(
@@ -4296,7 +4381,6 @@ class InventoryService:
                     )
                     .order_by(CheckOutRecord.checked_out_at.desc())
                     .limit(1)
-                    .with_for_update()
                 )
                 checkout = checkout_result.scalar_one_or_none()
                 if checkout:
@@ -4317,7 +4401,12 @@ class InventoryService:
                     )
                     continue
 
-                # Check for pool issuance to this user
+                # Check for pool issuance to this user. Not locked here for
+                # the same reason as the checkout lookup above: return_to_pool
+                # locks the item first and then locks+re-validates this
+                # issuance row itself, and locking it here first would put
+                # the order backwards. A stale id is caught by
+                # return_to_pool's own locked re-check.
                 if item.tracking_type == TrackingType.POOL:
                     issuance_result = await self.db.execute(
                         select(ItemIssuance)
@@ -4329,7 +4418,6 @@ class InventoryService:
                         )
                         .order_by(ItemIssuance.issued_at.desc())
                         .limit(1)
-                        .with_for_update()
                     )
                     issuance = issuance_result.scalar_one_or_none()
                     if issuance:

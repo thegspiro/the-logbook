@@ -184,6 +184,133 @@ source-inspection guard tests (matching
 established shape) both fail against the stashed pre-fix code and pass
 after — see [Guard tests added](#guard-tests-added) below.
 
+#### INV-20 — MED — the INV-18/INV-19 fix itself locked in the wrong order — ✅ FIXED (follow-up)
+
+**What:** Codex caught this on the merged PR before this pass closed —
+INV-18/INV-19's fix locked `ItemIssuance`/`CheckOutRecord` first, then the
+`InventoryItem`. Two sibling methods that also touch the same
+item-plus-holding-record pair lock in the opposite order:
+`review_return_request` and `transfer_item_holding`/`unassign_item` all
+lock the `InventoryItem` first, then the holding record. `return_to_pool`
+and `checkin_item` (as just fixed by INV-18/INV-19) were the only two
+methods locking holding-record-first — an inconsistent lock order across
+the module, which is exactly the shape that produces a deadlock rather
+than fixing one.
+
+**Where:** `backend/app/services/inventory_service.py:return_to_pool`,
+`:checkin_item`, and `:batch_return`'s own pre-lock queries that delegate
+to them.
+
+**Failure scenario:** a direct return (`return_to_pool`, now holding-first)
+races `review_return_request` (item-first) on the same issuance, or a
+check-in (`checkin_item`, now holding-first) races `transfer_item_holding`
+(item-first) on the same checkout. Transaction A holds the holding-record
+lock and requests the item lock; transaction B holds the item lock and
+requests the holding-record lock — a genuine circular wait. InnoDB detects
+it and kills one side with a deadlock error, which the endpoint layer
+converts to a plain failure with no retry, so a legitimate concurrent
+return or check-in can fail because of an unrelated concurrent transfer or
+review.
+
+**Fix:** restructured both methods to lock the item first, matching the
+other three methods' convention: an unlocked peek at the holding record's
+immutable `item_id` (safe — `item_id` is never reassigned after create),
+lock the `InventoryItem`, then lock and re-read the holding record for the
+actual `is_returned`/`already checked in` guard check. `batch_return`'s own
+pre-lock queries — which locked the checkout/issuance _before_ delegating
+to these methods — had their `.with_for_update()` dropped, since they now
+only need to name a candidate row for the loop; leaving it would have kept
+the batch path holding-first while direct calls became item-first, trading
+one inconsistency for another rather than actually unifying the order.
+
+**Verified:** two new guard tests
+(`tests/test_inventory_return_locking.py`) assert lock **order**, not just
+presence — confirmed failing against the merged (holding-first) code via
+`git stash` and passing after. Two existing mock-based unit tests in
+`tests/test_inventory_service.py`
+(`TestCheckinItem::test_checkin_already_returned`/`test_checkin_success`)
+updated for the new two-query shape they were asserting against — the
+assertions on outcome are unchanged, only the mocked call sequence.
+
+#### INV-21 — MED — INV-20's own locked re-read can still return a stale, pre-lock object (SQLAlchemy identity map) — ✅ FIXED (follow-up)
+
+**What:** Codex caught this on INV-20's own PR (#2190), before it merged.
+INV-20's fix makes `return_to_pool`/`checkin_item` lock the `InventoryItem`
+first, then lock-and-re-read the holding record (`ItemIssuance`/
+`CheckOutRecord`) for the actual `is_returned` guard check — but "lock and
+re-read" is not the same guarantee as "observe the latest committed row."
+`batch_return` names its candidate holding record with an earlier, _unlocked_
+`SELECT` of the same row, in the same session it then hands to
+`return_to_pool`/`checkin_item` (see INV-20's fix comment — that read was
+deliberately left unlocked once the item-first order was established). Once a
+row is loaded into SQLAlchemy's identity map, a second `SELECT` for the same
+primary key — even one issued with `.with_for_update()` — returns the
+_cached Python object_ by default and does **not** overwrite its
+already-loaded attributes with the row the locking query just fetched. The
+lock is real and the SQL-level read is fresh (InnoDB locking reads bypass the
+REPEATABLE READ snapshot — Pitfall #27), but the ORM object handed back to
+the caller is not.
+
+The same defect is present, independently, in `_get_item_locked` — the
+shared item-locking helper `return_to_pool`, `checkin_item`, `unassign_item`
+and every other holding-mutation method call. `batch_return` also loads the
+`InventoryItem` unlocked first (via `_lookup_by_item_id`/`lookup_by_code`,
+to route the scan to unassign/check-in/pool-return), so the item-level lock
+was exposed to the identical staleness, on `item.quantity`,
+`item.quantity_issued`, `item.status` and `item.condition` — the exact
+fields these methods read-modify-write.
+
+**Where:** `backend/app/services/inventory_service.py` — `_get_item_locked`,
+and the locked re-reads in `return_to_pool` (`ItemIssuance`) and
+`checkin_item` (`CheckOutRecord`).
+
+**Failure scenario:** `batch_return` scans an item already returned/checked
+in by a concurrent direct call (or a second batch) that raced it and
+committed in between `batch_return`'s own candidate lookup and its delegate
+call. Without the fix, the delegate's locked re-read hands back the object
+`batch_return` already cached — `is_returned == False` — so the guard passes
+a second time: `return_to_pool` re-runs `_return_units_to_stock` and
+double-credits `item.quantity` (or a lot) for units already returned once,
+`checkin_item` silently re-records a check-in — overwriting the first's
+committed `return_condition`/`damage_notes`, potentially making a damaged
+item read as available — and the batch reports both scans as successful.
+INV-20's own lock-order fix does not close this: the item lock is acquired in
+the correct order, but the value read out of it afterward can still be stale.
+
+**Impact:** the exact double-credit/silent-overwrite failure modes INV-18–20
+were written to close, reopened specifically on the batch path — the one
+`batch_return` exists to make routine (a member returning several items in
+one scan session, which is also the shape most likely to race a
+quartermaster's direct desk return of the same items).
+
+**Verified empirically**, not just reasoned about: a throwaway script against
+this app's own `database_manager`/model setup (SQLAlchemy 2.0.52) loaded an
+`InventoryItem` once (unlocked) in session A, committed a change to the same
+row from an independent session B, then re-read it in session A with
+`.with_for_update()` — the re-read returned A's original, pre-commit values
+until `.execution_options(populate_existing=True)` was added to the query, at
+which point it correctly reflected B's committed change.
+
+**Fix:** added `.execution_options(populate_existing=True)` to
+`_get_item_locked`'s query (fixing every caller unconditionally — item-level
+staleness can no longer depend on whether some caller upstream happened to
+have already loaded the same item) and to the `ItemIssuance`/`CheckOutRecord`
+locked re-reads in `return_to_pool`/`checkin_item`. `populate_existing=True`
+was Codex's suggested fix and is the one applied — narrower alternatives
+(e.g. having `batch_return` select only bare ids) would leave the guarantee
+dependent on every future caller remembering to do the same.
+
+**Verified:** two new integration tests
+(`tests/test_inventory_identity_map_staleness.py`) reproduce the race for
+real, against a real database with two independent sessions (a mock has no
+identity map, so this class of bug cannot be shown with one) — each loads
+the holding record once, unlocked, in session A (mirroring `batch_return`'s
+own candidate query), commits a return/check-in of the same row from
+independent session B, then asserts session A's own
+`return_to_pool`/`checkin_item` call observes B's committed state rather
+than the pre-race object it cached. Both confirmed failing against the
+pre-fix code via `git stash` and passing after.
+
 ### Re-verified still open, not re-flagged
 
 - **INV-8 / INV-9** (`GET /allowances/check/{user_id}/{category_id}` and
@@ -254,6 +381,18 @@ after — see [Guard tests added](#guard-tests-added) below.
   same shape as `test_inventory_return_receipt.py`'s existing INV-10 guard
   test. Both confirmed to **fail** against the pre-fix code (`git stash` of
   `inventory_service.py`) and **pass** after.
+- INV-20 follow-up: two more tests in `tests/test_inventory_return_locking.py`
+  asserting the lock **order** (item before holding record) in
+  `return_to_pool`/`checkin_item`, confirmed to fail against the merged
+  (holding-first) code via `git stash` and pass after. Two existing
+  mock-based tests in `tests/test_inventory_service.py`
+  (`TestCheckinItem::test_checkin_already_returned`/`test_checkin_success`)
+  updated for the new two-query call sequence.
+- INV-21 follow-up: `tests/test_inventory_identity_map_staleness.py` (new
+  file) — two real-database, two-session integration tests reproducing the
+  identity-map staleness itself (not just lock order), for `return_to_pool`
+  and `checkin_item`. Both confirmed to fail against the pre-fix code via
+  `git stash` and pass after.
 
 ### Completion gate
 
@@ -272,6 +411,27 @@ No `tsc`/`eslint` run this pass: every frontend finding this pass reviewed
 `EquipmentRequestsPage.tsx`, `onHand.ts`) was already correct in the diff,
 so no frontend edit was made. Stated explicitly per this rotation's "never
 report a gate you did not run" rule rather than implying a clean run.
+
+**INV-20 follow-up note:** INV-18/INV-19's fix merged with the wrong lock
+order (see INV-20 above); the corrected version landed in a separate PR
+after the original merged, since a merged PR's branch cannot be pushed to
+again (CLAUDE.md Pitfall #24). That follow-up PR's own completion gate:
+`flake8`/`black`/`isort` clean; `validate_migrations.py --strict` single
+head, 411 revisions; `pytest tests/test_inventory_return_locking.py
+tests/test_inventory_service.py` — 87 passed; full backend suite `pytest
+tests/` — 9979 passed, 21 pre-existing skips, 0 failed.
+
+**INV-21 follow-up note:** found by Codex reviewing INV-20's own (not yet
+merged) PR #2190, and fixed within that same PR before it merged — no
+branch-reuse concern here, unlike INV-20's own follow-up. Completion gate for
+this addition: `flake8`/`black --check`/`isort --check-only` on
+`app/services/inventory_service.py` and the new test file — clean;
+`validate_migrations.py --strict` — single head, 411 revisions, no migration
+added; `pytest tests/test_inventory_return_locking.py
+tests/test_inventory_service.py tests/test_inventory_identity_map_staleness.py`
+— 89 passed; full backend suite `pytest tests/` — 9981 passed (9979 baseline
+
+- 2 new), 21 pre-existing skips, 0 failed.
 
 ---
 
