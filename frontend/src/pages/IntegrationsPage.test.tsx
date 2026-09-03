@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import userEvent from '@testing-library/user-event';
 import IntegrationsPage from './IntegrationsPage';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
 
 // Mock the auth store
 const mockCheckPermission = vi.fn().mockReturnValue(true);
@@ -22,6 +23,9 @@ const mockSalesforceReadiness = vi.fn();
 const mockSalesforcePreviewMembers = vi.fn();
 const mockGetSalesforceOAuthUrl = vi.fn().mockReturnValue('/api/v1/integrations/salesforce/oauth/authorize');
 const mockGetCalcomBookings = vi.fn();
+const mockGetMcpStatus = vi.fn();
+const mockCreateMcpKey = vi.fn();
+const mockRevokeMcpKey = vi.fn();
 
 vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
@@ -38,6 +42,9 @@ vi.mock('../services/api', () => ({
     salesforcePreviewMembers: (...args: unknown[]) => mockSalesforcePreviewMembers(...args) as unknown,
     getSalesforceOAuthUrl: (...args: unknown[]) => mockGetSalesforceOAuthUrl(...args) as unknown,
     getCalcomBookings: (...args: unknown[]) => mockGetCalcomBookings(...args) as unknown,
+    getMcpStatus: (...args: unknown[]) => mockGetMcpStatus(...args) as unknown,
+    createMcpKey: (...args: unknown[]) => mockCreateMcpKey(...args) as unknown,
+    revokeMcpKey: (...args: unknown[]) => mockRevokeMcpKey(...args) as unknown,
   },
 }));
 
@@ -55,7 +62,9 @@ vi.mock('react-hot-toast', () => ({
 const renderPage = () =>
   render(
     <MemoryRouter>
-      <IntegrationsPage />
+      <ConfirmProvider>
+        <IntegrationsPage />
+      </ConfirmProvider>
     </MemoryRouter>
   );
 
@@ -532,6 +541,93 @@ describe('IntegrationsPage', () => {
       // only ever produced an error toast.
       expect(within(card).queryByText('Test')).not.toBeInTheDocument();
       expect(within(card).queryByText('Connected')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Claude (MCP)', () => {
+    const mcpAvailable = {
+      id: 'mcp-1',
+      organization_id: 'org-1',
+      integration_type: 'claude-mcp',
+      name: 'Claude (MCP)',
+      description: 'Let Claude answer questions about the department',
+      category: 'AI Assistants',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const mcpConnected = {
+      ...mcpAvailable,
+      status: 'connected' as const,
+      enabled: true,
+      config: { access_mode: 'read_write', expose_finance: true, expose_medical_screening: false },
+    };
+
+    beforeEach(() => {
+      mockGetMcpStatus.mockReset();
+      mockGetMcpStatus.mockResolvedValue({
+        enabled: true,
+        endpoint_path: '/api/mcp',
+        access_mode: 'read_write',
+        expose_finance: true,
+        expose_medical_screening: false,
+        active_key: null,
+      });
+    });
+
+    it('connects with the defaults: read-only and nothing extra shared', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpAvailable]);
+      mockConnectIntegration.mockResolvedValue(mcpConnected);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      await user.click(within(card).getByText('Connect'));
+      expect(screen.getByLabelText('Access')).toHaveValue('read_only');
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('mcp-1', {
+        access_mode: 'read_only',
+        expose_finance: false,
+        expose_medical_screening: false,
+      });
+    });
+
+    it('sends the chosen access mode and switches', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpAvailable]);
+      mockConnectIntegration.mockResolvedValue(mcpConnected);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      await user.click(within(screen.getByTestId('integration-card-claude-mcp')).getByText('Connect'));
+      await user.selectOptions(screen.getByLabelText('Access'), 'read_write');
+      await user.click(screen.getByLabelText(/Share finance totals/));
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('mcp-1', {
+        access_mode: 'read_write',
+        expose_finance: true,
+        expose_medical_screening: false,
+      });
+    });
+
+    it('opens the service key panel from a connected card', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([mcpConnected]);
+
+      renderPage();
+      await screen.findByText('Claude (MCP)');
+      const card = screen.getByTestId('integration-card-claude-mcp');
+      await user.click(within(card).getByText('Service key'));
+      expect(await screen.findByTestId('mcp-key-panel')).toBeInTheDocument();
+      expect(mockGetMcpStatus).toHaveBeenCalled();
+      const filters = screen.getByRole('group', { name: 'Filter by category' });
+      expect(within(filters).getByText('AI Assistants')).toBeInTheDocument();
     });
   });
 });

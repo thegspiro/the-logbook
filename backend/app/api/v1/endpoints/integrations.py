@@ -15,6 +15,8 @@ from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import sanitize_connector_error
+from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
+from app.mcp.keys import McpKeyService
 from app.models.integration import Integration
 from app.models.user import User
 from app.schemas.integration import (
@@ -188,6 +190,21 @@ INTEGRATION_CATALOG = [
             "payment is ever taken on this site."
         ),
         "category": "Payments",
+        "status": "available",
+    },
+    {
+        "integration_type": "claude-mcp",
+        "name": "Claude (MCP)",
+        "description": (
+            "Let Claude answer questions about the department over the Model "
+            "Context Protocol: rosters, schedules, training and certification "
+            "status, inventory, apparatus, facilities, published minutes and "
+            "documents. Personal information — phone numbers, personal email, "
+            "home addresses, dates of birth, emergency contacts, medical "
+            "results — is never sent, whatever the settings. Off until an IT "
+            "administrator connects it and issues a service key."
+        ),
+        "category": "AI Assistants",
         "status": "available",
     },
     {
@@ -389,6 +406,19 @@ def _validate_urls_in_config(config: dict[str, Any]) -> None:
                 )
 
 
+def _apply_type_specific_flags(integration: Integration) -> None:
+    """Derive per-type row flags from the freshly merged config.
+
+    The Claude MCP add-on is only a PHI surface when the department turns
+    medical-screening status on, so the ``contains_phi`` badge follows that
+    switch rather than being fixed in the catalog.
+    """
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        integration.contains_phi = bool(
+            (integration.config or {}).get("expose_medical_screening")
+        )
+
+
 async def ensure_catalog(db: AsyncSession, organization_id: str) -> None:
     """Ensure all catalog integrations exist for this org."""
     result = await db.execute(
@@ -539,6 +569,7 @@ async def connect_integration(
     integration.status = "connected"
     integration.enabled = True
     integration.config = {**(integration.config or {}), **public_config}
+    _apply_type_specific_flags(integration)
     # Store secrets encrypted
     for key, value in secrets.items():
         integration.set_secret(key, value)
@@ -653,6 +684,7 @@ async def update_integration(
     public_config, secrets = _extract_secrets(config)
 
     integration.config = {**(integration.config or {}), **public_config}
+    _apply_type_specific_flags(integration)
     for key, value in secrets.items():
         integration.set_secret(key, value)
     for key in secrets_to_clear:
@@ -681,6 +713,36 @@ async def update_integration(
     return _integration_to_dict(integration)
 
 
+async def _test_mcp_connection(
+    db: AsyncSession, integration: Integration
+) -> dict[str, Any]:
+    """There is nothing external to reach; report what a client would find."""
+    if not integration.enabled or integration.status != "connected":
+        return {"success": False, "message": "Connect the integration first"}
+    active = await McpKeyService(db).active_keys(integration.organization_id)
+    if not active:
+        return {
+            "success": False,
+            "message": (
+                "Connected, but no service key has been issued yet — an IT "
+                "administrator can issue one from the Service key panel."
+            ),
+        }
+    key = active[0]
+    expiry = (
+        f"expires {key.expires_at.date().isoformat()}"
+        if key.expires_at
+        else "no expiry"
+    )
+    return {
+        "success": True,
+        "message": (
+            f"MCP endpoint ready at {MCP_MOUNT_PATH}; active key "
+            f"{key.key_prefix}… ({expiry})."
+        ),
+    }
+
+
 @router.post("/{integration_id}/test-connection")
 async def test_connection(
     integration_id: str,
@@ -700,6 +762,9 @@ async def test_connection(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found"
         )
+
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        return await _test_mcp_connection(db, integration)
 
     # Delegate to the appropriate service
     from app.services.integration_services import test_integration_connection

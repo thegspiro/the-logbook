@@ -218,6 +218,28 @@ class PayPalConfig(BaseModel):
     auto_apply_payments: bool = True
 
 
+class ClaudeMcpConfig(BaseModel):
+    """What the department lets an MCP client see and do.
+
+    Nothing here widens the personal-information boundary: contact details,
+    home addresses, dates of birth, emergency contacts and medical results are
+    stripped by ``app.mcp.redaction`` whatever these switches say. The two
+    module switches expose *statuses and totals* for the modules that are off
+    by default because their data is sensitive as a whole.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # ``read_write`` additionally registers the write tools (draft events,
+    # action items, reorder requests). Reads are always available.
+    access_mode: Literal["read_only", "read_write"] = "read_only"
+    # Budget totals and fiscal years. Off by default: financial information.
+    expose_finance: bool = False
+    # Screening compliance status and expiry dates only — never a result,
+    # a provider or a note. Off by default: potential PHI.
+    expose_medical_screening: bool = False
+
+
 # Map integration_type → config schema for strict validation
 INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "slack": SlackConfig,
@@ -236,6 +258,7 @@ INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "documenso": DocumensoConfig,
     "calcom": CalcomConfig,
     "paypal": PayPalConfig,
+    "claude-mcp": ClaudeMcpConfig,
 }
 
 # Fields in config that contain secrets and should be stored encrypted

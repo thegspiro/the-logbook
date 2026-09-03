@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added: Claude (MCP) integration — an opt-in MCP server, off by default, that never carries personal information (2026-09-03)
+
+**Added**
+
+- **`/api/mcp` — a Model Context Protocol endpoint served by the existing
+  backend process**, so Claude Code, the Messages API connector and (through
+  a local bridge) Claude Desktop can ask questions of a department's
+  Logbook. It is a catalog integration (`claude-mcp`, category _AI
+  Assistants_), disabled on every installation until an administrator
+  connects it, and answers nothing until an IT administrator issues a
+  service key. Stateless, JSON-response transport: any worker or replica
+  answers any request and no reverse-proxy change is needed for `/api/`.
+- **38 tools** over the roster, events, shifts, training and certifications,
+  inventory, apparatus, facilities, meetings and published minutes,
+  documents in unrestricted folders, and elections. Finance totals and
+  medical-screening _status_ are behind two per-department switches, off by
+  default; three write tools (draft event, meeting action item, reorder
+  request) are behind a read/write switch, also off by default. Tools a
+  department has not switched on are not listed to the client.
+- **One redaction boundary** (`app/mcp/redaction.py`) applied to every tool
+  result: phone, mobile, email (work and personal), home address, date of
+  birth, emergency contacts, photo, membership and certification numbers,
+  login names, medical results, credentials and tokens are stripped at
+  every depth. `tests/test_mcp_redaction.py` asserts the behaviour and that
+  no tool module names a denied field.
+- **`mcp_service_keys`** (migration `c4d5e6f7a8b9`): one active key per
+  organization, SHA-256 digest only, optional expiry or lifetime, rotation
+  revokes the previous key. Issuing and revoking require the new
+  `integrations.mcp_keys` permission, which only the IT Manager position
+  holds by default. Every tool call, issue and revocation is audit-logged.
+- Integrations screen: connect form (access mode, finance, medical
+  switches) and a **Service key** panel that shows the plaintext exactly
+  once. Wiki: `Integration-Claude-MCP`.
+
+**Known limitation** — claude.ai custom connectors authenticate with OAuth
+2.1; The Logbook is an OAuth client, not an authorization server, so those
+clients use a local bridge for now (see `docs/KNOWN_LIMITATIONS.md`).
+
+**Dependency** — `mcp==2.1.1`, which brings in `httpx2` (coexists with the
+pinned `httpx`), `sse-starlette`, `mcp-types`, `jsonschema` and
+`opentelemetry-api`.
+
 ### Security: a folder delete could cascade-destroy a more-restricted descendant the caller could never access directly (2026-09-03)
 
 **Fixed**

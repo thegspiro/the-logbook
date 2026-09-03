@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
+import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
 import { useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -42,6 +43,7 @@ import {
   Wallet,
   CreditCard,
   KeyRound,
+  Bot,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -161,6 +163,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     bgColor: 'bg-indigo-500/10',
     features: ['Store payment matching', 'Auto-settles orders', 'Business account'],
   },
+  'claude-mcp': {
+    icon: <Bot className="h-6 w-6" />,
+    color: 'text-orange-700 dark:text-orange-400',
+    bgColor: 'bg-orange-500/10',
+    features: ['Read-only by default', 'No personal information', 'One service key per department'],
+  },
   active911: {
     icon: <Radio className="h-6 w-6" />,
     color: 'text-red-700 dark:text-red-400',
@@ -239,6 +247,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   Documents: <FileSignature className="h-3.5 w-3.5" />,
   Scheduling: <CalendarClock className="h-3.5 w-3.5" />,
   'Access Control': <KeyRound className="h-3.5 w-3.5" />,
+  'AI Assistants': <Bot className="h-3.5 w-3.5" />,
 };
 
 type CategoryFilter =
@@ -256,7 +265,8 @@ type CategoryFilter =
   | 'Documents'
   | 'Scheduling'
   | 'Payments'
-  | 'Access Control';
+  | 'Access Control'
+  | 'AI Assistants';
 
 const ALL_CATEGORIES: CategoryFilter[] = [
   'all',
@@ -274,6 +284,7 @@ const ALL_CATEGORIES: CategoryFilter[] = [
   'Scheduling',
   'Payments',
   'Access Control',
+  'AI Assistants',
 ];
 
 // Integration types that need webhook URL config
@@ -289,6 +300,7 @@ const CONFIG_TYPES = new Set([
   'documenso',
   'calcom',
   'paypal',
+  'claude-mcp',
 ]);
 
 /**
@@ -369,6 +381,10 @@ const IntegrationsPage: React.FC = () => {
   const [paypalClientSecret, setPaypalClientSecret] = useState('');
   const [paypalWebhookId, setPaypalWebhookId] = useState('');
   const [paypalAutoApply, setPaypalAutoApply] = useState(true);
+  const [mcpAccessMode, setMcpAccessMode] = useState<'read_only' | 'read_write'>('read_only');
+  const [mcpExposeFinance, setMcpExposeFinance] = useState(false);
+  const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
+  const [showMcpPanel, setShowMcpPanel] = useState(false);
 
   const loadIntegrations = useCallback(async () => {
     try {
@@ -457,6 +473,11 @@ const IntegrationsPage: React.FC = () => {
     setPaypalClientSecret('');
     setPaypalWebhookId(typeof stored['webhook_id'] === 'string' ? stored['webhook_id'] : '');
     setPaypalAutoApply(stored['auto_apply_payments'] !== false);
+    // Every switch on this add-on defaults to off; reopening the form on a
+    // live connection must show what is stored, not the defaults.
+    setMcpAccessMode(stored['access_mode'] === 'read_write' ? 'read_write' : 'read_only');
+    setMcpExposeFinance(stored['expose_finance'] === true);
+    setMcpExposeMedical(stored['expose_medical_screening'] === true);
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -495,6 +516,12 @@ const IntegrationsPage: React.FC = () => {
           client_secret: paypalClientSecret.trim() || undefined,
           webhook_id: paypalWebhookId.trim() || undefined,
           auto_apply_payments: paypalAutoApply,
+        };
+      case 'claude-mcp':
+        return {
+          access_mode: mcpAccessMode,
+          expose_finance: mcpExposeFinance,
+          expose_medical_screening: mcpExposeMedical,
         };
       case 'salesforce':
         return {
@@ -1146,6 +1173,64 @@ const IntegrationsPage: React.FC = () => {
           </div>
         );
 
+      case 'claude-mcp':
+        return (
+          <div className="space-y-3">
+            <div className="alert-info text-xs">
+              Claude never receives personal information through this connection &mdash; no phone numbers, email
+              addresses, home addresses, dates of birth, emergency contacts or medical results &mdash; whatever is
+              chosen below. After connecting, an IT administrator issues the service key from the card.
+            </div>
+            <div>
+              <label htmlFor="mcp-access-mode" className={labelClass}>
+                Access
+              </label>
+              <select
+                id="mcp-access-mode"
+                value={mcpAccessMode}
+                onChange={(e) => setMcpAccessMode(e.target.value === 'read_write' ? 'read_write' : 'read_only')}
+                className={inputClass}
+              >
+                <option value="read_only">Read-only</option>
+                <option value="read_write">Read and write</option>
+              </select>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Read and write lets Claude create draft events, meeting action items and pending reorder requests for a
+                person to review. It never publishes, approves or sends anything.
+              </p>
+            </div>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={mcpExposeFinance}
+                onChange={(e) => setMcpExposeFinance(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Share finance totals</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Fiscal years, budget lines and the treasurer&apos;s report in published minutes. Off by default.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={mcpExposeMedical}
+                onChange={(e) => setMcpExposeMedical(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Share medical screening status</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Whether a member is current on each screening and when it lapses &mdash; never a result, provider or
+                  note. Off by default because it can indicate protected health information.
+                </span>
+              </span>
+            </label>
+          </div>
+        );
+
       case 'paypal':
         return (
           <div className="space-y-3">
@@ -1390,6 +1475,15 @@ const IntegrationsPage: React.FC = () => {
                           <span>Sync</span>
                         </button>
                       )}
+                      {integration.integration_type === 'claude-mcp' && (
+                        <button
+                          onClick={() => setShowMcpPanel(!showMcpPanel)}
+                          className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          <span>Service key</span>
+                        </button>
+                      )}
                       {integration.integration_type === 'calcom' && (
                         <button
                           onClick={() => {
@@ -1441,6 +1535,12 @@ const IntegrationsPage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Claude (MCP) service key panel */}
+        {showMcpPanel &&
+          integrations.some((i) => i.integration_type === 'claude-mcp' && i.status === ConnectionStatus.CONNECTED) && (
+            <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} />
+          )}
 
         {/* Cal.com Bookings Panel */}
         {showBookingsPanel &&

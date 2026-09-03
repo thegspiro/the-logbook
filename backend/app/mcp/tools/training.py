@@ -1,0 +1,119 @@
+"""Training and certifications: records, requirement progress, expiries."""
+
+from typing import Any, Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.mcp.principal import McpPrincipal
+from app.mcp.registry import logbook_tool
+from app.mcp.tools._common import (
+    clamp_limit,
+    clamp_offset,
+    iso,
+    member_names,
+    org_uuid,
+    page,
+    parse_uuid,
+)
+from app.models.training import TrainingRecord
+from app.services.training_service import TrainingService
+
+
+def _record(record: TrainingRecord, member_name: Optional[str]) -> dict:
+    # Scores and certification numbers are deliberately not projected: a
+    # score is a performance detail, a certification number a credential.
+    return {
+        "id": record.id,
+        "member_id": record.user_id,
+        "member_name": member_name,
+        "course_name": record.course_name,
+        "course_code": record.course_code,
+        "training_type": iso(record.training_type),
+        "status": iso(record.status),
+        "scheduled_date": iso(record.scheduled_date),
+        "completion_date": iso(record.completion_date),
+        "expiration_date": iso(record.expiration_date),
+        "hours_completed": record.hours_completed,
+        "credit_hours": record.credit_hours,
+        "issuing_agency": record.issuing_agency,
+        "instructor": record.instructor,
+        "location": record.location,
+        "passed": record.passed,
+    }
+
+
+def register(server: Any) -> None:
+    @logbook_tool(server, title="Expiring certifications")
+    async def list_expiring_certifications(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        days_ahead: int = 90,
+    ) -> dict:
+        """Certifications expiring within ``days_ahead`` days, including ones
+        already expired, oldest expiry first, with the member's name."""
+        days_ahead = max(1, min(days_ahead, 730))
+        records = await TrainingService(db).get_expiring_certifications(
+            org_uuid(principal), days_ahead=days_ahead
+        )
+        names = await member_names(
+            db, principal.organization_id, (r.user_id for r in records)
+        )
+        items = [_record(r, names.get(r.user_id)) for r in records]
+        return {"days_ahead": days_ahead, "items": items, "total": len(items)}
+
+    @logbook_tool(server, title="Member training summary")
+    async def get_member_training_summary(
+        db: AsyncSession, principal: McpPrincipal, member_id: str
+    ) -> dict:
+        """A member's training standing: requirements met versus total,
+        certifications active, expiring and expired, hours this year, and
+        the overall compliance status (green, yellow, red or exempt)."""
+        stats = await TrainingService(db).get_user_training_stats(
+            parse_uuid(member_id, "member_id"), org_uuid(principal)
+        )
+        return stats.model_dump(mode="json")
+
+    @logbook_tool(server, title="Member requirement progress")
+    async def get_member_requirements_progress(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        member_id: str,
+        year: Optional[int] = None,
+    ) -> dict:
+        """Progress against each training requirement that applies to a member:
+        required and completed hours, percentage, due date and days until due
+        (negative when overdue). ``year`` narrows to one training year."""
+        progress = await TrainingService(db).get_all_requirements_progress(
+            parse_uuid(member_id, "member_id"), org_uuid(principal), year=year
+        )
+        return {"items": [p.model_dump(mode="json") for p in progress]}
+
+    @logbook_tool(server, title="Member training records")
+    async def list_member_training_records(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        member_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        """A member's training records, most recent first."""
+        limit = clamp_limit(limit)
+        offset = clamp_offset(offset)
+        uid = str(parse_uuid(member_id, "member_id"))
+        rows = await db.execute(
+            select(TrainingRecord)
+            .where(
+                TrainingRecord.organization_id == principal.organization_id,
+                TrainingRecord.user_id == uid,
+            )
+            .order_by(
+                TrainingRecord.completion_date.desc().nulls_last(),
+                TrainingRecord.created_at.desc(),
+            )
+            .offset(offset)
+            .limit(limit)
+        )
+        records = list(rows.scalars().all())
+        names = await member_names(db, principal.organization_id, [uid])
+        return page([_record(r, names.get(uid)) for r in records], None, limit, offset)
