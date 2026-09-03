@@ -16,32 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#2200** (branch `claude/apparatus-nfc-outstanding-write-invariant`) —
-Feature 13, Apparatus & NFC, pass 9. Redirect of #2199 (merged by the repo
-owner mid-round, before this pass's fix landed) per CLAUDE.md Pitfall #24 —
-branched fresh off `origin/main` at `f77cab7f` rather than reusing the dead
-branch. A fifth Codex round on the same `EquipmentCheckTemplateBuilder.tsx`
-autosave/subtree-delete subsystem passes 5–8 had already been through found
-two more gaps in the same shape (AP-13 finding 1: `flushPendingAutoSaves`
-issued PATCHes without registering them anywhere a delete's quiescing step
-could see; AP-13 finding 2: a partial-failure `handleSave` batch skipped the
-`savedParentByIdRef` refresh for a compartment whose own PATCH had already
-succeeded). Rather than a sixth pairwise patch — the same shape as the
-Facilities PR's FAC-32→FAC-34→FAC-35 lock-ordering saga — this pass states
-one canonical invariant (before a subtree delete proceeds, no id in that
-subtree may have an outstanding server write or unresolved local hierarchy
-change) and routes every item-PATCH-issuing write path through one
-registration point (`registerInFlightSave`) rather than three call sites
-each remembering to update the tracking maps themselves. Also trimmed
-review-chronology narration ("AP-13 finding N", "Codex", "three rounds") out
-of the production comments per AGENTS.md/CLAUDE.md comment policy, and fixed
-an unrelated `act()` test-hygiene issue Codex flagged in two pass-7/8 tests
-in the same file. Both new findings reproduced live (pre-fix files restored
-from `origin/main` against the new tests, confirmed failing, then passing
-post-fix) before being called findings. Full writeup:
-`docs/security-review/AP-13-apparatus-nfc.md` pass 9.
+None. Feature 13 (Apparatus & NFC) is fully closed for this pass — see log
+entry below. Next: 14 Equipment check & shifts.
 
 ---
+
+### 2026-09-03 — Feature 13 (Apparatus & NFC, pass 9) ✅ merged — PR #2200
+
+`05372cb9`. Merged cleanly by the repo owner (`thegspiro`) at 14:35:58Z — no
+merge conflict, base `main` unaffected. Checked `pull_request_read` (`get`,
+`get_reviews`, `get_comments`, `get_review_comments`) for outstanding
+feedback: **three review threads are still unresolved**, all from a second
+Codex pass (on commit `026567c32d`, 14:11:55Z) that landed 24 minutes before
+the owner's merge and was never responded to in-thread:
+
+- P1 — `moveItemToCompartment` (`EquipmentCheckTemplateBuilder.tsx:504`)
+  issues a fourth direct item PATCH that bypasses `registerInFlightSave`, so
+  pass 9's new invariant is not actually total: a cross-compartment move
+  racing a subtree delete of the source/destination compartment is still
+  unguarded.
+- P2 — `handleSave`'s reentrancy: `saving` is only set after the pending-
+  autosave flush, so a double-click during a slow flush can start two
+  concurrent `handleSave` calls; the first to finish clears `saving` while
+  the second is still mid-batch, re-enabling compartment deletion and
+  reopening the PATCH/DELETE race pass 9 closed for the single-call case
+  (`EquipmentCheckTemplateBuilder.tsx:2230`).
+- P1 — a new pass-9 test doesn't reset `updateEquipmentCheckTemplate` before
+  installing its `mockImplementationOnce`, so per CLAUDE.md Pitfall #28 a
+  leftover mock config from an earlier block could let it pass without
+  exercising the save gap it claims to test
+  (`EquipmentCheckTemplateBuilder.test.tsx:2399`).
+
+One earlier thread (a P2 on the same file/line, opened by the first Codex
+pass at 13:26:03Z) _was_ addressed in-thread by the owner and is marked
+resolved. These three are not — not fixed in code, not replied to, not
+resolved. They are carried forward as open items against `AP-13-apparatus-
+nfc.md` for whichever future pass picks feature 13 back up (this iteration's
+scope is Step 0 bookkeeping only; feature 13's own findings doc is left
+untouched per this iteration's instructions). Rotation row 13 → ✅ for this
+pass. Next: 14 Equipment check & shifts.
 
 ### 2026-09-03 — Feature 13 (Apparatus & NFC, passes 3–8) ✅ merged (mid-round) — PR #2199
 
@@ -7893,8 +7906,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | 🔄     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | 🔄     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
