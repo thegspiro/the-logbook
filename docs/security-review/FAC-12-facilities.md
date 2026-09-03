@@ -1365,6 +1365,53 @@ database) and pass post-fix.
 
 **Mirrored to** `CHANGELOG.md`.
 
+### FAC-32 — P2 (reliability, lock-ordering deadlock) — `delete_folder`'s cascade took the same two locks as the FAC-31 creator path in the opposite order — ✅ FIXED
+
+**Found by Codex review of the FAC-29 commit**, alongside FAC-31. FAC-31's
+fix makes the creator path lock a `Document` row first, then (still holding
+it) insert into the `FacilityDocument`/`FacilityPhoto` reference table.
+`delete_folder`'s cascade — which also touches both of those — did it
+backwards: it called `_match_facility_document_references` (a broad,
+organization-scoped `SELECT ... FOR UPDATE` over the reference table) before
+ever locking the subtree's `Document` rows, which only happened afterward,
+implicitly, when the ORM's `delete-orphan` cascade deleted them.
+
+**Why that is a deadlock, not just a staleness risk:** two transactions
+taking the same two locks in opposite orders is the textbook shape. With a
+creator (Document row, then reference table) and this cascade (reference
+table, then Document row) running concurrently against overlapping rows, the
+creator's reference-table insert can block on a gap lock the cascade's scan
+is holding, while the cascade's later need for the same Document row blocks
+on the lock the creator already holds — neither can proceed, and InnoDB
+kills one side with `Deadlock found when trying to get lock`. There is no
+retry around either endpoint, so the killed transaction surfaces as a bare 500.
+
+**Where:** `backend/app/services/documents_service.py` (`delete_folder`,
+the call to `_match_facility_document_references` via
+`_delete_facility_document_references`).
+
+**Fix:** add `.with_for_update()` to the subtree's `Document` id/file-path
+query and run it before `_delete_facility_document_references`, so this
+cascade acquires the two shared locks in the same order the FAC-31 creator
+path does — Document row(s) first, then the reference table. Matching lock
+order is what turns a potential deadlock back into ordinary serialization:
+whichever transaction gets there first makes the other wait, rather than
+both waiting on each other.
+
+**Regression test:** `tests/test_facility_document_reference_race.py`,
+`TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`. A true two-session
+InnoDB deadlock is inherently timing-sensitive to force on demand (both
+sides must be simultaneously blocked on each other for the engine to detect
+it), so — per this rotation's own escalation discipline when a live repro's
+reliability is in doubt — the test instead asserts the concrete, observable
+effect of the ordering fix: with a `Document` row locked by one session,
+`delete_folder`'s cascade (run in a second, real session) blocks on that
+lock immediately, _before_ it ever reaches the reference-table scan, proving
+the new order directly rather than depending on the engine's deadlock
+detector actually firing within a test timeout.
+
+**Mirrored to** `CHANGELOG.md`.
+
 ### FAC-33 — P1, test-only (CLAUDE.md "Fix All Errors") — the two-session test fixture's teardown swallowed any rollback failure with a blanket `except Exception: pass` — ✅ FIXED
 
 **Found by Codex review of the FAC-29 commit.**

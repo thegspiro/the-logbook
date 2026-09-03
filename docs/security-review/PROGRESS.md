@@ -85,12 +85,26 @@ Verified empirically that no known-benign exception occurs in practice
 against this backend; removed the blanket catch per CLAUDE.md's "Fix All
 Errors" policy.
 
-**FAC-32 (P2, reliability/deadlock)** still in progress on this branch — see
-the next log entry.
+**FAC-32 (P2, reliability/deadlock, fixed):** `delete_folder`'s cascade
+took the same two locks FAC-31's creator path takes (a `Document` row, then
+the `FacilityDocument`/`FacilityPhoto` reference table) in the opposite
+order — reference table first (via `_match_facility_document_references`),
+Document rows only afterward via the ORM cascade delete. Two transactions
+locking the same two resources in opposite orders is a textbook InnoDB
+deadlock. Fixed by adding `.with_for_update()` to the subtree's `Document`
+query and running it before the reference-table scan, matching the creator's
+order. A true two-session deadlock is inherently timing-sensitive to force
+on demand, so the regression test
+(`TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`) instead proves the
+concrete, engine-independent effect: with a `Document` row locked by one
+session, `delete_folder` run in a second blocks on it immediately, before
+ever reaching the reference-table scan (confirmed backwards pre-fix via
+`git stash` — the scan ran first, then it blocked much later at the cascade
+delete itself).
 
-Local completion gate green so far for FAC-31/33: flake8/black/isort clean
-on changed files, scoped facilities/documents suites and the full backend
-suite (10047 passed / 21 skipped, environment-only skips) pass with zero
+Full local completion gate green: flake8/black/isort clean on changed files,
+scoped facilities/documents suites (301 passed) and the full backend suite
+(10047 passed / 21 skipped, environment-only skips) both pass with zero
 regressions. Rotation row 12 stays ⏳ (awaiting this PR's merge).
 
 ---

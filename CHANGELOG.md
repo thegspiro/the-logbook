@@ -29,6 +29,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   _blocks_ on the held lock rather than merely reading a stale value.
   Confirmed to reproduce a real dangling reference against pre-fix code
   (`git stash` isolating the source change) and to close it post-fix.
+- **FAC-32 — `delete_folder`'s cascade took the same two locks the FAC-31
+  creator path takes (a `Document` row, then the
+  `FacilityDocument`/`FacilityPhoto` reference table) in the opposite
+  order** — reference table first (via `_match_facility_document_references`),
+  `Document` rows only afterward via the ORM cascade delete. Two
+  transactions locking the same two resources in opposite orders is a
+  textbook InnoDB deadlock. Fixed by adding `.with_for_update()` to the
+  subtree's `Document` query and running it before the reference-table
+  scan, matching the creator's order.
+- New regression test (`TestDeleteFolderLocksDocumentsBeforeTheReferenceTable`):
+  a true two-session deadlock is inherently timing-sensitive to force on
+  demand, so this instead proves the concrete, engine-independent effect —
+  with a `Document` row locked by one session, `delete_folder` run in a
+  second blocks on it immediately, before ever reaching the reference-table
+  scan. Confirmed backwards pre-fix (`git stash`): the scan ran first, and
+  the block only happened much later, at the cascade delete itself.
 - **FAC-33 (test-only) — the two-session test fixture's teardown swallowed
   any rollback failure with a blanket `except Exception: pass`.** Verified
   no known-benign exception occurs in practice against this backend; removed

@@ -615,11 +615,30 @@ class DocumentsService:
             subtree_ids |= new_ids
             frontier = new_ids
 
+        # FAC-32 (Codex): with_for_update() -- locking the subtree's Document
+        # rows here, *before* the facility-reference scan below, matters for
+        # more than staleness. A concurrent
+        # _validate_shared_document_reference (facilities.py, FAC-31) locks a
+        # Document row first and only inserts into the facility-reference
+        # table afterward, inside the same still-open transaction. This
+        # cascade used to do the opposite: lock the (broad, all-of-org)
+        # reference table first via _delete_facility_document_references,
+        # and only touch Document rows afterward, when the ORM cascade
+        # deletes them. Two transactions taking the same two locks in
+        # opposite orders is a textbook InnoDB deadlock -- the creator's
+        # insert blocks on this scan's gap lock on the reference table while
+        # this scan's later Document-row need blocks on the creator's
+        # already-held row lock, and neither can proceed. Locking Document
+        # rows first here puts both paths in the same order (Document
+        # row(s), then reference table), so the two sides serialize instead
+        # of deadlocking.
         file_rows = await self.db.execute(
-            select(Document.id, Document.file_path).where(
+            select(Document.id, Document.file_path)
+            .where(
                 Document.organization_id == str(organization_id),
                 Document.folder_id.in_(subtree_ids),
             )
+            .with_for_update()
         )
         document_ids: Set[str] = set()
         file_paths: List[str] = []
@@ -631,6 +650,8 @@ class DocumentsService:
         # A facility record can reference one of these documents without a
         # foreign key (see _delete_facility_document_references) -- clean
         # that up in the same transaction as the cascade delete, not after.
+        # Runs after the Document lock above -- see the FAC-32 comment there
+        # for why the order matters.
         await self._delete_facility_document_references(
             document_ids, organization_id, current_user
         )

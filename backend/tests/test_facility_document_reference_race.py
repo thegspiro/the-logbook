@@ -33,13 +33,14 @@ interleaving. Every row created is torn down explicitly at the end.
 import asyncio
 import uuid
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import select
 
 from app.api.v1.endpoints.facilities import _validate_shared_document_reference
 from app.core.database import database_manager
-from app.models.document import Document
+from app.models.document import Document, DocumentFolder
 from app.models.facilities import (
     Facility,
     FacilityDocument,
@@ -100,6 +101,51 @@ async def _make_org_facility_document(session, slug):
     session.add(document)
     await session.commit()
     return org.id, facility.id, document.id, facility_type.id, facility_status.id
+
+
+async def _make_org_folder_document(session, slug):
+    """A plain (non-facility) folder with one document in it -- what
+    ``delete_folder``'s cascade needs, with no facility scaffolding."""
+    org = Organization(name="Race Test VFD", slug=slug)
+    session.add(org)
+    await session.flush()
+    folder = DocumentFolder(
+        organization_id=org.id, name="Cascade Test", is_system=False
+    )
+    session.add(folder)
+    await session.flush()
+    document = Document(
+        organization_id=org.id,
+        name="Policy",
+        file_name="policy.pdf",
+        folder_id=folder.id,
+    )
+    session.add(document)
+    await session.commit()
+    return org.id, folder.id, document.id
+
+
+async def _teardown_org_folder(org_id, folder_id, document_id):
+    factory = database_manager.session_factory
+    cleanup = factory()
+    try:
+        await cleanup.execute(
+            FacilityDocument.__table__.delete().where(
+                FacilityDocument.organization_id == org_id
+            )
+        )
+        await cleanup.execute(
+            Document.__table__.delete().where(Document.id == document_id)
+        )
+        await cleanup.execute(
+            DocumentFolder.__table__.delete().where(DocumentFolder.id == folder_id)
+        )
+        await cleanup.execute(
+            Organization.__table__.delete().where(Organization.id == org_id)
+        )
+        await cleanup.commit()
+    finally:
+        await cleanup.close()
 
 
 async def _teardown_org(org_id, facility_id, document_id, facility_type_id, status_id):
@@ -367,3 +413,96 @@ class TestReferenceInsertStaysUnderTheDocumentLock:
             await creator.rollback()
             await deleter.rollback()
             await _teardown_org(*ids)
+
+
+class TestDeleteFolderLocksDocumentsBeforeTheReferenceTable:
+    """FAC-32 (Codex, on top of FAC-29/31): FAC-31 makes the creator path
+    lock a ``Document`` row first, then -- still holding it -- insert into
+    the ``FacilityDocument``/``FacilityPhoto`` reference table.
+    ``delete_folder``'s cascade used to do the opposite: it scanned (and
+    locked) the reference table first, via
+    ``_match_facility_document_references``, and only reached the subtree's
+    ``Document`` rows afterward, implicitly, through the ORM's cascade
+    delete. Two transactions taking the same two locks in opposite orders is
+    a textbook InnoDB deadlock: the creator's reference-table insert can
+    block on this scan's gap lock while this scan's later Document need
+    blocks on the creator's already-held row lock, and neither can proceed.
+
+    A true deadlock needs both sides genuinely blocked on each other at the
+    same instant, which is inherently timing-sensitive to force on demand in
+    a way that is reliable across both this project's MySQL 8.0 and MariaDB
+    10.11 test matrices. Rather than chase that, this test verifies the
+    concrete, engine-independent effect the reordering fix guarantees: with
+    a ``Document`` row already locked by one session, ``delete_folder`` run
+    in a second, real session must block on *that* row before it ever
+    reaches the reference-table scan -- not merely block *somewhere*
+    eventually, which the old, wrong order also did (just later, at the
+    cascade delete itself, by which point the reference-table lock had
+    already been taken in the wrong order). ``_match_facility_document_references``
+    is instrumented, on this one cascade-only ``DocumentsService`` instance,
+    to record whether it has been reached yet -- ``patch.object`` on an
+    object built for, and used by, only this one coroutine is the case
+    CLAUDE.md pitfall #22 carves out; nothing else concurrently patches the
+    same target.
+    """
+
+    async def test_delete_folder_blocks_on_the_document_lock_before_scanning_references(
+        self, two_sessions
+    ):
+        creator, cascade = two_sessions
+        ids = await _make_org_folder_document(
+            creator, f"fcvfd-lockorder-{uuid.uuid4().hex[:12]}"
+        )
+        org_id, folder_id, document_id = ids
+        cascade_task = None
+        try:
+            # Creator side: lock the Document first, exactly as the
+            # FAC-31-fixed create path does.
+            await DocumentsService(creator).get_document_by_id(
+                document_id, org_id, for_update=True
+            )
+
+            reference_scan_reached = asyncio.Event()
+            cascade_service = DocumentsService(cascade)
+            original_scan = cascade_service._match_facility_document_references
+
+            async def _tracking_scan(*args, **kwargs):
+                reference_scan_reached.set()
+                return await original_scan(*args, **kwargs)
+
+            with patch.object(
+                cascade_service, "_match_facility_document_references", _tracking_scan
+            ):
+                cascade_task = asyncio.create_task(
+                    cascade_service.delete_folder(folder_id, org_id, current_user=None)
+                )
+                await asyncio.sleep(0.5)
+
+                # The reordering fix's whole point: delete_folder is still
+                # blocked, and blocked *before* it ever reached the
+                # reference-table scan -- not merely blocked somewhere,
+                # which the wrong order produced too (just later).
+                assert not cascade_task.done(), (
+                    "delete_folder should still be blocked on the "
+                    "already-locked Document row"
+                )
+                assert not reference_scan_reached.is_set(), (
+                    "delete_folder reached the reference-table scan before "
+                    "locking the subtree's Document rows -- FAC-32's lock "
+                    "order regressed"
+                )
+
+                # Release the Document lock; delete_folder should now run
+                # to completion without deadlocking.
+                await creator.commit()
+                deleted = await asyncio.wait_for(cascade_task, timeout=10)
+                assert deleted is True
+                assert reference_scan_reached.is_set()
+        finally:
+            if cascade_task is not None and not cascade_task.done():
+                cascade_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await cascade_task
+            await creator.rollback()
+            await cascade.rollback()
+            await _teardown_org_folder(*ids)
