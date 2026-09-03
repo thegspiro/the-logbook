@@ -57,6 +57,7 @@ const {
   mockGetEnrollmentProgress,
   mockGetAdminHoursSummary,
   mockGetEnabledModules,
+  mockMarkNotificationRead,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -78,6 +79,7 @@ const {
   mockGetSchedulingSummary: vi.fn(),
   mockGetTrainingEnrollments: vi.fn(),
   mockGetEnrollmentProgress: vi.fn(),
+  mockMarkNotificationRead: vi.fn(),
   mockGetAdminHoursSummary: vi.fn(),
   mockGetEnabledModules: vi.fn(),
 }));
@@ -95,7 +97,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
 vi.mock('../services/api', () => ({
   notificationsService: {
     getMyNotifications: mockGetMyNotifications,
-    markMyNotificationRead: vi.fn().mockResolvedValue(undefined),
+    markMyNotificationRead: mockMarkNotificationRead,
   },
   messagesService: {
     getInbox: mockGetInbox,
@@ -232,6 +234,7 @@ const ALL_SERVICE_MOCKS = [
   mockGetEnabledModules,
   mockGetTrainingEnrollments,
   mockGetEnrollmentProgress,
+  mockMarkNotificationRead,
 ];
 
 describe('Dashboard', () => {
@@ -252,6 +255,7 @@ describe('Dashboard', () => {
     mockGetInbox.mockResolvedValue([]);
     mockGetUnreadCount.mockResolvedValue({ unread_count: 0 });
     mockGetMyNotifications.mockResolvedValue({ logs: [], total: 0 });
+    mockMarkNotificationRead.mockResolvedValue(undefined);
     mockAcknowledge.mockResolvedValue(undefined);
     mockGetMyTraining.mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 }, certifications: [] });
     mockGetEvents.mockResolvedValue([]);
@@ -1251,6 +1255,103 @@ describe('Dashboard', () => {
       // Once the older read settles, the post-RSVP read runs and lands last.
       await waitFor(() => {
         expect(mockGetEvents.mock.calls.length).toBeGreaterThan(callsBefore);
+      });
+    });
+
+    it('queues a read after marking a notification read', async () => {
+      // The row is removed locally. A notifications read that started before
+      // the mutation still carries it, so it puts the row back -- and the
+      // unread count with it -- when it lands. Same shape as the RSVP and
+      // signup paths, so it queues behind whatever is running.
+      const log = { id: 'n1', subject: 'Drill reminder', message: 'Tuesday', sent_at: '2026-09-01T12:00:00Z' };
+      mockGetMyNotifications.mockResolvedValue({ logs: [log], total: 1 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+      const updates = await screen.findByRole('region', { name: 'My Updates' });
+      await within(updates).findByText('Drill reminder');
+
+      // Leave an older notifications read in flight.
+      let releaseOlder: ((value: { logs: unknown[]; total: number }) => void) | undefined;
+      mockGetMyNotifications.mockImplementationOnce(
+        () => new Promise<{ logs: unknown[]; total: number }>((resolve) => (releaseOlder = resolve))
+      );
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(releaseOlder).toBeDefined(), { timeout: 5000 });
+      const callsBefore = mockGetMyNotifications.mock.calls.length;
+
+      await user.click(within(updates).getByText('Drill reminder'));
+      await waitFor(() => expect(mockMarkNotificationRead).toHaveBeenCalledWith('n1'));
+
+      // Queued, not racing.
+      expect(mockGetMyNotifications.mock.calls.length).toBe(callsBefore);
+
+      await act(async () => {
+        releaseOlder?.({ logs: [log], total: 1 });
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(mockGetMyNotifications.mock.calls.length).toBeGreaterThan(callsBefore);
+      });
+    });
+
+    it('keeps an acknowledgement when a pre-mutation inbox read lands after it', async () => {
+      // The Updates card deliberately keeps rows mounted during an inbox
+      // retry, so a member can acknowledge while getInbox is in flight. That
+      // read captured the pre-mutation row, so assigning its result whole puts
+      // the unacknowledged row back -- asking the member to acknowledge again
+      // something the server has already recorded. A refetch is not the fix
+      // here: getInbox asks for include_read: false, so it would drop the row
+      // the design keeps. The local edit is re-applied to whatever lands.
+      const pending = {
+        id: 'msg-ack',
+        title: 'Hydrant flow testing Saturday',
+        body: 'Crews report to Station 2.',
+        priority: 'normal',
+        target_type: 'all',
+        is_pinned: false,
+        is_persistent: false,
+        requires_acknowledgment: true,
+        posted_by: 'officer-1',
+        author_name: 'Chief Test',
+        created_at: '2026-08-01T12:00:00Z',
+        expires_at: null,
+        is_read: false,
+        read_at: null,
+        is_acknowledged: false,
+        acknowledged_at: null,
+      };
+      mockGetInbox.mockResolvedValue([pending]);
+      mockGetUnreadCount.mockResolvedValue({ unread_count: 1 });
+
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+      await screen.findByRole('button', { name: 'Acknowledge' });
+
+      // An inbox read carrying the pre-mutation row is left in flight.
+      let releaseStale: ((value: unknown[]) => void) | undefined;
+      mockGetInbox.mockImplementationOnce(() => new Promise<unknown[]>((resolve) => (releaseStale = resolve)));
+      await act(async () => {
+        void registeredPullToRefresh?.();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(releaseStale).toBeDefined(), { timeout: 5000 });
+
+      await user.click(screen.getByRole('button', { name: 'Acknowledge' }));
+      await waitFor(() => expect(mockAcknowledge).toHaveBeenCalledWith('msg-ack'));
+
+      // The stale read lands, still carrying the unacknowledged row.
+      await act(async () => {
+        releaseStale?.([pending]);
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
       });
     });
 
