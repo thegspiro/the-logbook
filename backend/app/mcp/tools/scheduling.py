@@ -14,6 +14,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.principal import McpPrincipal
+from app.mcp.redaction import scrub_text
 from app.mcp.registry import logbook_tool
 from app.mcp.tools._common import (
     clamp_limit,
@@ -23,6 +24,7 @@ from app.mcp.tools._common import (
     org_uuid,
     page,
     parse_date,
+    parse_uuid,
 )
 from app.models.apparatus import Apparatus
 from app.models.location import Location
@@ -35,6 +37,46 @@ from app.services.scheduling_service import SchedulingService
 # date to continue from, never silently cut.
 MAX_OPEN_SHIFT_CANDIDATES = 500
 MAX_OPEN_SHIFT_WINDOW_DAYS = 366
+
+# A listing carries this much of a shift's notes; the rest is read in
+# pieces through ``get_shift_notes``. The column is unbounded Text, so a
+# page of shifts cannot carry every word of it.
+SHIFT_TEXT_CHARS = 20_000
+
+
+def _clip(value: Any) -> tuple[Any, bool]:
+    """``value`` scrubbed and cut to ``SHIFT_TEXT_CHARS``, and whether cut."""
+    if not isinstance(value, str):
+        return value, False
+    value = scrub_text(value)
+    if len(value) <= SHIFT_TEXT_CHARS:
+        return value, False
+    return value[:SHIFT_TEXT_CHARS], True
+
+
+def _chunk(text: str, offset: int) -> dict:
+    text = scrub_text(text)
+    piece = text[offset : offset + SHIFT_TEXT_CHARS]
+    body = {
+        "content": piece,
+        "content_offset": offset,
+        "content_total_chars": len(text),
+        "content_has_more": offset + len(piece) < len(text),
+    }
+    if body["content_has_more"]:
+        body["next_content_offset"] = offset + len(piece)
+    return body
+
+
+def _visible_shift_criteria(principal: McpPrincipal, shift_id: str) -> list:
+    """The shift by id, under the same visibility rule as the listings."""
+    criteria = [
+        Shift.id == str(parse_uuid(shift_id, "shift_id")),
+        Shift.organization_id == principal.organization_id,
+    ]
+    if not principal.expose_full_schedule:
+        criteria.append(Shift.open_to_all_members.is_(True))
+    return criteria
 
 
 async def _reference_names(
@@ -131,6 +173,7 @@ def _shift(
     officers: dict[str, Optional[str]],
     assignments: list[dict],
 ) -> dict:
+    notes, cut = _clip(shift.notes)
     return {
         "id": shift.id,
         "shift_date": iso(shift.shift_date),
@@ -151,7 +194,8 @@ def _shift(
         "is_outreach": bool(shift.is_outreach),
         "call_count": shift.call_count,
         "total_hours": shift.total_hours,
-        "notes": shift.notes,
+        "notes": notes,
+        "notes_truncated": cut,
         "assignments": assignments,
     }
 
@@ -187,7 +231,9 @@ def register(server: Any) -> None:
         ``start_time`` and ``end_time`` are UTC instants with an offset;
         convert them to the department's timezone before presenting them.
         Unless the department shares its full schedule with Claude, only
-        shifts open to all members are listed."""
+        shifts open to all members are listed. Notes are cut at 20,000
+        characters (``notes_truncated``); ``get_shift_notes`` reads the
+        rest."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         shifts, total = await SchedulingService(db).get_shifts(
@@ -272,6 +318,29 @@ def register(server: Any) -> None:
             body["next_cursor"] = _cursor_for(shown[-1])
         elif truncated and candidates:
             body["next_cursor"] = _cursor_for(candidates[-1])
+        return body
+
+    @logbook_tool(server, title="Read shift notes", module="scheduling")
+    async def get_shift_notes(
+        db: AsyncSession,
+        principal: McpPrincipal,
+        shift_id: str,
+        content_offset: int = 0,
+    ) -> dict:
+        """A shift's notes, 20,000 characters at a time. When
+        ``content_has_more`` is true, call again with ``content_offset`` set
+        to ``next_content_offset``. Under the same visibility rule as the
+        shift listings."""
+        content_offset = clamp_offset(content_offset)
+        shift = (
+            await db.execute(
+                select(Shift).where(*_visible_shift_criteria(principal, shift_id))
+            )
+        ).scalar_one_or_none()
+        if shift is None:
+            raise ValueError("Shift not found")
+        body = {"shift_id": shift.id, "shift_date": iso(shift.shift_date)}
+        body.update(_chunk(shift.notes or "", content_offset))
         return body
 
     @logbook_tool(server, title="Scheduling summary", module="scheduling")

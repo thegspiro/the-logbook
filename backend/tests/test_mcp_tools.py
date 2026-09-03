@@ -3222,3 +3222,193 @@ class TestTwentyFifthRoundFindings:
             f"Coats {n}" for n in (1, 2, 3, 4, 5)
         ]
         assert low[0]["current_stock"] == 28
+
+
+class TestTwentySixthRoundFindings:
+    """Regressions for the twenty-sixth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_event_detail_leaves_the_rsvp_roster_unloaded(
+        self, org_with_members, db_session
+    ):
+        from sqlalchemy import inspect as sa_inspect
+
+        from app.models.event import Event
+        from app.services.event_service import EventService
+
+        org_id, admin_id, _ = org_with_members
+        now = datetime.now(timezone.utc)
+        event = Event(
+            organization_id=org_id,
+            title="Drill",
+            event_type="training",
+            start_datetime=now + timedelta(days=1),
+            end_datetime=now + timedelta(days=1, hours=2),
+            created_by=admin_id,
+        )
+        db_session.add(event)
+        await db_session.flush()
+        db_session.expunge(event)
+        lean, _ = await EventService(db_session).get_event(
+            uuid.UUID(event.id), uuid.UUID(org_id), load_rsvps=False
+        )
+        assert "rsvps" in sa_inspect(lean).unloaded
+        db_session.expunge(lean)
+        full, _ = await EventService(db_session).get_event(
+            uuid.UUID(event.id), uuid.UUID(org_id)
+        )
+        assert "rsvps" not in sa_inspect(full).unloaded
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_shift_notes_are_bounded_and_read_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import scheduling as scheduling_tools
+
+        org_id, admin_id, _ = org_with_members
+        day = date.today() + timedelta(days=3)
+        start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        notes = "Relief crew: call 5551234567. " + "n" * 40
+        shifts = {}
+        for open_to_all in (True, False):
+            shift = Shift(
+                organization_id=org_id,
+                shift_date=day,
+                start_time=start.replace(hour=8 if open_to_all else 18),
+                end_time=start.replace(hour=12 if open_to_all else 22),
+                min_staffing=2,
+                open_to_all_members=open_to_all,
+                notes=notes,
+            )
+            db_session.add(shift)
+            shifts[open_to_all] = shift
+        await db_session.flush()
+        monkeypatch.setattr(scheduling_tools, "SHIFT_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(
+            server, principal, "list_shifts", start_date=day.isoformat()
+        )
+        assert [len(s["notes"]) for s in listed["items"]] == [12]
+        assert listed["items"][0]["notes_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_shift_notes",
+                shift_id=shifts[True].id,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert joined.endswith("n" * 40)
+        assert chunk["shift_date"] == day.isoformat()
+        # The restricted shift follows the listing's visibility rule.
+        with pytest.raises(ToolError, match="Shift not found"):
+            await _call(server, principal, "get_shift_notes", shift_id=shifts[False].id)
+        shown = await _call(
+            server,
+            _principal(org_id, admin_id, expose_full_schedule=True),
+            "get_shift_notes",
+            shift_id=shifts[False].id,
+        )
+        assert shown["content_total_chars"] == len(
+            notes.replace("5551234567", "[phone removed]")
+        )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_medical_compliance_never_carries_the_record_status(
+        self, server, org_with_members, monkeypatch
+    ):
+        """``ComplianceItem.status`` is the screening record's outcome —
+        passed, completed or waived — which is a result by another name."""
+        from app.schemas.medical_screening import ComplianceItem, ComplianceSummary
+        from app.services import medical_screening_service
+
+        org_id, admin_id, member_id = org_with_members
+        summary = ComplianceSummary(
+            subject_id=member_id,
+            subject_name="Member",
+            subject_type="user",
+            total_requirements=1,
+            compliant_count=1,
+            non_compliant_count=0,
+            expiring_soon_count=0,
+            is_fully_compliant=True,
+            items=[
+                ComplianceItem(
+                    requirement_id="req-1",
+                    requirement_name="Annual physical",
+                    screening_type="physical",
+                    is_compliant=True,
+                    last_screening_date=date(2026, 1, 1),
+                    expiration_date=date(2027, 1, 1),
+                    days_until_expiration=120,
+                    status="waived",
+                )
+            ],
+        )
+
+        async def fake(self, organization_id, user_id=None, prospect_id=None):
+            return summary
+
+        monkeypatch.setattr(
+            medical_screening_service.MedicalScreeningService,
+            "get_compliance_status",
+            fake,
+        )
+        body = await _call(
+            server,
+            _principal(org_id, admin_id, expose_medical_screening=True),
+            "get_member_medical_compliance",
+            member_id=member_id,
+        )
+        assert body["is_fully_compliant"] is True
+        assert body["items"] == [
+            {
+                "requirement_id": "req-1",
+                "requirement_name": "Annual physical",
+                "screening_type": "physical",
+                "is_compliant": True,
+                "last_screening_date": "2026-01-01",
+                "expiration_date": "2027-01-01",
+                "days_until_expiration": 120,
+            }
+        ]
+        assert "waived" not in json.dumps(body)
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_inventory_items_sharing_a_name_page_without_repeats(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        category = InventoryCategory(
+            organization_id=org_id, name="Uniforms", item_type=ItemType.UNIFORM
+        )
+        db_session.add(category)
+        await db_session.flush()
+        item_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for item_id in item_ids:
+            db_session.add(
+                InventoryItem(
+                    id=item_id,
+                    organization_id=org_id,
+                    category_id=category.id,
+                    name="Class A coat",
+                    quantity=1,
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        seen = []
+        for offset in range(3):
+            body = await _call(
+                server, principal, "list_inventory_items", limit=1, offset=offset
+            )
+            seen.extend(i["id"] for i in body["items"])
+        assert seen == item_ids

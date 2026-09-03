@@ -142,6 +142,15 @@ class TestScrubText:
             ("+44/20/7946/0958", "[phone removed]"),
             ("0412 345 678", "[phone removed]"),
             ("612.345.678", "[phone removed]"),
+            # No separator after a parenthesized area code.
+            ("(020)7946 0958", "[phone removed]"),
+            ("(03)1234 5678", "[phone removed]"),
+            ("(555)123-4567", "[phone removed]"),
+            # Internationalized addresses.
+            ("write josé@example.com", "write [email removed]"),
+            ("用户@example.com", "[email removed]"),
+            ("user@bücher.de today", "[email removed] today"),
+            ("sam@sub.example.co.uk.", "[email removed]."),
         ],
     )
     def test_contact_shapes_are_replaced(self, text, expected):

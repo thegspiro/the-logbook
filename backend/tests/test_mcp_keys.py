@@ -85,6 +85,7 @@ class TestMintAndRevoke:
         self, db_session, setup_org_and_admin
     ):
         org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
         svc = McpKeyService(db_session)
         minted = await svc.mint(
             org_id, name="Claude Code", expires_in_days=90, created_by=admin_id
@@ -97,6 +98,7 @@ class TestMintAndRevoke:
 
     async def test_lifetime_key_has_no_expiry(self, db_session, setup_org_and_admin):
         org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
         minted = await McpKeyService(db_session).mint(
             org_id, name="Forever", expires_in_days=None, created_by=admin_id
         )
@@ -106,6 +108,7 @@ class TestMintAndRevoke:
         self, db_session, setup_org_and_admin
     ):
         org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
         svc = McpKeyService(db_session)
         first = await svc.mint(
             org_id, name="one", expires_in_days=None, created_by=admin_id
@@ -131,6 +134,7 @@ class TestMintAndRevoke:
         self, db_session, setup_org_and_admin
     ):
         org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
         svc = McpKeyService(db_session)
         minted = await svc.mint(
             org_id, name="k", expires_in_days=None, created_by=admin_id
@@ -211,11 +215,14 @@ class TestAuthenticate:
         both halves have to say on, or a key issued earlier keeps working
         after the department turned the feature off."""
         org_id, admin_id = setup_org_and_admin
-        await _integration(db_session, org_id, enabled=enabled, status=status)
+        row = await _integration(db_session, org_id)
         svc = McpKeyService(db_session)
         minted = await svc.mint(
             org_id, name="k", expires_in_days=None, created_by=admin_id
         )
+        row.enabled = enabled
+        row.status = status
+        await db_session.flush()
         with pytest.raises(McpAuthError) as excinfo:
             await svc.authenticate(minted.plaintext)
         assert excinfo.value.status == 403
@@ -283,10 +290,13 @@ class TestAuthenticate:
         self, db_session, setup_org_and_admin
     ):
         org_id, admin_id = setup_org_and_admin
+        row = await _integration(db_session, org_id)
         svc = McpKeyService(db_session)
         minted = await svc.mint(
             org_id, name="k", expires_in_days=None, created_by=admin_id
         )
+        await db_session.delete(row)
+        await db_session.flush()
         with pytest.raises(McpAuthError) as excinfo:
             await svc.authenticate(minted.plaintext)
         assert excinfo.value.status == 403
@@ -295,6 +305,7 @@ class TestAuthenticate:
         self, db_session, setup_org_and_admin
     ):
         org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
         svc = McpKeyService(db_session)
         minted = await svc.mint(
             org_id, name="k", expires_in_days=None, created_by=admin_id
@@ -312,6 +323,7 @@ class TestActiveMeansUsable:
         """What /status shows as the current key must be a key the endpoint
         would accept; an expired one is refused, so it is not active."""
         org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
         svc = McpKeyService(db_session)
         minted = await svc.mint(
             org_id, name="k", expires_in_days=5, created_by=admin_id
@@ -326,6 +338,7 @@ class TestActiveMeansUsable:
         self, db_session, setup_org_and_admin
     ):
         org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
         svc = McpKeyService(db_session)
         stale = await svc.mint(
             org_id, name="old", expires_in_days=5, created_by=admin_id
@@ -345,8 +358,44 @@ class TestActiveMeansUsable:
         import inspect
 
         source = inspect.getsource(McpKeyService.mint)
-        assert "Integration.integration_type == MCP_INTEGRATION_TYPE" in source
-        assert source.count(".with_for_update()") >= 1
+        assert "await self._lock_integration(organization_id)" in source
         assert "_unrevoked_keys(organization_id, for_update=True)" in source
+        lock = inspect.getsource(McpKeyService._lock_integration)
+        assert "Integration.integration_type == MCP_INTEGRATION_TYPE" in lock
+        assert ".with_for_update()" in lock
         helper = inspect.getsource(McpKeyService._unrevoked_keys)
         assert "query.with_for_update()" in helper
+        # A disconnect contends on the same row, so a rotation in flight
+        # either finishes first or refuses on the disconnected row.
+        assert "await self._lock_integration(organization_id)" in inspect.getsource(
+            McpKeyService.revoke_all
+        )
+
+    async def test_mint_refuses_on_a_row_that_is_no_longer_connected(
+        self, db_session, setup_org_and_admin
+    ):
+        """The endpoint's check reads a snapshot; the service re-reads the
+        row under lock, and a disconnect that landed in between wins."""
+        from sqlalchemy import update
+
+        from app.mcp.keys import IntegrationNotConnected
+        from app.models.integration import Integration
+
+        org_id, admin_id = setup_org_and_admin
+        await _integration(db_session, org_id)
+        service = McpKeyService(db_session)
+        await service.mint(
+            org_id, name="first", expires_in_days=30, created_by=admin_id
+        )
+        await db_session.execute(
+            update(Integration)
+            .where(
+                Integration.organization_id == org_id,
+                Integration.integration_type == MCP_INTEGRATION_TYPE,
+            )
+            .values(status="available", enabled=False)
+        )
+        with pytest.raises(IntegrationNotConnected):
+            await service.mint(
+                org_id, name="second", expires_in_days=30, created_by=admin_id
+            )

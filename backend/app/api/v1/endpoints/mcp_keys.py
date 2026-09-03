@@ -24,7 +24,12 @@ from app.core.database import get_db
 from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
-from app.mcp.keys import MAX_EXPIRY_DAYS, McpKeyService, parse_config
+from app.mcp.keys import (
+    MAX_EXPIRY_DAYS,
+    IntegrationNotConnected,
+    McpKeyService,
+    parse_config,
+)
 from app.models.integration import Integration
 from app.models.mcp_service_key import McpServiceKey
 from app.models.user import User
@@ -164,6 +169,13 @@ async def create_mcp_key(
             name=body.name,
             expires_in_days=body.expires_in_days,
             created_by=str(current_user.id),
+        )
+    except IntegrationNotConnected as exc:
+        # The check above read a snapshot; the service re-read the row
+        # under lock and a disconnect had committed in between.
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(exc)
         )
     except ValueError as exc:
         raise HTTPException(

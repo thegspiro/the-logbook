@@ -122,6 +122,11 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose,
       const result = await integrationsService.createMcpKey(keyName.trim() || 'Claude', option.days);
       setIssued(result);
       setCopied(null);
+      // The issue response already says which key is live. Showing it before
+      // the status refresh means a refresh that fails cannot leave the retired
+      // key on screen with a Revoke button that would revoke it, drop the
+      // plaintext and leave the new key running.
+      setStatus((current) => (current ? { ...current, active_key: result.key } : current));
       toast.success('Service key issued — copy it now, it will not be shown again');
       await load();
     } catch (err: unknown) {

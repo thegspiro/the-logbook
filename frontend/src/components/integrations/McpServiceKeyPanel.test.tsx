@@ -247,6 +247,37 @@ describe('McpServiceKeyPanel', () => {
     expect(onBusyChange).toHaveBeenLastCalledWith(false);
   });
 
+  it('shows the new key when the status refresh after issuing fails', async () => {
+    const user = userEvent.setup();
+    const newKey = { ...activeKey, id: 'key-2', name: 'Chief laptop', key_prefix: 'logbook_mcp_zzzzzzzz' };
+    mockCreateMcpKey.mockResolvedValue({
+      key: newKey,
+      plaintext: 'logbook_mcp_zzzzzzzzSECRET',
+      revoked: [activeKey],
+      endpoint_path: '/api/mcp',
+    });
+    mockGetMcpStatus.mockResolvedValueOnce(statusWithKey).mockRejectedValue(new Error('offline'));
+    mockRevokeMcpKey.mockResolvedValue({ ...newKey, is_active: false, revoked_at: '2026-09-04T00:00:00Z' });
+
+    renderWithRouter(<McpServiceKeyPanel onClose={vi.fn()} />);
+    await screen.findByText('Claude Code');
+    await user.click(screen.getByTestId('mcp-issue-key'));
+    expect(await screen.findByText('Replace the current service key?')).toBeInTheDocument();
+    // The panel's own button carries the same label as the dialog's confirm.
+    const issueButtons = screen.getAllByRole('button', { name: 'Issue new key' });
+    expect(issueButtons).toHaveLength(2);
+    await user.click(issueButtons[1] as HTMLElement);
+
+    expect(await screen.findByTestId('mcp-issued-key')).toHaveTextContent('logbook_mcp_zzzzzzzzSECRET');
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(await screen.findByText('Chief laptop')).toBeInTheDocument();
+    expect(screen.queryByText('Claude Code')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('Revoke'));
+    await user.click(await screen.findByRole('button', { name: 'Revoke key' }));
+    await waitFor(() => expect(mockRevokeMcpKey).toHaveBeenCalledWith('key-2'));
+  });
+
   it('reports a failed issue without crashing', async () => {
     const user = userEvent.setup();
     mockCreateMcpKey.mockRejectedValueOnce(new Error('nope'));

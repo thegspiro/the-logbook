@@ -231,18 +231,27 @@ class EventService:
         return event
 
     async def get_event(
-        self, event_id: UUID, organization_id: UUID, user_id: Optional[UUID] = None
+        self,
+        event_id: UUID,
+        organization_id: UUID,
+        user_id: Optional[UUID] = None,
+        load_rsvps: bool = True,
     ) -> Optional[Tuple[Event, Optional[EventRSVP]]]:
         """
         Get an event by ID
 
-        Returns: (Event, user's RSVP if exists)
+        Returns: (Event, user's RSVP if exists). ``load_rsvps=False`` leaves
+        the RSVP collection unloaded for a caller that only reads the event
+        row, so a well-attended event does not cost its whole roster.
         """
+        options = [selectinload(Event.location_obj)]
+        if load_rsvps:
+            options.append(selectinload(Event.rsvps))
         result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
-            .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
+            .options(*options)
         )
         event = result.scalar_one_or_none()
 

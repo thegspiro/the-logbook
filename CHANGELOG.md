@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connects it, and answers nothing until an IT administrator issues a
   service key. Stateless, JSON-response transport: any worker or replica
   answers any request and no reverse-proxy change is needed for `/api/`.
-- **44 tools** over the roster, events, shifts, training and certifications,
+- **45 tools** over the roster, events, shifts, training and certifications,
   inventory, apparatus, facilities, meetings and published minutes,
   documents in unrestricted folders, and elections. Finance totals,
   medical-screening _status_ and the full duty schedule are behind three

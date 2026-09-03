@@ -121,9 +121,10 @@ def register(server: Any) -> None:
     ) -> dict:
         """One event by id, with its description (cut at 20,000 characters;
         ``get_event_description`` reads the rest) and RSVP settings."""
-        # get_event answers (None, None) for an unknown or foreign id.
+        # get_event answers (None, None) for an unknown or foreign id. The
+        # RSVP roster is not read here, so it is not loaded.
         event, _ = await EventService(db).get_event(
-            parse_uuid(event_id, "event_id"), org_uuid(principal)
+            parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
         if event is None:
             raise ValueError("Event not found")
@@ -141,7 +142,7 @@ def register(server: Any) -> None:
         to ``next_content_offset``."""
         content_offset = clamp_offset(content_offset)
         event, _ = await EventService(db).get_event(
-            parse_uuid(event_id, "event_id"), org_uuid(principal)
+            parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
         if event is None:
             raise ValueError("Event not found")

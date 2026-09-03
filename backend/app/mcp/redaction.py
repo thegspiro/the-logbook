@@ -121,7 +121,10 @@ def is_denied_field(name: str) -> bool:
 # addresses and phone numbers. Anything else in free text (a street address
 # written out, a diagnosis) is not detectable and is why only *published*
 # content is exposed at all.
-_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# ``\w`` is Unicode-aware in Python, so an internationalized address
+# (josé@example.com, 用户@example.com, user@bücher.de) is matched the same
+# as an ASCII one; the top-level label is letters only.
+_EMAIL_RE = re.compile(r"[\w.%+-]+@[\w-]+(?:\.[\w-]+)*\.[^\W\d_]{2,}")
 # A phone number written the way people write them: international with a
 # country code, North American with an area code, or a local seven-digit
 # number, with groups separated by spaces, dots, dashes, slashes or
@@ -148,8 +151,13 @@ _PHONE_FORMATTED_RE = re.compile(
 # the subscriber number (020 79460958). The grouped form is checked by
 # ``_is_national_phone`` so that a date written with separators or a figure
 # grouped in thousands is left alone.
+# An area code in parentheses may run straight into the next group —
+# (020)7946 0958 — so the separator after a closing parenthesis is optional.
 _PHONE_NATIONAL_GROUPED_RE = re.compile(
-    r"(?<![\w-])\(?\d{2,5}\)?(?:[\s./-]\d{2,5}){2,4}(?![\w-])"
+    r"(?<![\w-])"
+    r"(?:\(\d{2,5}\)[\s./-]?\d{2,5}|\d{2,5}[\s./-]\d{2,5})"
+    r"(?:[\s./-]\d{2,5}){1,3}"
+    r"(?![\w-])"
 )
 _PHONE_NATIONAL_TRUNK_RE = re.compile(r"(?<![\w-])0\d{1,4}[\s./-]\d{6,9}(?![\w-])")
 _DATE_SHAPES = (
@@ -169,7 +177,7 @@ def _is_national_phone(match: "re.Match[str]") -> bool:
     # to dial. Only a one- or two-digit leading group counts as a figure —
     # a nine-digit 612 345 678 is how several countries write a phone
     # number, and a leading group of three or more is treated as one.
-    groups = re.split(r"[\s./-]", raw.strip("()"))
+    groups = [g for g in re.split(r"[\s./()-]+", raw) if g]
     if len(groups) > 1 and len(groups[0]) <= 2 and all(len(g) == 3 for g in groups[1:]):
         return False
     return True

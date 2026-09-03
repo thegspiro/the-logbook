@@ -42,6 +42,14 @@ class McpAuthError(Exception):
         self.status = status
 
 
+class IntegrationNotConnected(ValueError):
+    """The Claude (MCP) integration is not connected, read under lock.
+
+    Raised by ``mint`` when the row it serializes on turns out disabled or
+    disconnected — a disconnect committed after the endpoint's own check.
+    """
+
+
 def generate_key() -> tuple[str, str]:
     """Return ``(plaintext, display_prefix)`` for a brand-new key."""
     plaintext = f"{KEY_PREFIX}{secrets.token_urlsafe(32)}"
@@ -112,6 +120,23 @@ class McpKeyService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def _lock_integration(self, organization_id: str) -> Optional[Integration]:
+        """Lock the organization's Claude (MCP) integration row.
+
+        Every change to the key set serializes on it (pitfall 27): two
+        rotations, or a rotation racing a disconnect, take turns rather
+        than both deciding from the same snapshot.
+        """
+        result = await self.db.execute(
+            select(Integration)
+            .where(
+                Integration.organization_id == organization_id,
+                Integration.integration_type == MCP_INTEGRATION_TYPE,
+            )
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def _unrevoked_keys(
         self, organization_id: str, *, for_update: bool = False
     ) -> list[McpServiceKey]:
@@ -168,14 +193,15 @@ class McpKeyService:
         # key (pitfall 27): serialize on the organization's integration row —
         # the one row both requests share — and make the read of the keys to
         # retire a locking read, or it answers from a stale snapshot.
-        await self.db.execute(
-            select(Integration.id)
-            .where(
-                Integration.organization_id == organization_id,
-                Integration.integration_type == MCP_INTEGRATION_TYPE,
+        row = await self._lock_integration(organization_id)
+        # The endpoint checked the connection before calling; a disconnect
+        # that committed in between holds this same lock, so the locked
+        # row is the one to believe. Minting after it would leave a key
+        # the disconnect meant to revoke, live again on reconnection.
+        if row is None or not row.enabled or row.status != "connected":
+            raise IntegrationNotConnected(
+                "Connect the Claude (MCP) integration before issuing a key"
             )
-            .with_for_update()
-        )
         now = datetime.now(timezone.utc)
         revoked = await self._unrevoked_keys(organization_id, for_update=True)
         for old in revoked:
@@ -210,6 +236,10 @@ class McpKeyService:
         reconnected, before anybody chose to issue one. Flushes but does not
         commit, like ``revoke``.
         """
+        # Contend on the row ``mint`` locks, so a rotation in flight either
+        # finishes first (and its key is in the set revoked here) or waits
+        # and then refuses on the disconnected row.
+        await self._lock_integration(organization_id)
         now = datetime.now(timezone.utc)
         keys = await self._unrevoked_keys(organization_id, for_update=True)
         for key in keys:

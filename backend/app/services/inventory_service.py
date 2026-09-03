@@ -1770,11 +1770,13 @@ class InventoryService:
         total = total_result.scalar()
 
         # Apply sorting
+        # The id breaks ties (repeated uniforms share a name), so an offset
+        # page never repeats or skips a row between calls.
         col = self._SORTABLE_COLUMNS.get(sort_by or "name", InventoryItem.name)
         if sort_order == "desc":
-            query = query.order_by(col.desc())
+            query = query.order_by(col.desc(), InventoryItem.id.desc())
         else:
-            query = query.order_by(col.asc())
+            query = query.order_by(col.asc(), InventoryItem.id.asc())
 
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)

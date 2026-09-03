@@ -46,7 +46,31 @@ def register(server: Any) -> None:
         summary = await MedicalScreeningService(db).get_compliance_status(
             principal.organization_id, user_id=member.id
         )
-        return summary.model_dump(mode="json")
+        # An explicit projection rather than the schema's dump: the item's
+        # ``status`` is the record's outcome (passed, waived, ...), which is
+        # a result by another name and is what this tool promises never to
+        # say. Compliance is the yes/no derived from it.
+        return {
+            "member_id": summary.subject_id,
+            "member_name": summary.subject_name,
+            "total_requirements": summary.total_requirements,
+            "compliant_count": summary.compliant_count,
+            "non_compliant_count": summary.non_compliant_count,
+            "expiring_soon_count": summary.expiring_soon_count,
+            "is_fully_compliant": summary.is_fully_compliant,
+            "items": [
+                {
+                    "requirement_id": item.requirement_id,
+                    "requirement_name": item.requirement_name,
+                    "screening_type": item.screening_type,
+                    "is_compliant": item.is_compliant,
+                    "last_screening_date": iso(item.last_screening_date),
+                    "expiration_date": iso(item.expiration_date),
+                    "days_until_expiration": item.days_until_expiration,
+                }
+                for item in summary.items
+            ],
+        }
 
     @logbook_tool(
         server,

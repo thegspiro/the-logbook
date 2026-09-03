@@ -246,6 +246,42 @@ class TestCreate:
         )
         assert revoked == []
 
+    async def test_issuing_is_409_when_a_disconnect_lands_after_the_check(
+        self, db_session, setup_org_and_admin
+    ):
+        """The endpoint's connected check and the service's locked re-read
+        can disagree when a disconnect commits between them; the locked
+        read decides, and the answer is the same 409 as before connecting."""
+        from unittest.mock import patch
+
+        from sqlalchemy import update
+
+        org_id, admin_id = setup_org_and_admin
+        row = await _connect(db_session, org_id)
+        user = _user(org_id, admin_id)
+        snapshot = SimpleNamespace(enabled=True, status="connected", id=row.id)
+        await db_session.execute(
+            update(Integration)
+            .where(Integration.id == row.id)
+            .values(status="available", enabled=False)
+        )
+        with (
+            patch(
+                "app.api.v1.endpoints.mcp_keys._integration_row",
+                return_value=snapshot,
+            ),
+            pytest.raises(HTTPException) as refused,
+        ):
+            await create_mcp_key(
+                McpKeyCreateRequest(name="late"),
+                request=None,
+                db=db_session,
+                current_user=user,
+            )
+        assert refused.value.status_code == 409
+        listed = await list_mcp_keys(db=db_session, current_user=user)
+        assert listed["keys"] == []
+
     async def test_rotation_rolls_back_when_the_audit_entry_fails(
         self, db_session, setup_org_and_admin
     ):
