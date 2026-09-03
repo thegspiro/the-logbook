@@ -16,8 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 13 (Apparatus & NFC) is fully closed for this pass — see log
-entry below. Next: 14 Equipment check & shifts.
+**PLACEHOLDER — filled in by a follow-up commit once the PR is opened.**
+Feature 14 (Equipment check & shifts, pass 3) — no fixes, findings
+re-verified. Rotation row 14 → ⏳ awaiting PR merge. Next: 15 Scheduling,
+once this PR merges.
+
+---
+
+### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) — no new findings, PR pending
+
+Third pass. Pass 2's baseline commit (`d1f43285`) is no longer reachable in
+this worktree's shallow history, and five months of `main` sit between it
+and this pass — most notably the 2026-08-31 move of equipment checklists
+from Scheduling to the **Inventory** module (permission strings renamed
+`equipment_check.*` → `inventory.check_*`; frontend moved to
+`frontend/src/modules/inventory/`; API paths and backend file names
+unchanged). Re-derived the route inventory from current code rather than
+relying on the (unavailable) diff-from-baseline shortcut passes 1/2 used:
+`equipment_check.py` grew from 47 to **57** routes (10 new — catalog
+linking, bulk item add/delete with idempotency, compartment
+replace/clone/reorder, item reorder, check seals), `shift_completion.py`
+unchanged at 21/21.
+
+All 10 new routes and their service methods read in full: catalog linking
+(`suggest_inventory_matches`/`link_inventory_items`) validates both the
+template and every linked `inventory_item_id` in-org before writing; the
+bulk add/delete paths lock their parent compartment and validate item FKs
+before the first write, with a durable, payload-hash-checked idempotency
+ledger; `replace_compartments`/`clone_compartment` validate before
+destroying and resolve exclusively through already-org-scoped rows. Three
+new tables' migrations (bulk-request ledger ×2, sealed-container support)
+checked against their models — nullable/`ondelete` correct on all three, no
+Pitfall #2 exposure. Every pass-1/2 fix (EC-1, EC-2/EC2-3/EC2-4, EC-4, EC-6,
+EC-9, EC-10, EC-12, EC-13, EC-14) re-verified intact at its current
+location. `EquipmentCheckTemplateBuilder.tsx` deliberately left to AP-13's
+own in-progress rotation entry rather than duplicated here — its three
+outstanding Codex threads (recorded in this file's feature-13 entry above)
+are autosave/concurrency findings, not tenant-isolation or auth defects,
+which is this feature's lens.
+
+**No findings, no code changes.** Full completion gate run and green:
+`flake8`/`black`/`isort` (9.0.1, CI's pin) clean on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` — 414 revisions, single head; scoped
+pytest (`-k "equipment_check or shift_completion"`) 386 passed; full backend
+suite 10439 passed, 21 skipped (pre-existing), 0 failed; `tsc --noEmit` and
+`eslint .` both 0 errors. Full write-up:
+`docs/security-review/EC-14-equipment-check-shifts.md` pass 3.
 
 ---
 
@@ -7907,7 +7951,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | 🔄     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
