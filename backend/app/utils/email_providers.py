@@ -83,3 +83,22 @@ def resolve_smtp_settings(email_config: Mapping[str, Any]) -> dict[str, Any]:
         "password": email_config.get("smtp_password") or None,
         "encryption": email_config.get("smtp_encryption") or "tls",
     }
+
+
+def normalize_stored_platform(email_config: Mapping[str, Any]) -> dict[str, Any]:
+    """Map a stored ``platform`` outside ``EMAIL_PLATFORMS`` onto a known one.
+
+    ``EmailServiceSettings.platform`` was a free string until 2026-09-03, so a
+    row may carry a label such as ``sendgrid`` alongside ``smtp_*`` fields.
+    The sender always treated a non-preset platform as SMTP, and still does;
+    only the settings schema now validates. Reads reconstruct every stored
+    section through that schema, so an unknown value has to be settled here
+    or ``GET /settings`` (and the read-back after any unrelated settings
+    write) raises for that organization.
+    """
+    platform = email_config.get("platform")
+    if platform in EMAIL_PLATFORMS:
+        return dict(email_config)
+    normalized = dict(email_config)
+    normalized["platform"] = "selfhosted" if email_config.get("smtp_host") else "other"
+    return normalized

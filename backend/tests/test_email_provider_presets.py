@@ -28,6 +28,7 @@ from app.services.organization_service import OrganizationService
 from app.utils.email_providers import (
     EMAIL_PLATFORMS,
     PROVIDER_SMTP_PRESETS,
+    normalize_stored_platform,
     resolve_smtp_settings,
 )
 
@@ -214,6 +215,23 @@ class TestEmailServiceUsesPresets:
         smtp_instance.starttls.assert_called_once()
         smtp_instance.login.assert_called_once_with("chief@example.org", "pw")
 
+    def test_blank_from_name_falls_back_to_the_organization_name(self):
+        # The settings form saves an empty From Name as null, not as a
+        # missing key; the send path must not carry None into the header.
+        service = EmailService(
+            organization=_org(
+                {
+                    "enabled": True,
+                    "platform": "gmail",
+                    "from_email": "chief@example.org",
+                    "from_name": None,
+                    "google_app_password": "pw",
+                }
+            )
+        )
+
+        assert service._get_smtp_config()["from_name"] == "Test FD"
+
     def test_selfhosted_org_config_is_unchanged(self):
         service = EmailService(
             organization=_org(
@@ -297,6 +315,64 @@ class TestEmailServiceSettingsSchema:
         )
 
         assert stored["email_service"]["microsoft_app_password"].startswith("enc:")
+
+
+class TestLegacyPlatformOnRead:
+    def test_unknown_platform_with_smtp_host_reads_as_selfhosted(self):
+        stored = {
+            "enabled": True,
+            "platform": "sendgrid",
+            "smtp_host": "smtp.sendgrid.net",
+            "smtp_user": "apikey",
+        }
+
+        normalized = normalize_stored_platform(stored)
+
+        assert normalized["platform"] == "selfhosted"
+        assert normalized["smtp_host"] == "smtp.sendgrid.net"
+        assert stored["platform"] == "sendgrid"  # input untouched
+
+    def test_unknown_platform_without_smtp_host_reads_as_other(self):
+        assert normalize_stored_platform({"platform": "mailgun"})["platform"] == "other"
+
+    def test_known_platform_is_left_alone(self):
+        assert normalize_stored_platform({"platform": "gmail"})["platform"] == "gmail"
+
+    def test_missing_platform_reads_as_other(self):
+        # Pre-validation rows could omit the key; the schema default was
+        # "other" and must stay so.
+        assert normalize_stored_platform({})["platform"] == "other"
+
+    def test_legacy_platform_row_still_builds_the_settings_schema(self):
+        settings = EmailServiceSettings(
+            **{
+                k: v
+                for k, v in normalize_stored_platform(
+                    {"platform": "sendgrid", "smtp_host": "h", "junk": 1}
+                ).items()
+                if k in EmailServiceSettings.model_fields
+            }
+        )
+
+        assert settings.platform == "selfhosted"
+
+    def test_sender_still_treats_a_legacy_platform_as_smtp(self):
+        # The sender reads the raw row, not the schema; the label never
+        # mattered to it and must keep not mattering.
+        service = EmailService(
+            organization=_org(
+                {
+                    "enabled": True,
+                    "platform": "sendgrid",
+                    "smtp_host": "smtp.sendgrid.net",
+                    "smtp_user": "apikey",
+                    "smtp_password": "pw",
+                    "from_email": "alerts@dept.example",
+                }
+            )
+        )
+
+        assert service._get_smtp_config()["host"] == "smtp.sendgrid.net"
 
 
 class TestLegacyKeysPrunedOnWrite:

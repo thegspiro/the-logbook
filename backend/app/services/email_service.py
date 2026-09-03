@@ -527,12 +527,15 @@ class EmailService:
                 # host, port and login are the provider's, resolved here so
                 # the sender and the connection test cannot disagree again.
                 connection = resolve_smtp_settings(org_email_config)
+                # The settings form saves an empty From Name as null, so the
+                # key is present and dict.get's default never applies; `or`
+                # covers both the missing key and the stored null. Without
+                # it every send fails in _sanitize_header(None).
                 return {
                     **connection,
                     "from_email": org_email_config.get("from_email"),
-                    "from_name": org_email_config.get(
-                        "from_name", self.organization.name
-                    ),
+                    "from_name": org_email_config.get("from_name")
+                    or self.organization.name,
                 }
 
         # Fall back to global settings

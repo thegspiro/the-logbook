@@ -30,6 +30,7 @@ from app.schemas.organization import (
     decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
+from app.utils.email_providers import normalize_stored_platform
 
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
 
@@ -252,8 +253,12 @@ class OrganizationService:
             show_mobile=contact_info.get("show_mobile", True),
         )
 
-        # Parse email service settings
-        email_service = settings_dict.get("email_service", {})
+        # Parse email service settings. A platform label saved before the
+        # schema validated the field is settled onto a known value first, or
+        # this read raises for that organization (see normalize_stored_platform).
+        email_service = normalize_stored_platform(
+            settings_dict.get("email_service", {})
+        )
         email_settings = (
             EmailServiceSettings(
                 **{
