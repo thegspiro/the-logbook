@@ -7,6 +7,193 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: a folder delete could cascade-destroy a more-restricted descendant the caller could never access directly (2026-09-03)
+
+**Fixed**
+
+- **FAC-21 — `DELETE /documents/folders/{folder_id}` authorized only the
+  folder named in the request, never any descendant the cascade was about
+  to destroy.** `required_permissions` is set per folder independently —
+  nothing requires a child folder's restrictions to be at least as loose as
+  its parent's — so a `documents.manage` holder admitted at an accessible
+  parent folder could delete it and cascade-destroy a more-restricted
+  descendant nested beneath it, one they could never have accessed or
+  deleted directly. Not exploitable in the current facility tree specifically
+  (every facility folder currently carries the identical sensitive
+  permission set, a separate open issue — see FAC-13 above), but
+  `required_permissions` can only be set by system code, and FAC-13's own
+  eventual fix would create exactly this shape. `delete_folder`'s subtree
+  walk now also checks every descendant's own access before deleting
+  anything, aborting the whole delete if any descendant refuses the
+  caller — the same "abort before deleting" shape FAC-20's cross-organization
+  guard already uses. See `docs/security-review/FAC-12-facilities.md`
+  (FAC-21) for the full writeup and regression tests.
+
+### Security: `documents.manage` could still bypass a folder's ACL on folder creation and reparenting; the folder-delete cascade had no defense against a cross-organization link (2026-09-03)
+
+**Fixed**
+
+- **FAC-18 — `PATCH /documents/folders/{folder_id}` checked only the
+  target folder's own ACL, not the ACL of a _new parent_ on reparenting.**
+  The prior fix (FAC-16, `can_access_folder` on the folder being moved)
+  authorized only that folder's pre-move ancestry; reassigning `parent_id`
+  to a new, non-null folder was validated only for same-organization
+  membership (DOC-6), never for the caller's own access to that new parent.
+  A `documents.manage` holder with no facilities grant at all could
+  therefore reparent an accessible folder — and everything inside it — into
+  a `facilities.view_sensitive`-gated tree. `update_folder` now resolves
+  the new parent and calls `can_access_folder` on it whenever `parent_id`
+  changes to a new, non-null value, mirroring FAC-15's destination check on
+  `update_document`. Moving to root needs no destination check.
+- **FAC-19 — `POST /documents/folders` never checked the supplied parent's
+  ACL either.** Same gap on folder creation: a `documents.manage` holder
+  with no facilities grant could create a new child folder directly under a
+  sensitive-gated facility folder they cannot even read. `create_folder`
+  now calls `can_access_folder` on a non-null `parent_id` before creating.
+- **FAC-20 — the folder-delete cascade FAC-16 fixed to actually work walks
+  `parent_id` with no organization filter.** Not currently reachable — the
+  only two client-facing writers of `parent_id` (`create_folder`,
+  `update_folder`) both validate same-organization membership — but
+  `parent_id` carries no _database_ constraint enforcing that, only an
+  application-level guard on those two call sites. Added a defense-in-depth
+  check to `delete_folder`'s subtree walk: it now aborts with a clean error
+  instead of deleting anything if it ever discovers a descendant belonging
+  to a different organization than the folder being deleted, rather than
+  trusting the ORM cascade (which has no org awareness of its own) to never
+  encounter one.
+- See `docs/security-review/FAC-12-facilities.md` (FAC-18 through FAC-20)
+  for the full writeup, the systematic sweep of every remaining
+  folder/document route in `documents.py`, and regression tests.
+
+### Fixed: `GET /{facility_id}/folders` 500'd on every real HTTP call because its return value never matched its own declared response schema (2026-09-03)
+
+**Fixed**
+
+- **FAC-17 — `get_facility_folders`'s return dict omitted `skip`/`limit`,
+  which `FoldersListResponse` requires.** The handler's single return
+  statement (shared by both the empty-list and populated-list cases
+  described in FAC-13 above) set only `folders`/`total`. Once a facility is
+  found, FastAPI's own response-model validation runs against that dict on
+  every successful call and rejected it — turning what should have been a
+  200 (with an empty or populated folder list) into a 500. The prior round's
+  direct-Python-call tests never exercised FastAPI's request/response cycle,
+  so response-model validation never ran and the bug was invisible to them.
+  Fixed by including `"skip": 0, "limit": len(sub_folders)` on the return —
+  this route has no pagination params of its own, so it reports the whole
+  unpaginated result rather than echoing request query params. New tests
+  issue a real ASGI request through the actual router for both the
+  empty-list and populated-list cases and assert a 200 with `skip`/`limit`
+  present; independently confirmed both fail with `ResponseValidationError`
+  against the pre-fix return statement. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-17) for the full writeup.
+- **A separate, unrelated CI failure investigated alongside the fix above:**
+  the prior round's own FAC-15/FAC-16 regression tests
+  (`TestUpdateDocumentRespectsDestinationFolderAcl`,
+  `TestFolderMutationRespectsOwnFolderAcl` in `test_documents_access.py`)
+  use the real `db_session` fixture but, unlike every sibling class in that
+  file, were missing `@pytest.mark.integration` — so the "Backend Unit
+  Tests" CI job, which runs with no MySQL service specifically so
+  `db_session`-backed tests stay out of it, tried to run them anyway and
+  failed all 8 with `Can't connect to MySQL server`. Also ruled out a
+  competing theory (stale generated schema docs) before landing on the real
+  cause. Fixed by a separate, concurrent commit
+  (`acc4e29d`) that added the missing marker to both classes; this round
+  rebased onto it. See `docs/security-review/FAC-12-facilities.md`
+  (pass 3, round 4) for the full investigation.
+
+### Flagged: an unrelated folder-authorization fix silently emptied direct-API and generic-Documents-module access to facility folders for baseline permission tiers it was never meant to affect (2026-09-03)
+
+**Not fixed — flagged for a product decision.** `GET /{facility_id}/folders`
+still requires only baseline `facilities.view`, but every facility folder —
+including the established-baseline Photos, Maintenance Records, and
+Inspection Reports categories (Blueprints & Permits' classification is
+separately undecided) — is now stamped with the same permission set as the
+two genuinely sensitive categories (Insurance & Leases, Capital Projects),
+because of an unrelated cross-module folder-ACL fix (PR #2160) that started
+enforcing a permission stamp already present but previously inert. A
+secretary, quartermaster, safety officer, or training officer — every one of
+whom is meant to see the baseline categories at their baseline
+`facilities.view` grant — now gets an empty folder list from that endpoint,
+and is refused the same categories' documents through the generic Documents
+module's own folder browsing and `GET /documents/{id}/download` (both
+enforce the identical over-broad stamp). **This does not empty the
+Facilities module's own Files section in the app** — `FilesSection.tsx`
+loads via `getPhotos` and, for sensitive viewers, `getFacilityDocuments`,
+neither of which calls the affected `/folders` endpoint, so that section
+stays populated; a repo-wide search found no frontend consumer of
+`GET /{facility_id}/folders` at all. The real, live impact is on a direct
+API client and on anyone browsing a facility's baseline categories through
+the generic Documents module UI. Fail-closed, not a data leak. Correcting
+it needs a new permission tier, an owner call on Blueprints & Permits,
+reclassifying existing document references out of the per-facility parent
+folder or a too-weak sub-folder, and a migration — not a one-line loosening
+— see `docs/KNOWN_LIMITATIONS.md` and
+`docs/security-review/FAC-12-facilities.md` (FAC-13) for the full reasoning
+and why a naive fix would reopen a broader leak.
+
+### Security: `documents.manage` could still bypass a folder's ACL on a document _move_'s destination, and on the folder-mutation routes themselves; a folder delete with descendants silently orphaned them instead of cascading (2026-09-03)
+
+**Fixed**
+
+- **FAC-15 — `PATCH /documents/{document_id}` checked only the document's
+  source folder, not its destination, on a move.** The prior fix
+  (`can_access_document` on the document's existing folder) left the
+  opposite direction open: reassigning `folder_id` to a new, non-null value
+  was validated only for same-organization membership, never for the
+  caller's own access to that destination. A `documents.manage` holder with
+  no facilities grant at all could move a document they already had access
+  to _into_ a `facilities.view_sensitive`-gated folder. `update_document`
+  now resolves the destination folder and calls `can_access_folder` on it
+  whenever `folder_id` changes to a new, non-null value, mirroring the check
+  `upload_document` already applies to a new upload's destination. Moving
+  out to unfiled needs no destination check.
+- **FAC-16 — `PATCH`/`DELETE /documents/folders/{folder_id}` never checked
+  the target folder's own ACL at all.** Both required only
+  `documents.manage` and mutated the folder directly — unlike the read-side
+  `get_facility_sub_folders`, which already filters through
+  `can_access_folder`. A `documents.manage` holder with no facilities grant
+  could rename, reparent, or delete a sensitive-gated facility folder
+  outright. Both routes now call `can_access_folder` on the target folder
+  before mutating it.
+- **A related, independent bug found while regression-testing FAC-16's
+  delete path: deleting a folder with descendant folders silently orphaned
+  them instead of cascading.** `DocumentFolder.children`'s self-referential
+  relationship had `remote_side` on the wrong attribute (the plural
+  collection instead of its singular backref), which caused SQLAlchemy to
+  proactively null out each descendant's foreign key before the delete ran
+  — so the database's own `ON DELETE CASCADE` never fired, and a folder tree
+  survived as detached, orphaned root folders instead of being removed.
+  Fixed by correcting the relationship to the standard self-referential
+  pattern used correctly elsewhere in this codebase; verified with a
+  three-level fixture that a delete now removes the entire subtree. Two
+  other relationships share the same inverted shape
+  (`CheckTemplateCompartment.children`, `TrainingCategory.subcategories`) —
+  flagged, not fixed, as out of scope for this feature; see
+  `docs/KNOWN_LIMITATIONS.md`.
+- See `docs/security-review/FAC-12-facilities.md` (FAC-15, FAC-16) for the
+  full writeup and regression tests.
+
+### Security: `documents.manage` could bypass a document's own folder ACL through the generic update/delete routes (2026-09-03)
+
+**Fixed**
+
+- `PATCH /documents/{document_id}` and `DELETE /documents/{document_id}`
+  checked only the caller's `documents.manage` grant and the target
+  document's organization — never the document's _current_ folder ACL,
+  unlike `GET /documents/{document_id}` and its `/download` sibling, which
+  already call `can_access_document`. A `documents.manage` holder with no
+  facilities grant at all could therefore move a facility's
+  `facilities.view_sensitive`-gated document to unfiled/org-level storage
+  (or delete it outright) despite never being able to view it, after which
+  any `documents.view` holder could list and download it.
+- Both routes now call `can_access_document` on the existing document
+  before mutating it, matching the read-side check, and return the same
+  404 an inaccessible document already returns elsewhere rather than
+  confirming its existence to a caller who can't see it. A caller who
+  genuinely holds the folder's own required permission is unaffected. See
+  `docs/security-review/FAC-12-facilities.md` (FAC-14) for the full
+  writeup and regression test.
+
 ### Inventory: a concurrent return or check-in could double-credit stock or silently overwrite condition notes, and the first fix for it had a lock-ordering bug of its own (2026-09-02)
 
 **Fixed**

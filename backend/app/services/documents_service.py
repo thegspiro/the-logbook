@@ -449,7 +449,12 @@ class DocumentsService:
         await self.db.refresh(folder)
         return folder
 
-    async def delete_folder(self, folder_id: UUID, organization_id: UUID) -> bool:
+    async def delete_folder(
+        self,
+        folder_id: UUID,
+        organization_id: UUID,
+        current_user: Optional[User] = None,
+    ) -> bool:
         """Delete a folder, its subtree, and all their documents.
 
         Returns False if not found. The ORM cascade removes the descendant
@@ -457,24 +462,71 @@ class DocumentsService:
         file orphaned on disk (potentially sensitive uploads) — so we gather the
         subtree's file paths first and remove them after the delete, mirroring
         ``delete_document`` (DOC-1 continuation).
+
+        ``current_user`` is optional only so this signature doesn't break a
+        caller with no user in scope (there are none client-facing today);
+        every route that lets a caller choose *which* folder to delete must
+        pass it, or FAC-21's descendant-ACL check below silently no-ops.
         """
         folder = await self.get_folder_by_id(folder_id, organization_id)
         if not folder:
             return False
 
-        # Walk the folder subtree (this folder + all descendants via parent_id),
-        # org-scoped, so we can collect the backing file paths before the cascade
-        # delete removes the document rows.
+        # Walk the folder subtree (this folder + all descendants via parent_id)
+        # to collect backing file paths before the cascade delete removes the
+        # document rows.
+        #
+        # FAC-17 (Codex round 4 on FAC-14/15/16): deliberately walks
+        # ``parent_id`` with no organization_id filter, then checks each row
+        # found -- not the org-scoped query the walk used before. The ORM's
+        # ``children`` cascade (``cascade="all, delete-orphan"``, FAC-16) will
+        # itself load descendants by ``parent_id`` alone when ``self.db.delete``
+        # runs below, with no org awareness at all. ``parent_id`` carries no
+        # same-org DB constraint -- assert_in_org (DOC-6) is an
+        # application-level guard on create_folder/update_folder, the only two
+        # client-facing writers of this column, not a schema constraint -- so a
+        # row written before that guard existed, or by any future writer that
+        # forgets it, could carry a cross-organization parent_id. If the
+        # cascade were to reach such a row, it would delete another tenant's
+        # folder and documents. Failing closed here, before the delete, means
+        # this can't happen even if the guard upstream is ever wrong: any
+        # descendant outside the caller's org aborts the whole delete rather
+        # than silently being swept in.
+        #
+        # FAC-21 (Codex, round 6): the endpoint's own can_access_folder check
+        # authorizes only the folder being deleted (and, via that call's own
+        # ancestor walk, everything *above* it) -- never anything *below* it.
+        # required_permissions can differ folder-to-folder (nothing forces a
+        # descendant to be at least as permissive as its parent), so a caller
+        # admitted at the root of a subtree is not necessarily admitted at
+        # every node inside it. Checking each descendant's own restrictions
+        # here -- not a full ancestor re-walk, which would be redundant: this
+        # loop already visits every folder between the (already-authorized)
+        # root and each descendant, so the AND of every _folder_admits_user
+        # result along the way is exactly what can_access_folder computes.
         subtree_ids = {str(folder_id)}
         frontier = {str(folder_id)}
         while frontier:
             child_rows = await self.db.execute(
-                select(DocumentFolder.id).where(
-                    DocumentFolder.organization_id == str(organization_id),
+                select(DocumentFolder).where(
                     DocumentFolder.parent_id.in_(frontier),
                 )
             )
-            children = {row[0] for row in child_rows.all()}
+            rows = child_rows.scalars().all()
+            for child in rows:
+                if str(child.organization_id) != str(organization_id):
+                    raise ValueError(
+                        "Folder subtree contains a cross-organization "
+                        "reference and cannot be deleted"
+                    )
+                if current_user is not None and not self._folder_admits_user(
+                    child, current_user
+                ):
+                    raise ValueError(
+                        "Folder subtree contains a folder this caller cannot "
+                        "access and cannot be deleted"
+                    )
+            children = {str(child.id) for child in rows}
             new_ids = children - subtree_ids
             subtree_ids |= new_ids
             frontier = new_ids
