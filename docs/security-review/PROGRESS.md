@@ -16,16 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Follow-up to #2188 (Feature 11, Inventory, pass 3, merged) — fixes INV-20,
-a lock-ordering deadlock risk that #2188's own INV-18/INV-19 fix
-introduced. Codex caught it on the merged PR before this pass's agent
-finished; the corrected fix could not be pushed to #2188's branch (already
-merged, dead per CLAUDE.md Pitfall #24), so it lands as a fresh PR. Feature
-11 itself is otherwise done (#2188 merged); this is a correctness
-follow-up, not a new review pass. Rotation row 11 → ⏳ (awaiting this
-follow-up's merge).
+None. Feature 12 (Facilities) is in progress on `claude/security-review-facilities`.
 
 ---
+
+### 2026-09-03 — Feature 11 (Inventory) fully closed — PR #2190 merged
+
+PR #2190 (the INV-20/INV-21 follow-up to #2188) merged. It fixed INV-20 (a
+lock-ordering deadlock the INV-18/INV-19 fix itself introduced —
+restructured `return_to_pool`/`checkin_item` to lock the item before the
+holding record, matching the other three sibling methods) and INV-21 (a
+SQLAlchemy identity-map staleness bug: the locked re-read after acquiring
+the row lock returned the same already-in-session Python object with its
+pre-lock attribute values instead of the freshly-committed ones, because a
+second `SELECT` on an identity-mapped row needs `populate_existing=True` or
+an explicit `session.refresh()` to pick up a concurrent writer's commit —
+both caught by Codex reviewing the merged #2188, both independently
+re-verified real by this rotation before landing). Feature 11 is now fully
+✅. Rotation row 11 updated accordingly. Next: 12 Facilities.
 
 ### 2026-09-02 — Feature 11 doc fix — INV-20, a lock-ordering deadlock the INV-18/19 fix itself introduced
 
@@ -7164,8 +7172,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⏳     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | 🔄     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
