@@ -2082,9 +2082,48 @@ describe('EquipmentCheckTemplateBuilder cancels pending autosaves on subtree del
     // must not have removed either.
     expect(screen.getByLabelText('Actions for Cab')).toBeVisible();
 
-    // The auto-save was never cancelled, so it still fires on its own
-    // schedule.
+    // The original timer was cancelled the moment the delete started, but
+    // its patch was captured and re-armed on failure -- it still reaches
+    // the server on its own (fresh) schedule.
     await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
     expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false });
+  }, 10_000);
+
+  it('never lets a pending auto-save fire while the compartment delete is in flight (AP-13 finding 12)', async () => {
+    // Cancelling a subtree's pending auto-saves only *after* awaiting the
+    // delete (finding 8's own fix) left a window: if the DELETE takes
+    // longer than the remaining debounce, the timer can fire mid-flight,
+    // start its own PATCH, and race the DELETE to the server. The timer
+    // must be cancelled synchronously, before the delete request is even
+    // sent -- so it can never fire during the await, regardless of how long
+    // the request takes.
+    let releaseDelete: (() => void) | null = null;
+    deleteCompartment.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseDelete = resolve;
+        })
+    );
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    await userEvent.click(screen.getByLabelText('Delete Cab'));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+
+    // Outwait the debounce window while the delete is still in flight --
+    // the pre-fix timer would fire here and call updateCheckItem.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DEBOUNCE_MS + 200));
+    expect(updateCheckItem).not.toHaveBeenCalled();
+
+    releaseDelete?.();
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Compartment deleted'));
+
+    // Cab is gone, and nothing ever reached updateCheckItem for its item.
+    expect(screen.queryByLabelText('Actions for Cab')).not.toBeInTheDocument();
+    expect(updateCheckItem).not.toHaveBeenCalled();
   }, 10_000);
 });

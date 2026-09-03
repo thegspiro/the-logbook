@@ -873,44 +873,49 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!(await confirm({ title: 'Delete compartment', message: msg, confirmLabel: 'Delete', cancelLabel: 'Keep it' })))
       return;
 
+    // AP-13 finding 4 / AP-15 / AP-15 follow-up (Codex, three rounds on the
+    // same race): the backend delete is about to remove every item in this
+    // subtree too. A descendant item can have a debounced auto-save still
+    // pending (scheduleAutoSaveItem's 1.5s timer) at this moment, and that
+    // timer runs independently of the delete request -- cancelling it only
+    // *after* `await`ing the delete (the first fix here) leaves a window
+    // where the timer can still fire *while the delete is in flight*, start
+    // its own PATCH, and race the DELETE to the server; cancelling it only
+    // *before* the delete (an even earlier version) instead throws the
+    // pending edit away for good the moment the delete request fails. Both
+    // symptoms are the same one this comment is trying to close for good:
+    // capture and cancel every timer now, synchronously, before the delete
+    // even starts -- so none of them can fire mid-flight -- and hold the
+    // captured patches so they can be re-armed if the delete turns out to
+    // have failed, exactly the way flushPendingAutoSaves already re-arms a
+    // failed flush's patches (asFallback, so a newer edit made since still
+    // wins).
+    const doomedItemIds = [...comp.items, ...descendantComps.flatMap((c) => c.items)]
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id));
+    const capturedAutoSaves: Array<[string, Record<string, unknown>]> = [];
+    for (const itemId of doomedItemIds) {
+      const pending = autoSavePendingRef.current.get(itemId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        autoSavePendingRef.current.delete(itemId);
+        capturedAutoSaves.push([itemId, pending.patch]);
+      }
+    }
+
     if (comp.id) {
       try {
         await ensureDraftBeforeStructureEdit();
         await equipmentCheckService.deleteCompartment(comp.id);
         toast.success('Compartment deleted');
       } catch (err: unknown) {
-        // AP-15 follow-up (Codex): cancelling pending auto-saves has to wait
-        // until *after* the delete actually succeeds. Doing it up front (the
-        // original AP-15 fix) meant a failed delete -- a network error, or
-        // the AP-14 cross-template 400 -- left the compartment and its items
-        // still on screen with their edits' auto-saves already cancelled and
-        // forgotten: settleAutoSaveStatus would report them "saved" when
-        // they will now never be sent at all.
+        // The compartment (and these items) are still live -- re-arm rather
+        // than let the captured edits vanish.
+        for (const [itemId, patch] of capturedAutoSaves) {
+          scheduleAutoSaveItem(itemId, patch, { asFallback: true });
+        }
         toast.error(getErrorMessage(err, 'Failed to delete compartment'));
         return;
-      }
-    }
-
-    // AP-13 finding 4 / AP-15 (Codex): the backend cascade just deleted every
-    // item in this subtree too (or, for an unsaved local-only compartment,
-    // there was never a backend item to autosave in the first place). A
-    // descendant item can have a debounced auto-save still pending
-    // (scheduleAutoSaveItem's 1.5s timer) at this point -- left alone, that
-    // timer fires anyway, calls updateCheckItem against an id that no longer
-    // exists, 404s, and flips the global indicator to "Save failed" for an
-    // item the user never touched. Worse, pressing Save inside that same
-    // window flushes the same doomed patch through flushPendingAutoSaves --
-    // the *first* thing handleSave does, before any other edit is sent -- so
-    // one stale item id aborts saving everything else in the request too.
-    // Cancel (not flush) every pending timer for this subtree's items now
-    // that the delete has actually succeeded: their compartment is gone,
-    // there is nothing left to save them into.
-    for (const item of [...comp.items, ...descendantComps.flatMap((c) => c.items)]) {
-      if (!item.id) continue;
-      const pending = autoSavePendingRef.current.get(item.id);
-      if (pending) {
-        clearTimeout(pending.timer);
-        autoSavePendingRef.current.delete(item.id);
       }
     }
     settleAutoSaveStatus();
