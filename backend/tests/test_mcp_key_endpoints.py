@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
+from starlette.requests import Request
 
 from app.api.v1.endpoints.mcp_keys import (
     McpKeyCreateRequest,
@@ -27,6 +28,19 @@ from app.models.integration import Integration
 
 def _user(org_id, user_id):
     return SimpleNamespace(organization_id=org_id, id=user_id)
+
+
+def _request(ip="203.0.113.7"):
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/integrations/claude-mcp/keys",
+            "headers": [],
+            "client": (ip, 40000),
+            "query_string": b"",
+        }
+    )
 
 
 async def _connect(db, org_id, config=None):

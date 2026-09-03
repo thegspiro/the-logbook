@@ -102,3 +102,43 @@ class TestToolModulesNeverProjectDeniedFields:
         attrs = set(self.ATTR_PATTERN.findall(source))
         offenders = denied_fields_in(keys | attrs)
         assert not offenders, f"{path.name} touches denied fields: {offenders}"
+
+
+class TestScrubText:
+    """Field names cannot catch a phone number typed into a note; values are
+    scrubbed for the two shapes recognisable on their own."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("mail sam@example.org today", "mail [email removed] today"),
+            (
+                "Call (555) 123-4567 or 555.123.4567",
+                "Call [phone removed] or [phone removed]",
+            ),
+            ("555-123-4567", "[phone removed]"),
+            ("+1 555 123 4567", "[phone removed]"),
+            ("call 5551234567 now", "call [phone removed] now"),
+        ],
+    )
+    def test_contact_shapes_are_replaced(self, text, expected):
+        assert redact({"notes": text}) == {"notes": expected}
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "5551234567",  # a bare digit run alone is an asset tag, not prose
+            "SN-1234567890",
+            "PO 202609031234 shipped",
+            "Engine 1 pumps 1500 gpm; unit 2024",
+            "ext 4567",
+        ],
+    )
+    def test_identifiers_and_quantities_survive(self, text):
+        assert redact({"description": text}) == {"description": text}
+
+    def test_strings_are_scrubbed_at_every_depth(self):
+        value = {"items": [{"body": "x@y.io", "nested": {"t": "555-123-4567"}}]}
+        assert redact(value) == {
+            "items": [{"body": "[email removed]", "nested": {"t": "[phone removed]"}}]
+        }

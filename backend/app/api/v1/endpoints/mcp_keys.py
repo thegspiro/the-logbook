@@ -1,10 +1,12 @@
 """
 Service-key management for the Claude MCP integration.
 
-Mounted under ``/integrations/claude-mcp``. Listing keys needs
-``integrations.manage`` like the rest of the integrations screen; issuing
-and revoking one needs ``integrations.mcp_keys``, which only the IT
-administrator position carries by default (see ``core/permissions.py``).
+Mounted under ``/integrations/claude-mcp``. Reading the status and the key
+list needs ``integrations.manage`` or ``integrations.mcp_keys``; issuing and
+revoking needs ``integrations.mcp_keys``, which only the IT administrator
+position carries by default (see ``core/permissions.py``). The Integrations
+screen itself is behind ``settings.manage``, so a delegated key manager
+holds that too — the panel text and the wiki say so.
 """
 
 from typing import Any, Optional
@@ -17,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.mcp.constants import MCP_INTEGRATION_TYPE, MCP_MOUNT_PATH
 from app.mcp.keys import MAX_EXPIRY_DAYS, McpKeyService, parse_config
@@ -45,8 +48,12 @@ def _key_to_dict(key: McpServiceKey) -> dict[str, Any]:
         "revoked_at": key.revoked_at.isoformat() if key.revoked_at else None,
         "created_at": key.created_at.isoformat() if key.created_at else None,
         "created_by": key.created_by,
-        "is_active": key.revoked_at is None,
+        "is_active": key.is_active,
     }
+
+
+def _ip(request: Optional[Request]) -> Optional[str]:
+    return get_client_ip(request) if request is not None else None
 
 
 async def _integration_row(
@@ -64,7 +71,9 @@ async def _integration_row(
 @router.get("/status")
 async def get_mcp_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("integrations.manage")),
+    current_user: User = Depends(
+        require_permission("integrations.manage", "integrations.mcp_keys")
+    ),
 ):
     """Whether the add-on is on, what it exposes, and the active key if any."""
     org_id = str(current_user.organization_id)
@@ -85,7 +94,9 @@ async def get_mcp_status(
 @router.get("/keys")
 async def list_mcp_keys(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("integrations.manage")),
+    current_user: User = Depends(
+        require_permission("integrations.manage", "integrations.mcp_keys")
+    ),
 ):
     keys = await McpKeyService(db).list_keys(str(current_user.organization_id))
     return {"keys": [_key_to_dict(k) for k in keys]}
@@ -136,6 +147,7 @@ async def create_mcp_key(
         },
         user_id=str(current_user.id),
         organization_id=org_id,
+        ip_address=_ip(request),
     )
     await db.commit()
     return {
@@ -169,6 +181,7 @@ async def revoke_mcp_key(
         {"key_id": key.id, "key_prefix": key.key_prefix, "name": key.name},
         user_id=str(current_user.id),
         organization_id=org_id,
+        ip_address=_ip(request),
     )
     await db.commit()
     return {"key": _key_to_dict(key)}

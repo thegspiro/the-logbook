@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.mcp.constants import (
@@ -93,13 +93,35 @@ class McpKeyService:
         )
         return list(result.scalars().all())
 
-    async def active_keys(self, organization_id: str) -> list[McpServiceKey]:
-        result = await self.db.execute(
-            select(McpServiceKey).where(
-                McpServiceKey.organization_id == organization_id,
-                McpServiceKey.revoked_at.is_(None),
-            )
+    async def active_keys(
+        self, organization_id: str, *, for_update: bool = False
+    ) -> list[McpServiceKey]:
+        """Keys a client could authenticate with right now: not revoked and
+        not past their expiry. The same definition ``authenticate`` applies,
+        so the status screen never shows a key the endpoint would refuse."""
+        now = datetime.now(timezone.utc)
+        query = select(McpServiceKey).where(
+            McpServiceKey.organization_id == organization_id,
+            McpServiceKey.revoked_at.is_(None),
+            or_(McpServiceKey.expires_at.is_(None), McpServiceKey.expires_at > now),
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
+    async def _unrevoked_keys(
+        self, organization_id: str, *, for_update: bool = False
+    ) -> list[McpServiceKey]:
+        """Every key not yet revoked, expired ones included — what a
+        rotation retires."""
+        query = select(McpServiceKey).where(
+            McpServiceKey.organization_id == organization_id,
+            McpServiceKey.revoked_at.is_(None),
+        )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def get_key(
@@ -136,8 +158,20 @@ class McpKeyService:
                 "or omitted for a lifetime key"
             )
 
+        # Two administrators issuing at once must not both end up with a live
+        # key (pitfall 27): serialize on the organization's integration row —
+        # the one row both requests share — and make the read of the keys to
+        # retire a locking read, or it answers from a stale snapshot.
+        await self.db.execute(
+            select(Integration.id)
+            .where(
+                Integration.organization_id == organization_id,
+                Integration.integration_type == MCP_INTEGRATION_TYPE,
+            )
+            .with_for_update()
+        )
         now = datetime.now(timezone.utc)
-        revoked = await self.active_keys(organization_id)
+        revoked = await self._unrevoked_keys(organization_id, for_update=True)
         for old in revoked:
             old.revoked_at = now
             old.revoked_by = created_by

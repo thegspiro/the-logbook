@@ -62,8 +62,9 @@ meetings."_, _"Which shifts next week still have an open driver seat?"_
    give the key a name and an expiry (30 days to a year, or lifetime) and
    issue it. The key is shown **once**; copy it then. Requires
    `integrations.mcp_keys`, which only the IT Manager position holds by
-   default — a chief who wants to delegate it grants that permission to a
-   position explicitly.
+   default. A chief who wants to delegate it grants that permission to a
+   position that already has the Integrations screen (`settings.manage`);
+   the key permission on its own reaches nothing.
 3. **Configure the client** with the endpoint URL and the key as a bearer
    token. The endpoint is `https://<your-logbook-host>/api/mcp`.
 
@@ -114,9 +115,13 @@ stdio-to-HTTP bridge (such as `mcp-remote`) that passes the
   missing, disabled or not in the `connected` state, is refused with 401/403
   before the request reaches the MCP server.
 - **Redaction is enforced in one place.** `app/mcp/redaction.py` strips
-  denied field names at every depth of every tool result, and
-  `tests/test_mcp_redaction.py` asserts both that behaviour and that no tool
-  module names a denied field.
+  denied field names at every depth of every tool result and scrubs every
+  string value of email addresses and phone numbers, so a note or a
+  document body cannot carry either out. `tests/test_mcp_redaction.py`
+  asserts both behaviours and that no tool module names a denied field.
+  What a value-level scrub cannot recognise — a street address written
+  out, a diagnosis in prose — is why only _published_ minutes and
+  documents in unrestricted folders are exposed at all.
 - **Audit.** Every tool call, key issue and key revocation is written to the
   audit log (`mcp.tool_call`, `mcp.key_created`, `mcp.key_revoked`) with the
   key id, the tool, its arguments (redacted) and the client IP.
@@ -155,5 +160,9 @@ Dependencies added: `mcp` 2.x (which brings in `httpx2`, `sse-starlette`,
   works by field name so it can be proven by a test; a station's public
   phone number is stripped along with a member's. Locations and facilities
   are still listed by name, city and state.
+- **Free text is scrubbed, not understood.** Email addresses and phone
+  numbers are removed from every string; other personal details someone
+  typed into a published document or note are not detectable and pass
+  through. Keep personal information out of published content.
 - **Tool results are point-in-time.** There are no resources or
   subscriptions; a client re-asks to refresh.

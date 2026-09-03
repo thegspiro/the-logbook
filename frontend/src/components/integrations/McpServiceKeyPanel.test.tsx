@@ -144,7 +144,7 @@ describe('McpServiceKeyPanel', () => {
     expect(await screen.findByText('Claude Code')).toBeInTheDocument();
     expect(screen.queryByTestId('mcp-issue-key')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument();
-    expect(screen.getByText(/Only a member with the/)).toBeInTheDocument();
+    expect(screen.getByText(/Only a member holding/)).toBeInTheDocument();
   });
 
   it('reports a failed issue without crashing', async () => {

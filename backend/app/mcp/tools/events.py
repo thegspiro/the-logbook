@@ -84,12 +84,12 @@ def register(server: Any) -> None:
         db: AsyncSession, principal: McpPrincipal, event_id: str
     ) -> dict:
         """One event by id, with its full description and RSVP settings."""
-        found = await EventService(db).get_event(
+        # get_event answers (None, None) for an unknown or foreign id.
+        event, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal)
         )
-        if found is None:
+        if event is None:
             raise ValueError("Event not found")
-        event, _ = found
         return _event(event)
 
     @logbook_tool(server, title="List event RSVPs")

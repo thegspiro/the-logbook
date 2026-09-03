@@ -19,24 +19,44 @@ from app.models.document import DocumentFolder, DocumentStatus, FolderVisibility
 from app.services.documents_service import DocumentsService
 
 
-async def _open_folder_ids(db: AsyncSession, organization_id: str) -> set[str]:
-    """Folders every member can read.
+def _folder_is_open(folder: DocumentFolder) -> bool:
+    """A folder every member can read, judged on its own settings only."""
+    if folder.visibility != FolderVisibility.ORGANIZATION:
+        return False
+    return not (
+        folder.required_permissions or folder.allowed_roles or folder.owner_user_id
+    )
 
-    A folder that names required permissions or allowed roles, is
-    leadership- or owner-only, or has an owner is a restricted folder; the
-    service key is not a member and gets none of them. Documents with no
-    folder are treated as open by the service layer.
+
+async def _open_folder_ids(db: AsyncSession, organization_id: str) -> set[str]:
+    """Folders every member can read, judged with their whole ancestry.
+
+    Restrictions compose with AND down the tree, the way
+    ``DocumentsService.can_access_folder`` evaluates them: a folder is open
+    only if it and every ancestor is organization-visible with no required
+    permissions, allowed roles or owner. A missing ancestor or a cycle fails
+    closed. The service key is not a member and gets no leadership bypass.
+    Documents with no folder are treated as open by the service layer.
     """
     rows = await db.execute(
         select(DocumentFolder).where(DocumentFolder.organization_id == organization_id)
     )
+    by_id = {f.id: f for f in rows.scalars().all()}
     open_ids: set[str] = set()
-    for folder in rows.scalars().all():
-        if folder.visibility != FolderVisibility.ORGANIZATION:
-            continue
-        if folder.required_permissions or folder.allowed_roles or folder.owner_user_id:
-            continue
-        open_ids.add(folder.id)
+    for folder in by_id.values():
+        current: Optional[DocumentFolder] = folder
+        seen: set[str] = set()
+        admitted = False
+        while current is not None:
+            if current.id in seen or not _folder_is_open(current):
+                break
+            seen.add(current.id)
+            if current.parent_id is None:
+                admitted = True
+                break
+            current = by_id.get(current.parent_id)
+        if admitted:
+            open_ids.add(folder.id)
     return open_ids
 
 

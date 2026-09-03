@@ -18,6 +18,28 @@ from app.mcp.tools._common import (
 from app.services.meetings_service import MeetingsService
 from app.services.minute_service import MinuteService
 
+# Section keys and title words that carry the treasurer's figures. Minutes
+# written with the dynamic-section format keep the treasurer's report inside
+# ``sections`` rather than the legacy column, so the finance switch has to be
+# applied to the array as well as to the column.
+_FINANCE_SECTION_MARKERS = ("treasurer", "financ", "budget")
+
+
+def _is_finance_section(section: Any) -> bool:
+    if not isinstance(section, dict):
+        return False
+    haystack = " ".join(
+        str(section.get(field) or "") for field in ("key", "title")
+    ).lower()
+    return any(marker in haystack for marker in _FINANCE_SECTION_MARKERS)
+
+
+def _sections(m: Any, expose_finance: bool) -> list:
+    sections = m.get_sections() or []
+    if expose_finance:
+        return list(sections)
+    return [sec for sec in sections if not _is_finance_section(sec)]
+
 
 def _minutes_summary(m: Any) -> dict:
     return {
@@ -154,7 +176,7 @@ def register(server: Any) -> None:
                 "committee_reports": m.committee_reports,
                 "announcements": m.announcements,
                 "notes": m.notes,
-                "sections": m.sections,
+                "sections": _sections(m, principal.expose_finance),
                 "motions": [
                     {
                         "order": mo.order,

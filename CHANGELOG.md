@@ -30,7 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   result: phone, mobile, email (work and personal), home address, date of
   birth, emergency contacts, photo, membership and certification numbers,
   login names, medical results, credentials and tokens are stripped at
-  every depth. `tests/test_mcp_redaction.py` asserts the behaviour and that
+  every depth, and every string value is scrubbed of email addresses and
+  phone numbers so free text cannot carry them out either. `tests/test_mcp_redaction.py` asserts the behaviour and that
   no tool module names a denied field.
 - **`mcp_service_keys`** (migration `c4d5e6f7a8b9`): one active key per
   organization, SHA-256 digest only, optional expiry or lifetime, rotation

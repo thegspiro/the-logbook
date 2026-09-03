@@ -22,8 +22,13 @@ What is denied, and why:
   ``_token`` or ``_password``, MFA material, reset tokens.
 * recipients and telemetry — attendee/recipient email lists, IP address,
   user agent, a member's own notification and visibility preferences.
+
+Field names are one half. Free-text values are the other: every string in
+a result is scrubbed of email addresses and phone numbers, since a note or
+a document body can carry either however its field is named.
 """
 
+import re
 from typing import Any, Iterable
 
 DENIED_FIELDS: frozenset[str] = frozenset(
@@ -110,11 +115,46 @@ def is_denied_field(name: str) -> bool:
     return key.startswith(DENIED_PREFIXES)
 
 
-def redact(value: Any) -> Any:
-    """Return ``value`` with every denied key removed at every depth.
+# Free text — a description, a note, a document body — can carry contact
+# details someone typed in. Field names cannot catch those, so string values
+# are scrubbed for the two shapes that are recognisable on their own: email
+# addresses and phone numbers. Anything else in free text (a street address
+# written out, a diagnosis) is not detectable and is why only *published*
+# content is exposed at all.
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# A phone number written the way people write them: groups separated by
+# spaces, dots, dashes or parentheses, optional country code. Requiring the
+# separators is deliberate — a bare run of digits is as likely to be a
+# serial number or an asset tag as a phone number.
+_PHONE_FORMATTED_RE = re.compile(
+    r"(?<![\w-])(?:\+?\d{1,3}[\s.-])?(?:\(\d{3}\)\s?|\d{3}[\s.-])\d{3}[\s.-]\d{4}(?![\w-])"
+)
+# A bare ten- or eleven-digit run is scrubbed only inside prose (a string
+# with whitespace), where "call 5551234567" is a phone number and a lone
+# "5551234567" in an asset-tag field is not.
+_PHONE_BARE_RE = re.compile(r"(?<![\w-])\+?\d{10,11}(?![\w-])")
+EMAIL_PLACEHOLDER = "[email removed]"
+PHONE_PLACEHOLDER = "[phone removed]"
 
-    Dicts lose denied keys; lists, tuples and sets are walked; everything
-    else is returned as-is. Dict keys that are not strings are kept.
+
+def scrub_text(text: str) -> str:
+    """Replace email addresses and phone numbers inside free text."""
+    if "@" in text:
+        text = _EMAIL_RE.sub(EMAIL_PLACEHOLDER, text)
+    if any(ch.isdigit() for ch in text):
+        text = _PHONE_FORMATTED_RE.sub(PHONE_PLACEHOLDER, text)
+        if any(ch.isspace() for ch in text):
+            text = _PHONE_BARE_RE.sub(PHONE_PLACEHOLDER, text)
+    return text
+
+
+def redact(value: Any) -> Any:
+    """Return ``value`` with every denied key removed at every depth and
+    every string value scrubbed of email addresses and phone numbers.
+
+    Dicts lose denied keys; lists, tuples and sets are walked; strings are
+    scrubbed; everything else is returned as-is. Dict keys that are not
+    strings are kept.
     """
     if isinstance(value, dict):
         return {
@@ -124,6 +164,8 @@ def redact(value: Any) -> Any:
         }
     if isinstance(value, (list, tuple, set, frozenset)):
         return [redact(inner) for inner in value]
+    if isinstance(value, str):
+        return scrub_text(value)
     return value
 
 

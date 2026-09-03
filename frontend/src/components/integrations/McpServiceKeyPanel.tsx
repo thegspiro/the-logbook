@@ -7,7 +7,9 @@
  * endpoint URL beside it, which is everything an MCP client needs.
  *
  * Issuing and revoking need `integrations.mcp_keys`; the rest of the panel
- * is readable by anyone who can open the Integrations screen.
+ * is readable by anyone who can open the Integrations screen. The screen
+ * itself sits behind `settings.manage`, so a delegated key manager holds
+ * that in addition — the key permission alone reaches nothing.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -311,8 +313,8 @@ export const McpServiceKeyPanel: React.FC<McpServiceKeyPanelProps> = ({ onClose 
             </form>
           ) : (
             <p className="text-theme-text-muted text-xs">
-              Only a member with the <strong>Issue and revoke Claude MCP service keys</strong> permission — the IT
-              administrator by default — can issue or revoke the key.
+              Only a member holding <strong>Issue and revoke Claude MCP service keys</strong> alongside their
+              Integrations access — the IT administrator by default — can issue or revoke the key.
             </p>
           )}
         </div>

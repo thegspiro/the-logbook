@@ -96,9 +96,17 @@ async def member_names(
 
 
 def page(items: list[Any], total: Optional[int], limit: int, offset: int) -> dict:
-    return {
-        "items": items,
-        "total": total if total is not None else len(items),
-        "limit": limit,
-        "offset": offset,
-    }
+    """A page of results.
+
+    ``total`` is reported only when the caller has a real count. When it has
+    none, ``has_more`` says whether another page is worth asking for — a
+    page-sized result is treated as possibly incomplete — so a client never
+    mistakes one page for the whole collection.
+    """
+    body: dict[str, Any] = {"items": items, "limit": limit, "offset": offset}
+    if total is not None:
+        body["total"] = total
+        body["has_more"] = offset + len(items) < total
+    else:
+        body["has_more"] = len(items) >= limit
+    return body

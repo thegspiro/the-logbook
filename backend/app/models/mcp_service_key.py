@@ -15,6 +15,8 @@ must verify the key — a bcrypt round per call would cost more CPU than the
 tool call itself.
 """
 
+from datetime import datetime, timezone
+
 from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlalchemy.sql import func
 
@@ -56,4 +58,12 @@ class McpServiceKey(Base):
 
     @property
     def is_active(self) -> bool:
-        return self.revoked_at is None
+        """Usable right now: neither revoked nor past its expiry."""
+        if self.revoked_at is not None:
+            return False
+        if self.expires_at is None:
+            return True
+        expires = self.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        return expires > datetime.now(timezone.utc)

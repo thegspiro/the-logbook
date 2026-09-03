@@ -242,3 +242,48 @@ class TestAuthenticate:
         await db_session.flush()
         await db_session.refresh(minted.key)
         assert minted.key.created_by is None
+
+
+class TestActiveMeansUsable:
+    async def test_an_expired_key_is_not_active(self, db_session, setup_org_and_admin):
+        """What /status shows as the current key must be a key the endpoint
+        would accept; an expired one is refused, so it is not active."""
+        org_id, admin_id = setup_org_and_admin
+        svc = McpKeyService(db_session)
+        minted = await svc.mint(
+            org_id, name="k", expires_in_days=5, created_by=admin_id
+        )
+        assert minted.key.is_active is True
+        minted.key.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        await db_session.flush()
+        assert minted.key.is_active is False
+        assert await svc.active_keys(org_id) == []
+
+    async def test_rotation_retires_an_expired_key_too(
+        self, db_session, setup_org_and_admin
+    ):
+        org_id, admin_id = setup_org_and_admin
+        svc = McpKeyService(db_session)
+        stale = await svc.mint(
+            org_id, name="old", expires_in_days=5, created_by=admin_id
+        )
+        stale.key.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        await db_session.flush()
+        fresh = await svc.mint(
+            org_id, name="new", expires_in_days=None, created_by=admin_id
+        )
+        assert [k.id for k in fresh.revoked] == [stale.key.id]
+
+    def test_rotation_locks_the_integration_row_and_reads_keys_for_update(self):
+        """Two administrators issuing at once must not both keep a live key
+        (CLAUDE.md pitfall 27): the decision is serialized on the org's
+        integration row, and the read of the keys to retire is a locking
+        read so it sees the other transaction's commit."""
+        import inspect
+
+        source = inspect.getsource(McpKeyService.mint)
+        assert "Integration.integration_type == MCP_INTEGRATION_TYPE" in source
+        assert source.count(".with_for_update()") >= 1
+        assert "_unrevoked_keys(organization_id, for_update=True)" in source
+        helper = inspect.getsource(McpKeyService._unrevoked_keys)
+        assert "query.with_for_update()" in helper
