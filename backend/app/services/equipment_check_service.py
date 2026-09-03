@@ -489,8 +489,33 @@ class EquipmentCheckService:
         self.db.add(new_template)
         await self.db.flush()
 
+        # ``source.compartments`` is already loaded flat (get_template only
+        # selectin-loads ``.items``, not the self-referential ``.children``
+        # hierarchy). Walking ``.children`` here -- as this used to -- lazy-
+        # loads outside this awaited context and raises MissingGreenlet under
+        # AsyncSession the moment ``children`` is real (AP-13 finding 1; it
+        # became real when AP-8 fixed the relationship's inverted
+        # ``remote_side``). Group the already-loaded flat collection by
+        # parent instead, and clone root-down from that -- this also avoids
+        # double-cloning each nested compartment, which the old
+        # every-compartment-as-a-root loop combined with
+        # ``_clone_compartment``'s own children walk would otherwise do.
+        children_by_parent: Dict[Optional[str], List[CheckTemplateCompartment]] = {}
         for compartment in source.compartments:
-            await self._clone_compartment(new_template.id, compartment, parent_id=None)
+            children_by_parent.setdefault(compartment.parent_compartment_id, []).append(
+                compartment
+            )
+
+        async def _clone_subtree(
+            source_parent_id: Optional[str], new_parent_id: Optional[str]
+        ) -> None:
+            for compartment in children_by_parent.get(source_parent_id, []):
+                new_compartment = await self._clone_compartment(
+                    new_template.id, compartment, parent_id=new_parent_id
+                )
+                await _clone_subtree(str(compartment.id), str(new_compartment.id))
+
+        await _clone_subtree(None, None)
 
         await self.db.commit()
         return await self.get_template(new_template.id, organization_id)
@@ -4355,10 +4380,11 @@ class EquipmentCheckService:
             )
             self.db.add(new_item)
 
-        # Clone children
-        for child in getattr(source, "children", []) or []:
-            await self._clone_compartment(template_id, child, compartment.id)
-
+        # Children are cloned by the caller (``clone_template``'s
+        # ``_clone_subtree``), which walks the already flat-loaded
+        # ``source.compartments`` grouped by parent -- not this compartment's
+        # own ``.children``, which is not eager-loaded by ``get_template``
+        # and would lazy-load outside the awaited context (AP-13 finding 1).
         return compartment
 
     async def _validate_compartment_parent(
