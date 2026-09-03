@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: one canonical invariant replacing four pairwise rounds on the autosave/subtree-delete interaction (2026-09-03)
+
+A fifth Codex round on the same `EquipmentCheckTemplateBuilder.tsx`
+subsystem found two more gaps in the shape the previous four rounds (below)
+had each closed one instance of and missed the next. Rather than a sixth
+pairwise patch, replaced the ad-hoc tracking with one documented invariant
+and a single registration point every write path goes through.
+
+**Fixed**
+
+- **AP-13 finding 1, pass 9 (P2, frontend) — `flushPendingAutoSaves` (the
+  Save button's pre-save flush of a still-pending debounced edit) issued
+  its PATCH directly, never registering it anywhere a subtree delete's
+  quiescing step could see**: invisible to both tracking maps, in the
+  window before Save marks itself in progress — so a delete triggered while
+  a flush-issued PATCH was on the wire wasn't blocked on it at all. Fixed by
+  routing every item-PATCH-issuing write path (a fired debounce timer, this
+  flush, and Save's own per-item batch) through one new helper,
+  `registerInFlightSave`, rather than three call sites each managing the
+  tracking map by hand.
+- **AP-13 finding 2, pass 9 (P2, frontend) — a partial-failure Save skipped
+  the reparent-guard's server-truth-map refresh for a compartment whose own
+  update had already succeeded**: `handleSave` batched every compartment
+  and item update into one `Promise.all`, which rejects on the first
+  failure regardless of what else in the batch already committed
+  server-side — so if a compartment's reparent PATCH fulfilled while an
+  unrelated item's PATCH in the same batch rejected, the map never learned
+  about the reparent that had, in fact, already reached the server. A later
+  delete could then wrongly block (or, the inverse, wrongly allow) based on
+  a hierarchy comparison against a map that no longer matched the server's
+  actual state. Fixed by switching to two `Promise.allSettled` groups and
+  refreshing the map for every compartment PATCH that fulfilled,
+  unconditionally, before any batch failure is surfaced.
+
 ### Security: a fourth round on the delete/autosave interaction, and a bulk-replace path that never refreshed the reparent-guard's server-truth map (2026-09-03)
 
 **Fixed**
