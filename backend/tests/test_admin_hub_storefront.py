@@ -284,7 +284,15 @@ class TestStorefrontAttentionQueue:
         item = queue["store_pending_verification"]
         assert item.count == 1
         assert item.oldest_age_days == 3
-        assert item.href == "/inventory/admin/store?tab=orders"
+        # Filtered, not just the tab. The queue counts reported payments
+        # nobody has checked, and this row is the only way in from outside the
+        # page; landing on every order leaves the counted work to be found by
+        # eye. StoreAdminPage.test.tsx asserts the other half — that the page
+        # reads this parameter and seeds the Orders tab with it.
+        assert (
+            item.href == "/inventory/admin/store?tab=orders"
+            "&payment=pending_verification"
+        )
 
     async def test_raises_money_the_matcher_could_not_settle(self, db_session):
         org = await _org(db_session)

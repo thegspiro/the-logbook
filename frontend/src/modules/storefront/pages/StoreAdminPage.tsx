@@ -108,6 +108,14 @@ const StoreAdminPage: React.FC = () => {
     [setSearchParams]
   );
 
+  // The one filter that does travel in the URL. The frame's attention queue
+  // links in from outside the page ("Verify payments"), so its filter cannot
+  // be local state the way the overview's hand-offs below are — arriving on an
+  // unfiltered order list leaves the counted work to be found by eye. A value
+  // the Orders tab does not offer is ignored rather than forwarded to the API.
+  const paymentParam = searchParams.get('payment') ?? '';
+  const urlPaymentFilter = paymentParam in PAYMENT_STATUS_LABELS ? paymentParam : '';
+
   // The overview's hand-off into a pre-filtered Orders tab. These stay local
   // rather than joining `?tab=` in the URL: they are one click's worth of
   // context, not a place, and putting five filters in a shareable link would
@@ -438,10 +446,10 @@ const StoreAdminPage: React.FC = () => {
         {activeTab === 'catalog' && <StoreCatalogTab />}
         {activeTab === 'orders' && (
           <StoreOrdersTab
-            key={`${ordersStatusFilter}:${ordersPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
+            key={`${ordersStatusFilter}:${ordersPaymentFilter || urlPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
             onChanged={handleChanged}
             initialStatusFilter={ordersStatusFilter}
-            initialPaymentFilter={ordersPaymentFilter}
+            initialPaymentFilter={ordersPaymentFilter || urlPaymentFilter}
             initialOrderId={ordersDetailId}
             initialSubmittedWithinHours={ordersRecentHours}
             initialOpenOnly={ordersOpenOnly}

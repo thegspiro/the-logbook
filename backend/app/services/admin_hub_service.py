@@ -1455,7 +1455,10 @@ async def _storefront_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
                     if part
                 ),
                 action_label="Verify payments",
-                href="/inventory/admin/store?tab=orders",
+                # Filtered, not just the tab: this queue counts the reported
+                # payments nobody has checked, and an unfiltered order list
+                # leaves that work to be found by eye.
+                href="/inventory/admin/store?tab=orders&payment=pending_verification",
                 severity="warning",
                 count=verify_count,
                 oldest_age_days=age,

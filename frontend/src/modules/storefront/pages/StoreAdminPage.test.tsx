@@ -29,18 +29,21 @@ vi.mock('../components/StoreWindowsTab', () => ({ StoreWindowsTab: () => null })
 vi.mock('../components/StoreOrdersTab', () => ({
   StoreOrdersTab: ({
     initialStatusFilter,
+    initialPaymentFilter,
     initialOrderId,
     initialSubmittedWithinHours,
     initialOpenOnly,
   }: {
     initialStatusFilter?: string;
+    initialPaymentFilter?: string;
     initialOrderId?: string;
     initialSubmittedWithinHours?: number;
     initialOpenOnly?: boolean;
   }) => (
     <div>
-      Orders filter: {initialStatusFilter || 'all'}; detail: {initialOrderId || 'none'}; recent:{' '}
-      {initialSubmittedWithinHours ?? 'none'}; open: {initialOpenOnly ? 'yes' : 'no'}
+      Orders filter: {initialStatusFilter || 'all'}; payment: {initialPaymentFilter || 'all'}; detail:{' '}
+      {initialOrderId || 'none'}; recent: {initialSubmittedWithinHours ?? 'none'}; open:{' '}
+      {initialOpenOnly ? 'yes' : 'no'}
     </div>
   ),
 }));
@@ -199,6 +202,21 @@ describe('StoreAdminPage — tabs in the URL', () => {
 
     expect(await screen.findByText(/Orders filter: all/)).toBeInTheDocument();
     expect(screen.queryByText('Order workflow')).not.toBeInTheDocument();
+  });
+
+  it('carries the attention queue\u2019s payment filter in from the URL', async () => {
+    // The frame's "Verify payments" row links in from outside the page, so its
+    // filter cannot be the local state the overview's own hand-offs use. Landing
+    // on an unfiltered list leaves the counted work to be found by eye.
+    renderAt('/inventory/admin/store?tab=orders&payment=pending_verification');
+
+    expect(await screen.findByText(/payment: pending_verification/)).toBeInTheDocument();
+  });
+
+  it('ignores a payment filter the Orders tab does not offer', async () => {
+    renderAt('/inventory/admin/store?tab=orders&payment=not-a-status');
+
+    expect(await screen.findByText(/payment: all/)).toBeInTheDocument();
   });
 
   it('falls back to the overview for a tab that does not exist', async () => {

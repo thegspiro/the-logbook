@@ -487,7 +487,13 @@ export const InventoryAdminHub: React.FC = () => {
     'supply-ppe': { stat: summary?.items_by_type?.ppe, statLabel: 'items' },
     'supply-uniform': { stat: summary?.items_by_type?.uniform, statLabel: 'items' },
     'supply-medical': { stat: medicalExpiring ?? undefined, statLabel: 'expiring soon' },
-    items: { stat: summary?.total_items, statLabel: 'total' },
+    // A badge, not a `stat`: NavCard renders only the former, so the `stat`
+    // this entry used to carry was never on screen at all. And
+    // non_medical_items rather than total_items, because the latter sums
+    // quantities across every type including medical while this card opens a
+    // row listing that excludes it — a headline of 150 over a list of 127
+    // reads as a bug in the list.
+    items: { badge: summary?.non_medical_items },
     checkouts: {
       badge: summary?.overdue_checkouts,
       badgeColor: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',

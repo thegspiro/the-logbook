@@ -66,6 +66,7 @@ import { InventoryAdminHub } from './InventoryAdminHub';
 const mockSummary = {
   total_items: 150,
   items_by_type: { ppe: 62, uniform: 45, tool: 20 },
+  non_medical_items: 127,
   items_by_status: { available: 80, assigned: 40, checked_out: 20, in_maintenance: 5, retired: 5 },
   active_checkouts: 20,
   overdue_checkouts: 3,
@@ -472,6 +473,17 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
 
     expect(within(ppe).getByText('62')).toBeInTheDocument();
     expect(within(screen.getByRole('link', { name: /Uniforms/ })).getByText('45')).toBeInTheDocument();
+  });
+
+  it('counts All Items as the non-medical rows its listing shows', async () => {
+    // total_items is 150 and sums quantities across every type, medical
+    // included; /inventory/admin/items excludes medical and reports rows. A
+    // card that shows 150 over a list of 127 reads as a bug in the list.
+    renderWithRouter(<InventoryAdminHub />);
+    const items = await screen.findByRole('link', { name: /All Items/ });
+
+    expect(within(items).getByText('127')).toBeInTheDocument();
+    expect(within(items).queryByText('150')).not.toBeInTheDocument();
   });
 
   it('reports what is expiring on the EMS card, not what is on the shelf', async () => {

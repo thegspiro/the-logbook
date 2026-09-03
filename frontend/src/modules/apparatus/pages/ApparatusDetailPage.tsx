@@ -161,6 +161,9 @@ export const ApparatusDetailPage: React.FC = () => {
         status={status}
         id={id || ''}
         isArchived={currentApparatus.isArchived}
+        onArchived={() => {
+          if (id) void fetchApparatus(id);
+        }}
       />
 
       {/* Error Display */}
