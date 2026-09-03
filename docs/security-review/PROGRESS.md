@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#TBD]** (branch `claude/security-review-scheduling`) — Feature 15,
-Scheduling, pass 3. No fixes, no findings — diff-scoped against a
+**[#2210](https://github.com/thegspiro/the-logbook/pull/2210)** (branch
+`claude/security-review-scheduling`) — Feature 15, Scheduling, pass 3. No
+fixes, no findings — diff-scoped against a
 2026-08-31 baseline (five days of `main`), dominated by the equipment-check
 module move (already reviewed under EC-14 pass 3) and a new Claude MCP
 integration. New `equipment_check_template_ids` client-supplied FK list
