@@ -151,3 +151,83 @@ describe('apiClient — 401 handling on auth-flow endpoints', () => {
     expect(window.location.href).toBe('/login');
   });
 });
+
+/**
+ * The stale-while-revalidate path hands the caller a cached body and starts a
+ * background request to refresh the entry. That background request outlives
+ * the call that triggered it, so it must not inherit the caller's
+ * cancellation — see the abort assertions below.
+ */
+describe('apiClient — background revalidation of a stale entry', () => {
+  let originalAdapter: typeof api.defaults.adapter;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearCache();
+    originalAdapter = api.defaults.adapter;
+    // Only Date: the interceptor chain runs on microtasks, and faking those
+    // timers would stall the promises this test awaits.
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    api.defaults.adapter = originalAdapter;
+    clearCache();
+  });
+
+  it('does not cancel the refresh when the caller aborts', async () => {
+    const seenSignals: (AbortSignal | undefined)[] = [];
+    let releaseBackground: (() => void) | undefined;
+    let calls = 0;
+
+    withAdapter((config) => {
+      calls += 1;
+      seenSignals.push(config.signal as AbortSignal | undefined);
+      const ok = (data: unknown) => ({
+        data,
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      });
+      if (calls === 1) return Promise.resolve(ok({ generation: 1 }));
+      // Hold the revalidation open past the caller's abort, so this test
+      // measures the abort rather than racing it.
+      return new Promise((resolve, reject) => {
+        releaseBackground = () => resolve(ok({ generation: 2 }));
+        config.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    });
+
+    const primer = new AbortController();
+    await api.get('/inventory/items', { signal: primer.signal });
+    expect(calls).toBe(1);
+
+    // Into the stale window (30s-90s): served from cache, refreshed behind it.
+    vi.setSystemTime(Date.now() + 45_000);
+
+    const caller = new AbortController();
+    const cached = await api.get('/inventory/items', { signal: caller.signal });
+    expect(cached.data).toEqual({ generation: 1 });
+    expect(calls).toBe(2);
+
+    // What a page does on the next filter change or on unmount.
+    caller.abort();
+    releaseBackground?.();
+    // Real timers (only Date is faked), so this yields to the revalidation's
+    // .then(setCache) rather than merely to the microtask queue.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The background request was issued without the caller's signal, so the
+    // abort above could not reach it.
+    expect(seenSignals[1]).toBeUndefined();
+
+    // And the refreshed body actually landed in the cache: this third call is
+    // inside the fresh window of the revalidated entry, so it is served from
+    // cache without touching the adapter.
+    const refreshed = await api.get('/inventory/items');
+    expect(refreshed.data).toEqual({ generation: 2 });
+    expect(calls).toBe(2);
+  });
+});

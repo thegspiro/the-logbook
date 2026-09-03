@@ -101,9 +101,20 @@ const MedicalSuppliesPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
+  // Which filter the rows in `items` actually answer. Rendering the empty
+  // state off `items.length` alone reports "no medical supplies" whenever the
+  // list has not caught up with the controls — before the first response, and
+  // in the window after a filter changes — which reads as an empty catalogue
+  // rather than as a pending request. null until the first response lands.
+  const [itemsFilterKey, setItemsFilterKey] = useState<string | null>(null);
+
   const overviewRequestId = useRef(0);
   const itemsRequestId = useRef(0);
   const itemsAbortController = useRef<AbortController | null>(null);
+
+  // NUL separator: a plain space would let search "a b" with no category
+  // collide with search "a" under category "b".
+  const filterKey = `${debouncedSearch}\u0000${categoryFilter}`;
 
   const loadOverview = useCallback(async () => {
     const requestId = ++overviewRequestId.current;
@@ -147,6 +158,9 @@ const MedicalSuppliesPage: React.FC = () => {
       );
       if (requestId !== itemsRequestId.current) return;
       setItems(itemsData.items);
+      // Stamped from this closure's own filter values, not from the render's
+      // `filterKey`: those are what the request actually asked for.
+      setItemsFilterKey(`${debouncedSearch}\u0000${categoryFilter}`);
     } catch (err: unknown) {
       if (controller.signal.aborted || requestId !== itemsRequestId.current) return;
       const message = getErrorMessage(err, 'Failed to load medical supplies');
@@ -320,9 +334,17 @@ const MedicalSuppliesPage: React.FC = () => {
         </button>
       </div>
 
-      {tab === 'expiring' && overviewError && (
+      {/*
+       * The overview load carries the category list, so its failure degrades
+       * the stock tab too: rows show a dash for every category and the filter
+       * offers nothing but "All categories". Reporting it only on the expiring
+       * tab left that looking like a catalogue with no categories assigned.
+       */}
+      {overviewError && (
         <p role="alert" className="mb-4 text-sm text-red-700 dark:text-red-400">
-          {overviewError}
+          {tab === 'stock'
+            ? `${overviewError} Category names and the category filter are unavailable until it loads.`
+            : overviewError}
         </p>
       )}
       {tab === 'stock' && itemsError && (
@@ -416,7 +438,19 @@ const MedicalSuppliesPage: React.FC = () => {
             </select>
           </div>
 
-          {items.length === 0 ? (
+          {/*
+           * Rows are shown only when they answer the filter that is on screen.
+           * Anything else is a pending request (skeleton) or a failed one — and
+           * a failed one renders nothing here, because the alert above already
+           * says what happened and "No medical supplies yet" would contradict
+           * it. The controls above stay mounted throughout: putting the
+           * skeleton over them would unmount the search box mid-keystroke.
+           */}
+          {itemsFilterKey !== filterKey ? (
+            isItemsLoading ? (
+              <SkeletonCard />
+            ) : null
+          ) : items.length === 0 ? (
             <EmptyState
               icon={Stethoscope}
               title="No medical supplies yet"

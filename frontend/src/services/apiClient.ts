@@ -83,7 +83,13 @@ api.interceptors.request.use(
         // If stale, trigger a background revalidation for the next caller
         if (!cached.fresh && !isRevalidating(key)) {
           markRevalidating(key);
-          const { adapter: _adapter, ...restConfig } = config;
+          // Drop the caller's cancellation from the background request. The
+          // revalidation outlives the call that triggered it — the caller has
+          // already been handed the cached body and may abort on the next
+          // filter change or unmount, which would otherwise cancel the only
+          // thing refreshing this entry and leave the stale body cached until
+          // it expires.
+          const { adapter: _adapter, signal: _signal, cancelToken: _cancelToken, ...restConfig } = config;
           const bgConfig = { ...restConfig, _skipCache: true };
           void api
             .request(bgConfig)

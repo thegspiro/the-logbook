@@ -92,7 +92,13 @@ function assertOrganizationLowStockCount(count: number): void {
 
 describe('MedicalSuppliesPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset, not just clearAllMocks: clearAllMocks wipes recorded calls
+    // but leaves implementations and queued *Once values in place, so an
+    // unconsumed rejection from a failure-path test would be handed to
+    // whichever test called the mock next (CLAUDE.md pitfall #28).
+    [mockCheckPermission, mockGetSummary, mockGetItems, mockGetCategories, mockGetExpiringLots].forEach((mock) =>
+      mock.mockReset()
+    );
     mockCheckPermission.mockReturnValue(false);
     mockGetSummary.mockResolvedValue(summary);
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 200 });
@@ -398,6 +404,44 @@ describe('MedicalSuppliesPage', () => {
       )
     );
     assertOrganizationLowStockCount(7);
+  });
+
+  it('does not report an empty catalogue while the first item request is still in flight', async () => {
+    // The empty state is keyed off items.length, which is [] both before the
+    // first response and after an empty one. Reporting "No medical supplies
+    // yet" for the first is a false answer about the department's inventory,
+    // and on a slow connection it is the only answer on screen.
+    const pending = deferred<{ items: unknown[]; total: number; skip: number; limit: number }>();
+    mockGetItems.mockReturnValue(pending.promise);
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await screen.findByRole('heading', { name: /Medical Supplies/i });
+    await userEvent.click(screen.getByRole('button', { name: 'All supplies' }));
+
+    expect(screen.queryByText('No medical supplies yet')).not.toBeInTheDocument();
+
+    await act(async () => {
+      pending.resolve({ items: [], total: 0, skip: 0, limit: 200 });
+    });
+
+    // And once the server has actually said the catalogue is empty, it says so.
+    expect(await screen.findByText('No medical supplies yet')).toBeInTheDocument();
+  });
+
+  it('reports a failed overview load on the stock tab, where it costs the category names', async () => {
+    // The category list rides on the overview request. When it fails, the
+    // stock tab still renders rows -- with a dash for every category and a
+    // filter offering nothing -- so a tab that reported nothing looked like a
+    // catalogue with no categories assigned rather than a page half-loaded.
+    mockGetCategories.mockRejectedValue(new Error('Categories unavailable'));
+    mockGetItems.mockResolvedValue(itemResponse('4x4 Gauze'));
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await screen.findByRole('heading', { name: /Medical Supplies/i });
+    await userEvent.click(screen.getByRole('button', { name: 'All supplies' }));
+
+    expect(await screen.findByText('4x4 Gauze')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/Category names and the category filter are unavailable/i);
   });
 
   it('does not derive the organization-wide count from one page of a multi-page catalog', async () => {
