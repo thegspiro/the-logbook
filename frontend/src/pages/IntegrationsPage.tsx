@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
+import { McpServiceKeyPanel } from '../components/integrations/McpServiceKeyPanel';
 import { useLocation, useNavigate } from 'react-router';
 import {
   Plug,
@@ -42,6 +43,7 @@ import {
   Wallet,
   CreditCard,
   KeyRound,
+  Bot,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -52,6 +54,7 @@ import {
   type SalesforcePreviewResult,
   type CalcomBooking,
 } from '../services/api';
+import type { McpStatus } from '../services/adminServices';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ConnectionStatus } from '../constants/enums';
 import { formatDateTime } from '../utils/dateFormatting';
@@ -161,6 +164,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     bgColor: 'bg-indigo-500/10',
     features: ['Store payment matching', 'Auto-settles orders', 'Business account'],
   },
+  'claude-mcp': {
+    icon: <Bot className="h-6 w-6" />,
+    color: 'text-orange-700 dark:text-orange-400',
+    bgColor: 'bg-orange-500/10',
+    features: ['Read-only by default', 'No personal information', 'One service key per department'],
+  },
   active911: {
     icon: <Radio className="h-6 w-6" />,
     color: 'text-red-700 dark:text-red-400',
@@ -239,6 +248,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   Documents: <FileSignature className="h-3.5 w-3.5" />,
   Scheduling: <CalendarClock className="h-3.5 w-3.5" />,
   'Access Control': <KeyRound className="h-3.5 w-3.5" />,
+  'AI Assistants': <Bot className="h-3.5 w-3.5" />,
 };
 
 type CategoryFilter =
@@ -256,7 +266,8 @@ type CategoryFilter =
   | 'Documents'
   | 'Scheduling'
   | 'Payments'
-  | 'Access Control';
+  | 'Access Control'
+  | 'AI Assistants';
 
 const ALL_CATEGORIES: CategoryFilter[] = [
   'all',
@@ -274,6 +285,7 @@ const ALL_CATEGORIES: CategoryFilter[] = [
   'Scheduling',
   'Payments',
   'Access Control',
+  'AI Assistants',
 ];
 
 // Integration types that need webhook URL config
@@ -289,6 +301,7 @@ const CONFIG_TYPES = new Set([
   'documenso',
   'calcom',
   'paypal',
+  'claude-mcp',
 ]);
 
 /**
@@ -317,6 +330,9 @@ const webhookCallbackUrl = (provider: 'documenso' | 'calcom' | 'paypal', integra
 const IntegrationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('integrations.manage');
+  // A delegated key manager holds the key permission alongside the screen's
+  // own gate, not necessarily integrations.manage; the key panel is theirs too.
+  const canIssueKeys = checkPermission('integrations.mcp_keys');
   const location = useLocation();
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -369,8 +385,38 @@ const IntegrationsPage: React.FC = () => {
   const [paypalClientSecret, setPaypalClientSecret] = useState('');
   const [paypalWebhookId, setPaypalWebhookId] = useState('');
   const [paypalAutoApply, setPaypalAutoApply] = useState(true);
+  const [mcpAccessMode, setMcpAccessMode] = useState<'read_only' | 'read_write'>('read_only');
+  const [mcpExposeFinance, setMcpExposeFinance] = useState(false);
+  const [mcpExposeMedical, setMcpExposeMedical] = useState(false);
+  const [mcpExposeFullSchedule, setMcpExposeFullSchedule] = useState(false);
+  const [showMcpPanel, setShowMcpPanel] = useState(false);
+  // While the panel is issuing or revoking a key its response carries the
+  // one-time plaintext; closing it then would lose the only copy.
+  const [mcpPanelBusy, setMcpPanelBusy] = useState(false);
+  const toggleMcpPanel = () => {
+    if (mcpPanelBusy) return;
+    setShowMcpPanel((open) => !open);
+  };
+  // A delegated key manager cannot list integrations (that needs
+  // integrations.manage), so the Claude (MCP) card never renders for them.
+  // The status endpoint accepts their permission; it decides whether the
+  // service key card is shown instead.
+  const [delegatedMcp, setDelegatedMcp] = useState<McpStatus | null>(null);
+  // Set when that status request fails. Without it a transient failure
+  // leaves the page on the generic empty state with no way back to the key
+  // panel short of a full reload.
+  const [delegatedMcpError, setDelegatedMcpError] = useState<string | null>(null);
+  const [delegatedMcpAttempt, setDelegatedMcpAttempt] = useState(0);
 
   const loadIntegrations = useCallback(async () => {
+    // Listing integrations needs integrations.manage; a delegated key
+    // manager (key permission without it) would only ever get a 403 and an
+    // error toast, so they are not sent to it — the status endpoint decides
+    // what they see instead.
+    if (!canManage && canIssueKeys) {
+      setLoading(false);
+      return;
+    }
     try {
       const data = await integrationsService.getIntegrations();
       setIntegrations(data);
@@ -379,7 +425,27 @@ const IntegrationsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManage, canIssueKeys]);
+
+  useEffect(() => {
+    if (canManage || !canIssueKeys) return;
+    let cancelled = false;
+    void integrationsService
+      .getMcpStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setDelegatedMcp(status);
+        setDelegatedMcpError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setDelegatedMcp(null);
+        setDelegatedMcpError(getErrorMessage(err, 'Failed to load the Claude (MCP) status'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage, canIssueKeys, delegatedMcpAttempt]);
 
   useEffect(() => {
     void loadIntegrations();
@@ -423,6 +489,8 @@ const IntegrationsPage: React.FC = () => {
   const availableCount = integrations.filter((i) => i.status === 'available').length;
 
   const selectedIntegration = showConnectModal ? integrations.find((i) => i.id === showConnectModal) : null;
+  const showDelegatedMcpCard =
+    delegatedMcp?.enabled === true && !integrations.some((i) => i.integration_type === 'claude-mcp');
 
   // ``integration`` seeds the non-secret fields from what is already stored.
   // Without it, reopening the form on a live PayPal connection would show the
@@ -457,6 +525,12 @@ const IntegrationsPage: React.FC = () => {
     setPaypalClientSecret('');
     setPaypalWebhookId(typeof stored['webhook_id'] === 'string' ? stored['webhook_id'] : '');
     setPaypalAutoApply(stored['auto_apply_payments'] !== false);
+    // Every switch on this add-on defaults to off; reopening the form on a
+    // live connection must show what is stored, not the defaults.
+    setMcpAccessMode(stored['access_mode'] === 'read_write' ? 'read_write' : 'read_only');
+    setMcpExposeFinance(stored['expose_finance'] === true);
+    setMcpExposeMedical(stored['expose_medical_screening'] === true);
+    setMcpExposeFullSchedule(stored['expose_full_schedule'] === true);
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -495,6 +569,13 @@ const IntegrationsPage: React.FC = () => {
           client_secret: paypalClientSecret.trim() || undefined,
           webhook_id: paypalWebhookId.trim() || undefined,
           auto_apply_payments: paypalAutoApply,
+        };
+      case 'claude-mcp':
+        return {
+          access_mode: mcpAccessMode,
+          expose_finance: mcpExposeFinance,
+          expose_medical_screening: mcpExposeMedical,
+          expose_full_schedule: mcpExposeFullSchedule,
         };
       case 'salesforce':
         return {
@@ -545,6 +626,7 @@ const IntegrationsPage: React.FC = () => {
 
   const handleDisconnect = async (integrationId: string) => {
     const integration = integrations.find((i) => i.id === integrationId);
+    if (mcpPanelBusy && integration?.integration_type === 'claude-mcp') return;
     const activation = integration ? isActivation(integration.integration_type) : false;
     try {
       await integrationsService.disconnectIntegration(integrationId);
@@ -1146,6 +1228,81 @@ const IntegrationsPage: React.FC = () => {
           </div>
         );
 
+      case 'claude-mcp':
+        return (
+          <div className="space-y-3">
+            <div className="alert-info text-xs">
+              Member records never carry personal information through this connection &mdash; phone numbers, email
+              addresses, home addresses, dates of birth, emergency contacts and medical results are stripped whatever is
+              chosen below, and free text is scrubbed of phone numbers and email addresses. Other personal details
+              someone typed into a published document or note are not detectable and will pass through, so keep them out
+              of published content. After connecting, an IT administrator issues the service key from the card.
+            </div>
+            <div>
+              <label htmlFor="mcp-access-mode" className={labelClass}>
+                Access
+              </label>
+              <select
+                id="mcp-access-mode"
+                value={mcpAccessMode}
+                onChange={(e) => setMcpAccessMode(e.target.value === 'read_write' ? 'read_write' : 'read_only')}
+                className={inputClass}
+              >
+                <option value="read_only">Read-only</option>
+                <option value="read_write">Read and write</option>
+              </select>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Read and write lets Claude create draft events, meeting action items and pending reorder requests for a
+                person to review. It never publishes, approves or sends anything.
+              </p>
+            </div>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={mcpExposeFinance}
+                onChange={(e) => setMcpExposeFinance(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Share finance totals</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Fiscal years, budget lines and the treasurer&apos;s report in published minutes. Off by default.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={mcpExposeMedical}
+                onChange={(e) => setMcpExposeMedical(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Share medical screening status</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Whether a member is current on each screening and when it lapses &mdash; never a result, provider or
+                  note. Off by default because it can indicate protected health information.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={mcpExposeFullSchedule}
+                onChange={(e) => setMcpExposeFullSchedule(e.target.checked)}
+              />
+              <span>
+                <span className="text-theme-text-primary text-sm">Share the full duty schedule</span>
+                <span className="text-theme-text-muted block text-xs">
+                  Every shift and its assignments, as a scheduling manager sees them. Off by default: Claude then sees
+                  only shifts open to all members, which is what any eligible member can see.
+                </span>
+              </span>
+            </label>
+          </div>
+        );
+
       case 'paypal':
         return (
           <div className="space-y-3">
@@ -1334,6 +1491,32 @@ const IntegrationsPage: React.FC = () => {
 
         {/* Integration Cards */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {showDelegatedMcpCard && (
+            <div className="card p-6" data-testid="integration-card-claude-mcp-delegated">
+              <div className="mb-4 flex items-start space-x-3">
+                <div className="rounded-lg bg-orange-500/10 p-2 text-orange-700 dark:text-orange-400">
+                  <KeyRound className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">Claude (MCP)</h3>
+                  <p className="text-theme-text-muted text-sm">
+                    Connected. You can issue or revoke the department&apos;s service key.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={toggleMcpPanel}
+                  disabled={mcpPanelBusy}
+                  title={mcpPanelBusy ? 'Wait for the current key request to finish' : undefined}
+                  className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  <span>Service key</span>
+                </button>
+              </div>
+            </div>
+          )}
           {filteredIntegrations.map((integration) => {
             const ui = getUI(integration.integration_type);
             const activation = isActivation(integration.integration_type);
@@ -1379,6 +1562,19 @@ const IntegrationsPage: React.FC = () => {
                   ))}
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
+                  {integration.status === ConnectionStatus.CONNECTED &&
+                    integration.integration_type === 'claude-mcp' &&
+                    (canManage || canIssueKeys) && (
+                      <button
+                        onClick={toggleMcpPanel}
+                        disabled={mcpPanelBusy}
+                        title={mcpPanelBusy ? 'Wait for the current key request to finish' : undefined}
+                        className="flex items-center space-x-1 rounded-lg bg-orange-500/10 px-3 py-1.5 text-sm text-orange-700 transition-colors hover:bg-orange-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:text-orange-400"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        <span>Service key</span>
+                      </button>
+                    )}
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
                       {integration.integration_type === 'salesforce' && (
@@ -1417,6 +1613,14 @@ const IntegrationsPage: React.FC = () => {
                         onClick={() => {
                           void handleDisconnect(integration.id);
                         }}
+                        // Disconnecting the Claude integration unmounts the key
+                        // panel; mid-issue that would lose the one-time plaintext.
+                        disabled={mcpPanelBusy && integration.integration_type === 'claude-mcp'}
+                        title={
+                          mcpPanelBusy && integration.integration_type === 'claude-mcp'
+                            ? 'Wait for the current key request to finish'
+                            : undefined
+                        }
                         className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-1.5 text-sm transition-colors"
                       >
                         <Settings className="h-3.5 w-3.5" />
@@ -1441,6 +1645,13 @@ const IntegrationsPage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Claude (MCP) service key panel */}
+        {showMcpPanel &&
+          (showDelegatedMcpCard ||
+            integrations.some(
+              (i) => i.integration_type === 'claude-mcp' && i.status === ConnectionStatus.CONNECTED
+            )) && <McpServiceKeyPanel onClose={() => setShowMcpPanel(false)} onBusyChange={setMcpPanelBusy} />}
 
         {/* Cal.com Bookings Panel */}
         {showBookingsPanel &&
@@ -1726,7 +1937,25 @@ const IntegrationsPage: React.FC = () => {
             </div>
           )}
 
-        {filteredIntegrations.length === 0 && (
+        {delegatedMcpError && !showDelegatedMcpCard && (
+          <div className="alert-error mt-6 flex items-start gap-2" role="alert" data-testid="mcp-delegated-error">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm">
+                The Claude (MCP) status could not be loaded, so the service key cannot be managed right now.
+              </p>
+              <button
+                type="button"
+                onClick={() => setDelegatedMcpAttempt((n) => n + 1)}
+                className="mt-2 text-xs underline"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {filteredIntegrations.length === 0 && !showDelegatedMcpCard && !delegatedMcpError && (
           <div className="py-12 text-center">
             <Plug className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
             <p className="text-theme-text-secondary text-lg">No integrations match your search</p>
