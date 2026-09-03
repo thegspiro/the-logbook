@@ -1065,6 +1065,35 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     expect(screen.queryByLabelText('Actions for Medical bag')).not.toBeInTheDocument();
   });
 
+  it('blocks deleting a compartment whose subtree has an unsaved reparent (AP-13 finding 2)', async () => {
+    // Compartments have no auto-save path -- parent_compartment_id is only
+    // ever persisted by Save (handleSave) -- so moving Medical bag out of
+    // Cab here is a *local-only* edit. The backend still has Medical bag
+    // parented under Cab. If Cab's delete were allowed to proceed off the
+    // client's own (now-stale-relative-to-the-backend) subtree computation,
+    // the confirmation would undersell what's about to be destroyed and the
+    // backend's cascade would delete Medical bag anyway -- silently losing
+    // an edit the user was in the middle of saving.
+    renderBuilder();
+
+    const outdentBag = await screen.findByLabelText('Move Medical bag out one level');
+    await userEvent.click(outdentBag);
+
+    const deleteCab = screen.getByLabelText('Delete Cab');
+    await userEvent.click(deleteCab);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/unsaved changes/i)));
+    // No confirmation dialog, and no delete call -- the block happens before
+    // either, not as a cancel-in-place-of-them.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(deleteCompartment).not.toHaveBeenCalled();
+    // The pending reparent itself must survive the blocked attempt: Medical
+    // bag is still on screen, still outdented (not silently reverted or
+    // dropped), ready for the user to hit Save and try again.
+    expect(screen.getByLabelText('Actions for Medical bag')).toBeVisible();
+    expect(screen.getByLabelText('Actions for Cab')).toBeVisible();
+  });
+
   it('sends draft and publish state explicitly', async () => {
     const user = userEvent.setup();
     getTemplate.mockResolvedValue({

@@ -86,7 +86,7 @@ import type { CatalogAddPayload } from '@/modules/inventory/components/CatalogQu
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
-import { descendantCompartmentIds, storedInsideOptions } from './equipmentCheckHierarchy';
+import { descendantCompartmentIds, descendantIdsFromParentMap, storedInsideOptions } from './equipmentCheckHierarchy';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -479,6 +479,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
   const compartmentsRef = useRef(compartments);
   compartmentsRef.current = compartments;
+  // AP-13 finding 2 (Codex): last-known-server `id -> parentCompartmentId`
+  // for every persisted compartment. Reparenting (indent/outdent/the parent
+  // picker) has no auto-save path -- handleSave is the only writer of
+  // parent_compartment_id -- so this is what deleteCompartment compares
+  // against to detect a pending, unsaved hierarchy edit that would make its
+  // own client-side subtree computation disagree with what the backend's
+  // cascade would actually delete. Refreshed wholesale on every load (initial
+  // load and the reload handleSave triggers after a successful save) and
+  // per-row wherever a compartment's parent is persisted outside handleSave
+  // (add/duplicate a compartment, which the backend assigns a parent to
+  // immediately).
+  const savedParentByIdRef = useRef<Map<string, string>>(new Map());
   const itemMoveQueue = useRef<Promise<void>>(Promise.resolve());
   // Two guards, not one: adding a compartment and adding a section header are
   // separate buttons, and a shared flag would gray out one because the other
@@ -621,6 +633,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       });
       setCompartments(mapped);
       setExpandedCompartments(expanded);
+      const parentMap = new Map<string, string>();
+      for (const c of mapped) {
+        if (c.id) parentMap.set(c.id, c.parentCompartmentId);
+      }
+      savedParentByIdRef.current = parentMap;
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load template'));
     } finally {
@@ -743,6 +760,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
+        savedParentByIdRef.current.set(created.id, comp.parentCompartmentId);
         setCompartments((prev) => [...prev, comp]);
         setExpandedCompartments((prev) => new Set(prev).add(created.id));
         toast.success('Compartment added');
@@ -783,6 +801,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           parentCompartmentId: created.parentCompartmentId ?? '',
           items: [],
         };
+        savedParentByIdRef.current.set(created.id, comp.parentCompartmentId);
         setCompartments((prev) => [...prev, comp]);
         toast.success('Section header added');
       } catch (err: unknown) {
@@ -811,6 +830,35 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // what's being destroyed and deleted descendants linger as orphaned
     // "top-level" rows whose ids 404 on the next Save.
     const descendantIds = descendantCompartmentIds(compartments, comp.id);
+
+    // AP-13 finding 2 (Codex): descendantIds above is computed from *this
+    // screen's* current hierarchy, which can disagree with what the backend
+    // still has -- reparenting (indent/outdent/the parent picker) has no
+    // auto-save path; handleSave is the only writer of
+    // parent_compartment_id. If a descendant was reparented OUT of this
+    // subtree in unsaved local state, the confirmation and local removal
+    // below would correctly leave it alone -- but the backend's cascade,
+    // still seeing the old parent_compartment_id, destroys it anyway,
+    // silently losing whatever the user was in the middle of saving. The
+    // inverse (reparented IN, unsaved) would remove it from this screen
+    // while the backend leaves it alive elsewhere, untouched. Comparing the
+    // live computation against the last-known-server subtree
+    // (savedParentByIdRef) catches both directions and blocks rather than
+    // risks either.
+    if (comp.id) {
+      const serverDescendantIds = descendantIdsFromParentMap(savedParentByIdRef.current, comp.id);
+      const knownIds = new Set(
+        [...serverDescendantIds, ...descendantIds].filter((id) => savedParentByIdRef.current.has(id))
+      );
+      const hasPendingReparent = [...knownIds].some((id) => serverDescendantIds.has(id) !== descendantIds.has(id));
+      if (hasPendingReparent) {
+        toast.error(
+          'This compartment’s hierarchy has unsaved changes that would affect what gets deleted. Save the template, then delete this compartment.'
+        );
+        return;
+      }
+    }
+
     const descendantComps = compartments.filter((c) => c.id !== undefined && descendantIds.has(c.id));
     const totalItems = comp.items.length + descendantComps.reduce((sum, c) => sum + c.items.length, 0);
     const label = comp.name || 'Untitled Compartment';
@@ -858,6 +906,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       try {
         await ensureDraftBeforeStructureEdit();
         copy = compartmentFormFromResponse(await equipmentCheckService.cloneCompartment(comp.id, idx + 1));
+        if (copy.id) savedParentByIdRef.current.set(copy.id, copy.parentCompartmentId);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to duplicate compartment'));
         return;
@@ -1929,6 +1978,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           }
         }
         await Promise.all(updatePromises);
+        // Every compartment update above just persisted parent_compartment_id
+        // exactly as sent (handleSave is the only writer -- see the comment
+        // on the update above) -- refresh the server-truth map immediately
+        // rather than waiting on loadTemplate's reload below, which is a
+        // separate, unawaited round trip (AP-13 finding 2).
+        for (const comp of compartments) {
+          if (comp.id) savedParentByIdRef.current.set(comp.id, comp.parentCompartmentId);
+        }
 
         if (publish) {
           await equipmentCheckService.updateEquipmentCheckTemplate(templateId, { is_active: true });

@@ -27,6 +27,28 @@ export function descendantCompartmentIds(
   return descendants;
 }
 
+/**
+ * Descendant ids of `rootId`, walked from a flat `id -> parentCompartmentId`
+ * map rather than a live `HierarchyCompartment[]` — used to compare the
+ * *last known server* subtree against the current, possibly locally-edited
+ * one (AP-13 finding 2: reparenting has no auto-save path, so the client's
+ * in-memory hierarchy can disagree with what the backend still has).
+ */
+export function descendantIdsFromParentMap(parentById: Map<string, string>, rootId: string): Set<string> {
+  const descendants = new Set<string>();
+  const pending = [rootId];
+  while (pending.length > 0) {
+    const parentId = pending.pop();
+    for (const [id, pid] of parentById) {
+      if (pid === parentId && !descendants.has(id)) {
+        descendants.add(id);
+        pending.push(id);
+      }
+    }
+  }
+  return descendants;
+}
+
 function compartmentPath(compartments: HierarchyCompartment[], compartment: HierarchyCompartment): string {
   const names = [compartment.name || 'Untitled'];
   const visited = new Set<string>();
