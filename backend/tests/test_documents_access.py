@@ -31,7 +31,13 @@ from app.api.v1.endpoints.documents import (
 )
 from app.models.audit import AuditLog
 from app.models.document import Document, DocumentFolder, FolderVisibility
-from app.models.user import Organization, User
+from app.models.facilities import (
+    Facility,
+    FacilityDocument,
+    FacilityStatus,
+    FacilityType,
+)
+from app.models.user import Organization, Position, User, user_positions
 from app.schemas.documents import (
     DocumentFolderCreate,
     DocumentFolderUpdate,
@@ -1081,7 +1087,11 @@ class TestUpdateAndDeleteDocumentRespectFolderAcl:
         folder = DocumentFolder(
             organization_id=org.id,
             name="Insurance & Leases",
-            required_permissions=["facilities.view_sensitive"],
+            required_permissions=[
+                "facilities.view_sensitive",
+                "facilities.edit",
+                "facilities.manage",
+            ],
         )
         db_session.add(folder)
         await db_session.flush()
@@ -1098,7 +1108,8 @@ class TestUpdateAndDeleteDocumentRespectFolderAcl:
     def _caller(self, org_id, *, facilities_permission=False):
         perms = ["documents.manage"]
         if facilities_permission:
-            perms.append("facilities.view_sensitive")
+            # facilities.edit (write-tier), not the read-only facilities.view_sensitive.
+            perms.append("facilities.edit")
         user = _user(uid="caller-1", roles=[(perms, "admin")])
         user.organization_id = org_id
         user.username = "caller"
@@ -1200,7 +1211,11 @@ class TestUpdateDocumentRespectsDestinationFolderAcl:
         destination = DocumentFolder(
             organization_id=org.id,
             name="Insurance & Leases",
-            required_permissions=["facilities.view_sensitive"],
+            required_permissions=[
+                "facilities.view_sensitive",
+                "facilities.edit",
+                "facilities.manage",
+            ],
         )
         db_session.add(destination)
         await db_session.flush()
@@ -1217,7 +1232,8 @@ class TestUpdateDocumentRespectsDestinationFolderAcl:
     def _caller(self, org_id, *, facilities_permission=False):
         perms = ["documents.manage"]
         if facilities_permission:
-            perms.append("facilities.view_sensitive")
+            # facilities.edit (write-tier), not the read-only facilities.view_sensitive.
+            perms.append("facilities.edit")
         user = _user(uid="caller-1", roles=[(perms, "admin")])
         user.organization_id = org_id
         user.username = "caller"
@@ -1304,6 +1320,11 @@ class TestFolderMutationRespectsOwnFolderAcl:
     """
 
     async def _org_with_sensitive_folder(self, db_session, slug):
+        """Builds root -> child -> grandchild, each carrying its own document,
+        so the delete-cascade tests below exercise two descendant levels, not
+        one (Codex round 4: the earlier two-level fixture only proved a
+        single level of recursion, short of the "recursive subtree" claim
+        the verification write-up made)."""
         org = Organization(name="Falls Church VFD", slug=slug)
         db_session.add(org)
         await db_session.flush()
@@ -1312,7 +1333,11 @@ class TestFolderMutationRespectsOwnFolderAcl:
         folder = DocumentFolder(
             organization_id=org.id,
             name="Insurance & Leases",
-            required_permissions=["facilities.view_sensitive"],
+            required_permissions=[
+                "facilities.view_sensitive",
+                "facilities.edit",
+                "facilities.manage",
+            ],
         )
         db_session.add(folder)
         await db_session.flush()
@@ -1320,6 +1345,11 @@ class TestFolderMutationRespectsOwnFolderAcl:
             organization_id=org.id, name="Renewals", parent_id=folder.id
         )
         db_session.add(child)
+        await db_session.flush()
+        grandchild = DocumentFolder(
+            organization_id=org.id, name="2026", parent_id=child.id
+        )
+        db_session.add(grandchild)
         await db_session.flush()
         document = Document(
             organization_id=org.id,
@@ -1333,14 +1363,30 @@ class TestFolderMutationRespectsOwnFolderAcl:
             name="Renewal notice",
             file_name="renewal.pdf",
         )
-        db_session.add_all([document, child_document])
+        grandchild_document = Document(
+            organization_id=org.id,
+            folder_id=grandchild.id,
+            name="Renewal notice 2026",
+            file_name="renewal-2026.pdf",
+        )
+        db_session.add_all([document, child_document, grandchild_document])
         await db_session.flush()
-        return org, other_folder, folder, child, document, child_document
+        return (
+            org,
+            other_folder,
+            folder,
+            child,
+            document,
+            child_document,
+            grandchild,
+            grandchild_document,
+        )
 
     def _caller(self, org_id, *, facilities_permission=False):
         perms = ["documents.manage"]
         if facilities_permission:
-            perms.append("facilities.view_sensitive")
+            # facilities.edit (write-tier), not the read-only facilities.view_sensitive.
+            perms.append("facilities.edit")
         user = _user(uid="caller-1", roles=[(perms, "admin")])
         user.organization_id = org_id
         user.username = "caller"
@@ -1349,8 +1395,8 @@ class TestFolderMutationRespectsOwnFolderAcl:
     async def test_documents_manage_alone_cannot_rename_a_sensitive_folder(
         self, db_session
     ):
-        org, _other, folder, _child, _doc, _child_doc = (
-            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-1")
+        org, _other, folder, *_rest = await self._org_with_sensitive_folder(
+            db_session, "fcvfd-folder-1"
         )
         caller = self._caller(org.id)
 
@@ -1369,8 +1415,8 @@ class TestFolderMutationRespectsOwnFolderAcl:
     async def test_documents_manage_alone_cannot_reparent_a_sensitive_folder(
         self, db_session
     ):
-        org, other_folder, folder, _child, _doc, _child_doc = (
-            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-2")
+        org, other_folder, folder, *_rest = await self._org_with_sensitive_folder(
+            db_session, "fcvfd-folder-2"
         )
         caller = self._caller(org.id)
 
@@ -1389,21 +1435,31 @@ class TestFolderMutationRespectsOwnFolderAcl:
     async def test_documents_manage_alone_cannot_delete_a_sensitive_folder(
         self, db_session
     ):
-        org, _other, folder, child, document, child_document = (
-            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-3")
-        )
+        (
+            org,
+            _other,
+            folder,
+            child,
+            document,
+            child_document,
+            grandchild,
+            grandchild_document,
+        ) = await self._org_with_sensitive_folder(db_session, "fcvfd-folder-3")
         caller = self._caller(org.id)
 
         with pytest.raises(HTTPException) as exc:
             await delete_folder(folder.id, db=db_session, current_user=caller)
         assert exc.value.status_code == 404
 
-        # Nothing in the subtree was touched -- the cascade never started.
+        # Nothing in the subtree was touched -- the cascade never started, at
+        # any of the three levels (root, child, grandchild).
         for model, row_id in (
             (DocumentFolder, folder.id),
             (DocumentFolder, child.id),
+            (DocumentFolder, grandchild.id),
             (Document, document.id),
             (Document, child_document.id),
+            (Document, grandchild_document.id),
         ):
             result = await db_session.execute(select(model).where(model.id == row_id))
             assert result.scalar_one_or_none() is not None
@@ -1411,8 +1467,8 @@ class TestFolderMutationRespectsOwnFolderAcl:
     async def test_caller_with_the_folders_own_permission_can_still_rename_it(
         self, db_session
     ):
-        org, _other, folder, _child, _doc, _child_doc = (
-            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-4")
+        org, _other, folder, *_rest = await self._org_with_sensitive_folder(
+            db_session, "fcvfd-folder-4"
         )
         caller = self._caller(org.id, facilities_permission=True)
 
@@ -1428,11 +1484,19 @@ class TestFolderMutationRespectsOwnFolderAcl:
         self, db_session
     ):
         # Positive control, and proof the cascade still works as intended for
-        # an authorized caller: the folder, its child folder, and both
-        # documents are all gone afterward.
-        org, _other, folder, child, document, child_document = (
-            await self._org_with_sensitive_folder(db_session, "fcvfd-folder-5")
-        )
+        # an authorized caller: the folder, its child, its grandchild, and
+        # all three documents are gone afterward -- two full levels of
+        # recursion, not one.
+        (
+            org,
+            _other,
+            folder,
+            child,
+            document,
+            child_document,
+            grandchild,
+            grandchild_document,
+        ) = await self._org_with_sensitive_folder(db_session, "fcvfd-folder-5")
         caller = self._caller(org.id, facilities_permission=True)
 
         await delete_folder(folder.id, db=db_session, current_user=caller)
@@ -1440,8 +1504,10 @@ class TestFolderMutationRespectsOwnFolderAcl:
         for model, row_id in (
             (DocumentFolder, folder.id),
             (DocumentFolder, child.id),
+            (DocumentFolder, grandchild.id),
             (Document, document.id),
             (Document, child_document.id),
+            (Document, grandchild_document.id),
         ):
             result = await db_session.execute(select(model).where(model.id == row_id))
             assert result.scalar_one_or_none() is None
@@ -1465,7 +1531,11 @@ class TestFolderCreationRespectsParentAcl:
         parent = DocumentFolder(
             organization_id=org.id,
             name="Insurance & Leases",
-            required_permissions=["facilities.view_sensitive"],
+            required_permissions=[
+                "facilities.view_sensitive",
+                "facilities.edit",
+                "facilities.manage",
+            ],
         )
         db_session.add(parent)
         await db_session.flush()
@@ -1482,7 +1552,8 @@ class TestFolderCreationRespectsParentAcl:
         # `_grant_officer_position` helper does the same.
         perms = ["documents.manage"]
         if facilities_permission:
-            perms.append("facilities.view_sensitive")
+            # facilities.edit (write-tier), not the read-only facilities.view_sensitive.
+            perms.append("facilities.edit")
         user = User(organization_id=org_id, username="caller", email="caller@x.test")
         db_session.add(user)
         await db_session.flush()
@@ -1587,7 +1658,11 @@ class TestFolderReparentRespectsNewParentAcl:
         sensitive_parent = DocumentFolder(
             organization_id=org.id,
             name="Insurance & Leases",
-            required_permissions=["facilities.view_sensitive"],
+            required_permissions=[
+                "facilities.view_sensitive",
+                "facilities.edit",
+                "facilities.manage",
+            ],
         )
         db_session.add_all([movable, sensitive_parent])
         await db_session.flush()
@@ -1596,7 +1671,8 @@ class TestFolderReparentRespectsNewParentAcl:
     def _caller(self, org_id, *, facilities_permission=False):
         perms = ["documents.manage"]
         if facilities_permission:
-            perms.append("facilities.view_sensitive")
+            # facilities.edit (write-tier), not the read-only facilities.view_sensitive.
+            perms.append("facilities.edit")
         user = _user(uid="caller-1", roles=[(perms, "admin")])
         user.organization_id = org_id
         user.username = "caller"
@@ -1769,7 +1845,11 @@ class TestDeleteFolderRefusesInaccessibleDescendant:
             organization_id=org.id,
             name="Insurance & Leases",
             parent_id=root.id,
-            required_permissions=["facilities.view_sensitive"],
+            required_permissions=[
+                "facilities.view_sensitive",
+                "facilities.edit",
+                "facilities.manage",
+            ],
         )
         db_session.add(sensitive_child)
         await db_session.flush()
@@ -1786,7 +1866,8 @@ class TestDeleteFolderRefusesInaccessibleDescendant:
     def _caller(self, org_id, *, facilities_permission=False):
         perms = ["documents.manage"]
         if facilities_permission:
-            perms.append("facilities.view_sensitive")
+            # facilities.edit (write-tier), not the read-only facilities.view_sensitive.
+            perms.append("facilities.edit")
         user = _user(uid="caller-1", roles=[(perms, "admin")])
         user.organization_id = org_id
         user.username = "caller"
@@ -1858,6 +1939,388 @@ class TestDeleteFolderRefusesInaccessibleDescendant:
 
         service = DocumentsService(db_session)
         assert await service.delete_folder(parent.id, org.id) is True
+
+
+@pytest.mark.integration
+class TestFolderWriteTierPermission:
+    """Codex round: ``can_access_folder``/``can_access_document`` admit a
+    caller who holds *any one* of a folder's ``required_permissions`` --
+    including a read-only one. A sensitive facility folder's
+    ``required_permissions`` lists ``facilities.view_sensitive`` alongside
+    ``facilities.edit``/``.manage``, so every mutation-gating check added by
+    prior rounds (reusing that same predicate unmodified) let a caller
+    holding ``documents.manage`` plus only ``facilities.view_sensitive`` --
+    no facilities write permission at all, the seeded treasurer role's exact
+    shape, ``core/permissions.py:1637-1644`` -- unfile, move, or delete a
+    sensitive document, or rename/reparent/delete/create-under the folder
+    itself, purely on a read-tier grant. ``can_access_folder``/
+    ``can_access_document``'s ``require_write`` filters
+    ``required_permissions`` down to the non-view-only entries before
+    matching, so a read-only grant no longer authorizes a write; the source
+    module's own mutation routes never accept view-only for a write either
+    (facilities.py's ``.edit``/``.delete``/``.manage`` requirements).
+    """
+
+    async def _org_with_sensitive_tree(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        root = DocumentFolder(
+            organization_id=org.id,
+            name="Insurance & Leases",
+            required_permissions=[
+                "facilities.view_sensitive",
+                "facilities.edit",
+                "facilities.manage",
+            ],
+        )
+        other_root = DocumentFolder(organization_id=org.id, name="Other")
+        db_session.add_all([root, other_root])
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id,
+            folder_id=root.id,
+            name="Policy",
+            file_name="policy.pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+        return org, root, other_root, document
+
+    def _treasurer_shaped_caller(self, org_id):
+        """documents.manage + facilities.view_sensitive, no facilities write
+        permission at all -- the seeded treasurer role's exact combination."""
+        user = _user(
+            uid="treasurer-1",
+            roles=[(["documents.manage", "facilities.view_sensitive"], "treasurer")],
+        )
+        user.organization_id = org_id
+        user.username = "treasurer"
+        return user
+
+    def _write_capable_caller(self, org_id):
+        user = _user(
+            uid="editor-1",
+            roles=[(["documents.manage", "facilities.edit"], "facilities_editor")],
+        )
+        user.organization_id = org_id
+        user.username = "editor"
+        return user
+
+    async def _real_write_capable_user(self, db_session, org_id):
+        # A real row, not a SimpleNamespace stand-in: create_folder inserts
+        # `created_by` as an FK to `users.id`, which a synthetic id violates.
+        user = User(
+            organization_id=org_id, username="editor", email="editor@example.com"
+        )
+        db_session.add(user)
+        await db_session.flush()
+        position = Position(
+            organization_id=org_id,
+            name="Facilities Editor",
+            slug=f"fac-editor-{user.id[:8]}",
+            permissions=["documents.manage", "facilities.edit"],
+        )
+        db_session.add(position)
+        await db_session.flush()
+        await db_session.execute(
+            user_positions.insert().values(user_id=user.id, position_id=position.id)
+        )
+        await db_session.flush()
+        result = await db_session.execute(
+            select(User)
+            .where(User.id == user.id)
+            .options(selectinload(User.positions))
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one()
+
+    async def test_view_sensitive_alone_cannot_unfile_a_document(self, db_session):
+        org, root, _other, document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-1"
+        )
+        caller = self._treasurer_shaped_caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_document(
+                document.id,
+                DocumentUpdate(folder_id=None),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 404
+        await db_session.refresh(document)
+        assert document.folder_id == root.id
+
+    async def test_view_sensitive_alone_cannot_delete_a_document(self, db_session):
+        org, _root, _other, document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-2"
+        )
+        caller = self._treasurer_shaped_caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_document(document.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 404
+        result = await db_session.execute(
+            select(Document).where(Document.id == document.id)
+        )
+        assert result.scalar_one_or_none() is not None
+
+    async def test_write_permission_can_unfile_and_delete_a_document(self, db_session):
+        org, _root, _other, document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-3"
+        )
+        caller = self._write_capable_caller(org.id)
+
+        result = await update_document(
+            document.id,
+            DocumentUpdate(folder_id=None),
+            db=db_session,
+            current_user=caller,
+        )
+        assert result.folder_id is None
+
+    async def test_view_sensitive_alone_cannot_rename_the_folder(self, db_session):
+        org, root, _other, _document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-4"
+        )
+        caller = self._treasurer_shaped_caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_folder(
+                root.id,
+                DocumentFolderUpdate(name="Renamed"),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 404
+
+    async def test_view_sensitive_alone_cannot_delete_the_folder(self, db_session):
+        org, root, _other, _document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-5"
+        )
+        caller = self._treasurer_shaped_caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await delete_folder(root.id, db=db_session, current_user=caller)
+        assert exc.value.status_code == 404
+        result = await db_session.execute(
+            select(DocumentFolder).where(DocumentFolder.id == root.id)
+        )
+        assert result.scalar_one_or_none() is not None
+
+    async def test_view_sensitive_alone_cannot_move_a_document_into_the_folder(
+        self, db_session
+    ):
+        org, root, other_root, _document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-6"
+        )
+        outside_document = Document(
+            organization_id=org.id,
+            folder_id=other_root.id,
+            name="Memo",
+            file_name="memo.pdf",
+        )
+        db_session.add(outside_document)
+        await db_session.flush()
+        caller = self._treasurer_shaped_caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_document(
+                outside_document.id,
+                DocumentUpdate(folder_id=root.id),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 403
+
+    async def test_view_sensitive_alone_cannot_reparent_a_folder_into_it(
+        self, db_session
+    ):
+        org, root, other_root, _document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-7"
+        )
+        caller = self._treasurer_shaped_caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await update_folder(
+                other_root.id,
+                DocumentFolderUpdate(parent_id=root.id),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 403
+
+    async def test_view_sensitive_alone_cannot_create_a_folder_under_it(
+        self, db_session
+    ):
+        org, root, _other, _document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-8"
+        )
+        caller = self._treasurer_shaped_caller(org.id)
+
+        with pytest.raises(HTTPException) as exc:
+            await create_folder(
+                DocumentFolderCreate(name="New", parent_id=root.id),
+                db=db_session,
+                current_user=caller,
+            )
+        assert exc.value.status_code == 403
+
+    async def test_write_permission_can_create_a_folder_under_it(self, db_session):
+        org, root, _other, _document = await self._org_with_sensitive_tree(
+            db_session, "fcvfd-wt-9"
+        )
+        caller = await self._real_write_capable_user(db_session, org.id)
+
+        result = await create_folder(
+            DocumentFolderCreate(name="New", parent_id=root.id),
+            db=db_session,
+            current_user=caller,
+        )
+        assert str(result.parent_id) == str(root.id)
+
+
+@pytest.mark.integration
+class TestDeleteDocumentCleansUpFacilityReference:
+    """A facility record references a shared document by a plain
+    ``"document:<uuid>"`` string in ``FacilityDocument.file_path`` (see
+    ``_validate_shared_document_reference`` in ``facilities.py``), not a
+    foreign key. Deleting the referenced ``Document`` without cleaning that
+    up left a facility document entry that could never be downloaded again
+    -- a dangling reference with no error to surface it.
+    """
+
+    async def _facility_with_referenced_document(self, db_session, slug):
+        org = Organization(name="Falls Church VFD", slug=slug)
+        db_session.add(org)
+        await db_session.flush()
+        facility_type = FacilityType(
+            organization_id=None, name="Station", is_system=True
+        )
+        facility_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        db_session.add_all([facility_type, facility_status])
+        await db_session.flush()
+        facility = Facility(
+            organization_id=org.id,
+            name="Station 1",
+            facility_type_id=facility_type.id,
+            status_id=facility_status.id,
+        )
+        db_session.add(facility)
+        await db_session.flush()
+        document = Document(
+            organization_id=org.id,
+            name="Policy",
+            file_name="policy.pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+        facility_document = FacilityDocument(
+            organization_id=org.id,
+            facility_id=facility.id,
+            file_path=f"document:{document.id}",
+            file_name="policy.pdf",
+        )
+        db_session.add(facility_document)
+        await db_session.flush()
+        return org, document, facility_document
+
+    def _caller(self, org_id):
+        user = _user(uid="admin-1", roles=[(["documents.manage"], "admin")])
+        user.organization_id = org_id
+        user.username = "admin"
+        return user
+
+    async def test_deleting_the_document_removes_the_facility_reference(
+        self, db_session
+    ):
+        org, document, facility_document = (
+            await self._facility_with_referenced_document(db_session, "fcvfd-fdoc-1")
+        )
+        caller = self._caller(org.id)
+
+        await delete_document(document.id, db=db_session, current_user=caller)
+
+        result = await db_session.execute(
+            select(FacilityDocument).where(FacilityDocument.id == facility_document.id)
+        )
+        assert result.scalar_one_or_none() is None
+
+    async def test_a_different_organizations_reference_string_is_untouched(
+        self, db_session
+    ):
+        # The cleanup is org-scoped like every other by-id operation in this
+        # service (CLAUDE.md #14) -- a facility_documents row in a *different*
+        # organization that happens to carry the same "document:<uuid>"
+        # string (e.g. a corrupted or forged reference) must survive.
+        org, document, facility_document = (
+            await self._facility_with_referenced_document(db_session, "fcvfd-fdoc-2")
+        )
+        other_org = Organization(name="Other VFD", slug="fcvfd-fdoc-2-other")
+        db_session.add(other_org)
+        await db_session.flush()
+        other_type = FacilityType(organization_id=None, name="Station", is_system=True)
+        other_status = FacilityStatus(
+            organization_id=None, name="In service", is_system=True
+        )
+        db_session.add_all([other_type, other_status])
+        await db_session.flush()
+        other_facility = Facility(
+            organization_id=other_org.id,
+            name="Other Station",
+            facility_type_id=other_type.id,
+            status_id=other_status.id,
+        )
+        db_session.add(other_facility)
+        await db_session.flush()
+        other_org_reference = FacilityDocument(
+            organization_id=other_org.id,
+            facility_id=other_facility.id,
+            file_path=f"document:{document.id}",
+            file_name="policy.pdf",
+        )
+        db_session.add(other_org_reference)
+        await db_session.flush()
+        caller = self._caller(org.id)
+
+        await delete_document(document.id, db=db_session, current_user=caller)
+
+        # This org's own reference is cleaned up...
+        result = await db_session.execute(
+            select(FacilityDocument).where(FacilityDocument.id == facility_document.id)
+        )
+        assert result.scalar_one_or_none() is None
+        # ...but the other organization's row, sharing the same file_path
+        # string, is untouched.
+        result = await db_session.execute(
+            select(FacilityDocument).where(
+                FacilityDocument.id == other_org_reference.id
+            )
+        )
+        assert result.scalar_one_or_none() is not None
+
+    async def test_deleting_a_folder_cleans_up_references_in_its_subtree(
+        self, db_session
+    ):
+        org, document, facility_document = (
+            await self._facility_with_referenced_document(db_session, "fcvfd-fdoc-3")
+        )
+        folder = DocumentFolder(organization_id=org.id, name="Insurance & Leases")
+        db_session.add(folder)
+        await db_session.flush()
+        document.folder_id = folder.id
+        await db_session.flush()
+        caller = self._caller(org.id)
+
+        await delete_folder(folder.id, db=db_session, current_user=caller)
+
+        result = await db_session.execute(
+            select(FacilityDocument).where(FacilityDocument.id == facility_document.id)
+        )
+        assert result.scalar_one_or_none() is None
 
 
 @pytest.mark.integration

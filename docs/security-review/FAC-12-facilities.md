@@ -403,8 +403,9 @@ effect of the relationship's direction is this cascade behavior, and
 correcting it changes nothing else. Fixed by moving `remote_side=[id]` onto
 the `parent` backref (`backref=backref("parent", remote_side=[id])`),
 matching the pattern used correctly elsewhere in this codebase; re-verified
-with a three-level fixture (root → child → grandchild → document) that a
-delete now removes every row.
+with a standalone, ad-hoc three-level fixture (root → child → grandchild →
+document, built directly against the model, separate from the pytest
+regression suite below) that a delete now removes every row.
 
 **Not fixed here, flagged for a future pass:** the same inverted-`remote_side`
 shape exists in two other, unrelated modules —
@@ -420,16 +421,30 @@ finding used before assuming the fix transfers directly.
 `tests/test_documents_access.py::TestFolderMutationRespectsOwnFolderAcl` —
 proves a `documents.manage`-only caller cannot rename, reparent, or delete a
 sensitive-gated folder (all three 404, and the delete-attempt test confirms
-the entire subtree — folder, child folder, and both documents — is
-untouched, not partially cascaded); two positive-control tests prove a
-caller holding the folder's own permission can still rename it and can still
-delete it, with the delete test asserting the full three-level cascade
-(folder, child folder, and both documents) actually completes. Independently
-confirmed failing pre-fix via `git stash` (the three bypass tests raised no
-`HTTPException`) and passing post-fix; the positive-control delete test also
-served as the reproduction case for the cascade bug above (it failed with an
+the entire subtree — folder, child folder, grandchild folder, and all three
+documents — is untouched, not partially cascaded); two positive-control
+tests prove a caller holding the folder's own permission can still rename it
+and can still delete it, with the delete test asserting the cascade removes
+every row two descendant levels deep (folder, child folder, grandchild
+folder, and all three documents). Independently confirmed failing pre-fix
+via `git stash` (the three bypass tests raised no `HTTPException`) and
+passing post-fix; the positive-control delete test also served as the
+reproduction case for the cascade bug above (it failed with an
 `AssertionError` — the child folder survived — before that fix, distinct
 from the `HTTPException`-based ACL failures).
+
+**Correction (Codex round):** this write-up originally described the
+regression fixture (`_org_with_sensitive_folder`) as proving a
+`root → child → grandchild → document` cascade, echoing the ad-hoc
+standalone fixture used to diagnose the model bug above. The actual pytest
+fixture at the time only built a target folder, one child folder, and
+documents — two levels, not three — so the claimed grandchild-level coverage
+was not actually tested. Fixed by extending `_org_with_sensitive_folder` to
+add a genuine grandchild folder and document and asserting its deletion (and
+its survival in the bypass/untouched-subtree tests) alongside the existing
+two levels — the write-up above and the regression-test description now
+describe the fixture that actually runs, rather than narrowing the claim to
+match the old, weaker fixture.
 
 **Mirrored to** `docs/KNOWN_LIMITATIONS.md` (the two flagged sibling
 relationships) and `CHANGELOG.md`.
@@ -726,6 +741,116 @@ in a table like this means "none found by this method," not "none exist" —
 recorded so a later pass reads this claim with that caveat rather than at
 face value.
 
+**Superseded by FAC-22 below in one respect:** every "checks `can_access_folder`
+[or `can_access_document`]" cell in the table above described _whether_ a
+check ran, not _how strict_ it was. FAC-22 found that the check itself
+admitted a caller on a read-only permission for what is, in every row of
+this table, a mutation. The table's per-row conclusions ("fixed this round",
+"unchanged, re-verified") still hold as to _whether an ACL check exists at
+each site_ — FAC-22 is a correction to what that shared check requires, not
+a reopening of any row's own finding.
+
+### FAC-22 — P1 (access control, write-vs-read permission tier) — every check this sweep verified admitted a caller on a folder's read-only permission alone — ✅ FIXED
+
+**Found by Codex review of this round's own sweep.** `can_access_folder`/
+`can_access_document` (`documents_service.py`) — the one shared predicate
+every row of the sweep table above relies on — admit a caller who holds
+**any one** of a folder's `required_permissions`. For a sensitive facility
+folder, that list is `facilities.view_sensitive` OR `.edit` OR `.manage`
+(`FACILITY_SENSITIVE_PERMISSIONS`), an explicit **read-only** grant being one
+of the three. That is the right question for a read (`get_document`,
+`download_document`, the folder listing) but the wrong one for a write: the
+facility-side mutation routes themselves never accept `view_sensitive` alone
+— `update_facility_document`/`delete_facility_document`
+(`facilities.py:967-1024`) require `facilities.edit`/`.delete`/`.manage`
+specifically. FAC-14 through FAC-21 all closed "no check at all" or "checked
+the wrong folder"; none of them asked whether the check they added or
+verified was itself answering a write question with a read-admission
+predicate.
+
+**Impact:** a caller holding `documents.manage` (the org-wide generic-module
+mutation grant) plus only a facility folder's read-tier permission — no
+facilities write permission of any kind — passed every one of FAC-14
+through FAC-21's checks. The seeded **treasurer** role is exactly this
+combination: `DOCUMENTS_MANAGE` + `FACILITIES_VIEW_SENSITIVE`
+(`core/permissions.py:1637-1644`), and none of `FACILITIES_EDIT`/`_DELETE`/
+`_MANAGE`. A treasurer could therefore unfile, move, or delete a sensitive
+facility document through the generic document routes, or rename, reparent,
+delete, or inject a folder into the sensitive folder tree — despite holding
+no facilities write permission whatsoever.
+
+**Verified independently:** read `_folder_admits_user`
+(`documents_service.py`) and confirmed it checks `required_permissions` via
+`permission_matches_any` — an OR match with no distinction between the
+entries' own read/write character. Read
+`update_facility_document`/`delete_facility_document`
+(`facilities.py:967-1024`) and confirmed both require `facilities.edit`/
+`.delete`/`.manage` specifically, never `view_sensitive`. Read the seeded
+`treasurer` role definition (`core/permissions.py:1617-1650`) and confirmed
+`DOCUMENTS_MANAGE.name` and `FACILITIES_VIEW_SENSITIVE.name` are both
+present, with none of `FACILITIES_EDIT`/`_DELETE`/`_MANAGE` — a real, live
+combination, not hypothetical.
+
+**Fix:** every permission family in this codebase names its read-only
+actions `<module>.view` / `<module>.view_<detail>` and everything else as a
+write (`create`/`edit`/`update`/`delete`/`manage`) — `is_read_only_permission`
+and `permission_matches_any_write` (`core/permissions.py`) codify that
+convention rather than inventing a new one. `_folder_admits_user`,
+`can_access_folder`, and `can_access_document` (`documents_service.py`) take
+a new `require_write` keyword: when set, a folder's `required_permissions`
+are filtered down to their write-tier entries before matching, so a caller
+holding only the read-only entry no longer satisfies the check. Applied
+`require_write=True` at every site the sweep table above lists as a
+mutation-gating check: document update/delete and its destination, folder
+rename/delete and its destination (create's parent, update's reparent), and
+— one level deeper — the descendant-ACL check FAC-21 added inside
+`delete_folder`'s cascade walk, so a descendant admitting the caller only at
+its read-only tier still aborts a delete the same way a directly-targeted
+one would. A caller who holds the folder's own write-tier permission
+(`facilities.edit`, in the treasurer's case still absent) is unaffected.
+
+**Dangling reference on delete, also confirmed real and fixed:**
+`FacilityDocument.file_path` (`app/models/facilities.py`) stores a plain
+`"document:<uuid>"` string referencing the shared `documents` table
+(`_validate_shared_document_reference`, `facilities.py:135-190`) — not a
+foreign key. Deleting the referenced `Document` — via the generic
+`DELETE /documents/{document_id}` or via a folder cascade delete — left that
+string pointing at nothing: the facility record kept listing a document
+entry that could never be downloaded again, with no error surfacing the
+break. Fixed by a new
+`DocumentsService._delete_facility_document_references` helper, called from
+both `delete_document` and `delete_folder`'s cascade before the document
+rows themselves are removed, in the same transaction — deletes any
+`facility_documents` row (org-scoped) whose `file_path` names a document
+being deleted.
+
+**Regression tests:** `tests/test_documents_access.py::TestFolderWriteTierPermission`
+(9 tests) reproduces the treasurer-shaped combination
+(`documents.manage` + `facilities.view_sensitive`, no facilities write
+grant) and proves it is refused on: unfiling a document, deleting a
+document, renaming a folder, deleting a folder, moving a document into the
+folder, reparenting a folder into it, and creating a folder under it — with
+two positive controls proving a caller holding the folder's own write-tier
+permission (`facilities.edit`) can still do each of these.
+`TestDeleteDocumentCleansUpFacilityReference` (3 tests) proves deleting a
+referenced document, or deleting the folder it sits in, removes the
+facility's own reference, org-scoped (a same-string reference belonging to a
+different organization survives). Independently confirmed all 12 fail
+against the pre-fix code (`git stash` isolating just the source changes) —
+the ACL bypasses raised no `HTTPException`, the dangling-reference tests
+found the stale row still present — and pass once restored. Adapting these
+also required widening every existing fixture in this file whose
+`required_permissions` was `["facilities.view_sensitive"]` alone (matching
+production's `FACILITY_SENSITIVE_PERMISSIONS`, not a single entry) and
+changing each `_caller(..., facilities_permission=True)` positive control to
+grant `facilities.edit` rather than the now-insufficient
+`facilities.view_sensitive` — otherwise `require_write` would have made
+every one of those positive controls unsatisfiable by any permission, since
+their fixture's `required_permissions` listed only the one, now-filtered-out,
+read-only entry.
+
+**Mirrored to** `CHANGELOG.md`.
+
 ## Verified good ✅ (re-confirmed this pass)
 
 - **Auth coverage 98/98** — exact grep count unchanged since pass 2
@@ -923,6 +1048,63 @@ has nothing to regenerate.
 failed with `Failed: DID NOT RAISE HTTPException` (the delete silently
 cascaded into the sensitive child), both positive-control tests still
 passed. `git stash pop` restored the fix; all three passed.
+
+## Completion gate (pass 3, round 7 — Codex review of FAC-14/15/16's own predicate; FAC-22)
+
+PR #2191 merged (`f5e800f1`) before this round's fix could be pushed to it —
+per CLAUDE.md Pitfall #24, work continues on a new branch
+(`claude/security-review-facilities-followup`) and a new PR rather than
+reusing the merged one. Rebuilt this round's changes against a fresh
+`origin/main` (which already carried FAC-17 through FAC-21 from concurrent
+sessions) rather than against the pre-merge state they were first drafted
+against — `can_access_folder`/`can_access_document`/`_folder_admits_user`
+had no `require_write` support on `main` at rebuild time, confirmed by
+grepping the fresh checkout before writing a line, so this is not
+duplicate work.
+
+| Check                                                                    | Result                                                                                      |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                            | ✅ 0 violations                                                                             |
+| `black --check app/ tests/ alembic/`                                     | ✅ clean (1405 files)                                                                       |
+| `isort --check-only app/ tests/ alembic/`                                | ✅ clean                                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                        | ✅ single head, no schema change                                                            |
+| `python3 scripts/generate_schema_docs.py --check`                        | ✅ up to date — no model change this round                                                  |
+| `pytest tests/test_documents_access.py tests/test_facilities_folders.py` | ✅ 107 passed (+12 for this round's tests)                                                  |
+| `pytest tests/ -k "facilities or documents"`                             | ✅ 286 passed (+12), 1 skipped (pre-existing)                                               |
+| `pytest tests/` (full backend suite)                                     | ✅ 10029 passed (+12), 21 skipped (pre-existing) — no regression from the 10017/21 baseline |
+
+**FAC-22's regression tests independently confirmed against pre-fix code:**
+`git stash` isolating just the source changes to `documents.py`,
+`documents_service.py`, and `core/permissions.py` (keeping the new/adapted
+test files in place), then running `TestFolderWriteTierPermission` and
+`TestDeleteDocumentCleansUpFacilityReference`. All 10 new bypass/reference
+tests failed pre-fix — `DID NOT RAISE HTTPException` on every bypass, the
+stale `facility_documents` row still present on both dangling-reference
+tests — while the 2 positive-control tests already passed (they had genuine
+access before this fix too). `git stash pop` restored the fix and all 12
+passed.
+
+**Also fixed in this round, same discipline as the two prior comment-history
+findings on this PR:** trimmed the `documents.py`/`documents_service.py`
+comments this round's own edits touched that had drifted back into
+review-round narration (`"FAC-16 (Codex follow-up on FAC-14)"`,
+`"FAC-17 (Codex round 4 on FAC-14/15/16)"`, `"FAC-21 (Codex, round 6)"`) down
+to durable rationale only — the same class of issue fixed at earlier points
+in this PR's history, recurring because each new round's fix is drafted
+independently and the convention isn't machine-checked.
+
+**Two additional doc corrections, same round:** (1) the FAC-16 write-up's
+regression-test description claimed a `root → child → grandchild → document`
+cascade the actual `_org_with_sensitive_folder` fixture didn't build (two
+levels, not three) — fixed by extending the fixture rather than narrowing
+the claim (see the correction note under FAC-16 above). (2) `CHANGELOG.md`'s
+FAC-13 entry named the seeded `quartermaster` role among those refused
+access through the generic Documents module, but quartermaster has no
+`documents.view` grant and so could never reach that module either before or
+after the regression — corrected to scope that specific claim to the three
+roles that actually hold `documents.view` (secretary, safety officer,
+training officer), while quartermaster stays correctly named as affected by
+the direct `/{facility_id}/folders` endpoint's own gate.
 
 ---
 

@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: every generic document/folder mutation check admitted a read-only permission, letting a treasurer-shaped caller bypass facility write protections (2026-09-03)
+
+**Fixed**
+
+- **FAC-22 — `can_access_folder`/`can_access_document` admitted a caller who
+  held only a folder's read-only `required_permissions` entry, letting every
+  mutation-gating check added by prior rounds (FAC-14 through FAC-21) be
+  satisfied by a read-only grant.** A sensitive facility folder's
+  `required_permissions` lists `facilities.view_sensitive` alongside
+  `.edit`/`.manage` — the right set for a _read_, since holding any one of
+  the three should let you see the file. Reusing that same check unmodified
+  for a _write_ let a caller holding `documents.manage` (the generic
+  module's org-wide mutation grant) plus only `facilities.view_sensitive` —
+  no facilities write permission of any kind — unfile, move, or delete a
+  sensitive facility document, or rename, reparent, delete, or inject a
+  folder into the sensitive folder tree. This is a real, seeded combination:
+  the **treasurer** role holds exactly `documents.manage` +
+  `facilities.view_sensitive`, with none of
+  `facilities.edit`/`.delete`/`.manage`. Fixed by giving
+  `can_access_folder`/`can_access_document` a `require_write` mode that
+  filters a folder's `required_permissions` down to their write-tier entries
+  (every permission family in this codebase names read actions
+  `.view`/`.view_<detail>`; everything else is a write) before matching, and
+  applying it at every mutation-gating site: document update/delete and its
+  destination, folder rename/delete and its destination, and the
+  descendant-ACL check inside a folder-delete cascade.
+- **The same review also surfaced a dangling reference: deleting a shared
+  document (directly, or via a folder cascade) left a facility's own
+  reference to it pointing at nothing.** A facility record references a
+  shared document by a plain `"document:<uuid>"` string, not a foreign key —
+  deleting the generic document left that reference behind, so the facility
+  record kept listing a document entry that could never be downloaded again.
+  Fixed by cleaning up the org-scoped reference in the same transaction as
+  the delete, on both paths.
+- New regression tests: `TestFolderWriteTierPermission` (9 tests,
+  reproducing the treasurer-shaped bypass across every affected mutation and
+  positive-controlling a caller who genuinely holds the write-tier
+  permission), `TestDeleteDocumentCleansUpFacilityReference` (3 tests) — all
+  12 independently confirmed to fail against the pre-fix code and pass
+  against the fix. See `docs/security-review/FAC-12-facilities.md` (FAC-22)
+  for the full writeup.
+
 ### Security: a folder delete could cascade-destroy a more-restricted descendant the caller could never access directly (2026-09-03)
 
 **Fixed**
@@ -113,10 +155,15 @@ because of an unrelated cross-module folder-ACL fix (PR #2160) that started
 enforcing a permission stamp already present but previously inert. A
 secretary, quartermaster, safety officer, or training officer — every one of
 whom is meant to see the baseline categories at their baseline
-`facilities.view` grant — now gets an empty folder list from that endpoint,
-and is refused the same categories' documents through the generic Documents
+`facilities.view` grant — now gets an empty folder list from that endpoint.
+Of those four, the secretary, safety officer, and training officer are also
+refused the same categories' documents through the generic Documents
 module's own folder browsing and `GET /documents/{id}/download` (both
-enforce the identical over-broad stamp). **This does not empty the
+enforce the identical over-broad stamp) — the seeded quartermaster role has
+no `documents.view` grant at all, so it could not reach the generic
+Documents module either before or after this regression; only the direct
+`/folders` endpoint's own baseline-`facilities.view` gate affects it.
+**This does not empty the
 Facilities module's own Files section in the app** — `FilesSection.tsx`
 loads via `getPhotos` and, for sensitive viewers, `getFacilityDocuments`,
 neither of which calls the affected `/folders` endpoint, so that section

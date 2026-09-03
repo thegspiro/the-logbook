@@ -16,18 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-#2191 (`claude/security-review-facilities`) — Feature 12, Facilities, pass
-3, complete and ready for review. One HIGH finding flagged (FAC-13:
-facility-file folder access over-restricted for three established-baseline
-categories — Photos, Maintenance Records, Inspection Reports; Blueprints &
-Permits' classification is separately undecided — needs an owner decision,
-not auto-fixed) and eight P1/P2/MED findings fixed same-day across six
-Codex review rounds of this PR's own fix commits and write-up: FAC-14
-(documents.manage bypassing a document's own folder ACL on the generic
-update/delete routes), FAC-15 (the same bypass on a document _move_'s
-destination folder, missed by FAC-14's fix), FAC-16 (the identical bypass
-on the folder-mutation routes themselves — rename/reparent/delete of the
-target folder — which also uncovered and fixed a pre-existing bug where
+**#2191 merged** (`f5e800f1`) while this round's own fix (FAC-22, below) was
+in progress — its last pushed commit (`910c27e6`, FAC-18/19/20/21) did not
+include FAC-22, which Codex found on that same merged PR's sweep after the
+merge. Per CLAUDE.md Pitfall #24, continuing on a new branch
+(`claude/security-review-facilities-followup`) and a new PR rather than
+pushing to the now-dead `claude/security-review-facilities` or reopening the
+merged one. See the log entry below for #2191's own closing summary
+(FAC-13 through FAC-21).
+
+New PR (branch `claude/security-review-facilities-followup`) — Feature 12,
+Facilities, pass 3 continued. **FAC-22 (P1, access control, fixed):**
+`can_access_folder`/`can_access_document` — the one shared predicate every
+FAC-14 through FAC-21 mutation check relies on — admitted a caller who held
+only a folder's **read-only** `required_permissions` entry
+(`facilities.view_sensitive`), letting a caller holding `documents.manage` +
+that one read-tier grant (the seeded **treasurer** role's exact shape, no
+facilities write permission at all) unfile/move/delete a sensitive document
+or rename/reparent/delete/create-under the sensitive folder tree — bypassing
+every one of FAC-14 through FAC-21's checks at once, since they all reuse
+this same predicate. Fixed with a new `require_write` mode on the predicate
+(filters `required_permissions` to write-tier entries — the
+`.view`/`.view_*` vs. everything-else convention already used throughout
+`core/permissions.py` — before matching), applied at every mutation-gating
+site the FAC-14–21 sweep enumerated, including the descendant-ACL check
+inside a folder-delete cascade. Also closed a dangling reference the same
+audit surfaced: deleting a shared document (directly or via a folder
+cascade) left a facility's own `"document:<uuid>"` reference to it pointing
+at nothing; now cleaned up in the same transaction. Plus two doc corrections
+Codex found on the same round: the FAC-16 write-up claimed a
+`root → child → grandchild → document` regression-test cascade the actual
+fixture didn't build (fixed by extending the fixture, not narrowing the
+claim), and `CHANGELOG.md`'s FAC-13 entry over-broadly named the seeded
+`quartermaster` role among those refused generic-Documents-module access,
+when quartermaster never held the `documents.view` that path requires (fixed
+by scoping that specific claim to the three roles that do). Full completion
+gate green, 10029/10029 full backend suite (+12 for FAC-22's regression
+tests over the 10017 baseline `main` carried at fork time). Rotation row 12
+stays ⏳ (awaiting this new PR's merge).
+
+---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) — PR #2191 merged (FAC-13 through FAC-21)
+
+`f5e800f1` merged pass 3's work through FAC-21: one HIGH finding flagged
+(FAC-13: facility-file folder access over-restricted for three
+established-baseline categories — Photos, Maintenance Records, Inspection
+Reports; Blueprints & Permits' classification is separately undecided —
+needs an owner decision, not auto-fixed) and eight P1/P2/MED findings fixed
+same-day across six Codex review rounds of the PR's own fix commits and
+write-up: FAC-14 (documents.manage bypassing a document's own folder ACL on
+the generic update/delete routes), FAC-15 (the same bypass on a document
+_move_'s destination folder, missed by FAC-14's fix), FAC-16 (the identical
+bypass on the folder-mutation routes themselves — rename/reparent/delete of
+the target folder — which also uncovered and fixed a pre-existing bug where
 deleting a folder with descendants silently orphaned them instead of
 cascading; two sibling relationships elsewhere in the codebase flagged with
 the same shape, not fixed, out of scope), FAC-17 (`get_facility_folders`'s
@@ -42,24 +84,26 @@ cascade cannot follow a cross-organization `parent_id`, even though no
 current write path can create one), and FAC-21 (the delete cascade checked
 only the folder named in the request, never any descendant's own
 `required_permissions` — found by Codex on the FAC-18/19/20 fix commit
-itself, after a systematic sweep of every remaining folder/document route
-in `documents.py` had already (wrongly) concluded no further instance of
-this bug class remained; every descendant is now checked too). Plus two
+itself, after a systematic sweep of every remaining folder/document route in
+`documents.py` had already (wrongly) concluded no further instance of this
+bug class remained; every descendant is now checked too). Plus two
 doc-accuracy corrections (stale comments claiming a now-false
 "facilities.view-only sees the folders" invariant), and a
-separately-diagnosed, separately-fixed CI failure (two of an earlier
-round's own regression test classes were missing
-`@pytest.mark.integration`, so the DB-less "Backend Unit Tests" job tried to
-run them against no MySQL and errored on all 8; traced to root cause during
-FAC-17's investigation, fixed by a concurrent commit (`acc4e29d`) rebased
-onto — now marked and deselected there correctly). Full completion gate
-green, 10017/10017 full backend suite (+13 total across FAC-17's,
-FAC-18/19/20's, and FAC-21's regression tests, over the pre-round-4
-baseline of 10004), and the exact CI unit-test filter (`-m "not integration
-and not slow and not docker"`) 8474 passed/0 errors (was 8472 passed/8
-errors before `acc4e29d`). Rotation row 12 → ⏳ (awaiting this PR's merge).
+separately-diagnosed, separately-fixed CI failure (two of an earlier round's
+own regression test classes were missing `@pytest.mark.integration`, so the
+DB-less "Backend Unit Tests" job tried to run them against no MySQL and
+errored on all 8; traced to root cause during FAC-17's investigation, fixed
+by a concurrent commit (`acc4e29d`) rebased onto — now marked and deselected
+there correctly). Full completion gate green at merge time: 10017/10017
+full backend suite (+13 total across FAC-17's, FAC-18/19/20's, and FAC-21's
+regression tests, over the pre-round-4 baseline of 10004), and the exact CI
+unit-test filter (`-m "not integration and not slow and not docker"`) 8474
+passed/0 errors (was 8472 passed/8 errors before `acc4e29d`).
 
----
+A further Codex round landed on the merged PR's own sweep after the merge —
+FAC-22, the write-vs-read permission-tier gap underlying every FAC-14–21
+check — recorded in the "Open PR" section above as a new PR/branch per
+CLAUDE.md Pitfall #24, since the merged branch can no longer be pushed to.
 
 ### 2026-09-03 — Feature 12 (Facilities, pass 3) — 0 fixed (2 doc-accuracy corrections), 1 HIGH flagged
 
