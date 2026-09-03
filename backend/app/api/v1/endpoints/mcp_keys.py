@@ -89,22 +89,28 @@ async def _integration_row(
     return result.scalar_one_or_none()
 
 
-async def require_audit_entry(db: AsyncSession, entry: Any, action: str) -> None:
-    """Refuse to commit a key change that left no audit entry.
+async def require_audit_entry(
+    db: AsyncSession, entry: Any, action: str, *, subject: str = "key"
+) -> None:
+    """Refuse to commit a change to MCP access that left no audit entry.
 
     ``log_audit_event`` swallows its own failure and returns ``None`` so an
-    audit outage does not break ordinary requests; a key change is the one
-    place that trade goes the other way, since a key rotated without a
+    audit outage does not break ordinary requests; a change to what a
+    service key can do is the one place that trade goes the other way,
+    since a key rotated, or widened to finance or write access, without a
     record is exactly what the record exists to catch. The integrations
-    endpoint uses it too, for the keys a disconnect revokes.
+    endpoint uses it too, for the keys a disconnect revokes and for the
+    connection's configuration (``subject="configuration"``).
     """
     if entry is not None:
         return
     await db.rollback()
-    logger.error("MCP key {} without an audit entry; change rolled back", action)
+    logger.error(
+        "MCP {} {} without an audit entry; change rolled back", subject, action
+    )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="The audit log is unavailable, so the key was not changed. "
+        detail=f"The audit log is unavailable, so the {subject} was not changed. "
         "Try again later.",
     )
 

@@ -23,6 +23,28 @@ from app.services.election_service import ElectionService
 # read in pieces through ``get_election_description``. The column is
 # unbounded Text, so a page of elections cannot carry every word of it.
 ELECTION_TEXT_CHARS = 20_000
+# A position name is a label; the list is capped at 100 entries by the
+# schema but an entry's length is not, so each is cut here.
+POSITION_NAME_CHARS = 200
+
+
+def _positions(value: Any) -> tuple[Any, bool]:
+    """The ballot's position names, each scrubbed and cut, and whether any
+    was cut."""
+    if not isinstance(value, list):
+        return value, False
+    names = []
+    cut = False
+    for entry in value:
+        if not isinstance(entry, str):
+            names.append(entry)
+            continue
+        entry = scrub_text(entry)
+        if len(entry) > POSITION_NAME_CHARS:
+            entry = entry[:POSITION_NAME_CHARS]
+            cut = True
+        names.append(entry)
+    return names, cut
 
 
 def _clip(value: Any) -> tuple[Any, bool]:
@@ -97,6 +119,7 @@ def register(server: Any) -> None:
         items = []
         for e in rows.scalars().all():
             description, cut = _clip(e.description)
+            positions, positions_cut = _positions(e.positions)
             items.append(
                 {
                     "id": e.id,
@@ -105,7 +128,8 @@ def register(server: Any) -> None:
                     "description_truncated": cut,
                     "election_type": iso(e.election_type),
                     "status": iso(e.status),
-                    "positions": e.positions,
+                    "positions": positions,
+                    "positions_truncated": positions_cut,
                     "meeting_date": iso(e.meeting_date),
                     "start_date": iso(e.start_date),
                     "end_date": iso(e.end_date),

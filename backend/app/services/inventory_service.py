@@ -6275,37 +6275,39 @@ class InventoryService:
     ) -> bool:
         """Does ``name`` match an item or a category filed under ``item_types``?
 
-        Case-insensitive on the trimmed name. Used where a record is named
-        rather than linked, so that naming a medical supply without its id
-        is refused the way linking it is.
+        Compared through ``normalize_name`` — case, punctuation and spacing
+        aside — the way the catalog reconciles hand-typed supply names, so
+        "gauze pads 4x4" is the box filed as "Gauze Pads, 4x4". Used where a
+        record is named rather than linked, so that naming a medical supply
+        without its id is refused the way linking it is.
         """
-        wanted = (name or "").strip().lower()
+        wanted = normalize_name(name or "")
         if not wanted:
             return False
         types = list(item_types)
-        item = await self.db.scalar(
-            select(InventoryItem.id)
+        # Normalization is not expressible in SQL, so the domain's names are
+        # read and compared here; the domain is one department's catalog.
+        item_names = await self.db.execute(
+            select(InventoryItem.name)
             .join(
                 InventoryCategory,
                 InventoryCategory.id == InventoryItem.category_id,
             )
             .where(
                 InventoryItem.organization_id == organization_id,
-                func.lower(InventoryItem.name) == wanted,
                 InventoryCategory.organization_id == organization_id,
                 InventoryCategory.item_type.in_(types),
             )
         )
-        if item is not None:
+        if any(normalize_name(n) == wanted for n in item_names.scalars()):
             return True
-        category = await self.db.scalar(
-            select(InventoryCategory.id).where(
+        category_names = await self.db.execute(
+            select(InventoryCategory.name).where(
                 InventoryCategory.organization_id == organization_id,
-                func.lower(InventoryCategory.name) == wanted,
                 InventoryCategory.item_type.in_(types),
             )
         )
-        return category is not None
+        return any(normalize_name(n) == wanted for n in category_names.scalars())
 
     async def item_in_domain(
         self,

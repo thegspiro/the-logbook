@@ -282,6 +282,64 @@ class TestCreate:
         listed = await list_mcp_keys(db=db_session, current_user=user)
         assert listed["keys"] == []
 
+    async def test_widening_the_configuration_is_refused_without_an_audit_entry(
+        self, db_session, setup_org_and_admin
+    ):
+        """Switching a connected integration to read/write or sharing
+        finance widens what a live key can do; it commits with its audit
+        entry or not at all, the same rule as a key change."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.api.v1.endpoints.integrations import update_integration
+        from app.schemas.integration import IntegrationUpdateRequest
+
+        org_id, admin_id = setup_org_and_admin
+        row = await _connect(db_session, org_id, config={"access_mode": "read_only"})
+        integration_id = row.id
+        # Committed first: the endpoint's rollback must undo only its own
+        # change, as in production where the connection long precedes it.
+        await db_session.commit()
+        user = _user(org_id, admin_id)
+        with (
+            patch(
+                "app.api.v1.endpoints.integrations.log_audit_event",
+                AsyncMock(return_value=None),
+            ),
+            pytest.raises(HTTPException) as refused,
+        ):
+            await update_integration(
+                integration_id,
+                request=_request(),
+                body=IntegrationUpdateRequest(
+                    config={"access_mode": "read_write", "expose_finance": True}
+                ),
+                db=db_session,
+                current_user=user,
+            )
+        assert refused.value.status_code == 503
+        assert "configuration was not changed" in refused.value.detail
+        stored = (
+            await db_session.execute(
+                select(Integration).where(Integration.id == integration_id)
+            )
+        ).scalar_one()
+        assert stored.config.get("access_mode") == "read_only"
+        assert not stored.config.get("expose_finance")
+        updated = await update_integration(
+            integration_id,
+            request=_request(),
+            body=IntegrationUpdateRequest(config={"access_mode": "read_write"}),
+            db=db_session,
+            current_user=user,
+        )
+        assert updated["config"]["access_mode"] == "read_write"
+        entry = (
+            await db_session.execute(
+                select(AuditLog).where(AuditLog.event_type == "integration.updated")
+            )
+        ).scalar_one()
+        assert entry.organization_id == org_id
+
     async def test_rotation_rolls_back_when_the_audit_entry_fails(
         self, db_session, setup_org_and_admin
     ):

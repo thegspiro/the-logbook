@@ -733,11 +733,9 @@ async def update_integration(
     if clear_salesforce_refresh_token:
         integration.clear_secret("refresh_token")
         integration.clear_secret("access_token")
-    await db.commit()
-    await db.refresh(integration)
 
-    # Audit log
-    await log_audit_event(
+    # Audit log, in the same transaction as the change.
+    entry = await log_audit_event(
         db,
         "integration.updated",
         "integrations",
@@ -755,6 +753,13 @@ async def update_integration(
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
     )
+    # The Claude (MCP) configuration is what a live service key may read
+    # and write; widening it without a record is refused, the way a key
+    # change is. Other integrations keep the best-effort audit.
+    if integration.integration_type == MCP_INTEGRATION_TYPE:
+        await require_audit_entry(db, entry, "updated", subject="configuration")
+    await db.commit()
+    await db.refresh(integration)
 
     return _integration_to_dict(integration)
 

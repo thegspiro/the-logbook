@@ -1003,7 +1003,13 @@ class DocumentsService:
         total = total_result.scalar()
 
         # Paginated results
-        query = query.order_by(Document.updated_at.desc()).offset(skip).limit(limit)
+        # The id breaks ties between documents updated at one instant, so
+        # an offset page never repeats or skips one.
+        query = (
+            query.order_by(Document.updated_at.desc(), Document.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         if defer_content:
             query = query.options(defer(Document.content_html))
         result = await self.db.execute(query)

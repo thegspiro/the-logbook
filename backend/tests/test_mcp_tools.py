@@ -3981,3 +3981,115 @@ class TestTwentyEighthRoundFindings:
             seen.extend(a["member_id"] for a in body["items"])
         expected = [uid for _, uid in sorted(zip(rsvp_ids, (admin_id, member_id)))]
         assert seen == expected
+
+
+class TestTwentyNinthRoundFindings:
+    """Regressions for the twenty-ninth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_document_tags_are_bounded_and_documents_page_by_id(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import documents as document_tools
+
+        org_id, admin_id, _ = org_with_members
+        doc_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for doc_id in doc_ids:
+            await db_session.execute(
+                text(
+                    "INSERT INTO documents (id, organization_id, name, tags, "
+                    "document_type, status, version, updated_at) VALUES "
+                    "(:id, :org, 'Bulk upload', :tags, 'uploaded', 'active', 1, "
+                    "'2026-09-01 10:00:00')"
+                ),
+                {
+                    "id": doc_id,
+                    "org": org_id,
+                    "tags": "sog,training,contact sam@example.org," + "t" * 40,
+                },
+            )
+        await db_session.flush()
+        monkeypatch.setattr(document_tools, "DOCUMENT_CONTENT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        seen = []
+        for offset in range(3):
+            body = await _call(
+                server, principal, "list_documents", limit=1, offset=offset
+            )
+            seen.extend(d["id"] for d in body["items"])
+            for row in body["items"]:
+                assert len(row["tags"]) == 12
+                assert row["tags_truncated"] is True
+        # Same updated_at throughout: newest first means the id descending.
+        assert seen == sorted(doc_ids, reverse=True)
+        one = await _call(server, principal, "get_document", document_id=doc_ids[0])
+        assert one["tags_truncated"] is True
+        assert "sam@example.org" not in json.dumps(one)
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_election_position_names_are_bounded(
+        self, server, org_with_members, db_session
+    ):
+        from app.mcp.tools import elections as election_tools
+        from app.models.election import Election, ElectionStatus
+
+        org_id, admin_id, _ = org_with_members
+        now = datetime.now(timezone.utc)
+        election = Election(
+            organization_id=org_id,
+            title="Officers",
+            positions=["Chief", "Secretary (call 555-123-4567)", "P" * 400],
+            start_date=now - timedelta(days=1),
+            end_date=now + timedelta(days=1),
+            status=ElectionStatus.OPEN,
+        )
+        db_session.add(election)
+        await db_session.flush()
+        listed = await _call(server, _principal(org_id, admin_id), "list_elections")
+        row = next(e for e in listed["items"] if e["id"] == election.id)
+        assert row["positions"] == [
+            "Chief",
+            "Secretary (call [phone removed])",
+            "P" * election_tools.POSITION_NAME_CHARS,
+        ]
+        assert row["positions_truncated"] is True
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_naming_a_medical_supply_is_matched_after_normalization(
+        self, server, org_with_members, db_session
+    ):
+        """ "gauze pads 4x4" is the box filed as "Gauze Pads, 4x4": the
+        name-only check compares through ``normalize_name``."""
+        org_id, admin_id, _ = org_with_members
+        category = InventoryCategory(
+            organization_id=org_id, name="Wound care", item_type=ItemType.MEDICAL
+        )
+        db_session.add(category)
+        await db_session.flush()
+        db_session.add(
+            InventoryItem(
+                organization_id=org_id,
+                category_id=category.id,
+                name="Gauze Pads, 4x4",
+                quantity=10,
+            )
+        )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id, access_mode="read_write")
+        for spelling in ("gauze pads 4x4", "GAUZE-PADS 4X4", "  wound   care "):
+            with pytest.raises(ToolError, match="Medical supplies"):
+                await _call(
+                    server,
+                    principal,
+                    "create_reorder_request",
+                    item_name=spelling,
+                    quantity=2,
+                )
+        created = await _call(
+            server,
+            principal,
+            "create_reorder_request",
+            item_name="Gauze tape",
+            quantity=2,
+        )
+        assert created["item_name"] == "Gauze tape"

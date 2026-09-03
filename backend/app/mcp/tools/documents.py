@@ -117,6 +117,9 @@ async def _visible_document(
 
 def _document(d: Any, include_content: bool, content_offset: int = 0) -> dict:
     description, cut = _clip(d.description)
+    # Tags are a comma-separated Text column with no write-time bound, so
+    # they are cut like the description; nothing reads them back in pieces.
+    tags, tags_cut = _clip(d.tags)
     body = {
         "id": d.id,
         "name": d.name,
@@ -130,7 +133,8 @@ def _document(d: Any, include_content: bool, content_offset: int = 0) -> dict:
         "status": iso(d.status),
         "source_type": iso(d.source_type),
         "version": d.version,
-        "tags": d.tags,
+        "tags": tags,
+        "tags_truncated": tags_cut,
         "created_at": iso(d.created_at),
         "updated_at": iso(d.updated_at),
     }
