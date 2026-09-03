@@ -30,7 +30,13 @@ from app.schemas.organization import (
     decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
-from app.utils.email_providers import normalize_stored_platform
+from app.utils.email_providers import (
+    REDACTED_SECRET,
+    connection_identity,
+    missing_for_enabled,
+    normalize_stored_platform,
+    required_field_message,
+)
 
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
 
@@ -413,8 +419,17 @@ class OrganizationService:
             incoming = settings_update.get(section_key)
             existing = current_settings.get(section_key)
             if isinstance(incoming, dict) and isinstance(existing, dict):
+                # A saved email secret belongs to the server / account it was
+                # saved for. If the identity changed under a redacted marker,
+                # the marker resolves to nothing rather than pairing the old
+                # password with the new login — which would save green and
+                # fail every send.
+                if section_key == "email_service" and connection_identity(
+                    incoming.get("platform"), incoming
+                ) != connection_identity(existing.get("platform"), existing):
+                    existing = {}
                 for field, val in incoming.items():
-                    if val == "••••••••":
+                    if val == REDACTED_SECRET:
                         incoming[field] = existing.get(field)
 
         # Deep-merge so a partial PATCH of one sub-key doesn't wipe the rest of
@@ -430,6 +445,14 @@ class OrganizationService:
         if "email_service" in settings_update and isinstance(email_section, dict):
             for legacy_key in _LEGACY_EMAIL_OAUTH_FIELDS:
                 email_section.pop(legacy_key, None)
+            # An enabled configuration that cannot send must not save green.
+            # Checked here, on the merged section, so both the dedicated
+            # email PATCH and the full settings PATCH enforce it.
+            missing = missing_for_enabled(email_section)
+            if missing:
+                raise ValueError(
+                    required_field_message(email_section.get("platform"), missing)
+                )
 
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)

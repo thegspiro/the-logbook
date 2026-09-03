@@ -42,6 +42,95 @@ PROVIDER_SMTP_PRESETS: dict[str, SmtpPreset] = {
 EMAIL_PLATFORMS = ("gmail", "microsoft", "selfhosted", "cloudflare", "other")
 
 
+REDACTED_SECRET = "••••••••"
+
+
+def normalize_app_password(value: Any) -> Optional[str]:
+    """An App Password with its display spaces removed, or None if empty.
+
+    Google shows the password as four groups separated by spaces and accepts
+    it either way; strip them so a pasted value cannot fail login. A value
+    that is only spaces normalizes to nothing, and every presence check must
+    see that rather than the raw truthy string.
+    """
+    if not isinstance(value, str):
+        return None
+    return value.replace(" ", "") or None
+
+
+def connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
+    """The server a stored secret authenticates to, per platform.
+
+    A Gmail / Microsoft App Password logs in as the From address to a fixed
+    host; a self-hosted password logs in as ``smtp_user`` to whatever host,
+    port and encryption were saved; a Cloudflare token belongs to an account.
+    A saved secret is reused only for the identity it was saved with.
+    """
+    if platform in PROVIDER_SMTP_PRESETS:
+        return (platform, values.get("from_email") or None)
+    if platform == "cloudflare":
+        return (platform, values.get("cloudflare_account_id") or None)
+    port = values.get("smtp_port")
+    try:
+        port = int(port) if port is not None else None
+    except (TypeError, ValueError):
+        port = None
+    return (
+        platform,
+        values.get("smtp_host") or None,
+        port,
+        values.get("smtp_user") or None,
+        values.get("smtp_encryption") or "tls",
+    )
+
+
+REQUIRED_FIELD_LABELS = {
+    "from_email": "the account email address",
+    "google_app_password": "a Google App Password",
+    "microsoft_app_password": "a Microsoft 365 App Password",
+    "smtp_host": "an SMTP host",
+    "smtp_password": "the SMTP password",
+}
+
+
+def missing_for_enabled(email_config: Mapping[str, Any]) -> Optional[str]:
+    """Name the field an *enabled* configuration cannot send without, or None.
+
+    Applied on write only, by every path that stores the section. Reads
+    rebuild stored rows through the schema, and a row saved before the App
+    Password became the only Gmail / Microsoft path is enabled with no
+    password; failing the read would lock that organization out of the
+    screen where they fix it. Callers resolve redaction markers first, so a
+    marker echoed for a never-set field arrives here as nothing.
+    """
+    if not email_config.get("enabled"):
+        return None
+    platform = email_config.get("platform")
+    preset = PROVIDER_SMTP_PRESETS.get(platform) if isinstance(platform, str) else None
+    if preset is not None:
+        if not email_config.get("from_email"):
+            return "from_email"
+        if normalize_app_password(email_config.get(preset.password_field)) is None:
+            return preset.password_field
+        return None
+    if platform == "selfhosted":
+        if not email_config.get("smtp_host"):
+            return "smtp_host"
+        # A username with no password is a credential that was not restored
+        # (the server changed under a redacted marker); an anonymous relay
+        # with no username is still a complete configuration.
+        if email_config.get("smtp_user") and not email_config.get("smtp_password"):
+            return "smtp_password"
+    return None
+
+
+def required_field_message(platform: Any, field: str) -> str:
+    return (
+        f"Enabling {platform} email requires {REQUIRED_FIELD_LABELS[field]}. "
+        "Enter it, or leave email disabled."
+    )
+
+
 def resolve_smtp_settings(email_config: Mapping[str, Any]) -> dict[str, Any]:
     """Return the SMTP connection tuple for an ``email_service`` section.
 
@@ -60,9 +149,7 @@ def resolve_smtp_settings(email_config: Mapping[str, Any]) -> dict[str, Any]:
         # is the account the mail is sent from — one field on the form covers
         # both. A Gmail App Password is displayed with spaces; Google accepts
         # it either way, but strip them so a pasted value cannot fail login.
-        password: Optional[str] = email_config.get(preset.password_field) or None
-        if password is not None:
-            password = password.replace(" ", "")
+        password = normalize_app_password(email_config.get(preset.password_field))
         return {
             "host": preset.host,
             "port": preset.port,

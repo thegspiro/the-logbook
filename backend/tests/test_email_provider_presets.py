@@ -17,7 +17,6 @@ import pytest
 # them as tests if they were bound in this namespace.
 import app.api.v1.email_test_helper as email_test_helper
 from app.api.v1.endpoints.organizations import (
-    _missing_for_enabled,
     _resolve_redacted_secrets,
     _smtp_login_incomplete,
 )
@@ -32,6 +31,8 @@ from app.services.organization_service import OrganizationService
 from app.utils.email_providers import (
     EMAIL_PLATFORMS,
     PROVIDER_SMTP_PRESETS,
+    missing_for_enabled,
+    normalize_app_password,
     normalize_stored_platform,
     resolve_smtp_settings,
 )
@@ -647,60 +648,72 @@ class TestUnrestorablePasswordIsNotTestedAsAnonymous:
         assert not _smtp_login_incomplete(resolved)
 
 
-class TestEnabledPresetRequiresAppPassword:
+class TestEnabledConfigurationMustBeAbleToSend:
     def test_enabled_gmail_without_password_is_rejected(self):
-        submitted = EmailServiceSettings(
-            enabled=True, platform="gmail", from_email="chief@example.org"
-        )
+        config = {"enabled": True, "platform": "gmail", "from_email": "c@x.org"}
 
-        assert _missing_for_enabled(submitted, {}) == "google_app_password"
+        assert missing_for_enabled(config) == "google_app_password"
 
     def test_enabled_microsoft_without_password_is_rejected(self):
-        submitted = EmailServiceSettings(
-            enabled=True, platform="microsoft", from_email="a@dept.example"
-        )
+        config = {"enabled": True, "platform": "microsoft", "from_email": "a@d.ex"}
 
-        assert _missing_for_enabled(submitted, {}) == "microsoft_app_password"
+        assert missing_for_enabled(config) == "microsoft_app_password"
 
     def test_enabled_preset_without_account_email_is_rejected(self):
-        submitted = EmailServiceSettings(
-            enabled=True, platform="gmail", google_app_password="pw"
-        )
+        config = {"enabled": True, "platform": "gmail", "google_app_password": "pw"}
 
-        assert _missing_for_enabled(submitted, {}) == "from_email"
+        assert missing_for_enabled(config) == "from_email"
 
-    def test_redacted_marker_counts_only_when_something_is_stored(self):
-        submitted = EmailServiceSettings(
-            enabled=True,
-            platform="gmail",
-            from_email="chief@example.org",
-            google_app_password="••••••••",
-        )
+    def test_whitespace_only_app_password_counts_as_missing(self):
+        # resolve_smtp_settings strips the display spaces, so a value that is
+        # only spaces reaches the server as no password at all.
+        config = {
+            "enabled": True,
+            "platform": "gmail",
+            "from_email": "c@x.org",
+            "google_app_password": "    ",
+        }
 
-        assert _missing_for_enabled(submitted, {}) == "google_app_password"
-        assert _missing_for_enabled(submitted, {"google_app_password": "saved"}) is None
+        assert missing_for_enabled(config) == "google_app_password"
 
-    def test_complete_configuration_passes(self):
-        submitted = EmailServiceSettings(
-            enabled=True,
-            platform="gmail",
-            from_email="chief@example.org",
-            google_app_password="pw",
-        )
+    def test_enabled_selfhosted_without_host_is_rejected(self):
+        config = {"enabled": True, "platform": "selfhosted", "smtp_user": "svc"}
 
-        assert _missing_for_enabled(submitted, {}) is None
+        assert missing_for_enabled(config) == "smtp_host"
+
+    def test_enabled_selfhosted_username_without_password_is_rejected(self):
+        config = {
+            "enabled": True,
+            "platform": "selfhosted",
+            "smtp_host": "h",
+            "smtp_user": "svc",
+        }
+
+        assert missing_for_enabled(config) == "smtp_password"
+
+    def test_anonymous_relay_is_complete(self):
+        config = {"enabled": True, "platform": "selfhosted", "smtp_host": "relay"}
+
+        assert missing_for_enabled(config) is None
+
+    def test_complete_preset_configuration_passes(self):
+        config = {
+            "enabled": True,
+            "platform": "gmail",
+            "from_email": "c@x.org",
+            "google_app_password": "abcd efgh",
+        }
+
+        assert missing_for_enabled(config) is None
 
     def test_disabled_configuration_may_be_incomplete(self):
         # Disabled is the "configure later" state onboarding records; it must
         # stay saveable with nothing filled in.
-        submitted = EmailServiceSettings(enabled=False, platform="gmail")
+        assert missing_for_enabled({"enabled": False, "platform": "gmail"}) is None
 
-        assert _missing_for_enabled(submitted, {}) is None
-
-    def test_other_platforms_are_not_gated_here(self):
-        submitted = EmailServiceSettings(enabled=True, platform="selfhosted")
-
-        assert _missing_for_enabled(submitted, {}) is None
+    def test_cloudflare_and_other_are_not_gated_here(self):
+        assert missing_for_enabled({"enabled": True, "platform": "cloudflare"}) is None
+        assert missing_for_enabled({"enabled": True, "platform": "other"}) is None
 
     def test_read_path_still_accepts_an_enabled_row_without_password(self):
         # Write-only: an OAuth-era row is enabled with no App Password and
@@ -711,3 +724,154 @@ class TestEnabledPresetRequiresAppPassword:
 
         assert settings.enabled
         assert settings.google_app_password is None
+
+
+class TestNormalizeAppPassword:
+    def test_strips_display_spaces(self):
+        assert normalize_app_password("abcd efgh ijkl mnop") == "abcdefghijklmnop"
+
+    def test_only_spaces_is_nothing(self):
+        assert normalize_app_password("   ") is None
+
+    def test_none_and_non_strings_are_nothing(self):
+        assert normalize_app_password(None) is None
+        assert normalize_app_password(42) is None
+
+    def test_connection_test_rejects_a_whitespace_app_password(self):
+        with patch("app.api.v1.email_test_helper.test_smtp_connection") as smtp_test:
+            success, message, _ = email_test_helper.test_gmail_connection(
+                {"fromEmail": "chief@example.org", "googleAppPassword": "   "}
+            )
+
+        assert not success
+        assert "App Password" in message
+        smtp_test.assert_not_called()
+
+
+def _service_with(org):
+    db = MagicMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    service = OrganizationService(db)
+    return service
+
+
+class TestSaveBindsSecretsAndRefusesUnsendable:
+    async def _save(self, org, update):
+        service = _service_with(org)
+        with (
+            patch.object(service, "get_organization", AsyncMock(return_value=org)),
+            patch.object(
+                service, "get_organization_settings", AsyncMock(return_value=None)
+            ),
+        ):
+            await service.update_organization_settings("org-id", update)
+
+    async def test_marker_is_restored_for_the_same_account(self):
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": True,
+                    "platform": "gmail",
+                    "from_email": "chief@example.org",
+                    "google_app_password": "enc:saved",
+                }
+            }
+        )
+
+        await self._save(
+            org,
+            {
+                "email_service": {
+                    "enabled": True,
+                    "platform": "gmail",
+                    "from_email": "chief@example.org",
+                    "from_name": "Renamed",
+                    "google_app_password": "••••••••",
+                }
+            },
+        )
+
+        assert org.settings["email_service"]["google_app_password"] == "enc:saved"
+        assert org.settings["email_service"]["from_name"] == "Renamed"
+
+    async def test_changing_the_account_under_a_marker_is_refused(self):
+        # The saved password belongs to the old account; pairing it with the
+        # new login would save green and fail every send. With no password
+        # for the new account the enabled check refuses the save.
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": True,
+                    "platform": "gmail",
+                    "from_email": "chief@example.org",
+                    "google_app_password": "enc:saved",
+                }
+            }
+        )
+
+        with pytest.raises(ValueError, match="Google App Password"):
+            await self._save(
+                org,
+                {
+                    "email_service": {
+                        "enabled": True,
+                        "platform": "gmail",
+                        "from_email": "someone-else@example.org",
+                        "google_app_password": "••••••••",
+                    }
+                },
+            )
+
+    async def test_changing_the_server_under_a_marker_drops_the_password(self):
+        org = SimpleNamespace(
+            settings={
+                "email_service": {
+                    "enabled": False,
+                    "platform": "selfhosted",
+                    "smtp_host": "mail.dept.example",
+                    "smtp_password": "enc:saved",
+                }
+            }
+        )
+
+        await self._save(
+            org,
+            {
+                "email_service": {
+                    "enabled": False,
+                    "platform": "selfhosted",
+                    "smtp_host": "other.example",
+                    "smtp_password": "••••••••",
+                }
+            },
+        )
+
+        assert org.settings["email_service"]["smtp_password"] is None
+
+    async def test_full_settings_patch_is_gated_too(self):
+        # The invariant lives in the service, so PATCH /settings with an
+        # email_service section is refused the same way as PATCH /settings/email.
+        org = SimpleNamespace(settings={"modules": {"events": True}})
+
+        with pytest.raises(ValueError, match="App Password"):
+            await self._save(
+                org,
+                {
+                    "modules": {"events": False},
+                    "email_service": {
+                        "enabled": True,
+                        "platform": "microsoft",
+                        "from_email": "a@dept.example",
+                    },
+                },
+            )
+
+    async def test_unrelated_sections_are_not_gated(self):
+        org = SimpleNamespace(
+            settings={"email_service": {"enabled": True, "platform": "gmail"}}
+        )
+
+        await self._save(org, {"modules": {"events": False}})
+
+        assert org.settings["modules"] == {"events": False}

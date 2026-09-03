@@ -17,7 +17,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.utils.email_providers import resolve_smtp_settings
+from app.utils.email_providers import normalize_app_password, resolve_smtp_settings
 
 
 def _https_urlopen(request: urllib.request.Request, timeout: int = 10):
@@ -254,7 +254,7 @@ def _test_provider_connection(
     )
     if not config.get("fromEmail"):
         return False, f"{label} account email address is required", {}
-    if not config.get(password_key):
+    if normalize_app_password(config.get(password_key)) is None:
         return (
             False,
             f"{label} App Password is required",

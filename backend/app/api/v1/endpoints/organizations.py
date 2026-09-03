@@ -6,7 +6,7 @@ Endpoints for organization settings management.
 
 import asyncio
 from functools import partial
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
@@ -49,7 +49,7 @@ from app.schemas.organization import (
 )
 from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
-from app.utils.email_providers import PROVIDER_SMTP_PRESETS
+from app.utils.email_providers import REDACTED_SECRET, connection_identity
 
 router = APIRouter()
 
@@ -211,40 +211,6 @@ async def update_contact_info_settings(
         return contact_settings
 
 
-def _missing_for_enabled(
-    submitted: EmailServiceSettings, stored: Mapping[str, Any]
-) -> Optional[str]:
-    """Name the field an *enabled* configuration cannot send without, or None.
-
-    Enforced on write only. Reads rebuild stored rows through the schema, and
-    a row saved before the App Password became the only Gmail / Microsoft
-    path (an OAuth-era onboarding, say) is enabled with no password; failing
-    the read would lock that organization out of Settings, which is where
-    they fix it. A redacted marker counts as present only when a value is
-    actually stored, so a marker echoed for a never-set field does not pass.
-    """
-    if not submitted.enabled:
-        return None
-    preset = PROVIDER_SMTP_PRESETS.get(submitted.platform)
-    if preset is None:
-        return None
-    if not submitted.from_email:
-        return "from_email"
-    password = getattr(submitted, preset.password_field)
-    if password == _REDACTED:
-        password = stored.get(preset.password_field)
-    if not password:
-        return preset.password_field
-    return None
-
-
-_FIELD_LABELS = {
-    "from_email": "the account email address",
-    "google_app_password": "a Google App Password",
-    "microsoft_app_password": "a Microsoft 365 App Password",
-}
-
-
 @router.patch("/settings/email", response_model=EmailServiceSettings)
 async def update_email_settings(
     email_settings: EmailServiceSettings,
@@ -263,25 +229,10 @@ async def update_email_settings(
     """
     org_service = OrganizationService(db)
 
-    # An enabled Gmail / Microsoft 365 configuration with no App Password
-    # would save green and then fail every send: the resolver supplies a
-    # login with no password and the connect skips authentication.
-    org = await org_service.get_organization(current_user.organization_id)
-    stored_email = {}
-    if org and org.settings:
-        stored_email = decrypt_settings_secrets(org.settings).get("email_service", {})
-    if not isinstance(stored_email, dict):
-        stored_email = {}
-    missing = _missing_for_enabled(email_settings, stored_email)
-    if missing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Enabling {email_settings.platform} email requires "
-                f"{_FIELD_LABELS[missing]}. Enter it, or leave email disabled."
-            ),
-        )
-
+    # OrganizationService.update_organization_settings refuses an enabled
+    # configuration that cannot send (missing App Password, host, ...) with a
+    # ValueError, which handle_service_errors returns as a 400 naming the
+    # field. It lives there so the full settings PATCH enforces it too.
     settings_dict = {"email_service": email_settings.model_dump(exclude_unset=False)}
 
     async with handle_service_errors("Failed to update email settings"):
@@ -323,32 +274,7 @@ async def _rate_limit_settings_test_email(request: Request) -> None:
 
 EMAIL_CONNECTION_TEST_TIMEOUT_SECONDS = 30
 
-_REDACTED = "••••••••"
-
-
-def _connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
-    """The server a stored secret authenticates to, per platform.
-
-    A Gmail / Microsoft App Password logs in as the From address to a fixed
-    host; a self-hosted password logs in as ``smtp_user`` to whatever host,
-    port and encryption were saved; a Cloudflare token belongs to an account.
-    """
-    if platform in PROVIDER_SMTP_PRESETS:
-        return (platform, values.get("from_email") or None)
-    if platform == "cloudflare":
-        return (platform, values.get("cloudflare_account_id") or None)
-    port = values.get("smtp_port")
-    try:
-        port = int(port) if port is not None else None
-    except (TypeError, ValueError):
-        port = None
-    return (
-        platform,
-        values.get("smtp_host") or None,
-        port,
-        values.get("smtp_user") or None,
-        values.get("smtp_encryption") or "tls",
-    )
+_REDACTED = REDACTED_SECRET
 
 
 def _resolve_redacted_secrets(
@@ -368,8 +294,8 @@ def _resolve_redacted_secrets(
     the saved credential to that host. In that case the marker resolves to
     nothing and the test reports the password as missing.
     """
-    if _connection_identity(submitted.platform, submitted.model_dump()) != (
-        _connection_identity(stored.get("platform"), stored)
+    if connection_identity(submitted.platform, submitted.model_dump()) != (
+        connection_identity(stored.get("platform"), stored)
     ):
         stored = {}
     updates = {}

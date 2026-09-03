@@ -49,6 +49,7 @@ from app.services.onboarding import (
     ONBOARDING_ACCEPTED_MODULE_IDS,
     OnboardingService,
 )
+from app.utils.email_providers import missing_for_enabled
 from app.utils.image_validator import validate_logo_image
 from app.utils.onboarding_security import find_system_owner
 
@@ -738,6 +739,18 @@ async def _persist_session_data_to_org(
             }
             # Remove None values so only configured fields are stored
             email_settings = {k: v for k, v in email_settings.items() if v is not None}
+            # The same invariant the settings endpoints enforce with a 400:
+            # an enabled configuration that cannot send must not be stored
+            # enabled. Completion cannot reject, so it stores it disabled and
+            # says so; the admin finishes it in Settings > Email.
+            missing = missing_for_enabled(email_settings)
+            if missing:
+                logger.warning(
+                    "Onboarding email config for {} is missing {}; stored disabled",
+                    platform,
+                    missing,
+                )
+                email_settings["enabled"] = False
             org_settings["email_service"] = email_settings
 
             # Encrypt secret fields before persisting
