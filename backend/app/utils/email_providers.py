@@ -74,11 +74,14 @@ def connection_identity(platform: Any, values: Mapping[str, Any]) -> tuple:
         return (platform, values.get("from_email") or None)
     if platform == "cloudflare":
         return (platform, values.get("cloudflare_account_id") or None)
+    # A stored row may omit the port; the schema and the sender both read
+    # that as 587, so the identity must too or an unchanged form never
+    # matches what it was saved from.
     port = values.get("smtp_port")
     try:
-        port = int(port) if port is not None else None
+        port = int(port) if port is not None else 587
     except (TypeError, ValueError):
-        port = None
+        port = 587
     return (
         platform,
         values.get("smtp_host") or None,

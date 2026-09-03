@@ -31,6 +31,7 @@ from app.services.organization_service import OrganizationService
 from app.utils.email_providers import (
     EMAIL_PLATFORMS,
     PROVIDER_SMTP_PRESETS,
+    connection_identity,
     is_valid_email,
     missing_for_enabled,
     normalize_app_password,
@@ -634,6 +635,27 @@ class TestRedactedSecretsResolveAgainstStore:
             smtp_password="••••••••",
         )
 
+        assert _resolve_redacted_secrets(submitted, stored).smtp_password == "saved-pw"
+
+    def test_omitted_stored_port_matches_the_schema_default(self):
+        # An older row saved without smtp_port; the form submits 587.
+        stored = {
+            "platform": "selfhosted",
+            "smtp_host": "mail.dept.example",
+            "smtp_user": "svc",
+            "smtp_password": "saved-pw",
+        }
+        submitted = EmailServiceSettings(
+            platform="selfhosted",
+            smtp_host="mail.dept.example",
+            smtp_port=587,
+            smtp_user="svc",
+            smtp_password="••••••••",
+        )
+
+        assert connection_identity("selfhosted", stored) == connection_identity(
+            "selfhosted", submitted.model_dump()
+        )
         assert _resolve_redacted_secrets(submitted, stored).smtp_password == "saved-pw"
 
     def test_placeholder_with_nothing_saved_resolves_to_none(self):

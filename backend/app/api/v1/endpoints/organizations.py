@@ -240,7 +240,7 @@ async def update_email_settings(
     settings_dict = {"email_service": email_settings.model_dump(exclude_unset=False)}
 
     async with handle_service_errors("Failed to update email settings"):
-        await org_service.update_organization_settings(
+        updated = await org_service.update_organization_settings(
             current_user.organization_id, settings_dict
         )
 
@@ -258,8 +258,11 @@ async def update_email_settings(
             username=current_user.username,
         )
 
-        # SEC: Redact secrets before returning to the client
-        return email_settings.redacted()
+        # SEC: Redact secrets before returning to the client. Return what was
+        # persisted, not what was submitted: the service may have cleared a
+        # secret whose connection identity changed, and the form must show
+        # that rather than a marker for a password that no longer exists.
+        return updated.email_service.redacted()
 
 
 # A connection test opens a socket to whatever host the admin typed. The same
