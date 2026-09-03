@@ -32,9 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Client Secret** from `EmailServiceSettings`, the settings form and the
   onboarding form. No refresh token was ever obtained or stored and no
   XOAUTH2 or Graph send path exists, so the fields were decorative; the
-  onboarding test reported them "valid" on string format alone. Stored rows
-  still carrying them (encrypted) are ignored on read and pruned the next
-  time the email section is saved. `microsoft_app_password` is new; Gmail
+  onboarding test reported them "valid" on string format alone. Migration
+  `20260903_1300_e3a9c1d5b7f2` prunes the retired keys from every stored row
+  and settles a pre-validation platform label (`sendgrid`, say) onto
+  `selfhosted` / `other`; the read and write paths do the same for any row
+  the migration has not yet reached. It is not reversible: the pruned keys
+  held OAuth secrets nothing reads. `microsoft_app_password` is new; Gmail
   keeps `google_app_password`.
 
 **Added**

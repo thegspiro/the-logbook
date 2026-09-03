@@ -118,6 +118,27 @@ async def _rate_limit_onboarding_reset(request: Request) -> None:
     await check_rate_limit(request, scope="onboarding_reset")
 
 
+def _parse_smtp_port(value: Any) -> int:
+    """Return a usable port, or raise ValueError for a malformed one.
+
+    The onboarding config is a free dict, so the port arrives as whatever the
+    client sent. A missing or blank value is the submission default; a value
+    that is not an integer in 1-65535 is a client error that must surface as
+    a 400, not as an unhandled int() inside the request.
+    """
+    if value is None or value == "":
+        return 587
+    if isinstance(value, bool):
+        raise ValueError("SMTP port must be a number between 1 and 65535")
+    try:
+        port = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("SMTP port must be a number between 1 and 65535") from None
+    if not 1 <= port <= 65535:
+        raise ValueError("SMTP port must be a number between 1 and 65535")
+    return port
+
+
 def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
     """Map the onboarding form's camelCase config to the org settings shape.
 
@@ -132,7 +153,7 @@ def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
         "enabled": platform != "other" and bool(raw_config),
         "platform": platform,
         "smtp_host": raw_config.get("smtpHost"),
-        "smtp_port": int(raw_config.get("smtpPort") or 587),
+        "smtp_port": _parse_smtp_port(raw_config.get("smtpPort")),
         "smtp_user": raw_config.get("smtpUsername"),
         "smtp_password": raw_config.get("smtpPassword"),
         "smtp_encryption": raw_config.get("smtpEncryption", "tls"),
@@ -1533,9 +1554,11 @@ async def save_email_config(
     # that would be enabled but cannot send is refused here, naming the
     # field, rather than accepted and then quietly stored disabled at
     # completion — which the admin would only discover from missing mail.
-    missing = missing_for_enabled(
-        _email_settings_from_onboarding(data.platform, data.config)
-    )
+    try:
+        mapped = _email_settings_from_onboarding(data.platform, data.config)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    missing = missing_for_enabled(mapped)
     if missing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

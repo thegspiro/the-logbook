@@ -64,6 +64,19 @@ router = APIRouter()
 REVIEW_CHECKLIST_KEYS = {"org_settings", "modules"}
 
 
+# The two grants that may write settings (see the PATCH routes below). A
+# caller who may write the email section must also read its identifiers, or
+# the form loads with the host / account cleared, the identity comparison
+# refuses the saved secret, and a save from that form wipes the fields.
+_SETTINGS_WRITE_PERMISSIONS = ("settings.manage", "organization.update_settings")
+
+
+def _administers_settings(user_permissions: set) -> bool:
+    return any(
+        _has_permission(p, user_permissions) for p in _SETTINGS_WRITE_PERMISSIONS
+    )
+
+
 @router.get("/settings", response_model=OrganizationSettingsResponse)
 async def get_organization_settings(
     db: AsyncSession = Depends(get_db),
@@ -92,7 +105,7 @@ async def get_organization_settings(
     # also strip the infrastructure identifiers those secrets authenticate to
     # (mail host, S3 bucket/endpoint, SSO issuer, OAuth tenant/client IDs)
     # unless the caller actually administers settings.
-    if not _has_permission("settings.manage", _collect_user_permissions(current_user)):
+    if not _administers_settings(_collect_user_permissions(current_user)):
         redacted = redacted.without_infrastructure()
 
     # Return as dict so FastAPI's response_model validation preserves

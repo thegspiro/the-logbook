@@ -17,10 +17,14 @@ import pytest
 # them as tests if they were bound in this namespace.
 import app.api.v1.email_test_helper as email_test_helper
 from app.api.v1.endpoints.organizations import (
+    _administers_settings,
     _resolve_redacted_secrets,
     _smtp_login_incomplete,
 )
-from app.api.v1.onboarding import _email_settings_from_onboarding
+from app.api.v1.onboarding import (
+    _email_settings_from_onboarding,
+    _parse_smtp_port,
+)
 from app.schemas.organization import (
     _EMAIL_SECRET_FIELDS,
     _LEGACY_EMAIL_OAUTH_FIELDS,
@@ -1074,3 +1078,38 @@ class TestOnboardingEmailMapping:
 
         assert mapped["enabled"] is False
         assert missing_for_enabled(mapped) is None
+
+
+class TestOnboardingPortParsing:
+    def test_missing_or_blank_is_the_submission_default(self):
+        assert _parse_smtp_port(None) == 587
+        assert _parse_smtp_port("") == 587
+
+    def test_numeric_strings_and_ints_are_accepted(self):
+        assert _parse_smtp_port("465") == 465
+        assert _parse_smtp_port(25) == 25
+
+    def test_malformed_values_raise_a_value_error_not_a_type_error(self):
+        # The session save turns ValueError into a 400; anything else would
+        # escape as a 500.
+        for bad in ("abc", {"port": 587}, [587], True, 0, 70000, "-1"):
+            with pytest.raises(ValueError, match="SMTP port"):
+                _parse_smtp_port(bad)
+
+    def test_mapping_surfaces_the_port_error(self):
+        with pytest.raises(ValueError, match="SMTP port"):
+            _email_settings_from_onboarding("selfhosted", {"smtpPort": "abc"})
+
+
+class TestSettingsReadVisibility:
+    def test_either_settings_write_grant_sees_infrastructure(self):
+        assert _administers_settings({"settings.manage"})
+        assert _administers_settings({"organization.update_settings"})
+
+    def test_wildcards_count(self):
+        assert _administers_settings({"*"})
+        assert _administers_settings({"settings.*"})
+
+    def test_an_ordinary_member_does_not(self):
+        assert not _administers_settings({"events.view", "members.view"})
+        assert not _administers_settings(set())
