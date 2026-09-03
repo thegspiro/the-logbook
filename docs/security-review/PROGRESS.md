@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **#2199** (branch `claude/security-review-apparatus-nfc`) — Feature 13,
-Apparatus & NFC, passes 3–4. Pass 3: AP-8 fixed —
+Apparatus & NFC, passes 3–5. Pass 3: AP-8 fixed —
 `CheckTemplateCompartment.children` had the same inverted self-referential
 `remote_side` shape FAC-16 found and fixed on `DocumentFolder.children`
 (flagged there as a sibling instance, out of scope for Facilities) —
@@ -36,8 +36,22 @@ validation on a client-supplied `parent_compartment_id`, unlike
 confirmation and local-state removal didn't account for the descendants
 the backend now cascade-deletes). All three reproduced live against the
 current fixed code before being called findings, and regression-tested
-failing pre-fix / passing post-fix via `git stash`. See the log entry below
-for the full writeup once merged.
+failing pre-fix / passing post-fix via `git stash`. Pass 5 (same PR, a
+second Codex review of the pass-4 commit): two more findings — AP-12 (P1,
+`delete_compartment` cascaded off a stale REPEATABLE READ snapshot, the
+exact concurrency race FAC-40 already fixed once on `DocumentFolder`/
+`delete_folder`; fixed with FAC-40's own locking-walk + explicit-bulk-delete
+
+- `passive_deletes=True` pattern, adapted to this model's `SET NULL` vs.
+  `CASCADE` FK actions) and AP-13 (P1, frontend — AP-11's own descendant
+  computation trusted the browser's hierarchy, which can be ahead of what's
+  saved since reparenting has no auto-save path; fixed by tracking
+  last-known-server parent linkage and blocking the delete on disagreement).
+  Both reproduced live (two real, independently-committing database sessions
+  for AP-12; a component test reproducing the actual data-loss scenario for
+  AP-13) before being called findings, and regression-tested failing pre-fix /
+  passing post-fix via `git stash`. See the log entry below for the full
+  writeup once merged.
 
 ---
 
