@@ -58,6 +58,16 @@ function expiryLabel(days: number | undefined): string {
   return `${days}d left`;
 }
 
+/**
+ * Identity of an item query: what the rendered rows are an answer to.
+ *
+ * NUL separator, because a plain space would let search "a b" with no category
+ * collide with search "a" under category "b".
+ */
+function itemQueryKey(searchTerm: string, category: string, pageIndex: number): string {
+  return `${searchTerm}\u0000${category}\u0000${pageIndex}`;
+}
+
 interface StatTileProps {
   icon: React.ReactNode;
   label: string;
@@ -91,9 +101,12 @@ const MedicalSuppliesPage: React.FC = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
   const [expiring, setExpiring] = useState<ExpiringLot[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
+  const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+  const [isItemsLoading, setIsItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [page, setPage] = useState(0);
   const [itemPage, setItemPage] = useState({ total: 0, skip: 0, limit: PAGE_SIZE });
@@ -101,50 +114,122 @@ const MedicalSuppliesPage: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
 
-  // Monotonic request id. Clicking Next and then editing the filter starts two
-  // loads; without this both commit, and if the older one lands last the table
-  // shows rows that do not match the visible filter while `page` and
-  // `itemPage.skip` disagree -- a state the Previous button cannot recover from,
-  // because decrementing page 0 is a no-op.
-  const loadId = useRef(0);
+  // Which query the rows in `items` actually answer. Rendering the empty state
+  // off `items.length` alone reports "no medical supplies" whenever the list
+  // has not caught up with the controls -- before the first response, and in
+  // the window after a filter or page changes -- which reads as an empty
+  // catalogue rather than as a pending request. null until the first response.
+  const [itemsFilterKey, setItemsFilterKey] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const requestId = ++loadId.current;
-    setIsFetching(true);
+  // Monotonic request ids, one per flow. Clicking Next and then editing the
+  // filter starts two item loads; without this both commit, and if the older
+  // one lands last the table shows rows that do not match the visible filter
+  // while `page` and `itemPage.skip` disagree -- a state the Previous button
+  // cannot recover from, because decrementing page 0 is a no-op.
+  const overviewRequestId = useRef(0);
+  const itemsRequestId = useRef(0);
+  const itemsAbortController = useRef<AbortController | null>(null);
+
+  const filterKey = itemQueryKey(debouncedSearch, categoryFilter, page);
+
+  /**
+   * Shown while the numbers still describe something real: the rows on screen,
+   * or the request that is replacing them. A query that settles without
+   * producing rows for itself has failed, and `itemPage` still holds the
+   * previous response -- so the range would sit above an empty table, under
+   * the error explaining why it is empty.
+   *
+   * Deliberately still shown during an ordinary page change: hiding the pager
+   * on the click that uses it is worse than leaving it in place, disabled.
+   */
+  const pagerDescribesScreen = itemsFilterKey !== null && (itemsFilterKey === filterKey || isItemsLoading);
+
+  /**
+   * Whether the on-screen controls have actually been asked yet.
+   *
+   * During the search debounce no request has started, so nothing is loading
+   * and Next would otherwise stay live. One click there advances the page, and
+   * the typed search is then requested at skip 200 -- past its own first page,
+   * for a range like "Showing 201-5 of 5".
+   */
+  const filtersSettled = search === debouncedSearch;
+
+  const loadOverview = useCallback(async () => {
+    const requestId = ++overviewRequestId.current;
+    setIsOverviewLoading(true);
+    setOverviewError(null);
     try {
-      const [summaryData, itemsData, categoryData, expiringData] = await Promise.all([
+      const [summaryData, categoryData, expiringData] = await Promise.all([
         medicalSuppliesService.getSummary(EXPIRY_WINDOW_DAYS),
-        medicalSuppliesService.getItems({
-          search: search || undefined,
-          category_id: categoryFilter || undefined,
-          skip: page * PAGE_SIZE,
-          limit: PAGE_SIZE,
-        }),
         medicalSuppliesService.getCategories(),
         medicalSuppliesService.getExpiringLots(EXPIRY_WINDOW_DAYS),
       ]);
-      if (requestId !== loadId.current) return;
+      if (requestId !== overviewRequestId.current) return;
       setSummary(summaryData);
-      setItems(itemsData.items);
-      setItemPage({ total: itemsData.total, skip: itemsData.skip, limit: itemsData.limit });
       setCategories(categoryData);
       setExpiring(expiringData);
     } catch (err: unknown) {
-      if (requestId !== loadId.current) return;
-      toast.error(getErrorMessage(err, 'Failed to load medical supplies'));
+      if (requestId !== overviewRequestId.current) return;
+      const message = getErrorMessage(err, 'Failed to load medical supplies overview');
+      setOverviewError(message);
+      toast.error(message);
     } finally {
-      if (requestId === loadId.current) {
-        setIsLoading(false);
-        setIsFetching(false);
-      }
+      if (requestId === overviewRequestId.current) setIsOverviewLoading(false);
     }
-  }, [search, categoryFilter, page]);
+  }, []);
+
+  const loadItems = useCallback(async () => {
+    const requestId = ++itemsRequestId.current;
+    itemsAbortController.current?.abort();
+    const controller = new AbortController();
+    itemsAbortController.current = controller;
+    setIsItemsLoading(true);
+    setItemsError(null);
+    try {
+      const itemsData = await medicalSuppliesService.getItems(
+        {
+          search: debouncedSearch || undefined,
+          category_id: categoryFilter || undefined,
+          skip: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
+        },
+        controller.signal
+      );
+      if (requestId !== itemsRequestId.current) return;
+      setItems(itemsData.items);
+      setItemPage({ total: itemsData.total, skip: itemsData.skip, limit: itemsData.limit });
+      // Stamped from this closure's own values, not from the render's
+      // `filterKey`: those are what the request actually asked for.
+      setItemsFilterKey(itemQueryKey(debouncedSearch, categoryFilter, page));
+    } catch (err: unknown) {
+      if (controller.signal.aborted || requestId !== itemsRequestId.current) return;
+      const message = getErrorMessage(err, 'Failed to load medical supplies');
+      setItemsError(message);
+      toast.error(message);
+    } finally {
+      if (requestId === itemsRequestId.current) setIsItemsLoading(false);
+    }
+  }, [debouncedSearch, categoryFilter, page]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadOverview();
+  }, [loadOverview]);
 
-  useRegisterPullToRefresh(load);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    void loadItems();
+    return () => itemsAbortController.current?.abort();
+  }, [loadItems]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([loadOverview(), loadItems()]);
+  }, [loadOverview, loadItems]);
+
+  useRegisterPullToRefresh(refresh);
 
   /** Lot stock is the real count for dated items; quantity is what's left over. */
 
@@ -162,7 +247,7 @@ const MedicalSuppliesPage: React.FC = () => {
     setShowItemModal(false);
     setEditingItem(null);
     setShowDeliveryModal(false);
-    void load();
+    void refresh();
   };
 
   return (
@@ -200,7 +285,7 @@ const MedicalSuppliesPage: React.FC = () => {
           <div className="hscroll flex items-center gap-2">
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => void refresh()}
               className="btn-icon"
               aria-label="Refresh medical supplies"
             >
@@ -289,7 +374,26 @@ const MedicalSuppliesPage: React.FC = () => {
         </button>
       </div>
 
-      {isLoading ? (
+      {/*
+       * The overview load carries the category list, so its failure degrades
+       * the stock tab too: rows show a dash for every category and the filter
+       * offers nothing but "All categories". Reporting it only on the expiring
+       * tab left that looking like a catalogue with no categories assigned.
+       */}
+      {overviewError && (
+        <p role="alert" className="mb-4 text-sm text-red-700 dark:text-red-400">
+          {tab === 'stock'
+            ? `${overviewError} Category names and the category filter are unavailable until it loads.`
+            : overviewError}
+        </p>
+      )}
+      {tab === 'stock' && itemsError && (
+        <p role="alert" className="mb-4 text-sm text-red-700 dark:text-red-400">
+          {itemsError}
+        </p>
+      )}
+
+      {tab === 'expiring' && isOverviewLoading ? (
         <SkeletonCard />
       ) : tab === 'expiring' ? (
         <section aria-label="Expiring stock">
@@ -346,7 +450,7 @@ const MedicalSuppliesPage: React.FC = () => {
           )}
         </section>
       ) : (
-        <section aria-label="All supplies">
+        <section aria-label="All supplies" aria-busy={isItemsLoading}>
           <div className="mb-4 flex flex-wrap gap-2">
             <div className="relative min-w-[200px] flex-1">
               <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -380,7 +484,19 @@ const MedicalSuppliesPage: React.FC = () => {
             </select>
           </div>
 
-          {items.length === 0 ? (
+          {/*
+           * Rows are shown only when they answer the query that is on screen.
+           * Anything else is a pending request (skeleton) or a failed one -- and
+           * a failed one renders nothing here, because the alert above already
+           * says what happened and "No medical supplies yet" would contradict
+           * it. The controls above stay mounted throughout: putting the
+           * skeleton over them would unmount the search box mid-keystroke.
+           */}
+          {itemsFilterKey !== filterKey ? (
+            isItemsLoading ? (
+              <SkeletonCard />
+            ) : null
+          ) : items.length === 0 ? (
             <EmptyState
               icon={Stethoscope}
               title="No medical supplies yet"
@@ -463,12 +579,12 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
           )}
 
-          {itemPage.total > 0 && (
+          {pagerDescribesScreen && itemPage.total > 0 && (
             <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={isFetching || itemPage.skip === 0}
+                disabled={isItemsLoading || !filtersSettled || itemPage.skip === 0}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
               >
                 Previous
@@ -485,7 +601,7 @@ const MedicalSuppliesPage: React.FC = () => {
                 // response, so a second activation before this one landed
                 // stepped past the last page -- skip=400 on a 201-item catalog,
                 // an empty table and a range reading "Showing 401-201 of 201".
-                disabled={isFetching || itemPage.skip + itemPage.limit >= itemPage.total}
+                disabled={isItemsLoading || !filtersSettled || itemPage.skip + itemPage.limit >= itemPage.total}
                 onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
               >
                 Next
