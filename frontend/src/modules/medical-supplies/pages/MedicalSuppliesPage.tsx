@@ -452,7 +452,7 @@ const MedicalSuppliesPage: React.FC = () => {
         <SectionError
           section="items"
           message={errors.items}
-          isStale={loaded.items}
+          isStale={loaded.items && itemsFilterKey === filterKey}
           onRetry={() => void loadSections(['items'], { bypassCache: true })}
         />
       )}
@@ -549,8 +549,15 @@ const MedicalSuppliesPage: React.FC = () => {
             </select>
           </div>
 
-          {loading.items && itemsFilterKey !== filterKey ? (
-            <SkeletonCard />
+          {itemsFilterKey !== filterKey ? (
+            // The rows on hand answer a different filter. While the request for
+            // the selected one is in flight that is a skeleton; once it has
+            // failed there is nothing honest to show, and the section error
+            // above already says why. Either way the stale rows stay off screen
+            // rather than sitting under controls that disagree with them.
+            loading.items ? (
+              <SkeletonCard />
+            ) : null
           ) : loaded.items && items.length === 0 ? (
             <EmptyState
               icon={Stethoscope}

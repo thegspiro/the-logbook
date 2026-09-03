@@ -542,6 +542,35 @@ describe('MedicalSuppliesPage', () => {
       expect(screen.getByText('4x4 Gauze')).toBeInTheDocument();
     });
 
+    it('does not fall back to the previous filter\u2019s rows when the new filter fails', async () => {
+      // The guard that hid mismatched rows only held while the request was in
+      // flight. On rejection the loading flag drops and the old rows reappeared
+      // under controls that disagree with them -- the filter says "gauze", the
+      // table lists what was there before it.
+      mockGetItems
+        .mockResolvedValueOnce({
+          items: [{ id: 'item-1', name: 'Trauma Shears', quantity: 6 }],
+          total: 1,
+          skip: 0,
+          limit: 200,
+        })
+        .mockRejectedValue(new Error('Supplies unavailable'));
+
+      const user = userEvent.setup();
+      renderWithRouter(<MedicalSuppliesPage />);
+      await user.click(await screen.findByRole('button', { name: /All supplies/i }));
+      expect(await screen.findByText('Trauma Shears')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole('searchbox', { name: /Search medical supplies/i }), {
+        target: { value: 'gauze' },
+      });
+
+      await screen.findByText('Could not load the supply table.');
+      expect(screen.queryByText('Trauma Shears')).not.toBeInTheDocument();
+      // And the banner does not claim to be showing data it is not showing.
+      expect(screen.queryByText('Showing previously loaded data')).not.toBeInTheDocument();
+    });
+
     it('keeps the search box mounted while the item list reloads', async () => {
       // Skeletoning the whole section unmounted the focused input on the first
       // keystroke, so every character after it was typed into nothing until the
