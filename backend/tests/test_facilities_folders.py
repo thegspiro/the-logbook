@@ -9,7 +9,14 @@ the duration serializes concurrent creates.
 FAC-9: the folder list's `document_count` crosses into the generic Documents
 module's own permission boundary — a `facilities.view` holder without
 `documents.view` should see the folders (a fixed part of the facility
-record) but not how many documents are inside them.
+record) but not how many documents are inside them. This class below mocks
+`get_facility_sub_folders` entirely, so it tests only the count-redaction
+logic in `get_facility_folders` -- not whether the folders themselves reach
+that caller. As of FAC-13 (docs/security-review/FAC-12-facilities.md) they
+usually do not: every facility folder is now stamped with the sensitive
+permission set, so a plain `facilities.view` holder gets an empty folder
+list from the real `get_facility_sub_folders`, not the populated one this
+mock hands it.
 """
 
 import inspect

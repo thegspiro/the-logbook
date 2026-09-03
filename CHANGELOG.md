@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Flagged: an unrelated folder-authorization fix silently emptied the Facilities Files section for four permission tiers it was never meant to affect (2026-09-03)
+
+**Not fixed — flagged for a product decision.** `GET /{facility_id}/folders`
+still requires only baseline `facilities.view`, but every facility folder —
+including the non-sensitive Photos, Blueprints & Permits, Maintenance
+Records, and Inspection Reports categories — is now stamped with the same
+permission set as the two genuinely sensitive categories (Insurance &
+Leases, Capital Projects), because of an unrelated cross-module folder-ACL
+fix (PR #2160) that started enforcing a permission stamp already present but
+previously inert. A secretary, quartermaster, safety officer, or training
+officer — every one of whom is meant to see the non-sensitive categories at
+their baseline `facilities.view` grant — now gets an empty folder list for
+every facility. Fail-closed, not a data leak, but the department's own file
+records (photo captions, upload metadata) remain visible while the actual
+files behind them do not open for the same caller. Correcting it needs a new
+permission tier plus a migration, not a one-line loosening — see
+`docs/KNOWN_LIMITATIONS.md` and
+`docs/security-review/FAC-12-facilities.md` (FAC-13) for the full reasoning
+and why a naive fix would reopen a broader leak.
+
 ### Inventory: a concurrent return or check-in could double-credit stock or silently overwrite condition notes, and the first fix for it had a lock-ordering bug of its own (2026-09-02)
 
 **Fixed**

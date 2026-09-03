@@ -3069,6 +3069,55 @@ typed in), and a full second-approver workflow is a feature, not a same-day
 fix. Found in `docs/security-review/MS-09-medical-screening.md` (feature 09,
 pass 3, MS-7).
 
+## FAC-13 — Every Facility Folder Requires the Sensitive-Family Permission Set, Silencing Four Non-Sensitive Categories for Their Intended Baseline Audience (2026-09-03)
+
+`GET /{facility_id}/folders` is gated at baseline `facilities.view`/
+`.manage`, and FAC-5's design deliberately splits facility data into five
+**sensitive** families (access keys, utility accounts, capital projects,
+insurance policies, occupants — gated `facilities.view_sensitive`/`.edit`/
+`.manage`) and everything else — including a facility's photos and
+maintenance/inspection records — which stays readable at the **baseline**
+`facilities.view` grant held by the `secretary`, `quartermaster`,
+`safety_officer`, and `training_officer` positions by design.
+
+The facility file tree built by `DocumentsService.ensure_facility_folder`
+does not honor that split: the shared `facilities` system root, each
+per-facility folder, and **all six** of its sub-folders (Photos, Blueprints
+& Permits, Maintenance Records, Inspection Reports, Insurance & Leases,
+Capital Projects) are stamped with the identical
+`required_permissions = FACILITY_SENSITIVE_PERMISSIONS` (`facilities.view_sensitive`/
+`.edit`/`.manage`). That stamping existed since 2026-08-27 but was inert —
+`get_facility_sub_folders` never checked it — until PR #2160
+("Enforce document folder ancestor authorization", 2026-09-02, the DOC-5
+fix from the Documents & Legal feature) wired `can_access_folder` into it.
+Because `can_access_folder` ANDs every ancestor, a caller who is not
+admitted at the shared root is now refused a facility's **entire** folder
+tree, sensitive or not — so a secretary, quartermaster, safety officer, or
+training officer gets an empty folder list for every facility, including
+the four categories that are supposed to be visible at their baseline
+grant. `GET /photos` (baseline `.view`) still returns the photo's metadata;
+only the file behind it, filed into this tree, is unreachable to them.
+
+Verified empirically against the real `DocumentsService.can_access_folder`
+(not a reimplementation): a `facilities.view`-only caller is refused a
+`required_permissions`-stamped Photos sub-folder; a `facilities.manage`
+caller is admitted.
+
+Fail-closed throughout — not a data-exposure bug, a functional regression.
+Not fixed because a correct narrowing needs: (1) a new permission tier for
+"any facilities module access" to gate the root/per-facility folder/four
+non-financial sub-folders, distinct from both the generic `documents.view`
+(much broader — the default `member` position holds it, so simply clearing
+`required_permissions` would let any member browse these folders through
+the generic Documents module with no facilities grant at all) and the
+narrower sensitive set (which must stay on Insurance & Leases and Capital
+Projects); (2) an owner call on whether **Blueprints & Permits**
+specifically should stay sensitive (floor plans can be defensibly
+security-sensitive even though FAC-5 never named them as one of the five
+families) or move with the other three; (3) a migration correcting every
+already-stamped row for whichever categories move. Found in
+`docs/security-review/FAC-12-facilities.md` (feature 12, pass 3, FAC-13).
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

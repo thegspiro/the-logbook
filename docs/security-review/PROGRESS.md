@@ -16,12 +16,65 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-#2191 (`claude/security-review-facilities`) — Feature 12, Facilities, in
-progress. Bookkeeping-only so far (records #2190's merge, closes out
-feature 11); findings and fixes to follow in subsequent commits on the
-same branch/PR.
+#2191 (`claude/security-review-facilities`) — Feature 12, Facilities, pass
+3, complete and ready for review. One HIGH finding (FAC-13, facility-file
+folder access over-restricted for four non-sensitive categories, flagged —
+needs an owner decision, not auto-fixed) plus two doc-accuracy corrections
+(stale comments claiming a now-false "facilities.view-only sees the
+folders" invariant). Full completion gate green. Rotation row 12 → ⏳
+(awaiting this PR's merge).
 
 ---
+
+### 2026-09-03 — Feature 12 (Facilities, pass 3) — 0 fixed (2 doc-accuracy corrections), 1 HIGH flagged
+
+Prior art (`docs/module-audit/facilities.md`, `docs/app-review/facilities.md`,
+this doc's own pass 1/pass 2) re-read in full; no open findings inherited —
+all re-verified intact against current code. Enumerated 98/98 routes by
+exact grep count (`require_permission(\|require_all_permissions(` matches
+`^@router\.` 1:1), 0 bare `get_current_user`, unchanged since pass 2 — no
+new route landed. Backend/frontend diff since pass 2's merge reviewed in
+full (small: an `include_inactive` list param + `usage_count` on the three
+lookup-table endpoints for the new settings screen; larger on the frontend,
+already-landed `window.confirm` removal and stale-response-race fixes,
+re-verified clean, no new gap).
+
+This pass's specific brief was to check whether PR #2160 (the DOC-5
+folder-ACL fix from feature 10, which touched `facilities.py` by wiring
+`current_user` into `get_facility_sub_folders`) left a facilities-specific
+gap, without re-deriving the mechanism DOC-10's own pass 3 already verified
+sound. It did: **FAC-13 (HIGH, correctness/access, not a leak, flagged)** —
+`ensure_facility_folder` stamps the shared `facilities` folder root, every
+per-facility folder, and **all six** sub-folders (not just the two
+genuinely sensitive ones, Insurance & Leases and Capital Projects) with the
+same `facilities.view_sensitive`/`.edit`/`.manage` requirement. That stamp
+existed since 2026-08-27 but was inert until #2160 wired enforcement
+(2026-09-02); because folder authorization ANDs every ancestor, a caller
+admitted only at baseline `facilities.view` — secretary, quartermaster,
+safety officer, training officer, by FAC-5's own design — now gets an
+**empty** folder list for every facility, including the non-sensitive
+Photos/Blueprints/Maintenance/Inspection categories they're meant to see.
+Verified empirically against the real `can_access_folder` code path (not a
+reimplementation): a `facilities.view`-only caller is refused a
+sensitive-stamped folder, a `facilities.manage` caller is admitted.
+Fail-closed, so not a security leak — a functional regression a permission
+tier can no longer do the file-viewing part of its job. Flagged rather than
+fixed: a correct narrowing needs a new "any facilities access" permission
+tier (simply clearing `required_permissions` would let any `documents.view`
+holder — the default `member` position — browse these folders with zero
+facilities grant, reopening the leak the stamp exists to prevent), an owner
+call on whether Blueprints & Permits specifically should stay sensitive,
+and a migration for already-stamped rows. Corrected two now-false code
+comments that assumed the pre-#2160 behavior (`facilities.py`'s
+`get_facility_folders` docstring/comment and `test_facilities_folders.py`'s
+module docstring) — zero-behavior-change doc fixes, distinct from the
+flagged access gap itself. Mirrored to `docs/KNOWN_LIMITATIONS.md` and
+`CHANGELOG.md`. Full local completion gate green: flake8/black/isort clean
+across `app/ tests/ alembic/`, migrations validated (no schema change),
+249/249 scoped and 9992/9992 full backend suite pass (21 pre-existing
+skips), `tsc --noEmit` 0 errors, `eslint .` clean (no frontend code changed
+this pass). Findings doc: `docs/security-review/FAC-12-facilities.md`. PR
+#2191 opened and subscribed. Next: 13 apparatus & NFC, once #2191 merges.
 
 ### 2026-09-03 — Feature 11 (Inventory) fully closed — PR #2190 merged
 
@@ -7176,7 +7229,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | 🔄     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |

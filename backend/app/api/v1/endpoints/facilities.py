@@ -3756,8 +3756,19 @@ async def get_facility_folders(
     # Every generic folder/document/summary read in the Documents module
     # requires documents.view; a document_count here is the same aggregate
     # disclosure DOC-4 already flags for that module's own summary endpoint.
-    # A facilities.view-only caller sees the folders (they're a fixed part
-    # of the facility record) but not how many documents are inside them.
+    #
+    # This comment used to say a facilities.view-only caller sees the
+    # folders themselves (just not the counts). That stopped being true when
+    # #2160 wired get_facility_sub_folders into can_access_folder: every
+    # facility folder -- root, per-facility, and every one of the six
+    # sub-folders, sensitive or not -- carries required_permissions =
+    # FACILITY_SENSITIVE_PERMISSIONS, so a caller who holds only
+    # facilities.view now gets an empty folder list here, not an unredacted
+    # one. See FAC-13 (docs/security-review/FAC-12-facilities.md) --
+    # flagged, not fixed, because narrowing it correctly needs a decision on
+    # which of the four non-financial sub-folders (Photos, Blueprints &
+    # Permits, Maintenance Records, Inspection Reports) should drop to
+    # baseline facilities.view, plus a migration for rows already stamped.
     can_see_counts = user_has_permission(
         current_user, "documents.view"
     ) or user_has_permission(current_user, "documents.manage")

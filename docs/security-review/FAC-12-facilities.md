@@ -1,12 +1,197 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), (this PR) (pass 2)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2), 2026-09-03 (pass 3) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), [#1959](https://github.com/thegspiro/the-logbook/pull/1959) (pass 2), [#2191](https://github.com/thegspiro/the-logbook/pull/2191) (pass 3)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
 model `app/models/facilities.py`
 **Frontend:** `modules/facilities`
 **Migrations:** none this iteration (no schema change)
+
+---
+
+## Pass 3 (2026-09-03)
+
+Prior art re-read in full: `docs/module-audit/facilities.md` (open item FAC-3
+already closed per pass 1/2, re-confirmed below) and
+`docs/app-review/facilities.md` (no open items — FAC-4 closed since pass 1
+of this doc). Pass 1 and pass 2's findings (FAC-1 through FAC-12) all
+re-verified intact against current code; no regression in any of them.
+
+**Scope of this pass:** `git diff --stat` for
+`backend/app/api/v1/endpoints/facilities.py`,
+`backend/app/services/facilities_service.py`, `backend/app/models/facilities.py`,
+`backend/app/schemas/facilities.py`, and `frontend/src/modules/facilities/`
+since pass 2's merge (`b39a548c`, PR #1959) — small on the backend
+(`facilities.py` +12/−3, `facilities_service.py` +49/−4,
+`schemas/facilities.py` +14/−2: an `include_inactive` list param for the
+maintenance-types settings screen, and `usage_count` stamped on the three
+lookup-table list endpoints so the settings screen's Delete-disable guard
+means something), larger on the frontend (a new
+`FacilitiesSettingsPage.tsx`, `window.confirm`→`useConfirm()`/`PromptDialog`
+migrations already landed and re-verified clean, a stale-response-race guard
+in `facilitiesStore.ts`, error-handling fixes in `FilesSection.tsx`). None of
+that backend/frontend product work introduced a new tenant-isolation, auth,
+or injection gap — re-checked each site individually.
+
+**This pass's specific brief** was to check whether PR #2160 ("Normalize
+document system folder access" / "Enforce document folder ancestor
+authorization" — the DOC-5 fix from feature 10's own pass, which touched
+`facilities.py` by adding `current_user=current_user` to the
+`get_facility_sub_folders` call) left a facilities-specific gap, without
+re-deriving DOC-5's own mechanism review. `docs/security-review/
+DOC-10-documents-legal.md`'s pass 3 already verified `can_access_folder`'s
+ancestor-walk mechanism itself is sound (fail-closed on missing/cross-org/
+cyclic ancestry, `required_permissions` checked before the leadership
+bypass) — not re-derived here. It did.
+
+### FAC-13 — HIGH (correctness/access, not a leak) — every facility folder now requires the sensitive-family permission set, silencing four non-sensitive categories for their intended baseline audience — 🚩 FLAGGED
+
+**What:** `GET /{facility_id}/folders` is gated at `facilities.view`/
+`.manage` (`facilities.py:3714-3716`), and FAC-5's whole design point is
+that facility data splits into five **sensitive** families (access keys,
+utility accounts, capital projects, insurance policies, occupants — gated
+`facilities.view_sensitive`/`.edit`/`.manage`) and everything else —
+including a facility's photos and maintenance/inspection records — which
+stays readable at the **baseline** `facilities.view` grant held by
+`secretary`, `quartermaster`, `safety_officer`, and `training_officer`
+(`core/permissions.py:1694`, `1755`, `1963`, `1989` — each holds
+`FACILITIES_VIEW` alone, none of `FACILITIES_VIEW_SENSITIVE`/`_EDIT`/
+`_MANAGE`).
+
+The facility **file tree** built by `ensure_facility_folder`
+(`documents_service.py:913`) does not honor that split. Every node — the
+shared `facilities` system root, each per-facility folder, and **all six**
+of its sub-folders (Photos, Blueprints & Permits, Maintenance Records,
+Inspection Reports, Insurance & Leases, Capital Projects) — is stamped with
+the identical `required_permissions = FACILITY_SENSITIVE_PERMISSIONS =
+["facilities.view_sensitive", "facilities.edit", "facilities.manage"]`
+(`documents_service.py:986,1013,1041`), and the backfill migration
+`20260827_1800_a9c4e7b2f631` stamped every existing row the same way. That
+stamping was already in place as of pass 2 (2026-08-28) but **inert**:
+`get_facility_sub_folders` did not call `can_access_folder` at all until
+PR #2160 added the `current_user` parameter and the filter on
+2026-09-02 (`git show 5ff4ca3b -- backend/app/services/documents_service.py`
+— the filter line is new in that commit, not a signature-only change).
+`can_access_folder` ANDs every ancestor (`documents_service.py:281-303`), so
+once enforced, a caller who is not admitted at the shared root is refused
+**every** facility's entire folder tree, sensitive or not.
+
+**Verified empirically**, exercising the real `DocumentsService.can_access_folder`
+(not a reimplementation) against an in-memory tree shaped exactly like
+`ensure_facility_folder` builds it:
+
+```
+facilities.view-only can see Photos sub-folder: False
+facilities.manage    can see Photos sub-folder: True
+```
+
+**Failure scenario:** a secretary, quartermaster, safety officer, or
+training officer — every one of them holding `facilities.view` by design,
+per FAC-5 — calls `GET /facilities/{id}/folders` for any facility and gets
+back an **empty folder list** (`"folders": [], "total": 0`), for every
+facility, permanently, including the non-sensitive Photos and Maintenance
+Records categories they are supposed to see. `POST /photos`
+(`facilities.py:773`, gated `facilities.create`/`.edit`/`.manage`) still
+succeeds for whoever can upload, and `GET /photos` (`facilities.py:748`,
+gated baseline `.view`) still returns the photo's metadata — caption,
+`is_primary`, timestamps — to a `facilities.view` holder. Only the actual
+file, filed by `_validate_shared_document_reference` into this same gated
+tree, is unreachable to them. The record says a photo exists; the bytes
+behind it do not open for the same caller the record itself is visible to.
+
+**Not a data-exposure bug** — fail-closed throughout, verified by the
+empirical check above and by `DOC-10`'s own mechanism review. It is a
+functional regression: a permission tier the product deliberately created
+(FAC-5, FAC-P9) can no longer do the file-viewing part of its job. Two
+comments in the code now assert something false about current behavior as a
+result — both corrected in this pass as a pure-documentation, zero-behavior
+change (see below); the underlying access gap is flagged, not fixed.
+
+**Why this is flagged rather than fixed:** a correct fix is not "loosen the
+gate" — that would let any `documents.view` holder (a much broader grant;
+the default `member` position holds it) browse a facility's Photos/
+Maintenance Records folder through the generic Documents module UI with
+_no_ facilities permission at all, reopening exactly the leak
+`_validate_shared_document_reference`'s own docstring describes closing.
+Because `can_access_folder` ANDs every ancestor, splitting the tree
+correctly needs:
+
+1. A new, named permission tier for "any facilities module access" (the
+   endpoint's own `facilities.view`/`.manage` OR-set, not the narrower
+   sensitive set) to gate the shared root, the per-facility folder, and the
+   four non-financial sub-folders — `FACILITY_SENSITIVE_PERMISSIONS` stays
+   on `Insurance & Leases` and `Capital Projects` alone.
+2. A product/security call on **Blueprints & Permits** specifically: unlike
+   Photos, Maintenance Records, and Inspection Reports (unambiguously
+   operational per FAC-5's own text), a building's floor plans are
+   defensibly security-sensitive (entry points, alarm/utility shutoff
+   locations) even though FAC-5 never named them as one of the five
+   families — an owner call, not one this review should make unilaterally.
+3. A migration correcting every already-stamped row for the categories that
+   move (the root, the per-facility folders, and the sub-folders chosen in
+   (1)/(2)) — mirroring `a9c4e7b2f631`'s own shape, in the other direction.
+
+That is a genuine design decision plus a migration, squarely the "flag, not
+auto-apply" case this rotation's discipline exists for.
+
+**Fixed in this pass — the two comments that now claim something false:**
+`facilities.py:3756-3763`'s comment on `get_facility_folders` said "A
+facilities.view-only caller sees the folders... but not how many documents
+are inside them" — true when FAC-9 wrote it, false since PR #2160. Corrected
+to state the current behavior and point at this finding.
+`test_facilities_folders.py`'s module docstring made the identical claim
+about the scenario `TestFacilityFolderDocumentCountRedaction` is named for;
+corrected to note that class mocks `get_facility_sub_folders` outright, so
+it verifies only the count-redaction branch, never the folder-visibility
+claim in its own name. Neither correction changes any behavior or any
+test's pass/fail outcome — both are doc-accuracy fixes, verified by the full
+`facilities`/`documents` test run below.
+
+**Mirrored to** `docs/KNOWN_LIMITATIONS.md`.
+
+## Verified good ✅ (re-confirmed this pass)
+
+- **Auth coverage 98/98** — exact grep count unchanged since pass 2
+  (`grep -c 'require_permission(\|require_all_permissions(' facilities.py`
+  = 98 = `grep -c '^@router\.'`), 0 bare `get_current_user`. No new route
+  landed since pass 2.
+- **FAC-1 through FAC-12** (all prior findings) — spot-checked each site,
+  no regression.
+- **Settings-screen CRUD** (`create_facility_type`/`_status`/
+  `_maintenance_type` and their `update_*`) — all `facilities.manage`;
+  their `delete_*` siblings — all `require_permission("facilities.delete",
+"facilities.manage")`. Correctly manager-only.
+- **`_attach_usage_counts`** (new this window, `facilities_service.py:306`)
+  — the settings screen's per-lookup usage count — filters
+  `org_column == str(organization_id)` explicitly; a system (NULL-org)
+  lookup's usage is never counted against or leaked to another org.
+- **No new raw SQL / unescaped LIKE** — the one search
+  (`list_facilities`) is unchanged; `escape=LIKE_ESCAPE_CHAR` on all three
+  `ilike` calls, as before.
+- **No `window.confirm`/`.alert`/`.prompt`** anywhere in
+  `frontend/src/modules/facilities/` (already fixed pre-pass-3; re-verified
+  clean by direct grep).
+- **No reservation/booking/capacity-check shape** — `max_occupancy`
+  (`Facility`) and `capacity` (`FacilityRoom`) are descriptive fields synced
+  one-way into the linked `Location` record; neither is read back and
+  compared against a live count anywhere in `facilities_service.py`. CLAUDE.md
+  Pitfall #27 (capacity check needs both halves of the lock) does not apply
+  to this feature — there is no count-then-insert against either field.
+- **Lint:** flake8 clean on the two files touched this pass.
+
+## Completion gate (pass 3)
+
+| Check                                             | Result                                                                     |
+| ------------------------------------------------- | -------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                            |
+| `black --check app/ tests/ alembic/`              | ✅ clean                                                                   |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                                   |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head, no schema change                                           |
+| `pytest tests/ -k "facilities or documents"`      | ✅ 249 passed, 1 skipped (pre-existing optional-dependency skip)           |
+| `pytest tests/` (full backend suite)              | ✅ 9992 passed, 21 skipped (pre-existing Docker/optional-dependency skips) |
+| `tsc --noEmit`                                    | ✅ 0 errors (no frontend code changed this pass)                           |
+| `eslint .`                                        | ✅ (see report body — no frontend code changed this pass)                  |
 
 ---
 
