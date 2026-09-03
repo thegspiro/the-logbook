@@ -129,3 +129,68 @@ class TestCloneTemplatePreservesNestedCompartments:
         # The clone is a distinct row, not the source re-parented.
         assert cloned_root.id != root.id
         assert cloned_child.id != child.id
+
+
+class TestCloneTemplateRejectsDisconnectedCompartments:
+    """AP-16 (Codex, on top of AP-14): a compartment whose
+    parent_compartment_id points outside the source template (a dangling
+    cross-template reference, simulating a row persisted before AP-10's
+    create-time validation shipped) must not be silently dropped from the
+    clone."""
+
+    async def test_clone_aborts_rather_than_silently_omit_a_disconnected_compartment(
+        self, db_session
+    ):
+        org = await _org(db_session, "Clone Org")
+        apparatus = await _apparatus(db_session, org)
+
+        template = EquipmentCheckTemplate(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="Source template",
+            check_timing="start_of_shift",
+        )
+        other_template = EquipmentCheckTemplate(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            name="Unrelated template",
+            check_timing="start_of_shift",
+        )
+        db_session.add_all([template, other_template])
+        await db_session.flush()
+
+        root = CheckTemplateCompartment(
+            id=str(uuid.uuid4()), template_id=template.id, name="Cabinet"
+        )
+        # A compartment from a *different* template -- the dangling link
+        # AP-10's validation now prevents on write, simulated here as a row
+        # that already exists.
+        foreign_parent = CheckTemplateCompartment(
+            id=str(uuid.uuid4()),
+            template_id=other_template.id,
+            name="Foreign parent",
+        )
+        db_session.add_all([root, foreign_parent])
+        await db_session.flush()
+        # Disconnected: its parent_compartment_id names a row outside
+        # `template`, so it is unreachable from the clone's root-down walk.
+        disconnected = CheckTemplateCompartment(
+            id=str(uuid.uuid4()),
+            template_id=template.id,
+            name="Disconnected drawer",
+            parent_compartment_id=foreign_parent.id,
+        )
+        db_session.add(disconnected)
+        await db_session.commit()
+
+        service = EquipmentCheckService(db_session)
+        with pytest.raises(ValueError, match="disconnected"):
+            await service.clone_template(
+                template.id, org.id, apparatus.id, created_by=None
+            )
+
+        # Nothing from the aborted clone was committed -- no new template
+        # exists with "Cabinet" as a child, partial or otherwise.
+        source = await service.get_template(template.id, org.id)
+        assert source is not None
+        assert len(source.compartments) == 2

@@ -508,16 +508,36 @@ class EquipmentCheckService:
                 compartment
             )
 
+        visited_ids: Set[str] = set()
+
         async def _clone_subtree(
             source_parent_id: Optional[str], new_parent_id: Optional[str]
         ) -> None:
             for compartment in children_by_parent.get(source_parent_id, []):
+                visited_ids.add(str(compartment.id))
                 new_compartment = await self._clone_compartment(
                     new_template.id, compartment, parent_id=new_parent_id
                 )
                 await _clone_subtree(str(compartment.id), str(new_compartment.id))
 
         await _clone_subtree(None, None)
+
+        # AP-16 (Codex, on top of AP-14): a compartment whose
+        # parent_compartment_id points outside this template -- a dangling
+        # cross-template reference from before AP-10's create-time
+        # validation shipped, the same legacy-data shape AP-14 guards the
+        # delete path against -- is grouped under a children_by_parent key
+        # the walk above never reaches, since that key names a compartment
+        # that isn't part of this template at all. Left unchecked, it is
+        # silently omitted from the clone: no error, no indication the
+        # resulting checklist is missing a compartment (and whatever items
+        # it held). Fail closed instead of committing an incomplete clone --
+        # the same choice AP-14 made for delete, applied here to create.
+        if len(visited_ids) != len(source.compartments):
+            raise ValueError(
+                "Template contains a disconnected compartment (a parent "
+                "reference outside this template) and cannot be cloned"
+            )
 
         await self.db.commit()
         return await self.get_template(new_template.id, organization_id)
