@@ -193,6 +193,59 @@ class TestCreate:
         assert [r.event_data["reason"] for r in revoked] == ["integration_disconnected"]
         assert revoked[0].organization_id == org_id
 
+    async def test_disconnecting_refuses_when_the_revocation_is_unaudited(
+        self, db_session, setup_org_and_admin
+    ):
+        """A key revoked without a record is refused the same way a key
+        revoked from the key screen is, and the connection stays up with
+        it: nothing about the disconnect commits unaudited."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.api.v1.endpoints.integrations import disconnect_integration
+
+        org_id, admin_id = setup_org_and_admin
+        row = await _connect(db_session, org_id)
+        # The endpoint's rollback expires ``row``; keep the id in hand.
+        integration_id = row.id
+        user = _user(org_id, admin_id)
+        created = await create_mcp_key(
+            McpKeyCreateRequest(name="k"),
+            request=None,
+            db=db_session,
+            current_user=user,
+        )
+        with (
+            patch(
+                "app.api.v1.endpoints.integrations.log_audit_event",
+                AsyncMock(return_value=None),
+            ),
+            pytest.raises(HTTPException) as refused,
+        ):
+            await disconnect_integration(
+                integration_id, request=_request(), db=db_session, current_user=user
+            )
+        assert refused.value.status_code == 503
+        listed = await list_mcp_keys(db=db_session, current_user=user)
+        assert [(k["id"], k["is_active"]) for k in listed["keys"]] == [
+            (created["key"]["id"], True)
+        ]
+        integration = (
+            await db_session.execute(
+                select(Integration).where(Integration.id == integration_id)
+            )
+        ).scalar_one()
+        assert (integration.status, integration.enabled) == ("connected", True)
+        revoked = (
+            (
+                await db_session.execute(
+                    select(AuditLog).where(AuditLog.event_type == "mcp.key_revoked")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert revoked == []
+
     async def test_rotation_rolls_back_when_the_audit_entry_fails(
         self, db_session, setup_org_and_admin
     ):

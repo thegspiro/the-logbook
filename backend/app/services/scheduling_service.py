@@ -908,9 +908,12 @@ class SchedulingService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        # Paginated results
+        # Paginated results. The id breaks ties between shifts sharing a
+        # date and start time, so a page boundary never repeats or skips one.
         query = (
-            query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+            query.order_by(
+                Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
+            )
             .offset(skip)
             .limit(limit)
         )
@@ -970,7 +973,9 @@ class SchedulingService:
             Shift.shift_date >= start_date,
             Shift.shift_date <= end_date,
         )
-        query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+        query = query.order_by(
+            Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
+        )
         candidates = list((await self.db.execute(query)).scalars().all())
         if not candidates:
             return [], 0
@@ -6049,9 +6054,12 @@ class SchedulingService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        # Paginated results
+        # Paginated results. The id breaks ties between shifts sharing a
+        # date and start time, so a page boundary never repeats or skips one.
         query = (
-            query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+            query.order_by(
+                Shift.shift_date.asc(), Shift.start_time.asc(), Shift.id.asc()
+            )
             .offset(skip)
             .limit(limit)
         )

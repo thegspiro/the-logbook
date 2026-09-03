@@ -3070,3 +3070,141 @@ class TestReviewFindings:
             server, _principal(org_id, admin_id), "get_department_profile"
         )
         assert profile["county"] == "Call [phone removed] or [email removed]"
+
+
+class TestTwentyFifthRoundFindings:
+    """Regressions for the twenty-fifth review round on #2197."""
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_election_descriptions_are_bounded_and_read_in_pieces(
+        self, server, org_with_members, db_session, monkeypatch
+    ):
+        from app.mcp.tools import elections as election_tools
+        from app.models.election import Election, ElectionStatus
+
+        org_id, admin_id, _ = org_with_members
+        now = datetime.now(timezone.utc)
+        election = Election(
+            organization_id=org_id,
+            title="Officer election",
+            description="Call the secretary on 5551234567. " + "e" * 60,
+            start_date=now - timedelta(days=1),
+            end_date=now + timedelta(days=1),
+            status=ElectionStatus.OPEN,
+        )
+        db_session.add(election)
+        await db_session.flush()
+        monkeypatch.setattr(election_tools, "ELECTION_TEXT_CHARS", 12)
+        principal = _principal(org_id, admin_id)
+        listed = await _call(server, principal, "list_elections")
+        row = next(e for e in listed["items"] if e["id"] == election.id)
+        assert len(row["description"]) == 12
+        assert row["description_truncated"] is True
+        pieces = []
+        offset = 0
+        while True:
+            chunk = await _call(
+                server,
+                principal,
+                "get_election_description",
+                election_id=election.id,
+                content_offset=offset,
+            )
+            pieces.append(chunk["content"])
+            if not chunk["content_has_more"]:
+                break
+            offset = chunk["next_content_offset"]
+        joined = "".join(pieces)
+        assert "5551234567" not in joined
+        assert joined.endswith("e" * 60)
+        assert chunk["title"] == "Officer election"
+        with pytest.raises(ToolError, match="Election not found"):
+            await _call(
+                server,
+                principal,
+                "get_election_description",
+                election_id=str(uuid.uuid4()),
+            )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_shifts_sharing_a_start_page_without_repeats(
+        self, server, org_with_members, db_session
+    ):
+        """Two shifts on the same date and start time have no order between
+        them but their id; without it a page boundary could hand back one
+        of them twice and the other never."""
+        org_id, admin_id, _ = org_with_members
+        day = date.today() + timedelta(days=7)
+        start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        shift_ids = sorted(str(uuid.uuid4()) for _ in range(3))
+        for shift_id in shift_ids:
+            db_session.add(
+                Shift(
+                    id=shift_id,
+                    organization_id=org_id,
+                    shift_date=day,
+                    start_time=start.replace(hour=8),
+                    end_time=start.replace(hour=12),
+                    min_staffing=2,
+                    open_to_all_members=True,
+                )
+            )
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+        seen = []
+        for offset in range(3):
+            body = await _call(
+                server,
+                principal,
+                "list_shifts",
+                start_date=day.isoformat(),
+                end_date=day.isoformat(),
+                limit=1,
+                offset=offset,
+            )
+            seen.extend(s["id"] for s in body["items"])
+        assert seen == shift_ids
+
+    async def test_low_stock_item_names_come_from_one_query(
+        self, org_with_members, db_session, monkeypatch
+    ):
+        """The lowest five items of every low-stock category are fetched in
+        one query, not one per category, and stay ordered by quantity."""
+        from app.services.inventory_service import InventoryService
+
+        org_id, _, _ = org_with_members
+        for name in ("Boots", "Coats"):
+            category = InventoryCategory(
+                organization_id=org_id,
+                name=name,
+                item_type=ItemType.UNIFORM,
+                low_stock_threshold=30,
+            )
+            db_session.add(category)
+            await db_session.flush()
+            for quantity in (6, 4, 2, 5, 1, 3, 7):
+                db_session.add(
+                    InventoryItem(
+                        organization_id=org_id,
+                        category_id=category.id,
+                        name=f"{name} {quantity}",
+                        quantity=quantity,
+                    )
+                )
+        await db_session.flush()
+        original_execute = db_session.execute
+        statements = []
+
+        async def counting_execute(*args, **kwargs):
+            statements.append(args[0])
+            return await original_execute(*args, **kwargs)
+
+        monkeypatch.setattr(db_session, "execute", counting_execute)
+        low = await InventoryService(db_session).get_low_stock_items(uuid.UUID(org_id))
+        assert len(statements) == 2
+        assert [c["category_name"] for c in low] == ["Boots", "Coats"]
+        assert [i["quantity"] for i in low[0]["items"]] == [1, 2, 3, 4, 5]
+        assert [i["name"] for i in low[1]["items"]] == [
+            f"Coats {n}" for n in (1, 2, 3, 4, 5)
+        ]
+        assert low[0]["current_stock"] == 28

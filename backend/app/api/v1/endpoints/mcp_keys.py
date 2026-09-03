@@ -84,13 +84,14 @@ async def _integration_row(
     return result.scalar_one_or_none()
 
 
-async def _require_audit_entry(db: AsyncSession, entry: Any, action: str) -> None:
+async def require_audit_entry(db: AsyncSession, entry: Any, action: str) -> None:
     """Refuse to commit a key change that left no audit entry.
 
     ``log_audit_event`` swallows its own failure and returns ``None`` so an
     audit outage does not break ordinary requests; a key change is the one
     place that trade goes the other way, since a key rotated without a
-    record is exactly what the record exists to catch.
+    record is exactly what the record exists to catch. The integrations
+    endpoint uses it too, for the keys a disconnect revokes.
     """
     if entry is not None:
         return
@@ -185,7 +186,7 @@ async def create_mcp_key(
         organization_id=org_id,
         ip_address=_ip(request),
     )
-    await _require_audit_entry(db, entry, "issued")
+    await require_audit_entry(db, entry, "issued")
     await db.commit()
     return {
         "key": _key_to_dict(minted.key),
@@ -220,6 +221,6 @@ async def revoke_mcp_key(
         organization_id=org_id,
         ip_address=_ip(request),
     )
-    await _require_audit_entry(db, entry, "revoked")
+    await require_audit_entry(db, entry, "revoked")
     await db.commit()
     return {"key": _key_to_dict(key)}

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
+from app.api.v1.endpoints.mcp_keys import require_audit_entry
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip
@@ -643,7 +644,7 @@ async def disconnect_integration(
             str(current_user.organization_id), revoked_by=str(current_user.id)
         )
     for key in revoked_keys:
-        await log_audit_event(
+        entry = await log_audit_event(
             db,
             "mcp.key_revoked",
             "integrations",
@@ -658,6 +659,9 @@ async def disconnect_integration(
             organization_id=str(current_user.organization_id),
             ip_address=get_client_ip(request),
         )
+        # Same rule as the key endpoints: a revocation nobody can trace is
+        # refused, and the whole disconnect rolls back with it.
+        await require_audit_entry(db, entry, "revoked on disconnect")
     await db.commit()
 
     # Audit log

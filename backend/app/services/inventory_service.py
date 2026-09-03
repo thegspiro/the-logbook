@@ -78,6 +78,9 @@ from app.utils.name_matching import normalize_name
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
+# How many of a low-stock category's items a report names.
+LOW_STOCK_ITEMS_PER_CATEGORY = 5
+
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
 #
@@ -3348,33 +3351,57 @@ class InventoryService:
         if limit is not None:
             query = query.limit(limit)
         result = await self.db.execute(query)
+        categories = result.all()
 
-        low_stock_items = []
-        for category, current_stock in result.all():
-            # Fetch item names in this low-stock category
-            items_result = await self.db.execute(
-                select(InventoryItem.name, InventoryItem.quantity)
-                .where(InventoryItem.category_id == category.id)
+        # The lowest items of every category on the page in one query rather
+        # than one query per category: the page can be every category the
+        # department has.
+        item_details: Dict[str, List[Dict[str, Any]]] = {}
+        if categories:
+            rank = (
+                func.row_number()
+                .over(
+                    partition_by=InventoryItem.category_id,
+                    order_by=(InventoryItem.quantity.asc(), InventoryItem.id.asc()),
+                )
+                .label("rank")
+            )
+            ranked = (
+                select(
+                    InventoryItem.category_id,
+                    InventoryItem.name,
+                    InventoryItem.quantity,
+                    rank,
+                )
+                .where(
+                    InventoryItem.category_id.in_(
+                        [category.id for category, _ in categories]
+                    )
+                )
                 .where(InventoryItem.active.is_(True))
-                .order_by(InventoryItem.quantity.asc())
-                .limit(5)
+                .subquery()
             )
-            item_details = [
-                {"name": row.name, "quantity": row.quantity}
-                for row in items_result.all()
-            ]
-            low_stock_items.append(
-                {
-                    "category_id": category.id,
-                    "category_name": category.name,
-                    "item_type": category.item_type,
-                    "current_stock": int(current_stock),
-                    "threshold": category.low_stock_threshold,
-                    "items": item_details,
-                }
+            items_result = await self.db.execute(
+                select(ranked.c.category_id, ranked.c.name, ranked.c.quantity)
+                .where(ranked.c.rank <= LOW_STOCK_ITEMS_PER_CATEGORY)
+                .order_by(ranked.c.category_id, ranked.c.rank)
             )
+            for row in items_result.all():
+                item_details.setdefault(row.category_id, []).append(
+                    {"name": row.name, "quantity": row.quantity}
+                )
 
-        return low_stock_items
+        return [
+            {
+                "category_id": category.id,
+                "category_name": category.name,
+                "item_type": category.item_type,
+                "current_stock": int(current_stock),
+                "threshold": category.low_stock_threshold,
+                "items": item_details.get(category.id, []),
+            }
+            for category, current_stock in categories
+        ]
 
     async def get_inventory_summary(
         self,
