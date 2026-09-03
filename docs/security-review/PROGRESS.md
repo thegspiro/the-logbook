@@ -16,18 +16,63 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2203](https://github.com/thegspiro/the-logbook/pull/2203)** (branch
-`claude/security-review-equipment-check-shifts`) — Feature 14, Equipment
-check & shifts, pass 3, plus Step 0 bookkeeping for PR #2200's merge. No
-fixes, no findings — every pass-1/2 fix re-verified intact, ten new routes
-(the module's move from Scheduling to Inventory, catalog linking, bulk
-item add/delete, compartment replace/clone/reorder, sealed-container
-support) read in full and confirmed correctly org-scoped and gated. Three
-new tables' migrations checked, no Pitfall #2 exposure. Full completion
-gate green. Rotation row 14 → ⏳ awaiting PR merge. Next: 15 Scheduling,
-once this PR merges.
+**[#TBD]** (branch `claude/security-review-scheduling`) — Feature 15,
+Scheduling, pass 3. No fixes, no findings — diff-scoped against a
+2026-08-31 baseline (five days of `main`), dominated by the equipment-check
+module move (already reviewed under EC-14 pass 3) and a new Claude MCP
+integration. New `equipment_check_template_ids` client-supplied FK list
+verified correctly org-validated before write; two new migrations verified
+schema-safe; the one scheduling-relevant MCP tool file
+(`app/mcp/tools/scheduling.py`) read in full and confirmed org-scoped,
+visibility-gated and bounded (the wider MCP surface is out of this
+feature's scope and already tracked in `KNOWN_LIMITATIONS.md`). Full
+completion gate green. Rotation row 15 → ⏳ awaiting PR merge. Next: 16
+Events & requests, once this PR merges.
 
 ---
+
+### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) ✅ merged
+
+PR #2203 merged 2026-09-03. No review threads to resolve — CI ran clean.
+Next: 15 Scheduling.
+
+### 2026-09-03 — Feature 15 (Scheduling, pass 3) — no new findings, PR pending
+
+Diff-scoped against baseline `299a163a` (2026-08-31; pass 2's own merge
+commit was unreachable in this worktree's shallow history, the same gap
+EC-14 pass 3 hit — deepened the clone to reach this point). Of the six
+declared backend files, only `scheduling_service.py` (+250/-38) and
+`scheduling_module_config_service.py` (-6, dead field removed) had real
+churn; `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`,
+`standing_shift_service.py`, and `calcom_service.py` are byte-identical to
+pass 2. Five frontend files changed, all read in full.
+
+The substantive new logic is a shift template naming which Inventory
+equipment checklists its shifts carry (`equipment_check_template_ids`, part
+of the same 2026-08-31 module move EC-14 pass 3 covered from the Inventory
+side). The new client-supplied FK id list is validated in-org **before**
+either create or update writes anything (`_validated_check_ids`, ordered
+deliberately so a bad id never leaves an orphan template row), and the two
+new migrations (`shifts.template_id` SET NULL/nullable=True;
+`shift_template_equipment_checks` CASCADE/nullable=False with a unique
+constraint) are both correctly guarded per Pitfall #2/#26. Also found and
+verified clean, not new findings: `get_member_visible_shifts` now bounds
+its date window to 366 days (previously unbounded — closed since pass 2,
+matching SCH-3's shape); a new Claude MCP integration
+(`app/mcp/tools/scheduling.py`, 377 L, the only scheduling-relevant slice
+of a 5,068 L cross-cutting surface) correctly org-scopes every query to the
+calling principal's own org, gates the elevated "full schedule" view behind
+an explicit `expose_full_schedule` flag, redacts notes through `scrub_text`,
+and bounds every listing — the wider MCP surface is not a declared file of
+this feature and already carries its own `KNOWN_LIMITATIONS.md` entry from
+outside this rotation, so not duplicated here. SCH-9/SCH-10/SCH-11 (prior
+findings) sit outside this pass's diff and were not re-verified from
+scratch — noted as a scope choice, not silently assumed. Full local
+completion gate green: flake8/black/isort clean, migrations validated (414
+revisions, single head), 803/803 scheduling-scoped and 10485/10485 full
+backend suite pass, 0 frontend type/lint errors. Findings doc:
+`docs/security-review/SCH-15-scheduling.md` (pass 3 section appended). PR
+opening next. Next: 16 Events & requests, once this PR merges.
 
 ### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) — no new findings, PR pending
 
@@ -7957,8 +8002,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⏳     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |

@@ -693,3 +693,137 @@ correction for why.
 | `pytest tests/` (full backend suite)                | ✅ 9181 passed, 22 skipped (pre-existing Docker/no-MySQL) — +2 over the pre-follow-up baseline of 9179, the two new `test_swap_offer_response.py` tests, 0 regressions |
 | `tsc --noEmit`                                      | ✅ 0 errors (no frontend file changed this follow-up)                                                                                                                  |
 | `eslint .`                                          | ✅ 0 errors, 10 warnings (pre-existing, same set as SEC-00)                                                                                                            |
+
+## Pass 3 (2026-09-03) — 0 fixes, 0 flagged, 0 new findings
+
+**Baseline:** `299a163a` (2026-08-31, the last commit before the first
+post-pass-2 change to any declared file — pass 2's own merge commit is no
+longer reachable in this worktree's shallow history, the same gap EC-14 pass
+3 hit; the shallow clone was deepened to reach this point). Five days of
+`main` sit between it and this pass, dominated by the 2026-08-31 move of
+equipment-checklist ownership from Scheduling to Inventory (already reviewed
+under EC-14 pass 3) and a new Claude MCP integration (`app/mcp/`, not a
+declared file of this feature — see below).
+
+**Diff-scoped, not re-read whole.** `git diff --stat` against the six
+declared backend files and their frontend module shows real churn in only
+four: `scheduling_service.py` (+250/-38), `scheduling_module_config_service.py`
+(-6, a dead settings field removed), plus four frontend files
+(`TemplateFormModal.tsx`, `positionLabels.ts` [new],
+`EligibilitySettingsCard.tsx`, `ShiftSettingsPanel.tsx`,
+`ShiftReportsSettingsPanel.tsx`). `scheduling.py`, `scheduling_module_config.py`,
+`calcom_sync.py`, `standing_shift_service.py`, `calcom_service.py` are
+byte-identical to pass 2. All changed files read in full, not sampled.
+
+### Reviewed this pass
+
+- **New client-supplied FK id list, validated correctly (XC-1/Pitfall #14c).**
+  `create_template`/`update_template` gained an `equipment_check_template_ids`
+  field (a shift template naming which Inventory checklists its shifts
+  carry, part of the same EC-14 module move). `_validated_check_ids`
+  (`scheduling_service.py`) queries `EquipmentCheckTemplate.id.in_(wanted)`
+  filtered on `EquipmentCheckTemplate.organization_id == organization_id`
+  **before** `_crud_create`/`_crud_update` writes anything — deliberately
+  ordered that way per an in-code comment, because the create path commits
+  the template first and validating after it left an orphan row behind on a
+  bad id. `_replace_equipment_check_links` writes
+  `ShiftTemplateEquipmentCheck` rows with a server-set `organization_id`
+  (never client-supplied) and replaces the set atomically (unticked links
+  deleted, not merely left). Frontend (`TemplateFormModal.tsx`) sends the
+  field unconditionally on every save, including an empty array, with an
+  explicit CLAUDE.md Pitfall #1 comment — an update payload read with
+  `exclude_unset` means an omitted key silently keeps stale links, which the
+  code avoids. Verified good, no finding.
+- **Two new migrations, both correctly guarded.**
+  `20260831_0001_fab0ab7897d3_add_shift_template_id.py` adds
+  `shifts.template_id` — `ondelete="SET NULL"` with `nullable=True`
+  (Pitfall #2 holds) — guarded on `shifts` existing first (Pitfall #26,
+  `shifts` is a `create_all`-only table) and on `shift_templates` existing
+  before adding the FK. `20260831_0002_191a99d1d16f_...` creates
+  `shift_template_equipment_checks` with all three FKs `ondelete="CASCADE"`
+  - `nullable=False` (not `SET NULL`, so Pitfall #2 doesn't apply) and a
+    `(shift_template_id, equipment_check_template_id)` unique constraint. Both
+    read in full; no schema-integrity gap.
+- **`get_member_visible_shifts` closed its own unbounded-read gap.** Pass 1/2
+  did not flag this as it stood then, but the current code now bounds the
+  date window to `MEMBER_SHIFT_WINDOW_DAYS=366` via a new
+  `_bound_shift_window` helper whenever either end of the range is open or
+  the caller's explicit range exceeds it — matching the DoS-prevention shape
+  `/shifts/open` already used (SCH-3's pattern). Before this pass's baseline
+  commit the method had no such bound; verified the current code closes it,
+  not a regression to flag.
+- **New `open_to_all_only` parameter on `get_shifts`/`get_summary` — checked
+  its only two call sites.** Not called from `scheduling.py` (the declared
+  endpoint file, byte-identical to pass 2) at all — its only callers are the
+  new `app/mcp/tools/scheduling.py` (`list_shifts`, `get_scheduling_summary`),
+  passed as `not principal.expose_full_schedule`. Read that file in full
+  (377 L): every query filters `Shift.organization_id ==
+principal.organization_id` (the MCP principal's own org, not
+  client-suppliable), `_visible_shift_criteria` and `list_open_shifts` both
+  add the `open_to_all_members` restriction unless the connection is
+  explicitly configured for the elevated view, notes go through
+  `scrub_text` (redaction) before being returned, and every listing is
+  bounded (`clamp_limit`, `MAX_OPEN_SHIFT_CANDIDATES=500`,
+  keyset-cursor pagination) — no unbounded read, no cross-tenant leak, no
+  raw SQL. `app/mcp/` (5,068 L total) is a large new cross-cutting
+  integration spanning most modules, not a declared file of this feature and
+  not reviewed beyond the scheduling-specific tool file above; it already
+  has its own `docs/KNOWN_LIMITATIONS.md` entry ("Claude (MCP)", added
+  2026-09-03) from its own review process outside this rotation, so no
+  duplicate flag added here.
+- **`get_summary` now resolves the department's own timezone**
+  (`resolve_scheduling_timezone`) instead of a bare `date.today()` (UTC) for
+  its "this week"/"this month" boundaries — a correctness fix (SCH-15 has no
+  prior finding about it), not a new attack surface: the org id driving the
+  lookup is the caller's own, same as every other org-scoped read in this
+  file.
+- **Frontend settings-panel changes are the same module-move consolidation
+  EC-14 pass 3 covered from the Inventory side.** `ShiftSettingsPanel.tsx`
+  and `ShiftReportsSettingsPanel.tsx` had their `equipment_check_settings`/
+  `checklist_timing` editors removed (now edited in Inventory) and replaced
+  with signpost links gated on the same permissions the destination routes
+  require (`inventory.check_manage`, `settings.manage` OR
+  `organization.update_settings`) — read in full, no privilege-escalation
+  shape (a link to a page the viewer cannot use is hidden, not merely
+  disabled). `ShiftReportsSettingsPanel.tsx`'s own comment documents why it
+  must send only `post_shift_validation` rather than the whole
+  `shift_reports` object now that `checklist_timing` lives on the same key
+  but is saved from Inventory: sending the full object from both screens
+  would let whichever saved last silently revert the other's setting — a
+  real deep-merge-payload concern, verified against the code, not asserted.
+  `positionLabels.ts` (new, 54 L) is a display-only token→label mapper with
+  no backend call and no injection surface (values interpolated as plain JSX
+  text).
+- **No new banned pattern.** `grep` across `modules/scheduling/` and
+  `pages/scheduling/` for `window.confirm`/`alert`/`prompt`,
+  `dangerouslySetInnerHTML`, banned `.toLocale*`, and `date-fns` imports: zero
+  hits.
+
+### No new findings
+
+SCH-9 and SCH-11's fixes were not touched by this pass's diff (both live in
+`scheduling_service.py` regions this diff didn't reach) and are not re-cited
+as re-verified from scratch, unlike pass 2's practice, since the full file
+was not re-read this pass — the diff-scoped approach traded that for speed,
+consistent with EC-14 pass 3's precedent once a baseline commit is
+reachable. SCH-10 (DNS-rebinding TOCTOU, cross-cutting) is unchanged and
+still accurately tracked in `KNOWN_LIMITATIONS.md`; not re-investigated here
+since none of the three affected transports (`calcom_service.py` included)
+appear in this pass's diff. No new `.like()`/`.ilike()` call, no new
+CSV/export surface, no new Pitfall #12 JSON-mutation (the `positions`
+reordering in `_flat_positions`/shift-generation is a wholesale
+reassignment through `normalize_stored_positions`, not an in-place mutation
+of a loaded JSON value), no new capacity/count-then-insert pattern.
+
+## Completion gate (pass 3)
+
+| Check                                                         | Result                                                                  |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                 | ✅ 0 violations                                                         |
+| `black --check app/ tests/ alembic/`                          | ✅ 1451 files unchanged                                                 |
+| `isort --check-only app/ tests/ alembic/`                     | ✅ clean                                                                |
+| `python3 scripts/validate_migrations.py --strict`             | ✅ single head, 414 revisions                                           |
+| `pytest tests/ -q -k "scheduling or shift or swap or calcom"` | ✅ 803 passed, 1 skipped (pre-existing optional-dep skip)               |
+| `pytest tests/` (full backend suite)                          | ✅ 10485 passed, 21 skipped (pre-existing Docker/no-MySQL/optional-dep) |
+| `tsc --noEmit`                                                | ✅ 0 errors                                                             |
+| `eslint .`                                                    | ✅ 0 errors                                                             |
