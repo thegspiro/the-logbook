@@ -20,7 +20,7 @@ import {
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem, MaintenanceRecord, MaintenanceRecordCreate } from '../types';
 import { getConditionColor } from '../types';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -182,9 +182,18 @@ const InventoryMaintenancePage: React.FC = () => {
           },
           { replace: true }
         );
-      } catch {
-        // The item may have been retired between the link being rendered and
-        // followed. A working page beats an error about a record nobody holds.
+      } catch (err: unknown) {
+        if (cancelled) return;
+        // A 404 is the expected case and stays silent: the item may have been
+        // retired between the link being rendered and followed, and a working
+        // page beats an error about a record nobody holds. Anything else —
+        // offline, a 403, a 500 — is an operational failure, and swallowing it
+        // leaves the officer on a generic page with no form, no explanation
+        // and no retry, since the parameter is unchanged and this effect will
+        // not run again during the visit.
+        if (toAppError(err).status !== 404) {
+          toast.error(getErrorMessage(err, 'Could not open the linked item'));
+        }
       }
     })();
     return () => {

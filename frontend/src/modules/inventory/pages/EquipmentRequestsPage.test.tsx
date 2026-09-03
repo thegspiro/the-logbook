@@ -284,6 +284,7 @@ describe('EquipmentRequestsPage — opened from the attention queue', () => {
     mockGetItems.mockResolvedValue({ items: [], total: 0 });
     mockReviewEquipmentRequest.mockReset();
     mockReviewEquipmentRequest.mockResolvedValue({});
+    mockToastError.mockReset();
   });
 
   afterEach(() => {
@@ -317,6 +318,51 @@ describe('EquipmentRequestsPage — opened from the attention queue', () => {
     // Page two loads, and the hook then opens the record it names.
     expect(await screen.findByText('Nomex Hood')).toBeInTheDocument();
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('never asks for more than the endpoint accepts', async () => {
+    // `list_equipment_requests` declares `limit=Query(50, ge=1, le=200)`. A
+    // single oversized request 422s, the catch swallows it and the ref blocks
+    // a second attempt — so for precisely the long queue this scan exists for,
+    // the modal never opened.
+    const long = [
+      ...Array.from({ length: 260 }, (_, i) => makeRequest({ id: `bulk-${i}` })),
+      makeRequest({ id: 'req-far', item_name: 'Bunker Coat' }),
+    ];
+    mockGetEquipmentRequests.mockImplementation((params: { skip?: number; limit?: number } = {}) => {
+      const skip = params.skip ?? 0;
+      const limit = params.limit ?? 25;
+      if (limit > 200) return Promise.reject(new Error('422 limit above maximum'));
+      return Promise.resolve({ requests: long.slice(skip, skip + limit), total: long.length, skip, limit });
+    });
+    window.history.pushState({}, '', '/inventory/admin/requests?request=req-far');
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    expect(await screen.findByText('Bunker Coat')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(mockToastError).not.toHaveBeenCalled();
+    for (const call of mockGetEquipmentRequests.mock.calls) {
+      expect((call[0] as { limit?: number } | undefined)?.limit ?? 0).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('reports a locator failure rather than silently opening nothing', async () => {
+    // Every rejection here is operational: a request that is simply gone comes
+    // back as a list not containing it, not as an error. The reader clicked
+    // Review expecting something to open.
+    // Keyed on the request, not on how many have been made: the page issues
+    // its own list loads alongside the locator's, and counting calls made this
+    // depend on their interleaving. The locator is the only caller asking for
+    // 200 at a time, so that is what identifies it.
+    mockGetEquipmentRequests.mockImplementation((params: { limit?: number } = {}) =>
+      params.limit === 200
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve({ requests: [onPageOne], total: 400, skip: 0, limit: 25 })
+    );
+    window.history.pushState({}, '', '/inventory/admin/requests?request=req-40');
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
   });
 
   it('leaves the list alone for a request that no longer exists', async () => {

@@ -436,6 +436,12 @@ export const SettingsPage: React.FC = () => {
   });
   const [savingEmail, setSavingEmail] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
+  // Read at result time so a connection test can tell whether the form it
+  // was sent for is still the form on screen.
+  const emailSettingsRef = useRef<EmailServiceSettings>(emailSettings);
+  useEffect(() => {
+    emailSettingsRef.current = emailSettings;
+  }, [emailSettings]);
   const [emailPasswordVisible, setEmailPasswordVisible] = useState(false);
 
   // File storage state
@@ -713,9 +719,18 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleTestEmail = async () => {
+    // A test takes up to 30 seconds. If the admin edits the form while it
+    // runs, the result describes values that are no longer on screen, and a
+    // green toast over a since-changed password would vouch for a
+    // configuration nobody has tested.
+    const submitted = emailSettings;
     setTestingEmail(true);
     try {
-      const result = await organizationService.testEmailSettings(emailSettings);
+      const result = await organizationService.testEmailSettings(submitted);
+      if (emailSettingsRef.current !== submitted) {
+        toast.error('Email settings changed while the test was running. Test again.');
+        return;
+      }
       if (result.success) {
         toast.success(result.message || 'Email connection test successful');
       } else {
