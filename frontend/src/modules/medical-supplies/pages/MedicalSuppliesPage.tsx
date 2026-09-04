@@ -202,7 +202,25 @@ const MedicalSuppliesPage: React.FC = () => {
    * Deliberately still shown during an ordinary page change: hiding the pager
    * on the click that uses it is worse than leaving it in place, disabled.
    */
-  const pagerDescribesScreen = itemsFilterKey !== null && (itemsFilterKey === filterKey || loading.items);
+  /**
+   * Whether the range and total describe the rows on screen. A query that
+   * settled without producing rows for itself has failed, and `itemPage` still
+   * holds the previous response -- so the range would sit above an empty
+   * table, under the error explaining why it is empty.
+   */
+  const pagerAnswersScreen = itemsFilterKey === filterKey;
+
+  /**
+   * Whether paging is meaningful at all: some page of some query has loaded,
+   * so there is a place to go back to.
+   *
+   * Deliberately weaker than `pagerAnswersScreen`. Hiding the whole pager
+   * whenever the numbers went stale also removed the only control that could
+   * recover: a rejected Next leaves `page` at 1 with `itemPage` still
+   * describing page 0, and with no Previous on screen there is nothing that
+   * returns the officer to a page that loads.
+   */
+  const pagerNavigable = itemsFilterKey !== null;
 
   /**
    * Whether the on-screen controls have actually been asked yet.
@@ -730,19 +748,26 @@ const MedicalSuppliesPage: React.FC = () => {
             </div>
           )}
 
-          {pagerDescribesScreen && itemPage.total > 0 && (
+          {pagerNavigable && itemPage.total > 0 && (
             <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Medical supplies pagination">
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={loading.items || !filtersSettled || itemPage.skip === 0}
+                // Keyed on the requested `page`, not on the loaded
+                // `itemPage.skip`. After a rejected Next those disagree --
+                // page 1, skip 0 -- and keying on skip disabled the one
+                // control that could get back to a page that loads.
+                disabled={loading.items || !filtersSettled || page === 0}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
               >
                 Previous
               </button>
               <p className="text-theme-text-muted text-sm" aria-live="polite">
-                Showing {formatNumber(itemPage.skip + 1)}–
-                {formatNumber(Math.min(itemPage.skip + items.length, itemPage.total))} of {formatNumber(itemPage.total)}
+                {pagerAnswersScreen
+                  ? `Showing ${formatNumber(itemPage.skip + 1)}–${formatNumber(
+                      Math.min(itemPage.skip + items.length, itemPage.total)
+                    )} of ${formatNumber(itemPage.total)}`
+                  : `Page ${formatNumber(page + 1)}`}
               </p>
               <button
                 type="button"
@@ -752,7 +777,16 @@ const MedicalSuppliesPage: React.FC = () => {
                 // response, so a second activation before this one landed
                 // stepped past the last page -- skip=400 on a 201-item catalog,
                 // an empty table and a range reading "Showing 401-201 of 201".
-                disabled={loading.items || !filtersSettled || itemPage.skip + itemPage.limit >= itemPage.total}
+                //
+                // Also disabled when the totals belong to a different query:
+                // stepping forward on them would ask for page 2 of a query
+                // whose page 1 never arrived.
+                disabled={
+                  loading.items ||
+                  !filtersSettled ||
+                  !pagerAnswersScreen ||
+                  itemPage.skip + itemPage.limit >= itemPage.total
+                }
                 onClick={() => setPage((p) => Math.min(p + 1, Math.max(0, Math.ceil(itemPage.total / PAGE_SIZE) - 1)))}
               >
                 Next

@@ -3242,6 +3242,47 @@ and `CheckTemplateCompartment.children` after their fixes):
   what missed the `DocumentFolder` and `CheckTemplateCompartment` instances
   of this bug for as long as they existed).
 
+## Medical Supplies — The Item Picker Pages by Offset, and a Concurrent Edit Can Hide a Match (2026-09-04)
+
+**Severity:** LOW · **Status:** Accepted trade-off · **Verified against code:**
+2026-09-04
+
+`MedicalSupplyItemPicker` (the delivery-line catalogue search) pages with
+`skip`/`limit` against `GET /medical-supplies/items`. Offset paging is not
+stable over a set that changes between requests: if another officer archives or
+deletes a matching item **before** the page boundary while a search is open,
+every later match shifts back into a range already read, so the next page starts
+past a match that was never returned. The officer sees "Show more" retire on a
+list that is missing one row, with nothing on screen indicating it.
+
+**Why there is no client-side fix.** A revision of this component tried to
+detect the shift by comparing the new `total` against the previous one and
+rewinding the offset by the difference. It was wrong in both directions and
+introduced two defects of its own:
+
+- A removal paired with an insertion leaves `total` unchanged, so a net-count
+  comparison never fires while the boundary has still moved.
+- When the corrective request failed, the recorded total had already been
+  updated, so the retry saw no decrease, skipped the rewind, and omitted the row
+  permanently. The corrective request was also not chained into the original
+  promise, so "Show more" re-enabled mid-correction and could discard it.
+
+The compensation was removed rather than deepened. A client cannot reconstruct a
+boundary shift it did not observe; inferring one from a net count is a guess
+that fails silently.
+
+**The fix, when it is worth doing.** A cursor (keyset) on
+`GET /medical-supplies/items`, so a page is anchored to the last row returned
+rather than to a positional offset. That endpoint is shared with the gear
+inventory side, so it is a public-API change with its own schema, service and
+test surface — deliberately out of scope for the picker fix and needing its own
+change set.
+
+**Why it is accepted for now.** The window is a live search open across a
+concurrent catalogue edit, the impact is one hidden row in a search the officer
+can re-run, and the search box narrows results directly. This does not affect
+what is delivered or recorded — only which matches a picker lists.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
