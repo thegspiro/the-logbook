@@ -16,63 +16,165 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2213](https://github.com/thegspiro/the-logbook/pull/2213)** (branch
-`claude/security-review-events`) — Feature 16, Events &
-requests, pass 3. Diff-scoped against pass 2's merge (`fef19238`, PR #1973):
-of the nine declared files, five changed, all belonging to one feature
-(member-visible attendee rosters + the seat-accurate capacity/waitlist
-rework it depended on), plus one new migration and 21 frontend files. Read
-in full against all seven checklist dimensions — new endpoint fails closed
-on an unrecognized visibility setting and 404s a foreign event id before
-the visibility check runs; the new attendee response schema is a hand-built
-allowlist excluding contact/accommodation fields; the caller's own echoed
-RSVP deliberately omits `dietary_restrictions`/`accessibility_needs` because
-`GET /events/{id}` is not in the frontend cache-exclusion list;
-`get_eligible_members`'s email now routes through the existing
-`contact_visibility` policy instead of returning raw email unconditionally
-(a narrowing, not a new exposure). No findings, no code changes. Full
-completion gate green. Rotation row 16 → ⏳ awaiting PR merge. Next: 17
-Training core, once this PR merges.
+**[#2216](https://github.com/thegspiro/the-logbook/pull/2216)** (branch
+`claude/security-review-events-ev20-24-followup`) —
+Feature 16, Events & requests, pass 3 follow-up. #2213 (the pass-3 PR
+itself) merged at its stale first-draft state (`5b70834e`, "no findings")
+— the owner merged it while Codex's review of that same draft was still
+in progress, before the corrected findings and fixes could be pushed to
+it (CLAUDE.md pitfall #24: never reuse a branch whose PR has merged, so
+the fixes moved to a fresh branch/PR off current `main`, exactly as
+PR #2212 did for SCH-12). Two Codex rounds against this PR itself, both
+addressed: **4 fixed** — EV-20 (P1, `EligibleMemberResponse.email`
+required `str` 500'd the whole check-in roster whenever any member hid
+their email), EV-21 (P1, `create_or_update_rsvp`'s full-dump update
+silently wiped `dietary_restrictions`/`accessibility_needs` on any
+unrelated edit — a pre-existing bug this pass owns per CLAUDE.md), EV-22
+(P2, `RecurringEventCreate` was missing `attendee_visibility` entirely, so
+a series' explicit visibility choice was silently dropped), EV-25 (P1,
+found on round 2 reviewing EV-21's own fix — the guest/capacity checks
+kept reading the raw request's `guest_count` instead of what
+`exclude_unset` would actually leave stored, so an update omitting
+`guest_count` could evade capacity checks and oversubscribe an event; also
+closed the related P2 that a member could no longer clear a saved
+accommodation field at all). **2 flagged**: EV-23 (series RSVP never shows
+the training phase-gate warning it claims to have confirmed), EV-24
+(editing an existing waitlisted RSVP can promote it out of queue order).
+Also carries the events-specific MCP tool review Codex's scope-gap comment
+prompted. See the Log entries below for the full detail. Full completion
+gate green (10554/10554 backend, 0 frontend errors). Rotation row 16 stays
+⏳ awaiting merge. Next: 17 Training core, once this PR merges.
 
 ---
 
-### 2026-09-04 — Feature 16 (Events & requests, pass 3) — no new findings, PR pending
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2213 merged at its stale draft state; fixes moved to a new PR
+
+**PR #2213 merged (`5b70834e`, the "no findings" first-draft state) before
+this pass's Codex-driven corrections could be pushed to it** — the owner
+merged while Codex's review was still being addressed, the same race
+PR #2210/#2212 hit for SCH-12. Per CLAUDE.md pitfall #24, the merged branch
+is not reused: the corrected findings and the three real fixes (EV-20,
+EV-21, EV-22) moved to a new branch off current `main` and a new PR,
+**[#2216](https://github.com/thegspiro/the-logbook/pull/2216)**
+(`claude/security-review-events-ev20-24-followup`), which also
+updates this doc's Log and Open PR entries to point at itself. See the
+entry immediately below for the full corrected write-up. Next: 17 Training
+core, once the follow-up PR merges.
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2216 round 2: 1 more P1 fix (EV-25) + accommodation-clear gap closed
+
+Second Codex round, against PR #2216 (the round-1 fix PR itself). Found a
+real gap in round 1's own EV-21 fix: `create_or_update_rsvp`'s
+`allow_guests` check, party-size guard, and occupied-seats capacity sum all
+read `rsvp_data.guest_count` directly. That was safe under the old
+full-dump update (request value and stored value were always the same by
+construction) but not under EV-21's `exclude_unset=True` — an update that
+omits `guest_count` now preserves the existing row's value (correct for
+the write) while every guest/capacity check still evaluated the
+omitted-and-zero-defaulting request value instead. Concretely: a
+three-seat waitlisted party resubmitting `{"status": "going"}` (omitting
+`guest_count`) would be evaluated as a one-seat party, wrongly promoted
+into a two-seat gap, while the row silently kept its real three-seat
+`guest_count` — oversubscribing the event. Not reachable through this
+app's own RSVP modal (always sends `guest_count` explicitly), but
+reachable by any other API client.
+
+**Fixed (EV-25, P1):** `existing_rsvp` is now fetched ahead of the
+guest/capacity guards (not just ahead of the update-application branch),
+and a single `effective_guest_count` is resolved once — the incoming value
+when the client actually sent one, otherwise what's already on the row —
+and used by every guest/capacity check instead of the raw request value.
+Guard test reproduces the exact scenario and was confirmed to fail without
+the fix before being committed with it.
+
+**Also closed, same round (P2):** round 1's omit-when-blank behavior for
+`dietary_restrictions`/`accessibility_needs` correctly stopped the silent
+wipe, but left no way to distinguish "member didn't touch this field" from
+"member touched it and emptied it on purpose" — both looked like a blank
+box. Net effect: once set, these fields could never be cleared again, only
+overwritten with different text. Fixed with per-field `dietaryTouched`/
+`accessibilityTouched` tracking in `useRSVPForm.ts`, set on that field's
+own `onChange` and reset whenever the modal opens; the field is only
+included in the submit payload (with an explicit `null` to actually clear
+it) when it was touched this time, otherwise omitted exactly as before.
+
+Full completion gate re-run and green: 674 events-scoped, 10554 full
+backend suite (+1 guard test), 0 frontend errors. Findings doc updated in
+place under EV-21/EV-25. Rotation row 16 stays ⏳ awaiting merge. Next: 17
+Training core, once this PR merges.
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — Codex follow-up (same PR): 3 fixes (2 P1), 2 flagged, 1 scope correction
 
 Diff-scoped against pass 2's merge (`fef19238`, PR #1973). Five of the nine
 declared files changed since then — `events.py`, `models/event.py`,
 `schemas/event.py`, `event_service.py`, `event_attachments.py` (comment-only)
 — plus one migration; `event_requests.py`, `event_request_service.py`,
 `models/event_request.py` and `schemas/event_request.py` are byte-identical
-to pass 2. A grep for any other file importing the Event/EventRequest models
-or instantiating either service found none new, so the declared surface is
-confirmed complete rather than assumed.
+to pass 2. The whole diff is one feature: member-visible attendee rosters,
+built on a reworked seat-accurate capacity/waitlist model.
 
-The whole diff is one feature (member-visible attendee rosters, built on a
-reworked seat-accurate capacity/waitlist model), read in full: new
-`GET /{event_id}/attendees` gated on a baseline permission plus a
-per-event/org visibility resolver that fails closed on a missing or
-unrecognized setting and 404s a foreign event id before the visibility
-check runs; its response schema is a hand-written allowlist deliberately
-not inheriting from `RSVPResponse` (which carries contact/accommodation/
-check-in fields); the caller's own echoed RSVP on `GET /events/{id}`
-deliberately omits `dietary_restrictions`/`accessibility_needs` because that
-endpoint is not in the frontend's cache-exclusion list and those fields
-would have made the app's most-visited event endpoint a cacheable,
-PHI-bearing one; `get_eligible_members` now narrows raw email through the
-existing `contact_visibility` policy instead of returning it unconditionally.
-The capacity rework (seats instead of head-count, `allow_guests` actually
-enforced, `rsvp_to_series` delegating to `create_or_update_rsvp` instead of
-duplicating its logic) changes arithmetic, not authorization or tenancy;
-re-verified both locking halves of Pitfall #27 are still correctly ordered
-at both `create_or_update_rsvp` and the re-shaped `promote_from_waitlist`.
-New migration (`attendee_visibility` on `events`/`event_templates`) is two
-nullable String columns with no backfill, correctly — NULL is a real
-"inherit the org default" state. 21 frontend files changed, swept for the
-same banned patterns as pass 2 with zero new hits.
+**First draft claimed "no findings, no code changes" — wrong.** Codex raised
+six comments against it; five real.
 
-**No findings, no code changes.** Full completion gate green: flake8/black/
-isort clean, migrations single-head (414 revisions), 669 events-scoped and
-10549 full backend suite pass, `tsc --noEmit`/`eslint .` both 0 errors.
+**Fixed in this PR:**
+
+- **EV-20 (P1, correctness).** `EligibleMemberResponse.email` was a required
+  `str`, but the endpoint's own switch to `contact_visibility.email_for()`
+  (this same diff, described in the first draft as "a narrowing, not a new
+  exposure") can return `None` — so FastAPI's response-model validation
+  failed the **entire** check-in roster the first time any member in the org
+  had a hidden email. Fixed by making the field `Optional[str]`; frontend
+  widened to match and a `.toLowerCase()` call Codex separately flagged as
+  the resulting frontend crash is now null-safe.
+- **EV-21 (P1, data loss, pre-existing).** `create_or_update_rsvp`'s update
+  branch applied a full `model_dump()` over the existing row, so the RSVP
+  modal's long-standing, deliberate blanking of
+  `dietary_restrictions`/`accessibility_needs` (they're PHI and the event
+  detail response is cacheable, so the modal can't show their current value)
+  silently wiped real accommodation data on _any_ unrelated edit — changing
+  guest count, notes, or status. Predates this diff; owned per CLAUDE.md's
+  "no acceptable pre-existing errors." Fixed with
+  `exclude_unset=True` on the update dump (an omitted key now means "leave
+  alone"), plus making the frontend's notes-clearing behavior explicit
+  (`notes` always sent, with an explicit `null` to clear) so that field's
+  existing clear-by-blanking behavior didn't silently break.
+- **EV-22 (P2, schema gap).** `RecurringEventCreate` was the one
+  event-create schema missing `attendee_visibility` (Pydantic silently drops
+  unknown fields), so a series' explicit visibility choice was dropped and
+  every occurrence inherited the org default instead — a real exposure risk
+  if that default is member-visible. Fixed by adding the field + validator;
+  no service change needed since `create_recurring_event` already spreads
+  `**event_data` onto each occurrence.
+
+**Flagged, not fixed (both need a design/product call, not a mechanical
+patch):**
+
+- **EV-23 (P2).** Series RSVP (`rsvp_to_series`, rewritten this pass to
+  delegate to `create_or_update_rsvp`) passes `override=True`
+  unconditionally, so the training phase-gate warning an individual RSVP
+  must acknowledge never fires for a series — despite a code comment
+  claiming it was "already confirmed once." No such confirmation exists
+  anywhere in the series path. Needs a decision on what "the" warning means
+  when a series spans multiple training phases.
+- **EV-24 (P2).** Resubmitting an existing _waitlisted_ RSVP (e.g. editing
+  notes) can promote it straight to `going` if there happens to be room for
+  that one party — without checking whether anyone is ahead of them in the
+  queue, bypassing the ordering `promote_from_waitlist` otherwise guarantees.
+  Not a capacity or tenancy defect (the event is never oversubscribed), a
+  fairness/ordering one. Needs the same "earliest fitting row" check
+  `promote_from_waitlist` already has, ported into this path carefully
+  rather than patched same-day alongside an unrelated review.
+
+**Scope correction:** the events-specific MCP tools
+(`app/mcp/tools/events.py`, `app/mcp/tools/writes.py`'s
+`create_event_draft`) were missed by the file-diff scoping — they predate
+this diff and were never swept into a security-review pass. Read in full
+this round: both mirror the REST endpoints' org-scoping and visibility
+protections correctly. Clean, no finding.
+
+Full completion gate green: flake8/black/isort clean, migrations single-head
+(414 revisions, no schema change), 673 events-scoped and 10553 full backend
+suite pass (+4 guard tests), `tsc --noEmit`/`eslint .` both 0 errors.
 Findings doc: `docs/security-review/EV-16-events-requests.md` pass 3.
 Rotation row 16 → ⏳ awaiting PR merge. Next: 17 Training core, once this
 PR merges.

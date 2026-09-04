@@ -145,7 +145,7 @@ export const EventDetailPage: React.FC = () => {
   const [reopeningAttendance, setReopeningAttendance] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [eligibleMembers, setEligibleMembers] = useState<
-    Array<{ id: string; first_name: string; last_name: string; email: string }>
+    Array<{ id: string; first_name: string; last_name: string; email: string | null }>
   >([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [actualStartTime, setActualStartTime] = useState('');

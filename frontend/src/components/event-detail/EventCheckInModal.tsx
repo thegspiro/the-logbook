@@ -8,7 +8,10 @@ interface EligibleMember {
   id: string;
   first_name: string;
   last_name: string;
-  email: string;
+  // Hidden by the org's contact-visibility settings or the member's own
+  // profile choice; not every eligible member has a searchable/displayable
+  // email.
+  email: string | null;
 }
 
 interface EventCheckInModalProps {
@@ -38,7 +41,7 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
     (member) =>
       memberSearch === '' ||
       `${member.first_name} ${member.last_name}`.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      member.email.toLowerCase().includes(memberSearch.toLowerCase())
+      (member.email ?? '').toLowerCase().includes(memberSearch.toLowerCase())
   );
 
   return (

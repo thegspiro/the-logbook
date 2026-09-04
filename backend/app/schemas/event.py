@@ -1072,6 +1072,9 @@ class RecurringEventCreate(BaseModel):
     _check_recurrence_pattern = field_validator("recurrence_pattern")(
         _enum_check(_RECURRENCE_PATTERNS, "recurrence_pattern")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -1138,6 +1141,12 @@ class RecurringEventCreate(BaseModel):
     is_mandatory: bool = False
     mandatory_membership_types: Optional[List[str]] = None
     allow_guests: bool = False
+    # Was missing from this schema alone: EventCreate/EventUpdate/
+    # EventTemplateCreate/EventTemplateUpdate all declare it, but Pydantic
+    # silently drops unknown fields by default, so a series created with an
+    # explicit visibility choice stored NULL on every occurrence (inheriting
+    # the org default instead) instead of raising or erroring.
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     send_reminders: bool = True
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(default=[24])
@@ -1331,4 +1340,9 @@ class EligibleMemberResponse(BaseModel):
     id: str
     first_name: str
     last_name: str
-    email: str
+    # Optional, not str: contact_visibility.email_for() returns None when the
+    # org's contact_info_visibility ceiling is off or the member hid their
+    # own email — a required str here made those cases a 500 for the whole
+    # roster (Pydantic response validation fails the entry, not just omits
+    # the field).
+    email: Optional[str] = None
