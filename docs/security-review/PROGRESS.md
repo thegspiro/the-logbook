@@ -18,15 +18,15 @@ feature. The rotation cannot outrun its own review queue.
 
 **[#2222](https://github.com/thegspiro/the-logbook/pull/2222)** (branch
 `claude/security-review-training-core-tr3-round6`) — Feature 17, Training
-core, pass 3, rounds 6-8. **#2221 (rounds 1-5) merged before round 6's
+core, pass 3, rounds 6-9. **#2221 (rounds 1-5) merged before round 6's
 fixes could be pushed to it** — the owner merged while Codex's review of
 that PR was still in progress, the same race that hit #2213, #2217,
 #2218, and #2220 before it (CLAUDE.md pitfall #24: never reuse a branch
 whose PR has merged — round 6 moved to this fresh branch/PR off current
-`main`, which already carries rounds 1-5). Rounds 7 and 8 are further
-pushes to this same still-open PR — no premature merge since.
+`main`, which already carries rounds 1-5). Rounds 7-9 are further pushes
+to this same still-open PR — no premature merge since.
 
-This PR is entirely rounds 1-8 of the same TR3-1 finding
+This PR is entirely rounds 1-9 of the same TR3-1 finding
 (`RequirementProgress.days_until_due` was never populated), each round
 fixing a real gap Codex found in the previous round's own fix. Brief
 summary (full technical detail in `TR-17-training-core.md`'s Pass 3
@@ -85,12 +85,23 @@ tsx`) was still taking top priority over the rolling/certification-
   stale value from before this fix, the next time it's touched, even if
   the update doesn't mention `due_date` at all.
 
-Twelve new guard tests across rounds 6-8, all confirmed failing against
-the code before their respective fix. Full completion gate re-run green
-(10581/10581 backend).
-See `TR-17-training-core.md`'s Pass 3 section and the Log below for full
-detail on every round. Rotation row 17 stays ⏳ awaiting merge. Next: 18
-Training extended, once this PR merges.
+- **Round 9** (this PR, pushed after Codex reviewed round 8): round 8's
+  write-path fix stops _new_ staleness but does nothing for a row that
+  already carries a stale `due_date` and is never edited again — Codex
+  named the same CLAUDE.md pitfall #20 pattern applied to a plain column:
+  a write-path fix alone never reaches a row nobody revisits. Fixed with
+  migration `20260904_0530_bbdaca0844df`: a single `UPDATE ... SET
+due_date = NULL WHERE due_date_type IN (calendar_period, rolling,
+certification_period)`, table-existence-guarded per pitfall #26,
+  irreversible by design (nothing correct to restore the cleared values
+  to).
+
+Fourteen new guard tests across rounds 6-9, all confirmed failing against
+the code before their respective fix (round 9's migration test runs the
+real UPDATE against a live database, not a mocked bind). Full completion
+gate re-run green (10583/10583 backend). See `TR-17-training-core.md`'s Pass 3 section and the
+Log below for full detail on every round. Rotation row 17 stays ⏳
+awaiting merge. Next: 18 Training extended, once this PR merges.
 
 ---
 
@@ -103,9 +114,9 @@ CLAUDE.md pitfall #24, the merged branch is not reused: round 6's two
 fixes (the stale-due-date priority bug, the unverifiable-anchor/recency
 contradiction) moved to a new branch off current `main` and a new PR,
 **[#2222](https://github.com/thegspiro/the-logbook/pull/2222)**
-(`claude/security-review-training-core-tr3-round6`). Rounds 7 and 8
-pushed as further commits onto this same PR — no further premature
-merges. Next: 18 Training extended, once this PR merges.
+(`claude/security-review-training-core-tr3-round6`). Rounds 7-9 pushed as
+further commits onto this same PR — no further premature merges. Next: 18
+Training extended, once this PR merges.
 
 ### 2026-09-04 — Feature 17 (Training core, pass 3, round 5) — PR #2220 merged at round 4's commit; round-5 fixes moved to a new PR
 

@@ -552,6 +552,41 @@ unrelated field change cleans it up) and one `create_requirement` case
 five confirmed failing without the endpoint fix (the "genuine fixed_date
 update" case correctly still passed, since it's unaffected).
 
+**Round 9 — Codex found round 8's write-path fix doesn't reach a row
+nobody edits**, pushed as a further commit onto the same still-open PR
+(#2222):
+
+Round 8's normalization runs on `create`/`update`, which stops _new_
+staleness but does nothing for a `calendar_period`/`rolling`/
+`certification_period` row that already carries a stale `due_date` and is
+never edited again. Until an officer happens to touch it, the same two raw
+reads (the dashboard widget, the requirement detail page) keep showing the
+pre-fix value — exactly the CLAUDE.md pitfall #20 pattern applied to a
+plain column instead of a JSON one: _a write-path fix alone never reaches
+a row nobody revisits; it needs a migration to settle the rows already
+there._
+
+Fixed with `20260904_0530_bbdaca0844df_backfill_stale_due_date_non_fixed.py`:
+a single `UPDATE training_requirements SET due_date = NULL WHERE due_date
+IS NOT NULL AND due_date_type IN (...)` for the three non-`fixed_date`
+types, guarded on the table's existence (per CLAUDE.md pitfall #26 — even
+though `training_requirements` is migration-created, not `create_all`-only,
+matching the same defensive check the precedent migration
+(`20260903_1300_e3a9c1d5b7f2`, the `email_service` settle) uses).
+`downgrade()` is deliberately a no-op: the cleared values were never valid
+for these three types (there's no UI path to set both a period/anchor
+config and a deliberate override date at once), so there's nothing correct
+to restore.
+
+**Guard tests (round 9):** new file
+`test_backfill_stale_training_due_date_migration.py` — a real-database
+integration test (`db_session`, not a mocked bind) proving the actual
+UPDATE statement, including its expanding `IN`-list bindparam, clears
+`calendar_period`/`rolling`/`certification_period` rows while leaving
+`fixed_date` and legacy (`due_date_type IS NULL`) rows untouched; plus the
+standard mocked-bind unit test for the table-missing guard, in the manner
+of the `email_service` migration's own test.
+
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 
 **Reported by Codex on this PR; confirmed.** See the "Scope addition"
