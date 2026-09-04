@@ -5,7 +5,7 @@
  * Members can see available positions and volunteer for shifts they're qualified for.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DialogPanel } from '../../components/ux/DialogPanel';
 import { Clock, Users, UserPlus, Truck, Loader2, CalendarDays, Filter, Check, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -17,6 +17,8 @@ import { formatTime, getTodayLocalDate, toLocalDateString, formatDateCustom } fr
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
+import { signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
+import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 
 interface OpenShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -24,8 +26,15 @@ interface OpenShiftsTabProps {
 
 export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => {
   const { user, checkPermission } = useAuthStore();
-  const canAssign = checkPermission('scheduling.assign') || checkPermission('scheduling.manage');
+  const canManage = checkPermission('scheduling.manage');
+  const canAssign = checkPermission('scheduling.assign') || canManage;
+  // The window is actor-relative, and this screen has a `createAssignment`
+  // fallback for anyone who can seat crew — so gating the *action* on the
+  // member cutoff would block an officer inside the grace period, and a
+  // scheduling admin always, on a path the server accepts.
+  const signupViewer = useMemo(() => ({ canAssign, canManage }), [canAssign, canManage]);
   const tz = useTimezone();
+  const signupWindow = useSignupWindow();
 
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +121,12 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
   };
 
   const handleSignup = async (shiftId: string) => {
+    const target = shifts.find((s) => s.id === shiftId);
+    const closed = target ? signupClosedReason(target, signupWindow, signupViewer) : null;
+    if (closed) {
+      toast.error(canAssign ? closed : `${closed} Ask a duty officer to add you.`);
+      return;
+    }
     setSigningUp(true);
     try {
       const res = await schedulingService.signupForShift(shiftId, {
@@ -219,69 +234,81 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                   {formatDateCustom(dateObj, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }, tz)}
                 </h3>
                 <div className="space-y-3">
-                  {dayShifts?.map((shift) => (
-                    <div key={shift.id} className="card p-4 hover:border-violet-500/30 sm:p-5">
-                      <div className="flex items-start justify-between gap-3 sm:items-center">
-                        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
-                            <Clock className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-theme-text-primary text-sm font-semibold sm:text-base">
-                              {formatTime(shift.start_time, tz)}
-                              {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                              <span className="text-theme-text-muted flex items-center gap-1 text-xs">
-                                <Users className="h-3 w-3" />
-                                {shift.apparatus_positions && shift.apparatus_positions.length > 0
-                                  ? `${shift.attendee_count} / ${shift.apparatus_positions.length} filled`
-                                  : `${shift.attendee_count} assigned`}
-                              </span>
-                              {shift.apparatus_unit_number && (
+                  {dayShifts?.map((shift) => {
+                    const signupClosed = signupClosedReason(shift, signupWindow, signupViewer);
+                    return (
+                      <div key={shift.id} className="card p-4 hover:border-violet-500/30 sm:p-5">
+                        <div className="flex items-start justify-between gap-3 sm:items-center">
+                          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
+                              <Clock className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-theme-text-primary text-sm font-semibold sm:text-base">
+                                {formatTime(shift.start_time, tz)}
+                                {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                                 <span className="text-theme-text-muted flex items-center gap-1 text-xs">
-                                  <Truck className="h-3 w-3" /> {shift.apparatus_unit_number}
-                                  {shift.apparatus_name && (
-                                    <span className="hidden sm:inline"> — {shift.apparatus_name}</span>
-                                  )}
+                                  <Users className="h-3 w-3" />
+                                  {shift.apparatus_positions && shift.apparatus_positions.length > 0
+                                    ? `${shift.attendee_count} / ${shift.apparatus_positions.length} filled`
+                                    : `${shift.attendee_count} assigned`}
                                 </span>
-                              )}
-                              {shift.shift_officer_name && (
-                                <span className="text-theme-text-muted hidden items-center gap-1 text-xs sm:flex">
-                                  <MapPin className="h-3 w-3" /> {shift.shift_officer_name}
-                                </span>
+                                {shift.apparatus_unit_number && (
+                                  <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                                    <Truck className="h-3 w-3" /> {shift.apparatus_unit_number}
+                                    {shift.apparatus_name && (
+                                      <span className="hidden sm:inline"> — {shift.apparatus_name}</span>
+                                    )}
+                                  </span>
+                                )}
+                                {shift.shift_officer_name && (
+                                  <span className="text-theme-text-muted hidden items-center gap-1 text-xs sm:flex">
+                                    <MapPin className="h-3 w-3" /> {shift.shift_officer_name}
+                                  </span>
+                                )}
+                              </div>
+                              {shift.notes && (
+                                <p className="text-theme-text-muted mt-1 truncate text-xs">{shift.notes}</p>
                               )}
                             </div>
-                            {shift.notes && (
-                              <p className="text-theme-text-muted mt-1 truncate text-xs">{shift.notes}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {/* This button had no gating at all — not even a
+                              past-date check — so the open list offered a
+                              signup on a shift that had already gone out. */}
+                            {signupClosed ? (
+                              <span className="text-theme-text-muted max-w-[9rem] text-right text-xs sm:text-sm">
+                                {signupClosed}
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setSignupPosition('');
+                                  setSignupShiftId(shift.id);
+                                }}
+                                className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-violet-700 sm:text-sm"
+                                aria-label="Sign up for this shift"
+                              >
+                                <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Sign Up</span>
+                                <span className="sm:hidden">Join</span>
+                              </button>
+                            )}
+                            {onViewShift && (
+                              <button
+                                onClick={() => onViewShift(shift)}
+                                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover hidden rounded-lg border px-3 py-2 text-sm transition-colors sm:block"
+                                aria-label="View shift details"
+                              >
+                                Details
+                              </button>
                             )}
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setSignupPosition('');
-                              setSignupShiftId(shift.id);
-                            }}
-                            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-violet-700 sm:text-sm"
-                            aria-label="Sign up for this shift"
-                          >
-                            <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">Sign Up</span>
-                            <span className="sm:hidden">Join</span>
-                          </button>
-                          {onViewShift && (
-                            <button
-                              onClick={() => onViewShift(shift)}
-                              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover hidden rounded-lg border px-3 py-2 text-sm transition-colors sm:block"
-                              aria-label="View shift details"
-                            >
-                              Details
-                            </button>
-                          )}
-                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -389,6 +416,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                       disabled={
                         signingUp ||
                         eligibilityLoading ||
+                        (targetShift ? signupClosedReason(targetShift, signupWindow, signupViewer) !== null : false) ||
                         (isOutreachSignup ? !signupRole : !eligiblePositions.includes(signupPosition))
                       }
                       className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"

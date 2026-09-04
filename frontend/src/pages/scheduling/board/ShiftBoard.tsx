@@ -17,6 +17,7 @@ import type { SwapRequest } from '../../../types/scheduling';
 import { StandingShiftPeriod } from '../../../modules/scheduling';
 import {
   daySummary,
+  memberSignupClosedReason,
   monthMatrix,
   shiftPeriodLetter,
   shiftStatusInfo,
@@ -24,6 +25,7 @@ import {
   weekDates,
   type BoardFilter,
 } from '../../../modules/scheduling/utils/shiftBoard';
+import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
@@ -93,6 +95,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   refreshKey = 0,
   onViewShift,
 }) => {
+  const signupWindow = useSignupWindow();
   const { user } = useAuthStore();
   const timezone = useTimezone();
   const currentUserId = user?.id ?? null;
@@ -133,8 +136,8 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   // Only explain the "crew size not set" colour when something on screen is
   // in that state; a correctly configured department never sees the entry.
   const hasUnsizedShift = useMemo(
-    () => shifts.some((shift) => shiftStatusInfo(shift, currentUserId).capacity === null),
-    [shifts, currentUserId]
+    () => shifts.some((shift) => shiftStatusInfo(shift, currentUserId, new Date(), signupWindow).capacity === null),
+    [shifts, currentUserId, signupWindow]
   );
 
   // Pending offers, split by which way they point. Keyed by shift so the seat
@@ -160,23 +163,31 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   }, [myOffers, currentUserId]);
 
   const openSeatsThisMonth = useMemo(
-    () => shifts.reduce((total, shift) => total + shiftStatusInfo(shift, currentUserId).openSeats, 0),
-    [shifts, currentUserId]
+    () =>
+      shifts.reduce(
+        (total, shift) => total + shiftStatusInfo(shift, currentUserId, new Date(), signupWindow).openSeats,
+        0
+      ),
+    [shifts, currentUserId, signupWindow]
   );
 
   const urgentDaysThisWeek = useMemo(() => {
     const week = weekDates(today).map(toDateKey);
-    return week.filter((key) => daySummary(shiftsByDate.get(key) ?? [], currentUserId).openSeats > 0).length;
-  }, [shiftsByDate, currentUserId, today]);
+    return week.filter((key) => daySummary(shiftsByDate.get(key) ?? [], currentUserId, signupWindow).openSeats > 0)
+      .length;
+  }, [shiftsByDate, currentUserId, today, signupWindow]);
 
   const nextShift = useMemo(() => {
     const todayKey = toDateKey(today);
     return (
       shifts
-        .filter((shift) => shift.shift_date >= todayKey && shiftStatusInfo(shift, currentUserId).isMine)
+        .filter(
+          (shift) =>
+            shift.shift_date >= todayKey && shiftStatusInfo(shift, currentUserId, new Date(), signupWindow).isMine
+        )
         .sort((a, b) => a.start_time.localeCompare(b.start_time))[0] ?? null
     );
-  }, [shifts, currentUserId, today]);
+  }, [shifts, currentUserId, today, signupWindow]);
 
   /**
    * Re-read the visible range. Returns the shifts so a caller that has just
@@ -295,6 +306,15 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
   };
 
   const handleClaim = async (shift: ShiftRecord, position: string | null) => {
+    // Checked before the optimistic update below, not only in the buttons that
+    // reach here: painting the member into a seat the server is about to
+    // refuse would seat them and then snap them back out.
+    const closed = memberSignupClosedReason(shift, signupWindow);
+    if (closed) {
+      toast.error(`${closed} Ask a duty officer to add you.`);
+      return;
+    }
+
     const eligible = eligibleByShift[shift.id] ?? [];
     const seat = position ?? eligible[0];
     if (!seat) {
@@ -334,7 +354,7 @@ export const ShiftBoard: React.FC<ShiftBoardProps> = ({
       setAnnouncement(
         `You are on the ${formatCalendarDate(shift.shift_date, { month: 'long', day: 'numeric' })} shift.`
       );
-      const info = shiftStatusInfo(updated, currentUserId);
+      const info = shiftStatusInfo(updated, currentUserId, new Date(), signupWindow);
       if (info.capacity !== null && info.filled > info.capacity) {
         // An officer can seat a crew past its planned size deliberately, so a
         // member arriving on an over-full shift is told rather than left to

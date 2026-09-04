@@ -152,6 +152,9 @@ class ShiftResponse(UTCResponseBase):
     # The template this shift came from, when it came from one. NULL on ad-hoc
     # shifts and on every shift created before the column existed.
     template_id: Optional[UUID] = None
+    # Set when leadership reopened signup on this shift past the department's
+    # cutoff; the instant that reopening expires. NULL on every other shift.
+    late_signup_until: Optional[datetime] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
     shift_officer_name: Optional[str] = None
@@ -412,6 +415,17 @@ class ShiftReopenRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class LateSignupOpenRequest(BaseModel):
+    """Reopen signup on one shift for a bounded number of minutes.
+
+    Capped at twelve hours: an officer needs minutes to fill a seat on the
+    night, and an unbounded value would silently switch the cutoff off for
+    that shift forever, which is the state this feature exists to end.
+    """
+
+    minutes: int = Field(..., ge=1, le=720)
+
+
 class ShiftAttendanceResponse(UTCResponseBase):
     """Schema for shift attendance response"""
 
@@ -506,6 +520,13 @@ class ShiftDetailResponse(ShiftResponse):
     # undeclared keys leave it offering an action the API refuses.
     checkin_open: bool = True
     checkin_closed_reason: Optional[str] = None
+    # Whether *this viewer* may still be seated on the shift, and why not when
+    # they may not. Resolved against the viewer's own deadline — a member's
+    # closes at the start, an officer's after the department's grace window —
+    # so the panel disables the right button rather than reimplementing the
+    # rule and drifting from what the API enforces.
+    signup_open: bool = True
+    signup_closed_reason: Optional[str] = None
 
     model_config = _response_config
 
@@ -1315,6 +1336,16 @@ class SchedulingFeatureSettings(BaseModel):
     # Lifecycle enforcement
     require_end_of_shift_checks: bool = False
     restrict_checkin_to_assigned: bool = False
+    # Signup window. Self-signup closes this many minutes *before* the shift
+    # starts; 0 keeps it open right up to the start instant, which is the
+    # behaviour every existing department has (pitfall #19 — an absent setting
+    # must mean "current behaviour", never a new restriction nobody asked for).
+    signup_closes_minutes_before: int = Field(default=0, ge=0, le=10080)
+    # How long past the start an officer holding scheduling.assign may still
+    # seat somebody. Members are already closed out by then. scheduling.manage
+    # is never bounded, and an officer can reopen an individual shift for
+    # longer, so this is the routine case rather than the only way in.
+    late_signup_grace_minutes: int = Field(default=60, ge=0, le=1440)
     # Driver qualification. Defaults on: a member without the EVOC level an
     # apparatus requires cannot be seated as its driver. Inert until an admin
     # sets required_evoc_level_id on an apparatus, so switching it on for

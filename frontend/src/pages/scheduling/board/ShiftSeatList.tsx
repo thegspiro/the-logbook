@@ -16,10 +16,12 @@ import {
   canTakeSeat,
   firstClaimableSeat,
   memberInitials,
+  memberSignupClosedReason,
   shiftCrewName,
   shiftStatusInfo,
   statusBadgeLabel,
 } from '../../../modules/scheduling/utils/shiftBoard';
+import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
 import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
 import { formatTime } from '../../../utils/dateFormatting';
 import { STATUS_STYLES } from './statusStyles';
@@ -59,9 +61,13 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
   onAnswerOffer,
   onCancelOffer,
 }) => {
-  const info = shiftStatusInfo(shift, currentUserId);
+  const signupWindow = useSignupWindow();
+  const info = shiftStatusInfo(shift, currentUserId, new Date(), signupWindow);
   const seats = buildSeats(shift, currentUserId);
-  const claimable = firstClaimableSeat(shift, eligiblePositions, currentUserId);
+  const claimable = firstClaimableSeat(shift, eligiblePositions, currentUserId, new Date(), signupWindow);
+  // The server's own answer where the detail response supplied one, so the
+  // panel and the API cannot disagree about why the button is gone.
+  const signupClosed = shift.signup_closed_reason ?? memberSignupClosedReason(shift, signupWindow);
   const isSheet = variant === 'sheet';
   const avatar = isSheet ? 'h-6 w-6 text-[10px]' : 'h-[26px] w-[26px] text-[10px]';
 
@@ -131,6 +137,7 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
                       ? `${seat.position ? label : 'Open'} seat — you are not cleared for it`
                       : `${seat.position ? label : 'Open'} seat — this shift is closed to signups`
                 }
+                title={!takeable && !info.isOpen && signupClosed ? signupClosed : undefined}
               >
                 <span
                   className={`border-theme-input-border text-theme-text-muted flex shrink-0 items-center justify-center rounded-full border border-dashed ${avatar}`}
@@ -159,15 +166,26 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
           <p className="text-theme-text-secondary mt-0.5 text-xs">
             They stay on the roster until you answer, so the seat is never left empty.
           </p>
+          {/* Accepting an offer is bounded by the same member deadline as
+              signing up — it *is* the offerer withdrawing and the accepter
+              signing up — so past it the server refuses. Declining stays
+              available: the offerer is owed an answer either way. */}
+          {signupClosed && (
+            <p className="text-theme-text-secondary mt-2 text-xs font-medium">
+              {signupClosed} You can still decline so they know.
+            </p>
+          )}
           <div className="mt-2.5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => onAnswerOffer(offerToMe, true)}
-              className="btn-primary btn-sm rounded-lg px-3 font-semibold"
-            >
-              Take the shift
-            </button>
+            {!signupClosed && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onAnswerOffer(offerToMe, true)}
+                className="btn-primary btn-sm rounded-lg px-3 font-semibold"
+              >
+                Take the shift
+              </button>
+            )}
             <button
               type="button"
               disabled={pending}
@@ -203,11 +221,14 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
 
       {!info.isOpen ? (
         <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
+          {/* Cancelled and finalized are more informative than "already
+              started", and they mirror the backend rule's own precedence —
+              its window check defers to the mutability check for both. */}
           {info.isCancelled
             ? 'This shift was cancelled.'
             : shift.is_finalized
               ? 'This shift has been finalized.'
-              : 'This shift has already run.'}
+              : (signupClosed ?? 'This shift has already run.')}
         </p>
       ) : info.isMine ? (
         // While an offer of this seat stands, the only move is the banner's

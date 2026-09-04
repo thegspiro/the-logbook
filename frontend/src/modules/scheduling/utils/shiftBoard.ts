@@ -95,13 +95,147 @@ export const shiftCapacity = (shift: ShiftRecord): number | null => {
  *
  * The server refuses self-signup on a cancelled, finalized or past shift, so
  * a board that offered one would hand the member a button whose only outcome
- * is an error toast. It is the same predicate the empty-seat counts use: a
- * seat nobody can take is not a shortage anyone can fix.
+ * is an error toast.
+ *
+ * This is the *lifecycle* half only, at calendar-day granularity. Whether the
+ * shift has already started is `memberSignupClosedReason`; the two together
+ * are `isShiftClaimable`, which is what a claim button gates on. They are kept
+ * apart because several callers want the lifecycle answer alone — "has this
+ * day been and gone" is not the same question as "may I still join".
  */
 export const isShiftOpen = (shift: ShiftRecord, today: Date = new Date()): boolean => {
   if (shift.status === 'cancelled') return false;
   if (shift.is_finalized) return false;
   return shift.shift_date >= toDateKey(today);
+};
+
+/**
+ * The department's signup window: how long before a shift starts self-signup
+ * closes, and how long past the start an officer may still seat somebody.
+ *
+ * Both come from `GET /scheduling/settings`, which any member may read
+ * precisely so the board can gate its own buttons.
+ */
+export interface SignupWindow {
+  /** Minutes before start_time that member self-signup closes. 0 = at the start. */
+  closesMinutesBefore: number;
+  /** Minutes after start_time an officer may still seat somebody. */
+  graceMinutes: number;
+}
+
+/**
+ * What the rules assume before the department's settings have loaded.
+ *
+ * Deliberately the permissive end of the member rule: a board gating on
+ * settings it has not fetched yet would disable a button the server would have
+ * accepted, and the member cannot tell that apart from being genuinely too
+ * late. The server is authoritative either way.
+ */
+export const DEFAULT_SIGNUP_WINDOW: SignupWindow = { closesMinutesBefore: 0, graceMinutes: 60 };
+
+/**
+ * The shift's start as an epoch instant, or null when it cannot be read.
+ *
+ * `start_time` is normally an ISO UTC datetime, but a bare "HH:MM" still
+ * reaches the client from some responses (see ShiftDetailPanel's `hasStarted`).
+ * Returning null rather than NaN matters: NaN compares false in *both*
+ * directions, so a single unparseable value would silently close signup on
+ * every shift in the department.
+ */
+const startInstant = (shift: ShiftRecord): number | null => {
+  if (!shift.start_time || !shift.start_time.includes('T')) return null;
+  const parsed = Date.parse(shift.start_time);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+/**
+ * Who is looking at the shift, for the signup window.
+ *
+ * Mirrors the backend's three actors: a scheduling admin is never bounded, an
+ * officer is bounded by the department's grace period, and everyone else by
+ * the member cutoff. The client can decide the first two from the caller's
+ * org-wide permissions; the shift-officer case is the server's to resolve, and
+ * arrives on the detail response as `signup_closed_reason`.
+ */
+export interface SignupViewer {
+  /** Holds scheduling.assign, or is this shift's officer. */
+  canAssign: boolean;
+  /** Holds scheduling.manage — never bounded, this is the records path. */
+  canManage: boolean;
+}
+
+const MEMBER_VIEWER: SignupViewer = { canAssign: false, canManage: false };
+
+/**
+ * Why this viewer can no longer be seated on this shift, or null if they can.
+ *
+ * Signup used to be refused only once the shift's calendar *day* had passed, so
+ * the board offered a claim button on a 06:00 shift at 23:00 that night. The
+ * bound is the shift's own start — minus whatever lead time the department set
+ * for members, plus the grace period for an officer — or the later instant an
+ * officer opened with `late_signup_until`.
+ *
+ * Advisory only: the server enforces the same rule and its refusal is what
+ * actually stops a signup. No clock-skew tolerance is added on purpose — a
+ * fudge factor would put the two sides deliberately out of agreement.
+ */
+export const signupClosedReason = (
+  shift: ShiftRecord,
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW,
+  viewer: SignupViewer = MEMBER_VIEWER,
+  now: Date = new Date()
+): string | null => {
+  if (viewer.canManage) return null;
+
+  const start = startInstant(shift);
+  if (start === null) return null;
+
+  const override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
+  const offsetMinutes = viewer.canAssign ? window.graceMinutes : -window.closesMinutesBefore;
+  let deadline = start + offsetMinutes * 60_000;
+  if (!Number.isNaN(override) && override > deadline) deadline = override;
+  if (now.getTime() <= deadline) return null;
+
+  if (viewer.canAssign) return 'This shift started too long ago to add anyone to.';
+  if (!Number.isNaN(override)) return 'Late signup for this shift has closed.';
+  if (window.closesMinutesBefore > 0 && now.getTime() < start) {
+    return 'Signup for this shift has closed.';
+  }
+  // "Started" is true of last month's shift too, and reads as though it were
+  // under way. Once the end has passed, say what actually happened.
+  const end = shift.end_time ? Date.parse(shift.end_time) : NaN;
+  if (!Number.isNaN(end) && end < now.getTime()) return 'This shift has already run.';
+  return 'This shift has already started.';
+};
+
+/** The member case of `signupClosedReason` — what a claim button gates on. */
+export const memberSignupClosedReason = (
+  shift: ShiftRecord,
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW,
+  now: Date = new Date()
+): string | null => signupClosedReason(shift, window, MEMBER_VIEWER, now);
+
+/**
+ * `isShiftOpen` and the member signup window together — what a claim button
+ * gates on.
+ *
+ * Kept separate from `isShiftOpen`, which stays the *lifecycle* predicate
+ * (cancelled / finalized / day past) that five other call sites read for other
+ * reasons.
+ */
+export const isShiftClaimable = (
+  shift: ShiftRecord,
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW,
+  now: Date = new Date()
+): boolean => {
+  if (shift.status === 'cancelled' || shift.is_finalized) return false;
+  if (memberSignupClosedReason(shift, window, now) !== null) return false;
+  // `isShiftOpen`'s day comparison is a *fallback*, applied only when the
+  // start instant cannot be read. A 18:00–06:00 shift's `shift_date` rolls to
+  // yesterday at midnight, so applying it after the precise window had already
+  // approved the claim left an officer's 00:30 reopening — exactly when a crew
+  // is short — showing a live window with every button disabled.
+  return startInstant(shift) !== null || isShiftOpen(shift, now);
 };
 
 /**
@@ -159,7 +293,8 @@ export const buildSeats = (shift: ShiftRecord, currentUserId?: string | null): S
 export const shiftStatusInfo = (
   shift: ShiftRecord,
   currentUserId?: string | null,
-  today: Date = new Date()
+  today: Date = new Date(),
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW
 ): ShiftStatusInfo => {
   const capacity = shiftCapacity(shift);
   const seated = activeSeats(shift);
@@ -167,7 +302,10 @@ export const shiftStatusInfo = (
   // served before the roster field existed, so it is the more reliable count
   // whenever the two disagree.
   const filled = Math.max(seated.length, shift.attendee_count ?? 0);
-  const isOpen = isShiftOpen(shift, today);
+  // A shift that started twenty minutes ago has the same empty chairs a
+  // cancelled one does: nothing anybody browsing the board can do about them,
+  // so they are not a shortage and must not colour the day red.
+  const isOpen = isShiftClaimable(shift, window, today);
   const isCancelled = shift.status === 'cancelled';
   const openSeats = capacity === null || !isOpen ? 0 : Math.max(capacity - filled, 0);
   const isMine = !!currentUserId && seated.some((seat) => String(seat.user_id) === String(currentUserId));
@@ -224,12 +362,16 @@ export interface DaySummary {
   hasUnsizedShift: boolean;
 }
 
-export const daySummary = (shifts: ShiftRecord[], currentUserId?: string | null): DaySummary => {
+export const daySummary = (
+  shifts: ShiftRecord[],
+  currentUserId?: string | null,
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW
+): DaySummary => {
   let openSeats = 0;
   let hasMine = false;
   let hasUnsizedShift = false;
   for (const shift of shifts) {
-    const info = shiftStatusInfo(shift, currentUserId);
+    const info = shiftStatusInfo(shift, currentUserId, new Date(), window);
     openSeats += info.openSeats;
     if (info.isMine) hasMine = true;
     // Only an *open* shift's missing crew size is worth explaining in the
@@ -351,10 +493,11 @@ export const firstClaimableSeat = (
   shift: ShiftRecord,
   eligiblePositions: string[],
   currentUserId?: string | null,
-  today: Date = new Date()
+  today: Date = new Date(),
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW
 ): ShiftSeat | null => {
   // Nothing is claimable on a shift the server will not seat anyone on.
-  if (!isShiftOpen(shift, today)) return null;
+  if (!isShiftClaimable(shift, window, today)) return null;
 
   const open = buildSeats(shift, currentUserId).find(
     (seat) => seat.member === null && canTakeSeat(seat.position, eligiblePositions)

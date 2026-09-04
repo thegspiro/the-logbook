@@ -59,6 +59,16 @@ TRAINING_POSITION_MAP = {
     "aic": "officer",
 }
 
+# Signup-window defaults.
+#
+# Zero minutes before start: self-signup stays open right up to the start
+# instant, which is the behaviour every existing department already has.
+# Sixty after: an officer arriving to a short crew has the hour that actually
+# matters operationally, and past it a scheduling administrator — or a
+# per-shift reopening — is still the way in.
+DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE = 0
+DEFAULT_LATE_SIGNUP_GRACE_MINUTES = 60
+
 # Default membership types excluded from self-service shift signup.
 DEFAULT_EXCLUDED_MEMBERSHIP_TYPES = [
     "administrative",
@@ -902,6 +912,41 @@ class ShiftEligibilityService:
             ),
         }
 
+    def get_signup_window_settings(self, org: Organization) -> Dict[str, int]:
+        """How long before/after a shift's start it accepts signups.
+
+        ``signup_closes_minutes_before`` shuts self-signup that many minutes
+        ahead of the start (0 — the default — keeps it open to the start
+        instant, which is what every department has today).
+        ``late_signup_grace_minutes`` is how long past the start an officer
+        holding ``scheduling.assign`` may still seat somebody.
+
+        Read defensively, like ``get_call_tracking_settings``: this is
+        unvalidated JSON an admin can hand-edit, and raising here would refuse
+        every signup in the department over one mistyped value rather than
+        falling back to the built-in window (pitfall #19).
+        """
+        sched = self._get_scheduling_settings(org)
+
+        def minutes(key: str, default: int, ceiling: int) -> int:
+            raw = sched.get(key, default)
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                return default
+            return min(max(value, 0), ceiling)
+
+        return {
+            "signup_closes_minutes_before": minutes(
+                "signup_closes_minutes_before",
+                DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
+                10080,
+            ),
+            "late_signup_grace_minutes": minutes(
+                "late_signup_grace_minutes", DEFAULT_LATE_SIGNUP_GRACE_MINUTES, 1440
+            ),
+        }
+
     def get_call_tracking_settings(self, org: Organization) -> Dict[str, Any]:
         """Return the org's call-volume tracking config.
 
@@ -960,6 +1005,8 @@ class ShiftEligibilityService:
         auto_generate_weeks: Optional[int] = None,
         require_end_of_shift_checks: Optional[bool] = None,
         restrict_checkin_to_assigned: Optional[bool] = None,
+        signup_closes_minutes_before: Optional[int] = None,
+        late_signup_grace_minutes: Optional[int] = None,
         enforce_evoc: Optional[bool] = None,
         call_tracking: Optional[Dict[str, Any]] = None,
     ) -> dict:
@@ -992,6 +1039,10 @@ class ShiftEligibilityService:
             scheduling["require_end_of_shift_checks"] = require_end_of_shift_checks
         if restrict_checkin_to_assigned is not None:
             scheduling["restrict_checkin_to_assigned"] = restrict_checkin_to_assigned
+        if signup_closes_minutes_before is not None:
+            scheduling["signup_closes_minutes_before"] = signup_closes_minutes_before
+        if late_signup_grace_minutes is not None:
+            scheduling["late_signup_grace_minutes"] = late_signup_grace_minutes
         if enforce_evoc is not None:
             scheduling["enforce_evoc"] = enforce_evoc
         if call_tracking is not None:

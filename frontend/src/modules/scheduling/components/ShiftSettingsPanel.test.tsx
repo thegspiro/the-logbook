@@ -42,6 +42,8 @@ vi.mock('../services/api', () => ({
       auto_generate_weeks: 4,
       require_end_of_shift_checks: false,
       restrict_checkin_to_assigned: false,
+      signup_closes_minutes_before: 0,
+      late_signup_grace_minutes: 60,
       enforce_evoc: true,
     }),
     // Arrow-deferred so the hoisted factory can reference the const below it.
@@ -245,5 +247,56 @@ describe('ShiftSettingsPanel', () => {
       expect(screen.getByRole('link', { name: /Manage equipment checklists/i })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /Checklist settings/i })).toBeInTheDocument();
     });
+  });
+});
+
+describe('ShiftSettingsPanel signup window', () => {
+  beforeEach(() => {
+    mockUpdateFeatureSettings.mockReset();
+    mockUpdateFeatureSettings.mockResolvedValue({
+      platoons_enabled: false,
+      max_hours_per_window: 0,
+      hours_window_days: 7,
+      auto_generate_enabled: false,
+      auto_generate_weeks: 4,
+      require_end_of_shift_checks: false,
+      restrict_checkin_to_assigned: false,
+      signup_closes_minutes_before: 0,
+      late_signup_grace_minutes: 60,
+      enforce_evoc: true,
+    });
+    mockLoadShiftSettings.mockReset();
+    mockLoadShiftSettings.mockResolvedValue({ ...DEFAULT_SETTINGS });
+  });
+
+  const renderEligibility = () => renderPanel('eligibility');
+
+  it('renders both window controls on the eligibility section', async () => {
+    renderEligibility();
+
+    expect(await screen.findByLabelText('Members can sign up until')).toBeInTheDocument();
+    expect(screen.getByLabelText('Officers can add members until')).toBeInTheDocument();
+  });
+
+  it('saves the member lead time as a single-key patch', async () => {
+    const user = userEvent.setup();
+    renderEligibility();
+
+    await user.selectOptions(await screen.findByLabelText('Members can sign up until'), '30');
+
+    // A single key, so the backend's model_fields_set guard leaves every
+    // sibling setting alone.
+    await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ signup_closes_minutes_before: 30 }));
+  });
+
+  it('saves a zero grace rather than dropping it as falsy', async () => {
+    const user = userEvent.setup();
+    renderEligibility();
+
+    await user.selectOptions(await screen.findByLabelText('Officers can add members until'), '0');
+
+    // 0 means "closes exactly at the start" and must survive the round trip;
+    // it is the value a `||` would silently replace with the default.
+    await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ late_signup_grace_minutes: 0 }));
   });
 });

@@ -54,6 +54,8 @@ import {
 } from '../services/api';
 import type { AdminSummary, OperationsDashboard, InboxMessage, MyComplianceSummary } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
+import { memberSignupClosedReason } from '../modules/scheduling/utils/shiftBoard';
+import { useSignupWindow } from '../modules/scheduling/hooks/useSignupWindow';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
@@ -228,6 +230,7 @@ const TIMELINE_ACCENT: Record<TimelineKind, string> = {
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const signupWindow = useSignupWindow();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user: currentUser, checkPermission } = useAuthStore();
   const [departmentName, setDepartmentName] = useState('Fire Department');
@@ -816,6 +819,12 @@ const Dashboard: React.FC = () => {
   };
 
   const handleSignup = async (shiftId: string) => {
+    const target = openShifts.find((s) => s.id === shiftId);
+    const closed = target ? memberSignupClosedReason(target, signupWindow) : null;
+    if (closed) {
+      toast.error(`${closed} Ask a duty officer to add you.`);
+      return;
+    }
     setSigningUpShiftId(shiftId);
     try {
       await schedulingService.signupForShift(shiftId, { position: dashboardSignupPosition });
@@ -1450,6 +1459,7 @@ const Dashboard: React.FC = () => {
     const shift = entry.shift;
     const evt = entry.event;
     const expanded = shift != null && signupExpandedId === shift.id;
+    const signupClosedReason = shift ? memberSignupClosedReason(shift, signupWindow) : null;
     // Held back on phones only, and by CSS: the row stays in the markup, so a
     // rotation to landscape reveals it without the summary line below going
     // stale about what is hidden.
@@ -1493,7 +1503,14 @@ const Dashboard: React.FC = () => {
             </span>
           )}
 
-          {entry.kind === 'open-shift' && shift && !expanded && (
+          {/* The row stays — the open list still returns a shift that has
+              begun, and hiding one an officer is about to add somebody to is
+              worse than showing it with the reason. */}
+          {entry.kind === 'open-shift' && shift && !expanded && signupClosedReason && (
+            <span className="text-theme-text-muted shrink-0 text-xs sm:text-sm">{signupClosedReason}</span>
+          )}
+
+          {entry.kind === 'open-shift' && shift && !expanded && !signupClosedReason && (
             <button
               type="button"
               onClick={() => void handleExpandSignup(shift.id)}
