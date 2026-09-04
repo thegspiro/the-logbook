@@ -16,16 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2220](https://github.com/thegspiro/the-logbook/pull/2220)** (branch
-`claude/security-review-training-core-tr3-round4`) — Feature 17, Training
-core, pass 3, round 4. **#2218 merged (`f7073cd5`, rounds 1-3) before this
-round's fixes could be pushed to it** — the owner merged it while Codex's
-review of that same commit was still in progress, the same race that hit
-#2213 and #2217 (CLAUDE.md pitfall #24: never reuse a branch whose PR has
-merged — the fixes moved to a fresh branch/PR off current `main`, which
-already carries rounds 1-3).
+**[#2221](https://github.com/thegspiro/the-logbook/pull/2221)** (branch
+`claude/security-review-training-core-tr3-round5`) — Feature 17, Training
+core, pass 3, round 5. **#2220 (rounds 1-4) merged before round 5's fixes
+could be pushed to it** — the owner merged while Codex's review of that PR
+was still in progress, the same race that hit #2213, #2217, and #2218
+before it (CLAUDE.md pitfall #24: never reuse a branch whose PR has merged
+— the fixes moved to a fresh branch/PR off current `main`, which already
+carries rounds 1-4).
 
-This PR is entirely rounds 1-4 of the same TR3-1 finding
+This PR is entirely rounds 1-5 of the same TR3-1 finding
 (`RequirementProgress.days_until_due` was never populated), each round
 fixing a real gap Codex found in the previous round's own fix:
 
@@ -42,8 +42,8 @@ fixing a real gap Codex found in the previous round's own fix:
   fixed the identical latent flaw found by inspection (not Codex) in the
   sibling `evaluate_requirement_detail()`, present since pass 1 (PR
   #1851).
-- **Round 4** (this PR): Codex found three more gaps in round 3's own
-  anchor fix. (1) No branch at all for
+- **Round 4** (merged in #2220): Codex found three more gaps in round 3's
+  own anchor fix. (1) No branch at all for
   `due_date_type="certification_period"` — fell through to the
   calendar-period fallback instead of the held certificate's own
   expiration date; fixed with a new `_certification_due_date()` helper.
@@ -62,15 +62,48 @@ fixing a real gap Codex found in the previous round's own fix:
   existing unbounded-window exemption (already used for
   CERTIFICATION/BIANNUAL) to rolling and certification-period
   requirements.
+- **Round 5** (this PR): Codex found two more gaps, both introduced by
+  round 4 itself. **P1 (more severe):** the legacy BIANNUAL override in
+  `evaluate_requirement_detail()` (predates due_date_type awareness
+  entirely) unconditionally overwrote round 4's correctly-anchored
+  certification-period due date with the newest expiration across _any_
+  record passing a bare `training_type` check — an EMT cert due in 30 days
+  could get silently replaced by an unrelated cert expiring next year,
+  which would then never surface in a 90-day at-risk forecast. Fixed by
+  skipping that override whenever the rolling/certification-period anchor
+  logic already computed the value. `check_requirement_progress` was
+  checked and does not share this bug — it only reads the already-computed
+  value rather than reassigning it. **P2:** `_anchor_records` dropped
+  every record with `completion_date is None` before a
+  certification-period anchor could see it, even though the column is
+  nullable and four other certification-matching sites in the same file
+  deliberately keep such a record via a `completion_date or date.min`
+  fallback; fixed by removing that filter and having each caller
+  (`_rolling_due_date`, which still needs a real date;
+  `_certification_due_date`, which doesn't) apply the correct convention
+  itself.
 
-Five new guard tests in this round (including one against the real batch
-path, not just the standalone check), all confirmed failing against the
-round-3 code before this fix. Full completion gate re-run green
-(10566/10566 backend). See `TR-17-training-core.md`'s Pass 3 section and
+Three new guard tests in round 5, all confirmed failing against the
+round-4 code before this fix. Full completion gate re-run green
+(10569/10569 backend). See `TR-17-training-core.md`'s Pass 3 section and
 the Log below for full detail on every round. Rotation row 17 stays ⏳
 awaiting merge. Next: 18 Training extended, once this PR merges.
 
 ---
+
+### 2026-09-04 — Feature 17 (Training core, pass 3, round 5) — PR #2220 merged at round 4's commit; round-5 fixes moved to a new PR
+
+**PR #2220 merged (rounds 1-4) before round 5's fixes could be pushed to
+it** — the owner merged while Codex's review of it was still in progress,
+the same race that hit #2213, #2217, and #2218 before it. Per CLAUDE.md
+pitfall #24, the merged branch is not reused: round 5's two fixes (the
+BIANNUAL-override clobber, the unknown-completion-date anchor exclusion)
+moved to a new branch off current `main` and a new PR,
+**[#2221](https://github.com/thegspiro/the-logbook/pull/2221)**
+(`claude/security-review-training-core-tr3-round5`), which also updates
+this doc's Log and Open PR entries to point at itself. See the Open PR
+section above for the full round-by-round write-up. Next: 18 Training
+extended, once the follow-up PR merges.
 
 ### 2026-09-04 — Feature 17 (Training core, pass 3, round 4) — PR #2218 merged at round 3's commit; round-4 fixes moved to a new PR
 
@@ -81,10 +114,9 @@ pitfall #24, the merged branch is not reused: round 4's three fixes
 (certification-period due dates, type-aware anchor matching, the
 batch-preload window exemption) moved to a new branch off current `main`
 and a new PR, **[#2220](https://github.com/thegspiro/the-logbook/pull/2220)**
-(`claude/security-review-training-core-tr3-round4`), which also updates
-this doc's Log and Open PR entries to point at itself. See the Open PR
-section above for the full round-by-round write-up. Next: 18 Training
-extended, once the follow-up PR merges.
+(`claude/security-review-training-core-tr3-round4`), which merged before
+round 5's fixes could be pushed — see the entry immediately above. Next:
+18 Training extended, once the follow-up PR merges.
 
 ### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2213 merged at its stale draft state; fixes moved to a new PR
 

@@ -519,6 +519,42 @@ class TestCertificationCompliance:
         assert progress.due_date == future_exp
         assert progress.days_until_due == 180
 
+    async def test_certification_period_anchor_includes_unknown_completion_date(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A matching certification with a known expiration but an unknown
+        completion date must still anchor the due date. Codex found
+        `_anchor_records` dropped any record with `completion_date is
+        None` before `_certification_due_date` ever saw it, even though
+        `completion_date` is nullable and every other certification-
+        matching site in this file deliberately still considers such a
+        record (via a `completion_date or date.min` sort fallback) rather
+        than excluding it.
+        """
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_cert_requirement(
+            db_session, org_id, name="EMT Certification"
+        )
+        future_exp = date.today() + timedelta(days=180)
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            course_name="EMT Certification",
+            training_type="certification",
+            hours_completed=0.0,
+            completion_date=None,
+            expiration_date=future_exp,
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.due_date == future_exp
+        assert progress.days_until_due == 180
+
     async def test_rolling_anchor_does_not_match_an_unrelated_record(
         self, db_session: AsyncSession, setup_org_and_user
     ):

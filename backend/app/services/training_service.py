@@ -427,6 +427,15 @@ class TrainingService:
         ``completed_records`` must ensure it isn't itself window-bounded
         (``_preload_window`` exempts rolling and certification-period
         requirements for this reason).
+
+        Does not filter on ``completion_date`` -- it's optional even on a
+        completed record, and the certification-matching logic elsewhere
+        (``r.completion_date or date.min``) deliberately still considers
+        such a record rather than dropping it; each caller here applies
+        that same convention itself, since a rolling anchor genuinely
+        cannot use a missing date (nothing to add the interval to) while a
+        certification-period anchor can (it only needs the record's
+        ``expiration_date``).
         """
         req_type = (
             requirement.requirement_type.value
@@ -447,8 +456,7 @@ class TrainingService:
         return [
             r
             for r in completed_records
-            if r.completion_date is not None
-            and self._anchor_matches(requirement, r, req_type)
+            if self._anchor_matches(requirement, r, req_type)
         ]
 
     async def _rolling_due_date(
@@ -472,7 +480,14 @@ class TrainingService:
         anchors = await self._anchor_records(
             requirement, user_id, organization_id, completed_records
         )
-        latest = max((r.completion_date for r in anchors), default=None)
+        # Unlike _certification_due_date, a rolling anchor genuinely cannot
+        # use a record with no completion_date -- there is no date to add
+        # the interval to -- so it's filtered out here rather than in
+        # _anchor_records, which both callers share.
+        latest = max(
+            (r.completion_date for r in anchors if r.completion_date is not None),
+            default=None,
+        )
         return latest + relativedelta(months=rolling_months) if latest else None
 
     async def _certification_due_date(
@@ -486,15 +501,19 @@ class TrainingService:
         current matching certification's own expiration date -- i.e. when
         it needs to be renewed. Mirrors the matching/selection
         `check_requirement_progress`'s own CERTIFICATION branch uses
-        (latest completed matching record, by completion date). Returns
-        ``None`` when the member holds no matching certification.
+        (latest completed matching record, by completion date -- falling
+        back to `date.min` for a matching record with an unknown
+        completion date, same as every other certification-matching site
+        in this file, rather than dropping it: it can still have a known
+        `expiration_date` worth reporting). Returns ``None`` when the
+        member holds no matching certification.
         """
         anchors = await self._anchor_records(
             requirement, user_id, organization_id, completed_records
         )
         if not anchors:
             return None
-        latest = max(anchors, key=lambda r: r.completion_date)
+        latest = max(anchors, key=lambda r: r.completion_date or date.min)
         return latest.expiration_date
 
     @staticmethod
@@ -722,11 +741,11 @@ class TrainingService:
         is_met = pct >= 100 and not cert_expired
 
         # Effective due date
+        rolling_months = get_rolling_period_months(req)
+        req_due_date_type = TrainingService._due_date_type_str(req)
         if req.due_date:
             effective_due_date = req.due_date
         else:
-            rolling_months = get_rolling_period_months(req)
-            req_due_date_type = TrainingService._due_date_type_str(req)
             if rolling_months or req_due_date_type == "certification_period":
                 # Rolling/certification-period due dates are anchored to a
                 # completion, not the window end: end_date is always `today`
@@ -759,16 +778,30 @@ class TrainingService:
                         else None
                     )
                 else:
-                    dated_anchors = [r for r in anchors if r.completion_date]
+                    # A matching record's completion_date can be unknown
+                    # even when it's completed and carries a known
+                    # expiration_date -- date.min is the same fallback
+                    # every other certification-matching site in this file
+                    # uses, rather than dropping such a record outright.
                     latest = (
-                        max(dated_anchors, key=lambda r: r.completion_date)
-                        if dated_anchors
+                        max(anchors, key=lambda r: r.completion_date or date.min)
+                        if anchors
                         else None
                     )
                     effective_due_date = latest.expiration_date if latest else None
             else:
                 effective_due_date = end_date if end_date else None
-        if freq == RequirementFrequency.BIANNUAL.value:
+        # This legacy BIANNUAL override predates due_date_type awareness and
+        # is skipped for rolling/certification-period requirements: it
+        # selects the newest expiration across *any* record with a bare
+        # training_type filter (not _anchor_matches), which can overwrite
+        # the just-computed, correctly-anchored due date with an unrelated
+        # certification's expiration -- e.g. a biannual EMT cert due in 30
+        # days getting silently replaced by an unrelated cert expiring next
+        # year, which would then never surface in a 90-day at-risk forecast.
+        if freq == RequirementFrequency.BIANNUAL.value and not (
+            rolling_months or req_due_date_type == "certification_period"
+        ):
             with_exp = [r for r in completed if r.expiration_date]
             if req.training_type:
                 with_exp = [r for r in with_exp if r.training_type == req.training_type]
