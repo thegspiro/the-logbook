@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#pending]** (branch `claude/security-review-training-core-tr3-followup`)
+**[#2218](https://github.com/thegspiro/the-logbook/pull/2218)** (branch
+`claude/security-review-training-core-tr3-followup`)
 — Feature 17, Training core, pass 3 follow-up. #2217 (the pass-3 PR
 itself) merged at its stale first-draft state (`db454093`, "no findings")
 — the owner merged it while Codex's review of that same draft was still in
