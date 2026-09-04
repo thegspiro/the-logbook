@@ -19,8 +19,13 @@
 **PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged
 at its stale first-draft state before this correction could be pushed to
 it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
-`PROGRESS.md`'s Log for detail). The correction below and its fix carried
-forward on a new branch/PR, `claude/security-review-training-core-tr3-followup`.
+`PROGRESS.md`'s Log for detail). The correction (round 1) and its fix
+carried forward to [#2218](https://github.com/thegspiro/the-logbook/pull/2218)
+(`claude/security-review-training-core-tr3-followup`), which itself merged
+at round 3's commit before round 4's fixes could be pushed — the identical
+race, again — moving rounds 2-4 forward once more to
+[#2219](https://github.com/thegspiro/the-logbook/pull/2219)
+(`claude/security-review-training-core-tr3-round4`).
 **Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
 
 > **Correction (Codex review of this PR).** The first draft of this section
@@ -280,6 +285,72 @@ test_days_until_due_for_rolling_requirement_anchors_on_last_completion` and
 for `evaluate_requirement_detail`. All four confirmed failing (reproducing
 `due_date=today`/`days_until_due=0`) against the round-2 code before the
 round-3 fix, via `git stash` on just `training_service.py`.
+
+**Round 4 — Codex found three more gaps in round 3's own rolling-anchor
+fix**, all real:
+
+1. **No `certification_period` branch at all.** The fallback chain
+   (`explicit due_date` → `rolling` anchor → `calendar_period` window end)
+   never checked for `due_date_type="certification_period"`, so a
+   certification-period requirement fell through to the window-end
+   fallback: `None` for a BIANNUAL-frequency cert requirement (no window
+   at all) or the calendar year end for any other frequency — neither of
+   which is the certificate's actual expiration date. A
+   certification-period requirement never resets on a schedule; it comes
+   due when the currently-held certificate itself expires. Fixed with a
+   new `_certification_due_date()` helper: the latest matching completed
+   record's own `expiration_date` (mirroring `check_requirement_progress`'s
+   own CERTIFICATION branch — latest matching completion, by completion
+   date, then read that record's expiration), `None` when the member holds
+   no matching certification.
+2. **Rolling/certification anchor matching used a bare `training_type`
+   check, over- and under-matching in opposite directions.** When
+   `training_type` was unset (common for a course-specific requirement
+   restricted by `required_courses` instead), the round-3 filter matched
+   _any_ completed record of any type — Codex's example: an overdue
+   course-specific requirement gets a future deadline anchored on an
+   unrelated recent record. Swapping in `certification_record_matches`
+   wholesale (the obvious fix, and Codex's own suggested reference) turned
+   out to be wrong in the opposite direction for non-CERTIFICATION types:
+   its OR-of-criteria semantics report _no_ match at all for a requirement
+   that legitimately restricts nothing (e.g. "24 hours of any training
+   every 24 months," a valid, common rolling HOURS configuration) — a
+   round-1-draft regression caught only by this pass's own tests before
+   it shipped. Fixed with a new `_anchor_matches()` static method that
+   dispatches on requirement type and mirrors each type's own crediting
+   filter exactly: `certification_record_matches` for CERTIFICATION;
+   `required_courses` membership for COURSES; `training_type` AND
+   `required_courses` (each optional) for HOURS; `training_type` only for
+   SHIFTS/CALLS; `training_type` or name-substring for the
+   skills/checklist fallback. Used by both `check_requirement_progress`
+   (via a new shared `_anchor_records()`) and
+   `evaluate_requirement_detail()`, replacing round 3's ad-hoc filters in
+   both.
+3. **The batch/preload path's window bound excludes the very completions
+   an overdue anchor needs.** `get_requirements_progress_for` preloads
+   `completed_records` once via `_preload_window`, bounded to the union of
+   every requirement's own evaluation window — for an ordinary rolling
+   requirement, that window is `today - rolling_period_months` to `today`.
+   An _overdue_ rolling requirement's anchor is, by definition, older than
+   that window, so the preload silently excluded it and the batch/API/MCP
+   path reported `None` instead of a correctly negative
+   `days_until_due` — while the same requirement, checked standalone
+   (`completed_records=None`, an unbounded query), reported correctly.
+   Fixed by extending `_preload_window`'s existing unbounded-window
+   exemption (already applied to CERTIFICATION and BIANNUAL-hours, for the
+   identical reason) to any requirement using a rolling or
+   certification-period due date.
+
+**Guard tests (round 4):** `test_training_compliance_integration.py::
+TestCertificationCompliance::test_certification_period_due_date_is_the_certs_own_expiration`
+and `::test_rolling_anchor_does_not_match_an_unrelated_record` (finding 2,
+inserts a real FK-satisfying course + an unrelated newer record via raw SQL
+to prove the anchor picks the right one) for `check_requirement_progress`;
+`TestMultipleRequirements::test_rolling_due_date_survives_the_batch_preload_window`
+(finding 3) for `get_all_requirements_progress`; and the
+`test_training_compliance.py::TestEvaluateRequirementDetailFields` mirrors
+of findings 1 and 2 for `evaluate_requirement_detail`. All five confirmed
+failing against the round-3 code before this fix.
 
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 

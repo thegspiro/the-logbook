@@ -1083,6 +1083,61 @@ class TestEvaluateRequirementDetailFields:
         assert result["due_date"] is None
         assert result["days_until_due"] is None
 
+    def test_rolling_anchor_does_not_match_an_unrelated_record(self):
+        """A course-specific rolling requirement (required_courses set, no
+        training_type) must not be anchored on some unrelated record just
+        because it's the member's most recent completion. Codex's exact
+        example: filtering the anchor by training_type alone skips the
+        filter entirely when training_type is unset, matching *any* record
+        of any type. Proven here with a more recent unrelated-course record
+        present -- a training_type-only filter would anchor on it instead.
+        """
+        req = _make_requirement(
+            due_date_type="rolling",
+            rolling_period_months=24,
+            due_date=None,
+            required_courses=["course-abc"],
+        )
+        satisfying = _make_record(
+            course_id="course-abc", completion_date=date(2025, 1, 10)
+        )
+        unrelated = _make_record(
+            course_id="course-xyz", completion_date=date(2026, 5, 1)
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, [satisfying, unrelated], date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2027, 1, 10))
+
+    def test_days_until_due_for_certification_period_requirement_uses_cert_expiration(
+        self,
+    ):
+        """A certification-period requirement never resets on a schedule --
+        it comes due when the held certificate itself expires. Codex found
+        the rolling-anchor fallback chain had no branch at all for
+        due_date_type="certification_period", so it fell through to the
+        calendar-period window-end fallback instead of the certificate's
+        actual expiration.
+        """
+        req = _make_requirement(
+            requirement_type=SimpleNamespace(value="certification"),
+            due_date_type="certification_period",
+            due_date=None,
+            required_hours=None,
+        )
+        records = [
+            _make_record(
+                course_name="Test Requirement Cert",
+                completion_date=date(2025, 1, 10),
+                expiration_date=date(2027, 1, 10),
+            ),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2027, 1, 10))
+        assert result["days_until_due"] == (date(2027, 1, 10) - date(2026, 6, 15)).days
+
 
 # =====================================================
 # check_requirement_progress — the dashboard path
