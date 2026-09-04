@@ -16,12 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 18 (Training extended), pass 3 — branch
-`claude/security-review-training-extended`. PR pending open. No findings
-requiring a code fix (the one substantive change since pass 2,
+[#2223](https://github.com/thegspiro/the-logbook/pull/2223) — Feature 18
+(Training extended), pass 3 — branch
+`claude/security-review-training-extended`. No findings requiring a code
+fix (the one substantive change since pass 2,
 `external_training_service.py`'s DNS-rebinding hardening, was already fixed
 and tested by the repo owner outside this rotation — this pass verified it
 and corrected `KNOWN_LIMITATIONS.md`'s stale eight-site count to seven).
+Completion gate fully green, including `eslint .` (ran in background,
+completed clean after the PR was opened).
 
 ---
 

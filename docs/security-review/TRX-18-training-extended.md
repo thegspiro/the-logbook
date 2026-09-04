@@ -536,7 +536,7 @@ commands above) was run directly and is green, including the equivalent
 
 ## Pass 3 (2026-09-04)
 
-**Prefix:** `TRX3` · **PR:** (pending)
+**Prefix:** `TRX3` · **PR:** [#2223](https://github.com/thegspiro/the-logbook/pull/2223)
 
 **Scope check:** diffed the current tree against `e094e66e1c94604e00c9143e73bc27c8cb0f1014`
 (the pass-2 merge commit for PR #2012) across all fourteen pass-2 files. Only
