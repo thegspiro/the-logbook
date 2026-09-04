@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The org chart's link line is for the people who maintain it (2026-09-04)
+
+**Changed**
+
+- **A seat filled from a roster record no longer explains itself to
+  everyone.** Each seat whose holders come from a position or rank carried
+  a "Linked to ..." line naming that record. It answers "why can I not type
+  a name here", which is a question only somebody who can edit the chart
+  asks; for a member looking up the chain of command it is application
+  plumbing they cannot act on. The line is now shown only to people who can
+  manage the chart, in both the diagram and the outline. Who holds a seat is
+  unchanged for every reader.
+
+### A member can see their own hours and calls for the year (2026-09-04)
+
+**Added**
+
+- **My Shifts has a third view, Hours.** It opens on last month, this month
+  and the year to date, then lists every month of the selected year with the
+  shifts worked, hours credited and calls responded to. Until now a member
+  could see the hours on each past shift but had no total for a month or a
+  year, so "how many hours do I have this year?" was a question only an
+  officer with the department-wide report could answer.
+- **`GET /api/v1/scheduling/my-hours-history`** returns that year, month by
+  month, plus the current and previous month. It reports the caller's own
+  attendance and needs no permission beyond being signed in — the
+  department-wide member-hours report, which names every member, stays behind
+  `scheduling.report`.
+- **Credited and pending hours are reported separately.** Hours count once an
+  officer finalizes the shift, which is the rule the department's report
+  already applies, so a member's number and their officer's number agree.
+  Time on a shift still awaiting close-out is shown as its own line rather
+  than folded into the total, so a figure never drops without explanation.
+- **The previous month is reported whatever year is being viewed**, because
+  every January the month that just ended is in the previous year — and it is
+  the figure the card exists to show.
+- The calls column is dropped entirely for a department whose call tracking
+  is off, rather than showing a column of zeros that reads as a broken
+  counter.
+
+
 ### Checklist officers and store managers can open the admin hub (2026-09-04)
 
 **Fixed**

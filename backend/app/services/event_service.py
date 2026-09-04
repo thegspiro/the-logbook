@@ -15,9 +15,9 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
@@ -3275,15 +3275,40 @@ class EventService:
         Returns:
             Tuple of (stats_dict, error_message)
         """
-        # Get event
-        result = await self.db.execute(select(Event).where(Event.id == str(event_id)))
-        event = result.scalar_one_or_none()
+        # The organizer rides along on the event fetch rather than costing a
+        # query of its own: this screen polls every ten seconds, so a second
+        # round trip here is one per poll per open dashboard. The join is
+        # constrained to the event's own organization, so a created_by pointing
+        # outside it resolves to no row rather than naming a stranger.
+        creator = aliased(User)
+        result = await self.db.execute(
+            select(Event, creator)
+            .outerjoin(
+                creator,
+                and_(
+                    creator.id == Event.created_by,
+                    creator.organization_id == Event.organization_id,
+                ),
+            )
+            .where(Event.id == str(event_id))
+        )
+        row = result.first()
+        event = row[0] if row else None
 
         if not event:
             return None, "Event not found"
 
         if event.organization_id != organization_id:
             return None, "Event not found in your organization"
+
+        creator_row = row[1]
+        created_by_name = None
+        if creator_row:
+            created_by_name = (
+                f"{creator_row.first_name or ''} "
+                f"{creator_row.last_name or ''}".strip()
+                or creator_row.username
+            )
 
         # Use the same check-in window logic as the QR self-check-in page
         now = datetime.now(dt_timezone.utc)
@@ -3374,6 +3399,7 @@ class EventService:
             "event_id": str(event.id),
             "event_name": event.title,
             "event_type": event.event_type.value,
+            "created_by_name": created_by_name,
             "start_datetime": event.start_datetime,
             "end_datetime": event.end_datetime,
             "is_check_in_active": is_check_in_active,
