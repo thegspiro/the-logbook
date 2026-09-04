@@ -19,12 +19,15 @@ feature. The rotation cannot outrun its own review queue.
 [#2223](https://github.com/thegspiro/the-logbook/pull/2223) — Feature 18
 (Training extended), pass 3 — branch
 `claude/security-review-training-extended`. No findings requiring a code
-fix (the one substantive change since pass 2,
-`external_training_service.py`'s DNS-rebinding hardening, was already fixed
-and tested by the repo owner outside this rotation — this pass verified it
-and corrected `KNOWN_LIMITATIONS.md`'s stale eight-site count to seven).
-Completion gate fully green, including `eslint .` (ran in background,
-completed clean after the PR was opened).
+fix. A Codex review round caught two doc-accuracy corrections, both
+applied: `push_service.py` was also independently DNS-rebinding-hardened
+(a second, separate fix the pass's own diff-scope never looked at, since
+it isn't one of this feature's fourteen files) — `KNOWN_LIMITATIONS.md`'s
+affected-site count corrected twice in this pass, eight → seven → six; and
+a "Verified good" bullet undercounted its own `git diff --stat` command's
+output (six files, not four) by silently excluding three out-of-scope
+files instead of naming them. Completion gate fully green, including
+`eslint .` (ran in background, completed clean after the PR was opened).
 
 ---
 

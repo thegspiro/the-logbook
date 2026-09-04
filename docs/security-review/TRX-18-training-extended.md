@@ -614,6 +614,34 @@ paragraph naming the closure and its mechanism (see that file for the
 updated text) rather than re-writing a fix that already exists and is
 already tested.
 
+**A Codex review round on this pass's own PR (#2223) caught two further
+corrections, both applied:**
+
+1. (**P2**) `push_service.py` — listed in `KNOWN_LIMITATIONS.md` as still
+   needing a transport-specific fix (it doesn't use `httpx`, so the
+   `create_integration_client`/`SSRFSafeAsyncTransport` remediation
+   wouldn't reach it) — was itself independently closed the same day as
+   `external_training_service.py`, by a separate commit (`d50a9037`,
+   "Harden web push delivery against DNS rebinding") this pass's diff-scope
+   check never looked at, because `push_service.py` isn't one of this
+   feature's fourteen files and so was never diffed. Verified directly:
+   `_resolve_public_address()` resolves once and fails closed on a mixed or
+   non-global answer set, and `_send_one` passes `_pinned_session()`'s
+   `requests.Session` (mounted with `_PinnedHTTPSAdapter`, which connects
+   to the validated IP while still asserting the original hostname for TLS)
+   straight into `webpush(requests_session=session)` — the same
+   resolve-once-and-pin shape, for the one transport family
+   (`create_integration_client`'s siblings + `push_service.py`'s own) that
+   still needed a bespoke non-`httpx` fix. **Fix:** removed
+   `push_service.py` from `KNOWN_LIMITATIONS.md`'s affected-site list too,
+   correcting the count a second time in the same pass, from seven to six,
+   with its own paragraph naming the mechanism.
+2. (**P2**) This section's own "Verified good" scope-check bullet (below)
+   understated what its stated `git diff --stat` command actually returns —
+   six files, not four — by silently excluding three files that are
+   legitimately out of scope (feature 17's own) without saying so. **Fix:**
+   rewrote the bullet to list and classify all six.
+
 ### Re-verification of pass-1/pass-2 fixes and claims
 
 Re-read the current code directly for each (not re-cited from the doc):
@@ -646,14 +674,26 @@ Re-read the current code directly for each (not re-cited from the doc):
   closes a race where a GET issued before a mutation or logout could still
   write its stale response into the cache after the purge. Read in full;
   sound, and not this feature's to claim credit for or re-review further.
-- **Route/model/migration surface stable.** No new endpoint file, model
-  change, or training-extended migration since pass 2 (checked directly:
-  `git diff --stat` against the pass-2 merge commit across
+- **Route/model/migration surface stable.** `git diff --stat` against the
+  pass-2 merge commit across the broader glob
   `api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
-  `services/*training*`, `services/course_*`, and `schemas/*training*`
-  reports only the four files already accounted for above, none of which
-  fall in this feature's twelve-file scope except `external_training.py`/
-  `external_training_service.py`).
+  `services/*training*`, `services/course_*`, `schemas/*training*` (wider
+  than this feature's own twelve-file list, to catch a new file the
+  declared list wouldn't) returns **six** files, not four as an earlier
+  draft of this bullet claimed (caught by a Codex review of this pass's own
+  PR): the three already covered above
+  (`external_training.py`/`external_training_service.py`/
+  `schemas/training.py`), plus `api/v1/endpoints/training.py`,
+  `services/training_service.py`, and `services/training_compliance.py`.
+  Those three are **feature 17's (Training core) own files, not this
+  feature's** — matched only because the glob is name-based, not
+  scope-based — and their 700+-line diff is the TR3-1 fix arc that pass
+  reviewed and merged the same day (PR #2222). Confirmed by checking each
+  filename directly against this feature's twelve-file list (`training_
+submissions`/`training_waivers`/`training_enhancements`/
+  `external_training`/`course_cohorts`/`course_syllabus`, endpoint and
+  service pairs): none of the three match. No new endpoint file, model
+  change, or training-extended migration since pass 2.
 
 ## Corrections to prior write-ups
 
