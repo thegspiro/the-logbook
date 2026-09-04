@@ -1304,6 +1304,34 @@ class EventService:
         if rsvp_deadline and datetime.now(dt_timezone.utc) > rsvp_deadline:
             return None, "RSVP deadline has passed"
 
+        # Fetched here, ahead of the guest/capacity checks below, so those
+        # checks can be computed from what will actually end up on the row —
+        # not from the raw request alone. EV-21's exclude_unset=True update
+        # means an existing RSVP's guest_count survives untouched when a
+        # client omits it (e.g. a PATCH-shaped `{"status": "going"}`), so
+        # `rsvp_data.guest_count` (which defaults to 0) and the row's true
+        # post-update guest_count can now genuinely differ.
+        existing_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
+        )
+        existing_rsvp = existing_result.scalar_one_or_none()
+
+        # The count every guest/capacity check below must use: the incoming
+        # value when the client actually sent one (a new RSVP always counts
+        # as sending one, via the schema default), otherwise whatever is
+        # already stored — because that stored value is what exclude_unset
+        # will leave in place. Using rsvp_data.guest_count directly here would
+        # let an update that omits guest_count evade every check below by
+        # appearing to be a 1-seat party while the row keeps its real,
+        # possibly much larger, party size.
+        effective_guest_count = (
+            rsvp_data.guest_count
+            if "guest_count" in rsvp_data.model_fields_set or existing_rsvp is None
+            else (existing_rsvp.guest_count or 0)
+        )
+
         # Validate RSVP status against allowed statuses
         allowed_statuses = event.allowed_rsvp_statuses or DEFAULT_ALLOWED_RSVP_STATUSES
         if rsvp_data.status not in allowed_statuses:
@@ -1323,7 +1351,7 @@ class EventService:
         # enforced the flag — the modal prefills that historical count, so an
         # unconditional guard rejected their decline outright and left them
         # holding seats they had tried to give back.
-        requested_guests = rsvp_data.guest_count or 0
+        requested_guests = effective_guest_count
         if rsvp_data.status == RSVPStatus.GOING.value:
             if requested_guests and not event.allow_guests:
                 return None, "This event does not allow guests"
@@ -1332,6 +1360,7 @@ class EventService:
             # rather than leaving the stale count is what lets a legacy guest
             # party actually release its capacity by declining.
             requested_guests = 0
+            effective_guest_count = 0
             rsvp_data = rsvp_data.model_copy(update={"guest_count": 0})
 
         # Refused here, with the other guards, rather than down at the capacity
@@ -1347,7 +1376,7 @@ class EventService:
         # to wait for, and since promote_from_waitlist refuses to skip the head
         # of the queue, admitting one would block everybody behind it.
         if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
-            party_size = 1 + (rsvp_data.guest_count or 0)
+            party_size = 1 + effective_guest_count
             if party_size > event.max_attendees:
                 return (
                     None,
@@ -1362,13 +1391,8 @@ class EventService:
             if phase_warning:
                 return None, PHASE_GATE_PREFIX + phase_warning
 
-        # Check if RSVP already exists
-        existing_result = await self.db.execute(
-            select(EventRSVP)
-            .where(EventRSVP.event_id == str(event_id))
-            .where(EventRSVP.user_id == str(user_id))
-        )
-        existing_rsvp = existing_result.scalar_one_or_none()
+        # existing_rsvp was already fetched above, ahead of the guest/capacity
+        # checks, so effective_guest_count could be computed from it.
 
         # Seats this member held before the write, for the promotion decision
         # below. Reducing a guest count while staying "going" frees capacity
@@ -1450,7 +1474,7 @@ class EventService:
             # party of three does not fit a one-seat gap. (A party too big for
             # the event at all was already refused above, before this function
             # touched the session.)
-            requested_seats = 1 + (rsvp_data.guest_count or 0)
+            requested_seats = 1 + effective_guest_count
             if occupied_seats + requested_seats > event.max_attendees:
                 # Auto-waitlist instead of rejecting
                 rsvp.status = RSVPStatus.WAITLISTED

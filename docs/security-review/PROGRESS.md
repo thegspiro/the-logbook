@@ -24,22 +24,26 @@ itself) merged at its stale first-draft state (`5b70834e`, "no findings")
 in progress, before the corrected findings and fixes could be pushed to
 it (CLAUDE.md pitfall #24: never reuse a branch whose PR has merged, so
 the fixes moved to a fresh branch/PR off current `main`, exactly as
-PR #2212 did for SCH-12). This PR carries forward everything Codex's
-review of #2213 found real: **3 fixed** — EV-20 (P1,
-`EligibleMemberResponse.email` required `str` 500'd the whole check-in
-roster whenever any member hid their email), EV-21 (P1,
-`create_or_update_rsvp`'s full-dump update silently wiped
-`dietary_restrictions`/`accessibility_needs` on any unrelated edit — a
-pre-existing bug this pass owns per CLAUDE.md), EV-22 (P2,
-`RecurringEventCreate` was missing `attendee_visibility` entirely, so a
-series' explicit visibility choice was silently dropped) — and **2
-flagged**: EV-23 (series RSVP never shows the training phase-gate warning
-it claims to have confirmed), EV-24 (editing an existing waitlisted RSVP
-can promote it out of queue order). Also carries the events-specific MCP
-tool review Codex's scope-gap comment prompted. See the Log entries below
-for the full detail. Full completion gate green (10553/10553 backend, 0
-frontend errors). Rotation row 16 stays ⏳ awaiting merge. Next: 17
-Training core, once this PR merges.
+PR #2212 did for SCH-12). Two Codex rounds against this PR itself, both
+addressed: **4 fixed** — EV-20 (P1, `EligibleMemberResponse.email`
+required `str` 500'd the whole check-in roster whenever any member hid
+their email), EV-21 (P1, `create_or_update_rsvp`'s full-dump update
+silently wiped `dietary_restrictions`/`accessibility_needs` on any
+unrelated edit — a pre-existing bug this pass owns per CLAUDE.md), EV-22
+(P2, `RecurringEventCreate` was missing `attendee_visibility` entirely, so
+a series' explicit visibility choice was silently dropped), EV-25 (P1,
+found on round 2 reviewing EV-21's own fix — the guest/capacity checks
+kept reading the raw request's `guest_count` instead of what
+`exclude_unset` would actually leave stored, so an update omitting
+`guest_count` could evade capacity checks and oversubscribe an event; also
+closed the related P2 that a member could no longer clear a saved
+accommodation field at all). **2 flagged**: EV-23 (series RSVP never shows
+the training phase-gate warning it claims to have confirmed), EV-24
+(editing an existing waitlisted RSVP can promote it out of queue order).
+Also carries the events-specific MCP tool review Codex's scope-gap comment
+prompted. See the Log entries below for the full detail. Full completion
+gate green (10554/10554 backend, 0 frontend errors). Rotation row 16 stays
+⏳ awaiting merge. Next: 17 Training core, once this PR merges.
 
 ---
 
@@ -56,6 +60,48 @@ EV-21, EV-22) moved to a new branch off current `main` and a new PR,
 updates this doc's Log and Open PR entries to point at itself. See the
 entry immediately below for the full corrected write-up. Next: 17 Training
 core, once the follow-up PR merges.
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2216 round 2: 1 more P1 fix (EV-25) + accommodation-clear gap closed
+
+Second Codex round, against PR #2216 (the round-1 fix PR itself). Found a
+real gap in round 1's own EV-21 fix: `create_or_update_rsvp`'s
+`allow_guests` check, party-size guard, and occupied-seats capacity sum all
+read `rsvp_data.guest_count` directly. That was safe under the old
+full-dump update (request value and stored value were always the same by
+construction) but not under EV-21's `exclude_unset=True` — an update that
+omits `guest_count` now preserves the existing row's value (correct for
+the write) while every guest/capacity check still evaluated the
+omitted-and-zero-defaulting request value instead. Concretely: a
+three-seat waitlisted party resubmitting `{"status": "going"}` (omitting
+`guest_count`) would be evaluated as a one-seat party, wrongly promoted
+into a two-seat gap, while the row silently kept its real three-seat
+`guest_count` — oversubscribing the event. Not reachable through this
+app's own RSVP modal (always sends `guest_count` explicitly), but
+reachable by any other API client.
+
+**Fixed (EV-25, P1):** `existing_rsvp` is now fetched ahead of the
+guest/capacity guards (not just ahead of the update-application branch),
+and a single `effective_guest_count` is resolved once — the incoming value
+when the client actually sent one, otherwise what's already on the row —
+and used by every guest/capacity check instead of the raw request value.
+Guard test reproduces the exact scenario and was confirmed to fail without
+the fix before being committed with it.
+
+**Also closed, same round (P2):** round 1's omit-when-blank behavior for
+`dietary_restrictions`/`accessibility_needs` correctly stopped the silent
+wipe, but left no way to distinguish "member didn't touch this field" from
+"member touched it and emptied it on purpose" — both looked like a blank
+box. Net effect: once set, these fields could never be cleared again, only
+overwritten with different text. Fixed with per-field `dietaryTouched`/
+`accessibilityTouched` tracking in `useRSVPForm.ts`, set on that field's
+own `onChange` and reset whenever the modal opens; the field is only
+included in the submit payload (with an explicit `null` to actually clear
+it) when it was touched this time, otherwise omitted exactly as before.
+
+Full completion gate re-run and green: 674 events-scoped, 10554 full
+backend suite (+1 guard test), 0 frontend errors. Findings doc updated in
+place under EV-21/EV-25. Rotation row 16 stays ⏳ awaiting merge. Next: 17
+Training core, once this PR merges.
 
 ### 2026-09-04 — Feature 16 (Events & requests, pass 3) — Codex follow-up (same PR): 3 fixes (2 P1), 2 flagged, 1 scope correction
 

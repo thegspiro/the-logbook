@@ -292,12 +292,16 @@ export interface RSVP {
 export interface RSVPCreate {
   status: RSVPStatus;
   guest_count?: number | undefined;
-  // string clears it explicitly by design (see useRSVPForm) — omitted
-  // dietary_restrictions/accessibility_needs are safe to skip on update
-  // because the modal never has a real value to send back for them.
+  // An explicit null clears each field; omitting the key on an update leaves
+  // the stored value alone (backend applies exclude_unset). For
+  // dietary_restrictions/accessibility_needs specifically, the modal only
+  // ever sends the key once the member has actually touched that field this
+  // time it was open — see useRSVPForm's *Touched flags — since the field
+  // always starts blank regardless of what is stored (PHI, cacheable
+  // response) and a blank box alone can't mean "clear it".
   notes?: string | null | undefined;
-  dietary_restrictions?: string | undefined;
-  accessibility_needs?: string | undefined;
+  dietary_restrictions?: string | null | undefined;
+  accessibility_needs?: string | null | undefined;
 }
 
 export interface CheckInRequest {

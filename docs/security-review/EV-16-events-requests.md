@@ -13,7 +13,7 @@ read, extracted from `event_requests.py`)
 
 ---
 
-## Pass 3 (2026-09-04) — Codex follow-up: 3 fixes (2 P1), 2 flagged, 1 scope correction
+## Pass 3 (2026-09-04) — Codex follow-up, two rounds: 4 fixes (3 P1), 2 flagged, 1 scope correction
 
 **PR:** [#2213](https://github.com/thegspiro/the-logbook/pull/2213) merged
 at its stale first-draft state before this correction could be pushed to
@@ -247,9 +247,7 @@ stored value alone (CLAUDE.md Pitfall #1's update mirror). This also
 required making the frontend's own "clear notes by blanking the box"
 behavior explicit rather than implicit: `notes` is now always sent
 (`rsvpNotes.trim() || null`, never omitted) so a member who deletes their
-note still gets it cleared; `dietary_restrictions`/`accessibility_needs`
-keep the existing omit-when-blank behavior, which is now _correct_ instead
-of accidentally safe. `RSVPCreate.notes` widened to `string | null |
+note still gets it cleared. `RSVPCreate.notes` widened to `string | null |
 undefined` in `types/event.ts` to carry the explicit null.
 
 **Guard test:**
@@ -259,6 +257,66 @@ and asserts both survive unchanged; a third submission that explicitly
 sends `dietary_restrictions=""` confirms an actual edit still clears it
 (exclude_unset protects an _omitted_ field, not one the client genuinely
 changed).
+
+**Second round (Codex review of the follow-up PR): two more real gaps in
+this same fix.**
+
+1. **P1 — capacity/guest checks kept reading the raw request value, not
+   what would actually end up stored.** `create_or_update_rsvp`'s
+   `allow_guests` check, party-size guard, and the occupied-seats capacity
+   sum all read `rsvp_data.guest_count` directly. Before this fix that was
+   always correct, because the old full-dump update meant the request
+   value and the stored value were the same thing by construction. After
+   exclude_unset, they can genuinely diverge: a client that omits
+   `guest_count` on an update now has it preserved from the existing row
+   (correct for the write), but every guest/capacity check still evaluated
+   the omitted-and-therefore-zero-defaulting request value instead — so a
+   waitlisted three-seat party resubmitting `{"status": "going"}` (omitting
+   `guest_count` entirely) would be evaluated as a one-seat party, wrongly
+   promoted into a two-seat gap, while the row silently kept its real
+   three-seat `guest_count` — oversubscribing the event by the difference.
+   Not reachable through this app's own RSVP modal (`useRSVPForm.ts`
+   always sends `guest_count` explicitly), but reachable by any other API
+   client, and the check that exists to prevent oversubscription must not
+   depend on which client is calling it.
+
+   **Fix (EV-25 — P1):** the `existing_rsvp` fetch moved earlier in the
+   function (ahead of the guest/capacity guards, not just ahead of the
+   update-application branch), and a single `effective_guest_count` is
+   resolved once — the incoming value when the client actually sent one
+   (`"guest_count" in rsvp_data.model_fields_set`, or always for a brand
+   new RSVP), otherwise the value already on the row. Every guest/capacity
+   check (`requested_guests`, `party_size`, `requested_seats`) now reads
+   this resolved value instead of `rsvp_data.guest_count` directly; the
+   decline branch's forced `guest_count: 0` sets `effective_guest_count = 0`
+   alongside it, so the two never disagree. Guard test:
+   `test_event_lifecycle.py::TestEventRSVP::
+test_partial_update_uses_the_stored_guest_count_for_capacity` —
+   reproduces the exact scenario (a 3-seat waitlisted party resubmitting
+   with `guest_count` omitted must stay waitlisted, not get promoted into a
+   2-seat gap); confirmed to fail without the fix before being committed
+   with it.
+
+2. **P2 — no interaction in the modal could actually clear a saved
+   accommodation field.** The first round's omit-when-blank behavior for
+   `dietary_restrictions`/`accessibility_needs` is correct for the
+   "member didn't touch this field" case, but the modal has no other state
+   to distinguish that from "member touched it and emptied it on purpose" —
+   both looked like a blank box being submitted. The net effect: once a
+   member had a saved allergy or accessibility note, nothing in this modal
+   could ever remove it again, only overwrite it with different non-empty
+   text.
+
+   **Fix:** `useRSVPForm.ts` now tracks `dietaryTouched`/
+   `accessibilityTouched` per field — set the moment the member's `onChange`
+   fires for that field, reset (to untouched, alongside the value) whenever
+   the modal opens. The submit payload includes `dietary_restrictions`/
+   `accessibility_needs` (with an explicit `null` if left empty) only when
+   the corresponding field was touched this time the modal was open;
+   otherwise the key is omitted exactly as before, still relying on
+   `exclude_unset` to leave the stored value alone. `RSVPCreate`'s two
+   fields widened to `string | null | undefined` in `types/event.ts` to
+   carry the explicit clear.
 
 ### EV-22 — P2 (schema gap, XC-1 adjacent) — `RecurringEventCreate` had no `attendee_visibility` field; a series' visibility choice was silently dropped — ✅ FIXED
 
@@ -383,8 +441,8 @@ still filed as EV-16, feature 16) → see `PROGRESS.md`.
 | `black --check app/ tests/ alembic/`                          | ✅ 1453 files unchanged                              |
 | `isort --check-only app/ tests/ alembic/`                     | ✅ clean                                             |
 | `python3 scripts/validate_migrations.py --strict`             | ✅ single head, 414 revisions (no schema change)     |
-| `pytest tests/ -k "event"`                                    | ✅ 673 passed, 1 skipped (pre-existing)              |
-| `pytest tests/` (full backend suite)                          | ✅ 10553 passed, 21 skipped (pre-existing), 0 failed |
+| `pytest tests/ -k "event"`                                    | ✅ 674 passed, 1 skipped (pre-existing)              |
+| `pytest tests/` (full backend suite)                          | ✅ 10554 passed, 21 skipped (pre-existing), 0 failed |
 | `tsc --noEmit`                                                | ✅ 0 errors                                          |
 | `eslint .`                                                    | ✅ 0 errors                                          |
 | `npx vitest run src/pages/EventDetailPage.test.tsx src/hooks` | ✅ 224 passed (26 files)                             |

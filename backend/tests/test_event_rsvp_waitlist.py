@@ -108,7 +108,9 @@ class TestRsvpGuards:
 
     async def test_guests_rejected_when_the_event_disallows_them(self):
         """allow_guests existed on the model for years and was read nowhere."""
-        db = _db([_one(_event(allow_guests=False))])
+        # event, no existing RSVP — fetched ahead of this guard now so
+        # effective_guest_count can be resolved for it (EV-25).
+        db = _db([_one(_event(allow_guests=False)), _one(None)])
         rsvp, err = await EventService(db).create_or_update_rsvp(
             "e1", "u1", RSVPCreate(status="going", guest_count=2), "org-1"
         )
@@ -149,7 +151,8 @@ class TestRsvpGuards:
 
     async def test_disallowed_status(self):
         ev = _event(allowed_rsvp_statuses=["going"])
-        rsvp, err = await self._run(_db([_one(ev)]), status="not_going")
+        # event, no existing RSVP — fetched ahead of this guard now (EV-25).
+        rsvp, err = await self._run(_db([_one(ev), _one(None)]), status="not_going")
         assert "is not allowed" in err
 
     async def test_draft_event_rejected(self):
