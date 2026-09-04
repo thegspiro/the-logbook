@@ -1,7 +1,7 @@
 """Add shifts.late_signup_until for leadership-opened late signup
 
 Revision ID: c9f2a4b71d38
-Revises: bbdaca0844df
+Revises: d1c7f4a92e63
 Create Date: 2026-09-04
 
 Signup now closes when a shift starts. This column is the per-shift escape
@@ -16,7 +16,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "c9f2a4b71d38"
-down_revision = "bbdaca0844df"
+down_revision = "d1c7f4a92e63"
 branch_labels = None
 depends_on = None
 
