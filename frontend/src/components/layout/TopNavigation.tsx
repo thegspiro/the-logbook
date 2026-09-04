@@ -261,7 +261,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
               ...(isModuleOn('inventory')
-                ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
+                ? // Gate mirrors SideNavigation; the reasoning is documented there.
+                  // Keep the gate adjacent to `path`: navGateIntegrity reads a
+                  // 300-character window around it and otherwise picks up the
+                  // neighbouring row's gate instead of this one.
+                  [
+                    {
+                      label: 'Inventory Admin',
+                      path: '/inventory/admin',
+                      anyPermission: ['inventory.manage', 'inventory.check_manage'],
+                    },
+                  ]
                 : []),
               ...(isModuleOn('storefront')
                 ? [{ label: 'Store Admin', path: '/inventory/admin/store', permission: 'storefront.manage' }]

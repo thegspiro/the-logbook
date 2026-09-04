@@ -185,6 +185,28 @@ describe('navigation gates match the routes they target', () => {
     ).not.toContain("path: '/store/admin'");
   });
 
+  it('offers the admin hub to the checklist officer whose console it is', () => {
+    // `/inventory/admin` accepts the checklist grant because the hub holds the
+    // only link to the checklist console. Left on the manage grant alone,
+    // these rows meant the seeded officer who holds only the former could
+    // reach their own console by typed URL and no other way -- a widened route
+    // with no door onto it.
+    //
+    // Read through `gatesForPath`, which parses the entry's actual gate. An
+    // earlier version of this test asserted against raw source text and passed
+    // with the gate reverted, because the comment beside it names the grant.
+    for (const surface of NAV_SURFACES) {
+      const gates = gatesForPath(read(surface), '/inventory/admin');
+      expect(gates.length, `${surface} should carry an /inventory/admin entry`).toBeGreaterThan(0);
+      for (const gate of gates) {
+        expect(gate, `${surface}: /inventory/admin shuts out the checklist officer`).toContain(
+          'inventory.check_manage'
+        );
+        expect(gate, `${surface}: /inventory/admin shuts out the quartermaster`).toContain('inventory.manage');
+      }
+    }
+  });
+
   it('gates every surface that offers the gear catalogue on inventory.manage', () => {
     // Nav rows.
     for (const surface of NAV_SURFACES) {

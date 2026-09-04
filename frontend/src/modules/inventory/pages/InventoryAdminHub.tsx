@@ -17,7 +17,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { RefreshCw, UserPlus, Sparkles, ArrowRight, AlertTriangle } from 'lucide-react';
+import { RefreshCw, UserPlus, Sparkles, ArrowRight, AlertTriangle, Package } from 'lucide-react';
+import { EmptyState } from '../../../components/ux';
 import { inventoryService } from '../../../services/api';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
@@ -302,18 +303,28 @@ export const InventoryAdminHub: React.FC = () => {
     // banner could not mention.
     const medicalRequest = showsMedical ? medicalSuppliesService.getSummary() : null;
 
-    const sources = [
-      ['summary', inventoryService.getSummary()],
-      ['low stock', inventoryService.getLowStockItems()],
-      ['returns', inventoryService.getReturnRequests({ status: 'pending' })],
-      ['gear requests', inventoryService.getEquipmentRequests({ status: 'pending' })],
-      ['setup', inventoryService.getSetupStatus()],
-      ['temporary loans', inventoryService.getOverdueCheckouts()],
-      ['maintenance', inventoryService.getMaintenanceDueItems(30)],
-      ['write-offs', inventoryService.getWriteOffRequests({ status: 'pending' })],
-      ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
-      ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
-    ] as const;
+    // Only for the inventory grant. This page also admits a checklist officer
+    // and a store manager -- they come for their own card -- and every one of
+    // these ten endpoints requires an inventory grant they do not hold. Firing
+    // them anyway spends ten 403s on every visit and names all ten in the
+    // "some figures are unavailable" banner, which tells an officer the system
+    // is broken when it is working exactly as configured. The figures these
+    // fill are inventory figures; there is nothing for them to say to someone
+    // who administers neither.
+    const sources: readonly (readonly [string, Promise<unknown>])[] = canManage
+      ? [
+          ['summary', inventoryService.getSummary()],
+          ['low stock', inventoryService.getLowStockItems()],
+          ['returns', inventoryService.getReturnRequests({ status: 'pending' })],
+          ['gear requests', inventoryService.getEquipmentRequests({ status: 'pending' })],
+          ['setup', inventoryService.getSetupStatus()],
+          ['temporary loans', inventoryService.getOverdueCheckouts()],
+          ['maintenance', inventoryService.getMaintenanceDueItems(30)],
+          ['write-offs', inventoryService.getWriteOffRequests({ status: 'pending' })],
+          ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
+          ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
+        ]
+      : [];
     const [results, medicalSettled] = await Promise.all([
       Promise.allSettled(sources.map(([, promise]) => promise)),
       Promise.allSettled(medicalRequest ? [medicalRequest] : []),
@@ -463,7 +474,7 @@ export const InventoryAdminHub: React.FC = () => {
     ];
     setAttentionRows(rows.sort((a, b) => a.rank - b.rank || a.when.localeCompare(b.when)));
     setLoading(false);
-  }, [tz, showsMedical]);
+  }, [tz, showsMedical, canManage]);
 
   useEffect(() => {
     void loadSummary();
@@ -593,6 +604,22 @@ export const InventoryAdminHub: React.FC = () => {
               </div>
               <ArrowRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
             </Link>
+          )}
+
+          {/* Every card gated away. Reachable now that the hub admits three
+              different administrators: a store manager whose department has
+              Storefront switched off holds a grant this route accepts and none
+              that opens a card behind it. The header and an empty page read as
+              a failure to load -- which is what a Retry in the banner above
+              invites them to sit through -- so say plainly that there is
+              nothing here for them rather than showing a page that looks
+              broken. */}
+          {supplyLines.length === 0 && bodySections.length === 0 && (
+            <EmptyState
+              icon={Package}
+              title="Nothing here for your role"
+              description="Your permissions do not open any of this page's tools, or the modules they belong to are switched off for your department. An administrator can review this under Settings → Modules."
+            />
           )}
 
           {/* Supply lines — the three stock lines a department staffs.

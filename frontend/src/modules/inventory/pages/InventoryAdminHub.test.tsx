@@ -604,4 +604,71 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       '/inventory/admin/reorder?request=ro-1'
     );
   });
+  // Per CLAUDE.md #28 these reset before installing their own defaults:
+  // `vi.clearAllMocks()` leaves the outer block's implementations in place, so
+  // a block about *not* calling a service must own what that service does.
+  describe('administrators who are not the quartermaster', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockIsModuleOn.mockReset();
+      mockIsModuleOn.mockReturnValue(true);
+      mockGetMedicalSummary.mockReset();
+      mockGetMedicalSummary.mockResolvedValue({
+        total_items: 0,
+        expiring_soon: 0,
+        expired: 0,
+        low_stock: 0,
+        expiring_within_days: 30,
+      });
+    });
+
+    it('asks for no inventory figures on behalf of a checklist officer', async () => {
+      // The route admits `inventory.check_manage` so this officer can reach
+      // the checklist card. Every endpoint behind the metrics needs an
+      // inventory grant they do not hold, so requesting them spends ten 403s
+      // and then reports all ten as unavailable -- the page accusing itself of
+      // being broken.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(mockGetSummary).not.toHaveBeenCalled();
+      expect(mockGetLowStockItems).not.toHaveBeenCalled();
+      expect(mockGetSetupStatus).not.toHaveBeenCalled();
+      expect(mockGetDepartureClearances).not.toHaveBeenCalled();
+    });
+
+    it('still asks for them on behalf of the quartermaster', async () => {
+      // The other half of the gate: pinning only the negative would pass just
+      // as well with the batch removed outright.
+      mockCheckPermission.mockReturnValue(true);
+
+      renderWithRouter(<InventoryAdminHub />);
+      await waitFor(() => expect(mockGetSummary).toHaveBeenCalled());
+      expect(mockGetLowStockItems).toHaveBeenCalled();
+    });
+
+    it('says so plainly when the viewer opens none of the cards', async () => {
+      // A store manager whose department runs no storefront: the route accepts
+      // their grant, and nothing behind it does. Without this they get a
+      // heading over blank space, which reads as a page that failed to load.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'storefront.manage');
+      mockIsModuleOn.mockImplementation((module: string) => module !== 'storefront');
+
+      renderWithRouter(<InventoryAdminHub />);
+
+      expect(await screen.findByText('Nothing here for your role')).toBeInTheDocument();
+    });
+
+    it('shows cards rather than the empty state when one is open to them', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'storefront.manage');
+      mockIsModuleOn.mockReturnValue(true);
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.queryByText('Nothing here for your role')).not.toBeInTheDocument();
+    });
+  });
 });
