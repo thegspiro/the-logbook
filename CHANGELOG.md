@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A regular member could open Administration → Reports (2026-09-04)
+
+**Fixed**
+
+- **The rank and file could reach department-wide reporting.** Every gate on
+  the Reports page asks for `reports.view` — the route, both navigation bars
+  and all seven report endpoints — and the permission registry seeds it to no
+  rank-and-file position. The grant was in the stored row. The old onboarding
+  position editor took its checkbox defaults from a "a member views every
+  module whose category is not System" rule rather than from the registry, and
+  saved that over each seeded position on the first Continue. Reports is its
+  own category, so the rule ticked it, and because a member's permissions are
+  the union of their positions' stored lists it became a live grant. Holding
+  it also opened the Administration section itself, so the whole admin area
+  appeared for anyone affected.
+
+- **The same overwrite left other discrepancies, now settled.**
+  `integrations.view`, `medical_supplies.view`, `mobile.view` and
+  `prospective_members.view` are revoked from Member, Firefighter and
+  Engineer. Engineer additionally loses `positions.view`, `reports.view` and
+  `settings.view`, and its `apparatus.*` wildcard — which carried apparatus
+  management and driver-exception approval — is narrowed to the
+  `apparatus.view` and `apparatus.maintenance` the registry actually seeds for
+  a driver/operator. The overwrite also dropped grants: `storefront.order` is
+  restored to all three and `inventory.check_submit` to Member, so an affected
+  member can submit a store order and an equipment check again.
+
+- **Why the earlier repair missed these rows.** A migration written for this
+  overwrite already held the correct target list per position, but rewrote
+  only a row matching the old rule's output in full. Four migrations edit
+  those same rows before it runs, so a department that onboarded before them
+  was a permission or two off, its row was skipped, and every discrepancy
+  survived. The new migrations remove and restore one permission at a time,
+  which does not depend on the rest of the row.
+
+- **A department's own decisions are preserved.** A built-in position stays
+  marked as built-in even after an administrator edits its permissions on the
+  positions screen, so "built-in" alone could not tell a default from a
+  choice. Each change is therefore applied only to a row still carrying the
+  old rule's fingerprint — four grants the registry gives none of these
+  positions and nothing else grants. A department that deliberately gave its
+  members Reports keeps it, and a position the department created itself is
+  not touched at all.
+
 ### The org chart's link line is for the people who maintain it (2026-09-04)
 
 **Changed**
@@ -46,7 +90,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The calls column is dropped entirely for a department whose call tracking
   is off, rather than showing a column of zeros that reads as a broken
   counter.
-
 
 ### Checklist officers and store managers can open the admin hub (2026-09-04)
 

@@ -226,23 +226,36 @@ class TestTheApparatusWildcard:
         self, positions_table
     ):
         """Splitting the pair would strip apparatus access from every engineer."""
-        result = _repair_row(positions_table, "engineer", ["apparatus.*"])
+        result = _repair_row(
+            positions_table, "engineer", ["apparatus.*", "mobile.view"]
+        )
 
-        assert result == ["apparatus.view", "apparatus.maintenance"]
+        assert "apparatus.*" not in result
+        assert "apparatus.view" in result
+        assert "apparatus.maintenance" in result
 
     def test_it_does_not_duplicate_a_replacement_already_present(self, positions_table):
         result = _repair_row(
-            positions_table, "engineer", ["apparatus.*", "apparatus.view"]
+            positions_table,
+            "engineer",
+            ["apparatus.*", "apparatus.view", "mobile.view"],
         )
 
         assert result.count("apparatus.view") == 1
-        assert sorted(result) == ["apparatus.maintenance", "apparatus.view"]
+        assert result.count("apparatus.maintenance") == 1
 
-    def test_a_row_without_the_wildcard_gains_nothing(self, positions_table):
-        """Only the substitution adds these; a clean row is not topped up."""
-        result = _repair_row(positions_table, "engineer", ["training.view"])
+    def test_a_gated_row_without_the_wildcard_gains_no_apparatus_grants(
+        self, positions_table
+    ):
+        """Only the substitution adds these — a gated row is not topped up to
+        the registry set wholesale."""
+        result = _repair_row(
+            positions_table, "engineer", ["training.view", "mobile.view"]
+        )
 
-        assert result == ["training.view"]
+        assert "apparatus.view" not in result
+        assert "apparatus.maintenance" not in result
+        assert "training.view" in result
 
 
 class TestTheMarkerGatedAdditions:
@@ -284,6 +297,31 @@ class TestTheMarkerGatedAdditions:
                 assert "inventory.check_submit" in result, marker
             finally:
                 engine.dispose()
+
+
+class TestItOnlyTouchesTheWizardsRows:
+    """``is_system = True`` does not mean "untouched default".
+
+    ``RoleService.update_role`` (``app/services/role_service.py:283-311``) lets
+    an organization edit a built-in position's permissions in place and leaves
+    the flag set. Only a row still carrying the wizard's fingerprint is this
+    migration's to change.
+    """
+
+    @pytest.mark.parametrize("slug", SLUGS)
+    def test_a_curated_row_is_left_alone_entirely(self, positions_table, slug):
+        """No revoke, no narrowing, no restoration — the department's list
+        stands as they left it."""
+        curated = ["events.view", "members.view", "reports.view", "settings.view"]
+
+        assert _repair_row(positions_table, slug, curated) == curated
+
+    def test_a_deliberate_apparatus_wildcard_survives_on_a_clean_row(
+        self, positions_table
+    ):
+        curated = ["apparatus.*", "members.view"]
+
+        assert _repair_row(positions_table, "engineer", curated) == curated
 
 
 class TestWhatItMustNotTouch:

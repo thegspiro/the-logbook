@@ -34,8 +34,32 @@ department that onboarded *after* those ran and before the editor was fixed.
 One that onboarded earlier holds the heuristic output minus those revocations
 — one permission off, so the row is skipped and the grant survives.
 
-Removing the single permission, whatever else the row holds, is immune to that
-ordering. It is the shape ``31e2816df7c3`` and ``a1f7c34e9b02`` already use.
+Removing the single permission is immune to that ordering, rather than matching
+the row as a whole. It is the shape ``31e2816df7c3`` and ``a1f7c34e9b02``
+already use.
+
+It is not, however, applied to every seeded row. ``is_system = True`` does
+**not** mean "untouched default": ``RoleService.update_role``
+(``app/services/role_service.py:283-311``) lets an organization edit a built-in
+position's permissions in place and leaves the flag set, so a department can
+deliberately grant ``reports.view`` to its own Member position. Revoking from
+every system row would silently undo that on upgrade.
+
+So the removal is gated on the row still carrying one of
+``_HEURISTIC_MARKERS`` — four grants the registry seeds to none of these slugs,
+that the wizard's heuristic added to all of them, and that nothing else in the
+system grants or has ever removed. Their presence is what distinguishes "the
+wizard put this here" from "an administrator chose this".
+
+The gate costs no coverage. Every unrepaired wizard row still carries all four,
+because no migration touches them until ``d1c7f4a92e63`` (which runs after this
+one). What it excludes is exactly the row where ``reports.view`` cannot have
+come from the wizard — a clean registry-seeded row an administrator added it
+to — and that grant is theirs to keep.
+
+Matching the heuristic's output as a whole list instead would re-create the
+brittleness described above, which is the defect this migration exists to work
+around.
 
 Both slugs need rewriting. ``operational_ranks`` genuinely has no permissions
 column — rank defaults resolve at runtime from ``OPERATIONAL_RANKS`` — but
@@ -45,8 +69,8 @@ object, so onboarding also writes a system position with slug ``firefighter``
 carrying a copy. A member holding it would keep the grant if only ``member``
 were rewritten.
 
-Scoped to ``is_system = True``: a department that has customized a position of
-its own keeps whatever it put there.
+Scoped to ``is_system = True``: a position a department built for itself is
+theirs outright.
 
 Guarded on the table existing: ``positions`` is one of the tables no migration
 creates — it comes into being when ``main.py`` calls ``create_all()``, and CI
@@ -72,6 +96,19 @@ depends_on = None
 _PERMISSION = "reports.view"
 _SLUGS = ("member", "firefighter")
 
+# The wizard heuristic's fingerprint. The registry seeds none of these to these
+# slugs, nothing else grants them, and no migration removes them before this one
+# runs — so a row carrying any of them is unrepaired wizard output rather than
+# one an administrator curated. Kept in sync with ``d1c7f4a92e63``, which
+# revokes them; frozen here rather than imported, because a migration has to
+# keep transforming rows the way it did the day it ran (CLAUDE.md pitfall #20).
+_HEURISTIC_MARKERS = (
+    "integrations.view",
+    "medical_supplies.view",
+    "mobile.view",
+    "prospective_members.view",
+)
+
 
 def _load_permissions(raw):
     """Normalize JSON values returned by different database drivers."""
@@ -96,6 +133,9 @@ def upgrade() -> None:
         for row in rows:
             permissions = _load_permissions(row.permissions)
             if _PERMISSION not in permissions:
+                continue
+            if not any(marker in permissions for marker in _HEURISTIC_MARKERS):
+                # Not the wizard's doing: an administrator granted this.
                 continue
             permissions = [item for item in permissions if item != _PERMISSION]
             bind.execute(
