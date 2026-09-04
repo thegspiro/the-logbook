@@ -17,7 +17,8 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 19 (Skills testing), pass 3** — branch
-`claude/security-review-skills-testing`, PR TBD (opening now). 1 fix (LOW), 1
+`claude/security-review-skills-testing`, PR
+[#2230](https://github.com/thegspiro/the-logbook/pull/2230). 1 fix (LOW), 1
 flagged (LOW/MED). See the log entry below and
 `docs/security-review/SKT-19-skills-testing.md` → **Pass 3** for detail.
 

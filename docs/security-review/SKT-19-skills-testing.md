@@ -498,7 +498,7 @@ re-confirmed above; nothing in this pass contradicts anything pass 1 recorded.
 
 ## Pass 3 (2026-09-04)
 
-**Prefix:** `SKT3` · **PR:** TBD
+**Prefix:** `SKT3` · **PR:** [#2230](https://github.com/thegspiro/the-logbook/pull/2230)
 
 **Scope check:** diffed the current tree against `793bbebb4b03ddbe8f65ca171de261a4dd13fb1f`
 (the pass-2 merge commit, PR #2017). The full backend surface — endpoint file,
