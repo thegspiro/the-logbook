@@ -149,6 +149,13 @@ const EventCheckInMonitoringPage: React.FC = () => {
           <div>
             <h1 className="text-theme-text-primary text-2xl font-bold sm:text-3xl">Check-In Monitoring</h1>
             <p className="text-theme-text-secondary mt-1 text-xl">{stats.event_name}</p>
+            {/* This route has no event payload to read the organizer from, and
+                it is the screen a manager actually works the check-in list
+                from. The endpoint is already events.manage-gated, so presence
+                of the name is the only condition worth checking. */}
+            {stats.created_by_name && (
+              <p className="text-theme-text-muted mt-1 text-sm">Organized by {stats.created_by_name}</p>
+            )}
           </div>
           <div className="sm:text-right">
             <div className="text-theme-text-muted text-sm">Last updated: {formatTime(lastUpdated, tz)}</div>

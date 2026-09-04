@@ -16,6 +16,12 @@ interface EligibleMember {
 
 interface EventCheckInModalProps {
   eligibleMembers: EligibleMember[];
+  /**
+   * Who organized the event. Required rather than optional because
+   * `exactOptionalPropertyTypes` refuses an explicit `undefined` for an
+   * optional prop, and the caller has a nullable value to pass.
+   */
+  organizerName: string | null;
   rsvps: RSVP[];
   memberSearch: string;
   onMemberSearchChange: (search: string) => void;
@@ -28,6 +34,7 @@ interface EventCheckInModalProps {
 
 const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
   eligibleMembers,
+  organizerName,
   rsvps,
   memberSearch,
   onMemberSearchChange,
@@ -64,9 +71,14 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
         </>
       }
     >
-      <p id="checkin-modal-description" className="text-theme-text-secondary mb-4 text-sm">
-        Check in members as they arrive at the event. Their attendance will be recorded with a timestamp.
-      </p>
+      <div className="mb-4">
+        <p id="checkin-modal-description" className="text-theme-text-secondary text-sm">
+          Check in members as they arrive at the event. Their attendance will be recorded with a timestamp.
+        </p>
+        {/* This dialog covers the page that names the organizer, and it is the
+            screen where attendance is actually changed. */}
+        {organizerName && <p className="text-theme-text-muted mt-1 text-sm">Event organized by {organizerName}</p>}
+      </div>
 
       <div className="mb-4">
         <button

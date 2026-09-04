@@ -1322,4 +1322,55 @@ describe('EventDetailPage', () => {
       expect(screen.getByLabelText(/number of guests/i)).toHaveValue(1);
     });
   });
+
+  describe('the event organizer', () => {
+    const organizedEvent: Event = { ...mockEvent, created_by: 'organizer-1', created_by_name: 'Sam Ortiz' };
+
+    // mockReset, not the file-level vi.clearAllMocks: clearAllMocks drops
+    // recorded calls but not implementations, and nested blocks in this file
+    // install mockImplementation on mockCheckPermission. Without the reset,
+    // whichever of these two ran second would inherit the other's answer and
+    // pass for the wrong reason.
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(false);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue(mockRSVPs);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+    });
+
+    it('names the organizer for a manager', async () => {
+      mockCheckPermission.mockImplementation((p: string) => p === 'events.manage');
+      vi.mocked(eventService.getEvent).mockResolvedValue(organizedEvent);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('Organized by')).toBeInTheDocument();
+      expect(screen.getByText('Sam Ortiz')).toBeInTheDocument();
+    });
+
+    it('shows nothing to a member who cannot finalize', async () => {
+      // The server withholds created_by_name from this caller, so the realistic
+      // payload has no name at all. Asserted anyway: the point is that a member
+      // is never told who organized the event, whichever layer withheld it.
+      vi.mocked(eventService.getEvent).mockResolvedValue(organizedEvent);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByText(mockEvent.title);
+      expect(screen.queryByText('Organized by')).not.toBeInTheDocument();
+      expect(screen.queryByText('Sam Ortiz')).not.toBeInTheDocument();
+    });
+
+    it('renders nothing when no organizer is recorded', async () => {
+      // An event predating the column, or one whose organizer has left the
+      // department. An "Unknown" row would read as a data error.
+      mockCheckPermission.mockImplementation((p: string) => p === 'events.manage');
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, created_by_name: null });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await screen.findByText(mockEvent.title);
+      expect(screen.queryByText('Organized by')).not.toBeInTheDocument();
+    });
+  });
 });
