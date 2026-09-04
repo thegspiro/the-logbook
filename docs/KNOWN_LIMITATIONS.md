@@ -2633,6 +2633,36 @@ is now more pressing since a cache-based mitigation was correctly removed
 out from under it. (Security review TR-17 pass 2,
 `docs/security-review/TR-17-training-core.md`.)
 
+## Training — The MCP Requirement-Progress Tool Is Paginated, Not Bounded (2026-09-04)
+
+`app/mcp/tools/training.py`'s `get_member_requirements_progress` looks
+paginated (`limit`/`offset`, a real `total`), and its returned rows are —
+but two unbounded reads still happen underneath on every call, both
+pre-existing characteristics of `TrainingService` that this pass's first
+scope addition of this MCP file surfaced without previously being flagged:
+
+- `get_applicable_requirements` has no page bound of its own; a page is cut
+  from its full result only in Python, after the whole thing is fetched.
+  Mitigated in practice (per TR-17 pass 2) by configuration data — a
+  department's requirements — being naturally small (tens, not thousands),
+  unlike the per-member `TrainingRecord` case below.
+- If the requested page includes a CERTIFICATION-type requirement (or a
+  BIANNUAL-hours one), `get_requirements_progress_for`'s `_preload_window`
+  returns `None`, and the member's **entire** completed-training history is
+  preloaded rather than a date-bounded slice — a cert check has always
+  ignored the frequency window by design (valid until it expires, not per
+  period), so this is not new behavior, just newly reachable through an
+  MCP caller that never existed before.
+
+Not fixed: bounding a certification check's window without breaking its
+correctness is a service-level redesign of what "ignoring the window" means
+for this class of check (`training_compliance.py`'s date-window logic), not
+a safe drive-by change. Same abuse-resistance class as "Dashboard Summary Is
+an Unbounded Per-Request Scan" above (TR2-4) — a per-member, not org-wide,
+scan, so the ceiling is one member's training history rather than the whole
+department's. (Security review TR-17 pass 3,
+`docs/security-review/TR-17-training-core.md`, TR3-2.)
+
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 
 `POST /reports/saved` and `PATCH /reports/saved/{id}` fully accept and

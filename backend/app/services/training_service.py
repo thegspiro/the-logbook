@@ -655,6 +655,13 @@ class TrainingService:
             raise ValueError("Requirement not found")
 
         today = date.today()
+        # Every RequirementProgress this method returns carries this, so
+        # consumers (the MCP `get_member_requirements_progress` tool
+        # explicitly promises "days until due, negative when overdue") don't
+        # each have to re-derive it from due_date themselves.
+        days_until_due = (
+            (requirement.due_date - today).days if requirement.due_date else None
+        )
         start_date, end_date = self._get_date_window(requirement, today)
         # Narrow the window by the freshness cutoff up front so every query
         # below inherits it. A one_time requirement has no frequency window at
@@ -827,6 +834,7 @@ class TrainingService:
                         percentage_complete=0.0,
                         is_complete=False,
                         due_date=requirement.due_date,
+                        days_until_due=days_until_due,
                     )
 
             # A requirement with no positive target (required_hours unset/0) must
@@ -855,6 +863,7 @@ class TrainingService:
                     percentage_complete=0.0,
                     is_complete=False,
                     due_date=requirement.due_date,
+                    days_until_due=days_until_due,
                 )
 
             records = await _windowed()
@@ -1000,6 +1009,7 @@ class TrainingService:
             percentage_complete=round(percentage, 2),
             is_complete=is_complete,
             due_date=requirement.due_date,
+            days_until_due=days_until_due,
         )
 
     async def get_all_requirements_progress(
