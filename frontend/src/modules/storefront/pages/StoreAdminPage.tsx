@@ -96,8 +96,14 @@ const activityDescription = (activity: StoreDashboard['recentActivity'][number])
 };
 
 const StoreAdminPage: React.FC = () => {
-  const { isModuleOn } = useEnabledModules();
-  const inventoryOn = isModuleOn('inventory');
+  // `isLoading` as well as the answer: `isModuleOn` reports every module on
+  // while the lookup is in flight, which is right for a nav bar that must not
+  // flicker and wrong here. Rendering optimistically puts the link on screen
+  // for the width of that request, and a click inside it lands on the refusal
+  // this is meant to prevent. `ProtectedRoute`'s module gate waits for the
+  // same reason.
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const inventoryOn = !modulesLoading && isModuleOn('inventory');
   const tz = useTimezone();
   // Mirrored into `?tab=` like every other admin page, so the inventory hub
   // can link at a tab rather than dropping the reader on Overview to find it.

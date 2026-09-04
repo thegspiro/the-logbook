@@ -49,8 +49,12 @@ vi.mock('../components/StoreOrdersTab', () => ({
 }));
 
 const mockIsModuleOn = vi.fn();
+const mockModulesLoading = vi.fn();
 vi.mock('../../../hooks/useEnabledModules', () => ({
-  useEnabledModules: () => ({ isModuleOn: (...args: unknown[]) => mockIsModuleOn(...args) as boolean }),
+  useEnabledModules: () => ({
+    isModuleOn: (...args: unknown[]) => mockIsModuleOn(...args) as boolean,
+    isLoading: mockModulesLoading() as boolean,
+  }),
 }));
 
 import StoreAdminPage from './StoreAdminPage';
@@ -104,6 +108,8 @@ describe('StoreAdminPage overview', () => {
     // block cannot become another block's silent default.
     mockIsModuleOn.mockReset();
     mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
     mockGetDashboard.mockResolvedValue(dashboard);
     mockGetAdminHubSummary.mockResolvedValue({
       moduleKey: 'storefront',
@@ -177,6 +183,18 @@ describe('StoreAdminPage overview', () => {
     expect(await screen.findByRole('link', { name: /Inventory/ })).toHaveAttribute('href', '/inventory/admin');
   });
 
+  it('offers no way back while the module answer is still in flight', async () => {
+    // `isModuleOn` reports every module on until the lookup settles, so
+    // trusting it alone renders the link for the width of that request -- and
+    // a click inside that window reaches the refusal this hides.
+    mockModulesLoading.mockReturnValue(true);
+
+    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+    await screen.findByText('Department Store');
+
+    expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+  });
+
   it('offers no way back when the department runs no Inventory', async () => {
     // This route is gated on the storefront module, not on inventory, so the
     // store can run with Inventory off -- and the hub then refuses with
@@ -202,6 +220,8 @@ describe('StoreAdminPage — tabs in the URL', () => {
   beforeEach(() => {
     mockIsModuleOn.mockReset();
     mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
     mockGetDashboard.mockReset();
     mockGetDashboard.mockResolvedValue(dashboard);
     mockGetAdminHubSummary.mockReset();
