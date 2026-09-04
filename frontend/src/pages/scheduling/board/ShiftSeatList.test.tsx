@@ -22,11 +22,19 @@ const seat = (userId: string, position: string, name: string) => ({
 const TODAY_KEY = toDateKey(new Date());
 const TOMORROW_KEY = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
 
+// The default fixture's start must be an *instant* in the future, not a fixed
+// wall-clock time: `memberSignupClosedReason` compares it against `Date.now()`,
+// so a literal `T22:00:00Z` would close every default-fixture shift after 22:00
+// UTC and take this file and ShiftSeatList's red on a commit that touched
+// neither — the same time-bomb class the comment above describes, one level
+// down.
+const FUTURE_START = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+
 const shift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 's1',
   organization_id: 'org',
   shift_date: TODAY_KEY,
-  start_time: `${TODAY_KEY}T22:00:00Z`,
+  start_time: FUTURE_START,
   end_time: `${TOMORROW_KEY}T10:00:00Z`,
   positions: [
     { position: 'officer', required: true },
@@ -269,5 +277,68 @@ describe('a pending offer of this seat', () => {
     renderList();
     expect(screen.queryByText(/offered you this seat/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/offered to/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('a shift that has already started', () => {
+  const started = () => shift({ start_time: new Date(Date.now() - 60 * 60_000).toISOString() });
+
+  it('says it has started rather than that it has already run', () => {
+    render(
+      <ShiftSeatList
+        shift={started()}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+      />
+    );
+    expect(screen.getByText('This shift has already started.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /take a seat on this shift/i })).not.toBeInTheDocument();
+  });
+
+  it('still says cancelled when the shift was cancelled', () => {
+    // Cancelled is the more informative answer, and it is the precedence the
+    // backend rule uses too — its window check defers to the mutability check.
+    render(
+      <ShiftSeatList
+        shift={{ ...started(), status: 'cancelled' }}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+      />
+    );
+    expect(screen.getByText('This shift was cancelled.')).toBeInTheDocument();
+  });
+
+  it('offers the seats again inside a late-signup window', () => {
+    render(
+      <ShiftSeatList
+        shift={{ ...started(), late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString() }}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: /take a seat on this shift/i })).toBeInTheDocument();
+  });
+
+  it("prefers the server's own reason when the detail response supplied one", () => {
+    render(
+      <ShiftSeatList
+        shift={{ ...started(), signup_closed_reason: 'Late signup for this shift has closed.' }}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Late signup for this shift has closed.')).toBeInTheDocument();
   });
 });

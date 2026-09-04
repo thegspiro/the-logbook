@@ -58,10 +58,16 @@ def _shift():
 
 
 class _Session:
-    """Hands back the offer, then the shift, then the assignment."""
+    """Hands back the offer, then the shift, then the org, then the assignment.
 
-    def __init__(self, offer, shift=None, assignment=None):
-        self._queue = [offer, shift, assignment]
+    The organization is read between the two because accepting an offer is
+    bounded by the same signup window a member's own signup is — see
+    ``signup_closed_reason`` — and the window's numbers live in
+    ``org.settings["scheduling"]``.
+    """
+
+    def __init__(self, offer, shift=None, assignment=None, org=None):
+        self._queue = [offer, shift, org or SimpleNamespace(settings={}), assignment]
         self.committed = 0
 
     async def execute(self, _statement):
@@ -81,8 +87,8 @@ class _Session:
         return None
 
 
-def _service(offer, shift=None, assignment=None, validation_error=None):
-    service = SchedulingService(_Session(offer, shift, assignment))
+def _service(offer, shift=None, assignment=None, validation_error=None, org=None):
+    service = SchedulingService(_Session(offer, shift, assignment, org))
     service._validate_assignment_candidate = AsyncMock(return_value=validation_error)
     service._notify_offer_answered = AsyncMock()
     return service
@@ -351,3 +357,61 @@ class TestTheValidationIsRecheckedAtAcceptance:
         assert error == "Shift was finalized"
         assert assignment.user_id == str(OFFERER)
         assert offer.status == SwapRequestStatus.PENDING
+
+
+class TestTheSignupWindowBoundsAcceptance:
+    """Accepting is the offerer withdrawing and the accepter signing up.
+
+    So it is bounded by the same member deadline. Without this, a targeted
+    offer would be a way onto a shift that had already gone out — the hole the
+    signup window exists to close. The offerer keeps the seat, which is the
+    truthful record: they are who the roster committed.
+    """
+
+    async def test_a_started_shift_is_refused(self):
+        started = _shift()
+        started.shift_date = date.today()
+        started.start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        assignment = SimpleNamespace(
+            id="a1", user_id=str(OFFERER), position="firefighter", is_training=False
+        )
+        service = _service(_offer(), started, assignment)
+
+        result, error = await service.respond_to_swap_offer(
+            "sw1", ORG, TARGET, accept=True
+        )
+
+        assert result is None
+        assert error == "This shift has already started. Ask a duty officer to add you."
+
+    async def test_a_live_late_signup_window_lets_it_through(self):
+        started = _shift()
+        started.shift_date = date.today()
+        started.start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        started.late_signup_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+        assignment = SimpleNamespace(
+            id="a1", user_id=str(OFFERER), position="firefighter", is_training=False
+        )
+        service = _service(_offer(), started, assignment)
+
+        result, error = await service.respond_to_swap_offer(
+            "sw1", ORG, TARGET, accept=True
+        )
+
+        assert error is None
+        assert result is not None
+
+    async def test_declining_is_never_bounded(self):
+        # Declining removes nobody from a roster; refusing it would only leave
+        # the offerer waiting on an answer that can no longer be given.
+        started = _shift()
+        started.shift_date = date.today()
+        started.start_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        service = _service(_offer(), started, None)
+
+        result, error = await service.respond_to_swap_offer(
+            "sw1", ORG, TARGET, accept=False
+        )
+
+        assert error is None
+        assert result is not None

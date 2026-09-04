@@ -49,6 +49,7 @@ from app.schemas.scheduling import (
     CloseoutStateResponse,
     EligiblePositionsResponse,
     GenerateShiftsRequest,
+    LateSignupOpenRequest,
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
@@ -117,12 +118,15 @@ from app.services.integration_services.notification_dispatch import (
 from app.services.scheduling_module_config_service import (
     apparatus_type_defaults_for_org,
 )
-from app.services.scheduling_service import SchedulingService
+from app.services.scheduling_service import SchedulingService, SignupActor
 from app.services.scheduling_widget_service import (
     MAX_WIDGET_WINDOW_DAYS,
     SchedulingWidgetService,
 )
-from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.services.shift_eligibility_service import (
+    DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
+    ShiftEligibilityService,
+)
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
 from app.utils.hours import hours_from_minutes
 from app.utils.outreach_roles import normalize_staffing_roles
@@ -175,6 +179,25 @@ def _can_view_platoon_roster(shift, user: User) -> bool:
         or user_has_permission(user, "scheduling.manage")
         or _is_shift_officer(shift, user)
     )
+
+
+def _signup_actor(shift, user: User) -> SignupActor:
+    """How the signup window sees this caller on this shift.
+
+    ``scheduling.manage`` is never bounded — adding somebody to a shift that
+    ran last month is records work, and it is the one way a department repairs
+    a roster. A delegated assigner, or the shift's own officer (who carries the
+    same per-shift authority everywhere else in this module), is bounded by the
+    department's grace period. Everybody else is a member.
+
+    Resolved here rather than in the service, which cannot see the request and
+    deliberately knows nothing about permissions.
+    """
+    if user_has_permission(user, "scheduling.manage"):
+        return SignupActor.MANAGER
+    if user_has_permission(user, "scheduling.assign") or _is_shift_officer(shift, user):
+        return SignupActor.ASSIGNER
+    return SignupActor.MEMBER
 
 
 async def _authorize_shift_management(
@@ -702,6 +725,14 @@ async def get_shift(
         shift, current_user.organization_id
     )
 
+    # The same arrangement for signup: the panel disables its own button and
+    # prints this rather than reimplementing the rule and drifting from what
+    # the API enforces. Actor-relative — a manager always reads open — which is
+    # why it belongs on the detail response, where the caller is known.
+    signup_closed_reason = await service.signup_closed_reason(
+        shift, current_user.organization_id, _signup_actor(shift, current_user)
+    )
+
     return {
         **d,
         "attendees": attendees,
@@ -711,6 +742,8 @@ async def get_shift(
         "platoon_roster": platoon_roster,
         "checkin_open": checkin_closed_reason is None,
         "checkin_closed_reason": checkin_closed_reason,
+        "signup_open": signup_closed_reason is None,
+        "signup_closed_reason": signup_closed_reason,
     }
 
 
@@ -1021,6 +1054,101 @@ async def cancel_shift(
             status_code=400,
             detail=_safe_detail("Unable to cancel shift.", error),
         )
+    enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
+    return enriched[0]
+
+
+@router.post("/shifts/{shift_id}/late-signup", response_model=ShiftResponse)
+async def open_late_signup(
+    shift_id: UUID,
+    body: LateSignupOpenRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reopen signup on this shift for a bounded number of minutes from now.
+
+    Signup normally closes when the shift starts. This is the escape hatch for
+    the crew that turns up one short: it reopens the shift for members *and*
+    officers alike, because "allow last-minute additions" means letting people
+    put themselves on, not only letting the officer type their names in.
+
+    A duration rather than an instant on purpose — the server resolves it
+    against the same clock the enforcement reads, so a device running a few
+    minutes fast cannot open a window shorter than the officer intended.
+
+    Not offered to ``scheduling.manage``, who are never bound by the window and
+    so have nothing to reopen.
+
+    **Permissions required:** scheduling.assign, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.assign"
+    )
+    shift, error = await service.open_late_signup(
+        shift_id, current_user.organization_id, minutes=body.minutes
+    )
+    if not shift:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to reopen signup.", error),
+        )
+    await log_audit_event(
+        db=db,
+        event_type="shift_late_signup_opened",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "shift_id": str(shift_id),
+            "minutes": body.minutes,
+            "late_signup_until": (
+                shift.late_signup_until.isoformat() if shift.late_signup_until else None
+            ),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
+    return enriched[0]
+
+
+@router.delete("/shifts/{shift_id}/late-signup", response_model=ShiftResponse)
+async def close_late_signup(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Withdraw this shift's late-signup window, returning it to the org rule.
+
+    **Permissions required:** scheduling.assign, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.assign"
+    )
+    shift, error = await service.close_late_signup(
+        shift_id, current_user.organization_id
+    )
+    if not shift:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to close late signup.", error),
+        )
+    await log_audit_event(
+        db=db,
+        event_type="shift_late_signup_closed",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "shift_id": str(shift_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
 
@@ -1955,7 +2083,11 @@ async def create_assignment(
 
     try:
         result, error = await service.create_assignment(
-            current_user.organization_id, shift_id, assignment_data, current_user.id
+            current_user.organization_id,
+            shift_id,
+            assignment_data,
+            current_user.id,
+            actor=_signup_actor(shift, current_user),
         )
     except CodedValueError as e:
         raise _driver_block(e)
@@ -3311,6 +3443,7 @@ async def get_scheduling_feature_settings(
     overtime = service.get_overtime_settings(org)
     autogen = service.get_auto_generate_settings(org)
     lifecycle = service.get_lifecycle_settings(org)
+    window = service.get_signup_window_settings(org)
     return SchedulingFeatureSettings(
         platoons_enabled=service.get_platoons_enabled(org),
         max_hours_per_window=overtime.get("max_hours_per_window"),
@@ -3323,6 +3456,8 @@ async def get_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             lifecycle.get("restrict_checkin_to_assigned", False)
         ),
+        signup_closes_minutes_before=window["signup_closes_minutes_before"],
+        late_signup_grace_minutes=window["late_signup_grace_minutes"],
         enforce_evoc=service.get_evoc_enforcement(org),
         call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
     )
@@ -3377,6 +3512,20 @@ async def update_scheduling_feature_settings(
                 if "restrict_checkin_to_assigned" in fields_set
                 else None
             ),
+            # Guarded like every sibling field: each settings control sends
+            # only its own key, and passing the schema default unconditionally
+            # would reset the department's signup window from a save of an
+            # unrelated toggle.
+            signup_closes_minutes_before=(
+                data.signup_closes_minutes_before
+                if "signup_closes_minutes_before" in fields_set
+                else None
+            ),
+            late_signup_grace_minutes=(
+                data.late_signup_grace_minutes
+                if "late_signup_grace_minutes" in fields_set
+                else None
+            ),
             enforce_evoc=(data.enforce_evoc if "enforce_evoc" in fields_set else None),
             # Guarded like every sibling field: a partial save from another
             # toggle sends only its own key, and passing the schema default
@@ -3400,6 +3549,13 @@ async def update_scheduling_feature_settings(
         ),
         restrict_checkin_to_assigned=bool(
             result.get("restrict_checkin_to_assigned", False)
+        ),
+        signup_closes_minutes_before=int(
+            result.get("signup_closes_minutes_before", 0) or 0
+        ),
+        late_signup_grace_minutes=int(
+            result.get("late_signup_grace_minutes", DEFAULT_LATE_SIGNUP_GRACE_MINUTES)
+            or 0
         ),
         enforce_evoc=bool(result.get("enforce_evoc", True)),
         call_tracking=CallTrackingSettings(

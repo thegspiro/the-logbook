@@ -8,6 +8,7 @@ attendance tracking, and calendar views.
 import calendar
 import html as _html
 from datetime import date, datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -57,6 +58,10 @@ from app.models.user import (
 from app.services.call_tracking_service import CallTrackingService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.notifications_service import NotificationsService
+from app.services.shift_eligibility_service import (
+    DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
+    DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
+)
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
     resolve_apparatus_display_map,
@@ -90,11 +95,67 @@ def _position_label(position) -> str:
     return position_label(value)
 
 
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """A stored DATETIME as an aware UTC instant.
+
+    MySQL DATETIME carries no offset, so a value read back through
+    ``DateTime(timezone=True)`` arrives naive, and comparing it against an
+    aware ``now`` raises TypeError — which would 500 every check-in and every
+    signup. Everything is stored as UTC (see UTCResponseBase), so that is what
+    a naive value is.
+    """
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _minutes_phrase(total: int) -> str:
+    """ "90 minutes" as "an hour and a half" — how an officer would say it.
+
+    The refusal is read by somebody who has just been told they cannot work a
+    shift; "closed 120 minutes before" makes them do arithmetic to find out how
+    early they needed to act.
+    """
+    if total % 60 == 0 and total >= 60:
+        hours = total // 60
+        return f"{hours} hour{'s' if hours != 1 else ''}"
+    if total > 60:
+        hours, rest = divmod(total, 60)
+        return (
+            f"{hours} hour{'s' if hours != 1 else ''} "
+            f"{rest} minute{'s' if rest != 1 else ''}"
+        )
+    return f"{total} minute{'s' if total != 1 else ''}"
+
+
 # The widest span a member-facing shift listing will scan. Matches
 # MAX_OPEN_SHIFTS_DAYS on /shifts/open, which bounds the same kind of read for
 # the same reason: eligibility is not expressible in SQL, so the rows have to
 # be fetched before they can be filtered.
 MEMBER_SHIFT_WINDOW_DAYS = 366
+
+
+class SignupActor(str, Enum):
+    """Who is doing the seating, which is what decides the deadline.
+
+    The signup window is not one cutoff but three, because the three have
+    genuinely different jobs. A member choosing to work a shift is making a
+    commitment beforehand; an officer standing in front of a short crew is
+    solving a problem now; a scheduling administrator entering what actually
+    happened is keeping records, and records are written after the fact by
+    definition.
+
+    Resolved by the endpoint, not by the service — the service stays ignorant
+    of the caller's permissions, matching how every other check in this file
+    is layered.
+    """
+
+    #: Self-signup, a standing claim, or accepting a swap offer.
+    MEMBER = "member"
+    #: Holds ``scheduling.assign``, or is this shift's own officer.
+    ASSIGNER = "assigner"
+    #: Holds ``scheduling.manage``. Never bounded — this is the records path.
+    MANAGER = "manager"
 
 
 class SchedulingService:
@@ -1729,6 +1790,64 @@ class SchedulingService:
             await self.db.rollback()
             return False, str(e)
 
+    async def open_late_signup(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        minutes: int,
+    ) -> Tuple[Optional[Shift], Optional[str]]:
+        """Reopen signup on one shift for `minutes` from now.
+
+        A duration resolved against the server's clock, not an instant sent by
+        the browser: the enforcement reads the server's clock, so a device four
+        minutes fast would otherwise open a window the officer believes is a
+        quarter of an hour and is actually eleven minutes.
+
+        Extends only, under the row lock. Two officers each opening a window
+        while the crew is short would otherwise let the second, shorter one cut
+        the first short — and a member told they had until 19:45 would find the
+        seat gone at 19:30.
+        """
+        try:
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
+            if not shift:
+                return None, "Shift not found"
+            if shift.status == ShiftStatus.CANCELLED:
+                return None, "Cannot reopen signup on a cancelled shift"
+            if shift.is_finalized:
+                return None, "Cannot reopen signup on a finalized shift"
+
+            until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+            current = _as_utc(shift.late_signup_until)
+            if current is None or until > current:
+                shift.late_signup_until = until
+            await self.db.commit()
+            await self.db.refresh(shift)
+            return shift, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def close_late_signup(
+        self, shift_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Shift], Optional[str]]:
+        """Withdraw a late-signup window, returning the shift to the org rule."""
+        try:
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
+            if not shift:
+                return None, "Shift not found"
+            shift.late_signup_until = None
+            await self.db.commit()
+            await self.db.refresh(shift)
+            return shift, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
     async def cancel_shift(
         self,
         shift_id: UUID,
@@ -1916,18 +2035,9 @@ class SchedulingService:
         opens_before = timing.get("checkin_opens_hours_before", 2)
         closes_after = timing.get("checkin_closes_hours_after", 12)
 
-        # MySQL DATETIME carries no offset, so a value read back through
-        # DateTime(timezone=True) arrives naive and comparing it against an aware
-        # `now` raises TypeError — which would 500 every check-in. Everything is
-        # stored as UTC (see UTCResponseBase), so that is what a naive value is.
-        def as_utc(value: Optional[datetime]) -> Optional[datetime]:
-            if value is None:
-                return None
-            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
         now = datetime.now(timezone.utc)
-        start = as_utc(shift.start_time)
-        end = as_utc(shift.end_time) or start
+        start = _as_utc(shift.start_time)
+        end = _as_utc(shift.end_time) or start
         if start is None:
             return None
 
@@ -1943,6 +2053,128 @@ class SchedulingService:
                 "Ask an officer to record your attendance."
             )
         return None
+
+    async def signup_closed_reason(
+        self,
+        shift: Shift,
+        organization_id: UUID,
+        actor: SignupActor,
+    ) -> Optional[str]:
+        """Why signup is closed for this shift and this caller, or None.
+
+        The public form of _signup_window_error, for callers that want to show
+        the state rather than enforce it — the shift panel disables its own
+        button and prints this instead of offering an action the API refuses,
+        which is the same arrangement check-in already uses.
+        """
+        if actor == SignupActor.MANAGER:
+            return None
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        return self._signup_window_error(
+            shift, (org.settings or {}) if org else {}, actor
+        )
+
+    @staticmethod
+    def _signup_window_error(
+        shift: Any,
+        settings: Dict[str, Any],
+        actor: SignupActor,
+        *,
+        now: Optional[datetime] = None,
+    ) -> Optional[str]:
+        """Why this shift is outside its signup window for `actor`, or None.
+
+        Signup used to be refused only once the shift's calendar *day* had
+        passed, so a member could still claim a seat on a 06:00 shift at 23:00
+        that night — seventeen hours after a crew they were never part of went
+        out, and every hours and compliance report built on the assignment
+        accepted it. The bound is now the shift's own start.
+
+        Three deadlines, because the three actors are doing different things: a
+        member commits ahead of the shift, an officer solves a short crew on the
+        night, and a scheduling administrator records what happened, which is
+        necessarily afterwards. ``late_signup_until`` is an officer's override
+        for one shift and lifts the member's deadline too — "allow last-minute
+        additions" means letting people put themselves on, not only letting the
+        officer type names in.
+
+        Two deliberate pass-throughs:
+
+        * A shift with no recorded start cannot be bounded, so it is allowed
+          through rather than refused on data this rule cannot judge — the same
+          stance as ``_checkin_window_error``. The day-granular ``reject_past``
+          check in ``_validate_assignment_candidate`` still covers it.
+        * A cancelled or finalized shift is allowed through so the caller's
+          mutability check, which has a better answer than "already started",
+          is the one the member reads.
+        """
+        if actor == SignupActor.MANAGER:
+            return None
+
+        start = _as_utc(getattr(shift, "start_time", None))
+        if start is None:
+            return None
+        if getattr(shift, "status", None) == ShiftStatus.CANCELLED or getattr(
+            shift, "is_finalized", False
+        ):
+            return None
+
+        sched = settings.get("scheduling")
+        if not isinstance(sched, dict):
+            sched = {}
+
+        def minutes(key: str, default: int, ceiling: int) -> int:
+            # Unvalidated JSON an admin can hand-edit. Degrade to the built-in
+            # window rather than raising: an exception here would refuse every
+            # signup in the department over one mistyped value (pitfall #19).
+            try:
+                value = int(sched.get(key, default))
+            except (TypeError, ValueError):
+                return default
+            return min(max(value, 0), ceiling)
+
+        now = now or datetime.now(timezone.utc)
+        override = _as_utc(getattr(shift, "late_signup_until", None))
+
+        if actor == SignupActor.MEMBER:
+            lead = minutes(
+                "signup_closes_minutes_before",
+                DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
+                10080,
+            )
+            deadline = start - timedelta(minutes=lead)
+            if override is not None and override > deadline:
+                deadline = override
+            if now <= deadline:
+                return None
+            if override is not None:
+                return (
+                    "Late signup for this shift has closed. "
+                    "Ask a duty officer to add you."
+                )
+            if lead and now < start:
+                return (
+                    f"Signup closed {_minutes_phrase(lead)} before this shift "
+                    "starts. Ask a duty officer to add you."
+                )
+            return "This shift has already started. Ask a duty officer to add you."
+
+        grace = minutes(
+            "late_signup_grace_minutes", DEFAULT_LATE_SIGNUP_GRACE_MINUTES, 1440
+        )
+        deadline = start + timedelta(minutes=grace)
+        if override is not None and override > deadline:
+            deadline = override
+        if now <= deadline:
+            return None
+        return (
+            "This shift started too long ago to add anyone to. "
+            "A scheduling admin can still record it."
+        )
 
     async def member_check_in(
         self,
@@ -3370,6 +3602,7 @@ class SchedulingService:
         assignment_data: Dict[str, Any],
         assigned_by: UUID,
         self_signup: bool = False,
+        actor: Optional[SignupActor] = None,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
         """Create a new shift assignment.
 
@@ -3377,6 +3610,14 @@ class SchedulingService:
         assigning someone). Self-signup is restricted to an open, current shift
         and never confers shift-officer authority (see below); managers keep the
         flexibility to assign to cancelled/finalized/past shifts for records.
+
+        ``actor`` decides which signup-window deadline applies. It exists
+        because the service cannot see the caller's permissions and
+        ``self_signup`` only splits off the member path — the officer path
+        still divides into a bounded assigner and an unbounded scheduling
+        administrator. It defaults from ``self_signup``, so every existing
+        caller keeps the behaviour it has: a member is bounded as a member, and
+        anything else is treated as the records path it is today.
         """
         try:
             # Verify shift belongs to org, and lock the row on every path.
@@ -3391,6 +3632,22 @@ class SchedulingService:
             )
             if not shift:
                 return None, "Shift not found"
+
+            # Placed before the candidate checks so the specific "this shift
+            # has already started" wins over the generic capacity and
+            # eligibility refusals — a member told they are not cleared for a
+            # seat goes to an officer about their qualifications, when the real
+            # answer is that the shift went out an hour ago. Skipped entirely
+            # for the records path, which is also the hot path for backfill.
+            effective_actor = actor or (
+                SignupActor.MEMBER if self_signup else SignupActor.MANAGER
+            )
+            if effective_actor != SignupActor.MANAGER:
+                window_error = await self.signup_closed_reason(
+                    shift, organization_id, effective_actor
+                )
+                if window_error:
+                    return None, window_error
 
             user_id = assignment_data.get("user_id")
 
@@ -4700,6 +4957,19 @@ class SchedulingService:
             offering_shift = shift_result.scalar_one_or_none()
             if not offering_shift:
                 return await reject("That shift no longer exists")
+
+            # Accepting an offer is, as the docstring above says, exactly
+            # equivalent to the offerer withdrawing and the accepter signing
+            # up. So it is bounded by the same member deadline: without this,
+            # a targeted offer is a way to be seated on a shift that already
+            # ran, which is the hole the signup window exists to close. The
+            # offerer keeps the seat, which is the truthful record — they are
+            # who the roster committed.
+            window_error = await self.signup_closed_reason(
+                offering_shift, organization_id, SignupActor.MEMBER
+            )
+            if window_error:
+                return await reject(window_error)
 
             assignment_result = await self.db.execute(
                 select(ShiftAssignment)

@@ -38,12 +38,30 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+// Open shifts are, by definition, shifts that have not gone out yet — the tab
+// offers a signup button on each — so the fixtures must sit in the future as
+// *instants*, not on a date that was in the future when this file was written.
+// Hardcoded dates make these tests a time bomb: `2026-03-01` was ahead of the
+// clock once and is behind it now, and the signup window closes on a shift that
+// has already started.
+const inDays = (days: number, hour = 7): { date: string; start: string; end: string } => {
+  const day = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  day.setUTCHours(hour, 0, 0, 0);
+  const end = new Date(day.getTime() + 12 * 60 * 60 * 1000);
+  const date = day.toISOString().slice(0, 10);
+  return { date, start: day.toISOString(), end: end.toISOString() };
+};
+
+const DAY_ONE = inDays(3);
+const DAY_TWO = inDays(4, 19);
+const DAY_THREE = inDays(6, 14);
+
 const mockShifts = [
   {
     id: 'shift-1',
-    shift_date: '2026-03-01',
-    start_time: '2026-03-01T07:00:00Z',
-    end_time: '2026-03-01T19:00:00Z',
+    shift_date: DAY_ONE.date,
+    start_time: DAY_ONE.start,
+    end_time: DAY_ONE.end,
     apparatus_name: 'Engine 1',
     apparatus_unit_number: 'E1',
     apparatus_positions: ['officer', 'driver', 'firefighter'],
@@ -54,9 +72,9 @@ const mockShifts = [
   },
   {
     id: 'shift-2',
-    shift_date: '2026-03-02',
-    start_time: '2026-03-02T19:00:00Z',
-    end_time: '2026-03-03T07:00:00Z',
+    shift_date: DAY_TWO.date,
+    start_time: DAY_TWO.start,
+    end_time: DAY_TWO.end,
     attendee_count: 0,
     created_at: '2026-02-25T00:00:00Z',
     updated_at: '2026-02-25T00:00:00Z',
@@ -170,9 +188,9 @@ describe('OpenShiftsTab', () => {
   describe('outreach signup sheets', () => {
     const outreachShift = {
       id: 'shift-outreach',
-      shift_date: '2026-03-05',
-      start_time: '2026-03-05T14:00:00Z',
-      end_time: '2026-03-05T16:00:00Z',
+      shift_date: DAY_THREE.date,
+      start_time: DAY_THREE.start,
+      end_time: DAY_THREE.end,
       attendee_count: 0,
       is_outreach: true,
       outreach_roles: [

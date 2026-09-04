@@ -19,15 +19,23 @@ vi.mock('../../modules/apparatus/services/api', () => ({
 }));
 
 vi.mock('../../modules/scheduling/store/schedulingStore', () => ({
-  useSchedulingStore: () => ({
-    members: [
-      { id: 'u1', label: 'Alice Adams' },
-      { id: 'u2', label: 'Bob Brown' },
-    ],
-    apparatus: [{ id: 'ap1', unit_number: 'E-1', name: 'Engine 1' }],
-    loadMembers: vi.fn(),
-    loadApparatus: vi.fn(),
-  }),
+  // Honours the selector, as the real store does.
+  useSchedulingStore: (selector?: (s: unknown) => unknown) => {
+    const state = {
+      members: [
+        { id: 'u1', label: 'Alice Adams' },
+        { id: 'u2', label: 'Bob Brown' },
+      ],
+      apparatus: [{ id: 'ap1', unit_number: 'E-1', name: 'Engine 1' }],
+      loadMembers: vi.fn(),
+      loadApparatus: vi.fn(),
+      settingsLoaded: true,
+      signupClosesMinutesBefore: 0,
+      lateSignupGraceMinutes: 60,
+      loadSettings: vi.fn(),
+    };
+    return selector ? selector(state) : state;
+  },
 }));
 
 vi.mock('../../stores/authStore', () => ({

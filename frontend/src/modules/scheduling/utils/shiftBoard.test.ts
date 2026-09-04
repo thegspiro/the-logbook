@@ -12,6 +12,9 @@ import {
   memberInitials,
   monthMatrix,
   shiftCapacity,
+  DEFAULT_SIGNUP_WINDOW,
+  isShiftClaimable,
+  memberSignupClosedReason,
   shiftCrewName,
   shiftPeriodLetter,
   shiftStatusInfo,
@@ -39,14 +42,23 @@ const seat = (userId: string, position: string, name = 'A Member') => ({
 // fixture to today so it stays an open shift for good. Tests that pin an
 // explicit `today` (see TODAY below) keep their literal dates on purpose.
 const TODAY_KEY = toDateKey(new Date());
-const TOMORROW_KEY = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+// The default fixture's start must be an *instant* in the future, not a fixed
+// wall-clock time: `memberSignupClosedReason` compares it against `Date.now()`,
+// so a literal `T22:00:00Z` would close every default-fixture shift after 22:00
+// UTC and take this file and ShiftSeatList's red on a commit that touched
+// neither — the same time-bomb class the comment above describes, one level
+// down. Tests that care about the *hour* (day/night classification) override
+// `start_time` with a literal on purpose.
+const FUTURE_START = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+const FUTURE_END = new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString();
 
 const shift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 's1',
   organization_id: 'org',
   shift_date: TODAY_KEY,
-  start_time: `${TODAY_KEY}T22:00:00Z`,
-  end_time: `${TOMORROW_KEY}T10:00:00Z`,
+  start_time: FUTURE_START,
+  end_time: FUTURE_END,
   positions: [
     { position: 'officer', required: true },
     { position: 'driver', required: true },
@@ -461,5 +473,90 @@ describe('a shift nobody can sign up for any more', () => {
     const info = shiftStatusInfo(shift({ status: 'cancelled' }), null, TODAY);
     expect(chipLabel(info)).toBe('Cancelled');
     expect(statusBadgeLabel(info)).toBe('Cancelled');
+  });
+});
+
+describe('memberSignupClosedReason', () => {
+  const at = (minutesFromNow: number) =>
+    shift({ start_time: new Date(Date.now() + minutesFromNow * 60_000).toISOString() });
+
+  it('is open before the shift starts', () => {
+    expect(memberSignupClosedReason(at(60))).toBeNull();
+  });
+
+  it('closes once the shift has started', () => {
+    // The regression this exists for: the old rule compared calendar days, so
+    // a shift that began ten hours ago was still "today" and still claimable.
+    expect(memberSignupClosedReason(at(-600))).toBe('This shift has already started.');
+  });
+
+  it('closes early when the department set a lead time', () => {
+    const window = { closesMinutesBefore: 30, graceMinutes: 60 };
+    expect(memberSignupClosedReason(at(31), window)).toBeNull();
+    expect(memberSignupClosedReason(at(29), window)).toBe('Signup for this shift has closed.');
+  });
+
+  it('is reopened by a live late-signup window', () => {
+    const reopened = {
+      ...at(-600),
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    };
+    expect(memberSignupClosedReason(reopened)).toBeNull();
+  });
+
+  it('names an expired late-signup window rather than the generic reason', () => {
+    const expired = {
+      ...at(-600),
+      late_signup_until: new Date(Date.now() - 5 * 60_000).toISOString(),
+    };
+    expect(memberSignupClosedReason(expired)).toBe('Late signup for this shift has closed.');
+  });
+
+  it('never lets an expired override shorten the natural deadline', () => {
+    const future = {
+      ...at(60),
+      late_signup_until: new Date(Date.now() - 60 * 60_000).toISOString(),
+    };
+    expect(memberSignupClosedReason(future)).toBeNull();
+  });
+
+  it('falls back to the lifecycle rule when the start is not an instant', () => {
+    // A bare "HH:MM" still reaches the client from some responses. Returning
+    // null beats NaN, which compares false in both directions and would close
+    // every shift in the department.
+    expect(memberSignupClosedReason(shift({ start_time: '07:00' }))).toBeNull();
+    expect(memberSignupClosedReason(shift({ start_time: '' }))).toBeNull();
+  });
+
+  it('does not close a future shift under the pre-settings default', () => {
+    expect(memberSignupClosedReason(at(1), DEFAULT_SIGNUP_WINDOW)).toBeNull();
+  });
+});
+
+describe('isShiftClaimable', () => {
+  const started = shift({ start_time: new Date(Date.now() - 60 * 60_000).toISOString() });
+
+  it('is false on a shift that has started', () => {
+    expect(isShiftClaimable(started)).toBe(false);
+  });
+
+  it('is false on a cancelled shift even inside a late-signup window', () => {
+    const cancelled = {
+      ...started,
+      status: 'cancelled' as const,
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    };
+    expect(isShiftClaimable(cancelled)).toBe(false);
+  });
+});
+
+describe('shiftStatusInfo after the start', () => {
+  it('stops counting the empty chairs of a shift that has gone out', () => {
+    // A started shift's open seats are not a shortage anybody browsing the
+    // board can fix, which is the same argument a cancelled shift's are not.
+    const started = shift({ start_time: new Date(Date.now() - 60 * 60_000).toISOString() });
+    const info = shiftStatusInfo(started);
+    expect(info.isOpen).toBe(false);
+    expect(info.openSeats).toBe(0);
   });
 });

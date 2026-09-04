@@ -15,6 +15,7 @@ import { Modal } from '../../../components/Modal';
 import { schedulingService } from '../../../modules/scheduling';
 import type { ShiftRecord, StandingShiftClaim, TradeCandidate } from '../../../modules/scheduling';
 import { memberInitials, shiftCrewName, shiftStatusInfo } from '../../../modules/scheduling/utils/shiftBoard';
+import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
 import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
 import { calendarDaysFromToday, formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -44,6 +45,7 @@ export const GiveUpShiftModal: React.FC<GiveUpShiftModalProps> = ({
   onClose,
   onChanged,
 }) => {
+  const signupWindow = useSignupWindow();
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [choice, setChoice] = useState<GiveUpChoice>(initialChoice);
   const [candidates, setCandidates] = useState<TradeCandidate[]>([]);
@@ -54,7 +56,7 @@ export const GiveUpShiftModal: React.FC<GiveUpShiftModalProps> = ({
   const [endSeries, setEndSeries] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const info = shiftStatusInfo(shift, currentUserId);
+  const info = shiftStatusInfo(shift, currentUserId, new Date(), signupWindow);
   const crewAfterRelease = Math.max(info.filled - 1, 0);
   const leadDays = calendarDaysFromToday(shift.shift_date, timezone);
   const target = candidates.find((c) => c.user_id === targetId) ?? null;

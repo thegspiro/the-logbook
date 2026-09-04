@@ -12,6 +12,7 @@ import { schedulingService } from '../services/api';
 import type { SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } from '../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { UserStatus } from '../../../constants/enums';
+import { DEFAULT_SIGNUP_WINDOW } from '../utils/shiftBoard';
 
 interface MemberOption {
   id: string;
@@ -44,6 +45,14 @@ interface SchedulingState {
   requireEndOfShiftChecks: boolean;
   /** 'detailed' | 'count_only' | 'off'. Defaults to 'detailed'. */
   callTrackingMode: string;
+  /**
+   * The department's signup window — how long before a shift starts members
+   * stop being able to claim a seat, and how long past the start an officer
+   * may still seat somebody. Held here so every screen that gates a claim
+   * button reads one answer rather than fetching its own.
+   */
+  signupClosesMinutesBefore: number;
+  lateSignupGraceMinutes: number;
   settingsLoaded: boolean;
 
   // ─── Actions ────────────────────────────────────────────────────────────
@@ -76,6 +85,8 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   platoonsEnabled: false,
   requireEndOfShiftChecks: false,
   callTrackingMode: 'detailed',
+  signupClosesMinutesBefore: DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
+  lateSignupGraceMinutes: DEFAULT_SIGNUP_WINDOW.graceMinutes,
   settingsLoaded: false,
 
   // ─── Actions ────────────────────────────────────────────────────────────
@@ -89,6 +100,11 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
         requireEndOfShiftChecks: settings.require_end_of_shift_checks,
         // A missing setting means today's behaviour, never 'off'.
         callTrackingMode: settings.call_tracking?.mode || 'detailed',
+        // `??`, not `||`: 0 is a meaningful value here — it is what "closes
+        // exactly at the start" means — and `||` would silently replace it
+        // with the default.
+        signupClosesMinutesBefore: settings.signup_closes_minutes_before ?? DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
+        lateSignupGraceMinutes: settings.late_signup_grace_minutes ?? DEFAULT_SIGNUP_WINDOW.graceMinutes,
         settingsLoaded: true,
       });
     } catch {

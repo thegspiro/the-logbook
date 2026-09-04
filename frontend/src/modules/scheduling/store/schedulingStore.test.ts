@@ -5,13 +5,14 @@ const mockGetUsers = vi.fn();
 const mockGetTemplates = vi.fn();
 const mockGetBasicApparatus = vi.fn();
 const mockGetSummary = vi.fn();
+const mockGetFeatureSettings = vi.fn();
 
 vi.mock('../services/api', () => ({
   schedulingService: {
     getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
     getBasicApparatus: (...args: unknown[]) => mockGetBasicApparatus(...args) as unknown,
     getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
-    getFeatureSettings: () => Promise.resolve({ platoons_enabled: false }),
+    getFeatureSettings: (...args: unknown[]) => mockGetFeatureSettings(...args) as unknown,
   },
 }));
 
@@ -39,7 +40,15 @@ describe('schedulingStore', () => {
       summary: null,
       summaryLoading: false,
       summaryError: null,
+      settingsLoaded: false,
+      signupClosesMinutesBefore: 0,
+      lateSignupGraceMinutes: 60,
     });
+    // `vi.clearAllMocks` resets calls but not implementations, so this block
+    // installs its own default rather than running on a neighbour's (pitfall
+    // #28).
+    mockGetFeatureSettings.mockReset();
+    mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
   });
 
   describe('loadMembers', () => {
@@ -203,6 +212,47 @@ describe('schedulingStore', () => {
       expect(mockGetUsers).not.toHaveBeenCalled();
       expect(mockGetTemplates).not.toHaveBeenCalled();
       expect(mockGetBasicApparatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('loadSettings signup window', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('maps the department window onto the store', async () => {
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        signup_closes_minutes_before: 30,
+        late_signup_grace_minutes: 15,
+      });
+
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().signupClosesMinutesBefore).toBe(30);
+      expect(useSchedulingStore.getState().lateSignupGraceMinutes).toBe(15);
+    });
+
+    it('keeps a zero rather than treating it as unset', async () => {
+      // 0 means "closes exactly at the start"; `||` would silently replace it
+      // with the default and quietly widen the department's window.
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        signup_closes_minutes_before: 0,
+        late_signup_grace_minutes: 0,
+      });
+
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().lateSignupGraceMinutes).toBe(0);
+    });
+
+    it('falls back to the built-in window when the server omits the fields', async () => {
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().signupClosesMinutesBefore).toBe(0);
+      expect(useSchedulingStore.getState().lateSignupGraceMinutes).toBe(60);
     });
   });
 });
