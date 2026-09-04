@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The org chart's link line is for the people who maintain it (2026-09-04)
+
+**Changed**
+
+- **A seat filled from a roster record no longer explains itself to
+  everyone.** Each seat whose holders come from a position or rank carried
+  a "Linked to ..." line naming that record. It answers "why can I not type
+  a name here", which is a question only somebody who can edit the chart
+  asks; for a member looking up the chain of command it is application
+  plumbing they cannot act on. The line is now shown only to people who can
+  manage the chart, in both the diagram and the outline. Who holds a seat is
+  unchanged for every reader.
+
 ### Checklist officers and store managers can open the admin hub (2026-09-04)
 
 **Fixed**
