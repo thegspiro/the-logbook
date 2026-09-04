@@ -76,6 +76,8 @@ async def _insert_hours_requirement(
     due_date_type: str = "calendar_period",
     period_start_month: int = 1,
     period_start_day: int = 1,
+    due_date: date | None = None,
+    rolling_period_months: int | None = None,
 ) -> str:
     """Insert an HOURS-type training requirement and return its id."""
     req_id = _uid()
@@ -83,11 +85,11 @@ async def _insert_hours_requirement(
         text(
             "INSERT INTO training_requirements "
             "(id, organization_id, name, requirement_type, source, "
-            "required_hours, frequency, due_date_type, "
-            "period_start_month, period_start_day, "
+            "required_hours, frequency, due_date_type, due_date, "
+            "rolling_period_months, period_start_month, period_start_day, "
             "applies_to_all, active, created_at, updated_at) "
             "VALUES (:id, :org_id, :name, :req_type, :source, "
-            ":hours, :freq, :ddt, :psm, :psd, "
+            ":hours, :freq, :ddt, :due_date, :rpm, :psm, :psd, "
             "1, 1, :now, :now)"
         ),
         {
@@ -99,6 +101,8 @@ async def _insert_hours_requirement(
             "hours": required_hours,
             "freq": frequency,
             "ddt": due_date_type,
+            "due_date": due_date,
+            "rpm": rolling_period_months,
             "psm": period_start_month,
             "psd": period_start_day,
             "now": _NOW,
@@ -209,6 +213,137 @@ class TestHoursRequirementCompliance:
         assert progress.completed_hours == 0
         assert progress.required_hours == 24.0
         assert progress.is_complete is False
+
+    async def test_days_until_due_is_populated(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """RequirementProgress.days_until_due must actually be set.
+
+        The field defaults to None on the schema, and none of
+        check_requirement_progress's three RequirementProgress(...)
+        construction sites set it — so every consumer, including the MCP
+        get_member_requirements_progress tool (whose docstring promises
+        "days until due, negative when overdue"), always received null
+        regardless of the requirement's actual due date. Caught by Codex
+        reviewing TR-17 pass 3.
+        """
+        org_id, user_id = setup_org_and_user
+        due = date.today() + timedelta(days=10)
+        req_id = await _insert_hours_requirement(
+            db_session, org_id, required_hours=24.0, due_date=due
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.due_date == due
+        assert progress.days_until_due == 10
+
+    async def test_days_until_due_is_negative_when_overdue(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """An already-passed due date must report a negative day count."""
+        org_id, user_id = setup_org_and_user
+        due = date.today() - timedelta(days=5)
+        req_id = await _insert_hours_requirement(
+            db_session, org_id, required_hours=24.0, due_date=due
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.days_until_due == -5
+
+    async def test_days_until_due_falls_back_to_the_period_window_end(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A calendar-period requirement has no due_date of its own — the
+        deadline is the end of its evaluation window. Codex caught the first
+        draft of this fix computing days_until_due solely from
+        requirement.due_date, which left it null for every annual/quarterly/
+        monthly requirement (i.e. the common case) and fixed only the rare
+        explicit-due-date one.
+        """
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_hours_requirement(
+            db_session,
+            org_id,
+            required_hours=24.0,
+            due_date_type="calendar_period",
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        year_end = date(date.today().year, 12, 31)
+        assert progress.due_date == year_end
+        assert progress.days_until_due == (year_end - date.today()).days
+
+    async def test_days_until_due_for_rolling_requirement_anchors_on_last_completion(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A rolling requirement's deadline is the last completion plus its
+        interval, not `today` — _get_date_window() always returns `today` as
+        the rolling window's end (a trailing evaluation window, not a
+        deadline), which the round-1 fallback misread as "due today" for
+        every rolling requirement regardless of completion history. Caught
+        by Codex reviewing this fix's own first draft.
+        """
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_hours_requirement(
+            db_session,
+            org_id,
+            required_hours=24.0,
+            due_date_type="rolling",
+            rolling_period_months=24,
+        )
+        completion = date.today() - timedelta(days=365)
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            hours_completed=24.0,
+            completion_date=completion,
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        from dateutil.relativedelta import relativedelta
+
+        expected_due = completion + relativedelta(months=24)
+        assert progress.due_date == expected_due
+        assert progress.days_until_due == (expected_due - date.today()).days
+
+    async def test_days_until_due_for_rolling_requirement_with_no_completion_is_none(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """With no completion on file there is no anchor for a rolling
+        deadline — must stay null rather than misreport `today`."""
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_hours_requirement(
+            db_session,
+            org_id,
+            required_hours=24.0,
+            due_date_type="rolling",
+            rolling_period_months=24,
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.due_date is None
+        assert progress.days_until_due is None
 
     async def test_partial_hours_not_met(
         self, db_session: AsyncSession, setup_org_and_user

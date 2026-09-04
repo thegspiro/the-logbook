@@ -14,10 +14,21 @@
 
 ---
 
-## Pass 3 (2026-09-04) — no findings, diff-scoped against pass 2
+## Pass 3 (2026-09-04) — Codex follow-up: 1 fix, 1 flagged, 1 corrected claim
 
-**PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217).
+**PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged
+at its stale first-draft state before this correction could be pushed to
+it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
+`PROGRESS.md`'s Log for detail). The correction below and its fix carried
+forward on a new branch/PR, `claude/security-review-training-core-tr3-followup`.
 **Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
+
+> **Correction (Codex review of this PR).** The first draft of this section
+> claimed "no findings, no code changes" and described two things as
+> "already reviewed"/"clean" that were not quite either. Codex raised three
+> comments; all three real. One is a genuine bug in this feature's own code
+> (fixed below); the other two are corrections to this draft's own claims,
+> not new code defects. The section below is the corrected one.
 
 Diffed the seven declared files (six pass-1 files plus `training_compliance.py`,
 already declared) against the pass-2 merge commit, plus a fresh grep for any
@@ -38,30 +49,48 @@ new migrations matched a bare `training` grep only inside the word
 seeded positions, which is the Permissions & roles feature's own domain, not
 this one's).
 
-**Two adjacent files this feature also declares turned out to carry an
-already-reviewed fix from a different rotation feature, not new surface of
-this one's:** `models/training.py` (+109/-4) and `types/training.ts` (+32/-9)
-are both misleadingly-named shared files. The former's entire diff is
-`Shift`/`ShiftTemplate`/`ShiftTemplateEquipmentCheck` — Scheduling's models,
-already reviewed in `SCH-15-scheduling.md` pass 3 (the
-`equipment_check_template_ids` feature). The latter's entire diff is
-`ComplianceProfile*`/`ComplianceConfig*` type widenings citing `CMP2-2`/
-`CMP2-3`/`CMP2-4` — the Compliance feature's own security-review fixes
-(Pitfall #1 explicit-null-vs-omitted correctness for its config forms), not
-Training Core's. `schemas/training.py`'s one change (an SSRF-hardening
-`field_validator` on `ExternalProviderConfig`'s endpoint fields) belongs to
-`external_training.py` — declared as **feature 18, "training extended"**,
-out of this feature's scope per pass 1's own scope note. None of the three
-is re-reviewed here; each is already covered by its owning feature's pass.
-`training_compliance.py`'s own change (`compute_org_compliance_pct`) is
-similarly already covered — cited in its own comment as **CMP2-3** (a
-`None`-vs-`[]` distinction for `profile.required_requirement_ids`) — read
-directly to confirm the fix is what it claims: `if profile.
+**Two adjacent files this feature also declares carry another feature's
+already-reviewed fix, not new surface of this one's:** `models/training.py`
+(+109/-4) and `types/training.ts` (+32/-9) are both misleadingly-named shared
+files. The former's entire diff is `Shift`/`ShiftTemplate`/
+`ShiftTemplateEquipmentCheck` — Scheduling's models, already reviewed in
+`SCH-15-scheduling.md` pass 3 (the `equipment_check_template_ids` feature).
+The latter's entire diff is `ComplianceProfile*`/`ComplianceConfig*` type
+widenings citing `CMP2-2`/`CMP2-3`/`CMP2-4` — the Compliance feature's own
+security-review fixes (Pitfall #1 explicit-null-vs-omitted correctness for
+its config forms). `training_compliance.py`'s own change
+(`compute_org_compliance_pct`) is likewise cited as **CMP2-3** in its own
+comment — read directly to confirm the fix is what it claims: `if profile.
 required_requirement_ids is not None:` now correctly treats an explicitly
 empty list as "zero requirements," and the threshold-override reads were
 un-nested from that same conditional so they apply whenever the profile
 matched, independent of whether it also overrides the requirement list.
 Correct, matches the CMP2-3 description, not a re-finding.
+
+> **Correction (Codex): `schemas/training.py`'s SSRF-hardening change was
+> not, in fact, already reviewed.** The first draft claimed this — a
+> `field_validator` on `ExternalProviderConfig`'s four endpoint fields,
+> using `relative_endpoint` — belonged to and was covered by feature 18
+> ("training extended"). Codex checked the dates: the validator landed
+> September 2, after Training Extended's own pass 2 (August 29), and
+> feature 18's pass 3 has not run yet — so nothing had actually reviewed it,
+> and feature 18's own declared file list doesn't name `schemas/training.py`
+> at all, which could have let it fall through that future pass too.
+> Reviewed it directly here instead of continuing to defer it:
+> `relative_endpoint` (`app/utils/ssrf_transport.py`) rejects any value that
+> isn't a bare path starting with a single `/` (no scheme, no netloc, no
+> `//` protocol-relative trick, no fragment) — correct for its purpose. More
+> importantly, the actual outbound call sites in
+> `external_training_service.py` (`join_endpoint(provider.api_base_url,
+records_endpoint)`, four call sites) already run every configured endpoint
+> through this exact same `relative_endpoint` check at request time,
+> independent of whether the schema validates it at save time — confirmed by
+> reading `join_endpoint`'s own body. So this schema-level addition is
+> defense-in-depth (an early, clean 400 instead of a 500 deep in an outbound
+> call), not the closing of a live gap: the SSRF vector was already closed
+> at the point that actually matters. Not a finding against this feature,
+> and — now that it has actually been read — not an open item to hand to
+> feature 18 either.
 
 **`training_service.py`'s diff is squarely this feature's own: an N+1
 performance rework, org/tenant isolation preserved throughout.**
@@ -118,16 +147,166 @@ latter through `require_member` — the same shared, already-reviewed
 org-scoped-or-`ValueError` helper the Events MCP tools use). `get_member_
 training_summary` and `get_member_requirements_progress` both resolve the
 target member through `require_member` before calling into
-`TrainingService`; the latter is the new paginated API's own first outside
-caller, and uses it correctly — resolves `get_applicable_requirements` once,
-then hands only the requested page-slice to `get_requirements_progress_for`,
-so an MCP caller cannot force an unbounded per-call scan the way TR2-4's own
-gap does. The response builder (`_record`) is a deliberate allowlist that
-excludes `score`/certification-number fields as credential/performance
-detail, matching the redaction discipline the events/scheduling MCP tool
-files already established. Clean, no finding.
+`TrainingService`. Tenant isolation is correct on all four; no cross-org
+or cross-member read is reachable.
 
-**No findings, no code changes this pass.** Rotation row 17 → see
+> **Correction (Codex): `get_member_requirements_progress` is not fully
+> bounded, and the first draft should not have called it clean.** `limit`
+> only bounds the number of _returned_ progress rows. Two unbounded reads
+> still happen underneath on every call: `get_applicable_requirements`
+> itself has no page bound (mitigated only by the pass-2 finding that
+> configuration data — requirements — is naturally small per org, tens not
+> thousands); and if the requested page happens to include a CERTIFICATION-
+> type requirement (or a BIANNUAL-hours one), `_preload_window` returns
+> `None`, so `get_requirements_progress_for` preloads the member's _entire_
+> completed-training history rather than a date-bounded slice. Neither is
+> new: both are the same characteristic `check_requirement_progress` always
+> had per-requirement (a certification check has always ignored the
+> frequency window, by design — a cert is valid until it expires, not per
+> period), just newly reachable through this MCP tool, which had never been
+> reviewed before this pass. **Flagged, not fixed** — same disposition as
+> TR2-4, for the same reason: bounding a certification check's window
+> without breaking its correctness is a service-level redesign
+> (`training_compliance.py`'s date-window logic would need to change what
+> "ignoring the window" means for this class of call), not a safe drive-by
+> change. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+## Findings (pass 3)
+
+### TR3-1 — LOW/MED (correctness) — `RequirementProgress.days_until_due` was never populated — ✅ FIXED
+
+**Reported by Codex on this PR; confirmed.** All three `RequirementProgress(...)`
+construction sites in `check_requirement_progress` set `due_date=requirement.
+due_date` but never `days_until_due`, so the field always serialized as its
+schema default, `None` — regardless of whether the requirement actually had
+a due date. This is pre-existing (none of the three sites is part of this
+pass's own diff) and was never caught before because nothing consuming
+`RequirementProgress` had an explicit, checkable contract naming the field
+until this pass's own `app/mcp/tools/training.py` scope addition — its
+`get_member_requirements_progress` docstring promises "days until due
+(negative when overdue)" verbatim, which this pass should have verified
+rather than taken on faith when declaring that tool "clean."
+
+**Where:** `app/services/training_service.py` — `check_requirement_progress`,
+all three `return RequirementProgress(...)` sites.
+
+**Impact:** LOW/MED. Not a tenant-isolation or auth defect — every consumer
+of this field (the training UI's own due-date badges, this pass's MCP tool)
+simply received a silently-wrong `null` where a real day count belonged, in
+both the ordinary and the negative-when-overdue case. An MCP-driven
+automation deciding whether to escalate an overdue requirement based on
+`days_until_due` being negative would never fire.
+
+**Fix (round 1, incomplete):** computed `days_until_due = (requirement.
+due_date - today).days if requirement.due_date else None` once near the top
+of the method and passed it to all three construction sites. Verified against
+an explicit `due_date` — missed that most requirements don't have one.
+
+**Round 2 — Codex caught the round-1 fix still broken for the common case.**
+A `calendar_period` requirement (the default `due_date_type`, covering every
+annual/quarterly/monthly requirement) carries no `due_date` of its own — its
+deadline is the _end of its evaluation window_, which `_get_date_window()`
+already returns as `end_date` and which `evaluate_requirement_detail()`
+already uses as exactly this fallback (`effective_due_date = req.due_date if
+req.due_date else (end_date if end_date else None)`). Computing solely from
+`requirement.due_date` therefore left `days_until_due` (and `due_date`) null
+for every calendar-period requirement — the case this fix exists for — and
+only worked for the rare requirement with an explicit fixed date. Fixed by
+computing `effective_due_date = requirement.due_date or end_date` right after
+`_get_date_window()` (before the recency-cutoff logic below it can overwrite
+`end_date`), and using `effective_due_date` for both the `due_date` and
+`days_until_due` fields at all three construction sites — mirroring
+`evaluate_requirement_detail()`'s own fallback rather than duplicating a
+divergent one. The `BIANNUAL` cert-expiration override that
+`evaluate_requirement_detail()` layers on top of that fallback was left alone:
+out of scope for this finding, and unchanged from pre-existing behavior.
+
+**Guard tests:** `test_training_compliance_integration.py::
+TestHoursRequirementCompliance::test_days_until_due_is_populated` and
+`::test_days_until_due_is_negative_when_overdue` — insert a requirement with
+an explicit `due_date` 10 days out / 5 days past, assert the returned
+`RequirementProgress.days_until_due` is `10` / `-5` respectively.
+`::test_days_until_due_falls_back_to_the_period_window_end` — insert an
+ordinary `calendar_period` annual requirement with no explicit `due_date`,
+assert `RequirementProgress.due_date`/`days_until_due` resolve to the
+window's Dec 31 end date rather than `None` — this is the test that would
+have caught round 1's gap.
+
+**Round 3 — Codex caught round 2's own fallback broken for `rolling`
+requirements.** `effective_due_date = requirement.due_date or end_date`
+is correct for `calendar_period` (`end_date` really is the period's
+deadline) but wrong for `due_date_type="rolling"`: `_get_date_window()`
+always returns `today` as `end_date` for a rolling requirement — it is a
+trailing evaluation window (`today - rolling_period_months` to `today`),
+not a deadline — so round 2 reported `due_date=today` /
+`days_until_due=0` for every rolling requirement regardless of when it
+was last completed. A rolling deadline is genuinely defined as _last
+applicable completion + the configured interval_, which has no
+relationship to the evaluation window at all. Fixed by adding a third
+branch (`explicit due_date` → `rolling` anchor → `calendar_period` window
+fallback, in that order) that resolves the rolling case via a new
+`_rolling_due_date()` helper: the latest completed record matching the
+requirement's `training_type` (mirroring the filter every other branch of
+`check_requirement_progress` already applies), plus
+`rolling_period_months`, via the preloaded `completed_records` when given
+or a `MAX(completion_date)` query otherwise. Returns `None` — not `today`
+— when the member has no applicable completion yet, since there is no
+anchor to compute a deadline from and reporting "due today" for an
+untouched requirement would be actively misleading.
+
+While fixing this, found and fixed the same latent bug in the sibling
+function `evaluate_requirement_detail()` (the `/my-training` endpoint's
+own detailed-breakdown path) — it uses the identical `req.due_date or
+end_date` fallback this pass's round 2 had copied, and reading it closely
+after Codex's finding confirmed it has carried the exact same rolling-mode
+flaw since it was introduced (pass 1, PR #1851), independent of anything
+in this pass's diff. Not reported by Codex on this PR (out of this PR's
+declared diff, and evaluate_requirement_detail's own days_until_due logic
+predates this pass entirely) — found by inspection while fixing the
+sibling copy of the same pattern, and fixed in the same commit per
+CLAUDE.md's "no acceptable pre-existing errors" rule rather than left for
+a future pass to rediscover. Uses the same anchor logic, adapted to work
+in-memory against the already-fetched `member_records` list (this
+function takes no `db` session) instead of a query.
+
+**Guard tests (round 3):**
+`test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_days_until_due_for_rolling_requirement_anchors_on_last_completion` and
+`::test_days_until_due_for_rolling_requirement_with_no_completion_is_none`
+for `check_requirement_progress`;
+`test_training_compliance.py::TestEvaluateRequirementDetailFields::
+test_days_until_due_for_rolling_requirement_anchors_on_last_completion` and
+`::test_days_until_due_for_rolling_requirement_with_no_completion_is_none`
+for `evaluate_requirement_detail`. All four confirmed failing (reproducing
+`due_date=today`/`days_until_due=0`) against the round-2 code before the
+round-3 fix, via `git stash` on just `training_service.py`.
+
+### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
+
+**Reported by Codex on this PR; confirmed.** See the "Scope addition"
+correction above for the mechanism. `limit`/`offset` on the MCP tool
+genuinely bound the number of `RequirementProgress` rows returned, but not
+the work done to produce them: `get_applicable_requirements` has no page
+bound of its own (mitigated by requirements being naturally few per org),
+and a page containing a CERTIFICATION or BIANNUAL-hours requirement causes
+`_preload_window` to return `None`, preloading the member's entire
+completed-training history rather than a bounded slice.
+
+**Not fixed.** Both characteristics are pre-existing in `TrainingService`
+(the certification case is deliberate — a cert doesn't expire per period,
+so its check has always looked at everything), newly reachable only because
+this pass swept `app/mcp/tools/training.py` into scope for the first time.
+Bounding the certification case without changing its correctness needs a
+service-level redesign of `training_compliance.py`'s date-window logic —
+the same class of fix TR2-4 already flagged for `get_training_dashboard_
+summary`, and not a safe drive-by alongside this pass's other work.
+Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Impact:** LOW. Per-member, not org-wide — the ceiling on a single call's
+work is one member's own training history, not the whole department's, and
+every caller is an authenticated MCP principal.
+
+**No regression in any pass-1/pass-2 fix.** Rotation row 17 → see
 `PROGRESS.md`.
 
 ## Completion gate (pass 3)
@@ -138,10 +317,12 @@ files already established. Clean, no finding.
 | `black --check app/ tests/ alembic/`              | clean                                             |
 | `isort --check-only app/ tests/ alembic/`         | clean                                             |
 | `python3 scripts/validate_migrations.py --strict` | single head, 414 revisions (no schema change)     |
-| `pytest tests/ -k "training"`                     | 842 passed, 1 skipped (pre-existing)              |
-| `pytest tests/` (full backend suite)              | 10554 passed, 21 skipped (pre-existing), 0 failed |
+| `pytest tests/ -k "training"`                     | 844 passed, 1 skipped (pre-existing)              |
+| `pytest tests/` (full backend suite)              | 10556 passed, 21 skipped (pre-existing), 0 failed |
 | `tsc --noEmit`                                    | 0 errors                                          |
 | `eslint .`                                        | 0 errors                                          |
+
+---
 
 ---
 

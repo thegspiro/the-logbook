@@ -344,6 +344,50 @@ class TrainingService:
             yr = requirement.year if requirement.year else current_year
             return date(yr, 1, 1), date(yr, 12, 31)
 
+    async def _rolling_due_date(
+        self,
+        requirement,
+        user_id: UUID,
+        organization_id: UUID,
+        completed_records: Optional[Sequence[Any]],
+        rolling_months: int,
+    ) -> Optional[date]:
+        """Next due date for a rolling-due-date requirement.
+
+        Anchored to the member's most recent applicable completion plus the
+        configured interval -- not the evaluation window, which always ends
+        `today` for a rolling requirement and so cannot itself be a deadline.
+        Returns ``None`` when the member has no applicable completion yet;
+        there is no anchor to compute a deadline from.
+        """
+        from dateutil.relativedelta import relativedelta
+
+        if completed_records is not None:
+            latest = max(
+                (
+                    r.completion_date
+                    for r in completed_records
+                    if r.completion_date is not None
+                    and (
+                        not requirement.training_type
+                        or r.training_type == requirement.training_type
+                    )
+                ),
+                default=None,
+            )
+        else:
+            q = (
+                select(func.max(TrainingRecord.completion_date))
+                .where(TrainingRecord.user_id == str(user_id))
+                .where(TrainingRecord.organization_id == str(organization_id))
+                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+            )
+            if requirement.training_type:
+                q = q.where(TrainingRecord.training_type == requirement.training_type)
+            latest = (await self.db.execute(q)).scalar()
+
+        return latest + relativedelta(months=rolling_months) if latest else None
+
     @staticmethod
     def evaluate_requirement_detail(
         req,
@@ -569,9 +613,35 @@ class TrainingService:
         is_met = pct >= 100 and not cert_expired
 
         # Effective due date
-        effective_due_date = (
-            req.due_date if req.due_date else (end_date if end_date else None)
-        )
+        if req.due_date:
+            effective_due_date = req.due_date
+        else:
+            rolling_months = get_rolling_period_months(req)
+            if rolling_months:
+                # Rolling due dates are anchored to the member's last
+                # applicable completion, not the window end: end_date is
+                # always `today` for a rolling requirement (a trailing
+                # evaluation window, not a deadline), which would otherwise
+                # report every rolling requirement as due today. Use the
+                # full (recency-filtered, not window-filtered) completed
+                # set so a completion older than the window -- i.e. one
+                # that makes the requirement overdue -- is still found.
+                from dateutil.relativedelta import relativedelta
+
+                anchors = [
+                    r.completion_date
+                    for r in completed
+                    if r.completion_date is not None
+                    and (not req.training_type or r.training_type == req.training_type)
+                ]
+                latest_completion = max(anchors) if anchors else None
+                effective_due_date = (
+                    latest_completion + relativedelta(months=rolling_months)
+                    if latest_completion
+                    else None
+                )
+            else:
+                effective_due_date = end_date if end_date else None
         if freq == RequirementFrequency.BIANNUAL.value:
             with_exp = [r for r in completed if r.expiration_date]
             if req.training_type:
@@ -656,6 +726,31 @@ class TrainingService:
 
         today = date.today()
         start_date, end_date = self._get_date_window(requirement, today)
+        # Every RequirementProgress this method returns carries this, so
+        # consumers (the MCP `get_member_requirements_progress` tool
+        # explicitly promises "days until due, negative when overdue") don't
+        # each have to re-derive it themselves. Computed from the raw window
+        # before the recency cutoff below can overwrite end_date.
+        rolling_months = get_rolling_period_months(requirement)
+        if requirement.due_date:
+            effective_due_date = requirement.due_date
+        elif rolling_months:
+            # Rolling due dates are anchored to the member's last applicable
+            # completion, not the window end: _get_date_window() always
+            # returns `today` as end_date for a rolling requirement (it's a
+            # trailing evaluation window, not a deadline), which would
+            # otherwise report every rolling requirement as due today.
+            effective_due_date = await self._rolling_due_date(
+                requirement, user_id, organization_id, completed_records, rolling_months
+            )
+        else:
+            # A calendar-period requirement (annual/quarterly/monthly) has no
+            # due_date of its own -- the window's end_date IS its deadline,
+            # the same fallback evaluate_requirement_detail() uses.
+            effective_due_date = end_date
+        days_until_due = (
+            (effective_due_date - today).days if effective_due_date else None
+        )
         # Narrow the window by the freshness cutoff up front so every query
         # below inherits it. A one_time requirement has no frequency window at
         # all, so recency supplies both bounds rather than tightening them.
@@ -826,7 +921,8 @@ class TrainingService:
                         completed_hours=completed_value,
                         percentage_complete=0.0,
                         is_complete=False,
-                        due_date=requirement.due_date,
+                        due_date=effective_due_date,
+                        days_until_due=days_until_due,
                     )
 
             # A requirement with no positive target (required_hours unset/0) must
@@ -854,7 +950,8 @@ class TrainingService:
                     completed_hours=0,
                     percentage_complete=0.0,
                     is_complete=False,
-                    due_date=requirement.due_date,
+                    due_date=effective_due_date,
+                    days_until_due=days_until_due,
                 )
 
             records = await _windowed()
@@ -999,7 +1096,8 @@ class TrainingService:
             completed_hours=completed_value,
             percentage_complete=round(percentage, 2),
             is_complete=is_complete,
-            due_date=requirement.due_date,
+            due_date=effective_due_date,
+            days_until_due=days_until_due,
         )
 
     async def get_all_requirements_progress(
