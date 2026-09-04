@@ -16,27 +16,74 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2212](https://github.com/thegspiro/the-logbook/pull/2212)** (branch
-`claude/security-review-scheduling-sch12-followup`) — Feature 15,
-Scheduling, pass 3, SCH-12 follow-up. #2210 (the pass-3 PR itself) merged
-at its second-round state — the owner merged it while a third round of
-Codex review was still in progress, before that round's fix could be
-pushed to it (CLAUDE.md pitfall #24: never reuse a branch whose PR has
-merged, so the fix moved to a fresh branch/PR off current `main` instead
-of stacking onto the merged one). This PR carries SCH-12's third-round fix
-forward: `create_template` is now fully atomic (the template and its
-checklist links commit together, in one transaction, so neither is ever
-observable to a concurrent request before both are ready) rather than
-committing the template first and compensating for a link-write failure
-after the fact. See the Log entries below for the full three-round history.
-Full completion gate green (including frontend vitest + build). Rotation
-row 15 stays ⏳ awaiting merge. Next: 16 Events & requests, once this PR
-merges.
-
-**[#2210](https://github.com/thegspiro/the-logbook/pull/2210)** ✅ merged
-2026-09-03 — Feature 15, Scheduling, pass 3 (rounds 1–2 of Codex review).
+**#pending** (branch `claude/security-review-events`) — Feature 16, Events &
+requests, pass 3. Diff-scoped against pass 2's merge (`fef19238`, PR #1973):
+of the nine declared files, five changed, all belonging to one feature
+(member-visible attendee rosters + the seat-accurate capacity/waitlist
+rework it depended on), plus one new migration and 21 frontend files. Read
+in full against all seven checklist dimensions — new endpoint fails closed
+on an unrecognized visibility setting and 404s a foreign event id before
+the visibility check runs; the new attendee response schema is a hand-built
+allowlist excluding contact/accommodation fields; the caller's own echoed
+RSVP deliberately omits `dietary_restrictions`/`accessibility_needs` because
+`GET /events/{id}` is not in the frontend cache-exclusion list;
+`get_eligible_members`'s email now routes through the existing
+`contact_visibility` policy instead of returning raw email unconditionally
+(a narrowing, not a new exposure). No findings, no code changes. Full
+completion gate green. Rotation row 16 → ⏳ awaiting PR merge. Next: 17
+Training core, once this PR merges.
 
 ---
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — no new findings, PR pending
+
+Diff-scoped against pass 2's merge (`fef19238`, PR #1973). Five of the nine
+declared files changed since then — `events.py`, `models/event.py`,
+`schemas/event.py`, `event_service.py`, `event_attachments.py` (comment-only)
+— plus one migration; `event_requests.py`, `event_request_service.py`,
+`models/event_request.py` and `schemas/event_request.py` are byte-identical
+to pass 2. A grep for any other file importing the Event/EventRequest models
+or instantiating either service found none new, so the declared surface is
+confirmed complete rather than assumed.
+
+The whole diff is one feature (member-visible attendee rosters, built on a
+reworked seat-accurate capacity/waitlist model), read in full: new
+`GET /{event_id}/attendees` gated on a baseline permission plus a
+per-event/org visibility resolver that fails closed on a missing or
+unrecognized setting and 404s a foreign event id before the visibility
+check runs; its response schema is a hand-written allowlist deliberately
+not inheriting from `RSVPResponse` (which carries contact/accommodation/
+check-in fields); the caller's own echoed RSVP on `GET /events/{id}`
+deliberately omits `dietary_restrictions`/`accessibility_needs` because that
+endpoint is not in the frontend's cache-exclusion list and those fields
+would have made the app's most-visited event endpoint a cacheable,
+PHI-bearing one; `get_eligible_members` now narrows raw email through the
+existing `contact_visibility` policy instead of returning it unconditionally.
+The capacity rework (seats instead of head-count, `allow_guests` actually
+enforced, `rsvp_to_series` delegating to `create_or_update_rsvp` instead of
+duplicating its logic) changes arithmetic, not authorization or tenancy;
+re-verified both locking halves of Pitfall #27 are still correctly ordered
+at both `create_or_update_rsvp` and the re-shaped `promote_from_waitlist`.
+New migration (`attendee_visibility` on `events`/`event_templates`) is two
+nullable String columns with no backfill, correctly — NULL is a real
+"inherit the org default" state. 21 frontend files changed, swept for the
+same banned patterns as pass 2 with zero new hits.
+
+**No findings, no code changes.** Full completion gate green: flake8/black/
+isort clean, migrations single-head (414 revisions), 669 events-scoped and
+10549 full backend suite pass, `tsc --noEmit`/`eslint .` both 0 errors.
+Findings doc: `docs/security-review/EV-16-events-requests.md` pass 3.
+Rotation row 16 → ⏳ awaiting PR merge. Next: 17 Training core, once this
+PR merges.
+
+### 2026-09-03 — Feature 15 (Scheduling, pass 3) ✅ merged — PR #2212
+
+`8b89f319`. SCH-12's third-round fix (fully atomic `create_template`)
+merged cleanly — no conflict, base `main` unaffected. CI was fully green
+on the final head (`46b8a671`, 17/17 checks); Codex reported it was over
+its usage limit for security reviews (no review produced, informational
+only) so there were no review threads to resolve. Rotation row 15 → ✅.
+Next: 16 Events & requests.
 
 ### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) ✅ merged
 
@@ -8116,8 +8163,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⏳     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⏳     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
