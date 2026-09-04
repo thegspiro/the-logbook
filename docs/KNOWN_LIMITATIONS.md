@@ -2489,7 +2489,9 @@ reason. (Security review EC-14 residual,
 org-configured integration URL's hostname via `socket.getaddrinfo()`
 immediately before an outbound request, to catch a hostname that was
 repointed at an internal address since it was saved. **Six** call sites
-still share the gap, across two distinct transports:
+still share the gap. All six use `httpx`, via two different
+client-construction paths — the distinction that matters for scoping a fix,
+since a factory-only fix would miss the one that doesn't use the factory:
 
 - **Five** go through the shared `create_integration_client()` (plain
   `httpx.AsyncClient`) and share one remediation:
@@ -2531,10 +2533,13 @@ independently closed on 2026-09-02, outside any security-review PR:
   `requests.Session` mounted with a custom `_PinnedHTTPSAdapter` that
   connects to the validated IP while still asserting the original
   hostname for TLS verification, with redirects disabled
-  (`_NoRedirectSession`). Scoped to `production`/`staging`
-  (`settings.ENVIRONMENT`), matching this codebase's established pattern
-  of relaxing outbound-URL scheme/address enforcement in development (see
-  `SSRFSafeAsyncTransport`'s HTTP-in-dev allowance above). Re-verified
+  (`_NoRedirectSession`). The pinned session is used only in
+  `production`/`staging` (`settings.ENVIRONMENT`) — outside those, `_send_one`
+  skips it entirely and lets `webpush()` use its own default session, so
+  this is a push-specific exception, not an instance of a codebase-wide
+  convention: `SSRFSafeAsyncTransport` above relaxes only the HTTPS-scheme
+  requirement in development and still unconditionally calls
+  `resolve_public_addresses()` (address validation always runs). Re-verified
   during the training-extended pass 3 re-review: read the adapter and
   session code directly and confirmed `_pinned_session`'s output is the
   session actually passed to `webpush()`; its own test file,
@@ -2557,14 +2562,17 @@ that eighth site and `push_service.py` were independently closed.
 
 Not fixed: closing the remaining six means pinning the address
 `assert_outbound_url_safe` resolved for the actual connection (while
-preserving the original Host header / SNI) for the one remaining transport
-above — not one shared-infrastructure change, and not a fix scoped to any
-single file, but narrower than before now that both non-`httpx`/
-non-`create_integration_client` sites are closed.
-`external_training_service.py`'s and `push_service.py`'s own fixes (above)
-are the reference shapes — one per transport family. Needs a dedicated
-cross-cutting pass (the shape SEC-00 exists for) that accounts for the
-remaining transport, not a unilateral fix inside a feature-scoped review.
+preserving the original Host header / SNI) across both client-construction
+paths above — not one shared-infrastructure change, and not a fix scoped
+to any single file, but narrower than before now that the two sites
+outside this `httpx` family (`external_training_service.py`'s own client,
+and `push_service.py`'s non-`httpx` `pywebpush` transport) are closed.
+`external_training_service.py`'s fix (above) is the reference shape for
+the six remaining `httpx` sites; `push_service.py`'s is the reference shape
+should a future non-`httpx` transport need the same treatment. Needs a
+dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
+for both `httpx` client-construction paths, not a unilateral fix inside a
+feature-scoped review.
 (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`;
 count corrected by the training-extended pass,
 `docs/security-review/TRX-18-training-extended.md`;

@@ -539,11 +539,17 @@ commands above) was run directly and is green, including the equivalent
 **Prefix:** `TRX3` · **PR:** [#2223](https://github.com/thegspiro/the-logbook/pull/2223)
 
 **Scope check:** diffed the current tree against `e094e66e1c94604e00c9143e73bc27c8cb0f1014`
-(the pass-2 merge commit for PR #2012) across all fifteen pass-2 artifacts
-(fourteen pass-1 files plus `apiCache.test.ts`, added by pass 2 as the
-TRX2-1 guard test). **Four** changed (corrected from an initial miscount of
-three that omitted the test file — caught by a Codex review of this pass's
-own PR):
+(the pass-2 merge commit for PR #2012) across all fifteen pass-2 artifacts —
+the thirteen pass-1 artifacts (twelve feature files plus
+`training_program_service.py`, per pass 2's own scope-check above) plus
+`frontend/src/utils/apiCache.ts` and `apiCache.test.ts`, both added to the
+reviewed set by pass 2 itself for the TRX2-1 fix and its guard test (an
+earlier draft of this sentence said "fourteen pass-1 files plus
+`apiCache.test.ts`", which both undercounted pass 1 and backdated
+`apiCache.ts`'s own coverage to pass 1 — corrected after a Codex review of
+this pass's own PR). **Four** changed (corrected from an initial miscount of
+three that omitted the test file — caught by a separate Codex review round
+on this pass's own PR):
 
 - `backend/app/api/v1/endpoints/external_training.py` — a no-op import
   reformat (`from app.schemas.training import (TestConnectionResponse,)`
@@ -573,11 +579,22 @@ the stale in-flight response does not get written back into the cache.
 Neither the mechanism nor this test is training-extended-specific, so no
 finding here; the correction is to the claim, not the code.
 
-No new migration touches a training-extended table, and none of the twelve
-model classes this feature owns changed (checked directly, not inferred from
-the file diff-stat). Given a four-file diff this small, this pass is a
-targeted re-verification of what changed plus a re-confirmation of pass 1/2's
-claims, not a first-read of grown files.
+No new migration touches a training-extended table. `models/training.py`'s
+entire diff since pass 2 was read directly (not inferred from the file
+diff-stat): it is `Shift`/`ShiftTemplate`/the new
+`ShiftTemplateEquipmentCheck` table (an equipment-checklist-linking feature),
+with nothing touching `TrainingSubmission`, `TrainingWaiver`, `CourseCohort`,
+`CourseClass`, `ExternalTrainingProvider`, `ExternalCategoryMapping`,
+`ExternalUserMapping`, `ExternalTrainingSyncLog`, `ExternalTrainingImport`,
+`RecertificationPathway`, `CompetencyMatrix`, `InstructorQualification`,
+`TrainingEffectivenessEvaluation`, `MultiAgencyTraining`, `XAPIStatement`,
+`CourseCohortClass`, `CourseCohortMember`, or `SelfReportConfig` — this
+feature's model classes, named individually rather than by an unverified
+count (an earlier draft asserted "twelve," which this pass's own file list
+does not establish and a Codex review correctly flagged as unsubstantiated).
+Given a four-file diff this small, this pass is a targeted re-verification of
+what changed plus a re-confirmation of pass 1/2's claims, not a first-read of
+grown files.
 
 ### TRX3-1 — Corrects a prior write-up — `external_training_service.py`'s DNS-rebinding TOCTOU is now closed, not narrowed
 

@@ -19,38 +19,40 @@ feature. The rotation cannot outrun its own review queue.
 [#2223](https://github.com/thegspiro/the-logbook/pull/2223) — Feature 18
 (Training extended), pass 3 — branch
 `claude/security-review-training-extended`. No findings requiring a code
-fix. Four Codex review rounds on this PR caught nine doc-accuracy
-corrections total, all applied and all threads resolved: `push_service.py`
-was also independently DNS-rebinding-hardened (a second, separate fix the
-pass's own diff-scope never looked at, since it isn't one of this feature's
-declared files) — `KNOWN_LIMITATIONS.md`'s affected-site count corrected
-twice in this pass, eight → seven → six; a "Verified good" bullet
-undercounted its own `git diff --stat` command's output (six files, not
-four) by silently excluding three out-of-scope files instead of naming
-them; the scope-check's declared artifact list itself omitted
-`apiCache.test.ts` (pass 2's own TRX2-1 guard test), undercounting the
-changed-file total (four, not three); a "the other seven sites" sentence
-went stale once the count above dropped to six; `PROGRESS.md`'s own
-rotation row/log stayed marked in-progress after the pass was already
-complete, and (in a later round) two of this file's own log entries
-weren't updated when the corrections above landed, plus a stale "five more
-premature-merge recoveries" count in `TR-17-training-core.md`; and a fourth
-round found the doc's own claim that no test covers the `apiCache.ts`
-cache-generation/epoch mechanism was itself wrong — `apiClient.test.ts`
-(a new file from an unrelated frontend-shared security round, not on this
-feature's declared list) drives that exact mechanism through two
-race-condition tests. Completion gate fully green, including `eslint .`
-(ran in background, completed clean after the PR was opened).
+fix. This PR's own doc-accuracy record has itself gone through repeated
+Codex-driven correction — each fix to a stale count or an unlisted file
+risked leaving another summary of the same fact out of date, which Codex
+kept catching. Rather than maintain a running tally here that itself goes
+stale every round (the exact failure mode this note existed to avoid), the
+authoritative list is this PR's resolved review threads on GitHub — every
+one fixed, replied to, and resolved. In substance: `push_service.py` was
+found to be already DNS-rebinding-hardened alongside
+`external_training_service.py` (both independently fixed by the repo owner
+outside this rotation), dropping `KNOWN_LIMITATIONS.md`'s affected-site
+count eight → seven → six; the declared scope-check list was corrected to
+include `apiCache.test.ts` and (retroactively) `apiCache.ts` itself as
+pass-2, not pass-1, artifacts; a claim that no test covered the
+`apiCache.ts` cache-generation/epoch mechanism was wrong (`apiClient.test.ts`
+does); an unverified "twelve model classes" count was replaced with the
+actual model-diff read; `KNOWN_LIMITATIONS.md`'s "two transports" wording
+and a claim about `push_service.py`'s dev-environment scoping matching
+`SSRFSafeAsyncTransport`'s were both corrected to what the code actually
+does; and the PR's own merge-commit citation for #2222 and this file's
+rotation-status row/log were each fixed once found stale. Completion gate
+fully green, including `eslint .` (ran in background, completed clean after
+the PR was opened).
 
 ---
 
 ### 2026-09-04 — Feature 18 (Training extended), pass 3 — 0 code fixes, 2 doc corrections (one caught by Codex on this pass's own PR)
 
 Diff-scoped against pass 2's merge commit (`e094e66e1c94604e00c9143e73bc27c8cb0f1014`)
-across all fifteen pass-2 artifacts (the fourteen pass-1 files plus
-`apiCache.test.ts`, added by pass 2 as the TRX2-1 guard test — omitted from
-an initial miscount, caught by a Codex review of this pass's own PR): four
-changed. `external_training.py` was a no-op import reformat.
+across all fifteen pass-2 artifacts (the thirteen pass-1 artifacts plus
+`apiCache.ts`/`apiCache.test.ts`, both added to the reviewed set by pass 2
+itself for the TRX2-1 fix and its guard test — an earlier draft of this
+count wrongly backdated `apiCache.ts` to pass 1, caught by a Codex review of
+this pass's own PR): four changed. `external_training.py` was a no-op
+import reformat.
 `external_training_service.py`'s 37-line diff turned out to be the repo
 owner's own 2026-09-02 fix (`803eff25`, "Harden external training requests
 against DNS rebinding") — closes the DNS-rebinding TOCTOU this feature's own
