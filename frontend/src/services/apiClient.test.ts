@@ -231,6 +231,41 @@ describe('apiClient — background revalidation of a stale entry', () => {
     expect(calls).toBe(2);
   });
 
+  it('does not repopulate the cache with a response a mutation has since invalidated', async () => {
+    // A mutation deletes the prefix's entries, but a GET issued before it and
+    // settling after it would put the pre-mutation body straight back -- and
+    // it would then be served as fresh for the next 30s, so a successful edit
+    // reads as though it had not happened.
+    let releaseBackground: (() => void) | undefined;
+    let calls = 0;
+
+    withAdapter((config) => {
+      calls += 1;
+      const ok = (data: unknown) => ({ data, status: 200, statusText: 'OK', headers: {}, config });
+      if ((config.method || '').toUpperCase() !== 'GET') return Promise.resolve(ok({ saved: true }));
+      if (calls === 1) return Promise.resolve(ok({ quantity: 1 }));
+      if (releaseBackground) return Promise.resolve(ok({ quantity: 3 }));
+      return new Promise((resolve) => {
+        releaseBackground = () => resolve(ok({ quantity: 1 }));
+      });
+    });
+
+    await api.get('/inventory/items');
+    vi.setSystemTime(Date.now() + 45_000);
+    await api.get('/inventory/items');
+    expect(releaseBackground).toBeDefined();
+
+    // The edit lands while that revalidation is still open.
+    await api.patch('/inventory/items/abc', { quantity: 3 });
+    releaseBackground?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // The next read must reach the network rather than be answered with the
+    // quantity from before the edit.
+    const after = await api.get('/inventory/items');
+    expect(after.data).toEqual({ quantity: 3 });
+  });
+
   it('does not cache a bypassed read that was issued before logout cleared the cache', async () => {
     // SEC: a user-triggered refresh sets _skipCache, and that is the request
     // most likely to still be in flight when someone signs out on a shared

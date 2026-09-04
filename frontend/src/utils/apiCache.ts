@@ -229,6 +229,9 @@ export function invalidateByPrefix(prefix: string): void {
       cache.delete(key);
     }
   }
+  // Retires any request for this resource that is already in flight, so it
+  // cannot put back what this call just removed.
+  prefixEpochs.set(prefix, (prefixEpochs.get(prefix) ?? 0) + 1);
 }
 
 /**
@@ -253,28 +256,71 @@ export function isCacheable(url: string): boolean {
 }
 
 /**
- * Which "era" of the cache we are in. Bumped by every clearCache().
+ * Which "era" of the whole cache we are in. Bumped by every clearCache().
  *
  * SEC: cache keys carry no user identity, so clearCache() on logout is the
  * only thing standing between one member's responses and the next member to
  * sign in on the same tab. A request already in flight when logout happens
- * would otherwise write its result in after the purge. Callers capture this
- * before issuing a request and hand it back on the write; a write from a
- * previous era is dropped.
+ * would otherwise write its result in after the purge.
  */
 let generation = 0;
 
-/** The current cache era. Capture before issuing a request. */
-export function cacheGeneration(): number {
-  return generation;
+/**
+ * Per-resource era, bumped by every invalidateByPrefix().
+ *
+ * A mutation deletes a prefix's entries, but a GET issued before it and
+ * settling after it would put the pre-mutation body straight back -- and it
+ * would then be served as fresh, so a successful edit reads as though it had
+ * not happened. Bumping `generation` for this instead would work and is too
+ * coarse: it would discard every unrelated in-flight response as well.
+ *
+ * Bounded by the API surface, not by user input: getResourcePrefix() returns
+ * the first path segment, so this map holds one entry per resource.
+ */
+const prefixEpochs = new Map<string, number>();
+
+/**
+ * What a response must still be true of to be worth caching. Capture before
+ * issuing the request, hand back on the write.
+ */
+export interface CacheWriteToken {
+  generation: number;
+  prefix: string;
+  epoch: number;
+}
+
+/**
+ * Narrow a value stamped onto a request config back to a token.
+ *
+ * The stamp rides on the axios config through an index-signature cast, so it
+ * comes back as `unknown`; this is what lets the write path fail closed on
+ * anything that is not a token rather than casting and hoping.
+ */
+export function isCacheWriteToken(value: unknown): value is CacheWriteToken {
+  if (typeof value !== 'object' || value === null) return false;
+  return (
+    'generation' in value &&
+    typeof value.generation === 'number' &&
+    'prefix' in value &&
+    typeof value.prefix === 'string' &&
+    'epoch' in value &&
+    typeof value.epoch === 'number'
+  );
+}
+
+/** Capture the cache state a request is being issued against. */
+export function cacheWriteToken(url: string): CacheWriteToken {
+  const prefix = getResourcePrefix(url);
+  return { generation, prefix, epoch: prefixEpochs.get(prefix) ?? 0 };
 }
 
 /**
  * Cache a response only if the cache has not been purged since the request
  * that produced it was issued.
  */
-export function setCacheAtGeneration(key: string, data: unknown, issuedAt: number): void {
-  if (issuedAt !== generation) return;
+export function setCacheIfCurrent(key: string, data: unknown, token: CacheWriteToken): void {
+  if (token.generation !== generation) return;
+  if ((prefixEpochs.get(token.prefix) ?? 0) !== token.epoch) return;
   setCache(key, data);
 }
 
@@ -284,5 +330,8 @@ export function setCacheAtGeneration(key: string, data: unknown, issuedAt: numbe
 export function clearCache(): void {
   cache.clear();
   pendingRevalidations.clear();
+  // Every outstanding token carries the old generation, so the per-prefix
+  // epochs it also carries can start over.
+  prefixEpochs.clear();
   generation += 1;
 }
