@@ -2483,39 +2483,71 @@ already records this pairing as deliberately unadjudicated, for the same
 reason. (Security review EC-14 residual,
 `docs/security-review/EC-14-equipment-check-shifts.md`.)
 
-## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26)
+## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26, `external_training_service.py` and `push_service.py` closed 2026-09-02)
 
 `assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
 org-configured integration URL's hostname via `socket.getaddrinfo()`
 immediately before an outbound request, to catch a hostname that was
-repointed at an internal address since it was saved. **Eight** call sites
-share the gap, across three distinct transports:
+repointed at an internal address since it was saved. **Six** call sites
+still share the gap. All six use `httpx`, via two different
+client-construction paths — the distinction that matters for scoping a fix,
+since a factory-only fix would miss the one that doesn't use the factory:
 
 - **Five** go through the shared `create_integration_client()` (plain
   `httpx.AsyncClient`) and share one remediation:
   `integration_services/{teams,webhook,slack,discord,calcom}_service.py`.
-- **Two** construct their own `httpx.AsyncClient` directly rather than going
+- **One** constructs its own `httpx.AsyncClient` directly rather than going
   through `create_integration_client` — a `create_integration_client` fix
-  alone would not reach either; each needs either migrating onto the shared
-  client or its own equivalent fix: `audit_ship_service.py`, and
-  `external_training_service.py` (`ExternalTrainingSyncService.__init__`,
-  found during the training-extended security-review pass — its provider
-  base URL is `validate_integration_url`'d at write time and re-validated
-  before every outbound call exactly like the other seven, so it shares this
-  same TOCTOU shape; not itself a new/distinct gap, just an undercounted
-  instance of this one. Its 30s timeout is deliberately longer than the
-  shared factory's 10s — a full-catalog LMS sync legitimately runs longer
-  than a webhook POST — so migrating it onto `create_integration_client`
-  isn't a drop-in swap; the factory would need a per-call timeout override
-  first).
-- **`push_service.py`** doesn't use `httpx` at all — `_send_one` dispatches
-  through `pywebpush.webpush()`, a synchronous library with its own
-  connection handling. Pinning a resolved address here needs a
-  transport-specific approach, not the httpx-level fix the other seven
-  share; it would remain vulnerable if a fix were scoped only to
-  `create_integration_client`.
+  alone would not reach it; it needs either migrating onto the shared
+  client or its own equivalent fix: `audit_ship_service.py`.
 
-In every one of the eight, the actual request performs its **own**
+**`external_training_service.py` and `push_service.py` are no longer in
+this list.** Both previously shared this same TOCTOU shape and were
+independently closed on 2026-09-02, outside any security-review PR:
+
+- `ExternalTrainingSyncService` (found as the eighth site during the
+  training-extended security-review pass) was closed by `803eff25`,
+  "Harden external training requests against DNS rebinding". The fix
+  resolves the provider host once via `app/utils/ssrf_transport.py`'s
+  `resolve_public_addresses()` (rejecting the request unless every answer
+  is a global address) and then connects the actual `httpx` request to
+  that resolved IP directly (`SSRFSafeAsyncTransport`, pinning
+  `url.copy_with(host=approved_ip)` while preserving the original `Host`
+  header and TLS SNI) — the same resolve-once-and-pin shape this note
+  calls for below, rather than a second, independent `getaddrinfo()` at
+  connect time. `join_endpoint()`/`relative_endpoint()` additionally
+  reject an endpoint override that isn't a bare relative path, closing off
+  a client from redirecting the request to a different host via a
+  configured endpoint string. Re-verified during the training-extended
+  pass 3 re-review (`docs/security-review/TRX-18-training-extended.md`) —
+  the fix carries its own test file
+  (`backend/tests/test_external_training_ssrf_transport.py`), including a
+  DNS-rebinding-simulation test and a redirect-not-followed test.
+- `push_service.py` (previously listed here as needing a
+  transport-specific fix, since `_send_one` dispatches through
+  `pywebpush.webpush()` rather than `httpx`) was closed by `d50a9037`,
+  "Harden web push delivery against DNS rebinding", the same day. The fix
+  is the transport-specific approach this note previously said it would
+  need: `_resolve_public_address()` resolves once and rejects a mixed or
+  non-global answer set, and `_pinned_session()` hands `webpush()` a
+  `requests.Session` mounted with a custom `_PinnedHTTPSAdapter` that
+  connects to the validated IP while still asserting the original
+  hostname for TLS verification, with redirects disabled
+  (`_NoRedirectSession`). The pinned session is used only in
+  `production`/`staging` (`settings.ENVIRONMENT`) — outside those, `_send_one`
+  skips it entirely and lets `webpush()` use its own default session, so
+  this is a push-specific exception, not an instance of a codebase-wide
+  convention: `SSRFSafeAsyncTransport` above relaxes only the HTTPS-scheme
+  requirement in development and still unconditionally calls
+  `resolve_public_addresses()` (address validation always runs). Re-verified
+  during the training-extended pass 3 re-review: read the adapter and
+  session code directly and confirmed `_pinned_session`'s output is the
+  session actually passed to `webpush()`; its own test file,
+  `backend/tests/test_push_rebinding_guard.py`, predates this note's
+  correction (added by the same commit) and was not re-run as part of this
+  correction since no code changed.
+
+In each of the remaining six, the actual request performs its **own**
 independent DNS resolution when it connects, separate from the
 `assert_outbound_url_safe` check. A hostname that resolves to a public IP
 for the check and an internal one moments later (classic DNS rebinding)
@@ -2524,18 +2556,29 @@ docstring says it "shrink[s] the rebinding window... versus
 save-time-to-send" — narrows, not closes — which is accurate; a security
 review draft that read this as "closed," and then first wrote it up as six
 files sharing one fix, was corrected twice (SCH-10, then a Codex review of
-that correction itself), and the count was corrected again when the
-training-extended pass found the eighth site.
+that correction itself), the count was corrected again when the
+training-extended pass found the eighth site, and corrected twice more when
+that eighth site and `push_service.py` were independently closed.
 
-Not fixed: closing it means pinning the address `assert_outbound_url_safe`
-resolved for the actual connection (while preserving the original Host
-header / SNI), separately for each of the three transports above — not one
-shared-infrastructure change, and not a fix scoped to any single file. Needs
-a dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
-for all three transports, not a unilateral fix inside a feature-scoped
-review. (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`;
+Not fixed: closing the remaining six means pinning the address
+`assert_outbound_url_safe` resolved for the actual connection (while
+preserving the original Host header / SNI) across both client-construction
+paths above — not one shared-infrastructure change, and not a fix scoped
+to any single file, but narrower than before now that the two sites
+outside this `httpx` family (`external_training_service.py`'s own client,
+and `push_service.py`'s non-`httpx` `pywebpush` transport) are closed.
+`external_training_service.py`'s fix (above) is the reference shape for
+the six remaining `httpx` sites; `push_service.py`'s is the reference shape
+should a future non-`httpx` transport need the same treatment. Needs a
+dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
+for both `httpx` client-construction paths, not a unilateral fix inside a
+feature-scoped review.
+(Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`;
 count corrected by the training-extended pass,
-`docs/security-review/TRX-18-training-extended.md`.)
+`docs/security-review/TRX-18-training-extended.md`;
+`external_training_service.py` and `push_service.py` closed independently,
+both re-verified in the training-extended pass 3 re-review, the latter
+following a Codex finding on that pass's own PR.)
 
 ## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
 
