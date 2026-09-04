@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#pending** (branch `claude/security-review-events`) — Feature 16, Events &
+**[#2213](https://github.com/thegspiro/the-logbook/pull/2213)** (branch
+`claude/security-review-events`) — Feature 16, Events &
 requests, pass 3. Diff-scoped against pass 2's merge (`fef19238`, PR #1973):
 of the nine declared files, five changed, all belonging to one feature
 (member-visible attendee rosters + the seat-accurate capacity/waitlist
