@@ -540,12 +540,22 @@ class TestOvernightShiftsAndTheLegacyDateGuard:
     """
 
     async def _overnight_shift(self, svc, org_id, officer_id):
-        yesterday = date.today() - timedelta(days=1)
-        start = datetime.combine(yesterday, datetime.min.time()) + timedelta(hours=18)
+        # Anchored to now rather than to a literal 18:00. The property under
+        # test is that `shift_date` has rolled behind while the crew is still
+        # out — not the hour the shift starts — and a fixture pinned to 18:00
+        # only models that when the suite happens to run between midnight and
+        # dawn. It ran at 22:29 once the reopen gained an upper bound on a
+        # shift's age, by which point the fixture's shift had genuinely been
+        # over for sixteen hours and refusing to reopen it was correct.
+        #
+        # `shift_date` stays yesterday deliberately: it is what arms the
+        # day-granular `reject_past` guard this class exists to prove is only
+        # ever a fallback.
+        start = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=6)
         shift, err = await svc.create_shift(
             uuid.UUID(org_id),
             {
-                "shift_date": yesterday,
+                "shift_date": date.today() - timedelta(days=1),
                 "start_time": start,
                 "end_time": start + timedelta(hours=12),
             },
