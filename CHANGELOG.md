@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Checklist officers and store managers can open the admin hub (2026-09-04)
+
+**Fixed**
+
+- **The inventory admin hub refused the officers whose consoles it links
+  to.** The page carries cards for the equipment-check console and the
+  department store, and those pages accept grants the hub itself did not —
+  so a checklist officer or a store manager was turned away from the only
+  page that links to the console they run. The hub now admits any of the
+  three, and each card still resolves its own permission, so widening the
+  door did not widen what is behind it.
+- **The checklist console had no way in at all.** Its grant appeared in no
+  navigation entry, so the officer who holds it and nothing else could
+  reach their own console only by typing the address. Inventory Admin now
+  appears for them.
+- **A visit by one of those officers reported the page as broken.** The hub
+  asked for ten sets of inventory figures on every visit regardless of who
+  was looking. For anyone without the inventory grant every one of them was
+  refused, and the page then listed all ten as unavailable — telling an
+  officer the system was failing when it was working as configured. The
+  figures are now requested only for the people they describe.
+- **A viewer no card is open to now gets told so.** Previously that was a
+  heading over blank space, which reads as a page that failed to load.
+
 ### A successful edit no longer reads as though it had not happened (2026-09-04)
 
 **Fixed**

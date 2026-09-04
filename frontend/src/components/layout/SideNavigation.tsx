@@ -496,9 +496,19 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
             ? [
                 {
                   label: 'Inventory Admin',
+                  // The hub holds the only link to the checklist console, and
+                  // the checklist grant appears nowhere else in this file --
+                  // the seeded officer holding it and nothing else could reach
+                  // their own console by typed URL and no other way.
+                  //
+                  // The store grant is deliberately absent even though the
+                  // route accepts it: a store manager already has the Store
+                  // Admin row below, which lands on the console rather than on
+                  // a page of cards they cannot open. Narrower than the route
+                  // is allowed and is the safe direction; wider is the bug.
                   path: '/inventory/admin',
                   icon: Package,
-                  permission: 'inventory.manage',
+                  anyPermission: ['inventory.manage', 'inventory.check_manage'],
                 } as NavItem,
               ]
             : []),

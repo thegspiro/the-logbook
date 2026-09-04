@@ -48,6 +48,15 @@ vi.mock('../components/StoreOrdersTab', () => ({
   ),
 }));
 
+const mockIsModuleOn = vi.fn();
+const mockModulesLoading = vi.fn();
+vi.mock('../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    isModuleOn: (...args: unknown[]) => mockIsModuleOn(...args) as boolean,
+    isLoading: mockModulesLoading() as boolean,
+  }),
+}));
+
 import StoreAdminPage from './StoreAdminPage';
 
 const dashboard = {
@@ -95,6 +104,12 @@ const dashboard = {
 describe('StoreAdminPage overview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Per CLAUDE.md #28: reset before installing, so a per-test override in one
+    // block cannot become another block's silent default.
+    mockIsModuleOn.mockReset();
+    mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
     mockGetDashboard.mockResolvedValue(dashboard);
     mockGetAdminHubSummary.mockResolvedValue({
       moduleKey: 'storefront',
@@ -161,6 +176,37 @@ describe('StoreAdminPage overview', () => {
 
     expect(await screen.findByText(/open: yes/)).toBeInTheDocument();
   });
+
+  it('offers the way back to Inventory when that module is on', async () => {
+    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+
+    expect(await screen.findByRole('link', { name: /Inventory/ })).toHaveAttribute('href', '/inventory/admin');
+  });
+
+  it('offers no way back while the module answer is still in flight', async () => {
+    // `isModuleOn` reports every module on until the lookup settles, so
+    // trusting it alone renders the link for the width of that request -- and
+    // a click inside that window reaches the refusal this hides.
+    mockModulesLoading.mockReturnValue(true);
+
+    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+    await screen.findByText('Department Store');
+
+    expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no way back when the department runs no Inventory', async () => {
+    // This route is gated on the storefront module, not on inventory, so the
+    // store can run with Inventory off -- and the hub then refuses with
+    // "Inventory is not enabled". Offering a link the app knows will be turned
+    // away reads to the manager as their own permissions being wrong.
+    mockIsModuleOn.mockImplementation((module: string) => module !== 'inventory');
+
+    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+    await screen.findByText('Department Store');
+
+    expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+  });
 });
 
 /**
@@ -172,6 +218,10 @@ describe('StoreAdminPage overview', () => {
  */
 describe('StoreAdminPage — tabs in the URL', () => {
   beforeEach(() => {
+    mockIsModuleOn.mockReset();
+    mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
     mockGetDashboard.mockReset();
     mockGetDashboard.mockResolvedValue(dashboard);
     mockGetAdminHubSummary.mockReset();
