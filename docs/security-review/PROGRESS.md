@@ -19,36 +19,51 @@ feature. The rotation cannot outrun its own review queue.
 [#2223](https://github.com/thegspiro/the-logbook/pull/2223) — Feature 18
 (Training extended), pass 3 — branch
 `claude/security-review-training-extended`. No findings requiring a code
-fix. A Codex review round caught two doc-accuracy corrections, both
-applied: `push_service.py` was also independently DNS-rebinding-hardened
-(a second, separate fix the pass's own diff-scope never looked at, since
-it isn't one of this feature's fourteen files) — `KNOWN_LIMITATIONS.md`'s
-affected-site count corrected twice in this pass, eight → seven → six; and
-a "Verified good" bullet undercounted its own `git diff --stat` command's
-output (six files, not four) by silently excluding three out-of-scope
-files instead of naming them. Completion gate fully green, including
-`eslint .` (ran in background, completed clean after the PR was opened).
+fix. Two Codex review rounds on this PR caught five doc-accuracy
+corrections total, all applied and all threads resolved: `push_service.py`
+was also independently DNS-rebinding-hardened (a second, separate fix the
+pass's own diff-scope never looked at, since it isn't one of this feature's
+declared files) — `KNOWN_LIMITATIONS.md`'s affected-site count corrected
+twice in this pass, eight → seven → six; a "Verified good" bullet
+undercounted its own `git diff --stat` command's output (six files, not
+four) by silently excluding three out-of-scope files instead of naming
+them; the scope-check's declared artifact list itself omitted
+`apiCache.test.ts` (pass 2's own TRX2-1 guard test), undercounting the
+changed-file total (four, not three); a "the other seven sites" sentence
+went stale once the count above dropped to six; and `PROGRESS.md`'s own
+rotation row/log stayed marked in-progress after the pass was already
+complete. Completion gate fully green, including `eslint .` (ran in
+background, completed clean after the PR was opened).
 
 ---
 
-### 2026-09-04 — Feature 18 (Training extended), pass 3 — 0 code fixes, 1 doc correction
+### 2026-09-04 — Feature 18 (Training extended), pass 3 — 0 code fixes, 2 doc corrections (one caught by Codex on this pass's own PR)
 
 Diff-scoped against pass 2's merge commit (`e094e66e1c94604e00c9143e73bc27c8cb0f1014`)
-across all fourteen pass-2 files: only three changed. `external_training.py`
-was a no-op import reformat. `external_training_service.py`'s 37-line diff
-turned out to be the repo owner's own 2026-09-02 fix
-(`803eff25`, "Harden external training requests against DNS rebinding") —
-closes the DNS-rebinding TOCTOU this feature's own pass 1 had catalogued
-`external_training_service.py` as sharing (the "eighth site" note in
-`KNOWN_LIMITATIONS.md`). Verified the fix directly (read `ssrf_transport.py`,
-ran its 5-test suite) rather than assuming from the commit message, then
-corrected `KNOWN_LIMITATIONS.md`'s count from eight affected sites to seven.
-`apiCache.ts`'s 81-line diff was unrelated to training (an RPT-29
-`/dashboard/action-items` prefix plus a cache-generation/epoch race-condition
-fix); confirmed none of this feature's eleven cache-exclusion entries moved.
-All of pass 1/2's fixes re-verified present and unchanged. Full write-up:
-`docs/security-review/TRX-18-training-extended.md` (Pass 3 section).
-Rotation row 18 → ⏳ awaiting PR merge.
+across all fifteen pass-2 artifacts (the fourteen pass-1 files plus
+`apiCache.test.ts`, added by pass 2 as the TRX2-1 guard test — omitted from
+an initial miscount, caught by a Codex review of this pass's own PR): four
+changed. `external_training.py` was a no-op import reformat.
+`external_training_service.py`'s 37-line diff turned out to be the repo
+owner's own 2026-09-02 fix (`803eff25`, "Harden external training requests
+against DNS rebinding") — closes the DNS-rebinding TOCTOU this feature's own
+pass 1 had catalogued `external_training_service.py` as sharing (the
+"eighth site" note in `KNOWN_LIMITATIONS.md`). Verified the fix directly
+(read `ssrf_transport.py`, ran its 5-test suite) rather than assuming from
+the commit message. A second Codex review round on this pass's own PR then
+found that `push_service.py` had been independently DNS-rebinding-hardened
+the same day, by a separate commit (`d50a9037`) this pass's declared file
+list never covered — verified that fix too (`_pinned_session`/
+`_PinnedHTTPSAdapter`, its own test file). `KNOWN_LIMITATIONS.md`'s
+affected-site count corrected twice in this pass: eight → seven (after
+`external_training_service.py`) → six (after `push_service.py`).
+`apiCache.ts`/`apiCache.test.ts`'s combined diff was unrelated to training
+(an RPT-29 `/dashboard/action-items` prefix plus an `/attendees` substring
+plus a cache-generation/epoch race-condition fix, each with its matching
+test); confirmed none of this feature's eleven cache-exclusion entries
+moved. All of pass 1/2's fixes re-verified present and unchanged. Full
+write-up: `docs/security-review/TRX-18-training-extended.md` (Pass 3
+section). Rotation row 18 → ⏳ awaiting PR merge.
 
 ### 2026-09-04 — Feature 17 (Training core) ✅ closed — PR #2222 merged clean after 9 rounds
 
