@@ -69,6 +69,13 @@ export interface Event {
    * actor was recorded. */
   attendance_finalized_by_name?: string | null;
   created_by?: string;
+  /**
+   * Who organized the event. Resolved on the detail endpoint only, and only for
+   * a caller holding `events.manage` — the server withholds it from everyone
+   * else, so an absent name here means "not yours to see" or "no creator
+   * recorded", never "the field was forgotten".
+   */
+  created_by_name?: string | null;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;
@@ -389,6 +396,8 @@ export interface CheckInMonitoringStats {
   event_id: string;
   event_name: string;
   event_type: string;
+  /** The organizer. This route has no event payload of its own to read it from. */
+  created_by_name?: string | null;
   start_datetime: string;
   end_datetime: string;
   is_check_in_active: boolean;
