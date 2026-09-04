@@ -128,7 +128,12 @@ describe('ReceiveDeliveryModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Record delivery' }));
 
     await waitFor(() => expect(mockReceiveDelivery).toHaveBeenCalled());
-    expect(mockGetItems).toHaveBeenCalledWith({ search: 'Record 250 supply', active_only: true, limit: 20 });
+    expect(mockGetItems).toHaveBeenCalledWith({
+      search: 'Record 250 supply',
+      active_only: true,
+      skip: 0,
+      limit: 20,
+    });
     expect(mockReceiveDelivery).toHaveBeenCalledWith([
       expect.objectContaining({ inventory_item_id: 'item-250', quantity: 3 }),
     ]);
@@ -177,15 +182,19 @@ describe('ReceiveDeliveryModal', () => {
     it('reaches matches beyond the first page', async () => {
       // Item names are not unique, so a department can legitimately have more
       // matches than one page -- and every one of them has to be selectable.
-      mockGetItems.mockImplementation(({ limit }: { limit?: number }) =>
+      //
+      // Paged by `skip` rather than by a growing `limit`: the endpoint caps
+      // limit at 500, so growing it returned 422 once a search had been paged
+      // far enough, and the failure cleared every result already on screen.
+      mockGetItems.mockImplementation(({ skip = 0, limit = 20 }: { skip?: number; limit?: number }) =>
         Promise.resolve({
-          items: Array.from({ length: Math.min(limit ?? 20, 21) }, (_unused, index) => ({
-            id: `item-${index}`,
-            name: `Gauze ${index}`,
+          items: Array.from({ length: Math.max(0, Math.min(limit, 21 - skip)) }, (_unused, index) => ({
+            id: `item-${skip + index}`,
+            name: `Gauze ${skip + index}`,
           })),
           total: 21,
-          skip: 0,
-          limit: limit ?? 20,
+          skip,
+          limit,
         })
       );
 

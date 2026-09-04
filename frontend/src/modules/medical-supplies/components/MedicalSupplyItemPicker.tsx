@@ -32,7 +32,6 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   // them -- so a department can legitimately have more matches than one page,
   // and every one of them has to be selectable.
   const [total, setTotal] = useState(0);
-  const [limit, setLimit] = useState(PAGE);
   // Keyboard position in the list. The native <select> this replaced supported
   // arrow keys and Enter; a combobox that announces itself as one and then
   // ignores them strands keyboard-only users, whose Enter submits the delivery
@@ -41,6 +40,11 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listboxRef = useRef<HTMLDivElement>(null);
+  const clearRef = useRef<HTMLButtonElement>(null);
+  // Set only by a selection, so focus moves on the officer's own action and
+  // not when the row mounts with an item already on it.
+  const justChose = useRef(false);
 
   useEffect(
     () => () => {
@@ -49,6 +53,28 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
     },
     []
   );
+
+  // Selecting an item unmounts the combobox for the selected-item view. Focus
+  // would otherwise fall to the document body, so the next Tab restarts at the
+  // dialog's first control instead of continuing to Qty.
+  useEffect(() => {
+    if (!value || !justChose.current) return;
+    justChose.current = false;
+    clearRef.current?.focus();
+  }, [value]);
+
+  // ArrowDown past the first few rows moved the highlight outside the
+  // scrollport -- the list caps at max-h-56 while a page holds 20 options --
+  // so a sighted keyboard user could not tell what Enter would select.
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    const option = listboxRef.current?.children[activeIndex];
+    // jsdom does not implement scrollIntoView, and this is a presentation
+    // detail rather than behaviour worth failing a test over.
+    if (option instanceof HTMLElement && typeof option.scrollIntoView === 'function') {
+      option.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeIndex]);
 
   useEffect(() => {
     if (!open) return;
@@ -59,7 +85,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
-  const search = useCallback((text: string, request: number, take: number) => {
+  const search = useCallback((text: string, request: number, skip: number) => {
     const trimmed = text.trim();
     if (!trimmed) {
       setResults([]);
@@ -69,16 +95,29 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
       return;
     }
     void medicalSuppliesService
-      .getItems({ search: trimmed, active_only: true, limit: take })
+      .getItems({ search: trimmed, active_only: true, skip, limit: PAGE })
       .then((response) => {
         if (request !== requestRef.current) return;
-        setResults(response.items.map(({ id, name }) => ({ id, name })));
+        const page = response.items.map(({ id, name }) => ({ id, name }));
+        setResults((current) => {
+          if (skip === 0) return page;
+          // Appended, not replaced: Show more asks for the next page rather
+          // than re-requesting the whole set with a bigger limit. Growing the
+          // limit walked into the endpoint's own cap (le=500), so the 25th
+          // activation returned 422, cleared every result, and left Try again
+          // repeating the request that could not succeed.
+          const seen = new Set(current.map((item) => item.id));
+          return [...current, ...page.filter((item) => !seen.has(item.id))];
+        });
         setTotal(response.total);
         setFailed(false);
       })
       .catch((error: unknown) => {
         if (request !== requestRef.current) return;
-        setResults([]);
+        // A failed *next* page does not invalidate the pages already on
+        // screen; only a fresh search starts from nothing. Clearing either way
+        // threw away matches the officer could still have picked.
+        if (skip === 0) setResults([]);
         setFailed(true);
         toast.error(getErrorMessage(error, 'Failed to search medical supplies'));
       })
@@ -87,11 +126,11 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
       });
   }, []);
 
-  const runSearch = (text: string, take: number, delay: number) => {
+  const runSearch = (text: string, skip: number, delay: number) => {
     setLoading(Boolean(text.trim()));
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const request = ++requestRef.current;
-    debounceRef.current = setTimeout(() => search(text, request, take), delay);
+    debounceRef.current = setTimeout(() => search(text, request, skip), delay);
   };
 
   const changeQuery = (text: string) => {
@@ -100,18 +139,16 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
     setResults([]);
     setFailed(false);
     setActiveIndex(-1);
-    setLimit(PAGE);
-    runSearch(text, PAGE, 300);
+    runSearch(text, 0, 300);
   };
 
   const showMore = () => {
-    const next = limit + PAGE;
-    setLimit(next);
     // No debounce: this one is a deliberate activation, not typing.
-    runSearch(query, next, 0);
+    runSearch(query, results.length, 0);
   };
 
   const choose = (item: { id: string; name: string }) => {
+    justChose.current = true;
     onChange(item.id, item.name);
     setOpen(false);
     setQuery('');
@@ -155,6 +192,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
           {selectedName ?? 'Selected item'}
         </span>
         <button
+          ref={clearRef}
           type="button"
           onClick={() => onChange('')}
           className="btn-icon"
@@ -191,13 +229,18 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
         )}
       </div>
       {open && query.trim() && (
-        <div id={listboxId} role="listbox" className="card absolute z-20 mt-1 max-h-56 w-full overflow-auto shadow-lg">
+        <div
+          id={listboxId}
+          ref={listboxRef}
+          role="listbox"
+          className="card absolute z-20 mt-1 max-h-56 w-full overflow-auto shadow-lg"
+        >
           {!loading && failed && (
             <div className="px-3 py-2 text-sm">
               <p className="text-theme-text-primary">Could not search the catalog.</p>
               <button
                 type="button"
-                onClick={() => runSearch(query, limit, 0)}
+                onClick={() => runSearch(query, results.length, 0)}
                 className="text-theme-text-muted underline"
               >
                 Try again

@@ -459,7 +459,36 @@ describe('MedicalSuppliesPage', () => {
     });
 
     await waitFor(() => expect(screen.queryByText(/Showing 1–1 of 201/)).not.toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+    // The pager itself stays: hiding it also removed the only way back to a
+    // page that loads. Next is inert, because stepping forward on the previous
+    // query's total would ask for page 2 of a query whose page 1 never came.
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+  });
+
+  it('leaves Previous usable after a page request fails', async () => {
+    // page and itemPage.skip disagree after a rejected Next -- page 1, skip 0
+    // -- and keying Previous on skip disabled the one control that could get
+    // back to a page that loads, stranding the officer on an empty table.
+    mockGetItems.mockResolvedValue({
+      items: [{ id: 'item-1', name: 'Gauze', quantity: 1 }],
+      total: 201,
+      skip: 0,
+      limit: 200,
+    });
+
+    renderWithRouter(<MedicalSuppliesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /All supplies/i }));
+    expect(await screen.findByText(/Showing 1–1 of 201/)).toBeInTheDocument();
+
+    mockGetItems.mockRejectedValueOnce(new Error('Supplies unavailable'));
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled());
+    expect(screen.getByText('Page 2')).toBeInTheDocument();
+
+    // And it actually returns to a page that loads.
+    await userEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(await screen.findByText(/Showing 1–1 of 201/)).toBeInTheDocument();
   });
 
   it('does not report an empty catalogue while the first item request is still in flight', async () => {

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The delivery item picker reaches every match, and keeps your place (2026-09-04)
+
+**Fixed**
+
+- **Searching the medical catalogue could stop returning results after
+  enough "Show more" activations.** The picker asked for a larger page each
+  time rather than the next one, and the endpoint refuses a page size above
+  500 — so a heavily paged search eventually got an error back, cleared every
+  match already on screen, and left "Try again" repeating the request that
+  could not succeed. It now asks for the following page and adds it to the
+  list, and a page that fails no longer discards the ones before it.
+- **Choosing a supply dropped keyboard focus.** Selecting an item replaced
+  the search box with the chosen-item row, and focus fell to the page body,
+  so the next Tab restarted at the top of the delivery dialog instead of
+  carrying on to Qty. Focus now moves to the row's Clear button.
+- **Arrowing through search results could highlight something off-screen.**
+  The results list scrolls after a few rows, and the highlight was not
+  brought into view — so a keyboard user could not see which supply Enter
+  would pick.
+- **A failed page of the supply table left no way back.** When a page
+  request failed, Previous was disabled because it keyed off the last
+  _loaded_ page rather than the requested one, stranding the officer on an
+  empty table with no control that returned to a page that loads. Previous
+  now recovers, and the range above the table reads as a plain page number
+  while it does not describe what is on screen.
+
 ### Email settings: Microsoft 365 OAuth submission, and a Cloudflare test that checks the account (2026-09-03)
 
 **Added**
