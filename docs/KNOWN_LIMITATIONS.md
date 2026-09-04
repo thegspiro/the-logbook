@@ -1599,6 +1599,38 @@ is now marked as such and the screenshot placeholder is retired.
 Needs an owner decision on whether the panel should be built. This loop does
 not make that call.
 
+## Events — Series RSVP Never Shows the Training Phase-Gate Warning (2026-09-04, security review EV-23)
+
+An individual RSVP to a training session ahead of the member's current
+pipeline phase gets a soft, overridable 409 warning that the member must
+confirm before it proceeds. `rsvp_to_series` (rewritten 2026-09 to delegate
+to `create_or_update_rsvp` per occurrence, closing a separate set of
+capacity/deadline/`allow_guests` gaps) passes `override=True`
+unconditionally for every occurrence, with a code comment claiming the
+member "already confirmed once for the series." No such confirmation
+exists anywhere in the series path — `useRSVPForm.ts`'s series branch
+calls the series endpoint directly with no warning/retry handling, and
+`POST /events/{id}/rsvp-series` has no `override` parameter to receive one.
+A member applying to a whole series therefore never sees the warning an
+individual RSVP to the identical session would have required.
+
+Soft and overridable even when working correctly — a training-pipeline
+advisory, not an authorization or tenancy boundary — so the gap is a member
+proceeding without a nudge, not unauthorized access.
+
+**Needs an owner decision, not a mechanical fix:** a series can span
+sessions in different training phases, so "the" phase-gate warning for a
+series submission isn't single-valued the way it is for one event. Does the
+series endpoint warn once for the _first_ ahead-of-phase occurrence found,
+list every one, or warn only if _any_ occurrence would? Any is defensible;
+picking one needs a real response-shape change (a 409 from
+`POST /events/{id}/rsvp-series`, matching frontend confirm-and-retry
+handling). Full write-up: `docs/security-review/EV-16-events-requests.md`
+(EV-23). A related ordering bug in the same review (EV-24: editing an
+existing waitlisted RSVP can promote it ahead of an earlier-queued party)
+is a straightforward engineering fix rather than an owner decision, and is
+tracked only in that findings doc.
+
 ## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
 
 An item assignment carries an `assignment_type` of `permanent` or `temporary`,
