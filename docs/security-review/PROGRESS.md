@@ -16,11 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 19 (Skills testing), pass 3** — branch
-`claude/security-review-skills-testing`, PR
-[#2230](https://github.com/thegspiro/the-logbook/pull/2230). 1 fix (LOW), 1
-flagged (LOW/MED). See the log entry below and
-`docs/security-review/SKT-19-skills-testing.md` → **Pass 3** for detail.
+_None currently open._
+
+---
+
+### 2026-09-04 — Feature 19 (Skills testing) ✅ closed — PR #2230 merged
+
+**PR #2230 merged cleanly** (merge commit `d5b716ff8`, head `ae004266`).
+Codex flagged one P2 finding after the PR opened (`add_test_viewer`'s new
+examiner self-dealing check was write-time only, leaving any pre-existing
+`SkillTestViewer` rows with `user_id == examiner_id` in place); fixed with a
+one-time idempotent backfill migration (`9d2b4492faba`) plus a guard test,
+pushed as a same-PR follow-up commit, thread replied to and resolved.
+Codex's re-review of the final commit found nothing further. Rotation row 19
+→ ✅. Next: 20 Compliance.
 
 ---
 
@@ -8589,8 +8598,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | 🔄     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
