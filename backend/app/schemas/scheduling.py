@@ -559,6 +559,54 @@ class SchedulingSummary(BaseModel):
     hours_worked_this_month: float
 
 
+class MemberHoursMonth(BaseModel):
+    """One calendar month of a member's own shift work.
+
+    Credited and pending are reported side by side rather than combined:
+    hours count toward the member's record once an officer finalizes the
+    shift, and showing the two as one number would have a member believe
+    time is credited that a close-out could still change.
+    """
+
+    year: int
+    month: int = Field(ge=1, le=12)
+    shifts: int = 0
+    hours: float = 0.0
+    calls: int = 0
+    pending_shifts: int = 0
+    pending_hours: float = 0.0
+
+
+class MemberHoursTotals(BaseModel):
+    """Year totals for :class:`MemberHoursMonth`, on the same terms."""
+
+    shifts: int = 0
+    hours: float = 0.0
+    calls: int = 0
+    pending_shifts: int = 0
+    pending_hours: float = 0.0
+
+
+class MemberHoursHistoryResponse(BaseModel):
+    """A member's own year of shift hours and calls, month by month.
+
+    ``months`` always holds twelve entries, so a quiet month reads as a
+    quiet month rather than as missing data. ``current_month`` and
+    ``previous_month`` carry their own year because the month that just
+    ended is in the previous year every January.
+    """
+
+    year: int
+    # None when the member has no attendance at all — the year picker then
+    # has only the current year to offer.
+    earliest_year: Optional[int] = None
+    timezone: str
+    months: List[MemberHoursMonth]
+    totals: MemberHoursTotals
+    current_month: MemberHoursMonth
+    previous_month: MemberHoursMonth
+
+
 class SchedulingWidgetFilters(BaseModel):
     """Saved defaults for the scheduling dashboard widgets."""
 

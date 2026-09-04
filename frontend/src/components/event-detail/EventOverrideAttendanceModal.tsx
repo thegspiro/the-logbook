@@ -5,6 +5,12 @@ import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
 
 interface EventOverrideAttendanceModalProps {
   editingRsvp: RSVP;
+  /**
+   * Who organized the event. Required rather than optional because
+   * `exactOptionalPropertyTypes` refuses an explicit `undefined` for an
+   * optional prop, and the caller has a nullable value to pass.
+   */
+  organizerName: string | null;
   overrideCheckIn: string;
   onOverrideCheckInChange: (value: string) => void;
   overrideCheckOut: string;
@@ -17,6 +23,7 @@ interface EventOverrideAttendanceModalProps {
 
 const EventOverrideAttendanceModal: React.FC<EventOverrideAttendanceModalProps> = ({
   editingRsvp,
+  organizerName,
   overrideCheckIn,
   onOverrideCheckInChange,
   overrideCheckOut,
@@ -52,7 +59,12 @@ const EventOverrideAttendanceModal: React.FC<EventOverrideAttendanceModalProps> 
         </>
       }
     >
-      <p className="text-theme-text-muted mb-4 text-sm">{editingRsvp.user_name}</p>
+      <div className="mb-4">
+        <p className="text-theme-text-muted text-sm">{editingRsvp.user_name}</p>
+        {/* Correcting a credited time is the organizer's call to make or to be
+            told about, and this dialog covers the page that names them. */}
+        {organizerName && <p className="text-theme-text-muted text-sm">Event organized by {organizerName}</p>}
+      </div>
 
       {submitError && (
         <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3" role="alert" aria-live="assertive">

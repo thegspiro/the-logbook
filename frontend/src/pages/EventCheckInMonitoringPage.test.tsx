@@ -36,6 +36,9 @@ function stats(overrides: Record<string, unknown> = {}) {
     event_id: 'event-1',
     event_name: 'Monthly Drill',
     event_type: 'training',
+    // Absent by default so every other test in this file exercises the case
+    // where no organizer is recorded; the organizer block opts in explicitly.
+    created_by_name: null,
     start_datetime: '2026-06-01T19:00:00Z',
     end_datetime: '2026-06-01T21:00:00Z',
     is_check_in_active: true,
@@ -137,5 +140,31 @@ describe('EventCheckInMonitoringPage early check-ins', () => {
 
     await screen.findByText('John Doe');
     expect(screen.queryByText('Early')).not.toBeInTheDocument();
+  });
+});
+
+describe('EventCheckInMonitoringPage organizer', () => {
+  // mockReset before installing the default: vi.clearAllMocks drops recorded
+  // calls but not implementations, so a resolved value set by the block above
+  // would otherwise survive into a test here that configures nothing.
+  beforeEach(() => {
+    mockGetCheckInMonitoring.mockReset();
+    mockGetCheckInMonitoring.mockResolvedValue(stats({ created_by_name: 'Sam Ortiz' }));
+  });
+
+  it('names the organizer, since this route has no event payload to read it from', async () => {
+    renderWithRouter(<EventCheckInMonitoringPage />);
+
+    expect(await screen.findByText(/Organized by Sam Ortiz/)).toBeInTheDocument();
+  });
+
+  it('renders nothing when no organizer is recorded', async () => {
+    mockGetCheckInMonitoring.mockResolvedValue(stats());
+    renderWithRouter(<EventCheckInMonitoringPage />);
+
+    await screen.findByText('Monthly Drill');
+    expect(screen.queryByText(/Organized by/)).not.toBeInTheDocument();
+    // Specifically not the string "undefined" or "null" rendered as text.
+    expect(screen.queryByText(/Organized by (undefined|null)/)).not.toBeInTheDocument();
   });
 });

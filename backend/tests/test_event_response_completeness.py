@@ -47,6 +47,11 @@ CALLER_SUPPLIED = {
     # is the honest value everywhere else, including the rows backfilled from
     # the pre-column marker, which recorded no actor at all.
     "attendance_finalized_by_name",
+    # Resolved by the same detail-endpoint lookup, and additionally gated on
+    # the caller holding events.manage: most members have no reason to be told
+    # who organized an event, so its default of None is the right value both on
+    # every other response and for a caller who may not see it.
+    "created_by_name",
     # Waitlist standing and the caller's own RSVP: per-user, not per-event, so
     # there is no Event column for the builder to read. Computed on the detail
     # endpoint from the already eager-loaded rsvps and passed in. Their default

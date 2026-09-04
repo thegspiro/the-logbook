@@ -50,6 +50,7 @@ from app.schemas.scheduling import (
     EligiblePositionsResponse,
     GenerateShiftsRequest,
     LateSignupOpenRequest,
+    MemberHoursHistoryResponse,
     PlatoonBulkAssign,
     PlatoonBulkAssignResult,
     PlatoonOverviewResponse,
@@ -2599,6 +2600,28 @@ async def get_my_assignments(
     )
     return await service.enrich_assignments_with_shifts(
         assignments, current_user.organization_id
+    )
+
+
+@router.get("/my-hours-history", response_model=MemberHoursHistoryResponse)
+async def get_my_hours_history(
+    year: int | None = Query(None, ge=2000, le=2100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The caller's own shift hours and call credit, month by month.
+
+    No permission dependency beyond authentication: this reports the
+    caller's own attendance and nothing else, the same basis on which
+    ``/my-attendance-history`` is exposed. ``scheduling.report`` gates the
+    department-wide member-hours report, which names every member.
+
+    Defaults to the current year in the department's timezone. The previous
+    month is always reported, whichever year is being viewed.
+    """
+    service = SchedulingService(db)
+    return await service.get_my_hours_history(
+        current_user.id, current_user.organization_id, year
     )
 
 
