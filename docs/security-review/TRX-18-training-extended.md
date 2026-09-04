@@ -555,9 +555,23 @@ own PR):
   good" below; neither is a training-extended-specific change. The test
   diff mirrors the source diff exactly: one new test for the
   `/dashboard/action-items` prefix, one new test for the `/attendees`
-  substring — no test exercises the cache-generation/epoch mechanism
-  itself, which is a pre-existing gap in that unrelated change, not
-  something this pass introduced or is scoped to fix.
+  substring.
+
+**Not on the declared list, but part of the same unrelated diff and
+directly relevant to the claim above:** `frontend/src/services/
+apiClient.test.ts` (352 lines, new file, from the same frontend-shared
+security-review round as the `apiCache.ts` cache-generation/epoch
+mechanism — caught by a second Codex review round on this pass's own PR,
+which correctly called out that an earlier draft of this section claimed no
+test exercised that mechanism). It does: `describe('apiClient — background
+revalidation of a stale entry', ...)` drives the real interceptor chain
+against a stubbed adapter and asserts the exact two races
+`cacheWriteToken`/`setCacheIfCurrent` close — a mutation's `PATCH` landing
+while an earlier GET's background revalidation is still in flight, and a
+`clearCache()` (logout) landing the same way — proving in both cases that
+the stale in-flight response does not get written back into the cache.
+Neither the mechanism nor this test is training-extended-specific, so no
+finding here; the correction is to the claim, not the code.
 
 No new migration touches a training-extended table, and none of the twelve
 model classes this feature owns changed (checked directly, not inferred from
@@ -661,7 +675,7 @@ Re-read the current code directly for each (not re-cited from the doc):
   `training_waivers.py`, `training_submission_service.py`,
   `recertification`/`multi_agency`/`xapi` services inside
   `training_enhancements.py`'s service module) appear in this pass's
-  three-file diff.
+  four-file diff.
 - **TRX-2 / TRX-4 / TRX-5 / TRX-5b** — `external_training.py`'s only change
   is the import reformat; `update_provider`'s `apply_updates` call
   (TRX-2) is untouched. Cohort/syllabus files (TRX-4/5/5b) aren't in this

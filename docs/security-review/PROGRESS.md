@@ -19,7 +19,7 @@ feature. The rotation cannot outrun its own review queue.
 [#2223](https://github.com/thegspiro/the-logbook/pull/2223) — Feature 18
 (Training extended), pass 3 — branch
 `claude/security-review-training-extended`. No findings requiring a code
-fix. Two Codex review rounds on this PR caught five doc-accuracy
+fix. Four Codex review rounds on this PR caught nine doc-accuracy
 corrections total, all applied and all threads resolved: `push_service.py`
 was also independently DNS-rebinding-hardened (a second, separate fix the
 pass's own diff-scope never looked at, since it isn't one of this feature's
@@ -30,10 +30,17 @@ four) by silently excluding three out-of-scope files instead of naming
 them; the scope-check's declared artifact list itself omitted
 `apiCache.test.ts` (pass 2's own TRX2-1 guard test), undercounting the
 changed-file total (four, not three); a "the other seven sites" sentence
-went stale once the count above dropped to six; and `PROGRESS.md`'s own
+went stale once the count above dropped to six; `PROGRESS.md`'s own
 rotation row/log stayed marked in-progress after the pass was already
-complete. Completion gate fully green, including `eslint .` (ran in
-background, completed clean after the PR was opened).
+complete, and (in a later round) two of this file's own log entries
+weren't updated when the corrections above landed, plus a stale "five more
+premature-merge recoveries" count in `TR-17-training-core.md`; and a fourth
+round found the doc's own claim that no test covers the `apiCache.ts`
+cache-generation/epoch mechanism was itself wrong — `apiClient.test.ts`
+(a new file from an unrelated frontend-shared security round, not on this
+feature's declared list) drives that exact mechanism through two
+race-condition tests. Completion gate fully green, including `eslint .`
+(ran in background, completed clean after the PR was opened).
 
 ---
 
