@@ -10,7 +10,7 @@ import os
 import uuid as uuid_lib
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Optional
+from typing import Dict, Optional, Set
 from uuid import UUID
 
 from fastapi import (
@@ -255,6 +255,67 @@ def _display_name(user) -> Optional[str]:
         return None
     full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
     return full_name or user.username
+
+
+async def _resolve_display_names(
+    db: AsyncSession, user_ids: Set[str], organization_id
+) -> Dict[str, str]:
+    """Names for a set of user ids stored on an event, keyed by id.
+
+    Batched because the detail endpoint resolves two of them (the organizer and
+    whoever closed the event) and one round trip is enough for both.
+
+    Org-scoped: the ids are not client-supplied, but a bare by-id read on
+    `users` is the shape the 2026-07 audit kept finding, and a user outside the
+    caller's organization must not be named back. An id that does not resolve is
+    simply absent from the result, so the caller reports no name rather than
+    inventing one.
+
+    Deliberately does not filter `deleted_at` / `is_active`: a member who
+    organized an event and has since left the department is still who organized
+    it, and hiding the name would read as missing data rather than as a
+    departure.
+    """
+    if not user_ids:
+        return {}
+    result = await db.execute(
+        select(User).where(
+            User.id.in_(user_ids),
+            User.organization_id == organization_id,
+        )
+    )
+    resolved = {}
+    for user in result.scalars().all():
+        name = _display_name(user)
+        if name:
+            resolved[str(user.id)] = name
+    return resolved
+
+
+def _names_to_resolve(event, current_user) -> Dict[str, str]:
+    """Which display names the detail view should resolve, as field -> user id.
+
+    Keyed by response field rather than by user id: the organizer is usually the
+    same person who closed their own event, and keying by id would collapse the
+    two fields onto one another and drop a name.
+
+    The organizer is gated on events.manage. Closing an event and correcting its
+    check-ins are the same grant in code but different jobs in a department, so
+    whoever is about to finalize needs to know whose event it is — and nobody
+    else does. The gate lives here rather than in the client because this
+    endpoint's response is cached client-side: a field withheld only in JSX is
+    still delivered to every member who opens an event.
+
+    The finalizer's name stays ungated, as it has been. The attendance-lock badge
+    that names it renders for every member, and moving that behind a permission
+    would be a regression dressed up as a new feature.
+    """
+    wanted = {}
+    if event.attendance_finalized_by:
+        wanted["attendance_finalized_by_name"] = str(event.attendance_finalized_by)
+    if event.created_by and user_has_permission(current_user, "events.manage"):
+        wanted["created_by_name"] = str(event.created_by)
+    return wanted
 
 
 def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
@@ -1044,24 +1105,16 @@ async def get_event(
         str(r.user_id) == str(current_user.id) for r in all_waitlisted
     ) and not any(str(r.user_id) == str(current_user.id) for r in waitlisted)
 
-    # Resolved only on the detail view, which is the one screen that shows who
-    # closed the event. Rows backfilled from the pre-column marker carry no
-    # actor, so this stays None and the badge reads "Attendance finalized"
-    # without a name rather than inventing one.
-    finalized_by_name = None
-    if event.attendance_finalized_by:
-        finalizer_result = await db.execute(
-            select(User).where(
-                User.id == str(event.attendance_finalized_by),
-                User.organization_id == current_user.organization_id,
-            )
-        )
-        finalizer = finalizer_result.scalar_one_or_none()
-        if finalizer:
-            finalized_by_name = (
-                f"{finalizer.first_name} {finalizer.last_name}".strip()
-                or finalizer.username
-            )
+    # Both names are resolved only on the detail view, which is the one screen
+    # that shows who closed the event and who organized it. Rows backfilled from
+    # the pre-column marker carry no actor, so the badge reads "Attendance
+    # finalized" without a name rather than inventing one. _names_to_resolve
+    # owns which of the two this caller may see.
+    wanted = _names_to_resolve(event, current_user)
+    names = await _resolve_display_names(
+        db, set(wanted.values()), current_user.organization_id
+    )
+    resolved_names = {field: names.get(user_id) for field, user_id in wanted.items()}
 
     return _build_event_response(
         event,
@@ -1069,7 +1122,8 @@ async def get_event(
         going_count=going_count,
         not_going_count=not_going_count,
         maybe_count=maybe_count,
-        attendance_finalized_by_name=finalized_by_name,
+        attendance_finalized_by_name=resolved_names.get("attendance_finalized_by_name"),
+        created_by_name=resolved_names.get("created_by_name"),
         user_rsvp_status=(
             (
                 user_rsvp.status.value

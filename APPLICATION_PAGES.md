@@ -569,6 +569,8 @@ Compliance, Department Store, and Setup & Tools.
 
 Supports `?tab=` query parameter for deep-linking to specific tabs: `schedule`, `my-shifts`, `open-shifts`, `requests`, `equipment-checks`. Shift notifications deep-link to the scheduling page with the relevant shift pre-selected.
 
+The My Shifts tab has three sub-views, deep-linked with `?view=`: `upcoming` (default), `past`, and `hours` — the member's own hours and calls by month for a year.
+
 Tab-based interface with the following views:
 
 | Tab                | Label            | Admin Only |

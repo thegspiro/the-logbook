@@ -445,6 +445,13 @@ class EventResponse(EventBase, UTCResponseBase):
     attendance_finalized_by: Optional[UUID] = None
     attendance_finalized_by_name: Optional[str] = None
     created_by: Optional[UUID] = None
+    # Who organized the event, resolved for display. Closing an event and
+    # correcting its check-ins are the same grant in code but different jobs in
+    # a department, so whoever is about to finalize needs to know whose event it
+    # is. Resolved on the detail endpoint only, and only for a caller holding
+    # events.manage — None on every other response, for a creator outside the
+    # caller's organization, and for rows predating the column.
+    created_by_name: Optional[str] = None
     updated_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
@@ -832,6 +839,10 @@ class CheckInMonitoringStats(UTCResponseBase):
     event_id: UUID
     event_name: str
     event_type: str
+    # The organizer, for the manager working this screen: it is a route of its
+    # own, so there is no event payload here to read the name from. None for a
+    # row predating the column or a creator outside the caller's organization.
+    created_by_name: Optional[str] = None
     start_datetime: datetime
     end_datetime: datetime
     is_check_in_active: bool

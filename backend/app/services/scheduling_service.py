@@ -62,7 +62,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
 )
-from app.utils.hours import hours_from_minutes
+from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.membership import is_administrative
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions, position_label
@@ -5847,6 +5847,169 @@ class SchedulingService:
             key=lambda m: (m["worked_hours"], m["scheduled_hours"]),
             reverse=True,
         )
+
+    @staticmethod
+    def _empty_month_totals(year: int, month: int) -> Dict[str, Any]:
+        """A month with nothing in it, so every month of the year is present.
+
+        A year view that omits the quiet months makes a gap look like missing
+        data rather than like a month the member did not work.
+        """
+        return {
+            "year": year,
+            "month": month,
+            "shifts": 0,
+            "hours": 0.0,
+            "calls": 0,
+            "pending_shifts": 0,
+            "pending_hours": 0.0,
+        }
+
+    async def get_member_month_totals(
+        self,
+        user_id: UUID | str,
+        organization_id: UUID | str,
+        start_date: date,
+        end_date: date,
+    ) -> Dict[Tuple[int, int], Dict[str, Any]]:
+        """One member's worked hours and call credit, bucketed by month.
+
+        Keyed ``(year, month)`` rather than by month alone so a caller can
+        span a year boundary in one query: "last month" in January is
+        December of the previous year, and a member checking the month that
+        just ended should not have to change a year selector to find it.
+
+        **Credited and pending are separate figures, never summed.** Hours
+        become credit when an officer finalizes the shift — the same rule
+        :meth:`get_member_hours_report` applies, so a member's own screen and
+        the department's report cannot disagree — and ``call_count`` is only
+        snapshotted at finalization, so an unfinalized shift has hours the
+        member can see are not counted yet and no call credit to show at all.
+
+        Scoped through ``Shift.organization_id``: ``shift_attendance`` carries
+        no org column of its own, and the shift is the row that has one.
+        """
+        year_col = func.year(Shift.shift_date)
+        month_col = func.month(Shift.shift_date)
+
+        result = await self.db.execute(
+            select(
+                year_col.label("year"),
+                month_col.label("month"),
+                Shift.is_finalized.label("finalized"),
+                func.count(ShiftAttendance.id).label("shift_count"),
+                func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0).label(
+                    "minutes"
+                ),
+                func.coalesce(func.sum(ShiftAttendance.call_count), 0).label("calls"),
+            )
+            .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(ShiftAttendance.user_id == str(user_id))
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.shift_date >= start_date)
+            .where(Shift.shift_date <= end_date)
+            .group_by(year_col, month_col, Shift.is_finalized)
+        )
+
+        buckets: Dict[Tuple[int, int], Dict[str, Any]] = {}
+        for row in result.all():
+            key = (int(row.year), int(row.month))
+            entry = buckets.setdefault(key, self._empty_month_totals(*key))
+            if row.finalized:
+                entry["shifts"] = int(row.shift_count or 0)
+                entry["hours"] = hours_from_minutes(row.minutes or 0)
+                entry["calls"] = int(row.calls or 0)
+            else:
+                entry["pending_shifts"] = int(row.shift_count or 0)
+                entry["pending_hours"] = hours_from_minutes(row.minutes or 0)
+        return buckets
+
+    async def get_member_first_attendance_year(
+        self, user_id: UUID | str, organization_id: UUID | str
+    ) -> Optional[int]:
+        """The earliest year this member has any attendance in, if any.
+
+        Bounds the year picker to years the member could have worked, rather
+        than offering an arbitrary run of empty ones.
+        """
+        result = await self.db.execute(
+            select(func.min(Shift.shift_date))
+            .select_from(ShiftAttendance)
+            .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(ShiftAttendance.user_id == str(user_id))
+            .where(Shift.organization_id == str(organization_id))
+        )
+        earliest = result.scalar()
+        return earliest.year if earliest else None
+
+    async def get_my_hours_history(
+        self,
+        user_id: UUID | str,
+        organization_id: UUID | str,
+        year: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """A member's own year of shift hours and calls, month by month.
+
+        ``current_month`` and ``previous_month`` are resolved against the
+        department's local date, and are reported whatever year is being
+        viewed: in January the month that just ended is in the previous year,
+        and it is still the figure the member came to check.
+        """
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = datetime.now(tz).date()
+        selected_year = int(year) if year else today.year
+
+        months_by_key = await self.get_member_month_totals(
+            user_id,
+            organization_id,
+            date(selected_year, 1, 1),
+            date(selected_year, 12, 31),
+        )
+
+        months = [
+            months_by_key.get((selected_year, m))
+            or self._empty_month_totals(selected_year, m)
+            for m in range(1, 13)
+        ]
+
+        current_key = (today.year, today.month)
+        first_of_month = today.replace(day=1)
+        previous_end = first_of_month - timedelta(days=1)
+        previous_key = (previous_end.year, previous_end.month)
+
+        # Only query again for a month the selected year did not already
+        # cover — the common case (viewing the current year) is one query.
+        extra_keys = [k for k in (current_key, previous_key) if k[0] != selected_year]
+        if extra_keys:
+            span_start = date(min(k[0] for k in extra_keys), 1, 1)
+            span_end = date(max(k[0] for k in extra_keys), 12, 31)
+            extra = await self.get_member_month_totals(
+                user_id, organization_id, span_start, span_end
+            )
+            months_by_key = {**extra, **months_by_key}
+
+        def _bucket(key: Tuple[int, int]) -> Dict[str, Any]:
+            return months_by_key.get(key) or self._empty_month_totals(*key)
+
+        totals = {
+            "shifts": sum(m["shifts"] for m in months),
+            "hours": sum_hours_to_quarter([m["hours"] for m in months]),
+            "calls": sum(m["calls"] for m in months),
+            "pending_shifts": sum(m["pending_shifts"] for m in months),
+            "pending_hours": sum_hours_to_quarter([m["pending_hours"] for m in months]),
+        }
+
+        return {
+            "year": selected_year,
+            "earliest_year": await self.get_member_first_attendance_year(
+                user_id, organization_id
+            ),
+            "timezone": str(tz),
+            "months": months,
+            "totals": totals,
+            "current_month": _bucket(current_key),
+            "previous_month": _bucket(previous_key),
+        }
 
     async def get_shift_coverage_report(
         self, organization_id: UUID, start_date: date, end_date: date
