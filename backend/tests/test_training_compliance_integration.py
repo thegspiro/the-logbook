@@ -76,6 +76,7 @@ async def _insert_hours_requirement(
     due_date_type: str = "calendar_period",
     period_start_month: int = 1,
     period_start_day: int = 1,
+    due_date: date | None = None,
 ) -> str:
     """Insert an HOURS-type training requirement and return its id."""
     req_id = _uid()
@@ -83,11 +84,11 @@ async def _insert_hours_requirement(
         text(
             "INSERT INTO training_requirements "
             "(id, organization_id, name, requirement_type, source, "
-            "required_hours, frequency, due_date_type, "
+            "required_hours, frequency, due_date_type, due_date, "
             "period_start_month, period_start_day, "
             "applies_to_all, active, created_at, updated_at) "
             "VALUES (:id, :org_id, :name, :req_type, :source, "
-            ":hours, :freq, :ddt, :psm, :psd, "
+            ":hours, :freq, :ddt, :due_date, :psm, :psd, "
             "1, 1, :now, :now)"
         ),
         {
@@ -99,6 +100,7 @@ async def _insert_hours_requirement(
             "hours": required_hours,
             "freq": frequency,
             "ddt": due_date_type,
+            "due_date": due_date,
             "psm": period_start_month,
             "psd": period_start_day,
             "now": _NOW,
@@ -209,6 +211,50 @@ class TestHoursRequirementCompliance:
         assert progress.completed_hours == 0
         assert progress.required_hours == 24.0
         assert progress.is_complete is False
+
+    async def test_days_until_due_is_populated(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """RequirementProgress.days_until_due must actually be set.
+
+        The field defaults to None on the schema, and none of
+        check_requirement_progress's three RequirementProgress(...)
+        construction sites set it — so every consumer, including the MCP
+        get_member_requirements_progress tool (whose docstring promises
+        "days until due, negative when overdue"), always received null
+        regardless of the requirement's actual due date. Caught by Codex
+        reviewing TR-17 pass 3.
+        """
+        org_id, user_id = setup_org_and_user
+        due = date.today() + timedelta(days=10)
+        req_id = await _insert_hours_requirement(
+            db_session, org_id, required_hours=24.0, due_date=due
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.due_date == due
+        assert progress.days_until_due == 10
+
+    async def test_days_until_due_is_negative_when_overdue(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """An already-passed due date must report a negative day count."""
+        org_id, user_id = setup_org_and_user
+        due = date.today() - timedelta(days=5)
+        req_id = await _insert_hours_requirement(
+            db_session, org_id, required_hours=24.0, due_date=due
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.days_until_due == -5
 
     async def test_partial_hours_not_met(
         self, db_session: AsyncSession, setup_org_and_user
