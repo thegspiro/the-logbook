@@ -19,16 +19,16 @@
 **PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged
 at its stale first-draft state before this correction could be pushed to
 it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
-`PROGRESS.md`'s Log for detail). The correction (round 1) and its fix
-carried forward to [#2218](https://github.com/thegspiro/the-logbook/pull/2218)
-(`claude/security-review-training-core-tr3-followup`), which itself merged
-at round 3's commit before round 4's fixes could be pushed — the identical
-race, again — moving rounds 2-4 forward to
-[#2220](https://github.com/thegspiro/the-logbook/pull/2220)
-(`claude/security-review-training-core-tr3-round4`), which merged before
-round 5's fixes could be pushed in turn, moving round 5 to
-[#2221](https://github.com/thegspiro/the-logbook/pull/2221)
-(`claude/security-review-training-core-tr3-round5`).
+`PROGRESS.md`'s Log for detail). The fix has since carried forward through
+five more premature-merge recoveries of the identical shape — each PR
+merging while Codex's review of it was still in progress, moving the next
+round to a fresh branch/PR in turn:
+[#2218](https://github.com/thegspiro/the-logbook/pull/2218) (round 1) →
+[#2220](https://github.com/thegspiro/the-logbook/pull/2220) (rounds 2-4) →
+[#2221](https://github.com/thegspiro/the-logbook/pull/2221) (round 5) →
+[#2222](https://github.com/thegspiro/the-logbook/pull/2222) (round 6,
+`claude/security-review-training-core-tr3-round6`). See `PROGRESS.md`'s
+Log for each recovery's detail.
 **Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
 
 > **Correction (Codex review of this PR).** The first draft of this section
@@ -411,6 +411,181 @@ test_certification_period_anchor_includes_unknown_completion_date` (P2) for
 test since it doesn't have that bug (see above). All three confirmed
 failing against the round-4 code before this fix, via `git stash` on just
 `training_service.py`.
+
+**Round 6 — Codex found two more gaps in round 5's own fixes**, on the
+next PR (#2221, opened after round 5 merged prematurely — see
+`PROGRESS.md`'s Log):
+
+1. **A stale `due_date` left over from a prior `fixed_date` configuration
+   defeated the rolling/certification-period anchor.** `RequirementModal.
+tsx` seeds its `due_date` form field from the existing row and only
+   edits or clears it on the `fixed_date` screen (confirmed by reading the
+   component: line 77 seeds state, lines 181-183 submit `due_date`
+   whenever it's still truthy alongside whatever `due_date_type` was
+   actually selected). An officer switching an existing fixed-date
+   requirement to Cert Period therefore leaves the old `due_date` in the
+   payload. Every round since round 1 gave `req.due_date`/`requirement.
+due_date` top priority unconditionally, so this stale value would
+   silently defeat round 4's certification-period anchor (and round 3's
+   rolling anchor, sharing the identical root cause though not raised by
+   Codex against it directly) — the exact inverse failure mode of P1
+   (round 5 fixed the BIANNUAL override clobbering a _correct_ anchor;
+   this is a stale explicit date clobbering it instead). Fixed by only
+   honoring the explicit `due_date` when the requirement's `due_date_type`
+   is _not_ `rolling`/`certification_period` (an `anchored_type` flag in
+   both functions) — `calendar_period` keeps its existing, deliberately
+   tested precedent of an explicit-date override
+   (`test_days_until_due_calculated`) unchanged, since Codex's finding and
+   the frontend behavior it traced are specific to switching _out of_
+   `fixed_date`, not that combination.
+2. **A certification anchor could publish a due date for a record the
+   compliance calculation itself rejects as unverifiable.** When a
+   requirement sets `recency_days`, `is_recent_enough()` requires a known
+   `completion_date` to check a record's freshness — a record with
+   `completion_date is None` fails it and is excluded from the actual
+   compliance result (`check_requirement_progress`'s own CERTIFICATION
+   branch applies `apply_recency` for exactly this). Round 5's P2 fix,
+   however, let `_anchor_records` admit that same record for the _due
+   date_ calculation regardless, since it deliberately stopped filtering
+   on `completion_date` at all. Result: `is_complete=False` (correctly
+   unmet) alongside a future `due_date`/`days_until_due` computed from the
+   very record the compliance check excluded — a contradiction on the
+   same response object. `evaluate_requirement_detail()` needed no
+   equivalent fix: its `completed` list already has `apply_recency`
+   applied once, upstream of everything including the anchor block, so it
+   never received an unverifiable record in the first place. Fixed by
+   threading `today` into `_anchor_records` and filtering with the same
+   `is_recent_enough()` predicate the compliance calculation uses —
+   inert when `recency_days` is unset (matching the round-5 P2 fix's
+   behavior for the common case), and correctly exclusionary only when a
+   freshness window is actually configured.
+
+**Guard tests (round 6):** `test_training_compliance.py::
+TestEvaluateRequirementDetailFields::test_rolling_ignores_a_stale_fixed_due_date`
+and `::test_certification_period_ignores_a_stale_fixed_due_date` (finding
+
+1. for `evaluate_requirement_detail`;
+   `test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_rolling_ignores_a_stale_fixed_due_date`,
+   `TestCertificationCompliance::test_certification_period_ignores_a_stale_fixed_due_date`
+   (finding 1), and `::test_certification_period_anchor_excludes_unverifiable_completion_when_recency_required`
+   (finding 2) for `check_requirement_progress`. All five confirmed failing
+   against the round-5 code before this fix, via `git stash` on just
+   `training_service.py`.
+
+**Round 7 — Codex found round 6's own fix drew the line in the wrong
+place**, pushed as a further commit onto the same still-open PR (#2222) —
+no premature merge this time:
+
+Round 6 excluded `rolling`/`certification_period` from honoring a stale
+`due_date`, reasoning that `calendar_period` was unaffected because an
+explicit override there was "an established, deliberate override" per
+`test_days_until_due_calculated`. Codex pointed out that reasoning doesn't
+hold: `RequirementModal.tsx`'s stale-value behavior (seeds `due_date` from
+the existing row, only clears/edits it on the `fixed_date` screen) applies
+identically when switching to `calendar_period` — there is no UI path that
+lets an officer deliberately set both a period configuration _and_ an
+override date at once, so a `calendar_period` row carrying a `due_date` is
+just as likely to be the same stale leftover, not a real feature. The
+existing test had been asserting the bug's shape as if it were a
+requirement, and round 6 preserved it as a carve-out for exactly that
+reason.
+
+Fixed by replacing the round-6 `anchored_type` (rolling/certification_period)
+exclusion with an inclusion list: an explicit `due_date` now wins only when
+`due_date_type` is `None` (a legacy row from before the field existed) or
+`fixed_date` — never `calendar_period`, `rolling`, or `certification_period`,
+all three of which compute their own deadline. This required updating (not
+just adding to) two round-1/2 tests in `test_training_compliance_integration.py`
+(`test_days_until_due_is_populated`, `test_days_until_due_is_negative_when_overdue`)
+that relied on the default `due_date_type="calendar_period"` while asserting
+an explicit `due_date` wins — both now pass `due_date_type="fixed_date"`
+explicitly, which is what they were actually testing all along. The unit-test
+equivalents in `test_training_compliance.py` were unaffected: `_make_requirement`
+defaults `due_date_type` to `None`, which the new rule still honors.
+
+**Guard tests (round 7):**
+`test_training_compliance.py::TestEvaluateRequirementDetailFields::
+test_calendar_period_ignores_a_stale_fixed_due_date` for
+`evaluate_requirement_detail`;
+`test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_calendar_period_ignores_a_stale_fixed_due_date` for
+`check_requirement_progress`. Both confirmed failing against the round-6
+code before this fix.
+
+**Round 8 — Codex found rounds 6-7 only masked the symptom, not the root
+cause**, pushed as a further commit onto the same still-open PR (#2222):
+
+Rounds 6-7 made `check_requirement_progress`/`evaluate_requirement_detail`
+ignore a stale `due_date` for every type but `fixed_date` — but the stale
+value itself was still sitting in the database, unpersisted-corrected. Codex
+found two other active paths read `requirement.due_date` directly, bypassing
+both calculators entirely: the requirements dashboard widget
+(`api/v1/endpoints/training.py:330`, rendered by
+`frontend/.../widgets/training/index.tsx`) and the requirement detail page
+(`frontend/src/pages/TrainingRequirementsPage.tsx`). An officer would see
+the calculated (correct) due date on the progress screens and the raw
+(stale) one on the dashboard and detail page simultaneously — the
+calculators were never going to be a complete fix on their own, because the
+bug is in what gets _written_, not just what gets _read_.
+
+Fixed at the actual root: `create_requirement`/`update_requirement`
+(`api/v1/endpoints/training.py`) now null out `due_date` whenever the
+resulting `due_date_type` isn't `fixed_date` (or unset, for a legacy row) —
+regardless of what the client sent, so `RequirementModal.tsx`'s stale-value
+behavior can never reach the database in the first place, and every reader
+(the two calculators, the two raw-read paths Codex found, any future one)
+sees a consistent, correct value with no further per-site patching needed.
+`update_requirement` normalizes even when the update payload doesn't
+mention `due_date_type` or `due_date` at all, cleaning up a row that
+already carries a stale value from before this fix existed the next time
+it's touched. The calculators' rounds 6-7 defensive logic is left in place
+as harmless, correct defense-in-depth for any row not yet touched since.
+
+**Guard tests (round 8):** new file
+`test_training_requirement_due_date_write_normalization.py` — four
+`update_requirement` cases (switching away from `fixed_date` to `rolling`
+or `calendar_period` clears a stale `due_date`; a genuine `fixed_date`
+update keeps its own `due_date`; touching an already-stale row with an
+unrelated field change cleans it up) and one `create_requirement` case
+(a non-`fixed_date` create ignores a client-sent `due_date`). Four of the
+five confirmed failing without the endpoint fix (the "genuine fixed_date
+update" case correctly still passed, since it's unaffected).
+
+**Round 9 — Codex found round 8's write-path fix doesn't reach a row
+nobody edits**, pushed as a further commit onto the same still-open PR
+(#2222):
+
+Round 8's normalization runs on `create`/`update`, which stops _new_
+staleness but does nothing for a `calendar_period`/`rolling`/
+`certification_period` row that already carries a stale `due_date` and is
+never edited again. Until an officer happens to touch it, the same two raw
+reads (the dashboard widget, the requirement detail page) keep showing the
+pre-fix value — exactly the CLAUDE.md pitfall #20 pattern applied to a
+plain column instead of a JSON one: _a write-path fix alone never reaches
+a row nobody revisits; it needs a migration to settle the rows already
+there._
+
+Fixed with `20260904_0530_bbdaca0844df_backfill_stale_due_date_non_fixed.py`:
+a single `UPDATE training_requirements SET due_date = NULL WHERE due_date
+IS NOT NULL AND due_date_type IN (...)` for the three non-`fixed_date`
+types, guarded on the table's existence (per CLAUDE.md pitfall #26 — even
+though `training_requirements` is migration-created, not `create_all`-only,
+matching the same defensive check the precedent migration
+(`20260903_1300_e3a9c1d5b7f2`, the `email_service` settle) uses).
+`downgrade()` is deliberately a no-op: the cleared values were never valid
+for these three types (there's no UI path to set both a period/anchor
+config and a deliberate override date at once), so there's nothing correct
+to restore.
+
+**Guard tests (round 9):** new file
+`test_backfill_stale_training_due_date_migration.py` — a real-database
+integration test (`db_session`, not a mocked bind) proving the actual
+UPDATE statement, including its expanding `IN`-list bindparam, clears
+`calendar_period`/`rolling`/`certification_period` rows while leaving
+`fixed_date` and legacy (`due_date_type IS NULL`) rows untouched; plus the
+standard mocked-bind unit test for the table-missing guard, in the manner
+of the `email_service` migration's own test.
 
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 

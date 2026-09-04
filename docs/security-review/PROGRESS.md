@@ -16,80 +16,107 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2221](https://github.com/thegspiro/the-logbook/pull/2221)** (branch
-`claude/security-review-training-core-tr3-round5`) — Feature 17, Training
-core, pass 3, round 5. **#2220 (rounds 1-4) merged before round 5's fixes
-could be pushed to it** — the owner merged while Codex's review of that PR
-was still in progress, the same race that hit #2213, #2217, and #2218
-before it (CLAUDE.md pitfall #24: never reuse a branch whose PR has merged
-— the fixes moved to a fresh branch/PR off current `main`, which already
-carries rounds 1-4).
+**[#2222](https://github.com/thegspiro/the-logbook/pull/2222)** (branch
+`claude/security-review-training-core-tr3-round6`) — Feature 17, Training
+core, pass 3, rounds 6-9. **#2221 (rounds 1-5) merged before round 6's
+fixes could be pushed to it** — the owner merged while Codex's review of
+that PR was still in progress, the same race that hit #2213, #2217,
+#2218, and #2220 before it (CLAUDE.md pitfall #24: never reuse a branch
+whose PR has merged — round 6 moved to this fresh branch/PR off current
+`main`, which already carries rounds 1-5). Rounds 7-9 are further pushes
+to this same still-open PR — no premature merge since.
 
-This PR is entirely rounds 1-5 of the same TR3-1 finding
+This PR is entirely rounds 1-9 of the same TR3-1 finding
 (`RequirementProgress.days_until_due` was never populated), each round
-fixing a real gap Codex found in the previous round's own fix:
+fixing a real gap Codex found in the previous round's own fix. Brief
+summary (full technical detail in `TR-17-training-core.md`'s Pass 3
+section):
 
-- **Round 1** (merged in #2218): computed `days_until_due` from
-  `requirement.due_date` only — worked for an explicit fixed date, null
-  for everything else.
-- **Round 2** (merged in #2218): added the `calendar_period` window-end
-  fallback `evaluate_requirement_detail()` already used — fixed the
+- **Rounds 1-2** (merged in #2218): `days_until_due` from `requirement.
+due_date` only, then a `calendar_period` window-end fallback for the
   common annual/quarterly/monthly case.
-- **Round 3** (merged in #2218): `_get_date_window()` returns `today` as
-  the window end for a `rolling` requirement (a trailing window, not a
-  deadline), so round 2's fallback reported every rolling requirement due
-  today; fixed with a `_rolling_due_date()` last-completion anchor. Also
-  fixed the identical latent flaw found by inspection (not Codex) in the
-  sibling `evaluate_requirement_detail()`, present since pass 1 (PR
-  #1851).
-- **Round 4** (merged in #2220): Codex found three more gaps in round 3's
-  own anchor fix. (1) No branch at all for
-  `due_date_type="certification_period"` — fell through to the
-  calendar-period fallback instead of the held certificate's own
-  expiration date; fixed with a new `_certification_due_date()` helper.
-  (2) The rolling/certification anchor matched by a bare `training_type`
-  check, which both over-matches (any record of any type when unset —
-  Codex's course-specific-requirement example) and, once swapped for
-  `certification_record_matches` wholesale, under-matches
-  HOURS/SHIFTS/CALLS requirements that legitimately restrict nothing;
-  fixed with a new `_anchor_matches()` dispatcher mirroring each
-  requirement type's own crediting filter instead of a one-size-fits-all
-  matcher. (3) The batch/API preload path
-  (`get_requirements_progress_for`) bounds `completed_records` to the
-  union of every requirement's evaluation window, which for an ordinary
-  rolling requirement excludes exactly the older completions an
-  _overdue_ anchor needs — fixed by extending `_preload_window`'s
-  existing unbounded-window exemption (already used for
-  CERTIFICATION/BIANNUAL) to rolling and certification-period
-  requirements.
-- **Round 5** (this PR): Codex found two more gaps, both introduced by
-  round 4 itself. **P1 (more severe):** the legacy BIANNUAL override in
-  `evaluate_requirement_detail()` (predates due_date_type awareness
-  entirely) unconditionally overwrote round 4's correctly-anchored
-  certification-period due date with the newest expiration across _any_
-  record passing a bare `training_type` check — an EMT cert due in 30 days
-  could get silently replaced by an unrelated cert expiring next year,
-  which would then never surface in a 90-day at-risk forecast. Fixed by
-  skipping that override whenever the rolling/certification-period anchor
-  logic already computed the value. `check_requirement_progress` was
-  checked and does not share this bug — it only reads the already-computed
-  value rather than reassigning it. **P2:** `_anchor_records` dropped
-  every record with `completion_date is None` before a
-  certification-period anchor could see it, even though the column is
-  nullable and four other certification-matching sites in the same file
-  deliberately keep such a record via a `completion_date or date.min`
-  fallback; fixed by removing that filter and having each caller
-  (`_rolling_due_date`, which still needs a real date;
-  `_certification_due_date`, which doesn't) apply the correct convention
-  itself.
+- **Round 3** (merged in #2218): fixed `rolling` requirements always
+  reporting due `today` with a `_rolling_due_date()` last-completion
+  anchor, in both `check_requirement_progress` and the sibling
+  `evaluate_requirement_detail()`.
+- **Round 4** (merged in #2220): added a `certification_period` branch
+  (`_certification_due_date()`); a type-aware `_anchor_matches()`
+  dispatcher replacing a bare `training_type` filter; exempted
+  rolling/certification-period requirements from the batch-preload's
+  window bound.
+- **Round 5** (merged in #2221): stopped the legacy BIANNUAL override
+  from clobbering a correctly-anchored certification-period due date;
+  stopped `_anchor_records` from dropping matching records with an
+  unknown `completion_date`.
+- **Round 6** (this PR): a stale `due_date` left over from switching a
+  requirement away from `fixed_date` (confirmed in `RequirementModal.
+tsx`) was still taking top priority over the rolling/certification-
+  period anchor — fixed by excluding those two types from honoring it, on
+  the reasoning that `calendar_period` was an "established, deliberate
+  override." Also fixed a certification anchor publishing a due date for
+  a record the compliance calculation itself rejects as unverifiable
+  under `recency_days`.
+- **Round 7** (this PR, pushed after Codex reviewed round 6): Codex found
+  round 6's own carve-out was wrong — `calendar_period` has the identical
+  stale-`due_date` exposure as rolling/certification_period (the frontend
+  behavior isn't type-specific; there's no UI path to deliberately set
+  both a period config and an override date), so round 6's "established,
+  deliberate override" reasoning didn't hold. Fixed by replacing the
+  exclusion list with an inclusion list: an explicit `due_date` now wins
+  only for `due_date_type` `None` (legacy) or `fixed_date` — never
+  `calendar_period`, `rolling`, or `certification_period`. Required
+  updating two round-1/2 tests that had been asserting the bug's shape
+  (relying on the default `due_date_type="calendar_period"` while
+  asserting an explicit date wins) to use `due_date_type="fixed_date"`
+  explicitly instead.
 
-Three new guard tests in round 5, all confirmed failing against the
-round-4 code before this fix. Full completion gate re-run green
-(10569/10569 backend). See `TR-17-training-core.md`'s Pass 3 section and
-the Log below for full detail on every round. Rotation row 17 stays ⏳
+- **Round 8** (this PR, pushed after Codex reviewed round 7): rounds 6-7
+  only made the two `days_until_due` calculators ignore a stale
+  `due_date` — the value itself was still persisted, and Codex found two
+  other active paths read `requirement.due_date` directly, bypassing both
+  calculators: the requirements dashboard widget
+  (`api/v1/endpoints/training.py:330`) and the requirement detail page.
+  Fixed at the actual root instead of a third calculator patch:
+  `create_requirement`/`update_requirement` now null out `due_date`
+  whenever the resulting `due_date_type` isn't `fixed_date` (or unset),
+  regardless of what the client sent — so the stale value can never reach
+  the database, and every reader (present or future) sees a consistent
+  value. `update_requirement` also cleans up a row already carrying a
+  stale value from before this fix, the next time it's touched, even if
+  the update doesn't mention `due_date` at all.
+
+- **Round 9** (this PR, pushed after Codex reviewed round 8): round 8's
+  write-path fix stops _new_ staleness but does nothing for a row that
+  already carries a stale `due_date` and is never edited again — Codex
+  named the same CLAUDE.md pitfall #20 pattern applied to a plain column:
+  a write-path fix alone never reaches a row nobody revisits. Fixed with
+  migration `20260904_0530_bbdaca0844df`: a single `UPDATE ... SET
+due_date = NULL WHERE due_date_type IN (calendar_period, rolling,
+certification_period)`, table-existence-guarded per pitfall #26,
+  irreversible by design (nothing correct to restore the cleared values
+  to).
+
+Fourteen new guard tests across rounds 6-9, all confirmed failing against
+the code before their respective fix (round 9's migration test runs the
+real UPDATE against a live database, not a mocked bind). Full completion
+gate re-run green (10583/10583 backend). See `TR-17-training-core.md`'s Pass 3 section and the
+Log below for full detail on every round. Rotation row 17 stays ⏳
 awaiting merge. Next: 18 Training extended, once this PR merges.
 
 ---
+
+### 2026-09-04 — Feature 17 (Training core, pass 3, round 6) — PR #2221 merged at round 5's commit; round-6 fixes moved to a new PR
+
+**PR #2221 merged (rounds 1-5) before round 6's fixes could be pushed to
+it** — the owner merged while Codex's review of it was still in progress,
+the same race that hit #2213, #2217, #2218, and #2220 before it. Per
+CLAUDE.md pitfall #24, the merged branch is not reused: round 6's two
+fixes (the stale-due-date priority bug, the unverifiable-anchor/recency
+contradiction) moved to a new branch off current `main` and a new PR,
+**[#2222](https://github.com/thegspiro/the-logbook/pull/2222)**
+(`claude/security-review-training-core-tr3-round6`). Rounds 7-9 pushed as
+further commits onto this same PR — no further premature merges. Next: 18
+Training extended, once this PR merges.
 
 ### 2026-09-04 — Feature 17 (Training core, pass 3, round 5) — PR #2220 merged at round 4's commit; round-5 fixes moved to a new PR
 
@@ -100,10 +127,9 @@ pitfall #24, the merged branch is not reused: round 5's two fixes (the
 BIANNUAL-override clobber, the unknown-completion-date anchor exclusion)
 moved to a new branch off current `main` and a new PR,
 **[#2221](https://github.com/thegspiro/the-logbook/pull/2221)**
-(`claude/security-review-training-core-tr3-round5`), which also updates
-this doc's Log and Open PR entries to point at itself. See the Open PR
-section above for the full round-by-round write-up. Next: 18 Training
-extended, once the follow-up PR merges.
+(`claude/security-review-training-core-tr3-round5`), which merged before
+round 6's fixes could be pushed — see the entry immediately above. Next:
+18 Training extended, once the follow-up PR merges.
 
 ### 2026-09-04 — Feature 17 (Training core, pass 3, round 4) — PR #2218 merged at round 3's commit; round-4 fixes moved to a new PR
 
