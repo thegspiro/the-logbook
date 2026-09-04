@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A successful edit no longer reads as though it had not happened (2026-09-04)
+
+**Fixed**
+
+- **A response fetched just before an edit could be served as fresh just
+  after it.** The shared API client caches GET responses and evicts a
+  resource's entries whenever a POST/PATCH/DELETE against it succeeds. A GET
+  that was already in flight when the edit landed was not covered by either
+  step: it settled afterwards and wrote the pre-edit body straight back into
+  the cache it had just been cleared from, where it was served as fresh for
+  the next 30 seconds. Saving a change and seeing the old value come back —
+  and an explicit refresh in that window returning data older than the edit —
+  is what that looked like. Cache writes are now versioned against
+  per-resource invalidations as well as against the whole-cache purge on
+  logout, so a response that describes a state the app has already moved past
+  is discarded rather than stored.
+
 ### Email settings: Microsoft 365 OAuth submission, and a Cloudflare test that checks the account (2026-09-03)
 
 **Added**
