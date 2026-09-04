@@ -24,7 +24,7 @@ carried forward to [#2218](https://github.com/thegspiro/the-logbook/pull/2218)
 (`claude/security-review-training-core-tr3-followup`), which itself merged
 at round 3's commit before round 4's fixes could be pushed — the identical
 race, again — moving rounds 2-4 forward once more to
-[#2219](https://github.com/thegspiro/the-logbook/pull/2219)
+[#2220](https://github.com/thegspiro/the-logbook/pull/2220)
 (`claude/security-review-training-core-tr3-round4`).
 **Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
 

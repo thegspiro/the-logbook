@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2219](https://github.com/thegspiro/the-logbook/pull/2219)** (branch
+**[#2220](https://github.com/thegspiro/the-logbook/pull/2220)** (branch
 `claude/security-review-training-core-tr3-round4`) — Feature 17, Training
 core, pass 3, round 4. **#2218 merged (`f7073cd5`, rounds 1-3) before this
 round's fixes could be pushed to it** — the owner merged it while Codex's
@@ -80,7 +80,7 @@ still in progress, the same race that hit #2213 and #2217. Per CLAUDE.md
 pitfall #24, the merged branch is not reused: round 4's three fixes
 (certification-period due dates, type-aware anchor matching, the
 batch-preload window exemption) moved to a new branch off current `main`
-and a new PR, **[#2219](https://github.com/thegspiro/the-logbook/pull/2219)**
+and a new PR, **[#2220](https://github.com/thegspiro/the-logbook/pull/2220)**
 (`claude/security-review-training-core-tr3-round4`), which also updates
 this doc's Log and Open PR entries to point at itself. See the Open PR
 section above for the full round-by-round write-up. Next: 18 Training
