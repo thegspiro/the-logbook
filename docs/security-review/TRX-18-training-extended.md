@@ -539,20 +539,29 @@ commands above) was run directly and is green, including the equivalent
 **Prefix:** `TRX3` · **PR:** [#2223](https://github.com/thegspiro/the-logbook/pull/2223)
 
 **Scope check:** diffed the current tree against `e094e66e1c94604e00c9143e73bc27c8cb0f1014`
-(the pass-2 merge commit for PR #2012) across all fourteen pass-2 files. Only
-**three** changed:
+(the pass-2 merge commit for PR #2012) across all fifteen pass-2 artifacts
+(fourteen pass-1 files plus `apiCache.test.ts`, added by pass 2 as the
+TRX2-1 guard test). **Four** changed (corrected from an initial miscount of
+three that omitted the test file — caught by a Codex review of this pass's
+own PR):
 
 - `backend/app/api/v1/endpoints/external_training.py` — a no-op import
   reformat (`from app.schemas.training import (TestConnectionResponse,)`
   collapsed to one line). No functional change.
 - `backend/app/services/external_training_service.py` (37 lines) —
   see TRX3-1 below.
-- `frontend/src/utils/apiCache.ts` (81 lines added) — see "Verified good"
-  below; not a training-extended-specific change.
+- `frontend/src/utils/apiCache.ts` (81 lines added) and its test file
+  `frontend/src/utils/apiCache.test.ts` (10 lines added) — see "Verified
+  good" below; neither is a training-extended-specific change. The test
+  diff mirrors the source diff exactly: one new test for the
+  `/dashboard/action-items` prefix, one new test for the `/attendees`
+  substring — no test exercises the cache-generation/epoch mechanism
+  itself, which is a pre-existing gap in that unrelated change, not
+  something this pass introduced or is scoped to fix.
 
 No new migration touches a training-extended table, and none of the twelve
 model classes this feature owns changed (checked directly, not inferred from
-the file diff-stat). Given a three-file diff this small, this pass is a
+the file diff-stat). Given a four-file diff this small, this pass is a
 targeted re-verification of what changed plus a re-confirmation of pass 1/2's
 claims, not a first-read of grown files.
 
@@ -583,7 +592,8 @@ connection actually uses — not a second, independent `getaddrinfo()` at
 connect time — there is no window between the check and the request for a
 hostname to be rebound. This is structurally the same "resolve once and
 pin" shape this file's own KNOWN_LIMITATIONS entry says the eventual fix for
-the other seven sites needs.
+the other remaining sites needs (six, after this pass's own further
+correction below).
 
 Two smaller pieces close adjacent gaps in the same change: `join_endpoint`/
 `relative_endpoint` now build every request URL from a strictly relative
@@ -698,8 +708,10 @@ submissions`/`training_waivers`/`training_enhancements`/
 ## Corrections to prior write-ups
 
 - **`docs/KNOWN_LIMITATIONS.md`, "Outbound Integration Requests"** — see
-  TRX3-1 above: `external_training_service.py` removed from the affected-site
-  count (eight → seven); its closure and mechanism documented in place.
+  TRX3-1 above: `external_training_service.py` and `push_service.py` (the
+  latter caught by a Codex review of this pass's own PR) removed from the
+  affected-site count (eight → seven → six); both closures and their
+  mechanisms documented in place.
 
 ## Completion gate (pass 3)
 

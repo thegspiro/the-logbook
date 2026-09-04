@@ -48,7 +48,7 @@ corrected `KNOWN_LIMITATIONS.md`'s count from eight affected sites to seven.
 fix); confirmed none of this feature's eleven cache-exclusion entries moved.
 All of pass 1/2's fixes re-verified present and unchanged. Full write-up:
 `docs/security-review/TRX-18-training-extended.md` (Pass 3 section).
-Rotation row 18 stays 🔄 pending PR merge.
+Rotation row 18 → ⏳ awaiting PR merge.
 
 ### 2026-09-04 — Feature 17 (Training core) ✅ closed — PR #2222 merged clean after 9 rounds
 
@@ -8498,7 +8498,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | 🔄     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⏳     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
