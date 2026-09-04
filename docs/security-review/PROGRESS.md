@@ -16,31 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2223](https://github.com/thegspiro/the-logbook/pull/2223) — Feature 18
-(Training extended), pass 3 — branch
-`claude/security-review-training-extended`. No findings requiring a code
-fix. This PR's own doc-accuracy record has itself gone through repeated
-Codex-driven correction — each fix to a stale count or an unlisted file
-risked leaving another summary of the same fact out of date, which Codex
-kept catching. Rather than maintain a running tally here that itself goes
-stale every round (the exact failure mode this note existed to avoid), the
-authoritative list is this PR's resolved review threads on GitHub — every
-one fixed, replied to, and resolved. In substance: `push_service.py` was
-found to be already DNS-rebinding-hardened alongside
-`external_training_service.py` (both independently fixed by the repo owner
-outside this rotation), dropping `KNOWN_LIMITATIONS.md`'s affected-site
-count eight → seven → six; the declared scope-check list was corrected to
-include `apiCache.test.ts` and (retroactively) `apiCache.ts` itself as
-pass-2, not pass-1, artifacts; a claim that no test covered the
-`apiCache.ts` cache-generation/epoch mechanism was wrong (`apiClient.test.ts`
-does); an unverified "twelve model classes" count was replaced with the
-actual model-diff read; `KNOWN_LIMITATIONS.md`'s "two transports" wording
-and a claim about `push_service.py`'s dev-environment scoping matching
-`SSRFSafeAsyncTransport`'s were both corrected to what the code actually
-does; and the PR's own merge-commit citation for #2222 and this file's
-rotation-status row/log were each fixed once found stale. Completion gate
-fully green, including `eslint .` (ran in background, completed clean after
-the PR was opened).
+_None currently open._
+
+---
+
+### 2026-09-04 — Feature 18 (Training extended) ✅ closed — PR #2223 merged
+
+**PR #2223 merged cleanly** (merge recorded on `main`, head `6c95229a`),
+closing out pass 3 for Feature 18. This entry exists because the prior
+"Open PR" note above was found stale during a watchdog check: the PR had
+merged roughly ten hours earlier but the rotation had not picked up Feature
+19, and no new security-review PR had been opened in the interim. Rotation
+row 18 → ✅. Next: 19 Skills testing (pass 3).
 
 ---
 
@@ -8525,8 +8512,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⏳     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | 🔄     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
