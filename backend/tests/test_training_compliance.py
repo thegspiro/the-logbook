@@ -1054,6 +1054,23 @@ class TestEvaluateRequirementDetailFields:
         result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
         assert result["days_until_due"] == (date(2026, 12, 31) - date(2026, 6, 15)).days
 
+    def test_calendar_period_ignores_a_stale_fixed_due_date(self):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `calendar_period` must not suppress the
+        period-window deadline -- the same stale-value failure mode as the
+        rolling/certification_period cases, which a prior round wrongly
+        assumed didn't apply to calendar_period because an explicit
+        `due_date_type` was set explicitly here (unlike
+        `test_days_until_due_calculated` above, which leaves it at the
+        default `None` and is a different, legitimate legacy case).
+        """
+        req = _make_requirement(
+            due_date_type="calendar_period", due_date=date(2020, 1, 1)
+        )
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["due_date"] == str(date(2026, 12, 31))
+        assert result["due_date"] != str(date(2020, 1, 1))
+
     def test_days_until_due_for_rolling_requirement_anchors_on_last_completion(self):
         """A rolling requirement's deadline is the last completion plus its
         interval, not the evaluation window's end (which is always `today`

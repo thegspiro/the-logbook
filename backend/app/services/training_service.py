@@ -756,15 +756,17 @@ class TrainingService:
         rolling_months = get_rolling_period_months(req)
         req_due_date_type = TrainingService._due_date_type_str(req)
         # A stale req.due_date can survive a switch away from "fixed_date"
-        # (RequirementModal.tsx seeds due_date from the existing row and
-        # only clears/edits it on the fixed_date screen, so changing the
-        # type to rolling/certification_period keeps sending the old
-        # value) and must not defeat that type's own, better-informed
-        # anchor calculation below. "calendar_period" is unaffected: an
-        # explicit due_date there is an established, deliberate override
-        # (see test_days_until_due_calculated), not this stale-value case.
+        # to *any* other type: RequirementModal.tsx seeds due_date from the
+        # existing row and only clears/edits it on the fixed_date screen,
+        # so changing the type keeps sending the old value regardless of
+        # which type it's switched to. An explicit due_date therefore only
+        # means anything for "fixed_date" (or a legacy row with no
+        # due_date_type at all, from before the field existed) -- never
+        # calendar_period, rolling, or certification_period, all three of
+        # which compute their own deadline below.
+        honors_explicit_due_date = req_due_date_type in (None, "fixed_date")
         anchored_type = rolling_months or req_due_date_type == "certification_period"
-        if req.due_date and not anchored_type:
+        if req.due_date and honors_explicit_due_date:
             effective_due_date = req.due_date
         else:
             if anchored_type:
@@ -912,15 +914,16 @@ class TrainingService:
         rolling_months = get_rolling_period_months(requirement)
         due_date_type = self._due_date_type_str(requirement)
         # A stale requirement.due_date can survive a switch away from
-        # "fixed_date" (RequirementModal.tsx seeds due_date from the
-        # existing row and only clears/edits it on the fixed_date screen,
-        # so changing the type to rolling/certification_period keeps
-        # sending the old value) and must not defeat that type's own,
-        # better-informed anchor calculation below. "calendar_period" is
-        # unaffected: an explicit due_date there is an established,
-        # deliberate override, not this stale-value case.
-        anchored_type = rolling_months or due_date_type == "certification_period"
-        if requirement.due_date and not anchored_type:
+        # "fixed_date" to *any* other type: RequirementModal.tsx seeds
+        # due_date from the existing row and only clears/edits it on the
+        # fixed_date screen, so changing the type keeps sending the old
+        # value regardless of which type it's switched to. An explicit
+        # due_date therefore only means anything for "fixed_date" (or a
+        # legacy row with no due_date_type at all) -- never
+        # calendar_period, rolling, or certification_period, all three of
+        # which compute their own deadline below.
+        honors_explicit_due_date = due_date_type in (None, "fixed_date")
+        if requirement.due_date and honors_explicit_due_date:
             effective_due_date = requirement.due_date
         elif rolling_months:
             # Rolling due dates are anchored to the member's last applicable

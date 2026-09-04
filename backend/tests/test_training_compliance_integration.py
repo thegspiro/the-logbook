@@ -235,7 +235,11 @@ class TestHoursRequirementCompliance:
         org_id, user_id = setup_org_and_user
         due = date.today() + timedelta(days=10)
         req_id = await _insert_hours_requirement(
-            db_session, org_id, required_hours=24.0, due_date=due
+            db_session,
+            org_id,
+            required_hours=24.0,
+            due_date_type="fixed_date",
+            due_date=due,
         )
 
         svc = TrainingService(db_session)
@@ -253,7 +257,11 @@ class TestHoursRequirementCompliance:
         org_id, user_id = setup_org_and_user
         due = date.today() - timedelta(days=5)
         req_id = await _insert_hours_requirement(
-            db_session, org_id, required_hours=24.0, due_date=due
+            db_session,
+            org_id,
+            required_hours=24.0,
+            due_date_type="fixed_date",
+            due_date=due,
         )
 
         svc = TrainingService(db_session)
@@ -289,6 +297,39 @@ class TestHoursRequirementCompliance:
         year_end = date(date.today().year, 12, 31)
         assert progress.due_date == year_end
         assert progress.days_until_due == (year_end - date.today()).days
+
+    async def test_calendar_period_ignores_a_stale_fixed_due_date(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `calendar_period` must not suppress the
+        period-window deadline. `RequirementModal.tsx` seeds `due_date`
+        from the existing row and only clears/edits it on the fixed_date
+        screen for *any* type it's switched to, not just rolling/
+        certification_period -- Codex found this same failure mode also
+        applies to calendar_period, which a prior round had assumed was a
+        deliberate, established override rather than this stale-value
+        case. A sufficiently distant stale date would otherwise suppress
+        overdue/at-risk reporting for a plain annual requirement.
+        """
+        org_id, user_id = setup_org_and_user
+        stale_due = date.today() + timedelta(days=9999)
+        req_id = await _insert_hours_requirement(
+            db_session,
+            org_id,
+            required_hours=24.0,
+            due_date_type="calendar_period",
+            due_date=stale_due,
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        year_end = date(date.today().year, 12, 31)
+        assert progress.due_date == year_end
+        assert progress.due_date != stale_due
 
     async def test_days_until_due_for_rolling_requirement_anchors_on_last_completion(
         self, db_session: AsyncSession, setup_org_and_user

@@ -473,6 +473,46 @@ test_rolling_ignores_a_stale_fixed_due_date`,
    against the round-5 code before this fix, via `git stash` on just
    `training_service.py`.
 
+**Round 7 — Codex found round 6's own fix drew the line in the wrong
+place**, pushed as a further commit onto the same still-open PR (#2222) —
+no premature merge this time:
+
+Round 6 excluded `rolling`/`certification_period` from honoring a stale
+`due_date`, reasoning that `calendar_period` was unaffected because an
+explicit override there was "an established, deliberate override" per
+`test_days_until_due_calculated`. Codex pointed out that reasoning doesn't
+hold: `RequirementModal.tsx`'s stale-value behavior (seeds `due_date` from
+the existing row, only clears/edits it on the `fixed_date` screen) applies
+identically when switching to `calendar_period` — there is no UI path that
+lets an officer deliberately set both a period configuration _and_ an
+override date at once, so a `calendar_period` row carrying a `due_date` is
+just as likely to be the same stale leftover, not a real feature. The
+existing test had been asserting the bug's shape as if it were a
+requirement, and round 6 preserved it as a carve-out for exactly that
+reason.
+
+Fixed by replacing the round-6 `anchored_type` (rolling/certification_period)
+exclusion with an inclusion list: an explicit `due_date` now wins only when
+`due_date_type` is `None` (a legacy row from before the field existed) or
+`fixed_date` — never `calendar_period`, `rolling`, or `certification_period`,
+all three of which compute their own deadline. This required updating (not
+just adding to) two round-1/2 tests in `test_training_compliance_integration.py`
+(`test_days_until_due_is_populated`, `test_days_until_due_is_negative_when_overdue`)
+that relied on the default `due_date_type="calendar_period"` while asserting
+an explicit `due_date` wins — both now pass `due_date_type="fixed_date"`
+explicitly, which is what they were actually testing all along. The unit-test
+equivalents in `test_training_compliance.py` were unaffected: `_make_requirement`
+defaults `due_date_type` to `None`, which the new rule still honors.
+
+**Guard tests (round 7):**
+`test_training_compliance.py::TestEvaluateRequirementDetailFields::
+test_calendar_period_ignores_a_stale_fixed_due_date` for
+`evaluate_requirement_detail`;
+`test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_calendar_period_ignores_a_stale_fixed_due_date` for
+`check_requirement_progress`. Both confirmed failing against the round-6
+code before this fix.
+
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 
 **Reported by Codex on this PR; confirmed.** See the "Scope addition"
