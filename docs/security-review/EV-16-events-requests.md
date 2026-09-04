@@ -13,6 +13,155 @@ read, extracted from `event_requests.py`)
 
 ---
 
+## Pass 3 (2026-09-04) — no new findings, diff-scoped against pass 2
+
+**PR:** none needed — no code change this pass.
+**Scoped since pass 2's merge:** `fef19238` (PR #1973).
+
+Five months of feature work sit between pass 2 and now on `main` generally,
+but diffed narrowly (per file, not by line-count growth) against `fef19238`
+for the nine files pass 2 declared plus a fresh grep for any other file
+importing the Event/EventRequest models or instantiating either service —
+none found, so the surface is unchanged from pass 2's own enumeration.
+
+**Of the nine, five actually changed:** `api/v1/endpoints/events.py`
+(+182/-18), `models/event.py` (+24), `schemas/event.py` (+135/-4),
+`services/event_service.py` (+434/-98), `utils/event_attachments.py`
+(+19/-3, comment-only — the `Dict[str, Any]` type-check rationale expanded,
+no logic change). `event_requests.py`, `event_request_service.py`,
+`models/event_request.py` and `schemas/event_request.py` are **byte-identical**
+to pass 2 — confirmed via `git diff --stat`, not assumed from the "no PR
+touched these" changelog. One new migration,
+`20260901_0001_c3a71e5d9b48_add_event_attendee_visibility.py`.
+
+**The whole diff is one feature: member-visible attendee rosters, plus the
+seat-accurate capacity/waitlist rework it depended on.** Read in full, not
+sampled, against all seven checklist dimensions:
+
+- **New endpoint `GET /{event_id}/attendees`** (`events.py`) — gated
+  `require_permission("events.view")` (a baseline member grant), then a
+  second, per-event check: `resolve_attendee_visibility(event, org.settings)`
+  must resolve to `AttendeeVisibility.MEMBERS` **or** the caller must
+  additionally hold `events.manage`. The event is fetched org-scoped first
+  and a miss returns **404** before the visibility check ever runs — a
+  foreign event id can't be used to probe another org's visibility setting
+  (XC-3/Pitfall #14a-b). `resolve_attendee_visibility` fails closed three
+  ways: no per-event override falls to the org default; no org default (or an
+  org whose `settings` JSON has no `events.defaults` path) falls to
+  `MANAGERS`; an unrecognized stored string (unvalidated JSON — some other
+  write path could in principle put anything there) logs a warning and also
+  resolves to `MANAGERS` rather than raising or defaulting open. Every
+  installation's existing events keep manager-only rosters on upgrade — the
+  migration backfills nothing, by design (NULL is a real "inherit" state, not
+  a missing value).
+- **`EventAttendeeResponse` is a hand-written allowlist** (`user_id`,
+  `user_name`, `status`), explicitly **not** built on `RSVPResponse`/
+  `RSVPBase` — which carry `user_email`, `notes`, `dietary_restrictions`,
+  `accessibility_needs`, `guest_count` and the check-in/override block. The
+  docstring names the reason (inheriting to save lines is how those fields
+  would reach every member) and the service method backing it
+  (`list_event_attendees_for_member`) queries only `going` RSVPs — no
+  `status_filter` parameter, so `waitlisted`/`not_going`/contact rows are
+  structurally unreachable through this path, not merely unrendered.
+- **`UserRSVPSummary` (the caller's own RSVP, echoed on `GET /events/{id}`
+  for modal prefill) deliberately omits `dietary_restrictions` and
+  `accessibility_needs`.** The docstring gives the actual reason and it
+  checks out: `GET /events/{id}` is not in `UNCACHEABLE_PREFIXES` /
+  `UNCACHEABLE_SUBSTRINGS` (confirmed by reading
+  `frontend/src/utils/apiCache.ts` directly — the events exclusions are all
+  sub-resources: `/rsvps`, `/rsvp-history`, `/external-attendees`,
+  `/check-in-monitoring`, `/missed-mandatory`), so putting accommodation/PHI-
+  adjacent fields on the cached detail response would have made the app's
+  most-visited event endpoint a PHI-bearing, cacheable one. Confirmed the
+  fields are genuinely absent from the schema, not merely unset — `git grep`
+  for `dietary_restrictions\|accessibility_needs` in `schemas/event.py` finds
+  them only on `RSVPBase`/`RSVPResponse`.
+- **`get_eligible_members` (`events.manage`) now routes email through
+  `load_contact_policy`/`policy.email_for(member)`** instead of returning
+  `member.email` unconditionally. `contact_visibility.py` is a pre-existing,
+  already-reviewed shared utility (also used by `forms_service.py`); reading
+  it here confirms it resolves the same profile-visibility-vs-manager-ceiling
+  policy the member directory already applies, keyed off
+  `user_has_permission(current_user, "members.manage")` — correctly, since
+  `events.manage` and `members.manage` are separate grants and a coordinator
+  who can run events is not automatically a member of the roster's
+  visibility ceiling. This is a **narrowing** of what this endpoint returned
+  before (previously unconditional), not a new exposure.
+- **Capacity/waitlist rework changes arithmetic, not authorization or
+  tenancy — re-checked anyway since it touches the RSVP write path
+  CLAUDE.md pitfall #27 is specifically about.** Both locking halves are
+  still present and in the correct order at both call sites:
+  `create_or_update_rsvp` locks the event row then takes a locking read of
+  occupied seats (now `SUM(1 + guest_count)` instead of `COUNT(*)`, matching
+  the new allow_guests-aware capacity model) before the waitlist decision;
+  `promote_from_waitlist` now fetches-and-locks the earliest **fitting**
+  waitlisted row first, then re-verifies capacity with its own locking sum
+  before promoting — re-ordered from pass 2's shape (capacity check, then
+  fetch) specifically because capacity now depends on the fetched row's own
+  `guest_count`, and the promotion loop bound
+  (`MAX_WAITLIST_PROMOTIONS_PER_RELEASE = 50`) is a defensive cap on a
+  same-request loop, not a trust boundary. `rsvp_to_series` no longer
+  hand-rolls its own insert (which pass 2's audit never reached because
+  pass 1/2 both scoped to `create_or_update_rsvp`/`promote_from_waitlist`
+  by name) — it now delegates per-occurrence to `create_or_update_rsvp`
+  itself, so the series path inherits the same lock, capacity math,
+  `allow_guests` gate and deadline/draft checks instead of duplicating (and
+  drifting from) them. Confirmed the per-occurrence `rollback()` on a
+  refused occurrence discards only that attempt's uncommitted write, since
+  `create_or_update_rsvp` commits its own successes.
+- **`attendee_visibility` migration** — two `nullable=True` String(20)
+  columns on `events` and `event_templates` (both `create_table`-created,
+  not `create_all`-only), no `ondelete` involved, no backfill (correctly —
+  NULL is the inherit state). Single-head confirmed.
+- **No new unauthenticated route, no new client-supplied FK, no new SQL/LIKE
+  surface, no new CSV/export path.** `duplicate_event` and the recurring-
+  occurrence generator now carry `attendee_visibility` forward explicitly
+  (a duplicated or recurring event does not silently revert a manager's
+  chosen roster visibility to the org default) — read at both call sites,
+  plain field copy, no new write surface.
+- **Frontend:** `git diff --stat` against `fef19238` over the pass-2-
+  established 74-file surface finds 21 changed (listed in full in the
+  completion gate below); re-ran the same sweep pass 2 used
+  (`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+  `.toLocale*`, `date-fns` import, direct `fetch(`, `localStorage`) over all
+  21 — zero new hits; the two pre-existing `localStorage` uses in
+  `EventsPage.tsx` (filter presets) are unchanged. New
+  `EventAttendeesCard.tsx` read in full: calls the new endpoint, renders
+  `user_name`/`status` only, and treats a 403 as "roster not shared" rather
+  than an error state — it does not attempt to fall back to
+  `GET /{id}/rsvps` (the `events.manage` endpoint) on a permission failure,
+  so there's no path where a denied member-facing call silently upgrades to
+  the manager view.
+
+**No findings, no code changes this pass.** Rotation row 15 (this doc is
+still filed as EV-16, feature 16) → see `PROGRESS.md`.
+
+## Completion gate (pass 3)
+
+| Check                                             | Result                                               |
+| ------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (changed files)     | ✅ 0 violations                                      |
+| `black --check` (changed files)                   | ✅ 8 files unchanged                                 |
+| `isort --check-only` (changed files)              | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head, 414 revisions                        |
+| `pytest tests/ -k "event"`                        | ✅ 669 passed, 1 skipped (pre-existing)              |
+| `pytest tests/` (full backend suite)              | ✅ 10549 passed, 21 skipped (pre-existing), 0 failed |
+| `tsc --noEmit`                                    | ✅ 0 errors                                          |
+| `eslint .`                                        | ✅ 0 errors                                          |
+
+Frontend files diffed for the sweep above: `EventForm.tsx`/`.test.tsx`,
+`EventTemplateForm.tsx`, `event-detail/EventAttendeesCard.tsx` (new),
+`events/EventListCard.tsx`/`.test.tsx`, `EventCreatePage.tsx`,
+`EventDetailPage.tsx`/`.test.tsx`, `EventEditPage.tsx`/`.test.tsx`,
+`EventRequestsTab.tsx`, `EventsPage.tsx`/`.test.tsx`, `EventsSettingsTab.tsx`,
+`events-settings/AttendanceSection.tsx` (new), `events-settings/index.ts`,
+`services/eventServices.ts`, `types/event.ts`, `utils/eventHelpers.ts`.
+(`pages/MinutesDetailPage.unlinkEvent.test.tsx` also changed in range but
+belongs to the Meetings & Minutes feature, not this one — a test for that
+page's own event-unlink button, not events-owned code.)
+
+---
+
 ## Pass 2 (2026-08-28) — 3 fixes (1 HIGH cross-tenant, 2 MED DoS/ordering), 3 scope corrections, 2 stale-doc corrections
 
 **PR:** [#1973](https://github.com/thegspiro/the-logbook/pull/1973) ·
