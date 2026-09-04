@@ -53,8 +53,6 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   const requestRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxRef = useRef<HTMLDivElement>(null);
-  // `total` from the previous settled page, to notice the set shrinking.
-  const lastTotal = useRef<number | null>(null);
   const clearRef = useRef<HTMLButtonElement>(null);
   // Set only by a selection, so focus moves on the officer's own action and
   // not when the row mounts with an item already on it.
@@ -99,7 +97,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
-  const search = useCallback((text: string, request: number, skip: number, reconciled = false) => {
+  const search = useCallback((text: string, request: number, skip: number) => {
     const trimmed = text.trim();
     if (!trimmed) {
       setResults([]);
@@ -113,25 +111,21 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
       .then((response) => {
         if (request !== requestRef.current) return;
 
-        // A row removed between pages shifts every later row back into a range
-        // we have already read, so this page begins past rows we never saw.
-        // Offset paging cannot prevent that -- only notice it and go back for
-        // what it missed. `reconciled` bounds it to one extra request, so a
-        // catalogue being edited continuously cannot spin here.
-        const previousTotal = lastTotal.current;
-        lastTotal.current = response.total;
-        if (!reconciled && skip > 0 && previousTotal !== null && response.total < previousTotal) {
-          const corrected = Math.max(0, skip - (previousTotal - response.total));
-          if (corrected < skip) {
-            search(text, request, corrected, true);
-            return;
-          }
-        }
-
         const page = response.items.map(({ id, name }) => ({ id, name }));
         setReachedEnd(response.items.length < PAGE);
         // The server's own offset plus what it actually returned, not what
         // survived deduplication.
+        //
+        // KNOWN LIMITATION, deliberate: offset paging over a set another
+        // officer is editing can miss a row. Deleting a match before the
+        // boundary shifts every later match back into a range we have already
+        // read, so the next page begins past one we never saw. A client cannot
+        // fix this -- it can only guess, and guessing from the net `total` is
+        // wrong in both directions: a removal paired with an insertion leaves
+        // the count unchanged, and a rewind that then fails strands the offset
+        // it was correcting. An earlier revision of this file tried it and
+        // shipped two defects of its own. The real fix is a cursor on
+        // GET /medical-supplies/items; see docs/KNOWN_LIMITATIONS.md.
         setConsumed(response.skip + response.items.length);
         setResults((current) => {
           if (skip === 0) return page;
@@ -175,7 +169,6 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
     setActiveIndex(-1);
     setConsumed(0);
     setReachedEnd(false);
-    lastTotal.current = null;
     runSearch(text, 0, 300);
   };
 
