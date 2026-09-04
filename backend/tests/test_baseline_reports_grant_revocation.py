@@ -112,6 +112,14 @@ def _stored(conn, row_id):
     return json.loads(raw)
 
 
+_MARKERS = (
+    "integrations.view",
+    "medical_supplies.view",
+    "mobile.view",
+    "prospective_members.view",
+)
+
+
 def _run_upgrade(engine):
     module = _migration()
     with engine.begin() as conn:
@@ -121,15 +129,16 @@ def _run_upgrade(engine):
 
 class TestTheRevocation:
     def test_it_revokes_the_grant_from_both_seeded_slugs(self, positions_table):
+        wizard = ["events.view", "mobile.view", "reports.view"]
         with positions_table.begin() as conn:
-            _insert(conn, "m", "member", ["events.view", "reports.view"])
-            _insert(conn, "f", "firefighter", ["events.view", "reports.view"])
+            _insert(conn, "m", "member", wizard)
+            _insert(conn, "f", "firefighter", wizard)
 
         _run_upgrade(positions_table)
 
         with positions_table.connect() as conn:
-            assert _stored(conn, "m") == ["events.view"]
-            assert _stored(conn, "f") == ["events.view"]
+            assert "reports.view" not in _stored(conn, "m")
+            assert "reports.view" not in _stored(conn, "f")
 
     def test_it_revokes_the_grant_the_whole_list_match_skipped(self, positions_table):
         """The row ``f7b3c8d2e569`` walks past: heuristic output, one edit on.
@@ -165,14 +174,15 @@ class TestTheRevocation:
 
     def test_it_is_idempotent(self, positions_table):
         with positions_table.begin() as conn:
-            _insert(conn, "m", "member", ["events.view", "reports.view"])
+            _insert(conn, "m", "member", ["events.view", "mobile.view", "reports.view"])
 
         _run_upgrade(positions_table)
         with positions_table.connect() as conn:
             once = _stored(conn, "m")
         _run_upgrade(positions_table)
         with positions_table.connect() as conn:
-            assert _stored(conn, "m") == once == ["events.view"]
+            assert _stored(conn, "m") == once
+            assert "reports.view" not in once
 
     def test_a_row_without_the_grant_is_untouched(self, positions_table):
         with positions_table.begin() as conn:
@@ -182,6 +192,51 @@ class TestTheRevocation:
 
         with positions_table.connect() as conn:
             assert _stored(conn, "m") == ["events.view", "training.view"]
+
+
+class TestItOnlyTouchesTheWizardsRows:
+    """``is_system = True`` does not mean "untouched default".
+
+    ``RoleService.update_role`` (``app/services/role_service.py:283-311``) lets
+    an organization edit a built-in position's permissions in place and leaves
+    the flag set, so a department can deliberately grant ``reports.view`` to its
+    own Member position. Only a row still carrying the wizard's fingerprint is
+    this migration's to change.
+    """
+
+    @pytest.mark.parametrize("slug", ["member", "firefighter"])
+    def test_a_deliberate_grant_on_a_clean_row_survives(self, positions_table, slug):
+        curated = ["events.view", "members.view", "training.view", "reports.view"]
+
+        with positions_table.begin() as conn:
+            _insert(conn, "row", slug, curated)
+
+        _run_upgrade(positions_table)
+
+        with positions_table.connect() as conn:
+            assert _stored(conn, "row") == curated
+
+    @pytest.mark.parametrize("marker", _MARKERS)
+    def test_any_single_marker_identifies_a_wizard_row(self, positions_table, marker):
+        """The four are revoked by ``d1c7f4a92e63`` and could be edited away
+        individually, so requiring all of them would re-create the whole-list
+        brittleness this migration exists to avoid."""
+        with positions_table.begin() as conn:
+            _insert(conn, "row", "member", [marker, "reports.view"])
+
+        _run_upgrade(positions_table)
+
+        with positions_table.connect() as conn:
+            assert "reports.view" not in _stored(conn, "row")
+
+    def test_the_markers_are_not_seeded_to_the_covered_slugs(self):
+        """A marker that became legitimate would stop identifying a wizard row."""
+        from app.core.permissions import DEFAULT_POSITIONS
+
+        for slug in _migration()._SLUGS:
+            seeded = set(DEFAULT_POSITIONS[slug]["permissions"])
+            for marker in _MARKERS:
+                assert marker not in seeded, (slug, marker)
 
 
 class TestWhatItMustNotTouch:

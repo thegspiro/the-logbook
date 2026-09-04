@@ -30,38 +30,44 @@ rank exists but no position mirrors it — so onboarding writes no ``is_system``
 row under that slug for the wizard to have overwritten. ``e4f5a6b7c8d9`` listed
 it defensively; there is nothing for it to match.
 
-Three operations, because they carry different risks and so cannot share one
-matching rule:
+Every change here is gated on the row being recognizably unrepaired wizard
+output — it carries one of ``_HEURISTIC_MARKERS``, four grants the registry
+seeds to none of these slugs, that the heuristic added to all of them, and that
+nothing else in the system grants or removes.
 
-1. **Unconditional revokes.** Removing a grant never widens access, so it needs
-   no gate — and going per-permission rather than per-whole-list is exactly what
-   makes this immune to the ordering problem above.
+That gate is the point, not a precaution. ``is_system = True`` does **not** mean
+"untouched default": ``RoleService.update_role``
+(``app/services/role_service.py:283-311``) lets an organization edit a built-in
+position's permissions in place and leaves the flag set. Acting on every system
+row would silently undo a department's own decisions on upgrade. Matching the
+heuristic's output as a whole list instead — the obvious alternative — is
+exactly what left ``f7b3c8d2e569`` unable to recognise these rows, so the
+recognizer has to be robust to the row having moved on.
+
+Marker presence is computed **before** anything else, because the revokes
+remove the markers themselves. That ordering is also what makes the migration
+idempotent: a second run finds no markers and leaves the row byte-identical.
+
+Within a gated row, three groups of change:
+
+1. **Revokes** — the four markers, plus ``positions.view``, ``reports.view`` and
+   ``settings.view`` on engineer. Per-permission rather than whole-list, which
+   is what makes this immune to the ordering problem above.
 
 2. **Narrowing engineer's ``apparatus.*``.** The wildcard grants
    ``apparatus.manage`` and ``apparatus.approve_driver_exception``, which the
    registry does not seed to a driver/operator, and it *masks* the two apparatus
-   grants the row is missing. Replacing it with ``apparatus.view`` and
-   ``apparatus.maintenance`` is strictly a reduction — the wildcard already
-   matched both — so it also needs no gate, but the removal and the two
-   additions must happen together. Dropping the wildcard on its own would take
-   apparatus access away from every engineer in the department, which is why
-   this is neither folded into (1) nor gated with (3).
+   grants the row is missing. It is replaced by ``apparatus.view`` and
+   ``apparatus.maintenance`` — strictly a reduction, since the wildcard already
+   matched both — and the removal and the two additions happen together.
+   Dropping the wildcard on its own would take apparatus access away from every
+   engineer in the department.
 
-3. **Marker-gated additions.** ``storefront.order`` and
-   ``inventory.check_submit`` are grants, so an unconditional add would also
-   override a department that removed one on purpose. They are added only to a
-   row still carrying one of ``_HEURISTIC_MARKERS`` — permissions the registry
-   has never seeded to these slugs and no other code path grants, so their
-   presence is proof the row is unrepaired wizard output rather than one
-   somebody curated.
+3. **Restorations** — ``storefront.order`` and ``inventory.check_submit``, which
+   the registry seeds and the heuristic's replacement dropped.
 
-Marker presence is therefore computed **before** the revokes are applied, since
-the revokes remove the markers. That ordering is also what makes the migration
-idempotent: a second run finds no markers, skips the additions, and leaves the
-row byte-identical.
-
-Scoped to ``is_system = True``: a position a department built for itself is
-theirs.
+Scoped to ``is_system = True`` as well: a position a department built for itself
+is theirs outright.
 
 The tables below are frozen copies rather than imports from
 ``app.core.permissions``. A migration has to keep transforming rows the way it
@@ -144,19 +150,20 @@ def repair(slug, permissions):
     original = list(permissions)
     held = set(original)
 
-    # Before the revokes, which remove the markers themselves.
-    is_wizard_row = any(marker in held for marker in _HEURISTIC_MARKERS)
+    # Tested before anything else: the revokes below remove the markers, so a
+    # repaired row must not be recognised a second time.
+    if not any(marker in held for marker in _HEURISTIC_MARKERS):
+        # Either never overwritten, or already repaired. Whatever it holds now
+        # is the department's, not the wizard's.
+        return None
 
     remove = set(_REVOKE.get(slug, ()))
-    additions = []
+    additions = list(_ADD.get(slug, ()))
 
     for wildcard, replacements in _WILDCARD_NARROWING.get(slug, ()):
         if wildcard in held:
             remove.add(wildcard)
             additions.extend(replacements)
-
-    if is_wizard_row:
-        additions.extend(_ADD.get(slug, ()))
 
     repaired = [item for item in original if item not in remove]
     present = set(repaired)
