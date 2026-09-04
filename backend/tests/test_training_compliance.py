@@ -1083,6 +1083,28 @@ class TestEvaluateRequirementDetailFields:
         assert result["due_date"] is None
         assert result["days_until_due"] is None
 
+    def test_rolling_ignores_a_stale_fixed_due_date(self):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `rolling` must not defeat the rolling anchor.
+        `RequirementModal.tsx` seeds its `due_date` field from the existing
+        row and only edits/clears it on the fixed_date screen, so switching
+        the type away from fixed_date can still submit the old date
+        alongside the new `due_date_type`. Codex found the top-priority
+        `req.due_date` check would silently defeat the just-added rolling
+        anchor with this stale value.
+        """
+        stale_due = date(2020, 1, 1)
+        req = _make_requirement(
+            due_date_type="rolling", rolling_period_months=24, due_date=stale_due
+        )
+        records = [_make_record(completion_date=date(2025, 1, 10))]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        expected_due = date(2027, 1, 10)
+        assert result["due_date"] == str(expected_due)
+        assert result["due_date"] != str(stale_due)
+
     def test_rolling_anchor_does_not_match_an_unrelated_record(self):
         """A course-specific rolling requirement (required_courses set, no
         training_type) must not be anchored on some unrelated record just
@@ -1190,6 +1212,30 @@ class TestEvaluateRequirementDetailFields:
             req, [record], date(2026, 6, 15)
         )
         assert result["due_date"] == str(date(2027, 3, 1))
+
+    def test_certification_period_ignores_a_stale_fixed_due_date(self):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `certification_period` must not defeat the
+        certification anchor -- same root cause as the rolling case.
+        """
+        stale_due = date(2099, 1, 1)
+        req = _make_requirement(
+            requirement_type=SimpleNamespace(value="certification"),
+            due_date_type="certification_period",
+            due_date=stale_due,
+            name="EMT Certification",
+            required_hours=None,
+        )
+        record = _make_record(
+            course_name="EMT Certification",
+            completion_date=date(2025, 6, 1),
+            expiration_date=date(2026, 7, 15),
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, [record], date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2026, 7, 15))
+        assert result["due_date"] != str(stale_due)
 
 
 # =====================================================

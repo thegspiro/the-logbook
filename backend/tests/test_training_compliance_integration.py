@@ -120,6 +120,8 @@ async def _insert_cert_requirement(
     name: str = "EMT Certification",
     frequency: str = "biannual",
     source: str = "national",
+    due_date: date | None = None,
+    recency_days: int | None = None,
 ) -> str:
     """Insert a CERTIFICATION-type training requirement and return its id."""
     req_id = _uid()
@@ -127,10 +129,10 @@ async def _insert_cert_requirement(
         text(
             "INSERT INTO training_requirements "
             "(id, organization_id, name, requirement_type, source, "
-            "frequency, due_date_type, "
+            "frequency, due_date_type, due_date, recency_days, "
             "applies_to_all, active, created_at, updated_at) "
             "VALUES (:id, :org_id, :name, :req_type, :source, "
-            ":freq, :ddt, "
+            ":freq, :ddt, :due_date, :recency_days, "
             "1, 1, :now, :now)"
         ),
         {
@@ -141,6 +143,8 @@ async def _insert_cert_requirement(
             "source": source,
             "freq": frequency,
             "ddt": "certification_period",
+            "due_date": due_date,
+            "recency_days": recency_days,
             "now": _NOW,
         },
     )
@@ -345,6 +349,48 @@ class TestHoursRequirementCompliance:
 
         assert progress.due_date is None
         assert progress.days_until_due is None
+
+    async def test_rolling_ignores_a_stale_fixed_due_date(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `rolling` must not defeat the rolling anchor.
+        `RequirementModal.tsx` seeds its `due_date` field from the existing
+        row and only edits/clears it on the fixed_date screen, so switching
+        the type away from fixed_date can still submit the old date
+        alongside the new `due_date_type`. Codex found the round-5 fix
+        would have honored that stale date via the top-priority
+        `requirement.due_date` check, silently defeating its own
+        just-added rolling anchor.
+        """
+        org_id, user_id = setup_org_and_user
+        stale_due = date.today() - timedelta(days=1000)
+        req_id = await _insert_hours_requirement(
+            db_session,
+            org_id,
+            required_hours=24.0,
+            due_date_type="rolling",
+            rolling_period_months=24,
+            due_date=stale_due,
+        )
+        completion = date.today() - timedelta(days=365)
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            hours_completed=24.0,
+            completion_date=completion,
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        from dateutil.relativedelta import relativedelta
+
+        assert progress.due_date == completion + relativedelta(months=24)
+        assert progress.due_date != stale_due
 
     async def test_partial_hours_not_met(
         self, db_session: AsyncSession, setup_org_and_user
@@ -554,6 +600,78 @@ class TestCertificationCompliance:
 
         assert progress.due_date == future_exp
         assert progress.days_until_due == 180
+
+    async def test_certification_period_ignores_a_stale_fixed_due_date(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `certification_period` must not defeat the
+        certification anchor. Same root cause as the rolling case:
+        `RequirementModal.tsx` seeds `due_date` from the existing row and
+        only edits/clears it on the fixed_date screen, so switching away
+        from fixed_date can still submit the old date. Codex found the
+        top-priority `requirement.due_date` check would silently defeat
+        round 4's certification-period anchor with this stale value.
+        """
+        org_id, user_id = setup_org_and_user
+        stale_due = date.today() + timedelta(days=9999)
+        req_id = await _insert_cert_requirement(
+            db_session, org_id, name="EMT Certification", due_date=stale_due
+        )
+        future_exp = date.today() + timedelta(days=180)
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            course_name="EMT Certification",
+            training_type="certification",
+            hours_completed=0.0,
+            completion_date=date.today() - timedelta(days=365),
+            expiration_date=future_exp,
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.due_date == future_exp
+        assert progress.due_date != stale_due
+
+    async def test_certification_period_anchor_excludes_unverifiable_completion_when_recency_required(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """When the requirement sets `recency_days`, a matching record
+        with an unknown completion date cannot be verified as fresh
+        (`is_recent_enough` needs a known `completion_date` to check it
+        against the cutoff) and must not anchor a due date either --
+        doing so would show a future renewal deadline for a certification
+        the compliance calculation itself treats as unmet on the very
+        same response.
+        """
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_cert_requirement(
+            db_session, org_id, name="EMT Certification", recency_days=180
+        )
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            course_name="EMT Certification",
+            training_type="certification",
+            hours_completed=0.0,
+            completion_date=None,
+            expiration_date=date.today() + timedelta(days=180),
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.due_date is None
+        assert progress.days_until_due is None
+        assert progress.is_complete is False
 
     async def test_rolling_anchor_does_not_match_an_unrelated_record(
         self, db_session: AsyncSession, setup_org_and_user

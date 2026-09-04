@@ -19,16 +19,16 @@
 **PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged
 at its stale first-draft state before this correction could be pushed to
 it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
-`PROGRESS.md`'s Log for detail). The correction (round 1) and its fix
-carried forward to [#2218](https://github.com/thegspiro/the-logbook/pull/2218)
-(`claude/security-review-training-core-tr3-followup`), which itself merged
-at round 3's commit before round 4's fixes could be pushed — the identical
-race, again — moving rounds 2-4 forward to
-[#2220](https://github.com/thegspiro/the-logbook/pull/2220)
-(`claude/security-review-training-core-tr3-round4`), which merged before
-round 5's fixes could be pushed in turn, moving round 5 to
-[#2221](https://github.com/thegspiro/the-logbook/pull/2221)
-(`claude/security-review-training-core-tr3-round5`).
+`PROGRESS.md`'s Log for detail). The fix has since carried forward through
+five more premature-merge recoveries of the identical shape — each PR
+merging while Codex's review of it was still in progress, moving the next
+round to a fresh branch/PR in turn:
+[#2218](https://github.com/thegspiro/the-logbook/pull/2218) (round 1) →
+[#2220](https://github.com/thegspiro/the-logbook/pull/2220) (rounds 2-4) →
+[#2221](https://github.com/thegspiro/the-logbook/pull/2221) (round 5) →
+[#2222](https://github.com/thegspiro/the-logbook/pull/2222) (round 6,
+`claude/security-review-training-core-tr3-round6`). See `PROGRESS.md`'s
+Log for each recovery's detail.
 **Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
 
 > **Correction (Codex review of this PR).** The first draft of this section
@@ -411,6 +411,67 @@ test_certification_period_anchor_includes_unknown_completion_date` (P2) for
 test since it doesn't have that bug (see above). All three confirmed
 failing against the round-4 code before this fix, via `git stash` on just
 `training_service.py`.
+
+**Round 6 — Codex found two more gaps in round 5's own fixes**, on the
+next PR (#2221, opened after round 5 merged prematurely — see
+`PROGRESS.md`'s Log):
+
+1. **A stale `due_date` left over from a prior `fixed_date` configuration
+   defeated the rolling/certification-period anchor.** `RequirementModal.
+tsx` seeds its `due_date` form field from the existing row and only
+   edits or clears it on the `fixed_date` screen (confirmed by reading the
+   component: line 77 seeds state, lines 181-183 submit `due_date`
+   whenever it's still truthy alongside whatever `due_date_type` was
+   actually selected). An officer switching an existing fixed-date
+   requirement to Cert Period therefore leaves the old `due_date` in the
+   payload. Every round since round 1 gave `req.due_date`/`requirement.
+due_date` top priority unconditionally, so this stale value would
+   silently defeat round 4's certification-period anchor (and round 3's
+   rolling anchor, sharing the identical root cause though not raised by
+   Codex against it directly) — the exact inverse failure mode of P1
+   (round 5 fixed the BIANNUAL override clobbering a _correct_ anchor;
+   this is a stale explicit date clobbering it instead). Fixed by only
+   honoring the explicit `due_date` when the requirement's `due_date_type`
+   is _not_ `rolling`/`certification_period` (an `anchored_type` flag in
+   both functions) — `calendar_period` keeps its existing, deliberately
+   tested precedent of an explicit-date override
+   (`test_days_until_due_calculated`) unchanged, since Codex's finding and
+   the frontend behavior it traced are specific to switching _out of_
+   `fixed_date`, not that combination.
+2. **A certification anchor could publish a due date for a record the
+   compliance calculation itself rejects as unverifiable.** When a
+   requirement sets `recency_days`, `is_recent_enough()` requires a known
+   `completion_date` to check a record's freshness — a record with
+   `completion_date is None` fails it and is excluded from the actual
+   compliance result (`check_requirement_progress`'s own CERTIFICATION
+   branch applies `apply_recency` for exactly this). Round 5's P2 fix,
+   however, let `_anchor_records` admit that same record for the _due
+   date_ calculation regardless, since it deliberately stopped filtering
+   on `completion_date` at all. Result: `is_complete=False` (correctly
+   unmet) alongside a future `due_date`/`days_until_due` computed from the
+   very record the compliance check excluded — a contradiction on the
+   same response object. `evaluate_requirement_detail()` needed no
+   equivalent fix: its `completed` list already has `apply_recency`
+   applied once, upstream of everything including the anchor block, so it
+   never received an unverifiable record in the first place. Fixed by
+   threading `today` into `_anchor_records` and filtering with the same
+   `is_recent_enough()` predicate the compliance calculation uses —
+   inert when `recency_days` is unset (matching the round-5 P2 fix's
+   behavior for the common case), and correctly exclusionary only when a
+   freshness window is actually configured.
+
+**Guard tests (round 6):** `test_training_compliance.py::
+TestEvaluateRequirementDetailFields::test_rolling_ignores_a_stale_fixed_due_date`
+and `::test_certification_period_ignores_a_stale_fixed_due_date` (finding
+
+1. for `evaluate_requirement_detail`;
+   `test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_rolling_ignores_a_stale_fixed_due_date`,
+   `TestCertificationCompliance::test_certification_period_ignores_a_stale_fixed_due_date`
+   (finding 1), and `::test_certification_period_anchor_excludes_unverifiable_completion_when_recency_required`
+   (finding 2) for `check_requirement_progress`. All five confirmed failing
+   against the round-5 code before this fix, via `git stash` on just
+   `training_service.py`.
 
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 
