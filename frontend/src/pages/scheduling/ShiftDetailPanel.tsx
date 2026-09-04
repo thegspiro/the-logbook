@@ -1008,7 +1008,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               onSave={(id, newPos, curPos) => {
                 void handlePositionChange(id, newPos, curPos);
               }}
-              editable={canAssign && !isPast}
+              editable={canAssign && !isPast && !isRosterLocked}
               updatingPosition={pending.updatingPosition}
             />
             {assignment.is_training && (

@@ -15,7 +15,12 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.scheduling_service import SchedulingService, SignupActor
+from app.services.scheduling_service import (
+    DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
+    SchedulingService,
+    SignupActor,
+    _as_utc,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -340,6 +345,53 @@ class TestReopeningIsBoundedByTheShiftsAge:
         shift = await _shift_starting(
             svc, org_id, officer_id, minutes_from_now=-(12 * 60 + 30)
         )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30
+        )
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+    async def test_a_reopening_cannot_carry_the_shift_past_the_deadline(
+        self, db_session, org_and_members
+    ):
+        # `minutes` accepts up to 720 and the later override wins in
+        # `_signup_window_error`, so without a clamp an officer reopening a
+        # second inside the cutoff would carry an ended shift twelve hours
+        # beyond it — stepping around the bound by being early rather than
+        # late.
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        # Ended thirty minutes ago; the default grace leaves thirty to run.
+        shift = await _shift_starting(
+            svc, org_id, officer_id, minutes_from_now=-(12 * 60 + 30)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=720
+        )
+        assert err is None
+        cutoff = _as_utc(reopened.end_time) + timedelta(
+            minutes=DEFAULT_LATE_SIGNUP_GRACE_MINUTES
+        )
+        assert _as_utc(reopened.late_signup_until) == cutoff
+
+    async def test_an_open_ended_shift_is_never_too_late_to_reopen(
+        self, db_session, org_and_members
+    ):
+        # `end_time` is nullable and `ShiftCreate` defaults it to None, so an
+        # open-ended shift is a real shift. Standing the start in for the
+        # missing end would refuse the officer's escape hatch one grace period
+        # after such a shift began, with the crew still working.
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        start = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=8)
+        shift, err = await svc.create_shift(
+            uuid.UUID(org_id),
+            {"shift_date": start.date(), "start_time": start, "end_time": None},
+            uuid.UUID(officer_id),
+        )
+        assert err is None, err
 
         reopened, err = await svc.open_late_signup(
             uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30

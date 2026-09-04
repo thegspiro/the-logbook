@@ -702,17 +702,21 @@ describe('rosterLocked', () => {
     expect(rosterLocked(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
   });
 
-  it('falls back to the start when the end cannot be read', () => {
-    // A bare "HH:MM" end still reaches the client. Using the officer's own
-    // signup bound is better than treating the shift as never-ending.
-    const noEnd = { ...ran, end_time: '19:00' };
-    expect(rosterLocked(noEnd, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+  it('leaves an open-ended shift unlocked however long ago it began', () => {
+    // `end_time` is optional on a shift, and an open-ended one is real rather
+    // than malformed. Standing the start in for the missing end would lock it
+    // one grace period after it began, with the crew still working — a false
+    // lock on a live shift, which is worse than no lock on one nothing can
+    // bound.
+    const openEnded = { ...ran, end_time: undefined };
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
   });
 
-  it('leaves a shift it cannot judge unlocked', () => {
-    // Permissive on unreadable data, like every other rule in this file: the
-    // server refuses the reopen either way.
-    const unreadable = { ...ran, start_time: '07:00', end_time: '19:00' };
+  it('leaves an end it cannot read unlocked', () => {
+    // A bare "HH:MM" end still reaches the client from some responses. It is
+    // the same unjudgeable case, and takes the same permissive answer.
+    const unreadable = { ...ran, end_time: '19:00' };
     expect(rosterLocked(unreadable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
   });
 

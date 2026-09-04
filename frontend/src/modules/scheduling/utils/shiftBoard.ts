@@ -269,7 +269,9 @@ export const isShiftClaimable = (
  * through the night and past the hand-over — the day-granular `isShiftOpen`
  * cannot be used here for exactly the reason it is only a fallback elsewhere.
  * A live `late_signup_until` holds the roster open too: an officer who has
- * legitimately reopened the shift needs to seat whoever answers.
+ * legitimately reopened the shift needs to seat whoever answers. The server
+ * now clamps that override to the same deadline, so it can only ever move the
+ * answer for a row written before it did.
  *
  * A scheduling admin is never locked out. That is the same three-actor split
  * the whole signup window uses — the admin path is records work, which happens
@@ -287,14 +289,16 @@ export const rosterLocked = (
 ): boolean => {
   if (viewer.canManage) return false;
 
-  // Falling back to the start is not a guess at the duration — it is the
-  // officer's existing signup bound, reused for a shift whose end never
-  // reached the client. A shift with neither readable stays unlocked, the same
-  // permissive stance the rest of this file takes on data it cannot judge.
-  const bound = endInstant(shift) ?? startInstant(shift);
-  if (bound === null) return false;
+  // No end, no lock. `end_time` is optional on `ShiftRecord` for a reason —
+  // an open-ended shift is a real shift, not a malformed one — and standing in
+  // the start would lock its roster one grace period after it began, with the
+  // crew still working. A false lock on a live shift is worse than a missed
+  // one on a shift nothing can bound, which is also the permissive stance the
+  // rest of this file takes on data it cannot judge.
+  const end = endInstant(shift);
+  if (end === null) return false;
 
-  let deadline = bound + window.graceMinutes * 60_000;
+  let deadline = end + window.graceMinutes * 60_000;
   const override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
   if (!Number.isNaN(override) && override > deadline) deadline = override;
   return now.getTime() > deadline;

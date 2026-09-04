@@ -33,6 +33,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   those hours hang off, and an officer was still offered Remove beside every
   name. All three are withdrawn once the roster locks.
 
+- **A reopening cannot carry a shift past that deadline either.** The bound
+  above refuses a late reopening, but `minutes` accepts up to 720 and
+  `_signup_window_error` treats the later override as authoritative, so a
+  reopening made a second inside the cutoff would have carried an ended shift
+  twelve hours beyond it — leaving the bound as something anyone could step
+  around by being early rather than late. `late_signup_until` is now clamped
+  to the deadline as well as gated by it.
+
+- **An open-ended shift is never locked.** `end_time` is nullable on the
+  model and defaults to `None` on `ShiftCreate`, so a shift without one is
+  open-ended rather than malformed. Standing its start in for the missing end
+  would have locked its roster, and refused its officer's escape hatch, one
+  grace period after it began with the crew still working — a false lock on a
+  live shift, which is worse than no lock on one nothing can bound.
+
 - **The lock is the shift's end, not its date.** A new `rosterLocked` rule
   counts from `end_time` plus the same grace period the officer's own signup
   deadline uses, so the two move together when a department changes the
@@ -41,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mid-shift, which is the same trap `isShiftOpen` is only a fallback for. A
   scheduling administrator is never locked out: correcting a past roster is
   the records path, and that is where a change to a shift this old belongs.
+  The lock also covers the seat dropdown beside each name, which is
+  day-granular on its own and would otherwise have stayed live for the rest of
+  the evening on a shift that ended at seven.
 
 ### A regular member could open Administration → Reports (2026-09-04)
 

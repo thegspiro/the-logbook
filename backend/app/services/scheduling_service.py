@@ -1815,10 +1815,10 @@ class SchedulingService:
             await self.db.rollback()
             return False, str(e)
 
-    async def _late_signup_too_late(
+    async def _late_signup_deadline(
         self, shift: Shift, organization_id: UUID
-    ) -> Optional[str]:
-        """Why this shift is too far gone to reopen signup on, or None.
+    ) -> Optional[datetime]:
+        """The last instant signup on this shift may stand, or None if unbounded.
 
         Anchored to the shift's *end* rather than its start: the whole point of
         a reopening is to seat somebody while the crew is still out, and an
@@ -1826,13 +1826,16 @@ class SchedulingService:
         period the officer's own signup deadline uses is added to it, so the
         two rules move together when a department changes the setting.
 
-        A shift with no readable start or end is allowed through rather than
-        refused on data this rule cannot judge — the same stance
-        ``_signup_window_error`` and ``_checkin_window_error`` take.
+        ``end_time`` is genuinely optional — nullable on the model, ``None`` by
+        default on ``ShiftCreate``, and handled explicitly by the overlap query
+        — so a shift without one is open-ended, not malformed, and is left
+        unbounded. Substituting the start was wrong at this scale: it would
+        have locked an open-ended shift one grace period after it began, with
+        the crew still working. ``_checkin_window_error`` does make that
+        substitution, but against a twelve-*hour* cushion rather than a
+        sixty-minute one.
         """
-        end = _as_utc(getattr(shift, "end_time", None)) or _as_utc(
-            getattr(shift, "start_time", None)
-        )
+        end = _as_utc(getattr(shift, "end_time", None))
         if end is None:
             return None
 
@@ -1847,12 +1850,7 @@ class SchedulingService:
             DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
             1440,
         )
-        if datetime.now(timezone.utc) <= end + timedelta(minutes=grace):
-            return None
-        return (
-            "This shift ended too long ago to reopen signup on. "
-            "A scheduling administrator can still record who worked it."
-        )
+        return end + timedelta(minutes=grace)
 
     async def open_late_signup(
         self,
@@ -1894,11 +1892,23 @@ class SchedulingService:
             if shift.is_finalized:
                 return None, "Cannot reopen signup on a finalized shift"
 
-            reopen_error = await self._late_signup_too_late(shift, organization_id)
-            if reopen_error:
-                return None, reopen_error
+            deadline = await self._late_signup_deadline(shift, organization_id)
+            now = datetime.now(timezone.utc)
+            if deadline is not None and now > deadline:
+                return None, (
+                    "This shift ended too long ago to reopen signup on. "
+                    "A scheduling administrator can still record who worked it."
+                )
 
-            until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+            until = now + timedelta(minutes=minutes)
+            # Clamped, not merely gated. `minutes` accepts up to 720, and
+            # `_signup_window_error` treats the later of the two as
+            # authoritative, so a reopening made a second inside the cutoff
+            # would otherwise carry the shift twelve hours past it — turning
+            # the bound above into a formality anyone could step around by
+            # reopening early.
+            if deadline is not None and until > deadline:
+                until = deadline
             current = _as_utc(shift.late_signup_until)
             if current is None or until > current:
                 shift.late_signup_until = until

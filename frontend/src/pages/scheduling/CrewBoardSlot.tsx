@@ -106,7 +106,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
                 displayLabel={seatLabel}
                 positionOptions={positionOptions}
                 onSave={onPositionChange}
-                editable={canAssign && !isPast}
+                editable={canAssign && !isPast && !rosterLocked}
                 updatingPosition={pendingStates.updatingPosition}
               />
               {assignment.is_training && (
