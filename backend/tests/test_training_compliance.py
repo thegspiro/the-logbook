@@ -1138,6 +1138,59 @@ class TestEvaluateRequirementDetailFields:
         assert result["due_date"] == str(date(2027, 1, 10))
         assert result["days_until_due"] == (date(2027, 1, 10) - date(2026, 6, 15)).days
 
+    def test_biannual_certification_period_keeps_the_matched_certs_expiration(self):
+        """A BIANNUAL-frequency certification-period requirement's
+        correctly-anchored due date must not be overwritten by the legacy
+        BIANNUAL override below it, which selects the newest expiration
+        across *any* record passing a bare `training_type` check -- not
+        `_anchor_matches`. Codex's exact scenario: an EMT cert due in 30
+        days silently replaced by an unrelated cert expiring next year,
+        which would then never surface in a 90-day at-risk forecast.
+        """
+        req = _make_requirement(
+            requirement_type=SimpleNamespace(value="certification"),
+            frequency=SimpleNamespace(value="biannual"),
+            due_date_type="certification_period",
+            name="EMT Certification",
+            required_hours=None,
+        )
+        matching = _make_record(
+            course_name="EMT Certification",
+            completion_date=date(2025, 6, 1),
+            expiration_date=date(2026, 7, 15),
+        )
+        unrelated = _make_record(
+            course_name="Unrelated Cert",
+            completion_date=date(2025, 1, 1),
+            expiration_date=date(2027, 1, 1),
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, [matching, unrelated], date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2026, 7, 15))
+
+    def test_certification_period_anchor_includes_unknown_completion_date(self):
+        """A matching certification with a known expiration but an unknown
+        completion date must still anchor the due date -- `date.min` is
+        the same fallback every other certification-matching site in this
+        file uses for exactly this case, not a reason to drop the record.
+        """
+        req = _make_requirement(
+            requirement_type=SimpleNamespace(value="certification"),
+            due_date_type="certification_period",
+            name="EMT Certification",
+            required_hours=None,
+        )
+        record = _make_record(
+            course_name="EMT Certification",
+            completion_date=None,
+            expiration_date=date(2027, 3, 1),
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, [record], date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2027, 3, 1))
+
 
 # =====================================================
 # check_requirement_progress — the dashboard path

@@ -23,9 +23,12 @@ it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
 carried forward to [#2218](https://github.com/thegspiro/the-logbook/pull/2218)
 (`claude/security-review-training-core-tr3-followup`), which itself merged
 at round 3's commit before round 4's fixes could be pushed — the identical
-race, again — moving rounds 2-4 forward once more to
+race, again — moving rounds 2-4 forward to
 [#2220](https://github.com/thegspiro/the-logbook/pull/2220)
-(`claude/security-review-training-core-tr3-round4`).
+(`claude/security-review-training-core-tr3-round4`), which merged before
+round 5's fixes could be pushed in turn, moving round 5 to
+[#2221](https://github.com/thegspiro/the-logbook/pull/2221)
+(`claude/security-review-training-core-tr3-round5`).
 **Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
 
 > **Correction (Codex review of this PR).** The first draft of this section
@@ -351,6 +354,63 @@ to prove the anchor picks the right one) for `check_requirement_progress`;
 `test_training_compliance.py::TestEvaluateRequirementDetailFields` mirrors
 of findings 1 and 2 for `evaluate_requirement_detail`. All five confirmed
 failing against the round-3 code before this fix.
+
+**Round 5 — Codex found two more gaps, both introduced by round 4 itself**,
+this time on the new PR (#2220, opened after round 4 merged prematurely —
+see `PROGRESS.md`'s Log):
+
+1. **P1 (the more severe): the legacy BIANNUAL override in
+   `evaluate_requirement_detail()` unconditionally overwrote round 4's
+   correctly-anchored certification-period due date.** That block (added
+   long before due_date_type awareness existed) selects the newest
+   expiration across _any_ completed record passing a bare `training_type`
+   check — not `_anchor_matches` — whenever `freq == BIANNUAL`, with no
+   awareness that a certification-period (or rolling) anchor might already
+   have computed the correct value earlier in the same function. Concrete
+   scenario: an EMT certification due in 30 days, with an unrelated
+   certification expiring next year also on file and no `training_type`
+   set on the requirement (so the override's filter is a no-op) — the
+   override picked the later, unrelated date, silently replacing the real
+   deadline. Downstream, `generate_compliance_forecast`'s 90-day at-risk
+   list would never surface the actually-overdue-soon EMT renewal. Fixed
+   by skipping the legacy override whenever `rolling_months` or
+   `due_date_type == "certification_period"` already computed
+   `effective_due_date` via the new anchor logic — the override's original
+   scope (a BIANNUAL requirement with no due-date-type awareness at all)
+   is unaffected. `check_requirement_progress`'s own BIANNUAL handling was
+   checked and does _not_ have this bug: it only reads the already-computed
+   `effective_due_date` for its early-return's `due_date=` field rather
+   than reassigning it.
+2. **P2: `_anchor_records` (and `evaluate_requirement_detail`'s parallel
+   in-memory filter) dropped every record with `completion_date is None`
+   before a certification-period anchor could ever see it**, even though
+   `TrainingRecord.completion_date` is nullable and every other
+   certification-matching site in this file (four of them) deliberately
+   still considers such a record via a `r.completion_date or date.min`
+   sort-key fallback rather than excluding it. A completed certification
+   with a known `expiration_date` but an unrecorded completion date (e.g.
+   a grandfathered/imported record) was silently marked compliant while
+   reporting `due_date=None`/`days_until_due=None`. Fixed by removing the
+   `completion_date is not None` filter from `_anchor_records` (it now
+   returns every record `_anchor_matches`, regardless of completion date)
+   and having each caller apply the correct convention itself:
+   `_rolling_due_date` still filters `None` internally — a rolling anchor
+   genuinely cannot add an interval to an unknown date — while
+   `_certification_due_date` and `evaluate_requirement_detail`'s own
+   certification-period branch use `r.completion_date or date.min` as the
+   sort key, matching the other four sites exactly.
+
+**Guard tests (round 5):**
+`test_training_compliance.py::TestEvaluateRequirementDetailFields::
+test_biannual_certification_period_keeps_the_matched_certs_expiration`
+(P1) and `::test_certification_period_anchor_includes_unknown_completion_date`
+(P2) for `evaluate_requirement_detail`;
+`test_training_compliance_integration.py::TestCertificationCompliance::
+test_certification_period_anchor_includes_unknown_completion_date` (P2) for
+`check_requirement_progress` — `check_requirement_progress` needed no P1
+test since it doesn't have that bug (see above). All three confirmed
+failing against the round-4 code before this fix, via `git stash` on just
+`training_service.py`.
 
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 
