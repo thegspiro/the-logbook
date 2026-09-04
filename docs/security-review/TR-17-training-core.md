@@ -197,15 +197,40 @@ both the ordinary and the negative-when-overdue case. An MCP-driven
 automation deciding whether to escalate an overdue requirement based on
 `days_until_due` being negative would never fire.
 
-**Fix:** compute `days_until_due = (requirement.due_date - today).days if
-requirement.due_date else None` once near the top of the method (`today` was
-already computed there) and pass it to all three construction sites.
+**Fix (round 1, incomplete):** computed `days_until_due = (requirement.
+due_date - today).days if requirement.due_date else None` once near the top
+of the method and passed it to all three construction sites. Verified against
+an explicit `due_date` — missed that most requirements don't have one.
+
+**Round 2 — Codex caught the round-1 fix still broken for the common case.**
+A `calendar_period` requirement (the default `due_date_type`, covering every
+annual/quarterly/monthly requirement) carries no `due_date` of its own — its
+deadline is the _end of its evaluation window_, which `_get_date_window()`
+already returns as `end_date` and which `evaluate_requirement_detail()`
+already uses as exactly this fallback (`effective_due_date = req.due_date if
+req.due_date else (end_date if end_date else None)`). Computing solely from
+`requirement.due_date` therefore left `days_until_due` (and `due_date`) null
+for every calendar-period requirement — the case this fix exists for — and
+only worked for the rare requirement with an explicit fixed date. Fixed by
+computing `effective_due_date = requirement.due_date or end_date` right after
+`_get_date_window()` (before the recency-cutoff logic below it can overwrite
+`end_date`), and using `effective_due_date` for both the `due_date` and
+`days_until_due` fields at all three construction sites — mirroring
+`evaluate_requirement_detail()`'s own fallback rather than duplicating a
+divergent one. The `BIANNUAL` cert-expiration override that
+`evaluate_requirement_detail()` layers on top of that fallback was left alone:
+out of scope for this finding, and unchanged from pre-existing behavior.
 
 **Guard tests:** `test_training_compliance_integration.py::
 TestHoursRequirementCompliance::test_days_until_due_is_populated` and
 `::test_days_until_due_is_negative_when_overdue` — insert a requirement with
 an explicit `due_date` 10 days out / 5 days past, assert the returned
 `RequirementProgress.days_until_due` is `10` / `-5` respectively.
+`::test_days_until_due_falls_back_to_the_period_window_end` — insert an
+ordinary `calendar_period` annual requirement with no explicit `due_date`,
+assert `RequirementProgress.due_date`/`days_until_due` resolve to the
+window's Dec 31 end date rather than `None` — this is the test that would
+have caught round 1's gap.
 
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 

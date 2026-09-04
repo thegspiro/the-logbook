@@ -655,14 +655,19 @@ class TrainingService:
             raise ValueError("Requirement not found")
 
         today = date.today()
+        start_date, end_date = self._get_date_window(requirement, today)
         # Every RequirementProgress this method returns carries this, so
         # consumers (the MCP `get_member_requirements_progress` tool
         # explicitly promises "days until due, negative when overdue") don't
-        # each have to re-derive it from due_date themselves.
+        # each have to re-derive it themselves. A calendar-period requirement
+        # (annual/quarterly/monthly) has no due_date of its own -- the
+        # window's end_date IS its deadline, the same fallback
+        # evaluate_requirement_detail() uses -- so compute this from the raw
+        # window before the recency cutoff below can overwrite end_date.
+        effective_due_date = requirement.due_date or end_date
         days_until_due = (
-            (requirement.due_date - today).days if requirement.due_date else None
+            (effective_due_date - today).days if effective_due_date else None
         )
-        start_date, end_date = self._get_date_window(requirement, today)
         # Narrow the window by the freshness cutoff up front so every query
         # below inherits it. A one_time requirement has no frequency window at
         # all, so recency supplies both bounds rather than tightening them.
@@ -833,7 +838,7 @@ class TrainingService:
                         completed_hours=completed_value,
                         percentage_complete=0.0,
                         is_complete=False,
-                        due_date=requirement.due_date,
+                        due_date=effective_due_date,
                         days_until_due=days_until_due,
                     )
 
@@ -862,7 +867,7 @@ class TrainingService:
                     completed_hours=0,
                     percentage_complete=0.0,
                     is_complete=False,
-                    due_date=requirement.due_date,
+                    due_date=effective_due_date,
                     days_until_due=days_until_due,
                 )
 
@@ -1008,7 +1013,7 @@ class TrainingService:
             completed_hours=completed_value,
             percentage_complete=round(percentage, 2),
             is_complete=is_complete,
-            due_date=requirement.due_date,
+            due_date=effective_due_date,
             days_until_due=days_until_due,
         )
 

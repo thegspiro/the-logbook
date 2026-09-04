@@ -39,9 +39,22 @@ validator on `ExternalProviderConfig` had NOT actually been reviewed by
 feature 18 as the first draft asserted (its pass 3 hasn't run) — reviewed
 directly instead and confirmed no live gap, since the actual outbound call
 sites already enforce the same check at request time regardless. See the
-Log entries below for the full detail. Full completion gate green
-(10556/10556 backend, 0 frontend errors). Rotation row 17 stays ⏳
-awaiting merge. Next: 18 Training extended, once this PR merges.
+Log entries below for the full detail.
+
+**Round 2 (on this PR, before merge):** Codex reviewed this PR's own TR3-1
+fix and found it still incomplete — it computed `days_until_due` solely
+from `requirement.due_date`, which stays unset for every `calendar_period`
+requirement (the common annual/quarterly/monthly case), leaving the field
+`null` for exactly the case the fix was written for and working only for
+the rare explicit-due-date requirement. Fixed by reusing the same
+`end_date`-fallback `evaluate_requirement_detail()` already applies
+(`effective_due_date = requirement.due_date or end_date`, computed from
+`_get_date_window()`'s raw window before the recency cutoff can overwrite
+it) at all three `RequirementProgress(...)` sites, for both `due_date` and
+`days_until_due`. New guard test
+`test_days_until_due_falls_back_to_the_period_window_end` covers the gap
+round 1 missed. Full completion gate re-run green. Rotation row 17 stays
+⏳ awaiting merge. Next: 18 Training extended, once this PR merges.
 
 ---
 

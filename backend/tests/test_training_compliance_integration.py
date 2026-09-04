@@ -256,6 +256,33 @@ class TestHoursRequirementCompliance:
 
         assert progress.days_until_due == -5
 
+    async def test_days_until_due_falls_back_to_the_period_window_end(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A calendar-period requirement has no due_date of its own — the
+        deadline is the end of its evaluation window. Codex caught the first
+        draft of this fix computing days_until_due solely from
+        requirement.due_date, which left it null for every annual/quarterly/
+        monthly requirement (i.e. the common case) and fixed only the rare
+        explicit-due-date one.
+        """
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_hours_requirement(
+            db_session,
+            org_id,
+            required_hours=24.0,
+            due_date_type="calendar_period",
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        year_end = date(date.today().year, 12, 31)
+        assert progress.due_date == year_end
+        assert progress.days_until_due == (year_end - date.today()).days
+
     async def test_partial_hours_not_met(
         self, db_session: AsyncSession, setup_org_and_user
     ):
