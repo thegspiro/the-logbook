@@ -260,7 +260,11 @@ describe('InventoryAdminHub', () => {
     // an empty body rather than a wall of links that all refuse them.
     mockCheckPermission.mockReturnValue(false);
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByRole('region', { name: 'Needs attention' });
+    // Settles on the empty state rather than on the attention queue: the queue
+    // is raised only for `inventory.manage` now, so for this viewer -- who
+    // holds nothing -- it is deliberately absent and can no longer serve as
+    // the anchor. The assertions below are unchanged.
+    await screen.findByText('Nothing here for your role');
 
     expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
     expect(screen.queryByText('All Items')).not.toBeInTheDocument();
@@ -647,6 +651,56 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       renderWithRouter(<InventoryAdminHub />);
       await waitFor(() => expect(mockGetSummary).toHaveBeenCalled());
       expect(mockGetLowStockItems).toHaveBeenCalled();
+    });
+
+    it('asks for no headline summary either', async () => {
+      // The frame raises its own request, separate from the ten above.
+      // `/admin-hub/inventory/summary` resolves the module to its manage
+      // grant, so for these officers it is a guaranteed 404 -- reported as a
+      // failed summary with a Retry that repeats it on every press.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(mockGetAdminHubSummary).not.toHaveBeenCalled();
+    });
+
+    it('does not claim the inventory queue is clear without having asked', async () => {
+      // The queue's empty state reads "All inventory work is up to date". With
+      // the batch behind it skipped, that is a statement about data nobody
+      // requested -- and for a store manager it sat directly above "Nothing
+      // here for your role".
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.queryByText('Nothing needs attention. All inventory work is up to date.')).not.toBeInTheDocument();
+    });
+
+    it('offers no metrics Settings tab, and refuses it by URL as well', async () => {
+      // Both the read and the write behind Settings require `inventory.manage`,
+      // so the panel would report itself unavailable and could never save.
+      // Hiding only the tab leaves `?tab=settings` reaching it anyway.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
+      window.history.pushState({}, '', '/inventory/admin?tab=settings');
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Headline metrics')).not.toBeInTheDocument();
+      window.history.pushState({}, '', '/inventory/admin');
+    });
+
+    it('keeps the Settings tab for the quartermaster', async () => {
+      mockCheckPermission.mockReturnValue(true);
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
     });
 
     it('says so plainly when the viewer opens none of the cards', async () => {

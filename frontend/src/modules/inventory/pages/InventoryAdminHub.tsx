@@ -241,6 +241,9 @@ const TABS: AdminHubTab<AdminTab>[] = [
   { id: 'settings', label: 'Settings' },
 ];
 
+/** For the administrators this page admits who cannot edit inventory metrics. */
+const OVERVIEW_ONLY_TABS: AdminHubTab<AdminTab>[] = [{ id: 'overview', label: 'Overview' }];
+
 export const InventoryAdminHub: React.FC = () => {
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManage = checkPermission('inventory.manage');
@@ -264,7 +267,13 @@ export const InventoryAdminHub: React.FC = () => {
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
-  const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
+  // Settings edits the inventory headline metrics; both its read and its write
+  // require `inventory.manage`. Offering the tab to a checklist officer or a
+  // store manager gives them a panel that reports itself unavailable and can
+  // never save, and `?tab=settings` reaches it whether or not the tab is drawn
+  // -- so the URL is refused here too, not just the control hidden.
+  const activeTab: AdminTab = tabParam === 'settings' && canManage ? 'settings' : 'overview';
+  const tabs = canManage ? TABS : OVERVIEW_ONLY_TABS;
   // Bumped when the settings tab saves, so the metrics row above it reflects
   // the new selection without a page reload.
   const [frameToken, setFrameToken] = useState(0);
@@ -540,6 +549,7 @@ export const InventoryAdminHub: React.FC = () => {
   return (
     <AdminHubFrame<AdminTab>
       moduleKey="inventory"
+      summary={canManage}
       title="Inventory Administration"
       description="Gear, uniforms and EMS supplies — stock, issuance, and what needs a decision today"
       actions={actions}
@@ -553,7 +563,7 @@ export const InventoryAdminHub: React.FC = () => {
             }
           : undefined
       }
-      tabs={TABS}
+      tabs={tabs}
       activeTab={activeTab}
       onTabChange={(tab) => setSearchParams(tab === 'overview' ? {} : { tab })}
       refreshToken={frameToken}
@@ -570,12 +580,21 @@ export const InventoryAdminHub: React.FC = () => {
         </div>
       ) : (
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-          <NeedsAttention
-            rows={attentionRows}
-            loading={loading}
-            failedSources={failedSources}
-            onRetry={() => void loadSummary()}
-          />
+          {/* Only for the viewer it describes. Its empty state reads "Nothing
+              needs attention. All inventory work is up to date." -- a claim
+              about inventory nobody asked the server about, since the batch
+              behind it is raised only for `inventory.manage`. Shown to a store
+              manager it sat directly above "Nothing here for your role",
+              telling them in consecutive lines that everything is fine and
+              that none of it is theirs. */}
+          {canManage && (
+            <NeedsAttention
+              rows={attentionRows}
+              loading={loading}
+              failedSources={failedSources}
+              onRetry={() => void loadSummary()}
+            />
+          )}
           {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
             Without it a new quartermaster meets the item form first and fills in
             three dropdowns that have nothing in them. */}
