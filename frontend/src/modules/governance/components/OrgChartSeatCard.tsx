@@ -106,10 +106,13 @@ export const OrgChartSeatCard: React.FC<OrgChartSeatCardProps> = ({
             </ul>
           )}
 
-          {node.linkLabel ? (
-            // Says where the names came from. A reader looking at a name the
-            // chart did not choose deserves to know the roster is what put it
-            // there — and that it will stay right without anyone's attention.
+          {canManage && node.linkLabel ? (
+            // Says where the names came from, for the people who maintain the
+            // chart: it is the answer to "why can I not edit this name here",
+            // and it names the roster they have to change instead. A reader
+            // just looking up the chain of command is asking who holds the
+            // seat, not which application record fills it, so the line is
+            // scoped to managers rather than shown to everyone.
             <p className="text-theme-text-muted mt-1.5 flex items-center gap-1 text-xs">
               <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
               <span>Linked to {node.linkLabel}</span>
