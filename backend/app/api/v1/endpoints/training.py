@@ -38,6 +38,7 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.event import Event, EventRSVP
 from app.models.training import (
+    DueDateType,
     SubmissionStatus,
     TrainingCategory,
     TrainingCourse,
@@ -1313,6 +1314,15 @@ async def create_requirement(
         created_by=current_user.id,
         **requirement.model_dump(),
     )
+    # due_date only means anything for fixed_date -- clear anything else the
+    # client sent so a stale value from a form that hasn't cleared its own
+    # state on a due_date_type change (see update_requirement below) can
+    # never be persisted in the first place.
+    if (
+        new_requirement.due_date_type not in (None, DueDateType.FIXED_DATE)
+        and new_requirement.due_date is not None
+    ):
+        new_requirement.due_date = None
 
     db.add(new_requirement)
     await db.commit()
@@ -1369,6 +1379,25 @@ async def update_requirement(
     # Update fields
     for field, value in updates.items():
         setattr(requirement, field, value)
+
+    # due_date only means anything for fixed_date -- RequirementModal.tsx
+    # seeds its due_date field from the existing row and only clears/edits
+    # it on the fixed_date screen, so switching to any other due_date_type
+    # can still submit the old value alongside it. Clearing it here (not
+    # just at the days_until_due calculators, which already ignore a stale
+    # value for this reason) is what keeps every other reader -- the
+    # requirements dashboard widget, the requirement detail page -- from
+    # ever seeing it, and also cleans up a value a requirement already
+    # carries from before this normalization existed.
+    if (
+        requirement.due_date_type
+        not in (
+            None,
+            DueDateType.FIXED_DATE,
+        )
+        and requirement.due_date is not None
+    ):
+        requirement.due_date = None
 
     await db.commit()
     await db.refresh(requirement)

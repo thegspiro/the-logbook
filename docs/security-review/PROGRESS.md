@@ -18,15 +18,15 @@ feature. The rotation cannot outrun its own review queue.
 
 **[#2222](https://github.com/thegspiro/the-logbook/pull/2222)** (branch
 `claude/security-review-training-core-tr3-round6`) — Feature 17, Training
-core, pass 3, rounds 6-7. **#2221 (rounds 1-5) merged before round 6's
+core, pass 3, rounds 6-8. **#2221 (rounds 1-5) merged before round 6's
 fixes could be pushed to it** — the owner merged while Codex's review of
 that PR was still in progress, the same race that hit #2213, #2217,
 #2218, and #2220 before it (CLAUDE.md pitfall #24: never reuse a branch
 whose PR has merged — round 6 moved to this fresh branch/PR off current
-`main`, which already carries rounds 1-5). Round 7 is a further push to
-this same still-open PR — no premature merge this time.
+`main`, which already carries rounds 1-5). Rounds 7 and 8 are further
+pushes to this same still-open PR — no premature merge since.
 
-This PR is entirely rounds 1-7 of the same TR3-1 finding
+This PR is entirely rounds 1-8 of the same TR3-1 finding
 (`RequirementProgress.days_until_due` was never populated), each round
 fixing a real gap Codex found in the previous round's own fix. Brief
 summary (full technical detail in `TR-17-training-core.md`'s Pass 3
@@ -70,11 +70,27 @@ tsx`) was still taking top priority over the rolling/certification-
   asserting an explicit date wins) to use `due_date_type="fixed_date"`
   explicitly instead.
 
-Seven new guard tests across rounds 6-7, all confirmed failing against
+- **Round 8** (this PR, pushed after Codex reviewed round 7): rounds 6-7
+  only made the two `days_until_due` calculators ignore a stale
+  `due_date` — the value itself was still persisted, and Codex found two
+  other active paths read `requirement.due_date` directly, bypassing both
+  calculators: the requirements dashboard widget
+  (`api/v1/endpoints/training.py:330`) and the requirement detail page.
+  Fixed at the actual root instead of a third calculator patch:
+  `create_requirement`/`update_requirement` now null out `due_date`
+  whenever the resulting `due_date_type` isn't `fixed_date` (or unset),
+  regardless of what the client sent — so the stale value can never reach
+  the database, and every reader (present or future) sees a consistent
+  value. `update_requirement` also cleans up a row already carrying a
+  stale value from before this fix, the next time it's touched, even if
+  the update doesn't mention `due_date` at all.
+
+Twelve new guard tests across rounds 6-8, all confirmed failing against
 the code before their respective fix. Full completion gate re-run green
-(10576/10576 backend). See `TR-17-training-core.md`'s Pass 3 section and
-the Log below for full detail on every round. Rotation row 17 stays ⏳
-awaiting merge. Next: 18 Training extended, once this PR merges.
+(10581/10581 backend).
+See `TR-17-training-core.md`'s Pass 3 section and the Log below for full
+detail on every round. Rotation row 17 stays ⏳ awaiting merge. Next: 18
+Training extended, once this PR merges.
 
 ---
 
@@ -87,9 +103,9 @@ CLAUDE.md pitfall #24, the merged branch is not reused: round 6's two
 fixes (the stale-due-date priority bug, the unverifiable-anchor/recency
 contradiction) moved to a new branch off current `main` and a new PR,
 **[#2222](https://github.com/thegspiro/the-logbook/pull/2222)**
-(`claude/security-review-training-core-tr3-round6`), which merged before
-round 7's fix could be pushed — see the entry immediately above. Next: 18
-Training extended, once the follow-up PR merges.
+(`claude/security-review-training-core-tr3-round6`). Rounds 7 and 8
+pushed as further commits onto this same PR — no further premature
+merges. Next: 18 Training extended, once this PR merges.
 
 ### 2026-09-04 — Feature 17 (Training core, pass 3, round 5) — PR #2220 merged at round 4's commit; round-5 fixes moved to a new PR
 

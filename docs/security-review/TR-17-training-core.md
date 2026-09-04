@@ -513,6 +513,45 @@ test_calendar_period_ignores_a_stale_fixed_due_date` for
 `check_requirement_progress`. Both confirmed failing against the round-6
 code before this fix.
 
+**Round 8 — Codex found rounds 6-7 only masked the symptom, not the root
+cause**, pushed as a further commit onto the same still-open PR (#2222):
+
+Rounds 6-7 made `check_requirement_progress`/`evaluate_requirement_detail`
+ignore a stale `due_date` for every type but `fixed_date` — but the stale
+value itself was still sitting in the database, unpersisted-corrected. Codex
+found two other active paths read `requirement.due_date` directly, bypassing
+both calculators entirely: the requirements dashboard widget
+(`api/v1/endpoints/training.py:330`, rendered by
+`frontend/.../widgets/training/index.tsx`) and the requirement detail page
+(`frontend/src/pages/TrainingRequirementsPage.tsx`). An officer would see
+the calculated (correct) due date on the progress screens and the raw
+(stale) one on the dashboard and detail page simultaneously — the
+calculators were never going to be a complete fix on their own, because the
+bug is in what gets _written_, not just what gets _read_.
+
+Fixed at the actual root: `create_requirement`/`update_requirement`
+(`api/v1/endpoints/training.py`) now null out `due_date` whenever the
+resulting `due_date_type` isn't `fixed_date` (or unset, for a legacy row) —
+regardless of what the client sent, so `RequirementModal.tsx`'s stale-value
+behavior can never reach the database in the first place, and every reader
+(the two calculators, the two raw-read paths Codex found, any future one)
+sees a consistent, correct value with no further per-site patching needed.
+`update_requirement` normalizes even when the update payload doesn't
+mention `due_date_type` or `due_date` at all, cleaning up a row that
+already carries a stale value from before this fix existed the next time
+it's touched. The calculators' rounds 6-7 defensive logic is left in place
+as harmless, correct defense-in-depth for any row not yet touched since.
+
+**Guard tests (round 8):** new file
+`test_training_requirement_due_date_write_normalization.py` — four
+`update_requirement` cases (switching away from `fixed_date` to `rolling`
+or `calendar_period` clears a stale `due_date`; a genuine `fixed_date`
+update keeps its own `due_date`; touching an already-stale row with an
+unrelated field change cleans it up) and one `create_requirement` case
+(a non-`fixed_date` create ignores a client-sent `due_date`). Four of the
+five confirmed failing without the endpoint fix (the "genuine fixed_date
+update" case correctly still passed, since it's unaffected).
+
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 
 **Reported by Codex on this PR; confirmed.** See the "Scope addition"
