@@ -223,6 +223,47 @@ export interface SchedulingSummary {
   hours_worked_this_month: number;
 }
 
+/**
+ * One calendar month of the signed-in member's own shift work.
+ *
+ * `hours`/`shifts`/`calls` are credited figures — attendance on a shift an
+ * officer has finalized, the same basis the department's member-hours report
+ * uses. `pending_*` is time the member has worked that close-out has not
+ * confirmed yet; it is shown alongside rather than added in, so the member's
+ * number and their officer's number never disagree without explanation.
+ */
+export interface MemberHoursMonth {
+  year: number;
+  /** 1-12. */
+  month: number;
+  shifts: number;
+  hours: number;
+  calls: number;
+  pending_shifts: number;
+  pending_hours: number;
+}
+
+export interface MemberHoursTotals {
+  shifts: number;
+  hours: number;
+  calls: number;
+  pending_shifts: number;
+  pending_hours: number;
+}
+
+export interface MemberHoursHistory {
+  year: number;
+  /** Earliest year the member has any attendance in; null when they have none. */
+  earliest_year: number | null;
+  timezone: string;
+  /** Always twelve entries, January first, so quiet months read as quiet. */
+  months: MemberHoursMonth[];
+  totals: MemberHoursTotals;
+  /** Carry their own year: every January, last month was last year. */
+  current_month: MemberHoursMonth;
+  previous_month: MemberHoursMonth;
+}
+
 export interface SchedulingWidgetSummary {
   timezone: string;
   window_start: string;
@@ -537,6 +578,13 @@ export const schedulingService = {
 
   async getSummary(): Promise<SchedulingSummary> {
     const response = await api.get<SchedulingSummary>('/scheduling/summary');
+    return response.data;
+  },
+  /** The signed-in member's own hours and calls for a year, month by month. */
+  async getMyHoursHistory(year?: number): Promise<MemberHoursHistory> {
+    const response = await api.get<MemberHoursHistory>('/scheduling/my-hours-history', {
+      params: year ? { year } : {},
+    });
     return response.data;
   },
   async getWidgetSummary(params: {
