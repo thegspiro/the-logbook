@@ -14,6 +14,137 @@
 
 ---
 
+## Pass 3 (2026-09-04) — no findings, diff-scoped against pass 2
+
+**PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217).
+**Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
+
+Diffed the seven declared files (six pass-1 files plus `training_compliance.py`,
+already declared) against the pass-2 merge commit, plus a fresh grep for any
+other file instantiating `TrainingService` or importing the training models —
+one found, `app/mcp/tools/training.py`, reviewed below as a scope addition
+(the same class of gap Codex caught in the Events pass immediately before
+this one: a feature-specific MCP tool file added after the last pass and
+never swept in).
+
+**Of the seven, two changed:** `services/training_service.py` (+329/-91)
+and `services/training_compliance.py` (+27/-14). `training.py`,
+`training_programs.py`, `training_sessions.py`, `training_program_service.py`,
+and `training_session_service.py` are byte-identical to pass 2 — confirmed
+via `git diff --stat`, not assumed. No new migration touches any table this
+feature owns (checked `alembic/versions/` by content, not filename — several
+new migrations matched a bare `training` grep only inside the word
+"cons**training**" or by restoring `training.*` permission strings across
+seeded positions, which is the Permissions & roles feature's own domain, not
+this one's).
+
+**Two adjacent files this feature also declares turned out to carry an
+already-reviewed fix from a different rotation feature, not new surface of
+this one's:** `models/training.py` (+109/-4) and `types/training.ts` (+32/-9)
+are both misleadingly-named shared files. The former's entire diff is
+`Shift`/`ShiftTemplate`/`ShiftTemplateEquipmentCheck` — Scheduling's models,
+already reviewed in `SCH-15-scheduling.md` pass 3 (the
+`equipment_check_template_ids` feature). The latter's entire diff is
+`ComplianceProfile*`/`ComplianceConfig*` type widenings citing `CMP2-2`/
+`CMP2-3`/`CMP2-4` — the Compliance feature's own security-review fixes
+(Pitfall #1 explicit-null-vs-omitted correctness for its config forms), not
+Training Core's. `schemas/training.py`'s one change (an SSRF-hardening
+`field_validator` on `ExternalProviderConfig`'s endpoint fields) belongs to
+`external_training.py` — declared as **feature 18, "training extended"**,
+out of this feature's scope per pass 1's own scope note. None of the three
+is re-reviewed here; each is already covered by its owning feature's pass.
+`training_compliance.py`'s own change (`compute_org_compliance_pct`) is
+similarly already covered — cited in its own comment as **CMP2-3** (a
+`None`-vs-`[]` distinction for `profile.required_requirement_ids`) — read
+directly to confirm the fix is what it claims: `if profile.
+required_requirement_ids is not None:` now correctly treats an explicitly
+empty list as "zero requirements," and the threshold-override reads were
+un-nested from that same conditional so they apply whenever the profile
+matched, independent of whether it also overrides the requirement list.
+Correct, matches the CMP2-3 description, not a re-finding.
+
+**`training_service.py`'s diff is squarely this feature's own: an N+1
+performance rework, org/tenant isolation preserved throughout.**
+`check_requirement_progress` gained optional `requirement`/
+`completed_records` parameters so a caller checking many requirements for
+one member (`get_requirements_progress_for`, new) can preload the member's
+completed records **once** and have every requirement's check filter that
+same in-memory set, instead of each requirement issuing its own query.
+Read every branch (HOURS, CERTIFICATION, SHIFTS, CALLS, and the
+skills/checklist fallback) to confirm the in-memory path filters
+identically to the SQL path it replaces (training_type, required_courses,
+frequency window via `_windowed()`/`_all_completed()`):
+
+- The preload itself (`get_requirements_progress_for`) is the only place
+  `TrainingRecord` rows are fetched for this path, and it filters
+  `user_id`, `organization_id`, and `status == COMPLETED` before anything
+  downstream ever sees a row — every requirement's in-memory filtering
+  inherits this scoping; there is no path where a preloaded row could
+  belong to another org or another member.
+- `get_all_requirements_progress` (TR-12's original fix site) no longer
+  does its own `User` lookup at all — that responsibility moved to
+  `get_applicable_requirements`, which already carries an org-scoped
+  `User` query (`User.id == ... , User.organization_id == ...`, confirmed
+  at its current location). `generate_training_report`'s tier-exemption
+  block (TR-12's other fix site, using the locally-aliased `_User`, which
+  is why a bare `select(User)` grep alone would have missed it — checked
+  both spellings) still carries its own org filter, unchanged.
+- Only columns the checks actually read are preloaded
+  (`_PROGRESS_RECORD_COLUMNS`, a fixed tuple — never notes, attachments, or
+  anything PHI-adjacent beyond what these checks already handled), loaded
+  as plain rows rather than ORM instances specifically to avoid colliding
+  with a fully-loaded copy of the same row already in the session.
+  `_preload_window` bounds the date range read to the union of what the
+  page's own requirements can use, returning `None` (no bound — read
+  everything) only when a requirement type that inherently ignores the
+  window is present (certification, or biannual hours' expired-cert
+  override) — matches `check_requirement_progress`'s own per-requirement
+  window logic exactly, so the preload can't under-fetch what a later
+  per-requirement check needs.
+- No new client-supplied FK, no new unauthenticated route, no schema
+  change. `training.py` (the endpoint file) is untouched, so
+  `get_training_dashboard_summary` (TR2-4, flagged, unbounded per-request
+  scan) is not this refactor's target and remains exactly as flagged —
+  confirmed, not assumed, since the file has zero diff.
+
+### Scope addition — `app/mcp/tools/training.py` (following the EV-16 lesson)
+
+Not part of any prior pass's declared scope; predates this diff (unchanged
+in it) but was never swept into a security-review pass. Read in full (170
+L, 4 tools): `list_expiring_certifications` and `list_member_training_records`
+are both directly org/member-scoped and paginated with a real `total` count
+(the former org-wide with a bounded `days_ahead` clamped to 1–730 days, the
+latter through `require_member` — the same shared, already-reviewed
+org-scoped-or-`ValueError` helper the Events MCP tools use). `get_member_
+training_summary` and `get_member_requirements_progress` both resolve the
+target member through `require_member` before calling into
+`TrainingService`; the latter is the new paginated API's own first outside
+caller, and uses it correctly — resolves `get_applicable_requirements` once,
+then hands only the requested page-slice to `get_requirements_progress_for`,
+so an MCP caller cannot force an unbounded per-call scan the way TR2-4's own
+gap does. The response builder (`_record`) is a deliberate allowlist that
+excludes `score`/certification-number fields as credential/performance
+detail, matching the redaction discipline the events/scheduling MCP tool
+files already established. Clean, no finding.
+
+**No findings, no code changes this pass.** Rotation row 17 → see
+`PROGRESS.md`.
+
+## Completion gate (pass 3)
+
+| Check                                             | Result                                            |
+| ------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | 0 violations                                      |
+| `black --check app/ tests/ alembic/`              | clean                                             |
+| `isort --check-only app/ tests/ alembic/`         | clean                                             |
+| `python3 scripts/validate_migrations.py --strict` | single head, 414 revisions (no schema change)     |
+| `pytest tests/ -k "training"`                     | 842 passed, 1 skipped (pre-existing)              |
+| `pytest tests/` (full backend suite)              | 10554 passed, 21 skipped (pre-existing), 0 failed |
+| `tsc --noEmit`                                    | 0 errors                                          |
+| `eslint .`                                        | 0 errors                                          |
+
+---
+
 ## Scope
 
 This is the training module's first pass through the security-review
