@@ -39,6 +39,11 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   // offset we have already consumed -- re-reading the same row while
   // `total > results.length` kept Show more alive on a match it never reached.
   const [consumed, setConsumed] = useState(0);
+  // The server answered with a short page, so there is nothing after this
+  // offset. Derived from the response rather than from `consumed < total`,
+  // because `total` moves under us and arithmetic on a moving total is what
+  // lets the end of the list be mis-declared in either direction.
+  const [reachedEnd, setReachedEnd] = useState(false);
   // Keyboard position in the list. The native <select> this replaced supported
   // arrow keys and Enter; a combobox that announces itself as one and then
   // ignores them strands keyboard-only users, whose Enter submits the delivery
@@ -48,6 +53,8 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   const requestRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxRef = useRef<HTMLDivElement>(null);
+  // `total` from the previous settled page, to notice the set shrinking.
+  const lastTotal = useRef<number | null>(null);
   const clearRef = useRef<HTMLButtonElement>(null);
   // Set only by a selection, so focus moves on the officer's own action and
   // not when the row mounts with an item already on it.
@@ -92,7 +99,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
-  const search = useCallback((text: string, request: number, skip: number) => {
+  const search = useCallback((text: string, request: number, skip: number, reconciled = false) => {
     const trimmed = text.trim();
     if (!trimmed) {
       setResults([]);
@@ -105,7 +112,24 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
       .getItems({ search: trimmed, active_only: true, skip, limit: PAGE })
       .then((response) => {
         if (request !== requestRef.current) return;
+
+        // A row removed between pages shifts every later row back into a range
+        // we have already read, so this page begins past rows we never saw.
+        // Offset paging cannot prevent that -- only notice it and go back for
+        // what it missed. `reconciled` bounds it to one extra request, so a
+        // catalogue being edited continuously cannot spin here.
+        const previousTotal = lastTotal.current;
+        lastTotal.current = response.total;
+        if (!reconciled && skip > 0 && previousTotal !== null && response.total < previousTotal) {
+          const corrected = Math.max(0, skip - (previousTotal - response.total));
+          if (corrected < skip) {
+            search(text, request, corrected, true);
+            return;
+          }
+        }
+
         const page = response.items.map(({ id, name }) => ({ id, name }));
+        setReachedEnd(response.items.length < PAGE);
         // The server's own offset plus what it actually returned, not what
         // survived deduplication.
         setConsumed(response.skip + response.items.length);
@@ -150,6 +174,8 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
     setFailed(false);
     setActiveIndex(-1);
     setConsumed(0);
+    setReachedEnd(false);
+    lastTotal.current = null;
     runSearch(text, 0, 300);
   };
 
@@ -277,7 +303,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
               {item.name}
             </button>
           ))}
-          {!loading && !failed && consumed < total && (
+          {!loading && !failed && !reachedEnd && (
             <button
               type="button"
               onClick={showMore}

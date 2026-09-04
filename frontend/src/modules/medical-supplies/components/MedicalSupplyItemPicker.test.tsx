@@ -111,6 +111,67 @@ describe('MedicalSupplyItemPicker', () => {
     await waitFor(() => expect(screen.queryByText(/Show more/)).not.toBeInTheDocument());
   });
 
+  it('goes back for a match a removal pushed behind the page boundary', async () => {
+    // Deleting a row before the boundary shifts every later row back into a
+    // range we already read, so the next page starts past a match we never
+    // saw. Offset paging cannot prevent that -- it can notice the set shrank
+    // and re-read from the corrected offset.
+    const row = (i: number) => ({ id: `item-${i}`, name: `Gauze ${i}` });
+    mockGetItems.mockImplementation(({ skip = 0 }: { skip?: number }) => {
+      // Before the removal: 41 matches, page 1 is rows 0-19.
+      if (skip === 0) return Promise.resolve({ items: [...Array(20).keys()].map(row), total: 41, skip: 0, limit: 20 });
+      // Row 0 is deleted, so 40 remain and offset 20 now begins at row 21 --
+      // row 20 has slipped into a position we already passed.
+      if (skip === 20)
+        return Promise.resolve({
+          items: [...Array(20).keys()].map((i) => row(i + 21)),
+          total: 40,
+          skip: 20,
+          limit: 20,
+        });
+      // The corrected offset, one back for the one row that disappeared.
+      if (skip === 19)
+        return Promise.resolve({
+          items: [...Array(20).keys()].map((i) => row(i + 20)),
+          total: 40,
+          skip: 19,
+          limit: 20,
+        });
+      return Promise.resolve({ items: [], total: 40, skip, limit: 20 });
+    });
+
+    const user = userEvent.setup();
+    renderPicker();
+    await user.type(screen.getByRole('combobox'), 'gauze');
+    expect(await screen.findByText(/Show more/)).toBeInTheDocument();
+
+    await user.click(screen.getByText(/Show more/));
+
+    // The match that the removal displaced is fetched rather than skipped.
+    expect(await screen.findByRole('option', { name: 'Gauze 20' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith({ search: 'gauze', active_only: true, skip: 19, limit: 20 })
+    );
+  });
+
+  it('trusts a short page over a total that disagrees with it', async () => {
+    // The end of the list is what the server returned, not what `total` says
+    // remains. They can disagree -- a count and a page query filtered
+    // differently will do it -- and `consumed < total` then keeps Show more
+    // alive over an offset the server has already said holds nothing.
+    const row = (i: number) => ({ id: `item-${i}`, name: `Gauze ${i}` });
+    mockGetItems.mockResolvedValue({ items: [...Array(15).keys()].map(row), total: 41, skip: 0, limit: 20 });
+
+    const user = userEvent.setup();
+    renderPicker();
+    await user.type(screen.getByRole('combobox'), 'gauze');
+
+    expect(await screen.findByRole('option', { name: 'Gauze 14' })).toBeInTheDocument();
+    // 15 read against a claimed 41, and still no Show more: the page was short,
+    // so there is nothing after this offset to ask for.
+    await waitFor(() => expect(screen.queryByText(/Show more/)).not.toBeInTheDocument());
+  });
+
   it('scrolls the highlighted option even when a failure banner precedes the list', async () => {
     // The banner is a sibling of the options, so a positional child lookup
     // stops matching activeIndex the moment it renders -- scrolling the banner
