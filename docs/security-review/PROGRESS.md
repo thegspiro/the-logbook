@@ -16,34 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2216](https://github.com/thegspiro/the-logbook/pull/2216)** (branch
-`claude/security-review-events-ev20-24-followup`) —
-Feature 16, Events & requests, pass 3 follow-up. #2213 (the pass-3 PR
-itself) merged at its stale first-draft state (`5b70834e`, "no findings")
-— the owner merged it while Codex's review of that same draft was still
-in progress, before the corrected findings and fixes could be pushed to
-it (CLAUDE.md pitfall #24: never reuse a branch whose PR has merged, so
-the fixes moved to a fresh branch/PR off current `main`, exactly as
-PR #2212 did for SCH-12). Two Codex rounds against this PR itself, both
-addressed: **4 fixed** — EV-20 (P1, `EligibleMemberResponse.email`
-required `str` 500'd the whole check-in roster whenever any member hid
-their email), EV-21 (P1, `create_or_update_rsvp`'s full-dump update
-silently wiped `dietary_restrictions`/`accessibility_needs` on any
-unrelated edit — a pre-existing bug this pass owns per CLAUDE.md), EV-22
-(P2, `RecurringEventCreate` was missing `attendee_visibility` entirely, so
-a series' explicit visibility choice was silently dropped), EV-25 (P1,
-found on round 2 reviewing EV-21's own fix — the guest/capacity checks
-kept reading the raw request's `guest_count` instead of what
-`exclude_unset` would actually leave stored, so an update omitting
-`guest_count` could evade capacity checks and oversubscribe an event; also
-closed the related P2 that a member could no longer clear a saved
-accommodation field at all). **2 flagged**: EV-23 (series RSVP never shows
-the training phase-gate warning it claims to have confirmed), EV-24
-(editing an existing waitlisted RSVP can promote it out of queue order).
-Also carries the events-specific MCP tool review Codex's scope-gap comment
-prompted. See the Log entries below for the full detail. Full completion
-gate green (10554/10554 backend, 0 frontend errors). Rotation row 16 stays
-⏳ awaiting merge. Next: 17 Training core, once this PR merges.
+**[#2217](https://github.com/thegspiro/the-logbook/pull/2217)** (branch
+`claude/security-review-training-core`) — Feature 17, Training core, pass 3.
+Diff-scoped against pass 2's merge (`0b8b5bd4`, PR #1981): of the seven
+declared files, only `training_service.py` and `training_compliance.py`
+changed. `training_compliance.py`'s change and two adjacent files this
+feature also declares (`models/training.py`, `types/training.ts`) turned
+out to be already-reviewed fixes from other rotation features (Scheduling's
+`equipment_check_template_ids`, Compliance's CMP2-2/3/4) sharing these
+misleadingly-named files, not new surface of this one — confirmed by
+reading each diff rather than assumed from the filename. `training_
+service.py`'s own diff is a genuine N+1 performance rework
+(`get_requirements_progress_for`, a new paginated progress-check API);
+read every branch to confirm org/user scoping is preserved throughout the
+new in-memory-filtering path, and that TR-12's two org-scoping fixes
+survived the refactor (one consolidated into an already-scoped helper, one
+unchanged). Also swept `app/mcp/tools/training.py`, missed by prior passes'
+file-diff scoping (the same class of gap Codex caught in the Events pass
+immediately before this one) — clean, no finding; its one caller of the new
+paginated API uses it correctly (paginated, not an unbounded scan).
+**No findings, no code changes.** Full completion gate green (10554/10554
+backend, 0 frontend errors). Rotation row 17 → ⏳ awaiting PR merge. Next:
+18 Training extended, once this PR merges.
 
 ---
 
@@ -60,6 +54,77 @@ EV-21, EV-22) moved to a new branch off current `main` and a new PR,
 updates this doc's Log and Open PR entries to point at itself. See the
 entry immediately below for the full corrected write-up. Next: 17 Training
 core, once the follow-up PR merges.
+
+### 2026-09-04 — Feature 17 (Training core, pass 3) — no new findings, PR pending
+
+Diff-scoped against pass 2's merge (`0b8b5bd4`, PR #1981). Of the seven
+declared files, only `services/training_service.py` (+329/-91) and
+`services/training_compliance.py` (+27/-14) changed; the other five are
+byte-identical. A grep for any other file instantiating `TrainingService`
+or importing the training models found one addition,
+`app/mcp/tools/training.py` — predates this diff but was never swept into
+a security-review pass, the same class of gap Codex caught reviewing the
+Events pass immediately before this one.
+
+Two files this feature also declares turned out to carry another feature's
+already-reviewed fix, not new surface of this one: `models/training.py`
+(+109/-4, entirely `Shift`/`ShiftTemplate`/`ShiftTemplateEquipmentCheck` —
+Scheduling's own models, already covered in `SCH-15-scheduling.md` pass 3)
+and `types/training.ts` (+32/-9, entirely `ComplianceProfile*`/
+`ComplianceConfig*` type widenings citing CMP2-2/3/4 — Compliance's own
+Pitfall #1 fixes). `training_compliance.py`'s change is likewise already
+covered (cited as CMP2-3 in its own comment) — read directly to confirm
+the fix does what it claims (`profile.required_requirement_ids is not
+None`, not truthy, so an explicitly-empty override list is no longer
+confused with "no override"). `schemas/training.py`'s one change (an SSRF
+hardening validator on `ExternalProviderConfig`) belongs to
+`external_training.py`, declared as feature 18 ("training extended") since
+pass 1 — out of this feature's scope.
+
+`training_service.py`'s own diff is a genuine N+1 performance rework:
+`check_requirement_progress` gained optional preload parameters so
+`get_requirements_progress_for` (new) can preload a member's completed
+records once and have every requirement's check filter that same in-memory
+set instead of issuing its own query. Read every branch (HOURS,
+CERTIFICATION, SHIFTS, CALLS, fallback) to confirm the in-memory path
+filters identically to the SQL path it replaces, and confirmed the preload
+itself is the only fetch point and is correctly scoped to `user_id`/
+`organization_id`/`status == COMPLETED` before anything downstream sees a
+row. TR-12's two org-scoping fixes (pass 1) both survive: one consolidated
+into `get_applicable_requirements`'s already-org-scoped `User` query, the
+other (`generate_training_report`'s tier-exemption block, using a
+locally-aliased `_User` — checked both spellings) unchanged in place.
+`training.py` itself (the endpoint file) is untouched, so TR2-4 (flagged,
+unbounded dashboard scan) remains exactly as flagged — confirmed via zero
+diff, not assumed.
+
+`app/mcp/tools/training.py` read in full (170 L, 4 tools): every tool
+resolves its target member through the same shared, already-reviewed
+`require_member` helper the Events MCP tools use (org-scoped,
+`ValueError` on a foreign/missing id); `get_member_requirements_progress`
+is the new paginated API's first outside caller and uses it correctly —
+resolves applicable requirements once, hands only the requested page-slice
+to `get_requirements_progress_for`, so an MCP caller cannot trigger an
+unbounded scan. Response builder excludes score/certification-number
+fields as credential detail. Clean, no finding.
+
+**No findings, no code changes.** Full completion gate green: flake8/black/
+isort clean, migrations single-head (414 revisions, no schema change), 842
+training-scoped and 10554 full backend suite pass, `tsc --noEmit`/
+`eslint .` both 0 errors. Findings doc:
+`docs/security-review/TR-17-training-core.md` pass 3. Rotation row 17 →
+⏳ awaiting PR merge. Next: 18 Training extended, once this PR merges.
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) ✅ merged — PR #2216
+
+`7af79795`. Merged cleanly — no conflict, base `main` unaffected. CI was
+fully green on the final head (`acf298aa`, 17/17 checks); Codex's review of
+the round-2 fix found no new issues. No unresolved review threads — all
+four addressed findings' threads (EV-20, EV-21, EV-22, EV-25) were resolved
+in-PR with replies describing each fix. EV-23/EV-24 remain open findings,
+tracked in `docs/security-review/EV-16-events-requests.md` and (EV-23)
+`docs/KNOWN_LIMITATIONS.md` — not blocking, since both are flagged rather
+than fixed by design. Rotation row 16 → ✅. Next: 17 Training core.
 
 ### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2216 round 2: 1 more P1 fix (EV-25) + accommodation-clear gap closed
 
@@ -8267,8 +8332,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⏳     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | 🔄     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
