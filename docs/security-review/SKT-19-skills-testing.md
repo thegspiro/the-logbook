@@ -493,3 +493,248 @@ re-confirmed above; nothing in this pass contradicts anything pass 1 recorded.
 | `pytest tests/ -q` (full backend suite)           | ✅ 9225 passed, 22 skipped (pre-existing Docker/no-MySQL/optional skips) |
 | `cd frontend && npm run typecheck`                | ✅ 0 errors                                                              |
 | `cd frontend && npx eslint .`                     | ✅ 0 errors, 10 pre-existing warnings (none in skills-testing files)     |
+
+---
+
+## Pass 3 (2026-09-04)
+
+**Prefix:** `SKT3` · **PR:** TBD
+
+**Scope check:** diffed the current tree against `793bbebb4b03ddbe8f65ca171de261a4dd13fb1f`
+(the pass-2 merge commit, PR #2017). The full backend surface — endpoint file,
+service file, schema file, model file — came back **byte-identical**
+(`git diff --stat`, not assumed; the repo's shallow clone required fetching
+that commit directly by SHA since it predates this clone's default depth).
+`backend/app/models/training.py` did change since pass 2, but the diff is
+entirely `Shift`/`ShiftTemplate` scheduling additions (`late_signup_until`,
+`ShiftTemplateEquipmentCheck`) — confirmed by reading the diff directly, no
+`SkillTest`/`SkillTemplate` class is defined in that file. No new migration
+touches a skills-testing table. Given zero backend diff going in, this pass is
+re-verification plus closing two frontend-inventory gaps pass 2 left, not a
+first read of changed code.
+
+**Frontend scope-completeness gap found and closed.** Pass 2's declared
+16-file frontend inventory (`docs/security-review/SKT-19-skills-testing.md`,
+Pass 2) missed two files that import `skillsTestingService` directly:
+`components/training/ScoreBreakdownPanel.tsx` and
+`components/training/TestViewersPanel.tsx` (plus their `.test.tsx` files) —
+confirmed via a fresh `grep -rl` for `skillsTestingService\|skillsTestingStore`
+across `frontend/src`, which returns 20 non-test source files where pass 2's
+prose named 9. Both existed unchanged since before pass 1 (`git show
+7a772a67:frontend/src/components/training/ScoreBreakdownPanel.tsx` resolves,
+i.e. pre-dates even the pass-1 merge) — they were never new code slipping
+through, just missing from the file list pass 2 wrote down. Read both in full
+this pass:
+
+- **`ScoreBreakdownPanel.tsx`** is pure presentation — takes a `ScoreBreakdown`
+  prop, makes no API call, mutates nothing. Traced where its data originates:
+  `SkillTest.score_breakdown` is built server-side by
+  `build_score_breakdown()` (`skills_testing_service.py:266`) from
+  `template.sections`' own step labels/names — structural template metadata,
+  never examiner free-text — so it correctly is **not** stripped by
+  `redact_test_for_view`'s `scores` branch (which strips only written
+  commentary), while the `pending` branch does null it out
+  (`skills_testing_service.py:1023`, with an explanatory comment: "the
+  breakdown is the score restated as arithmetic — leaving it would hand over
+  the very outcome the rest of this branch withholds"). Correct on both
+  branches; no finding.
+- **`TestViewersPanel.tsx`** calls `getTestViewers`/`addTestViewer`/
+  `removeTestViewer` through the shared `services/api.ts` client
+  (`withCredentials`, CSRF interceptor — not a bespoke module axios instance,
+  Pitfall #7 doesn't apply) and its own member-search input reuses
+  `useMemberSearch()`, which wraps the already-reviewed, rate-bounded
+  `/candidates` endpoint. Confirmed both panels are additionally gated
+  client-side: `ActiveSkillTestPage.tsx:1112` computes
+  `isOfficer = checkPermission('training.manage')` and only renders
+  `<TestViewersPanel>` when `isOfficer` is true (defense in depth on top of
+  the backend's own `training.manage` gate on every `/viewers` route) — this
+  is what led to the one real finding below, since defense in depth on the
+  frontend picker turned out not to be mirrored by every check the backend
+  docstring claimed.
+
+### Re-verification of pass-1/2 fixes
+
+Read the current code directly for each (not re-cited from either prior
+write-up):
+
+- **SKT-1** — `update_template` still routes through `apply_updates` inside a
+  `try/except ValueError` (`skills_testing.py:678`).
+- **SKT-2** — `void_test` still calls `assert_different_person(current_user.id,
+test.candidate_id, action="void", ...)` before any mutation
+  (`skills_testing.py:2687`).
+- **SKT-3** — `return_test_for_correction` still calls the identical guard
+  before the status mutation begins (`skills_testing.py:2857`).
+- **SKT-4** — `lock_attempt_capacity` still locks `TrainingRequirement` with
+  `.with_for_update()`, the `spent` count in `assert_attempts_remaining` still
+  carries `.with_for_update(of=SkillTest)`, and `validate_test` still acquires
+  the capacity lock via a non-locking peek at `requirement_id`
+  (`skills_testing.py:2000`) **before** `_lock_test_for_transition` locks the
+  specific test row.
+- **SKT2-1** — the ten `SkillTest.is_practice == False` sites remain converted
+  to `.is_(False)`, no `# noqa: E712` reintroduced.
+
+**Route auth coverage re-enumerated from scratch**, via a small `ast`-walk
+script (not a re-read of either prior table): every `@router.<verb>` decorator
+plus every `Depends(...)` default among that function's arguments. Result:
+**29/29 routes**, same paths, same methods, same `get_current_user` /
+`require_permission(...)` gate as pass 1/2's table — this file's route surface
+has not moved since pass 1. Cross-checked the disclosure-gated routes
+(`/tests`, `/tests/{id}`) still carry `get_current_user` with the in-body
+two-pass filter, not a bare permission gate, matching CS-1.
+
+**Org-scoping** — re-swept `select(SkillTest)`/`select(SkillTemplate)`/
+`select(SkillTestViewer)` call sites in `list_test_viewers`, `add_test_viewer`,
+and `remove_test_viewer` by hand (the three `/viewers` routes, since they are
+the routes this pass's one new finding lives in): all three resolve the test
+via `SkillTest.id == test_id` **and** `SkillTest.organization_id ==
+current_user.organization_id` before touching `SkillTestViewer`, and
+`add_test_viewer` additionally re-validates the client-supplied
+`viewer_data.user_id` against `User.organization_id` before storing it
+(Pitfall #14c, in-code comment present) — unchanged from pass 2's finding of
+no gap.
+
+### Findings
+
+### SKT3-1 — LOW — `add_test_viewer` did not reject naming the examiner, only the candidate — ✅ FIXED
+
+**What:** `add_test_viewer` checked `str(viewer.id) == str(test.candidate_id)`
+and rejected the grant with a 400, but had no matching check against
+`test.examiner_id`. The examiner already holds `ResultDisclosure.FULL` on
+their own test unconditionally — `resolve_result_view`'s very first branch is
+`if str(test.examiner_id) == uid: return ResultDisclosure.FULL.value`, before
+any viewer-grant lookup runs — so a stored viewer grant naming the examiner is
+inert: it changes nothing about what they can see, exactly the same "no-op the
+officer could not tell had done nothing" reasoning the code's own comment
+gives for blocking the candidate case one line above.
+**Where:** `app/api/v1/endpoints/skills_testing.py:2416` (was; now followed by
+a second check at what is now line ~2422).
+**Failure scenario:** the frontend's own `TestViewersPanel.tsx` docstring
+states, of both the candidate and examiner: "Excluded from the picker — ...
+the API rejects granting to them" (candidate) and "Excluded too: the examiner
+always sees what they themselves recorded, so a grant would be a no-op the
+officer could not tell had done nothing" (examiner) — and the picker's
+`grantable` filter does exclude both client-side
+(`m.id !== candidateId && m.id !== examinerId`). But a caller hitting `POST
+/tests/{test_id}/viewers` directly (a script, an API client, a future frontend
+change that forgets the exclusion) with `{"user_id": <examiner's id>}` would
+succeed and receive a `201` and a stored `SkillTestViewer` row — the very
+"docstring says the API rejects it" claim the frontend relies on was not
+actually true at the API layer for the examiner half of the pair.
+**Impact:** no data exposure (the examiner already sees everything a grant
+could add) and no privilege escalation — this is a documentation/contract
+inconsistency between the frontend's stated assumption and the backend's
+actual behavior, not a live vulnerability. Included as a finding because a
+future officer-facing "who can see this" audit view, or a future disclosure
+rule that stops treating the examiner as an automatic FULL viewer, would
+silently inherit a stored grant that was written on the (currently false)
+assumption the backend already prevents it.
+**Fix:** added a second self-dealing check mirroring the candidate one exactly
+(`str(viewer.id) == str(test.examiner_id)` → `HTTPException(400, "The examiner
+already sees this result in full")`), placed immediately after the candidate
+check and before the existing-grant lookup. Guard tests:
+`tests/test_skill_test_viewers.py` (new file) —
+`TestAddViewerSelfDealingGuard::test_naming_the_examiner_is_rejected` (the new
+behavior), `::test_naming_the_candidate_is_rejected` (mirrors the pre-existing
+candidate check, which had no dedicated endpoint-level test of its own before
+this pass — pass 2's claim that it was "re-confirmed" rested on reading the
+code, not on an existing test), and
+`::test_a_third_party_is_still_grantable` (a mentor who is neither candidate
+nor examiner still reaches the grant path — guards the fix against
+over-matching).
+
+### SKT3-2 — LOW/MED — `GET /tests` has no pagination or result cap — OPEN / FLAGGED
+
+**What:** `list_tests` (`GET /tests`, gated only by `get_current_user` — open
+to every member, not `training.manage`) builds its `SkillTest` query with
+filters but no `.limit()` anywhere in the function, then does two additional
+full-width queries per call (a batch `User` fetch and a batch `SkillTemplate`
+fetch keyed on every distinct id in the result set) and, for a non-officer, a
+third and fourth query (named-viewer ids, position-granting templates) plus a
+per-row `resolve_result_view()` call in a Python loop over every row returned.
+`search_candidates` (the sibling lookup endpoint) has an explicit
+`CANDIDATE_SEARCH_MAX_RESULTS` cap; `list_tests` has no equivalent.
+**Where:** `app/api/v1/endpoints/skills_testing.py:978-1198` (`list_tests`).
+**Failure scenario:** this is user-reachable today, not hypothetical — traced
+the actual call path. `frontend/src/pages/SkillsTestingTestRecordsTab.tsx`
+calls `loadTests(statusFilter ? { status: statusFilter } : undefined)`; the
+default "All" status filter (the tab's initial state) sends **no filter at
+all**, so every load of the Test Records tab with no status selected issues
+`GET /tests` with zero query params — the entire org's non-practice skill-test
+history in one response, every time. `skillsTestingService.getTests()`
+(`services/trainingServices.ts:1447`) accepts no `limit`/`offset`/`page`
+parameter for a caller to opt into bounding it even if it wanted to. A
+department several years into using this feature, testing routinely across
+multiple templates and candidates with repeat attempts, accumulates skill-test
+rows the same way `training_submissions` or `shift` rows do — this is not a
+small, bounded-by-nature table like `organizations` or `templates`.
+**Impact:** primarily an abuse-resistance / resource-exhaustion concern
+(CHECKLIST dimension 6: "List endpoints and exports are bounded — no `all()`
+over an org-wide table"), not a data-exposure one — every row is already
+org-scoped and disclosure-filtered before being returned, so this does not
+let anyone see data they otherwise could not. The risk is request latency and
+server memory/CPU (N+1-shaped batch fetches, then an O(n) Python
+disclosure-resolution loop per non-officer request) scaling unboundedly with
+the organization's accumulated testing history, on a route every authenticated
+member — not just officers — can call with no filter at all.
+**Why flagged, not fixed:** closing this properly needs a paging contract
+(`limit`/`offset` or a cursor), a decision on a sane default page size and cap,
+and — for it to actually bound anything — a change to
+`skillsTestingService.getTests()` and `SkillsTestingTestRecordsTab.tsx`'s own
+fetch/render loop, since a backend-only cap that silently truncates the "All"
+view without frontend pagination UI would just make the tab quietly show a
+partial roster with no indication rows are missing. That is a product decision
+and a coordinated frontend change, not a same-commit, verifiable, behavior-
+preserving fix — exactly the "changes behavior, needs a migration, or needs a
+product decision" carve-out this rotation's own process reserves for
+flagging. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+### Corrections to prior write-ups
+
+None to either pass's findings or fixes — all re-verified intact above. The
+frontend-inventory gap (`ScoreBreakdownPanel.tsx`/`TestViewersPanel.tsx` missing
+from pass 2's file list) is noted above under Scope rather than as a
+correction to a claim, since pass 2 did not assert those two files were
+reviewed — it simply omitted them from an inventory that turns out to have
+under-counted by two.
+
+### Guard tests added
+
+- `tests/test_skill_test_viewers.py` (new file) —
+  `TestAddViewerSelfDealingGuard`: naming the candidate is rejected (400,
+  pre-existing behavior, now under an endpoint-level test for the first time),
+  naming the examiner is rejected (400, the SKT3-1 fix), and a genuine third
+  party still reaches the grant path and gets back the created
+  `SkillTestViewer` (guards the fix against over-matching every viewer
+  candidate).
+
+### Completion gate (pass 3)
+
+| Check                                             | Result                                                                                                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                                                                                                                          |
+| `black --check app/ tests/ alembic/`              | ✅ 1467 files unchanged                                                                                                                                                  |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (`isort==9.0.1`, CI's current pin — confirmed against `ci.yml`, updated from 8.0.1 since pass 2)                                                                |
+| `python3 scripts/validate_migrations.py --strict` | ✅ 418 revisions, single head `c9f2a4b71d38`                                                                                                                             |
+| `pytest tests/ -q -k "skill"`                     | ✅ 395 passed, 1 skipped (pre-existing optional-dependency skip) — 392 pass-2 count + 3 new SKT3-1 guard tests                                                           |
+| `cd frontend && npx tsc --noEmit`                 | ✅ 0 errors                                                                                                                                                              |
+| `cd frontend && npm run typecheck`                | ✅ 0 errors (the aliased TS 7.0.2 compiler, via `scripts/tsc-native.mjs`)                                                                                                |
+| `cd frontend && npx eslint .` / `npm run lint`    | ✅ 0 errors; 1 pre-existing warning (`pages/scheduling/ShiftDetailPanel.test.tsx:257`, unrelated module, not skills-testing), well under the `--max-warnings 10` CI gate |
+
+Full backend suite not re-run this pass beyond the `-k skill` scope (zero
+backend diff against pass 2, which already ran and recorded the full suite
+clean at 9225 passed); the skills-testing-scoped run above is the one new code
+in this pass could plausibly affect.
+
+**Environment note, not a finding:** this pass's isolated review worktree
+initially had no `node_modules` installed at all (a fresh worktree checkout,
+never `npm install`ed). Running `eslint`/`tsc` directly under that condition
+resolved to a global fallback toolchain with `@types/node` unresolvable,
+producing 942 spurious `@typescript-eslint/no-unsafe-*` warnings across 38
+files in a dozen unrelated modules — none of it real, all of it an artifact of
+the missing local install, not a defect on `main`. Caught by checking `npm run
+lint`'s actual exit code (1, "too many warnings") against what should have
+been a clean baseline per pass 2's own gate a week prior, then confirmed via
+`npm ls @types/node` failing to resolve. `npm ci` from the worktree root fixed
+it; the real numbers are recorded in the table above. Noted here so a future
+pass with a similarly bare worktree doesn't misreport a phantom "CI is red on
+main."

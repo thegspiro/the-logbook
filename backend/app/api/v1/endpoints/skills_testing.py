@@ -2419,6 +2419,18 @@ async def add_test_viewer(
             detail="The candidate can already see their own result as policy allows",
         )
 
+    # The examiner already holds FULL disclosure on their own scoring
+    # (resolve_result_view short-circuits on examiner_id before any viewer
+    # grant is consulted), so a grant naming them would be a no-op the officer
+    # could not tell had done nothing — same reasoning as the candidate check
+    # above, and the docstring's own claim ("the API rejects granting to
+    # them") that TestViewersPanel.tsx's picker exclusion relies on.
+    if str(viewer.id) == str(test.examiner_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The examiner already sees this result in full",
+        )
+
     existing = (
         await db.execute(
             select(SkillTestViewer)

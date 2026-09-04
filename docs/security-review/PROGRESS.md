@@ -16,7 +16,82 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_None currently open._
+**Feature 19 (Skills testing), pass 3** — branch
+`claude/security-review-skills-testing`, PR TBD (opening now). 1 fix (LOW), 1
+flagged (LOW/MED). See the log entry below and
+`docs/security-review/SKT-19-skills-testing.md` → **Pass 3** for detail.
+
+---
+
+### 2026-09-04 — Feature 19 (Skills testing), pass 3 — 1 fixed (LOW), 1 flagged (LOW/MED)
+
+Picked up after a watchdog session closed out Feature 18 and started this
+feature's row (see the entry immediately below). Diff-scoped against the
+pass-2 merge commit (`793bbebb4b03ddbe8f65ca171de261a4dd13fb1f`, PR #2017)
+across the full backend surface: endpoint file, service file, schema file,
+model file all came back **byte-identical**. `models/training.py` changed,
+but the diff is entirely unrelated `Shift`/`ShiftTemplate` scheduling
+additions, confirmed by reading it — no skills-testing model touched. No new
+migration touches a skills-testing table.
+
+Re-verified all four pass-1 fixes (SKT-1 through SKT-4, including both halves
+of SKT-4's Pitfall #27 capacity lock and its lock-ordering fix) and pass 2's
+SKT2-1 cleanup by reading the current code directly — all intact. Re-ran an
+AST route enumeration from scratch: 29/29 routes unchanged from pass 1/2's
+table. Found and closed a frontend-inventory gap in pass 2's own scope note:
+two files that import `skillsTestingService` directly
+(`ScoreBreakdownPanel.tsx`, `TestViewersPanel.tsx`, both pre-dating pass 1)
+were never named in either prior pass's file list. Read both in full this
+pass — no finding in `ScoreBreakdownPanel.tsx` (pure presentation, and its
+data source, `build_score_breakdown()`, is correctly redacted only on the
+`pending` disclosure branch, not `scores`, since it carries template step
+labels rather than examiner commentary).
+
+**SKT3-1** (LOW, fixed) — `add_test_viewer` rejected naming the test's
+candidate as their own viewer grant, but had no matching check for the
+examiner, who already holds FULL disclosure unconditionally and so gets
+nothing from a grant. `TestViewersPanel.tsx`'s own docstring claims the API
+rejects granting to either the candidate or the examiner; only the candidate
+half was actually true. No live data exposure (a grant to the examiner would
+be a no-op), but a real gap between the frontend's stated assumption and
+backend behavior, worth closing before a future audit view or disclosure-rule
+change silently inherits a grant written on a false premise. Fixed by mirroring
+the existing candidate check for `test.examiner_id`. Guard tests (new file,
+`tests/test_skill_test_viewers.py`): the new examiner rejection, the
+pre-existing candidate rejection (which had no dedicated endpoint-level test
+before this pass), and a genuine third party still reaching the grant path.
+
+**SKT3-2** (LOW/MED, flagged) — `GET /tests`, open to every member via
+`get_current_user`, has no `.limit()`/pagination anywhere in `list_tests`.
+Traced the live call path: `SkillsTestingTestRecordsTab.tsx`'s default "All"
+status filter sends zero query params, so every unfiltered load of the Test
+Records tab fetches the org's entire non-practice skill-test history in one
+response, plus batch user/template fetches and (for non-officers) a per-row
+disclosure-resolution loop. Not a data-exposure issue — everything returned is
+already org-scoped and disclosure-filtered — but an unbounded-work-per-request
+resource concern (CHECKLIST dimension 6) that grows with an organization's
+accumulated testing history. Not fixed: closing it needs a paging contract,
+a chosen cap, and matching frontend pagination work, which changes behavior
+and needs a product decision rather than a same-commit fix. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+Completion gate: flake8/black/isort clean (`isort==9.0.1`, matching CI's
+current pin — updated from 8.0.1 since pass 2, confirmed against
+`.github/workflows/ci.yml`); `validate_migrations.py --strict` 418 revisions,
+single head; `pytest -k skill` 395 passed/1 pre-existing skip (392 + 3 new);
+`tsc --noEmit`/`npm run typecheck` 0 errors; `npm run lint` 0 errors, 1
+pre-existing warning in an unrelated scheduling test file, well under the
+`--max-warnings 10` cap. One environment wrinkle worth recording for the next
+pass rather than as a finding: this review's isolated worktree started with no
+`node_modules` installed, and running `eslint`/`tsc` under that condition
+silently fell back to a global toolchain that could not resolve `@types/node`,
+producing 942 spurious warnings across 38 unrelated files before `npm ci`
+(from the worktree root) fixed it — recorded in
+`SKT-19-skills-testing.md`'s Pass 3 completion-gate section so it isn't
+mistaken for a real `main`-red finding by a future reader skimming this log.
+Full write-up: `docs/security-review/SKT-19-skills-testing.md` → **Pass 3**.
+Rotation row 19 → ⏳ awaiting PR merge. Next: 20 compliance, once this PR
+merges.
 
 ---
 
@@ -8513,7 +8588,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | 🔄     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
