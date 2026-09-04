@@ -3350,6 +3350,7 @@ class SchedulingService:
         exclude_assignment_ids: Optional[set[str]] = None,
         require_mutable: bool = False,
         reject_past: bool = False,
+        window_checked: bool = False,
         enforce_position_eligibility: bool = True,
         enforce_capacity: bool = False,
         context: str = "shift",
@@ -3377,7 +3378,18 @@ class SchedulingService:
             if shift.is_finalized:
                 return f"{label} was finalized"
         if reject_past and shift.shift_date and shift.shift_date < date.today():
-            return "Cannot sign up for a past shift"
+            # A *fallback*, not a second opinion. When the caller has already
+            # run the instant-based signup window and the shift has a readable
+            # start, that window is the precise answer and this day-granular
+            # one must not overrule it: a 18:00–06:00 shift's `shift_date`
+            # rolls to yesterday at midnight, so an officer reopening signup at
+            # 00:30 — exactly when a crew is short and a reopening matters —
+            # got a live window that admitted nobody.
+            if (
+                not window_checked
+                or _as_utc(getattr(shift, "start_time", None)) is None
+            ):
+                return "Cannot sign up for a past shift"
         active_user_result = await self.db.execute(
             select(User.id).where(
                 User.id == str(user_id),
@@ -3664,6 +3676,7 @@ class SchedulingService:
                 position=assignment_data.get("position"),
                 require_mutable=self_signup,
                 reject_past=self_signup,
+                window_checked=effective_actor != SignupActor.MANAGER,
                 # Eligibility is enforced for officer-made assignments too
                 # (#1752): an officer seating a member on a position they are
                 # not cleared for is the same risk as the member doing it.
@@ -5001,6 +5014,9 @@ class SchedulingService:
                 exclude_assignment_ids={str(offered_assignment.id)},
                 require_mutable=True,
                 reject_past=True,
+                # The member window ran above, so the day-granular check is
+                # only the fallback for a shift it could not judge.
+                window_checked=True,
                 enforce_position_eligibility=True,
                 enforce_capacity=True,
             )

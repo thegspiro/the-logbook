@@ -166,15 +166,26 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
           <p className="text-theme-text-secondary mt-0.5 text-xs">
             They stay on the roster until you answer, so the seat is never left empty.
           </p>
+          {/* Accepting an offer is bounded by the same member deadline as
+              signing up — it *is* the offerer withdrawing and the accepter
+              signing up — so past it the server refuses. Declining stays
+              available: the offerer is owed an answer either way. */}
+          {signupClosed && (
+            <p className="text-theme-text-secondary mt-2 text-xs font-medium">
+              {signupClosed} You can still decline so they know.
+            </p>
+          )}
           <div className="mt-2.5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => onAnswerOffer(offerToMe, true)}
-              className="btn-primary btn-sm rounded-lg px-3 font-semibold"
-            >
-              Take the shift
-            </button>
+            {!signupClosed && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onAnswerOffer(offerToMe, true)}
+                className="btn-primary btn-sm rounded-lg px-3 font-semibold"
+              >
+                Take the shift
+              </button>
+            )}
             <button
               type="button"
               disabled={pending}

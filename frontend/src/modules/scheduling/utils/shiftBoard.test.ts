@@ -424,6 +424,12 @@ describe('a shift nobody can sign up for any more', () => {
   // A board that counted their empty chairs would report a shortage nobody
   // can act on, and would offer a button whose only outcome is an error.
   const TODAY = new Date('2026-08-25T12:00:00Z');
+  // A shift that ran yesterday, and whose start says so too. The two have to
+  // agree: `shift_date` and `start_time` describe one shift, and since the
+  // claim rules now take the start instant as the authority (so an overnight
+  // shift's midnight rollover cannot close a live reopening), a fixture with
+  // a past date and a future start is not a shift any department could have.
+  const RAN_YESTERDAY = { shift_date: '2026-08-24', start_time: '2026-08-24T18:00:00Z' };
 
   it('is closed once cancelled', () => {
     expect(isShiftOpen(shift({ status: 'cancelled' }), TODAY)).toBe(false);
@@ -434,7 +440,7 @@ describe('a shift nobody can sign up for any more', () => {
   });
 
   it('is closed once the day has passed', () => {
-    expect(isShiftOpen(shift({ shift_date: '2026-08-24' }), TODAY)).toBe(false);
+    expect(isShiftOpen(shift(RAN_YESTERDAY), TODAY)).toBe(false);
   });
 
   it('is still open on its own day', () => {
@@ -456,14 +462,14 @@ describe('a shift nobody can sign up for any more', () => {
 
   it('offers no seat to claim', () => {
     expect(firstClaimableSeat(shift({ status: 'cancelled' }), ['firefighter'], ME, TODAY)).toBeNull();
-    expect(firstClaimableSeat(shift({ shift_date: '2026-08-24' }), ['firefighter'], ME, TODAY)).toBeNull();
+    expect(firstClaimableSeat(shift(RAN_YESTERDAY), ['firefighter'], ME, TODAY)).toBeNull();
   });
 
   it('still shows a member the shift they were on', () => {
     // Precedence: a member scanning the month for what they worked last week
     // is asking the same question as one scanning for next week.
     const worked = shift({
-      shift_date: '2026-08-24',
+      ...RAN_YESTERDAY,
       roster: [seat(ME, 'driver')],
       attendee_count: 1,
     });
@@ -605,5 +611,35 @@ describe('signupClosedReason by actor', () => {
 
   it('defaults to the member rule when no viewer is given', () => {
     expect(signupClosedReason(at(-30))).toBe(memberSignupClosedReason(at(-30)));
+  });
+});
+
+describe('an overnight shift after its date has rolled over', () => {
+  // A 18:00–06:00 shift is "yesterday" from midnight. The day-granular rule is
+  // only a fallback, or an officer's 00:30 reopening — exactly when a crew is
+  // short — shows a live window with every button disabled.
+  const overnight = (overrides: Partial<ShiftRecord> = {}) =>
+    shift({
+      shift_date: toDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+      start_time: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+      end_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+      ...overrides,
+    });
+
+  it('is claimable again while a reopening is live', () => {
+    const reopened = overnight({
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    });
+    expect(isShiftClaimable(reopened)).toBe(true);
+    expect(shiftStatusInfo(reopened).isOpen).toBe(true);
+  });
+
+  it('is not claimable without one', () => {
+    expect(isShiftClaimable(overnight())).toBe(false);
+  });
+
+  it('still falls back to the day rule when the start cannot be read', () => {
+    const unreadable = overnight({ start_time: '18:00' });
+    expect(isShiftClaimable(unreadable)).toBe(false);
   });
 });

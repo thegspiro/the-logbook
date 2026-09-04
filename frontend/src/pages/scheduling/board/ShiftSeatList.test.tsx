@@ -30,6 +30,17 @@ const TOMORROW_KEY = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
 // down.
 const FUTURE_START = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
 
+// A shift that ran long ago, and whose start says so too. The two have to
+// agree: the claim rules take the start instant as the authority (so an
+// overnight shift's midnight rollover cannot close a live reopening), and a
+// past date paired with a future start is not a shift any department could
+// have had.
+const LONG_PAST = {
+  shift_date: '2000-01-01',
+  start_time: '2000-01-01T08:00:00Z',
+  end_time: '2000-01-01T20:00:00Z',
+};
+
 const shift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 's1',
   organization_id: 'org',
@@ -173,12 +184,12 @@ describe('a shift nobody can sign up for', () => {
   });
 
   it('offers no claim on a shift that has already run', () => {
-    renderList({ shift: shift({ shift_date: '2000-01-01' }) });
+    renderList({ shift: shift(LONG_PAST) });
     expect(screen.getByText(/has already run/i)).toBeInTheDocument();
   });
 
   it('does not offer to give up a shift that has already run', () => {
-    const past = shift({ shift_date: '2000-01-01', roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
+    const past = shift({ ...LONG_PAST, roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
     renderList({ shift: past });
     expect(screen.queryByRole('button', { name: /give up this shift/i })).not.toBeInTheDocument();
   });
@@ -340,5 +351,55 @@ describe('a shift that has already started', () => {
       />
     );
     expect(screen.getByText('Late signup for this shift has closed.')).toBeInTheDocument();
+  });
+});
+
+describe('a swap offer on a shift past its signup deadline', () => {
+  const started = () => shift({ start_time: new Date(Date.now() - 60 * 60_000).toISOString() });
+  const offer = {
+    id: 'sw1',
+    offering_shift_id: 's1',
+    requesting_user_id: 'other-1',
+    requesting_user_name: 'Dana Reed',
+    target_user_id: ME,
+    status: 'pending',
+  };
+
+  it('withdraws "Take the shift" but keeps Decline', () => {
+    // Accepting is the offerer withdrawing and the accepter signing up, so the
+    // server refuses it past the deadline. The offerer is still owed an answer.
+    const onAnswerOffer = vi.fn();
+    render(
+      <ShiftSeatList
+        shift={started()}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+        offerToMe={offer as never}
+        onAnswerOffer={onAnswerOffer}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: /take the shift/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /decline/i })).toBeInTheDocument();
+  });
+
+  it('offers acceptance while the shift is still ahead', () => {
+    render(
+      <ShiftSeatList
+        shift={shift()}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+        offerToMe={offer as never}
+        onAnswerOffer={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /take the shift/i })).toBeInTheDocument();
   });
 });

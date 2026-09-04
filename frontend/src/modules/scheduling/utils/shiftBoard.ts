@@ -201,6 +201,10 @@ export const signupClosedReason = (
   if (window.closesMinutesBefore > 0 && now.getTime() < start) {
     return 'Signup for this shift has closed.';
   }
+  // "Started" is true of last month's shift too, and reads as though it were
+  // under way. Once the end has passed, say what actually happened.
+  const end = shift.end_time ? Date.parse(shift.end_time) : NaN;
+  if (!Number.isNaN(end) && end < now.getTime()) return 'This shift has already run.';
   return 'This shift has already started.';
 };
 
@@ -223,7 +227,16 @@ export const isShiftClaimable = (
   shift: ShiftRecord,
   window: SignupWindow = DEFAULT_SIGNUP_WINDOW,
   now: Date = new Date()
-): boolean => isShiftOpen(shift, now) && memberSignupClosedReason(shift, window, now) === null;
+): boolean => {
+  if (shift.status === 'cancelled' || shift.is_finalized) return false;
+  if (memberSignupClosedReason(shift, window, now) !== null) return false;
+  // `isShiftOpen`'s day comparison is a *fallback*, applied only when the
+  // start instant cannot be read. A 18:00–06:00 shift's `shift_date` rolls to
+  // yesterday at midnight, so applying it after the precise window had already
+  // approved the claim left an officer's 00:30 reopening — exactly when a crew
+  // is short — showing a live window with every button disabled.
+  return startInstant(shift) !== null || isShiftOpen(shift, now);
+};
 
 /**
  * The seat list, named seats first and in order, open seats last.

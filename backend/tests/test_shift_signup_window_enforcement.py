@@ -430,3 +430,91 @@ class TestSettingsRoundTrip:
         org = await svc._get_org(org_id)
 
         assert svc.get_signup_window_settings(org)["late_signup_grace_minutes"] == 60
+
+
+class TestOvernightShiftsAndTheLegacyDateGuard:
+    """A night shift's `shift_date` rolls over while the shift is still running.
+
+    The day-granular `reject_past` check has to stay a *fallback*: an
+    18:00–06:00 shift is "yesterday" from midnight, so applying it after the
+    instant-based window had already approved the signup meant a reopening
+    made at 00:30 — exactly when a crew is short — admitted nobody.
+    """
+
+    async def _overnight_shift(self, svc, org_id, officer_id):
+        yesterday = date.today() - timedelta(days=1)
+        start = datetime.combine(yesterday, datetime.min.time()) + timedelta(hours=18)
+        shift, err = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": yesterday,
+                "start_time": start,
+                "end_time": start + timedelta(hours=12),
+            },
+            uuid.UUID(officer_id),
+        )
+        assert err is None, err
+        return shift
+
+    async def test_a_live_reopening_admits_a_member_after_midnight(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await self._overnight_shift(svc, org_id, officer_id)
+
+        await svc.open_late_signup(uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30)
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert err is None
+        assert assignment is not None
+
+    async def test_without_a_reopening_the_window_still_refuses(
+        self, db_session, org_and_members
+    ):
+        # The precise rule is what refuses it now, not the calendar day.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await self._overnight_shift(svc, org_id, officer_id)
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+
+        assert assignment is None
+        assert err == "This shift has already started. Ask a duty officer to add you."
+
+    async def test_the_day_guard_still_fires_when_the_start_cannot_be_read(
+        self, db_session, org_and_members
+    ):
+        # The fallback's whole reason to exist: a row the instant-based window
+        # passes through because it cannot judge it.
+        from types import SimpleNamespace
+
+        org_id, _, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        unreadable = SimpleNamespace(
+            id=str(uuid.uuid4()),
+            shift_date=date.today() - timedelta(days=7),
+            start_time=None,
+            end_time=None,
+            status="scheduled",
+            is_finalized=False,
+            min_staffing=None,
+            positions=None,
+            late_signup_until=None,
+        )
+
+        error = await svc._validate_assignment_candidate(
+            organization_id=uuid.UUID(org_id),
+            shift=unreadable,
+            user_id=member_id,
+            position="firefighter",
+            require_mutable=True,
+            reject_past=True,
+            window_checked=True,
+        )
+
+        assert error == "Cannot sign up for a past shift"
