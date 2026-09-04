@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#pending** (branch `claude/security-review-events-ev20-24-followup`) —
+**[#2216](https://github.com/thegspiro/the-logbook/pull/2216)** (branch
+`claude/security-review-events-ev20-24-followup`) —
 Feature 16, Events & requests, pass 3 follow-up. #2213 (the pass-3 PR
 itself) merged at its stale first-draft state (`5b70834e`, "no findings")
 — the owner merged it while Codex's review of that same draft was still
@@ -50,7 +51,8 @@ merged while Codex's review was still being addressed, the same race
 PR #2210/#2212 hit for SCH-12. Per CLAUDE.md pitfall #24, the merged branch
 is not reused: the corrected findings and the three real fixes (EV-20,
 EV-21, EV-22) moved to a new branch off current `main` and a new PR,
-**#pending** (`claude/security-review-events-ev20-24-followup`), which also
+**[#2216](https://github.com/thegspiro/the-logbook/pull/2216)**
+(`claude/security-review-events-ev20-24-followup`), which also
 updates this doc's Log and Open PR entries to point at itself. See the
 entry immediately below for the full corrected write-up. Next: 17 Training
 core, once the follow-up PR merges.
