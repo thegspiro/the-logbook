@@ -80,6 +80,13 @@ creates — it appears when ``main.py`` calls ``create_all()``, and CI runs
 ``alembic upgrade head`` against an empty database, so reflecting it unguarded
 would fail the whole upgrade rather than this one step (CLAUDE.md pitfall #26).
 
+**Partly superseded by ``f3b8d0c26a17``.** The fingerprint gate below misses a
+wizard row whose four marker modules were unticked at onboarding, so that
+revision repeats every revocation here unconditionally. Only the restorations —
+``storefront.order`` and ``inventory.check_submit`` — remain this migration's
+alone: adding is the direction where an unconditional write would override a
+department's deliberate removal. This body is left as it ran (pitfall #20).
+
 Revision ID: d1c7f4a92e63
 Revises: c9a5e21f7b04
 Create Date: 2026-09-04 16:40:00.000000

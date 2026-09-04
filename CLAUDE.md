@@ -1123,12 +1123,36 @@ the entry is a reference — which is how the gap was missed in the first place.
 **Rule:** changing a seeded grant means changing the registry **and** writing a
 migration that covers every stored `positions` row carrying it — for a rank
 grant, both the `member`-style position and the rank-mirroring one. Scope the
-`UPDATE` to `is_system = True`: a department's own customized position is
-theirs. Verify the migration by running it against a real table rather than by
+`UPDATE` to `is_system = True`: a position the department **created** is theirs.
+Verify the migration by running it against a real table rather than by
 reading it; `20260824_2140_31e2816df7c3` and its precedent
 `20260814_0004` are the shape to copy. `tests/test_baseline_member_grants.py`
 asserts the day-one grant set on all three registry entries by name, aliasing
 or not, so the persisted path is covered rather than inferred.
+
+**`is_system = True` does not mean the row is unedited** _(2026-09-04)_. It
+separates the seeded positions from ones the department added — nothing more.
+`RoleService.update_role` (`app/services/role_service.py`) explicitly permits
+editing a **system** position's `permissions` and leaves the flag set, so a
+seeded row may hold exactly what an administrator chose. An earlier version of
+this rule said the scope preserved "a department's own customized position",
+and three migrations were written against that reading.
+
+Nothing in the row distinguishes a grant the seed wrote from one an
+administrator added, so decide by direction rather than by guessing provenance:
+
+- **Revoking** a grant that discloses other members' data — reporting,
+  rosters, compliance, another member's record — is unconditional. Leaving it
+  in place on an unrecognized row keeps the disclosure open; the cost of being
+  wrong is an administrator re-adding it on the positions screen.
+- **Adding** a grant is gated on some positive evidence the row is an
+  unrepaired seed. An unconditional add overrides a department that removed the
+  grant deliberately, and a missing benign grant discloses nothing.
+
+Do not try to recognize an unedited row by matching its whole permission list:
+`20260901_1320_f7b3c8d2e569` did, and every later migration that touched those
+rows moved them out of the match. Say in the migration's docstring which
+direction you chose and what it costs when it is wrong.
 
 ### 24. Do Not Reuse a Branch Name After Its Pull Request Merges _(2026-08-24)_
 
