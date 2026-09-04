@@ -16,63 +16,75 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2218](https://github.com/thegspiro/the-logbook/pull/2218)** (branch
-`claude/security-review-training-core-tr3-followup`)
-— Feature 17, Training core, pass 3 follow-up. #2217 (the pass-3 PR
-itself) merged at its stale first-draft state (`db454093`, "no findings")
-— the owner merged it while Codex's review of that same draft was still in
-progress, before the corrected findings and fixes could be pushed to it
-(CLAUDE.md pitfall #24: never reuse a branch whose PR has merged — the
-same race that hit #2213, so the fixes moved to a fresh branch/PR off
-current `main`). This PR carries forward everything Codex's review of
-#2217 found real: **1 fixed** — TR3-1 (LOW/MED,
-`RequirementProgress.days_until_due` was never populated by any of
-`check_requirement_progress`'s three construction sites, so it always
-serialized as `null` regardless of the requirement's actual due date —
-surfaced by this pass's own scope addition of the MCP training tool,
-whose docstring promises the field). **1 flagged**: TR3-2 (the MCP
-progress tool's pagination bounds the returned rows, not the underlying
-scan — a page containing a certification requirement still preloads a
-member's entire completed-training history; same class as TR2-4, needs a
-service-level redesign). **1 corrected claim**: the SSRF-hardening
-validator on `ExternalProviderConfig` had NOT actually been reviewed by
-feature 18 as the first draft asserted (its pass 3 hasn't run) — reviewed
-directly instead and confirmed no live gap, since the actual outbound call
-sites already enforce the same check at request time regardless. See the
-Log entries below for the full detail.
+**[#2220](https://github.com/thegspiro/the-logbook/pull/2220)** (branch
+`claude/security-review-training-core-tr3-round4`) — Feature 17, Training
+core, pass 3, round 4. **#2218 merged (`f7073cd5`, rounds 1-3) before this
+round's fixes could be pushed to it** — the owner merged it while Codex's
+review of that same commit was still in progress, the same race that hit
+#2213 and #2217 (CLAUDE.md pitfall #24: never reuse a branch whose PR has
+merged — the fixes moved to a fresh branch/PR off current `main`, which
+already carries rounds 1-3).
 
-**Round 2 (on this PR, before merge):** Codex reviewed this PR's own TR3-1
-fix and found it still incomplete — it computed `days_until_due` solely
-from `requirement.due_date`, which stays unset for every `calendar_period`
-requirement (the common annual/quarterly/monthly case), leaving the field
-`null` for exactly the case the fix was written for and working only for
-the rare explicit-due-date requirement. Fixed by reusing the same
-`end_date`-fallback `evaluate_requirement_detail()` already applies
-(`effective_due_date = requirement.due_date or end_date`, computed from
-`_get_date_window()`'s raw window before the recency cutoff can overwrite
-it) at all three `RequirementProgress(...)` sites, for both `due_date` and
-`days_until_due`. New guard test
-`test_days_until_due_falls_back_to_the_period_window_end` covers the gap
-round 1 missed. Full completion gate re-run green.
+This PR is entirely rounds 1-4 of the same TR3-1 finding
+(`RequirementProgress.days_until_due` was never populated), each round
+fixing a real gap Codex found in the previous round's own fix:
 
-**Round 3 (on this PR, before merge):** Codex then caught round 2's own
-fallback broken for `due_date_type="rolling"` — `_get_date_window()`
-always returns `today` as `end_date` for a rolling requirement (a trailing
-window, not a deadline), so `requirement.due_date or end_date` reported
-every rolling requirement as due today regardless of completion history.
-Fixed with a dedicated `_rolling_due_date()` anchor (last matching
-completion + `rolling_period_months`, `None` with no completion on file)
-used ahead of the calendar-period fallback. While fixing it, found —
-by inspection, not from Codex — that the sibling `evaluate_requirement_
-detail()` (the `/my-training` endpoint's own path) has carried the
-identical rolling-mode flaw since pass 1 (PR #1851), well outside this
-PR's diff; fixed it in the same commit per CLAUDE.md's no-pre-existing-
-errors rule rather than leaving it for a future pass to rediscover. Four
-new guard tests, all confirmed failing against the round-2 code before
-this fix. Full completion gate re-run green. Rotation row 17 stays ⏳
+- **Round 1** (merged in #2218): computed `days_until_due` from
+  `requirement.due_date` only — worked for an explicit fixed date, null
+  for everything else.
+- **Round 2** (merged in #2218): added the `calendar_period` window-end
+  fallback `evaluate_requirement_detail()` already used — fixed the
+  common annual/quarterly/monthly case.
+- **Round 3** (merged in #2218): `_get_date_window()` returns `today` as
+  the window end for a `rolling` requirement (a trailing window, not a
+  deadline), so round 2's fallback reported every rolling requirement due
+  today; fixed with a `_rolling_due_date()` last-completion anchor. Also
+  fixed the identical latent flaw found by inspection (not Codex) in the
+  sibling `evaluate_requirement_detail()`, present since pass 1 (PR
+  #1851).
+- **Round 4** (this PR): Codex found three more gaps in round 3's own
+  anchor fix. (1) No branch at all for
+  `due_date_type="certification_period"` — fell through to the
+  calendar-period fallback instead of the held certificate's own
+  expiration date; fixed with a new `_certification_due_date()` helper.
+  (2) The rolling/certification anchor matched by a bare `training_type`
+  check, which both over-matches (any record of any type when unset —
+  Codex's course-specific-requirement example) and, once swapped for
+  `certification_record_matches` wholesale, under-matches
+  HOURS/SHIFTS/CALLS requirements that legitimately restrict nothing;
+  fixed with a new `_anchor_matches()` dispatcher mirroring each
+  requirement type's own crediting filter instead of a one-size-fits-all
+  matcher. (3) The batch/API preload path
+  (`get_requirements_progress_for`) bounds `completed_records` to the
+  union of every requirement's evaluation window, which for an ordinary
+  rolling requirement excludes exactly the older completions an
+  _overdue_ anchor needs — fixed by extending `_preload_window`'s
+  existing unbounded-window exemption (already used for
+  CERTIFICATION/BIANNUAL) to rolling and certification-period
+  requirements.
+
+Five new guard tests in this round (including one against the real batch
+path, not just the standalone check), all confirmed failing against the
+round-3 code before this fix. Full completion gate re-run green
+(10566/10566 backend). See `TR-17-training-core.md`'s Pass 3 section and
+the Log below for full detail on every round. Rotation row 17 stays ⏳
 awaiting merge. Next: 18 Training extended, once this PR merges.
 
 ---
+
+### 2026-09-04 — Feature 17 (Training core, pass 3, round 4) — PR #2218 merged at round 3's commit; round-4 fixes moved to a new PR
+
+**PR #2218 merged (`f7073cd5`, rounds 1-3) before round 4's fixes could be
+pushed to it** — the owner merged while Codex's review of that commit was
+still in progress, the same race that hit #2213 and #2217. Per CLAUDE.md
+pitfall #24, the merged branch is not reused: round 4's three fixes
+(certification-period due dates, type-aware anchor matching, the
+batch-preload window exemption) moved to a new branch off current `main`
+and a new PR, **[#2220](https://github.com/thegspiro/the-logbook/pull/2220)**
+(`claude/security-review-training-core-tr3-round4`), which also updates
+this doc's Log and Open PR entries to point at itself. See the Open PR
+section above for the full round-by-round write-up. Next: 18 Training
+extended, once the follow-up PR merges.
 
 ### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2213 merged at its stale draft state; fixes moved to a new PR
 

@@ -5,6 +5,7 @@ Verifies that TrainingService methods correctly evaluate compliance status
 when operating against actual database rows rather than mock objects.
 """
 
+import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
@@ -481,6 +482,134 @@ class TestCertificationCompliance:
 
         assert progress.is_complete is True
 
+    async def test_certification_period_due_date_is_the_certs_own_expiration(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A certification-period requirement never resets on a schedule --
+        it comes due when the held certificate itself expires. Codex found
+        the round-2/3 fallback chain (explicit due_date -> rolling anchor
+        -> calendar-period window end) had no branch for
+        due_date_type="certification_period" at all, so it fell through to
+        the window-end fallback: `None` for a biannual-frequency cert
+        requirement (no window at all) or the calendar year end for any
+        other frequency -- neither of which is the certificate's actual
+        expiration date.
+        """
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_cert_requirement(
+            db_session, org_id, name="EMT Certification"
+        )
+        future_exp = date.today() + timedelta(days=180)
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            course_name="EMT Certification",
+            training_type="certification",
+            hours_completed=0.0,
+            completion_date=date.today() - timedelta(days=365),
+            expiration_date=future_exp,
+        )
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        assert progress.due_date == future_exp
+        assert progress.days_until_due == 180
+
+    async def test_rolling_anchor_does_not_match_an_unrelated_record(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """A course-specific rolling requirement (required_courses set, no
+        training_type) must not be anchored on some unrelated record just
+        because it happens to be the member's most recent completion.
+        Codex's example exactly: filtering the anchor by training_type
+        alone skips the filter entirely when training_type is unset,
+        matching *any* record of any type. Confirmed by inserting an
+        unrelated, more recent record than the one that actually satisfies
+        the requirement -- a training_type-only filter would anchor on the
+        unrelated (wrong) one and report a later, incorrect due date.
+        """
+        org_id, user_id = setup_org_and_user
+        course_id = str(uuid.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO training_courses "
+                "(id, organization_id, name, training_type) "
+                "VALUES (:id, :org_id, :name, 'continuing_education')"
+            ),
+            {"id": course_id, "org_id": org_id, "name": "The Actual Course"},
+        )
+        req_id = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO training_requirements "
+                "(id, organization_id, name, requirement_type, source, "
+                "required_hours, frequency, due_date_type, rolling_period_months, "
+                "required_courses, applies_to_all, active, created_at, updated_at) "
+                "VALUES (:id, :org_id, :name, 'hours', 'department', "
+                ":hours, 'annual', 'rolling', :rpm, "
+                ":courses, 1, 1, :now, :now)"
+            ),
+            {
+                "id": req_id,
+                "org_id": org_id,
+                "name": "Course-specific rolling requirement",
+                "hours": 8.0,
+                "rpm": 24,
+                "courses": json.dumps([course_id]),
+                "now": _NOW,
+            },
+        )
+        await db_session.flush()
+
+        # The record that actually satisfies the requirement (older).
+        satisfying_completion = date.today() - timedelta(days=400)
+        await db_session.execute(
+            text(
+                "INSERT INTO training_records "
+                "(id, organization_id, user_id, course_id, course_name, "
+                "training_type, completion_date, hours_completed, status, "
+                "created_at, updated_at) "
+                "VALUES (:id, :org_id, :user_id, :course_id, :name, "
+                ":type, :comp_date, :hours, 'completed', :now, :now)"
+            ),
+            {
+                "id": _uid(),
+                "org_id": org_id,
+                "user_id": user_id,
+                "course_id": course_id,
+                "name": "The Actual Course",
+                "type": "continuing_education",
+                "comp_date": satisfying_completion,
+                "hours": 8.0,
+                "now": _NOW,
+            },
+        )
+        # An unrelated, more recent record for a different course entirely.
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            course_name="Unrelated Training",
+            training_type="continuing_education",
+            hours_completed=4.0,
+            completion_date=date.today() - timedelta(days=5),
+        )
+        await db_session.flush()
+
+        svc = TrainingService(db_session)
+        progress = await svc.check_requirement_progress(
+            UUID(user_id), UUID(req_id), UUID(org_id)
+        )
+
+        from dateutil.relativedelta import relativedelta
+
+        expected_due = satisfying_completion + relativedelta(months=24)
+        assert progress.due_date == expected_due
+
     async def test_expired_certification(
         self, db_session: AsyncSession, setup_org_and_user
     ):
@@ -595,6 +724,49 @@ class TestMultipleRequirements:
         cert_progress = progress_by_id.get(cert_req_id)
         assert cert_progress is not None
         assert cert_progress.is_complete is False
+
+    async def test_rolling_due_date_survives_the_batch_preload_window(
+        self, db_session: AsyncSession, setup_org_and_user
+    ):
+        """get_all_requirements_progress (the API/MCP batch path) preloads
+        completed_records once via _preload_window, which bounds the read
+        to the union of every requirement's own evaluation window -- for an
+        ordinary rolling requirement that window is `today - rolling_months`
+        to `today`. Codex found this excludes exactly the completions an
+        *overdue* rolling requirement needs to anchor on (one older than
+        its own interval). Confirmed here with a completion ~26 months old
+        against a 24-month rolling interval -- outside the trailing window
+        an unexempted preload would have used.
+        """
+        org_id, user_id = setup_org_and_user
+        req_id = await _insert_hours_requirement(
+            db_session,
+            org_id,
+            required_hours=8.0,
+            due_date_type="rolling",
+            rolling_period_months=24,
+        )
+        old_completion = date.today() - timedelta(days=800)  # ~26 months
+        await _insert_training_record(
+            db_session,
+            org_id,
+            user_id,
+            hours_completed=8.0,
+            completion_date=old_completion,
+        )
+
+        svc = TrainingService(db_session)
+        progress_list = await svc.get_all_requirements_progress(
+            UUID(user_id), UUID(org_id)
+        )
+        progress = next(p for p in progress_list if str(p.requirement_id) == req_id)
+
+        from dateutil.relativedelta import relativedelta
+
+        expected_due = old_completion + relativedelta(months=24)
+        assert progress.due_date == expected_due
+        assert progress.days_until_due == (expected_due - date.today()).days
+        assert progress.days_until_due < 0  # overdue
 
 
 # ============================================
