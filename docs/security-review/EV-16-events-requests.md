@@ -13,10 +13,20 @@ read, extracted from `event_requests.py`)
 
 ---
 
-## Pass 3 (2026-09-04) — no new findings, diff-scoped against pass 2
+## Pass 3 (2026-09-04) — Codex follow-up (same PR): 3 fixes (1 P1 correctness), 2 flagged, 1 scope correction
 
-**PR:** none needed — no code change this pass.
+**PR:** [#2213](https://github.com/thegspiro/the-logbook/pull/2213).
 **Scoped since pass 2's merge:** `fef19238` (PR #1973).
+
+> **Correction (Codex review of this PR).** The first draft of this section
+> claimed "no new findings, no code changes" — that was wrong. Codex raised
+> six comments against it; five are real (one P1 correctness bug this draft's
+> own "narrowing, not a new exposure" line had missed, one P2 schema gap, one
+> P2 pre-existing data-loss bug this draft surfaced without fixing, one P2
+> scope gap, one P2 ordering bug flagged rather than fixed) and one (the
+> phase-gate finding) is real but flagged, not fixed, for the reason given
+> under **Findings (pass 3)** below. The section below is the corrected one;
+> see the Log for the blow-by-blow.
 
 Five months of feature work sit between pass 2 and now on `main` generally,
 but diffed narrowly (per file, not by line-count growth) against `fef19238`
@@ -133,23 +143,249 @@ sampled, against all seven checklist dimensions:
   so there's no path where a denied member-facing call silently upgrades to
   the manager view.
 
-**No findings, no code changes this pass.** Rotation row 15 (this doc is
+### Scope correction — the events-specific MCP tools (Codex review of this PR)
+
+The declared surface (nine backend files) is what pass 2 enumerated, but a
+repository-wide check for "any other file instantiating either service" only
+covered files that _changed_ in this diff — it never asked whether an
+already-existing, never-reviewed file used the models. Two do:
+`app/mcp/tools/events.py` (`list_events`/`get_event`/
+`get_event_description`/`list_event_attendees`) and
+`app/mcp/tools/writes.py` (`create_event_draft`, ~line 122). Both predate
+this diff and were added after `fef19238` without ever being swept into a
+security-review pass — the same class of gap SCH-15 pass 3 hit for its own
+feature's MCP tool file, and the fix is the same: read the feature-specific
+file now rather than deferring it to a hypothetical future MCP-wide pass
+(the wider, cross-feature MCP surface stays out of scope and is tracked
+separately in `KNOWN_LIMITATIONS.md`).
+
+Both read in full. `events.py`'s four tools mirror the REST endpoints'
+protections exactly: every query is org-scoped via `org_uuid(principal)`,
+`get_event`/`get_event_description` raise (a clean error, not a 404-vs-403
+oracle) on a foreign or unknown id before returning anything,
+`list_event_attendees` calls the same `list_event_attendees_for_member` +
+`resolve_attendee_visibility` pair the REST `GET /{event_id}/attendees`
+uses and returns the same allowlisted shape (member id/name/status only —
+no guest count, no response time, no check-in detail), and unbounded text
+columns (`description`, `location_details`) are scrubbed and paginated in
+20,000-character chunks rather than returned whole. One deliberate,
+correct divergence from the REST endpoint: `list_event_attendees` here does
+**not** have an `events.manage`-holder fallback for a managers-only roster —
+it fails closed to "not shared" outright, which is right, since an MCP
+service key is not a department member and has no such permission to check.
+`writes.py`'s `create_event_draft` constructs a validated `EventCreate` from
+a fixed, narrow field set (title/description/type/location string/times) —
+no client-supplied `location_id`, `template_id`, `attachments` or
+`attendee_visibility` — always `is_draft=True` and `send_reminders=False`,
+and creates through the same org-scoped `EventService.create_event`. Clean,
+no finding; recorded here so "full event surface reviewed" is true rather
+than approximately true.
+
+## Findings (pass 3)
+
+### EV-20 — P1 (correctness) — `EligibleMemberResponse.email` was a required `str`; a hidden email 500'd the whole roster — ✅ FIXED
+
+**Reported by Codex on this PR; confirmed.** Pass 3's own first draft
+described `get_eligible_members`'s switch to `policy.email_for(member)` as
+strictly "a narrowing, not a new exposure" — true for what it returns, but
+it missed what the schema requires. `email_for()` returns `None` whenever
+the org's `contact_info_visibility.show_email` ceiling is off (a common,
+even default, configuration) or the individual member hid their own email,
+while `EligibleMemberResponse.email` was declared as a required `str`.
+FastAPI's response-model validation fails the **entire** response — not
+just the one row — the first time any member in the org has a hidden
+email, turning `GET /{event_id}/eligible-members` (the check-in roster) into
+a 500 for that event. The existing unit test for this path
+(`test_events_eligible_members_visibility.py`) called the endpoint function
+directly and never exercised this: it checks the dict the function returns,
+not what happens when FastAPI validates that dict against the response
+model, which is exactly where this failed.
+
+**Fix:** `email: Optional[str] = None` on `EligibleMemberResponse`
+(`app/schemas/event.py`). Frontend: `EligibleMember.email` widened to
+`string | null` in `EventCheckInModal.tsx`, `eventServices.ts` and
+`EventDetailPage.tsx`; the modal's search filter
+(`member.email.toLowerCase()`) — which Codex separately flagged as its own
+follow-on crash once the field is nullable — now reads
+`(member.email ?? '').toLowerCase()`. The bare `{member.email}` display
+line needed no change: React renders `null` as nothing.
+
+**Guard test:** `test_events_eligible_members_visibility.py::
+TestEligibleMembersEmail::test_hidden_email_survives_response_model_validation`
+constructs `EligibleMemberResponse(**rows[0])` directly (rather than calling
+the endpoint function alone) so a future regression in the schema, not just
+the endpoint logic, fails the suite.
+
+### EV-21 — P1 (data loss) — RSVP update overwrote `dietary_restrictions`/`accessibility_needs` with `NULL` on every unrelated edit — ✅ FIXED
+
+**Reported by Codex on this PR; confirmed as pre-existing, not introduced by
+this diff — this pass owns it per CLAUDE.md's "no acceptable pre-existing
+errors."** `create_or_update_rsvp`'s update branch applied
+`rsvp_data.model_dump()` (a **full** dump) over the existing row's every
+field. The RSVP modal (`useRSVPForm.ts`) has always reopened
+`dietary_restrictions`/`accessibility_needs` blank on purpose — they are
+PHI-adjacent and `GET /events/{id}` is a cacheable response
+(`UserRSVPSummary`'s own docstring, added this same diff, explains exactly
+why they can't be echoed back) — so the modal has no way to show the
+member their current value. A blank box therefore means "not touched," not
+"clear it," but the full-dump update sent that blank back as an explicit
+`None` regardless: a member editing their guest count, notes, or status —
+anything — silently deleted their own previously-recorded allergy or
+mobility-accommodation note, with no error and no warning. This is
+independent of, and predates, this pass's own diff; it became reachable in
+practice the moment the app stopped showing these fields back, and nothing
+in pass 1 or 2 exercised an RSVP edit against a row that already had them
+set.
+
+**Fix:** the update branch now applies
+`rsvp_data.model_dump(exclude_unset=True)` — an omitted key leaves the
+stored value alone (CLAUDE.md Pitfall #1's update mirror). This also
+required making the frontend's own "clear notes by blanking the box"
+behavior explicit rather than implicit: `notes` is now always sent
+(`rsvpNotes.trim() || null`, never omitted) so a member who deletes their
+note still gets it cleared; `dietary_restrictions`/`accessibility_needs`
+keep the existing omit-when-blank behavior, which is now _correct_ instead
+of accidentally safe. `RSVPCreate.notes` widened to `string | null |
+undefined` in `types/event.ts` to carry the explicit null.
+
+**Guard test:**
+`test_event_lifecycle.py::TestEventRSVP::test_update_preserves_omitted_accommodation_fields`
+— sets both fields, then submits an update that only changes `guest_count`
+and asserts both survive unchanged; a third submission that explicitly
+sends `dietary_restrictions=""` confirms an actual edit still clears it
+(exclude_unset protects an _omitted_ field, not one the client genuinely
+changed).
+
+### EV-22 — P2 (schema gap, XC-1 adjacent) — `RecurringEventCreate` had no `attendee_visibility` field; a series' visibility choice was silently dropped — ✅ FIXED
+
+**Reported by Codex on this PR; confirmed.** `EventCreate`, `EventUpdate`,
+`EventTemplateCreate` and `EventTemplateUpdate` all declare
+`attendee_visibility` — `RecurringEventCreate` was the one event-create
+schema that didn't, even though `EventForm.tsx`'s `formData` (shared across
+all four create/update paths) always includes it and `RecurringEventCreate`
+already carries `attachments` for the same "series built from the same form"
+reason. Pydantic silently drops unrecognized keys by default (no
+`extra="forbid"` anywhere in this schema file), so the field never reached
+`create_recurring_event`, and every generated occurrence stored `NULL`
+(inheriting the org default) regardless of what the organizer picked.
+Concretely: an org whose default is member-visible, with an organizer
+deliberately choosing managers-only for a sensitive recurring series, would
+have that choice dropped and the roster exposed to members on every
+occurrence — silently, with a 201 that looked like it worked.
+
+**Fix:** added `attendee_visibility: Optional[str] = Field(None,
+max_length=20)` plus the same `_check_attendee_visibility` enum validator
+the other four schemas use. No service-layer change needed:
+`create_recurring_event` already spreads `**event_data` onto every
+constructed `Event(...)`, so once the field survives the schema it flows
+through on its own — the same mechanism that already carries
+`attendee_visibility` forward correctly on `duplicate_event`.
+
+**Guard test:**
+`test_event_recurrence.py::TestCreateRecurringEventAttendeeVisibility` — one
+case asserting the field round-trips through `model_dump()` (the actual
+mechanism `create_recurring_event` depends on, not just "the schema accepts
+it"), one asserting an invalid value is still rejected.
+
+### EV-23 — P2 (flagged, not fixed) — series RSVP never shows the training phase-gate warning it claims to have already confirmed
+
+**Reported by Codex on this PR; confirmed, not fixed.** An individual RSVP
+to a session ahead of the member's current training-pipeline phase gets a
+409 with a soft, overridable warning (`_evaluate_session_phase_warning`),
+which `useRSVPForm.ts` catches and turns into a confirm dialog before
+retrying with `override=True`. `rsvp_to_series` — rewritten this pass to
+delegate to `create_or_update_rsvp` per occurrence instead of hand-rolling
+its own insert — passes `override=True` **unconditionally** for every
+occurrence, with a comment claiming "the member confirmed the training
+phase-gate warning once for the series." No such confirmation exists
+anywhere in the series path: `useRSVPForm.ts`'s series branch
+(`rsvpApplyToSeries`) calls `eventService.rsvpToSeries` directly with no
+409/warning handling at all, and the backend `POST /events/{id}/rsvp-series`
+endpoint has no `override` parameter to receive one. So a member applying
+to a whole series silently skips a warning an individual RSVP to the exact
+same session would have required them to acknowledge.
+
+**Not fixed here, deliberately.** A correct fix needs a product decision
+this pass isn't positioned to make on its own: a series can span sessions in
+different phases, so "the" phase-gate warning for a series submission isn't
+single-valued the way it is for one event — does the series endpoint warn
+once for the _first_ ahead-of-phase occurrence found, list every one, or
+warn only if _any_ occurrence would? Any of the three is a defensible
+answer and a real API/response-shape change (a new 409 shape from
+`POST /events/{id}/rsvp-series`, new frontend confirm-and-retry handling
+mirroring the single-RSVP path). Getting it wrong risks either an
+unactionable wall of warnings or silently picking the weakest of the three.
+
+**Impact:** LOW/MED. Soft and overridable even in the working case — this
+is a training-pipeline advisory, not an authorization or tenancy boundary —
+so the exposure is a member proceeding without a nudge they'd have gotten
+individually, not unauthorized access to anything.
+
+**Recommendation for whoever picks this up:** warn once per series
+submission, keyed on the _earliest_ ahead-of-phase occurrence (matching how
+`promote_from_waitlist` and the capacity model elsewhere in this diff always
+resolve "which one" by earliest first), and thread a genuine `override`
+query/body parameter through `rsvp_to_series` mirroring the single-RSVP
+endpoint's shape.
+
+### EV-24 — P2 (flagged, not fixed) — editing an existing waitlisted RSVP can promote it out of order
+
+**Reported by Codex on this PR; confirmed.** The ordering guarantee
+(earliest-`responded_at`-first) is enforced by `promote_from_waitlist`
+alone. `create_or_update_rsvp`'s own capacity check — which also runs when
+a member merely _edits_ an existing RSVP that happens to already be
+`WAITLISTED` (the modal always resubmits `status: "going"` for a waitlisted
+member, per `useRSVPForm.ts`'s `openModal`) — only asks "is there room for
+**this** party," never "is anyone ahead of this one in the queue." Concrete
+scenario: two seats are free; the head of the queue needs three (too big to
+fit yet); a member further back with a one-person party reopens their
+(prefilled) RSVP modal and resubmits without changing anything. Their
+update goes through `create_or_update_rsvp`, finds two free seats, fits
+one person, and promotes them straight to `GOING` — ahead of the party that
+has been waiting longer and whose position the member-facing UI (per-member
+`user_waitlist_position`, added this same diff) explicitly promised was
+ahead of theirs.
+
+**Not fixed here.** The capacity-locking discipline this exact write path
+carries (Pitfall #27, both halves) is delicate enough that a same-pass,
+same-reviewer patch risks trading a fairness bug for a correctness one —
+e.g., naively refusing to ever promote from this path would also block the
+legitimate case of the actual queue head reducing their own guest count to
+fit. This needs the fix aimed specifically at "is this row the earliest
+_fitting_ waitlisted row," which is exactly the query
+`promote_from_waitlist` already has, and doing that correctly deserves its
+own change and its own test pass rather than a same-day patch bolted onto
+an unrelated review's completion gate.
+
+**Impact:** LOW/MED. A fairness/ordering defect, not a tenancy or capacity-
+correctness one — the event is never actually oversubscribed by this path
+(the party still has to fit), and it cannot be triggered by a party larger
+than the actual free capacity. The harm is queue-jumping, not overbooking.
+
+**Recommendation:** route this specific case (existing row is `WAITLISTED`,
+new status is `GOING`) through the same "am I the earliest fitting
+waitlisted row" check `promote_from_waitlist` performs, rather than the bare
+capacity comparison, so a resubmission can only succeed when the normal
+promotion order would have reached this row anyway.
+
+**No regression in any pass-1/pass-2 fix.** Rotation row 15 (this doc is
 still filed as EV-16, feature 16) → see `PROGRESS.md`.
 
 ## Completion gate (pass 3)
 
-| Check                                             | Result                                               |
-| ------------------------------------------------- | ---------------------------------------------------- |
-| `flake8 app/ tests/ alembic/` (changed files)     | ✅ 0 violations                                      |
-| `black --check` (changed files)                   | ✅ 8 files unchanged                                 |
-| `isort --check-only` (changed files)              | ✅ clean                                             |
-| `python3 scripts/validate_migrations.py --strict` | ✅ single head, 414 revisions                        |
-| `pytest tests/ -k "event"`                        | ✅ 669 passed, 1 skipped (pre-existing)              |
-| `pytest tests/` (full backend suite)              | ✅ 10549 passed, 21 skipped (pre-existing), 0 failed |
-| `tsc --noEmit`                                    | ✅ 0 errors                                          |
-| `eslint .`                                        | ✅ 0 errors                                          |
+| Check                                                         | Result                                               |
+| ------------------------------------------------------------- | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                 | ✅ 0 violations                                      |
+| `black --check app/ tests/ alembic/`                          | ✅ 1453 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/`                     | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`             | ✅ single head, 414 revisions (no schema change)     |
+| `pytest tests/ -k "event"`                                    | ✅ 673 passed, 1 skipped (pre-existing)              |
+| `pytest tests/` (full backend suite)                          | ✅ 10553 passed, 21 skipped (pre-existing), 0 failed |
+| `tsc --noEmit`                                                | ✅ 0 errors                                          |
+| `eslint .`                                                    | ✅ 0 errors                                          |
+| `npx vitest run src/pages/EventDetailPage.test.tsx src/hooks` | ✅ 224 passed (26 files)                             |
 
-Frontend files diffed for the sweep above: `EventForm.tsx`/`.test.tsx`,
+Frontend files diffed for the initial sweep: `EventForm.tsx`/`.test.tsx`,
 `EventTemplateForm.tsx`, `event-detail/EventAttendeesCard.tsx` (new),
 `events/EventListCard.tsx`/`.test.tsx`, `EventCreatePage.tsx`,
 `EventDetailPage.tsx`/`.test.tsx`, `EventEditPage.tsx`/`.test.tsx`,
@@ -158,7 +394,9 @@ Frontend files diffed for the sweep above: `EventForm.tsx`/`.test.tsx`,
 `services/eventServices.ts`, `types/event.ts`, `utils/eventHelpers.ts`.
 (`pages/MinutesDetailPage.unlinkEvent.test.tsx` also changed in range but
 belongs to the Meetings & Minutes feature, not this one — a test for that
-page's own event-unlink button, not events-owned code.)
+page's own event-unlink button, not events-owned code.) Additionally
+touched by this pass's fixes: `hooks/useRSVPForm.ts`,
+`components/event-detail/EventCheckInModal.tsx`.
 
 ---
 

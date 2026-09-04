@@ -201,6 +201,46 @@ class TestCreateRecurringEventTemplateValidation:
         assert error == "Template not found"
 
 
+class TestCreateRecurringEventAttendeeVisibility:
+    """RecurringEventCreate was the one event-create schema missing
+    attendee_visibility — EventCreate/EventUpdate/EventTemplateCreate/
+    EventTemplateUpdate all declare it. Pydantic silently drops unknown
+    fields by default, so an organizer's explicit choice for a series was
+    dropped before create_recurring_event ever saw it, and every occurrence
+    stored NULL (inheriting the org default) instead."""
+
+    def test_field_is_accepted_and_dumped(self):
+        from app.schemas.event import RecurringEventCreate
+
+        data = RecurringEventCreate(
+            title="Weekly Drill",
+            start_datetime=datetime(2026, 6, 1, 19, 0),
+            end_datetime=datetime(2026, 6, 1, 21, 0),
+            recurrence_pattern="weekly",
+            recurrence_end_date=datetime(2026, 8, 1, 19, 0),
+            attendee_visibility="managers",
+        )
+        # create_recurring_event spreads **event_data straight onto every
+        # Event(...) it constructs, so surviving the dump is what actually
+        # gets it stored — not merely accepted by the schema.
+        assert data.model_dump()["attendee_visibility"] == "managers"
+
+    def test_invalid_value_rejected(self):
+        import pytest
+        from pydantic import ValidationError
+
+        from app.schemas.event import RecurringEventCreate
+
+        with pytest.raises(ValidationError):
+            RecurringEventCreate(
+                title="Weekly Drill",
+                start_datetime=datetime(2026, 6, 1, 19, 0),
+                end_datetime=datetime(2026, 6, 1, 21, 0),
+                recurrence_pattern="weekly",
+                attendee_visibility="everyone",
+            )
+
+
 def test_all_patterns_have_a_test():
     # Guard: every RecurrencePattern value is exercised above (custom/weekday
     # variants included), so a new pattern won't silently go untested.

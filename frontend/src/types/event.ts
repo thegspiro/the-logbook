@@ -292,7 +292,10 @@ export interface RSVP {
 export interface RSVPCreate {
   status: RSVPStatus;
   guest_count?: number | undefined;
-  notes?: string | undefined;
+  // string clears it explicitly by design (see useRSVPForm) — omitted
+  // dietary_restrictions/accessibility_needs are safe to skip on update
+  // because the modal never has a real value to send back for them.
+  notes?: string | null | undefined;
   dietary_restrictions?: string | undefined;
   accessibility_needs?: string | undefined;
 }
