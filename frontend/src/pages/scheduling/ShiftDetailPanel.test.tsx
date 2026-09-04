@@ -25,6 +25,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getShift: vi.fn().mockResolvedValue(null),
     getShiftHandoff: vi.fn().mockResolvedValue(null),
     getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'], is_excluded: false }),
+    getUnavailableMembers: vi.fn().mockResolvedValue([]),
     openLateSignup: vi.fn().mockResolvedValue({}),
     closeLateSignup: vi.fn().mockResolvedValue({}),
   },
@@ -74,10 +75,19 @@ const schedulingStoreState = vi.hoisted(() => ({
   loadSettings: vi.fn(),
 }));
 
+// Which permissions the viewer holds, settable per test. The signup window is
+// actor-relative — a `scheduling.manage` holder is never bounded by it — so a
+// blanket `() => true` cannot exercise the officer path at all.
+const grantedPermissions = vi.hoisted(() => ({ current: null as string[] | null }));
+
 vi.mock('../../stores/authStore', () => {
   // Callable and carrying getState, as the real store is: consumers that read
   // it outside React (the org-scoped scheduling settings cache) use the latter.
-  const state = () => ({ user: { id: 'user-1' }, checkPermission: () => true });
+  const state = () => ({
+    user: { id: 'user-1' },
+    checkPermission: (permission: string) =>
+      grantedPermissions.current === null || grantedPermissions.current.includes(permission),
+  });
   return { useAuthStore: Object.assign(() => state(), { getState: state }) };
 });
 
@@ -200,6 +210,24 @@ describe('ShiftDetailPanel signup window', () => {
     expect(mockOpen).toHaveBeenCalledWith('shift-1', 30);
   });
 
+  it('refreshes its own shift state after reopening, not just the board', async () => {
+    // `onRefresh` bumps the board's key; the panel renders its own `shift`
+    // state, so without a refetch the toast said reopened and the banner
+    // carried on saying closed until the drawer was reopened.
+    const user = userEvent.setup();
+    const mockGetShift = vi.mocked(schedulingService.getShift);
+    mockGetShift.mockReset();
+    mockGetShift.mockResolvedValue({
+      ...startedShift(),
+      late_signup_until: new Date(Date.now() + 30 * 60_000).toISOString(),
+    } as never);
+
+    renderWithRouter(<ShiftDetailPanel shift={startedShift() as never} onClose={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: 'Reopen for 30 min' }));
+
+    expect(await screen.findByText(/Late signup is open until/)).toBeInTheDocument();
+  });
+
   it('shows the live window and closes it on request', async () => {
     const user = userEvent.setup();
     const reopened = {
@@ -212,5 +240,43 @@ describe('ShiftDetailPanel signup window', () => {
     await user.click(screen.getByRole('button', { name: 'Close it now' }));
 
     expect(mockClose).toHaveBeenCalledWith('shift-1');
+  });
+});
+
+describe('ShiftDetailPanel assign controls past the grace', () => {
+  const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
+
+  beforeEach(() => {
+    mockEligibility.mockReset();
+    mockEligibility.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    // An officer, deliberately without scheduling.manage: a manager is never
+    // bounded, so they would keep the controls in both cases below.
+    grantedPermissions.current = ['scheduling.assign'];
+  });
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+  });
+
+  const shiftStartedAgo = (minutes: number) => ({
+    ...shift,
+    shift_date: new Date().toISOString().slice(0, 10),
+    start_time: new Date(Date.now() - minutes * 60_000).toISOString(),
+    end_time: new Date(Date.now() + 60 * 60_000).toISOString(),
+  });
+
+  it('keeps "Assign someone" inside the officer grace period', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={shiftStartedAgo(30) as never} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /Assign someone/ })).toBeInTheDocument();
+  });
+
+  it('withdraws it past the grace, where create_assignment refuses too', async () => {
+    // Leaving the form enabled only makes the officer fill it in to earn an
+    // error the server was always going to return.
+    renderWithRouter(<ShiftDetailPanel shift={shiftStartedAgo(180) as never} onClose={vi.fn()} />);
+
+    await screen.findByText('Signup is closed for this shift');
+    expect(screen.queryByRole('button', { name: /Assign someone/ })).not.toBeInTheDocument();
   });
 });

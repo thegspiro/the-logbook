@@ -124,10 +124,7 @@ from app.services.scheduling_widget_service import (
     MAX_WIDGET_WINDOW_DAYS,
     SchedulingWidgetService,
 )
-from app.services.shift_eligibility_service import (
-    DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
-    ShiftEligibilityService,
-)
+from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.services.standing_shift_service import MAX_SERIES_DAYS, StandingShiftService
 from app.utils.hours import hours_from_minutes
 from app.utils.outreach_roles import normalize_staffing_roles
@@ -3561,6 +3558,14 @@ async def update_scheduling_feature_settings(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    # Read the window back through the same degrading reader the GET path
+    # uses. A bare `int()` here raises *outside* the try above, so one
+    # hand-edited value like "tomorrow" turned an unrelated toggle's save into
+    # a 500 — reported to the admin as a failure, with the write already
+    # committed. It also mishandled a stored null, which `or 0` silently
+    # turned into "closes at the start" rather than the built-in default.
+    saved_org = await service._get_org(current_user.organization_id)
+    window = service.get_signup_window_settings(saved_org)
     return SchedulingFeatureSettings(
         platoons_enabled=bool(result.get("platoons_enabled", False)),
         max_hours_per_window=result.get("max_hours_per_window"),
@@ -3573,18 +3578,11 @@ async def update_scheduling_feature_settings(
         restrict_checkin_to_assigned=bool(
             result.get("restrict_checkin_to_assigned", False)
         ),
-        signup_closes_minutes_before=int(
-            result.get("signup_closes_minutes_before", 0) or 0
-        ),
-        late_signup_grace_minutes=int(
-            result.get("late_signup_grace_minutes", DEFAULT_LATE_SIGNUP_GRACE_MINUTES)
-            or 0
-        ),
+        signup_closes_minutes_before=window["signup_closes_minutes_before"],
+        late_signup_grace_minutes=window["late_signup_grace_minutes"],
         enforce_evoc=bool(result.get("enforce_evoc", True)),
         call_tracking=CallTrackingSettings(
-            **service.get_call_tracking_settings(
-                await service._get_org(current_user.organization_id)
-            )
+            **service.get_call_tracking_settings(saved_org)
         ),
     )
 

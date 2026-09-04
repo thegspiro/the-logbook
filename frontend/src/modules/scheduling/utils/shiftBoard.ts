@@ -149,36 +149,67 @@ const startInstant = (shift: ShiftRecord): number | null => {
 };
 
 /**
- * Why a member can no longer claim a seat on this shift, or null if they can.
+ * Who is looking at the shift, for the signup window.
+ *
+ * Mirrors the backend's three actors: a scheduling admin is never bounded, an
+ * officer is bounded by the department's grace period, and everyone else by
+ * the member cutoff. The client can decide the first two from the caller's
+ * org-wide permissions; the shift-officer case is the server's to resolve, and
+ * arrives on the detail response as `signup_closed_reason`.
+ */
+export interface SignupViewer {
+  /** Holds scheduling.assign, or is this shift's officer. */
+  canAssign: boolean;
+  /** Holds scheduling.manage — never bounded, this is the records path. */
+  canManage: boolean;
+}
+
+const MEMBER_VIEWER: SignupViewer = { canAssign: false, canManage: false };
+
+/**
+ * Why this viewer can no longer be seated on this shift, or null if they can.
  *
  * Signup used to be refused only once the shift's calendar *day* had passed, so
  * the board offered a claim button on a 06:00 shift at 23:00 that night. The
- * bound is the shift's own start, minus whatever lead time the department set,
- * or the later instant an officer opened with `late_signup_until`.
+ * bound is the shift's own start — minus whatever lead time the department set
+ * for members, plus the grace period for an officer — or the later instant an
+ * officer opened with `late_signup_until`.
  *
- * Advisory only — the server enforces the same rule and its refusal is what
- * actually stops a signup. No clock-skew tolerance is added on purpose: a fudge
- * factor would put the two sides deliberately out of agreement.
+ * Advisory only: the server enforces the same rule and its refusal is what
+ * actually stops a signup. No clock-skew tolerance is added on purpose — a
+ * fudge factor would put the two sides deliberately out of agreement.
  */
-export const memberSignupClosedReason = (
+export const signupClosedReason = (
   shift: ShiftRecord,
   window: SignupWindow = DEFAULT_SIGNUP_WINDOW,
+  viewer: SignupViewer = MEMBER_VIEWER,
   now: Date = new Date()
 ): string | null => {
+  if (viewer.canManage) return null;
+
   const start = startInstant(shift);
   if (start === null) return null;
 
   const override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
-  let deadline = start - window.closesMinutesBefore * 60_000;
+  const offsetMinutes = viewer.canAssign ? window.graceMinutes : -window.closesMinutesBefore;
+  let deadline = start + offsetMinutes * 60_000;
   if (!Number.isNaN(override) && override > deadline) deadline = override;
   if (now.getTime() <= deadline) return null;
 
+  if (viewer.canAssign) return 'This shift started too long ago to add anyone to.';
   if (!Number.isNaN(override)) return 'Late signup for this shift has closed.';
   if (window.closesMinutesBefore > 0 && now.getTime() < start) {
     return 'Signup for this shift has closed.';
   }
   return 'This shift has already started.';
 };
+
+/** The member case of `signupClosedReason` — what a claim button gates on. */
+export const memberSignupClosedReason = (
+  shift: ShiftRecord,
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW,
+  now: Date = new Date()
+): string | null => signupClosedReason(shift, window, MEMBER_VIEWER, now);
 
 /**
  * `isShiftOpen` and the member signup window together — what a claim button

@@ -5,7 +5,7 @@
  * Members can see available positions and volunteer for shifts they're qualified for.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DialogPanel } from '../../components/ux/DialogPanel';
 import { Clock, Users, UserPlus, Truck, Loader2, CalendarDays, Filter, Check, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -17,7 +17,7 @@ import { formatTime, getTodayLocalDate, toLocalDateString, formatDateCustom } fr
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
-import { memberSignupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
+import { signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 
 interface OpenShiftsTabProps {
@@ -26,7 +26,13 @@ interface OpenShiftsTabProps {
 
 export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => {
   const { user, checkPermission } = useAuthStore();
-  const canAssign = checkPermission('scheduling.assign') || checkPermission('scheduling.manage');
+  const canManage = checkPermission('scheduling.manage');
+  const canAssign = checkPermission('scheduling.assign') || canManage;
+  // The window is actor-relative, and this screen has a `createAssignment`
+  // fallback for anyone who can seat crew — so gating the *action* on the
+  // member cutoff would block an officer inside the grace period, and a
+  // scheduling admin always, on a path the server accepts.
+  const signupViewer = useMemo(() => ({ canAssign, canManage }), [canAssign, canManage]);
   const tz = useTimezone();
   const signupWindow = useSignupWindow();
 
@@ -116,9 +122,9 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
 
   const handleSignup = async (shiftId: string) => {
     const target = shifts.find((s) => s.id === shiftId);
-    const closed = target ? memberSignupClosedReason(target, signupWindow) : null;
+    const closed = target ? signupClosedReason(target, signupWindow, signupViewer) : null;
     if (closed) {
-      toast.error(`${closed} Ask a duty officer to add you.`);
+      toast.error(canAssign ? closed : `${closed} Ask a duty officer to add you.`);
       return;
     }
     setSigningUp(true);
@@ -229,7 +235,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                 </h3>
                 <div className="space-y-3">
                   {dayShifts?.map((shift) => {
-                    const signupClosed = memberSignupClosedReason(shift, signupWindow);
+                    const signupClosed = signupClosedReason(shift, signupWindow, signupViewer);
                     return (
                       <div key={shift.id} className="card p-4 hover:border-violet-500/30 sm:p-5">
                         <div className="flex items-start justify-between gap-3 sm:items-center">
@@ -410,7 +416,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                       disabled={
                         signingUp ||
                         eligibilityLoading ||
-                        (targetShift ? memberSignupClosedReason(targetShift, signupWindow) !== null : false) ||
+                        (targetShift ? signupClosedReason(targetShift, signupWindow, signupViewer) !== null : false) ||
                         (isOutreachSignup ? !signupRole : !eligiblePositions.includes(signupPosition))
                       }
                       className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"

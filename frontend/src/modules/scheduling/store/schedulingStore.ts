@@ -65,6 +65,15 @@ interface SchedulingState {
   loadInitialData: () => Promise<void>;
 }
 
+/**
+ * The in-flight settings request, shared by every concurrent caller.
+ *
+ * Module-level rather than store state: it is request bookkeeping, not
+ * something a component renders, and it must be readable synchronously by the
+ * next caller in the same tick.
+ */
+let settingsRequest: Promise<void> | null = null;
+
 export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   // ─── Initial State ──────────────────────────────────────────────────────
   members: [],
@@ -93,24 +102,43 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
 
   loadSettings: async () => {
     if (get().settingsLoaded) return;
-    try {
-      const settings = await schedulingService.getFeatureSettings();
-      set({
-        platoonsEnabled: settings.platoons_enabled,
-        requireEndOfShiftChecks: settings.require_end_of_shift_checks,
-        // A missing setting means today's behaviour, never 'off'.
-        callTrackingMode: settings.call_tracking?.mode || 'detailed',
-        // `??`, not `||`: 0 is a meaningful value here — it is what "closes
-        // exactly at the start" means — and `||` would silently replace it
-        // with the default.
-        signupClosesMinutesBefore: settings.signup_closes_minutes_before ?? DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
-        lateSignupGraceMinutes: settings.late_signup_grace_minutes ?? DEFAULT_SIGNUP_WINDOW.graceMinutes,
-        settingsLoaded: true,
-      });
-    } catch {
-      // Non-critical — default to platoons disabled on failure.
-      set({ settingsLoaded: true });
-    }
+    // Share one request across every caller that arrives before it resolves.
+    // The `settingsLoaded` guard alone does not dedupe: a board paints one
+    // ShiftBoard, two calendar variants, a DayDetailPanel and a ShiftSeatList
+    // per shift, and each reads the signup window on mount — so a single day
+    // with six shifts fired ten simultaneous GET /scheduling/settings, all of
+    // them past the guard because none had resolved yet. Mirrors the shared
+    // `refreshPromise` in services/api.ts.
+    if (settingsRequest) return settingsRequest;
+
+    settingsRequest = (async () => {
+      try {
+        const settings = await schedulingService.getFeatureSettings();
+        set({
+          platoonsEnabled: settings.platoons_enabled,
+          requireEndOfShiftChecks: settings.require_end_of_shift_checks,
+          // A missing setting means today's behaviour, never 'off'.
+          callTrackingMode: settings.call_tracking?.mode || 'detailed',
+          // `??`, not `||`: 0 is a meaningful value here — it is what "closes
+          // exactly at the start" means — and `||` would silently replace it
+          // with the default.
+          signupClosesMinutesBefore: settings.signup_closes_minutes_before ?? DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
+          lateSignupGraceMinutes: settings.late_signup_grace_minutes ?? DEFAULT_SIGNUP_WINDOW.graceMinutes,
+          settingsLoaded: true,
+        });
+      } catch {
+        // Deliberately does NOT mark the settings loaded. They now carry the
+        // signup window, and caching the permissive fallback for the session
+        // would let one transient failure make every scheduling screen offer
+        // signups the server refuses, for a department with a real cutoff,
+        // until the tab is reloaded. Leaving it unloaded lets the next mount
+        // retry; the shared promise above stops that becoming a storm.
+      } finally {
+        settingsRequest = null;
+      }
+    })();
+
+    return settingsRequest;
   },
 
   setPlatoonsEnabled: (enabled) => set({ platoonsEnabled: enabled }),

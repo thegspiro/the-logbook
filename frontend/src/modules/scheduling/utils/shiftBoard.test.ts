@@ -15,6 +15,7 @@ import {
   DEFAULT_SIGNUP_WINDOW,
   isShiftClaimable,
   memberSignupClosedReason,
+  signupClosedReason,
   shiftCrewName,
   shiftPeriodLetter,
   shiftStatusInfo,
@@ -558,5 +559,51 @@ describe('shiftStatusInfo after the start', () => {
     const info = shiftStatusInfo(started);
     expect(info.isOpen).toBe(false);
     expect(info.openSeats).toBe(0);
+  });
+});
+
+describe('signupClosedReason by actor', () => {
+  const at = (minutesFromNow: number) =>
+    shift({ start_time: new Date(Date.now() + minutesFromNow * 60_000).toISOString() });
+  const MEMBER = { canAssign: false, canManage: false };
+  const OFFICER = { canAssign: true, canManage: false };
+  const ADMIN = { canAssign: false, canManage: true };
+
+  it('bounds an officer by the grace period, not the member cutoff', () => {
+    // The whole point of the grace: an officer seats somebody after the crew
+    // has gone out. Gating their controls on the member rule would block a
+    // path the server accepts.
+    const started = at(-30);
+    expect(signupClosedReason(started, DEFAULT_SIGNUP_WINDOW, MEMBER)).not.toBeNull();
+    expect(signupClosedReason(started, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBeNull();
+  });
+
+  it('closes for an officer past the grace period', () => {
+    expect(signupClosedReason(at(-90), DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(
+      'This shift started too long ago to add anyone to.'
+    );
+  });
+
+  it('never bounds a scheduling admin', () => {
+    const window = { closesMinutesBefore: 10080, graceMinutes: 0 };
+    expect(signupClosedReason(at(-100_000), window, ADMIN)).toBeNull();
+  });
+
+  it('does not apply the member lead time to an officer', () => {
+    const window = { closesMinutesBefore: 10080, graceMinutes: 60 };
+    expect(signupClosedReason(at(60), window, MEMBER)).not.toBeNull();
+    expect(signupClosedReason(at(60), window, OFFICER)).toBeNull();
+  });
+
+  it('lets a late-signup window reopen the shift for an officer too', () => {
+    const reopened = {
+      ...at(-600),
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    };
+    expect(signupClosedReason(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBeNull();
+  });
+
+  it('defaults to the member rule when no viewer is given', () => {
+    expect(signupClosedReason(at(-30))).toBe(memberSignupClosedReason(at(-30)));
   });
 });

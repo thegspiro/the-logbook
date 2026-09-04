@@ -380,3 +380,53 @@ class TestSettingsRoundTrip:
         svc = ShiftEligibilityService(db_session)
         org = await svc._get_org(org_id)
         assert svc.get_signup_window_settings(org)["late_signup_grace_minutes"] == 60
+
+    async def test_a_hand_edited_value_does_not_500_an_unrelated_save(
+        self, db_session, org_and_members
+    ):
+        """The PUT response must degrade the same way the GET path does.
+
+        Building it with a bare ``int()`` raised *outside* the endpoint's try,
+        so one hand-edited value turned an unrelated toggle's save into a 500 —
+        reported to the admin as a failure, with the write already committed.
+        """
+        from app.schemas.scheduling import SchedulingFeatureSettings
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        org_id, _, _ = org_and_members
+        await _set_scheduling_settings(
+            db_session,
+            org_id,
+            signup_closes_minutes_before="tomorrow",
+            late_signup_grace_minutes="a while",
+        )
+        svc = ShiftEligibilityService(db_session)
+        result = await svc.update_scheduling_settings(org_id, platoons_enabled=True)
+        org = await svc._get_org(org_id)
+        window = svc.get_signup_window_settings(org)
+
+        # The values the endpoint projects come from the degrading reader, so
+        # the response is constructible rather than raising.
+        settings = SchedulingFeatureSettings(
+            platoons_enabled=bool(result.get("platoons_enabled", False)),
+            signup_closes_minutes_before=window["signup_closes_minutes_before"],
+            late_signup_grace_minutes=window["late_signup_grace_minutes"],
+        )
+        assert settings.signup_closes_minutes_before == 0
+        assert settings.late_signup_grace_minutes == 60
+
+    async def test_a_stored_null_reads_back_as_the_default(
+        self, db_session, org_and_members
+    ):
+        # `result.get(key, DEFAULT) or 0` turned a stored null into 0 —
+        # "closes at the start" — rather than the built-in default.
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        org_id, _, _ = org_and_members
+        await _set_scheduling_settings(
+            db_session, org_id, late_signup_grace_minutes=None
+        )
+        svc = ShiftEligibilityService(db_session)
+        org = await svc._get_org(org_id)
+
+        assert svc.get_signup_window_settings(org)["late_signup_grace_minutes"] == 60

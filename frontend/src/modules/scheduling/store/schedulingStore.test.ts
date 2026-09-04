@@ -255,4 +255,50 @@ describe('schedulingStore', () => {
       expect(useSchedulingStore.getState().lateSignupGraceMinutes).toBe(60);
     });
   });
+
+  describe('loadSettings request sharing', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('shares one request across concurrent callers', async () => {
+      // A board mounts the shift board, two calendar variants, a day panel and
+      // one seat list per shift, each reading the signup window; the
+      // `settingsLoaded` guard cannot dedupe them because none has resolved.
+      let resolve: ((v: unknown) => void) | undefined;
+      mockGetFeatureSettings.mockReturnValue(
+        new Promise((r) => {
+          resolve = r;
+        })
+      );
+
+      const load = useSchedulingStore.getState().loadSettings;
+      const inFlight = [load(), load(), load()];
+      resolve?.({ platoons_enabled: false });
+      await Promise.all(inFlight);
+
+      expect(mockGetFeatureSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries after a failed load rather than caching the fallback', async () => {
+      // The settings now carry the signup window. Caching the permissive
+      // fallback for the session would make every scheduling screen offer
+      // signups the server refuses, for a department with a real cutoff.
+      mockGetFeatureSettings.mockRejectedValueOnce(new Error('network'));
+
+      await useSchedulingStore.getState().loadSettings();
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        signup_closes_minutes_before: 45,
+        late_signup_grace_minutes: 15,
+      });
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(true);
+      expect(useSchedulingStore.getState().signupClosesMinutesBefore).toBe(45);
+    });
+  });
 });
