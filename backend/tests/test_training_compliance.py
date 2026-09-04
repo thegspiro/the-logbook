@@ -1054,6 +1054,35 @@ class TestEvaluateRequirementDetailFields:
         result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
         assert result["days_until_due"] == (date(2026, 12, 31) - date(2026, 6, 15)).days
 
+    def test_days_until_due_for_rolling_requirement_anchors_on_last_completion(self):
+        """A rolling requirement's deadline is the last completion plus its
+        interval, not the evaluation window's end (which is always `today`
+        for a rolling requirement and would otherwise report every rolling
+        requirement as due today, regardless of when it was last done).
+        Caught by Codex reviewing this fix's own first draft.
+        """
+        req = _make_requirement(
+            due_date_type="rolling", rolling_period_months=24, due_date=None
+        )
+        records = [_make_record(completion_date=date(2025, 1, 10))]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        expected_due = date(2027, 1, 10)
+        assert result["due_date"] == str(expected_due)
+        assert result["days_until_due"] == (expected_due - date(2026, 6, 15)).days
+
+    def test_days_until_due_for_rolling_requirement_with_no_completion_is_none(self):
+        """With no applicable completion there is no anchor to compute a
+        rolling deadline from — must stay null, not fall back to `today`
+        (which would misreport an untouched requirement as due right now)."""
+        req = _make_requirement(
+            due_date_type="rolling", rolling_period_months=24, due_date=None
+        )
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["due_date"] is None
+        assert result["days_until_due"] is None
+
 
 # =====================================================
 # check_requirement_progress — the dashboard path

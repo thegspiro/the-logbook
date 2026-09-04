@@ -53,8 +53,24 @@ the rare explicit-due-date requirement. Fixed by reusing the same
 it) at all three `RequirementProgress(...)` sites, for both `due_date` and
 `days_until_due`. New guard test
 `test_days_until_due_falls_back_to_the_period_window_end` covers the gap
-round 1 missed. Full completion gate re-run green. Rotation row 17 stays
-⏳ awaiting merge. Next: 18 Training extended, once this PR merges.
+round 1 missed. Full completion gate re-run green.
+
+**Round 3 (on this PR, before merge):** Codex then caught round 2's own
+fallback broken for `due_date_type="rolling"` — `_get_date_window()`
+always returns `today` as `end_date` for a rolling requirement (a trailing
+window, not a deadline), so `requirement.due_date or end_date` reported
+every rolling requirement as due today regardless of completion history.
+Fixed with a dedicated `_rolling_due_date()` anchor (last matching
+completion + `rolling_period_months`, `None` with no completion on file)
+used ahead of the calendar-period fallback. While fixing it, found —
+by inspection, not from Codex — that the sibling `evaluate_requirement_
+detail()` (the `/my-training` endpoint's own path) has carried the
+identical rolling-mode flaw since pass 1 (PR #1851), well outside this
+PR's diff; fixed it in the same commit per CLAUDE.md's no-pre-existing-
+errors rule rather than leaving it for a future pass to rediscover. Four
+new guard tests, all confirmed failing against the round-2 code before
+this fix. Full completion gate re-run green. Rotation row 17 stays ⏳
+awaiting merge. Next: 18 Training extended, once this PR merges.
 
 ---
 

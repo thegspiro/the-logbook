@@ -232,6 +232,55 @@ assert `RequirementProgress.due_date`/`days_until_due` resolve to the
 window's Dec 31 end date rather than `None` — this is the test that would
 have caught round 1's gap.
 
+**Round 3 — Codex caught round 2's own fallback broken for `rolling`
+requirements.** `effective_due_date = requirement.due_date or end_date`
+is correct for `calendar_period` (`end_date` really is the period's
+deadline) but wrong for `due_date_type="rolling"`: `_get_date_window()`
+always returns `today` as `end_date` for a rolling requirement — it is a
+trailing evaluation window (`today - rolling_period_months` to `today`),
+not a deadline — so round 2 reported `due_date=today` /
+`days_until_due=0` for every rolling requirement regardless of when it
+was last completed. A rolling deadline is genuinely defined as _last
+applicable completion + the configured interval_, which has no
+relationship to the evaluation window at all. Fixed by adding a third
+branch (`explicit due_date` → `rolling` anchor → `calendar_period` window
+fallback, in that order) that resolves the rolling case via a new
+`_rolling_due_date()` helper: the latest completed record matching the
+requirement's `training_type` (mirroring the filter every other branch of
+`check_requirement_progress` already applies), plus
+`rolling_period_months`, via the preloaded `completed_records` when given
+or a `MAX(completion_date)` query otherwise. Returns `None` — not `today`
+— when the member has no applicable completion yet, since there is no
+anchor to compute a deadline from and reporting "due today" for an
+untouched requirement would be actively misleading.
+
+While fixing this, found and fixed the same latent bug in the sibling
+function `evaluate_requirement_detail()` (the `/my-training` endpoint's
+own detailed-breakdown path) — it uses the identical `req.due_date or
+end_date` fallback this pass's round 2 had copied, and reading it closely
+after Codex's finding confirmed it has carried the exact same rolling-mode
+flaw since it was introduced (pass 1, PR #1851), independent of anything
+in this pass's diff. Not reported by Codex on this PR (out of this PR's
+declared diff, and evaluate_requirement_detail's own days_until_due logic
+predates this pass entirely) — found by inspection while fixing the
+sibling copy of the same pattern, and fixed in the same commit per
+CLAUDE.md's "no acceptable pre-existing errors" rule rather than left for
+a future pass to rediscover. Uses the same anchor logic, adapted to work
+in-memory against the already-fetched `member_records` list (this
+function takes no `db` session) instead of a query.
+
+**Guard tests (round 3):**
+`test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_days_until_due_for_rolling_requirement_anchors_on_last_completion` and
+`::test_days_until_due_for_rolling_requirement_with_no_completion_is_none`
+for `check_requirement_progress`;
+`test_training_compliance.py::TestEvaluateRequirementDetailFields::
+test_days_until_due_for_rolling_requirement_anchors_on_last_completion` and
+`::test_days_until_due_for_rolling_requirement_with_no_completion_is_none`
+for `evaluate_requirement_detail`. All four confirmed failing (reproducing
+`due_date=today`/`days_until_due=0`) against the round-2 code before the
+round-3 fix, via `git stash` on just `training_service.py`.
+
 ### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
 
 **Reported by Codex on this PR; confirmed.** See the "Scope addition"
