@@ -16,28 +16,31 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2217](https://github.com/thegspiro/the-logbook/pull/2217)** (branch
-`claude/security-review-training-core`) — Feature 17, Training core, pass 3.
-Diff-scoped against pass 2's merge (`0b8b5bd4`, PR #1981): of the seven
-declared files, only `training_service.py` and `training_compliance.py`
-changed. `training_compliance.py`'s change and two adjacent files this
-feature also declares (`models/training.py`, `types/training.ts`) turned
-out to be already-reviewed fixes from other rotation features (Scheduling's
-`equipment_check_template_ids`, Compliance's CMP2-2/3/4) sharing these
-misleadingly-named files, not new surface of this one — confirmed by
-reading each diff rather than assumed from the filename. `training_
-service.py`'s own diff is a genuine N+1 performance rework
-(`get_requirements_progress_for`, a new paginated progress-check API);
-read every branch to confirm org/user scoping is preserved throughout the
-new in-memory-filtering path, and that TR-12's two org-scoping fixes
-survived the refactor (one consolidated into an already-scoped helper, one
-unchanged). Also swept `app/mcp/tools/training.py`, missed by prior passes'
-file-diff scoping (the same class of gap Codex caught in the Events pass
-immediately before this one) — clean, no finding; its one caller of the new
-paginated API uses it correctly (paginated, not an unbounded scan).
-**No findings, no code changes.** Full completion gate green (10554/10554
-backend, 0 frontend errors). Rotation row 17 → ⏳ awaiting PR merge. Next:
-18 Training extended, once this PR merges.
+**[#pending]** (branch `claude/security-review-training-core-tr3-followup`)
+— Feature 17, Training core, pass 3 follow-up. #2217 (the pass-3 PR
+itself) merged at its stale first-draft state (`db454093`, "no findings")
+— the owner merged it while Codex's review of that same draft was still in
+progress, before the corrected findings and fixes could be pushed to it
+(CLAUDE.md pitfall #24: never reuse a branch whose PR has merged — the
+same race that hit #2213, so the fixes moved to a fresh branch/PR off
+current `main`). This PR carries forward everything Codex's review of
+#2217 found real: **1 fixed** — TR3-1 (LOW/MED,
+`RequirementProgress.days_until_due` was never populated by any of
+`check_requirement_progress`'s three construction sites, so it always
+serialized as `null` regardless of the requirement's actual due date —
+surfaced by this pass's own scope addition of the MCP training tool,
+whose docstring promises the field). **1 flagged**: TR3-2 (the MCP
+progress tool's pagination bounds the returned rows, not the underlying
+scan — a page containing a certification requirement still preloads a
+member's entire completed-training history; same class as TR2-4, needs a
+service-level redesign). **1 corrected claim**: the SSRF-hardening
+validator on `ExternalProviderConfig` had NOT actually been reviewed by
+feature 18 as the first draft asserted (its pass 3 hasn't run) — reviewed
+directly instead and confirmed no live gap, since the actual outbound call
+sites already enforce the same check at request time regardless. See the
+Log entries below for the full detail. Full completion gate green
+(10556/10556 backend, 0 frontend errors). Rotation row 17 stays ⏳
+awaiting merge. Next: 18 Training extended, once this PR merges.
 
 ---
 
@@ -54,6 +57,19 @@ EV-21, EV-22) moved to a new branch off current `main` and a new PR,
 updates this doc's Log and Open PR entries to point at itself. See the
 entry immediately below for the full corrected write-up. Next: 17 Training
 core, once the follow-up PR merges.
+
+### 2026-09-04 — Feature 17 (Training core, pass 3) — PR #2217 merged at its stale draft state; fixes moved to a new PR
+
+**PR #2217 merged (`db454093`, the "no findings" first-draft state) before
+this pass's Codex-driven corrections could be pushed to it** — the same
+race that hit #2213 for Feature 16, the owner merging while Codex's review
+was still being addressed. Per CLAUDE.md pitfall #24, the merged branch is
+not reused: TR3-1's fix, the TR3-2 flag, and the corrected SSRF claim moved
+to a new branch off current `main` and a new PR,
+`claude/security-review-training-core-tr3-followup`, which also updates
+this doc's Log and Open PR entries to point at itself. See the entry
+immediately below for the full corrected write-up. Next: 18 Training
+extended, once the follow-up PR merges.
 
 ### 2026-09-04 — Feature 17 (Training core, pass 3) — no new findings, PR pending
 

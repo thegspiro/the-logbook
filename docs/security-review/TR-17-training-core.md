@@ -14,9 +14,13 @@
 
 ---
 
-## Pass 3 (2026-09-04) — Codex follow-up (same PR): 1 fix, 1 flagged, 1 corrected claim
+## Pass 3 (2026-09-04) — Codex follow-up: 1 fix, 1 flagged, 1 corrected claim
 
-**PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217).
+**PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged
+at its stale first-draft state before this correction could be pushed to
+it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
+`PROGRESS.md`'s Log for detail). The correction below and its fix carried
+forward on a new branch/PR, `claude/security-review-training-core-tr3-followup`.
 **Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
 
 > **Correction (Codex review of this PR).** The first draft of this section
