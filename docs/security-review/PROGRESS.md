@@ -74,9 +74,10 @@ section). Rotation row 18 → ⏳ awaiting PR merge.
 
 ### 2026-09-04 — Feature 17 (Training core) ✅ closed — PR #2222 merged clean after 9 rounds
 
-**PR #2222 merged cleanly** at `802086b3`, fully green (all 17 checks
-passing including `CI Success` and `Migration Chain`) and with Codex's
-final review finding nothing new — the first merge in this feature's pass
+**PR #2222 merged cleanly** via merge commit `0d1f92c4` (head `802086b3`),
+fully green (all 17 checks passing including `CI Success` and
+`Migration Chain`) and with Codex's final review finding nothing new — the
+first merge in this feature's pass
 3 not to race an in-progress review. This closes out the TR3-1 finding
 (`RequirementProgress.days_until_due` was never populated) after nine
 rounds of Codex-driven correction, four of which required a fresh
