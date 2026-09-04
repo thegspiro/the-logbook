@@ -23,14 +23,27 @@ from pathlib import Path
 import pytest
 import sqlalchemy as sa
 
-from app.core.permissions import DEFAULT_POSITIONS
+from app.core.permissions import DEFAULT_POSITIONS, OPERATIONAL_RANKS
+
+
+def _intended_grants(slug):
+    """What the registry means this slug's holders to have.
+
+    ``emt`` has no ``DEFAULT_POSITIONS`` entry — which is precisely why
+    onboarding stored the heuristic's output verbatim under that slug — so its
+    intent lives in the rank registry instead.
+    """
+    if slug in DEFAULT_POSITIONS:
+        return set(DEFAULT_POSITIONS[slug]["permissions"])
+    return set(OPERATIONAL_RANKS[slug]["default_permissions"])
+
 
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 _PATH = _VERSIONS / (
     "20260904_2050_f3b8d0c26a17_revoke_wizard_over_grants_unconditionally.py"
 )
 
-SLUGS = ("member", "firefighter", "engineer")
+SLUGS = ("member", "firefighter", "engineer", "emt")
 
 #: The four module views the editor let an administrator untick. Named here so
 #: the tests can build a row with none of them — the case that motivated this
@@ -222,6 +235,71 @@ class TestTheApparatusWildcard:
         ]
 
 
+class TestTheStoredFormsOfAnOverGrant:
+    """``.view`` is only one of the three strings the editor could have stored.
+
+    ``expand_module_checkboxes`` writes ``{module}.manage`` *and* ``{module}.*``
+    for a ticked Manage box, and ``permission_matches`` treats ``reports.*`` as
+    satisfying ``reports.view`` — so removing the ``.view`` string alone would
+    leave the reports open through the wildcard.
+    """
+
+    @pytest.mark.parametrize("slug", SLUGS)
+    @pytest.mark.parametrize("form", ["reports.*", "reports.manage"])
+    def test_a_managed_module_row_loses_the_wildcard(self, positions_table, slug, form):
+        stored = ["members.view", "reports.view", form]
+
+        result = _revoke_row(positions_table, slug, stored)
+
+        assert result == ["members.view"]
+
+    def test_engineer_loses_a_literal_apparatus_manage(self, positions_table):
+        """Otherwise it would sit beside the narrowed wildcard and undo it."""
+        result = _revoke_row(
+            positions_table, "engineer", ["apparatus.*", "apparatus.manage"]
+        )
+
+        assert "apparatus.manage" not in result
+        assert sorted(result) == ["apparatus.maintenance", "apparatus.view"]
+
+    @pytest.mark.parametrize("slug", SLUGS)
+    def test_every_over_granted_module_is_covered_in_all_three_forms(self, slug):
+        module = _migration()
+        revoked = set(module._REVOKE[slug])
+        for over_granted in module._OVER_GRANTED_MODULES:
+            for form in module._stored_forms(over_granted):
+                assert form in revoked, (slug, form)
+
+
+class TestTheWizardCreatedEmtPosition:
+    """``emt`` has no registry entry, which is why its row is pure heuristic.
+
+    It is in the wizard's ``DISCIPLINE_POSITION_IDS`` and is the whole roster
+    for an ``ems_only`` agency. With no seeded row to update,
+    ``save_session_roles`` takes its create branch and stores
+    ``expand_module_checkboxes`` output verbatim with ``is_system=True``, and
+    ``_collect_user_permissions`` unions it into every EMT's grants.
+    """
+
+    def test_it_is_covered(self):
+        assert "emt" in _migration()._SLUGS
+
+    def test_an_emt_row_loses_reports_view(self, positions_table):
+        wizard = ["members.view", "reports.view", "training.view"]
+
+        result = _revoke_row(positions_table, "emt", wizard)
+
+        assert "reports.view" not in result
+        assert result == ["members.view", "training.view"]
+
+    def test_it_takes_the_same_revocations_as_firefighter(self):
+        """An EMT's intended grants are the line-member set, same as
+        Firefighter's — same standing, different discipline."""
+        module = _migration()
+        assert module._REVOKE["emt"] == module._REVOKE["firefighter"]
+        assert _intended_grants("emt") == _intended_grants("firefighter")
+
+
 class TestTheAcceptedCost:
     """Failing closed has a price, recorded here rather than only in prose.
 
@@ -281,7 +359,7 @@ class TestWhatItMustNotTouch:
 class TestItAgreesWithTheRegistry:
     @pytest.mark.parametrize("slug", SLUGS)
     def test_nothing_it_revokes_is_seeded(self, slug):
-        seeded = set(DEFAULT_POSITIONS[slug]["permissions"])
+        seeded = _intended_grants(slug)
         for permission in _migration()._REVOKE[slug]:
             assert permission not in seeded, (
                 f"{permission} is now seeded to {slug}; this migration would "
@@ -289,7 +367,7 @@ class TestItAgreesWithTheRegistry:
             )
 
     def test_both_apparatus_replacements_are_seeded_to_engineer(self):
-        seeded = set(DEFAULT_POSITIONS["engineer"]["permissions"])
+        seeded = _intended_grants("engineer")
         for _wildcard, replacements in _migration()._WILDCARD_NARROWING["engineer"]:
             for permission in replacements:
                 assert permission in seeded, permission
@@ -298,8 +376,6 @@ class TestItAgreesWithTheRegistry:
         """``DEFAULT_POSITIONS["firefighter"]["permissions"]`` *is* the rank's
         list object, so onboarding writes a system position under that slug too
         (CLAUDE.md pitfall #23)."""
-        from app.core.permissions import OPERATIONAL_RANKS
-
         assert set(_migration()._SLUGS) == set(SLUGS)
         for slug in ("firefighter", "engineer"):
             assert (

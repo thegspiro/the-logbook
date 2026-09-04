@@ -45,6 +45,38 @@ installation which already stamped either version — the unconditional bodies o
 the gated ones — so every installation converges here regardless of which it ran.
 It is a no-op for a row already repaired.
 
+**Every stored form of an over-granted module, not just ``.view``.**
+``expand_module_checkboxes`` writes ``{module}.view`` for a ticked View box and
+both ``{module}.manage`` and ``{module}.*`` for a ticked Manage box. An
+administrator who ticked Manage on one of these modules during setup therefore
+stored a wildcard, and ``permission_matches`` treats ``reports.*`` as satisfying
+``reports.view`` — so removing the ``.view`` string alone would leave the
+department-wide reports open through the wildcard. All three forms go.
+``apparatus.manage`` is removed from engineer for the same reason: the wildcard
+narrowing below would otherwise be undone by a literal manage grant sitting
+beside it.
+
+A Manage tick on a module these slugs *are* seeded to view — apparatus for a
+member, say — is a different question and is left alone: the module is theirs to
+see, and only the over-granted modules named here are this migration's business.
+
+**``emt`` is covered, and the note in ``d1c7f4a92e63`` saying otherwise is
+wrong.** That reasoning ran: ``DEFAULT_POSITIONS`` has no ``emt`` entry, so
+onboarding writes no system row under that slug. The wizard has its own list.
+``emt`` is in ``DISCIPLINE_POSITION_IDS`` (and is the whole roster for an
+``ems_only`` agency), and because no seeded row exists to update,
+``save_session_roles`` takes its create branch — storing
+``expand_module_checkboxes`` output verbatim, with ``is_system=not is_custom``,
+which is ``True`` for a position the wizard offered. So an EMT row holds the
+heuristic's output with nothing merged from the registry, and
+``_collect_user_permissions`` unions it into every EMT's grants.
+``e4f5a6b7c8d9`` already listed ``emt`` for exactly this reason.
+
+An EMT's intended grants are the line-member set
+(``OPERATIONAL_RANKS["emt"]["default_permissions"]``), the same list Firefighter
+holds, so it takes the same revocations. Its missing *restorations* are not
+repaired here — see the note on restorations above.
+
 Scoped to ``is_system = True``: a position a department created for itself is
 theirs, and is not what the wizard overwrote.
 
@@ -72,23 +104,48 @@ depends_on = None
 # to keep transforming rows the way it did the day it ran (pitfall #20). The
 # accompanying test cross-checks them against the registry so drift is reported
 # rather than silently applied.
-_OVER_GRANTS = (
-    "integrations.view",
-    "medical_supplies.view",
-    "mobile.view",
-    "prospective_members.view",
-    "reports.view",
+# Modules the heuristic granted to these slugs and the registry seeds to none of
+# them. Frozen rather than imported from app.core.permissions: a migration has to
+# keep transforming rows the way it did the day it ran (pitfall #20). The
+# accompanying test cross-checks them against the registry so drift is reported
+# rather than silently applied.
+_OVER_GRANTED_MODULES = (
+    "integrations",
+    "medical_supplies",
+    "mobile",
+    "prospective_members",
+    "reports",
 )
 
+# The heuristic treated engineer as a leader and handed it these two as well.
+_ENGINEER_EXTRA_MODULES = ("positions", "settings")
+
+
+def _stored_forms(module):
+    """Every string the editor could have stored for one module's checkboxes."""
+    return (f"{module}.view", f"{module}.manage", f"{module}.*")
+
+
+def _revocations(modules, extra=()):
+    return tuple(
+        permission for module in modules for permission in _stored_forms(module)
+    ) + tuple(extra)
+
+
+_MEMBER_REVOCATIONS = _revocations(_OVER_GRANTED_MODULES)
+
 _REVOKE = {
-    "member": _OVER_GRANTS,
-    "firefighter": _OVER_GRANTS,
+    "member": _MEMBER_REVOCATIONS,
+    "firefighter": _MEMBER_REVOCATIONS,
+    # An EMT's intended grants are the line-member set, the same list Firefighter
+    # holds, so the same revocations apply.
+    "emt": _MEMBER_REVOCATIONS,
     # Engineer is a driver/operator, not an officer: the settings screen and the
     # position roster are outside that, as is department-wide reporting.
-    "engineer": _OVER_GRANTS
-    + (
-        "positions.view",
-        "settings.view",
+    # apparatus.manage goes with the wildcard narrowing below.
+    "engineer": _revocations(
+        _OVER_GRANTED_MODULES + _ENGINEER_EXTRA_MODULES,
+        extra=("apparatus.manage",),
     ),
 }
 

@@ -25,8 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The same overwrite left other discrepancies, now settled.**
   `integrations.view`, `medical_supplies.view`, `mobile.view` and
-  `prospective_members.view` are revoked from Member, Firefighter and
-  Engineer. Engineer additionally loses `positions.view`, `reports.view` and
+  `prospective_members.view` are revoked from Member, Firefighter, Engineer and
+  EMT — including the `.manage` and module-wildcard forms, which the setup
+  screen stored instead whenever Manage was ticked and which grant the same
+  access by another name. Engineer additionally loses `positions.view`, `reports.view` and
   `settings.view`, and its `apparatus.*` wildcard — which carried apparatus
   management and driver-exception approval — is narrowed to the
   `apparatus.view` and `apparatus.maintenance` the registry actually seeds for
