@@ -70,6 +70,82 @@ describe('MedicalSupplyItemPicker', () => {
     expect(screen.getByRole('option', { name: 'Gauze 0' })).toBeInTheDocument();
   });
 
+  it('pages by what the server has returned, not by what survived deduplication', async () => {
+    // A row inserted before the page boundary makes page 2 overlap page 1 by
+    // one, so 40 rows have been *read* while only 39 unique ones are held.
+    // Paging on the deduplicated length would then ask for skip 39 -- an
+    // offset already consumed -- and the final row would stay unreachable
+    // while Show more remained enabled on it.
+    const row = (i: number) => ({ id: `item-${i}`, name: `Gauze ${i}` });
+    mockGetItems.mockImplementation(({ skip = 0 }: { skip?: number }) => {
+      if (skip === 0) return Promise.resolve({ items: [...Array(20).keys()].map(row), total: 41, skip: 0, limit: 20 });
+      // Shifted by the insert: starts at 19, so "Gauze 19" repeats.
+      if (skip === 20)
+        return Promise.resolve({
+          items: [...Array(20).keys()].map((i) => row(i + 19)),
+          total: 41,
+          skip: 20,
+          limit: 20,
+        });
+      if (skip === 40) return Promise.resolve({ items: [row(39)], total: 41, skip: 40, limit: 20 });
+      // Any other offset is one we should never ask for.
+      return Promise.resolve({ items: [], total: 41, skip, limit: 20 });
+    });
+
+    const user = userEvent.setup();
+    renderPicker();
+    await user.type(screen.getByRole('combobox'), 'gauze');
+    expect(await screen.findByText('Show more (20 of 41)')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Show more (20 of 41)'));
+    await screen.findByRole('option', { name: 'Gauze 38' });
+
+    // 39 unique rows held, 40 read -- so the next page starts at 40.
+    await user.click(await screen.findByText(/Show more/));
+    await waitFor(() =>
+      expect(mockGetItems).toHaveBeenLastCalledWith({ search: 'gauze', active_only: true, skip: 40, limit: 20 })
+    );
+
+    // Everything the server has is now read, so the control retires rather
+    // than sitting enabled over a row it can never fetch.
+    await waitFor(() => expect(screen.queryByText(/Show more/)).not.toBeInTheDocument());
+  });
+
+  it('scrolls the highlighted option even when a failure banner precedes the list', async () => {
+    // The banner is a sibling of the options, so a positional child lookup
+    // stops matching activeIndex the moment it renders -- scrolling the banner
+    // or the row above instead of the highlighted one.
+    mockGetItems.mockResolvedValue(page(0, 20, 45));
+
+    const user = userEvent.setup();
+    renderPicker();
+    await user.type(screen.getByRole('combobox'), 'gauze');
+    expect(await screen.findByText('Show more (20 of 45)')).toBeInTheDocument();
+
+    mockGetItems.mockRejectedValue(new Error('Network Error'));
+    await user.click(screen.getByText('Show more (20 of 45)'));
+    await screen.findByText('Could not search the catalog.');
+
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: scrollIntoView,
+    });
+
+    // Show more retires on failure, so the click left focus on an unmounted
+    // button; the key handler lives on the combobox.
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('{ArrowDown}');
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    // `contexts`, not `instances`: the latter records `new` calls, and this is
+    // a method invoked on an element.
+    const scrolled = scrollIntoView.mock.contexts[0] as HTMLElement;
+    expect(scrolled).toHaveAttribute('role', 'option');
+    expect(scrolled).toHaveTextContent('Gauze 0');
+  });
+
   it('keeps the pages already shown when the next one fails', async () => {
     mockGetItems.mockResolvedValue(page(0, 20, 45));
 

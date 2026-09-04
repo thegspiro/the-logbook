@@ -32,6 +32,13 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   // them -- so a department can legitimately have more matches than one page,
   // and every one of them has to be selectable.
   const [total, setTotal] = useState(0);
+  // How far into the server's result set we have already read. Tracked apart
+  // from `results.length` because deduplication makes the two diverge: if the
+  // catalogue gains a row before the page boundary, a page can repeat an item
+  // we already hold, and paging on the deduplicated length would ask for an
+  // offset we have already consumed -- re-reading the same row while
+  // `total > results.length` kept Show more alive on a match it never reached.
+  const [consumed, setConsumed] = useState(0);
   // Keyboard position in the list. The native <select> this replaced supported
   // arrow keys and Enter; a combobox that announces itself as one and then
   // ignores them strands keyboard-only users, whose Enter submits the delivery
@@ -68,7 +75,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   // so a sighted keyboard user could not tell what Enter would select.
   useEffect(() => {
     if (activeIndex < 0) return;
-    const option = listboxRef.current?.children[activeIndex];
+    const option = listboxRef.current?.querySelectorAll('[role="option"]')[activeIndex];
     // jsdom does not implement scrollIntoView, and this is a presentation
     // detail rather than behaviour worth failing a test over.
     if (option instanceof HTMLElement && typeof option.scrollIntoView === 'function') {
@@ -99,6 +106,9 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
       .then((response) => {
         if (request !== requestRef.current) return;
         const page = response.items.map(({ id, name }) => ({ id, name }));
+        // The server's own offset plus what it actually returned, not what
+        // survived deduplication.
+        setConsumed(response.skip + response.items.length);
         setResults((current) => {
           if (skip === 0) return page;
           // Appended, not replaced: Show more asks for the next page rather
@@ -139,12 +149,13 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
     setResults([]);
     setFailed(false);
     setActiveIndex(-1);
+    setConsumed(0);
     runSearch(text, 0, 300);
   };
 
   const showMore = () => {
     // No debounce: this one is a deliberate activation, not typing.
-    runSearch(query, results.length, 0);
+    runSearch(query, consumed, 0);
   };
 
   const choose = (item: { id: string; name: string }) => {
@@ -240,7 +251,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
               <p className="text-theme-text-primary">Could not search the catalog.</p>
               <button
                 type="button"
-                onClick={() => runSearch(query, results.length, 0)}
+                onClick={() => runSearch(query, consumed, 0)}
                 className="text-theme-text-muted underline"
               >
                 Try again
@@ -266,7 +277,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
               {item.name}
             </button>
           ))}
-          {!loading && !failed && total > results.length && (
+          {!loading && !failed && consumed < total && (
             <button
               type="button"
               onClick={showMore}
