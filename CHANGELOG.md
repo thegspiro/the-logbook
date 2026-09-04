@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A shift that ran weeks ago still offered its live controls (2026-09-04)
+
+**Fixed**
+
+- **"Reopen for 15 min" was offered on a shift three weeks gone, and it
+  worked.** The shift detail panel showed the late-signup escape hatch to
+  anyone who can seat crew on any past, unfinalized shift, under copy that
+  reads "Reopen it if you are a body short and somebody can still get here" —
+  a sentence about a shift under way. `open_late_signup` had no upper bound on
+  the shift's age either, so taking it was not cosmetic: `create_assignment`
+  passes `window_checked=True` for a non-manager, which deliberately
+  suppresses the day-granular `reject_past` fallback so a reopened overnight
+  shift admits people. The reopened window was therefore the only rule left,
+  and a member could sign themselves onto a shift they had never worked and
+  draw hours for it. A reopening is now refused once the shift's end plus the
+  department's `late_signup_grace_minutes` has passed, and the banner is
+  withdrawn at the same moment.
+
+- **Confirm, decline and remove outlived the shift they belonged to.**
+  `AssignmentActions` decided what to render from the assignment's status and
+  the viewer's permissions alone, with no notion of time, so a member looking
+  at a shift they had worked a fortnight earlier — twelve hours already
+  recorded against it — was still offered a button to decline the assignment
+  those hours hang off, and an officer was still offered Remove beside every
+  name. All three are withdrawn once the roster locks.
+
+- **The lock is the shift's end, not its date.** A new `rosterLocked` rule
+  counts from `end_time` plus the same grace period the officer's own signup
+  deadline uses, so the two move together when a department changes the
+  setting, and an overnight crew keeps every control through the night — the
+  day-granular `isPast` is true from midnight and would have taken them away
+  mid-shift, which is the same trap `isShiftOpen` is only a fallback for. A
+  scheduling administrator is never locked out: correcting a past roster is
+  the records path, and that is where a change to a shift this old belongs.
+
 ### A regular member could open Administration → Reports (2026-09-04)
 
 **Fixed**

@@ -16,7 +16,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
-import { memberSignupClosedReason, signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
+import { memberSignupClosedReason, rosterLocked, signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 import {
   X,
@@ -874,6 +874,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // leaving the form enabled only makes them fill it in to earn an error.
   const canAssignNow = canAssign && viewerSignupClosed === null;
   const lateSignupOpen = shift.late_signup_until != null && Date.parse(shift.late_signup_until) > Date.now();
+  // Past the shift's end plus the grace period the roster is a record, and its
+  // live controls stop applying — see `rosterLocked`. Deliberately not
+  // `isPast`: that is day-granular and true from midnight, which would take an
+  // overnight crew's controls away mid-shift.
+  const isRosterLocked = rosterLocked(shift, signupWindow, { canAssign, canManage });
 
   /**
    * Has the shift begun? Nobody can be present for a shift eight days out, so
@@ -1026,6 +1031,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             effectiveStatus={assignment.status || 'assigned'}
             isCurrentUser={isCurrentUser || false}
             canAssign={canAssign}
+            locked={isRosterLocked}
             onConfirm={(id) => {
               void handleConfirm(id);
             }}
@@ -1954,6 +1960,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     currentUserId={user?.id}
                     canAssign={canAssign}
                     isPast={isPast}
+                    rosterLocked={isRosterLocked}
                     isUserAssigned={isUserAssigned}
                     canSignUp={canSignUpFor(position)}
                     positionOptions={positionOptions}
@@ -2282,10 +2289,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           {/* Leadership's escape hatch once the department's cutoff has passed.
               Offered only to somebody who can seat crew, and only when there
               is something to reopen — a scheduling admin is never bound by the
-              window, so they have nothing to open. */}
+              window, so they have nothing to open.
+
+              Withdrawn once the roster locks. "Reopen it if you are a body
+              short and somebody can still get here" is a sentence about a
+              shift under way; on one that ran three weeks ago it offered to
+              admit a member to a crew that has long since gone home, and the
+              server used to let it. */}
           {canAssign &&
             !isCancelled &&
             !shift.is_finalized &&
+            !isRosterLocked &&
             (lateSignupOpen || viewerSignupClosed || memberSignupClosed) && (
               <div className={lateSignupOpen ? 'alert-warning' : 'alert-info'}>
                 {lateSignupOpen ? (

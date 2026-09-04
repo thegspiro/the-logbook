@@ -277,6 +277,104 @@ class TestLateSignupOverride:
         assert "not found" in (err or "").lower()
 
 
+class TestReopeningIsBoundedByTheShiftsAge:
+    """A reopening is for the crew that turned up short, not for last month.
+
+    ``open_late_signup`` had no upper bound on how old a shift could be, and
+    the panel offered "Reopen for 15 min" on every past shift an officer could
+    see. Taking it was not cosmetic: ``create_assignment`` passes
+    ``window_checked=True`` for a non-manager, which suppresses the
+    day-granular ``reject_past`` fallback so a reopened overnight shift admits
+    people — leaving the reopened window as the only rule, and letting a member
+    self-signup onto a shift that ran three weeks ago and draw hours for it.
+    """
+
+    async def test_refused_on_a_shift_that_ended_weeks_ago(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        # Twelve hours long, and it ended twenty days ago.
+        shift = await _shift_starting(
+            svc, org_id, officer_id, minutes_from_now=-(20 * 24 * 60 + 720)
+        )
+
+        result, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30
+        )
+        assert result is None
+        assert err == (
+            "This shift ended too long ago to reopen signup on. "
+            "A scheduling administrator can still record who worked it."
+        )
+        assert shift.late_signup_until is None
+
+    async def test_the_member_stays_refused_after_a_rejected_reopen(
+        self, db_session, org_and_members
+    ):
+        # The reason the bound exists at all — the reopen was the one thing
+        # standing between a dead shift and a self-service hours claim.
+        org_id, officer_id, member_id = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _shift_starting(
+            svc, org_id, officer_id, minutes_from_now=-(20 * 24 * 60 + 720)
+        )
+        await svc.open_late_signup(uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30)
+
+        assignment, err = await _seat(
+            svc, org_id, shift, member_id, member_id, self_signup=True
+        )
+        assert assignment is None
+        assert err is not None
+        seated = await svc.get_shift_assignments(uuid.UUID(shift.id), uuid.UUID(org_id))
+        assert seated == []
+
+    async def test_allowed_while_the_crew_has_only_just_come_in(
+        self, db_session, org_and_members
+    ):
+        # Signup closed for the officer hours ago — their own deadline counts
+        # from the *start* — but the shift ended thirty minutes ago and the
+        # roster is still being settled.
+        org_id, officer_id, _ = org_and_members
+        svc = SchedulingService(db_session)
+        shift = await _shift_starting(
+            svc, org_id, officer_id, minutes_from_now=-(12 * 60 + 30)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30
+        )
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+    async def test_the_bound_follows_the_departments_grace_setting(
+        self, db_session, org_and_members
+    ):
+        # Same shift, two departments: the bound is the org's own grace period
+        # added to the end, not a constant this rule invented.
+        org_id, officer_id, _ = org_and_members
+        await _set_scheduling_settings(db_session, org_id, late_signup_grace_minutes=15)
+        svc = SchedulingService(db_session)
+        shift = await _shift_starting(
+            svc, org_id, officer_id, minutes_from_now=-(12 * 60 + 45)
+        )
+
+        result, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30
+        )
+        assert result is None
+        assert "ended too long ago" in (err or "")
+
+        await _set_scheduling_settings(
+            db_session, org_id, late_signup_grace_minutes=120
+        )
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=30
+        )
+        assert err is None
+        assert reopened.late_signup_until is not None
+
+
 class TestSignupClosedReason:
     async def test_reports_the_state_the_endpoint_enforces(
         self, db_session, org_and_members

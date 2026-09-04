@@ -73,6 +73,31 @@ from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions, position_label
 
 
+def _scheduling_minutes(
+    settings: Dict[str, Any], key: str, default: int, ceiling: int
+) -> int:
+    """Read one clamped minute count out of an org's scheduling settings.
+
+    Module-level rather than a closure inside ``_signup_window_error`` because
+    two rules now depend on the same number and must not drift: the officer's
+    signup deadline, and how long past a shift's end its signup may still be
+    reopened. A reopen bound looser than the window it lifts would hand the
+    officer a button whose only outcome is the refusal it just cleared.
+
+    Unvalidated JSON an admin can hand-edit. Degrade to the built-in window
+    rather than raising: an exception here would refuse every signup in the
+    department over one mistyped value (pitfall #19).
+    """
+    sched = settings.get("scheduling")
+    if not isinstance(sched, dict):
+        sched = {}
+    try:
+        value = int(sched.get(key, default))
+    except (TypeError, ValueError):
+        return default
+    return min(max(value, 0), ceiling)
+
+
 def _position_label(position) -> str:
     """Human-readable position for a notification body.
 
@@ -1790,6 +1815,45 @@ class SchedulingService:
             await self.db.rollback()
             return False, str(e)
 
+    async def _late_signup_too_late(
+        self, shift: Shift, organization_id: UUID
+    ) -> Optional[str]:
+        """Why this shift is too far gone to reopen signup on, or None.
+
+        Anchored to the shift's *end* rather than its start: the whole point of
+        a reopening is to seat somebody while the crew is still out, and an
+        overnight shift's start is twelve hours behind its end. The same grace
+        period the officer's own signup deadline uses is added to it, so the
+        two rules move together when a department changes the setting.
+
+        A shift with no readable start or end is allowed through rather than
+        refused on data this rule cannot judge — the same stance
+        ``_signup_window_error`` and ``_checkin_window_error`` take.
+        """
+        end = _as_utc(getattr(shift, "end_time", None)) or _as_utc(
+            getattr(shift, "start_time", None)
+        )
+        if end is None:
+            return None
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        grace = _scheduling_minutes(
+            (org.settings or {}) if org else {},
+            "late_signup_grace_minutes",
+            DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
+            1440,
+        )
+        if datetime.now(timezone.utc) <= end + timedelta(minutes=grace):
+            return None
+        return (
+            "This shift ended too long ago to reopen signup on. "
+            "A scheduling administrator can still record who worked it."
+        )
+
     async def open_late_signup(
         self,
         shift_id: UUID,
@@ -1807,6 +1871,17 @@ class SchedulingService:
         while the crew is short would otherwise let the second, shorter one cut
         the first short — and a member told they had until 19:45 would find the
         seat gone at 19:30.
+
+        Bounded by the shift's own end plus the department's grace period. The
+        window used to have no upper bound on the shift's age, so an officer
+        looking at a shift three weeks gone was still shown "Reopen for 15 min"
+        — and taking it worked: ``create_assignment`` passes
+        ``window_checked=True`` for a non-manager, which suppresses the
+        day-granular ``reject_past`` fallback precisely so a reopened overnight
+        shift admits people, so the reopened window was the only rule left and
+        a member could self-signup onto a shift they had never worked and draw
+        hours for it. Correcting a roster that old is records work, which is
+        the scheduling administrator's path and is not bounded at all.
         """
         try:
             shift = await self.get_shift_by_id(
@@ -1818,6 +1893,10 @@ class SchedulingService:
                 return None, "Cannot reopen signup on a cancelled shift"
             if shift.is_finalized:
                 return None, "Cannot reopen signup on a finalized shift"
+
+            reopen_error = await self._late_signup_too_late(shift, organization_id)
+            if reopen_error:
+                return None, reopen_error
 
             until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
             current = _as_utc(shift.late_signup_until)
@@ -2123,19 +2202,8 @@ class SchedulingService:
         ):
             return None
 
-        sched = settings.get("scheduling")
-        if not isinstance(sched, dict):
-            sched = {}
-
         def minutes(key: str, default: int, ceiling: int) -> int:
-            # Unvalidated JSON an admin can hand-edit. Degrade to the built-in
-            # window rather than raising: an exception here would refuse every
-            # signup in the department over one mistyped value (pitfall #19).
-            try:
-                value = int(sched.get(key, default))
-            except (TypeError, ValueError):
-                return default
-            return min(max(value, 0), ceiling)
+            return _scheduling_minutes(settings, key, default, ceiling)
 
         now = now or datetime.now(timezone.utc)
         override = _as_utc(getattr(shift, "late_signup_until", None))
