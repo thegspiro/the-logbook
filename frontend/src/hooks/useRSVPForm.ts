@@ -91,7 +91,19 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
         const rsvpPayload = {
           status: rsvpStatus,
           guest_count: guestCount,
-          notes: rsvpNotes || undefined,
+          // Always sent, with an explicit null to clear: the modal prefills
+          // notes from the existing RSVP, so a blank box here means the
+          // member actually deleted it, not "unknown" (contrast the two
+          // fields below).
+          notes: rsvpNotes.trim() || null,
+          // Omitted (not null) when blank: dietary_restrictions/
+          // accessibility_needs are never echoed back by the API (they are
+          // PHI and this modal's data is cacheable), so this modal always
+          // reopens them blank regardless of what is actually stored. A
+          // blank box here means "not touched", not "clear it" — sending an
+          // explicit null would silently wipe real accommodation data on
+          // every unrelated edit (e.g. bumping guest_count). Backing service
+          // treats an omitted key as "leave this alone".
           dietary_restrictions: rsvpDietaryRestrictions || undefined,
           accessibility_needs: rsvpAccessibilityNeeds || undefined,
         };

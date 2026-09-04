@@ -248,8 +248,8 @@ export const eventService = {
    */
   async getEligibleMembers(
     eventId: string
-  ): Promise<Array<{ id: string; first_name: string; last_name: string; email: string }>> {
-    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string }>>(
+  ): Promise<Array<{ id: string; first_name: string; last_name: string; email: string | null }>> {
+    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string | null }>>(
       `/events/${eventId}/eligible-members`
     );
     return response.data;

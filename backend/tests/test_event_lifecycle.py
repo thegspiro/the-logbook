@@ -372,6 +372,71 @@ class TestEventRSVP:
         assert updated_rsvp is not None
         assert updated_rsvp.status.value == "not_going"
 
+    async def test_update_preserves_omitted_accommodation_fields(
+        self, db_session, setup_org_and_users
+    ):
+        """An edit that doesn't touch dietary/accessibility must not wipe them.
+
+        The RSVP modal can't show their current value back to the member (PHI,
+        and the event detail response is cacheable), so it always resubmits
+        them blank/omitted. Before this fix, the update path applied a full
+        `model_dump()` over the existing row, so any unrelated edit (here,
+        guest_count) silently deleted real accommodation data.
+        """
+        org_id, user_id, _ = setup_org_and_users
+        svc = EventService(db_session)
+
+        event = await svc.create_event(
+            event_data=_make_event_create(
+                title="Accommodation Event",
+                requires_rsvp=True,
+                allow_guests=True,
+            ),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+        )
+
+        rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(
+                status="going",
+                dietary_restrictions="peanut allergy",
+                accessibility_needs="wheelchair access",
+            ),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        assert rsvp.dietary_restrictions == "peanut allergy"
+        assert rsvp.accessibility_needs == "wheelchair access"
+
+        # Simulates the modal resubmitting after the member only changed
+        # guest_count — dietary_restrictions/accessibility_needs are not set
+        # on this RSVPCreate, so they must be left alone rather than reset to
+        # their None default.
+        updated_rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=1),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        assert updated_rsvp.guest_count == 1
+        assert updated_rsvp.dietary_restrictions == "peanut allergy"
+        assert updated_rsvp.accessibility_needs == "wheelchair access"
+
+        # An explicit empty string IS a real edit and must clear the field —
+        # exclude_unset only protects a field the client never mentioned.
+        cleared_rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", dietary_restrictions=""),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        assert cleared_rsvp.dietary_restrictions == ""
+        assert cleared_rsvp.accessibility_needs == "wheelchair access"
+
     async def test_multiple_rsvps(self, db_session, setup_org_and_users):
         org_id, user_id, user2_id = setup_org_and_users
         svc = EventService(db_session)

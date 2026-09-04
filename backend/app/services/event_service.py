@@ -1385,8 +1385,19 @@ class EventService:
             old_status = existing_rsvp.status
             if isinstance(old_status, RSVPStatus):
                 old_status = old_status.value
-            # Update existing RSVP
-            for field, value in rsvp_data.model_dump().items():
+            # Update existing RSVP. exclude_unset=True, not a full dump: an
+            # omitted key means "leave this alone" (Pitfall #1's update
+            # mirror). This matters most for dietary_restrictions/
+            # accessibility_needs — the RSVP modal deliberately can't show
+            # their current value (PHI, and GET /events/{id} is cacheable),
+            # so it always reopens them blank. A full dump would have sent
+            # that blank back as an explicit clear on every edit — silently
+            # deleting real accommodation data the next time a member changed
+            # an unrelated field like guest_count or status. The frontend
+            # sends `notes`/`status`/`guest_count` explicitly on every submit
+            # (including an explicit null to actually clear notes), so they
+            # are unaffected by this change.
+            for field, value in rsvp_data.model_dump(exclude_unset=True).items():
                 setattr(existing_rsvp, field, value)
             existing_rsvp.updated_at = datetime.now(dt_timezone.utc)
             rsvp = existing_rsvp
