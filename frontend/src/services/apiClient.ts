@@ -19,8 +19,9 @@ import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import {
   getCacheKey,
   getCached,
-  setCacheAtGeneration,
-  cacheGeneration,
+  setCacheIfCurrent,
+  cacheWriteToken,
+  isCacheWriteToken,
   invalidateByPrefix,
   getResourcePrefix,
   isCacheable,
@@ -70,8 +71,8 @@ api.interceptors.request.use(
     // unstamped response is cached unconditionally by the write below, so
     // leaving the bypass path unstamped defeated the guard for the requests
     // that most needed it.
-    if (cacheableGet) {
-      (config as unknown as Record<string, unknown>)._cacheGeneration = cacheGeneration();
+    if (cacheableGet && config.url) {
+      (config as unknown as Record<string, unknown>)._cacheToken = cacheWriteToken(config.url);
     }
 
     if (cacheableGet && !skipCache && config.url) {
@@ -111,10 +112,10 @@ api.interceptors.request.use(
           // whoever signs in next on a shared terminal.
           const { adapter: _adapter, signal: _signal, cancelToken: _cancelToken, ...restConfig } = config;
           const bgConfig = { ...restConfig, _skipCache: true };
-          const issuedAt = cacheGeneration();
+          const token = cacheWriteToken(config.url);
           void api
             .request(bgConfig)
-            .then((res) => setCacheAtGeneration(key, res.data, issuedAt))
+            .then((res) => setCacheIfCurrent(key, res.data, token))
             .catch(() => {
               /* background revalidation failure is non-critical */
             })
@@ -241,12 +242,12 @@ api.interceptors.response.use(
       !(response.config as unknown as Record<string, unknown>)._fromCache
     ) {
       const key = getCacheKey(response.config.url, response.config.params as Record<string, unknown> | undefined);
-      const issuedAt = (response.config as unknown as Record<string, unknown>)._cacheGeneration;
+      const token = (response.config as unknown as Record<string, unknown>)._cacheToken;
       // SEC: fail closed. An unstamped response is one we cannot prove was
-      // issued in this cache era, and defaulting to the current one would
-      // permit exactly the post-logout write the stamp exists to stop.
-      if (typeof issuedAt === 'number') {
-        setCacheAtGeneration(key, response.data, issuedAt);
+      // issued in this cache era, and caching it anyway would permit exactly
+      // the post-logout and post-mutation writes the stamp exists to stop.
+      if (isCacheWriteToken(token)) {
+        setCacheIfCurrent(key, response.data, token);
       }
     }
 
