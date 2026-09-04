@@ -19,16 +19,17 @@
 **PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged
 at its stale first-draft state before this correction could be pushed to
 it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
-`PROGRESS.md`'s Log for detail). The fix has since carried forward through
-five more premature-merge recoveries of the identical shape — each PR
-merging while Codex's review of it was still in progress, moving the next
-round to a fresh branch/PR in turn:
-[#2218](https://github.com/thegspiro/the-logbook/pull/2218) (round 1) →
-[#2220](https://github.com/thegspiro/the-logbook/pull/2220) (rounds 2-4) →
-[#2221](https://github.com/thegspiro/the-logbook/pull/2221) (round 5) →
-[#2222](https://github.com/thegspiro/the-logbook/pull/2222) (round 6,
-`claude/security-review-training-core-tr3-round6`). See `PROGRESS.md`'s
-Log for each recovery's detail.
+`PROGRESS.md`'s Log for detail). The fix carried forward through five more
+premature-merge recoveries of the identical shape — each PR merging while
+Codex's review of it was still in progress, moving the next round to a
+fresh branch/PR in turn: [#2218](https://github.com/thegspiro/the-logbook/pull/2218)
+(round 1) → [#2220](https://github.com/thegspiro/the-logbook/pull/2220)
+(rounds 2-4) → [#2221](https://github.com/thegspiro/the-logbook/pull/2221)
+(round 5) → **[#2222](https://github.com/thegspiro/the-logbook/pull/2222)**
+(rounds 6-9, `claude/security-review-training-core-tr3-round6`), which
+**merged cleanly** — the first merge in this pass not to race an
+in-progress review, closing out the TR3-1 finding after nine rounds total.
+See `PROGRESS.md`'s Log for each recovery's detail.
 **Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
 
 > **Correction (Codex review of this PR).** The first draft of this section

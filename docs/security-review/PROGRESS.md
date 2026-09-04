@@ -16,8 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2222](https://github.com/thegspiro/the-logbook/pull/2222)** (branch
-`claude/security-review-training-core-tr3-round6`) — Feature 17, Training
+Feature 18 (Training extended), pass 3 — branch
+`claude/security-review-training-extended`. PR pending open. No findings
+requiring a code fix (the one substantive change since pass 2,
+`external_training_service.py`'s DNS-rebinding hardening, was already fixed
+and tested by the repo owner outside this rotation — this pass verified it
+and corrected `KNOWN_LIMITATIONS.md`'s stale eight-site count to seven).
+
+---
+
+### 2026-09-04 — Feature 18 (Training extended), pass 3 — 0 code fixes, 1 doc correction
+
+Diff-scoped against pass 2's merge commit (`e094e66e1c94604e00c9143e73bc27c8cb0f1014`)
+across all fourteen pass-2 files: only three changed. `external_training.py`
+was a no-op import reformat. `external_training_service.py`'s 37-line diff
+turned out to be the repo owner's own 2026-09-02 fix
+(`803eff25`, "Harden external training requests against DNS rebinding") —
+closes the DNS-rebinding TOCTOU this feature's own pass 1 had catalogued
+`external_training_service.py` as sharing (the "eighth site" note in
+`KNOWN_LIMITATIONS.md`). Verified the fix directly (read `ssrf_transport.py`,
+ran its 5-test suite) rather than assuming from the commit message, then
+corrected `KNOWN_LIMITATIONS.md`'s count from eight affected sites to seven.
+`apiCache.ts`'s 81-line diff was unrelated to training (an RPT-29
+`/dashboard/action-items` prefix plus a cache-generation/epoch race-condition
+fix); confirmed none of this feature's eleven cache-exclusion entries moved.
+All of pass 1/2's fixes re-verified present and unchanged. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` (Pass 3 section).
+Rotation row 18 stays 🔄 pending PR merge.
+
+### 2026-09-04 — Feature 17 (Training core) ✅ closed — PR #2222 merged clean after 9 rounds
+
+**PR #2222 merged cleanly** at `802086b3`, fully green (all 17 checks
+passing including `CI Success` and `Migration Chain`) and with Codex's
+final review finding nothing new — the first merge in this feature's pass
+3 not to race an in-progress review. This closes out the TR3-1 finding
+(`RequirementProgress.days_until_due` was never populated) after nine
+rounds of Codex-driven correction, four of which required a fresh
+branch/PR under CLAUDE.md pitfall #24 (#2218 → #2220 → #2221 → #2222) when
+the owner merged mid-review. Full round-by-round technical detail is in
+`TR-17-training-core.md`'s Pass 3 section; the premature-merge recoveries
+are logged individually below. Next: 18 Training extended.
+
+### 2026-09-04 — Feature 17 (Training core, pass 3, rounds 6-9) — full detail while PR #2222 was open
+
+Feature 17, Training
 core, pass 3, rounds 6-9. **#2221 (rounds 1-5) merged before round 6's
 fixes could be pushed to it** — the owner merged while Codex's review of
 that PR was still in progress, the same race that hit #2213, #2217,
@@ -8449,8 +8491,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | 🔄     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | 🔄     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
