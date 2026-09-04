@@ -2289,7 +2289,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           {/* Leadership's escape hatch once the department's cutoff has passed.
               Offered only to somebody who can seat crew, and only when there
               is something to reopen — a scheduling admin is never bound by the
-              window, so they have nothing to open.
+              window, so they have nothing to open. That exemption has to be
+              its own gate: `rosterLocked` returns false for an admin and
+              `memberSignupClosed` is non-null on any old shift, so without
+              `!canManage` the banner reappeared for exactly the viewer the
+              comment says it is not for, and the bounded endpoint refused the
+              click.
 
               Withdrawn once the roster locks. "Reopen it if you are a body
               short and somebody can still get here" is a sentence about a
@@ -2297,6 +2302,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               admit a member to a crew that has long since gone home, and the
               server used to let it. */}
           {canAssign &&
+            !canManage &&
             !isCancelled &&
             !shift.is_finalized &&
             !isRosterLocked &&
@@ -2408,7 +2414,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                   <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
                 </div>
-                {!isPast && !shift.is_finalized && (
+                {/* `isPast` alone is day-granular, so on a shift that ended at
+                    seven this stayed offered until midnight — beside the very
+                    line reporting the hours it would have deleted. */}
+                {!isPast && !isRosterLocked && !shift.is_finalized && (
                   <button
                     onClick={() => {
                       void handleWithdraw();

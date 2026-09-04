@@ -33,6 +33,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   those hours hang off, and an officer was still offered Remove beside every
   name. All three are withdrawn once the roster locks.
 
+- **Withdraw outlived the lock, beside the hours it would have deleted.** The
+  "You are assigned to this shift" card gated its Withdraw button on `isPast`
+  alone, which is day-granular, so on a shift that ended at seven it stayed
+  offered until midnight — directly beneath the line reporting the twelve
+  hours recorded against that assignment.
+
+- **The reopen banner came back for the one viewer it is not for.** A
+  scheduling admin is exempt from the roster lock and from the signup window,
+  so neither of the banner's own conditions could withhold it, and
+  `memberSignupClosed` rendered it on every old unfinalized shift — offering
+  an admin a reopening they never needed and the newly bounded endpoint now
+  refuses. The exemption is its own gate, as the endpoint's contract already
+  said.
+
 - **A reopening cannot carry a shift past that deadline either.** The bound
   above refuses a late reopening, but `minutes` accepts up to 720 and
   `_signup_window_error` treats the later override as authoritative, so a
