@@ -247,7 +247,12 @@ const OVERVIEW_ONLY_TABS: AdminHubTab<AdminTab>[] = [{ id: 'overview', label: 'O
 export const InventoryAdminHub: React.FC = () => {
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManage = checkPermission('inventory.manage');
-  const { isModuleOn } = useEnabledModules();
+  // `isLoading` as well as the answer: `isModuleOn` reports every module on
+  // while the lookup is in flight. That default is right for a nav bar, which
+  // must not flicker its rows, and wrong here -- it puts the store cards on
+  // screen for the width of that request, suppresses the empty state that
+  // should have shown instead, and offers links the storefront route refuses.
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const tz = useTimezone();
 
   // Every card resolves its own gate here rather than inheriting the page's.
@@ -258,12 +263,17 @@ export const InventoryAdminHub: React.FC = () => {
   // is the grant everyone reaching this page holds.
   const visibleCards = useMemo(
     () =>
-      INVENTORY_HUB_CARDS.filter((card) => {
-        if (card.requiresModule && !isModuleOn(card.requiresModule)) return false;
-        if (card.anyPermission) return card.anyPermission.some((permission) => checkPermission(permission));
-        return card.permission ? checkPermission(card.permission) : true;
-      }),
-    [checkPermission, isModuleOn]
+      // Nothing until the module flags are known -- see the hook comment above.
+      // This also keeps `showsMedical` false for that window, so the EMS
+      // request is raised once against the settled answer rather than twice.
+      modulesLoading
+        ? []
+        : INVENTORY_HUB_CARDS.filter((card) => {
+            if (card.requiresModule && !isModuleOn(card.requiresModule)) return false;
+            if (card.anyPermission) return card.anyPermission.some((permission) => checkPermission(permission));
+            return card.permission ? checkPermission(card.permission) : true;
+          }),
+    [checkPermission, isModuleOn, modulesLoading]
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
@@ -486,8 +496,12 @@ export const InventoryAdminHub: React.FC = () => {
   }, [tz, showsMedical, canManage]);
 
   useEffect(() => {
+    // Waits for the module answer too: `showsMedical` is derived from the card
+    // list, so firing before it settles spends one request set on a guess and
+    // a second on the truth.
+    if (modulesLoading) return;
     void loadSummary();
-  }, [loadSummary]);
+  }, [loadSummary, modulesLoading]);
 
   const actions: AdminHubAction[] = [
     {
@@ -587,13 +601,29 @@ export const InventoryAdminHub: React.FC = () => {
               manager it sat directly above "Nothing here for your role",
               telling them in consecutive lines that everything is fine and
               that none of it is theirs. */}
-          {canManage && (
+          {canManage ? (
             <NeedsAttention
               rows={attentionRows}
               loading={loading}
               failedSources={failedSources}
               onRetry={() => void loadSummary()}
             />
+          ) : (
+            // The queue is gone for this viewer, and it was the only thing
+            // rendering `failedSources`. The EMS request is raised off the card
+            // being visible rather than off `inventory.manage`, so a checklist
+            // or store administrator holding the medical grant still makes it
+            // -- and a rejection would have vanished silently, leaving the card
+            // with no figure and nothing to say why. They are entitled to the
+            // number, so they are entitled to know it did not arrive.
+            failedSources.length > 0 && (
+              <div className="alert-warning mb-8 flex items-center gap-2 text-sm" role="alert">
+                <span className="flex-1">Some figures on this page did not load ({failedSources.join(', ')}).</span>
+                <button type="button" className="font-semibold underline" onClick={() => void loadSummary()}>
+                  Retry
+                </button>
+              </div>
+            )
           )}
           {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
             Without it a new quartermaster meets the item form first and fills in
@@ -633,7 +663,7 @@ export const InventoryAdminHub: React.FC = () => {
               invites them to sit through -- so say plainly that there is
               nothing here for them rather than showing a page that looks
               broken. */}
-          {supplyLines.length === 0 && bodySections.length === 0 && (
+          {!modulesLoading && supplyLines.length === 0 && bodySections.length === 0 && (
             <EmptyState
               icon={Package}
               title="Nothing here for your role"
