@@ -22,9 +22,9 @@ it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
 `PROGRESS.md`'s Log for detail). The fix carried forward through four more
 recovery branches/PRs of the identical shape, three of which again raced an
 in-progress Codex review and had to move on in turn:
-[#2218](https://github.com/thegspiro/the-logbook/pull/2218) (round 1,
+[#2218](https://github.com/thegspiro/the-logbook/pull/2218) (rounds 1-3,
 premature merge) → [#2220](https://github.com/thegspiro/the-logbook/pull/2220)
-(rounds 2-4, premature merge) → [#2221](https://github.com/thegspiro/the-logbook/pull/2221)
+(round 4, premature merge) → [#2221](https://github.com/thegspiro/the-logbook/pull/2221)
 (round 5, premature merge) → **[#2222](https://github.com/thegspiro/the-logbook/pull/2222)**
 (rounds 6-9, `claude/security-review-training-core-tr3-round6`), which
 **merged cleanly** — the first merge in this pass not to race an

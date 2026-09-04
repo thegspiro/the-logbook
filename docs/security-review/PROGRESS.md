@@ -47,12 +47,14 @@ the PR was opened).
 ### 2026-09-04 — Feature 18 (Training extended), pass 3 — 0 code fixes, 2 doc corrections (one caught by Codex on this pass's own PR)
 
 Diff-scoped against pass 2's merge commit (`e094e66e1c94604e00c9143e73bc27c8cb0f1014`)
-across all fifteen pass-2 artifacts (the thirteen pass-1 artifacts plus
-`apiCache.ts`/`apiCache.test.ts`, both added to the reviewed set by pass 2
-itself for the TRX2-1 fix and its guard test — an earlier draft of this
-count wrongly backdated `apiCache.ts` to pass 1, caught by a Codex review of
-this pass's own PR): four changed. `external_training.py` was a no-op
-import reformat.
+across all twenty-five pass-2 artifacts (the thirteen pass-1 artifacts, the
+two cache artifacts pass 2 itself added for the TRX2-1 fix and its guard
+test, and the ten frontend files pass 2's own frontend-surface inventory
+named — successive Codex reviews of this pass's own PR caught this count
+first excluding the cache artifacts, then the frontend ones): five changed.
+`external_training.py` was a no-op import reformat.
+`frontend/src/pages/SubmitTrainingPage.tsx` was an unrelated one-line
+layout fix (`7509263a`, a cross-cutting action-bar-positioning sweep).
 `external_training_service.py`'s 37-line diff turned out to be the repo
 owner's own 2026-09-02 fix (`803eff25`, "Harden external training requests
 against DNS rebinding") — closes the DNS-rebinding TOCTOU this feature's own

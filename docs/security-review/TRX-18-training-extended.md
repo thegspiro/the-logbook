@@ -539,17 +539,17 @@ commands above) was run directly and is green, including the equivalent
 **Prefix:** `TRX3` · **PR:** [#2223](https://github.com/thegspiro/the-logbook/pull/2223)
 
 **Scope check:** diffed the current tree against `e094e66e1c94604e00c9143e73bc27c8cb0f1014`
-(the pass-2 merge commit for PR #2012) across all fifteen pass-2 artifacts —
-the thirteen pass-1 artifacts (twelve feature files plus
-`training_program_service.py`, per pass 2's own scope-check above) plus
-`frontend/src/utils/apiCache.ts` and `apiCache.test.ts`, both added to the
-reviewed set by pass 2 itself for the TRX2-1 fix and its guard test (an
-earlier draft of this sentence said "fourteen pass-1 files plus
-`apiCache.test.ts`", which both undercounted pass 1 and backdated
-`apiCache.ts`'s own coverage to pass 1 — corrected after a Codex review of
-this pass's own PR). **Four** changed (corrected from an initial miscount of
-three that omitted the test file — caught by a separate Codex review round
-on this pass's own PR):
+(the pass-2 merge commit for PR #2012) across all twenty-five pass-2
+artifacts — the thirteen pass-1 artifacts (twelve feature files plus
+`training_program_service.py`, per pass 2's own scope-check above), the two
+cache artifacts pass 2 itself added (`frontend/src/utils/apiCache.ts` and
+`apiCache.test.ts`, for the TRX2-1 fix and its guard test — an earlier
+draft of this sentence said "fourteen pass-1 files plus `apiCache.test.ts`",
+which both undercounted pass 1 and backdated `apiCache.ts`'s own coverage
+to pass 1), and the ten frontend files pass 2's own frontend-surface
+inventory named (below, "Verified good ✅ (pass 2, ...)"), missed by this
+same earlier draft — corrected across two Codex review rounds on this
+pass's own PR. **Five** changed:
 
 - `backend/app/api/v1/endpoints/external_training.py` — a no-op import
   reformat (`from app.schemas.training import (TestConnectionResponse,)`
@@ -559,9 +559,18 @@ on this pass's own PR):
 - `frontend/src/utils/apiCache.ts` (81 lines added) and its test file
   `frontend/src/utils/apiCache.test.ts` (10 lines added) — see "Verified
   good" below; neither is a training-extended-specific change. The test
-  diff mirrors the source diff exactly: one new test for the
-  `/dashboard/action-items` prefix, one new test for the `/attendees`
-  substring.
+  diff mirrors only the two new cache-exclusion tests
+  (`/dashboard/action-items`, `/attendees`) in the source diff — it does
+  not touch the cache-generation/epoch mechanism the same source diff also
+  adds, which is exercised elsewhere (see `apiClient.test.ts` below, not a
+  mirror of this file).
+- `frontend/src/pages/SubmitTrainingPage.tsx` (1 line changed) — the
+  mobile sticky action bar's positioning classes changed from a bare
+  `inset-x-0` to `right-0 left-[var(--side-nav-width,0px)]` and its z-index
+  from 40 to 30 (`7509263a`, "Give every action bar the content inset, not
+  just the ones that needed it" — a cross-cutting layout sweep, not
+  training-specific or security-relevant). Confirmed no other file in pass
+  2's ten-file frontend inventory changed.
 
 **Not on the declared list, but part of the same unrelated diff and
 directly relevant to the claim above:** `frontend/src/services/
@@ -586,15 +595,19 @@ diff-stat): it is `Shift`/`ShiftTemplate`/the new
 with nothing touching `TrainingSubmission`, `TrainingWaiver`, `CourseCohort`,
 `CourseClass`, `ExternalTrainingProvider`, `ExternalCategoryMapping`,
 `ExternalUserMapping`, `ExternalTrainingSyncLog`, `ExternalTrainingImport`,
-`RecertificationPathway`, `CompetencyMatrix`, `InstructorQualification`,
+`RecertificationPathway`, `RenewalTask`, `MemberCompetency`,
+`CompetencyMatrix`, `InstructorQualification`,
 `TrainingEffectivenessEvaluation`, `MultiAgencyTraining`, `XAPIStatement`,
-`CourseCohortClass`, `CourseCohortMember`, or `SelfReportConfig` — this
-feature's model classes, named individually rather than by an unverified
-count (an earlier draft asserted "twelve," which this pass's own file list
-does not establish and a Codex review correctly flagged as unsubstantiated).
-Given a four-file diff this small, this pass is a targeted re-verification of
-what changed plus a re-confirmation of pass 1/2's claims, not a first-read of
-grown files.
+`CourseCohortClass`, `CourseCohortMember`, or `SelfReportConfig`. This list
+is what this feature's service/endpoint files were found to query or create
+against `models/training.py`, not asserted as exhaustive by construction —
+an earlier draft asserted an unverified count ("twelve") instead, and a
+first attempt at naming the set individually still missed `RenewalTask`/
+`MemberCompetency` (both directly used by
+`training_enhancement_service.py`), each caught by a Codex review of this
+pass's own PR. Given a five-file diff this small, this pass is a targeted
+re-verification of what changed plus a re-confirmation of pass 1/2's
+claims, not a first-read of grown files.
 
 ### TRX3-1 — Corrects a prior write-up — `external_training_service.py`'s DNS-rebinding TOCTOU is now closed, not narrowed
 
@@ -671,8 +684,9 @@ corrections, both applied:**
    `requests.Session` (mounted with `_PinnedHTTPSAdapter`, which connects
    to the validated IP while still asserting the original hostname for TLS)
    straight into `webpush(requests_session=session)` — the same
-   resolve-once-and-pin shape, for the one transport family
-   (`create_integration_client`'s siblings + `push_service.py`'s own) that
+   resolve-once-and-pin shape, applied to `push_service.py`'s own
+   `pywebpush`/`requests.Session` transport family (distinct from the
+   `httpx` family `create_integration_client`'s siblings share), which
    still needed a bespoke non-`httpx` fix. **Fix:** removed
    `push_service.py` from `KNOWN_LIMITATIONS.md`'s affected-site list too,
    correcting the count a second time in the same pass, from seven to six,
@@ -692,7 +706,7 @@ Re-read the current code directly for each (not re-cited from the doc):
   `training_waivers.py`, `training_submission_service.py`,
   `recertification`/`multi_agency`/`xapi` services inside
   `training_enhancements.py`'s service module) appear in this pass's
-  four-file diff.
+  five-file diff.
 - **TRX-2 / TRX-4 / TRX-5 / TRX-5b** — `external_training.py`'s only change
   is the import reformat; `update_provider`'s `apply_updates` call
   (TRX-2) is untouched. Cohort/syllabus files (TRX-4/5/5b) aren't in this
