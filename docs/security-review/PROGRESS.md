@@ -16,31 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2213](https://github.com/thegspiro/the-logbook/pull/2213)** (branch
-`claude/security-review-events`) — Feature 16, Events & requests, pass 3.
-Diff-scoped against pass 2's merge (`fef19238`, PR #1973): of the nine
-declared files, five changed, all belonging to one feature (member-visible
-attendee rosters + the seat-accurate capacity/waitlist rework it depended
-on), plus one new migration and 21 frontend files. First draft claimed "no
-findings" — wrong; Codex raised six comments, five real. **3 fixed:** EV-20
-(P1, `EligibleMemberResponse.email` required `str` 500'd the whole
-check-in roster whenever any member hid their email), EV-21 (P1,
+**#pending** (branch `claude/security-review-events-ev20-24-followup`) —
+Feature 16, Events & requests, pass 3 follow-up. #2213 (the pass-3 PR
+itself) merged at its stale first-draft state (`5b70834e`, "no findings")
+— the owner merged it while Codex's review of that same draft was still
+in progress, before the corrected findings and fixes could be pushed to
+it (CLAUDE.md pitfall #24: never reuse a branch whose PR has merged, so
+the fixes moved to a fresh branch/PR off current `main`, exactly as
+PR #2212 did for SCH-12). This PR carries forward everything Codex's
+review of #2213 found real: **3 fixed** — EV-20 (P1,
+`EligibleMemberResponse.email` required `str` 500'd the whole check-in
+roster whenever any member hid their email), EV-21 (P1,
 `create_or_update_rsvp`'s full-dump update silently wiped
 `dietary_restrictions`/`accessibility_needs` on any unrelated edit — a
 pre-existing bug this pass owns per CLAUDE.md), EV-22 (P2,
 `RecurringEventCreate` was missing `attendee_visibility` entirely, so a
-series' explicit visibility choice was silently dropped). **2 flagged:**
-EV-23 (series RSVP never shows the training phase-gate warning it claims to
-have confirmed — needs a product decision on what "the" warning means for a
-multi-phase series), EV-24 (editing an existing waitlisted RSVP can promote
-it out of queue order — needs its own careful fix given the capacity-
-locking discipline this path carries). Also swept in scope this round:
-`app/mcp/tools/events.py`/`writes.py`, missed by the file-level diff scoping
-— read in full, clean, no finding. Full completion gate green (10553/10553
-backend, 0 frontend errors). Rotation row 16 → ⏳ awaiting PR merge. Next:
-17 Training core, once this PR merges.
+series' explicit visibility choice was silently dropped) — and **2
+flagged**: EV-23 (series RSVP never shows the training phase-gate warning
+it claims to have confirmed), EV-24 (editing an existing waitlisted RSVP
+can promote it out of queue order). Also carries the events-specific MCP
+tool review Codex's scope-gap comment prompted. See the Log entries below
+for the full detail. Full completion gate green (10553/10553 backend, 0
+frontend errors). Rotation row 16 stays ⏳ awaiting merge. Next: 17
+Training core, once this PR merges.
 
 ---
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2213 merged at its stale draft state; fixes moved to a new PR
+
+**PR #2213 merged (`5b70834e`, the "no findings" first-draft state) before
+this pass's Codex-driven corrections could be pushed to it** — the owner
+merged while Codex's review was still being addressed, the same race
+PR #2210/#2212 hit for SCH-12. Per CLAUDE.md pitfall #24, the merged branch
+is not reused: the corrected findings and the three real fixes (EV-20,
+EV-21, EV-22) moved to a new branch off current `main` and a new PR,
+**#pending** (`claude/security-review-events-ev20-24-followup`), which also
+updates this doc's Log and Open PR entries to point at itself. See the
+entry immediately below for the full corrected write-up. Next: 17 Training
+core, once the follow-up PR merges.
 
 ### 2026-09-04 — Feature 16 (Events & requests, pass 3) — Codex follow-up (same PR): 3 fixes (2 P1), 2 flagged, 1 scope correction
 

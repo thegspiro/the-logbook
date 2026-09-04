@@ -13,20 +13,24 @@ read, extracted from `event_requests.py`)
 
 ---
 
-## Pass 3 (2026-09-04) — Codex follow-up (same PR): 3 fixes (1 P1 correctness), 2 flagged, 1 scope correction
+## Pass 3 (2026-09-04) — Codex follow-up: 3 fixes (2 P1), 2 flagged, 1 scope correction
 
-**PR:** [#2213](https://github.com/thegspiro/the-logbook/pull/2213).
+**PR:** [#2213](https://github.com/thegspiro/the-logbook/pull/2213) merged
+at its stale first-draft state before this correction could be pushed to
+it (CLAUDE.md pitfall #24 — see `PROGRESS.md`'s Log for detail); the
+correction below and its fixes carried forward on a new branch/PR,
+`claude/security-review-events-ev20-24-followup`.
 **Scoped since pass 2's merge:** `fef19238` (PR #1973).
 
-> **Correction (Codex review of this PR).** The first draft of this section
+> **Correction (Codex review of PR #2213).** The first draft of this section
 > claimed "no new findings, no code changes" — that was wrong. Codex raised
-> six comments against it; five are real (one P1 correctness bug this draft's
-> own "narrowing, not a new exposure" line had missed, one P2 schema gap, one
-> P2 pre-existing data-loss bug this draft surfaced without fixing, one P2
-> scope gap, one P2 ordering bug flagged rather than fixed) and one (the
-> phase-gate finding) is real but flagged, not fixed, for the reason given
-> under **Findings (pass 3)** below. The section below is the corrected one;
-> see the Log for the blow-by-blow.
+> six comments against it; five are real (two P1 correctness/data-loss bugs
+> this draft's own "narrowing, not a new exposure" line had missed or
+> surfaced without fixing, one P2 schema gap, one P2 scope gap, one P2
+> ordering bug flagged rather than fixed) and one (the phase-gate finding)
+> is real but flagged, not fixed, for the reason given under
+> **Findings (pass 3)** below. The section below is the corrected one; see
+> `PROGRESS.md`'s Log for the blow-by-blow.
 
 Five months of feature work sit between pass 2 and now on `main` generally,
 but diffed narrowly (per file, not by line-count growth) against `fef19238`
