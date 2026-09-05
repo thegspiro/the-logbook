@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Compliance Matrix: a grid you could read becomes a queue you can work (2026-09-05)
+
+**Changed**
+
+- **The member × requirement icon grid is replaced by a triage rail.** Every
+  cell said only "met" or "not met", so a coordinator could see who was short
+  without seeing by how much, and the screen offered nowhere to go next.
+  Members (or requirements, on the other axis) are now grouped by standing,
+  ordered worst-first, and stepped through one at a time, with the numbers
+  behind each status on the row — "6 of 24 hours", "Lapsed 41 days ago",
+  "Expires in 26 days".
+- **The dashboard's non-compliant link now lands filtered.** The Needs
+  Attention widget has been linking to `?status=noncompliant` all along and the
+  grid ignored it, dropping the coordinator into the full unfiltered roster.
+  Clearing the chip drops the parameter too, so a refresh does not silently
+  re-apply a filter that was just dismissed.
+- `GET /training/compliance-matrix` gains optional per-cell progress
+  (`progress_current` / `progress_required` / `progress_unit`, the pre-waiver
+  `base_required` and `waived_months`, and the evaluation window), per
+  requirement meta (type, frequency, target, unit), and a top-level `as_of`.
+  **Additive only** — the four original cell keys are unchanged, so the
+  printable report and any other consumer keep working.
+- `evaluate_member_requirement_detail()` returns the counts the evaluator
+  already computed and discarded. `evaluate_member_requirement()` stays a thin
+  wrapper over it returning the same `(status, completion, expiry)` triple, so
+  its callers and the existing suite are untouched; a parametrized test pins
+  the two in lockstep across every requirement type.
+- Actions are limited to ones with something behind them: Print, a CSV export
+  written through the formula-injection-safe `buildCsv`, and links to member
+  training records. The mock's Notify and Assign buttons have no endpoint, and
+  a control wired to nothing invites somebody to believe a message was sent.
+
+**Fixed**
+
+- **A member exempt from a requirement could never reach 100%.**
+  `completion_pct` divided by every active requirement while counting only the
+  ones applicable to the member, so anyone whose membership type excused them
+  from one was capped below full compliance no matter what they did. The
+  denominator is now the requirements actually asked of them, reported
+  alongside as `requirements_met` / `requirements_total`.
+- **A certification expiring soon read as a failure.** The tally counted only
+  the `met` tone, so a member holding a card valid for another 26 days rendered
+  under "Compliant" reading "1 of 2 met · 1 open item" — a contradiction on the
+  face of the screen. A cert valid today is met today; the tone is a renewal
+  warning, and the orange "Due soon" pill still marks the row.
+- The row's date printed twice — in the sub-line and again in its own column —
+  which on a phone was three wasted lines per row. Window labels also printed
+  the year twice ("Jan 1, 2026 – Dec 31, 2026") and now print it once when both
+  ends share it, keeping both when the window genuinely crosses a year.
+- The loading state nested a `role="status"` inside `SkeletonPage`'s own live
+  region, so a screen reader announced only the inner one, and the queue rail
+  had no accessible name.
+
+  The last three were found by running the app and looking at it. All 6,521
+  frontend tests passed while they were on screen.
+
 ### Apparatus: the fleet record becomes officer-only (2026-09-05)
 
 **Changed**
