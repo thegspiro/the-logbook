@@ -1,7 +1,7 @@
 """Mark pre-existing count-only shift reports as carrying org call-type slugs.
 
 Revision ID: a3d7e2f18c45
-Revises: c8f4a1e6b309
+Revises: a1c7e93b2d54
 
 ``ShiftCompletionReport.call_types`` holds two different things. Under
 per-incident (detailed) tracking it holds the incident text an officer typed;
@@ -40,7 +40,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a3d7e2f18c45"
-down_revision = "c8f4a1e6b309"
+down_revision = "a1c7e93b2d54"
 branch_labels = None
 depends_on = None
 
