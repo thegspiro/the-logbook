@@ -904,6 +904,16 @@ def _false_claims(sources: dict[str, str]) -> list[str]:
             named = set(re.findall(r"[a-z_]{4,}", block)) & model_tables
             for table in sorted(named):
                 built_by = creators.get(table, set()) & forebears
+                # No citation exemption. An earlier version here exempted a
+                # block that merely mentioned the creating revision's id, to
+                # spare the concessive form ("`positions` looks create_all-only
+                # ... but 20260805_0008 renames `roles` into it"). A mention is
+                # not an assertion: "positions is a model-only table;
+                # 20260805_0008 only renames user_roles" would have been
+                # exempted while still making the false claim, which is a
+                # bypass anyone could reach by accident. The corpus is clean
+                # without it -- #2261 reworded the one concessive block to
+                # state the positive directly, which is the house style now.
                 if built_by:
                     offenders.append(
                         f"{name} says `{table}` is create_all-only, but "
@@ -1004,6 +1014,24 @@ class TestTheClaimDetection:
         creation at all. A check that flags correct prose gets deleted."""
         assert not self._plant(innocuous), f"false positive on: {innocuous!r}"
 
+    @pytest.mark.parametrize(
+        "cited",
+        [
+            "see 20260722_0001 for context",
+            # The creating revision itself. Mentioning it is not asserting it:
+            # this sentence still denies that a migration creates the table.
+            "20260805_0008 only renames user_roles",
+        ],
+    )
+    def test_naming_a_revision_does_not_excuse_a_false_claim(self, cited):
+        """A revision id in the block buys nothing.
+
+        Exempting on a mention was a bypass reachable by accident -- the second
+        case here states the falsehood and names the very revision that
+        disproves it.
+        """
+        assert self._plant(f"positions is a model-only table; {cited}.")
+
     def test_a_sibling_is_not_an_ancestor(self):
         """The bug this replaced: a linear walk gives siblings adjacent
         positions, so comparing positions calls a sibling's correct claim an
@@ -1024,3 +1052,482 @@ class TestTheClaimDetection:
         ancestors = _ancestor_sets(_migration_sources())
 
         assert {"20260814_0003", "20260813_0020"} <= ancestors["20260814_0004"]
+
+
+# ---------------------------------------------------------------------------
+# A table name has to be valid *at the revision that uses it*
+# ---------------------------------------------------------------------------
+#
+# The two ratchets above ask whether a table is ever created by a migration.
+# Neither asks whether the name is correct *at the point in the chain where it
+# is written*, and that gap is a real defect class, not a hypothetical one:
+# 20260528_0001, 20260610_0002, 20260720_0002 and 20260801_0010 each queried
+# `positions` while the table was still called `roles`, guarded on its absence,
+# and therefore did nothing at all on every upgrade path they existed to repair.
+#
+# Both existing checks pass them, correctly on their own terms. The structural
+# tests skip `positions` because it *is* migration-created (by 20260805_0008's
+# rename). `_false_claims` exempts them because a claim is only false when the
+# creating revision is an ANCESTOR, and here the creator is a descendant -- for
+# a revision that truly runs before the table exists, the guard is load-bearing
+# and the claim is true.
+#
+# What neither asks is the follow-on question: if the table does not exist yet
+# under this name, what is this migration doing naming it? Either it means a
+# different table (the bug), or it is dead code.
+
+#: Clauses that introduce a table name in raw SQL. DDL forms matter as much as
+#: DML here: 22 migration files issue raw ``ALTER TABLE`` through
+#: ``op.execute(sa.text(...))``, so recognizing only FROM/JOIN/UPDATE/INTO left
+#: the commonest way this codebase names a table invisible to both checks.
+_SQL_TABLE_REF = re.compile(
+    r"\b(?:FROM|JOIN|UPDATE|INTO|ALTER\s+TABLE|TRUNCATE(?:\s+TABLE)?)"
+    r"\s+`?([a-z_][a-z0-9_]*)`?",
+    re.IGNORECASE,
+)
+#: Alembic operations whose FIRST string argument is the table.
+_OP_TABLE_FIRST = re.compile(
+    r"op\.(?:add_column|drop_column|alter_column|bulk_insert|create_table|"
+    r"rename_table|drop_table)\(\s*[\"']([a-z0-9_]+)[\"']"
+)
+#: Operations whose first argument NAMES THE CONSTRAINT OR INDEX, not the
+#: table -- the table is the second. Reading the first argument here records
+#: `ix_roles_slug` as the table and lets a genuine post-rename
+#: `op.create_index("ix_roles_slug", "roles", ...)` pass unnoticed.
+#: The table is the SECOND argument here, and either argument may be a
+#: constant rather than a literal -- ``op.create_index(_INDEX, _TABLE, ...)``
+#: is used in this corpus. ``create_unique_constraint`` and
+#: ``create_check_constraint`` belong in this group too; omitting them left
+#: a post-rename reference in either form invisible.
+_OP_TABLE_SECOND = re.compile(
+    r"op\.(?:create_index|drop_index|create_foreign_key|drop_constraint"
+    r"|create_unique_constraint|create_check_constraint)\("
+    r"\s*[^,]+,\s*(?:[\"']([a-z0-9_]+)[\"']|([A-Za-z_]\w*))"
+)
+#: ``op.drop_index("ix", table_name="roles")`` -- the keyword form.
+_OP_TABLE_KWARG = re.compile(
+    r"table_name\s*=\s*(?:[\"']([a-z0-9_]+)[\"']|([A-Za-z_]\w*))"
+)
+
+
+#: ``op.add_column(table, ...)`` -- the argument is a name, not a literal.
+_OP_TABLE_FIRST_VAR = re.compile(
+    r"op\.(?:add_column|drop_column|alter_column|bulk_insert|create_table|"
+    r"rename_table|drop_table)\(\s*([A-Za-z_]\w*)\s*[,)]"
+)
+
+
+def _literal_bindings(text: str) -> dict[str, str]:
+    """Names bound to a plain string literal, module-level or inside ``upgrade()``.
+
+    A migration that routes the table through a variable -- ``table = "roles"``,
+    then ``op.add_column(table, ...)`` and ``f"... FROM `{table}`"`` -- would
+    otherwise contribute no table name at all, and sail through both checks
+    while querying a table the rename retired. That is the exact regression
+    these checks exist to prevent, so the binding is resolved rather than
+    skipped.
+
+    Only *literal* bindings resolve. A name computed at runtime (a helper that
+    inspects the database and returns one of two tables, say) is genuinely
+    dynamic and no static reading can settle it; those still contribute
+    nothing, which is a known limit rather than an oversight.
+    """
+    bindings = dict(_string_constants(text))
+    bindings.update(
+        re.findall(
+            r"^\s*([A-Za-z_]\w*)\s*=\s*[\"']([a-z0-9_]+)[\"']\s*$",
+            _upgrade_body(text),
+            re.MULTILINE,
+        )
+    )
+    return bindings
+
+
+def _tables_referenced(text: str) -> set[str]:
+    """Every table name an ``upgrade()`` names, in ``op.*`` calls and in SQL.
+
+    Scoped to ``upgrade()`` for the same reason as
+    ``_tables_created_by_migrations``: a ``downgrade()`` runs against a
+    different schema and never establishes what the upgrade path sees.
+    """
+    body = _upgrade_body(text)
+    bindings = _literal_bindings(text)
+
+    found = set(_OP_TABLE_FIRST.findall(body))
+    for pattern in (_OP_TABLE_SECOND, _OP_TABLE_KWARG):
+        for literal, name in pattern.findall(body):
+            if literal:
+                found.add(literal)
+            elif name in bindings:
+                found.add(bindings[name])
+    for name in _OP_TABLE_FIRST_VAR.findall(body):
+        if name in bindings:
+            found.add(bindings[name])
+
+    for match in re.finditer(r'"""(.*?)"""|"([^"\n]*)"|\'([^\'\n]*)\'', body, re.S):
+        literal = next((group for group in match.groups() if group), "")
+        # Substitute f-string placeholders that name a literal binding, so
+        # f"SELECT id FROM `{table}`" is read as the table it interpolates.
+        resolved = re.sub(
+            r"\{(\w+)\}",
+            lambda hit: bindings.get(hit.group(1), hit.group(0)),
+            literal,
+        )
+        found |= {name.lower() for name in _SQL_TABLE_REF.findall(resolved)}
+    return found
+
+
+def _tables_renamed_away(sources: dict[str, str]) -> dict[str, set[str]]:
+    """Old name -> the revisions that rename it to something else."""
+    retired: dict[str, set[str]] = {}
+    for text in sources.values():
+        revision = _revision_of(text)
+        if revision is None:
+            continue
+        for old in re.findall(
+            r"op\.rename_table\(\s*[\"']([a-z0-9_]+)[\"']", _upgrade_body(text)
+        ):
+            retired.setdefault(old, set()).add(revision)
+    return retired
+
+
+#: The four revisions that shipped naming `positions` before 20260805_0008
+#: renamed `roles` into it. Their guards therefore always fire and their bodies
+#: are inert on every upgrade path. They are NOT fixed in place: an
+#: already-deployed migration is not edited to change its behaviour (AGENTS.md),
+#: and a database already past them would never execute a rewritten body anyway
+#: (CLAUDE.md pitfall #23) -- so `e8a1c04f6b27` carries the repair instead.
+#:
+#: This is a closed baseline of four historical facts, in the manner of the
+#: coverage floors: it can only ever shrink. It is not an allowlist to append
+#: to. A NEW migration naming a table its ancestors do not create is a defect
+#: and fails below -- which is the whole point, since nothing caught these four
+#: for months.
+_INERT_BY_HISTORY = frozenset(
+    {
+        "20260528_0001_rename_membership_committee_chair_to_coordinator.py",
+        "20260610_0002_add_position_settings.py",
+        "20260720_0002_backfill_department_message_role_ids.py",
+        "20260801_0010_grant_equipment_check_submit_to_members.py",
+    }
+)
+
+
+def _names_not_yet_valid_unfiltered(sources: dict[str, str]) -> list[str]:
+    """``_names_not_yet_valid`` without the historical baseline applied."""
+    return _names_not_yet_valid(sources, apply_baseline=False)
+
+
+def _names_not_yet_valid(
+    sources: dict[str, str], apply_baseline: bool = True
+) -> list[str]:
+    """Migrations naming a table whose only creators are NOT their ancestors."""
+    ancestors = _ancestor_sets(sources)
+
+    creators: dict[str, set[str]] = {}
+    revisions: dict[str, str] = {}
+    for name, text in sources.items():
+        revision = _revision_of(text)
+        if revision is None:
+            continue
+        revisions[name] = revision
+        for table in _tables_created_by_migrations({name: text}):
+            creators.setdefault(table, set()).add(revision)
+
+    offenders = []
+    for name, text in sources.items():
+        revision = revisions.get(name)
+        if revision is None:
+            continue
+        # A revision may of course create the table itself.
+        if apply_baseline and name.rsplit("/", 1)[-1] in _INERT_BY_HISTORY:
+            continue
+        forebears = ancestors.get(revision, set()) | {revision}
+        for table in sorted(_tables_referenced(text)):
+            built_by = creators.get(table)
+            # No migration creates it: create_all-only, and the existing
+            # structural ratchets own that case.
+            if not built_by:
+                continue
+            if built_by & forebears:
+                continue
+            offenders.append(
+                f"{name} references `{table}`, which no ancestor creates -- "
+                f"only {sorted(built_by)[0]}, which runs later"
+            )
+    return offenders
+
+
+def _names_already_retired(sources: dict[str, str]) -> list[str]:
+    """Migrations naming a table an ancestor already renamed out of existence.
+
+    A retired name that the models still declare is NOT an offender: the name
+    comes back at startup. ``20260312_0200`` renames ``meeting_action_items``
+    to ``minutes_action_items``, and ``app/models/meeting.py`` then declares a
+    separate ``meeting_action_items``, so both tables exist on a running
+    installation and a later migration naming the first is correct -- as
+    ``7bfe85f2e4e5`` is, guarding on the table's presence. Only a name nothing
+    brings back, as ``roles`` is once ``20260805_0008`` has run, is a defect.
+    """
+    ancestors = _ancestor_sets(sources)
+    retired = _tables_renamed_away(sources)
+    model_tables = set(Base.metadata.tables)
+
+    offenders = []
+    for name, text in sources.items():
+        revision = _revision_of(text)
+        if revision is None:
+            continue
+        forebears = ancestors.get(revision, set())
+        for table in sorted(_tables_referenced(text)):
+            if table in model_tables:
+                continue
+            movers = retired.get(table, set()) & forebears
+            if movers:
+                offenders.append(
+                    f"{name} references `{table}`, which {sorted(movers)[0]} "
+                    f"already renamed away"
+                )
+    return offenders
+
+
+def test_no_migration_references_a_table_before_it_exists():
+    """The defect the two older ratchets are each built not to see.
+
+    Measured before adopting: this reports exactly the four known offenders
+    against the pre-fix corpus and nothing at all against the corrected one, so
+    it catches the real defect without flagging a single correct migration.
+    """
+    assert _names_not_yet_valid(_migration_sources()) == []
+
+
+def test_no_migration_references_a_table_name_a_rename_retired():
+    """The mirror, and the half a one-directional check would miss.
+
+    After 20260805_0008 the rows are in `positions`; a later revision still
+    saying `roles` is the same bug pointing the other way, and would equally
+    read as working code. Measured clean on the current corpus before adopting.
+    """
+    assert _names_already_retired(_migration_sources()) == []
+
+
+def test_the_inert_baseline_names_only_revisions_that_are_really_inert():
+    """Guard the baseline itself, so it cannot quietly become an allowlist.
+
+    Every entry must (a) exist, and (b) still be an offender were it not
+    exempt -- otherwise it has been fixed or removed and the entry should go.
+    A baseline that outlives its reason is how a ratchet stops ratcheting.
+    """
+    sources = _migration_sources()
+    basenames = {name.rsplit("/", 1)[-1] for name in sources}
+    assert _INERT_BY_HISTORY <= basenames, "baseline names a migration that is gone"
+
+    without_baseline = {
+        name: text
+        for name, text in sources.items()
+        if name.rsplit("/", 1)[-1] in _INERT_BY_HISTORY
+    }
+    # Scored against the full corpus for ancestry, but only these reported.
+    reported = {
+        offender.split(" ", 1)[0].rsplit("/", 1)[-1]
+        for offender in _names_not_yet_valid_unfiltered(sources)
+    }
+    assert _INERT_BY_HISTORY <= reported, (
+        "a baseline entry is no longer an offender -- remove it: "
+        f"{sorted(_INERT_BY_HISTORY - reported)}"
+    )
+    assert without_baseline, "baseline resolved to no sources"
+
+
+class TestTheChainNameDetection:
+    """Guard the guard, as above: every assertion plants an offender.
+
+    The corpus is expected to be clean, so asserting cleanliness would prove
+    only that the detector returns something falsy.
+    """
+
+    def _sources_with(self, filename: str, body: str) -> dict[str, str]:
+        sources = dict(_migration_sources())
+        sources[filename] = body
+        return sources
+
+    def test_a_reference_to_a_later_created_table_is_reported(self):
+        """A revision early in the chain naming `positions`, which only the
+        much later 20260805_0008 brings into existence."""
+        planted = self._sources_with(
+            "planted_early.py",
+            'revision = "planted_early"\n'
+            'down_revision = "20260502_0004"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("UPDATE positions SET slug = :s"))\n',
+        )
+
+        offenders = _names_not_yet_valid(planted)
+
+        assert any("planted_early" in o and "positions" in o for o in offenders), (
+            "A migration querying `positions` before the rename creates it was "
+            "not reported."
+        )
+
+    def test_the_same_reference_after_the_rename_is_fine(self):
+        """The identical statement on a descendant of the rename is correct,
+        and reporting it would condemn every migration written since August."""
+        planted = self._sources_with(
+            "planted_late.py",
+            'revision = "planted_late"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("UPDATE positions SET slug = :s"))\n',
+        )
+
+        assert not [o for o in _names_not_yet_valid(planted) if "planted_late" in o]
+
+    def test_a_retired_name_used_after_the_rename_is_reported(self):
+        planted = self._sources_with(
+            "planted_stale.py",
+            'revision = "planted_stale"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("SELECT id FROM roles"))\n',
+        )
+
+        offenders = _names_already_retired(planted)
+
+        assert any("planted_stale" in o and "roles" in o for o in offenders)
+
+    def test_a_table_routed_through_a_variable_is_still_seen(self):
+        """The hole a literal-only scan leaves.
+
+        A migration binding ``table = "roles"`` and using it in both the op
+        call and an f-string contributes no literal table name at all, so it
+        would sail through both checks while querying the table
+        20260805_0008 retired -- the exact regression they exist to prevent.
+        """
+        planted = self._sources_with(
+            "planted_var.py",
+            'revision = "planted_var"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    table = "roles"\n'
+            '    op.add_column(table, sa.Column("z", sa.JSON()))\n'
+            '    op.execute(sa.text(f"SELECT id FROM `{table}`"))\n',
+        )
+
+        offenders = _names_already_retired(planted)
+
+        assert any(
+            "planted_var" in o and "roles" in o for o in offenders
+        ), "A table routed through a variable evaded the retired-name check."
+
+    def test_a_module_level_table_constant_is_resolved(self):
+        """``_TABLE = "roles"`` is the house style for this, so it must resolve."""
+        planted = self._sources_with(
+            "planted_const.py",
+            'revision = "planted_const"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            '_TABLE = "roles"\n'
+            "def upgrade() -> None:\n"
+            '    op.drop_column(_TABLE, "z")\n',
+        )
+
+        assert any("planted_const" in o for o in _names_already_retired(planted))
+
+    def test_a_raw_alter_table_is_seen(self):
+        """22 migration files issue raw ``ALTER TABLE`` through op.execute.
+
+        Recognizing only FROM/JOIN/UPDATE/INTO left the commonest way this
+        codebase names a table invisible, so a post-rename
+        ``ALTER TABLE roles ...`` passed both checks while addressing a table
+        that no longer exists.
+        """
+        planted = self._sources_with(
+            "planted_ddl.py",
+            'revision = "planted_ddl"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("ALTER TABLE roles ADD COLUMN z JSON NULL"))\n',
+        )
+
+        offenders = _names_already_retired(planted)
+
+        assert any("planted_ddl" in o and "roles" in o for o in offenders)
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            'op.create_index(_INDEX, _TABLE, ["slug"])',
+            'op.create_unique_constraint("uq_x", _TABLE, ["slug"])',
+            'op.create_check_constraint("ck_x", _TABLE, "slug <> \'\'")',
+            'op.drop_index("ix_x", table_name=_TABLE)',
+        ],
+    )
+    def test_a_second_argument_constant_is_resolved(self, call):
+        """``op.create_index(_INDEX, _TABLE, ...)`` is used in this corpus.
+
+        Requiring both arguments to be string literals -- and omitting the
+        unique/check constraint operations -- left a post-rename reference in
+        any of these forms contributing no table name at all.
+        """
+        planted = self._sources_with(
+            "planted_second.py",
+            'revision = "planted_second"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            '_INDEX = "ix_roles_slug"\n'
+            '_TABLE = "roles"\n'
+            "def upgrade() -> None:\n"
+            f"    {call}\n",
+        )
+
+        assert any(
+            "planted_second" in o and "roles" in o
+            for o in _names_already_retired(planted)
+        ), f"not seen: {call}"
+
+    def test_a_retired_name_the_models_bring_back_is_not_an_offender(self):
+        """The other direction, and a live case rather than a hypothetical.
+
+        20260312_0200 renames `meeting_action_items` away, but the models
+        declare a separate table under that name, so create_all restores it and
+        a later migration naming it is correct. Reporting it would send someone
+        to delete a guard that is doing real work.
+        """
+        planted = self._sources_with(
+            "planted_back.py",
+            'revision = "planted_back"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("SELECT id FROM meeting_action_items"))\n',
+        )
+
+        assert not [o for o in _names_already_retired(planted) if "planted_back" in o]
+
+    def test_a_create_all_only_table_is_left_to_the_other_ratchets(self):
+        """No migration creates `event_requests`, so this check must stay
+        silent on it -- the guard-on-existence tests above own that case, and
+        two ratchets reporting one table would make both harder to act on."""
+        planted = self._sources_with(
+            "planted_createall.py",
+            'revision = "planted_createall"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("SELECT id FROM event_requests"))\n',
+        )
+
+        assert not [
+            o for o in _names_not_yet_valid(planted) if "planted_createall" in o
+        ]
+
+    def test_a_migration_creating_the_table_itself_is_not_an_offender(self):
+        """The table need not predate the revision that makes it."""
+        planted = self._sources_with(
+            "planted_selfcreate.py",
+            'revision = "planted_selfcreate"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.create_table("brand_new_widgets", sa.Column("id", sa.String(36)))\n'
+            '    op.execute(sa.text("SELECT id FROM brand_new_widgets"))\n',
+        )
+
+        assert not [
+            o for o in _names_not_yet_valid(planted) if "planted_selfcreate" in o
+        ]

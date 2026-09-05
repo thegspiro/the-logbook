@@ -488,8 +488,8 @@ days, so the platoons tile to exactly one on-duty platoon per day:
 
 ### Department Platoon Overview & Bulk Assignment
 
-- A **Platoon Management** page (`/scheduling/platoons`, `scheduling.manage`,
-  linked from Settings → Platoons) lists every platoon and the unassigned bucket
+- A **Platoon Management** page (`/scheduling/admin/platoons`, `scheduling.manage`,
+  a card on Scheduling Administration) lists every platoon and the unassigned bucket
   with their active members, and lets a manager **bulk-assign** members to a
   platoon (or clear it) in one request.
 - `GET /scheduling/platoons/overview` (**`scheduling.manage`** as of 2026-08-17)
@@ -586,21 +586,53 @@ assignments, check-in state) remains visible to any member.
 
 | URL                                         | Page                                    | Permission                                                                |
 | ------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling`                               | Scheduling Hub                          | Authenticated                                                             |
+| `/scheduling`                               | Scheduling Hub (members)                | Authenticated                                                             |
+| `/scheduling/admin`                         | Scheduling Administration               | any of `scheduling.manage`, `training.view_all`, `training.manage`        |
 | `/inventory/admin/checklists/supply`        | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`    |
 | `/inventory/checklists/apparatus-inventory` | Apparatus Inventory _(2026-08-10)_      | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 ### Scheduling Tabs
 
-| Tab         | Description                                     | Admin Only |
-| ----------- | ----------------------------------------------- | ---------- |
-| Schedule    | Calendar view of shifts                         | No         |
-| My Shifts   | Personal shifts, confirm/decline, swap/time-off | No         |
-| Open Shifts | Browse and sign up for available shifts         | No         |
-| Requests    | Swap and time-off request management            | No         |
-| Templates   | Shift template and pattern management           | Yes        |
-| Reports     | Hours, coverage, call volume, availability      | Yes        |
-| Settings    | Scheduling configuration                        | Yes        |
+`/scheduling` is the member's page. Nothing administrative is reached from it —
+see **Scheduling Administration** below.
+
+| Tab           | Description                                     |
+| ------------- | ----------------------------------------------- |
+| Schedule      | Calendar view of shifts                         |
+| My Shifts     | Personal shifts, confirm/decline, swap/time-off |
+| Open Shifts   | Browse and sign up for available shifts         |
+| Requests      | Swap and time-off request management            |
+| Shift Reports | End-of-shift reports you filed or are named on  |
+
+### Scheduling Administration _(2026-09-05)_
+
+`/scheduling/admin`, in the **Administration** section of the navigation beside
+Training Admin and Inventory Admin. It replaces the strip of officer tools that
+used to sit on the member-facing page, where an administrator had to open the
+schedule to find the settings.
+
+| Page                    | URL                                    | Permission                                                         |
+| ----------------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| Shift Templates         | `/scheduling/admin/templates`          | `scheduling.manage`                                                |
+| Shift Patterns          | `/scheduling/admin/patterns`           | `scheduling.manage`                                                |
+| Scheduling Reports      | `/scheduling/admin/reports`            | `scheduling.manage`                                                |
+| Platoons                | `/scheduling/admin/platoons`           | `scheduling.manage`                                                |
+| Who Can Fill What       | `/scheduling/admin/positions`          | any of `scheduling.manage`, `training.view_all`, `training.manage` |
+| Settings (six sections) | `/scheduling/admin/settings/<section>` | `scheduling.manage`                                                |
+
+Settings sections: `general`, `apparatus`, `platoons`, `eligibility`,
+`notifications`, `shift-reports` — each its own route, so a section can be
+linked to and bookmarked. The old `Equipment` section is gone; its two links
+into Inventory are cards on the hub, gated on Inventory's own grants.
+
+> **The old URLs no longer resolve, and there is no redirect:**
+> `/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`,
+> `/scheduling/platoons`, `/scheduling/qualifications`, `/scheduling/settings`.
+
+> **`scheduling.manage` and `training.view_all` are both in
+> `ADMIN_NAVIGATION_PERMISSIONS`.** Without them the Administration section
+> never opens for the two officers whose only administrative page is in here,
+> and a child gate cannot admit anyone its parent has already turned away.
 
 ---
 
@@ -802,7 +834,7 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 - **Shift position eligibility system**: Operational ranks now define `eligible_positions` — a list of shift positions each rank is qualified for. Dashboard signup validates against eligibility. Existing ranks backfilled via migration
 - **Rank eligible positions UI redesign**: Settings page shows a clear matrix of ranks × positions with toggle controls
-- **Scheduling admin sub-pages**: Admin tabs extracted into dedicated routed pages: `/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/settings` with back navigation and `ProtectedRoute` gating
+- **Scheduling admin sub-pages**: Admin tabs extracted into dedicated routed pages with back navigation and `ProtectedRoute` gating. They moved under `/scheduling/admin` on 2026-09-05 — see **Scheduling Administration** above for the current URLs.
 - **Shift settings tabbed sub-navigation**: Settings page reorganized into tabbed sections
 - **Structured position slots**: Shifts define required and optional position slots with decline notifications
 - **Open slot visibility**: Declined or removed members reveal open slots for re-assignment
@@ -818,13 +850,16 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 | URL                                                 | Page                             | Permission               |
 | --------------------------------------------------- | -------------------------------- | ------------------------ |
-| `/scheduling/templates`                             | Scheduling Templates             | `scheduling.manage`      |
-| `/scheduling/patterns`                              | Scheduling Patterns              | `scheduling.manage`      |
-| `/scheduling/reports`                               | Scheduling Reports               | `scheduling.manage`      |
-| `/scheduling/settings`                              | Scheduling Settings              | `scheduling.manage`      |
+| `/scheduling/templates` ¹                           | Scheduling Templates             | `scheduling.manage`      |
+| `/scheduling/patterns` ¹                            | Scheduling Patterns              | `scheduling.manage`      |
+| `/scheduling/reports` ¹                             | Scheduling Reports               | `scheduling.manage`      |
+| `/scheduling/settings` ¹                            | Scheduling Settings              | `scheduling.manage`      |
 | `/inventory/admin/checklists/templates/new`         | Equipment Check Template Builder | `inventory.check_manage` |
 | `/inventory/admin/checklists/templates/:templateId` | Edit Equipment Check Template    | `inventory.check_manage` |
 | `/inventory/admin/checklists/reports`               | Equipment Check Reports          | `inventory.check_view`   |
+
+¹ These four moved under `/scheduling/admin` on 2026-09-05 and the original
+URLs no longer resolve — see **Scheduling Administration** above.
 
 ### Data Model Changes (2026-03-19)
 

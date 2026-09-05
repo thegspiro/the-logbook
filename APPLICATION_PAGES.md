@@ -584,19 +584,47 @@ Tab-based interface with the following views:
 | `reports`          | Reports          | Yes        |
 | `settings`         | Settings         | Yes        |
 
-### Scheduling Admin Pages (2026-03-19)
+### Scheduling Administration (2026-09-05)
 
-| URL                          | Page                          | Permission                                                         |
-| ---------------------------- | ----------------------------- | ------------------------------------------------------------------ |
-| `/scheduling/templates`      | Shift Templates Management    | `scheduling.manage`                                                |
-| `/scheduling/patterns`       | Shift Pattern Management      | `scheduling.manage`                                                |
-| `/scheduling/reports`        | Scheduling Reports            | `scheduling.manage`                                                |
-| `/scheduling/settings`       | Scheduling Settings           | `scheduling.manage`                                                |
-| `/scheduling/platoons`       | Platoon Management            | `scheduling.manage`                                                |
-| `/scheduling/qualifications` | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage` |
-| `/scheduling/checkin`        | Shift Check-In                | Authenticated                                                      |
+Everything an officer administers about the schedule sits under
+`/scheduling/admin`, reached from the **Administration** section of the
+navigation beside Training Admin and Inventory Admin. It was previously reached
+only from a row of cards on the member-facing `/scheduling` page — so an
+administrator opened the schedule to find the settings, and the Administration
+section had no scheduling entry at all. That row is gone.
 
-> Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
+| URL                                        | Page                          | Permission                                                         |
+| ------------------------------------------ | ----------------------------- | ------------------------------------------------------------------ |
+| `/scheduling/admin`                        | Scheduling Administration hub | any of `scheduling.manage`, `training.view_all`, `training.manage` |
+| `/scheduling/admin/templates`              | Shift Templates Management    | `scheduling.manage`                                                |
+| `/scheduling/admin/patterns`               | Shift Pattern Management      | `scheduling.manage`                                                |
+| `/scheduling/admin/reports`                | Scheduling Reports            | `scheduling.manage`                                                |
+| `/scheduling/admin/platoons`               | Platoon Management            | `scheduling.manage`                                                |
+| `/scheduling/admin/positions`              | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage` |
+| `/scheduling/admin/settings/general`       | Scheduling Settings — General | `scheduling.manage`                                                |
+| `/scheduling/admin/settings/apparatus`     | Settings — Apparatus          | `scheduling.manage`                                                |
+| `/scheduling/admin/settings/platoons`      | Settings — Platoons           | `scheduling.manage`                                                |
+| `/scheduling/admin/settings/eligibility`   | Settings — Eligibility        | `scheduling.manage`                                                |
+| `/scheduling/admin/settings/notifications` | Settings — Notifications      | `scheduling.manage`                                                |
+| `/scheduling/admin/settings/shift-reports` | Settings — Shift Reports      | `scheduling.manage`                                                |
+| `/scheduling/checkin`                      | Shift Check-In                | Authenticated                                                      |
+
+> **The old URLs are gone, with no redirect.** `/scheduling/templates`,
+> `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
+> `/scheduling/qualifications` and `/scheduling/settings` no longer resolve.
+
+> **The hub admits two different administrators.** Its route accepts the
+> training grants because the position roster inside it does; the hub's body
+> shows each viewer only the cards their own permissions open, and says so
+> plainly when that is none. The **nav row** stays on `scheduling.manage`,
+> because a row labelled "Scheduling Admin" that opens one card is a worse offer
+> than no row.
+
+> **`scheduling.manage` and `training.view_all` are both in
+> `ADMIN_NAVIGATION_PERMISSIONS`.** Without the first, a scheduling officer
+> holding nothing else administrative never sees the Administration section open;
+> without the second, neither does a training officer whose only page here is the
+> roster. A child gate cannot admit anyone its parent has already turned away.
 
 > **`/scheduling/checkin` accepts `?shift=<id>` or `?apparatus=<id>`**
 > _(2026-08-18)_. Prefer the **apparatus** form for anything physically mounted:
@@ -612,7 +640,7 @@ Tab-based interface with the following views:
 > takes `{ apparatusId }` or `{ shiftId }` so the choice is explicit at the call
 > site; `shift` is read first when both are present.
 
-#### Position Qualification Roster (`/scheduling/qualifications`) _(documented 2026-08-18)_
+#### Position Qualification Roster (`/scheduling/admin/positions`) _(documented 2026-08-18)_
 
 Answers "who is cleared to drive?" in one screen rather than one apparatus
 operator tab at a time. Shift-position eligibility is OR'd from three
@@ -646,15 +674,14 @@ had before.
 Sections are defined in
 `modules/scheduling/components/schedulingSettingsSections.ts`:
 
-| Section (`?tab=`) | Label         | Description                             | Saved by footer |
-| ----------------- | ------------- | --------------------------------------- | --------------- |
-| `general`         | General       | Shift defaults, overtime, and close-out | Yes             |
-| `apparatus`       | Apparatus     | Apparatus and resource type defaults    | Yes             |
-| `platoons`        | Platoons      | Platoon rosters and assignments         | No              |
-| `eligibility`     | Eligibility   | Who may sign up for a shift             | No              |
-| `notifications`   | Notifications | Shift reminders and alerts              | No              |
-| `equipment`       | Equipment     | Check requirements and templates        | Yes             |
-| `shift-reports`   | Shift Reports | End-of-shift reporting options          | No              |
+| Section         | Route                                      | Description                             | Saved by footer |
+| --------------- | ------------------------------------------ | --------------------------------------- | --------------- |
+| `general`       | `/scheduling/admin/settings/general`       | Shift defaults, overtime, and close-out | Yes             |
+| `apparatus`     | `/scheduling/admin/settings/apparatus`     | Apparatus and resource type defaults    | Yes             |
+| `platoons`      | `/scheduling/admin/settings/platoons`      | Platoon rosters and assignments         | No              |
+| `eligibility`   | `/scheduling/admin/settings/eligibility`   | Who may sign up for a shift             | No              |
+| `notifications` | `/scheduling/admin/settings/notifications` | Shift reminders and alerts              | No              |
+| `shift-reports` | `/scheduling/admin/settings/shift-reports` | End-of-shift reporting options          | No              |
 
 > **The Save/Reset footer appears only on the three sections it actually
 > writes** (`LOCALLY_SAVED_SECTIONS`). It used to be shown on all seven while
@@ -662,15 +689,21 @@ Sections are defined in
 > flashed "Settings saved" without touching their values. Every other section
 > owns its own save control.
 
-> **Selecting a section writes `?tab=`**, as the other settings screens do, so a
-> section can be linked to, refreshed into, and reached with the back button.
-> The page previously read the param on mount but never wrote it. A deep link to
+> **Each section is its own route** _(2026-09-05)_, so a section can be linked
+> to, bookmarked, refreshed into and reached with the back button — selecting one
+> navigates. It was a `?tab=` that only client state read. A deep link to
 > **Platoons** while the department has that feature switched off falls back to
-> General by derivation rather than by resetting state, so the link still lands
-> once the feature flag loads.
+> General by derivation rather than by redirecting, so the link still lands once
+> the feature flag loads.
+
+> **The Equipment section is gone** _(2026-09-05)_. Nothing on it was ever
+> edited there — checklists are Inventory's, and so are the settings that govern
+> them — so what was left was two links behind a settings tab, which is not where
+> anyone looks for a link. They are cards on the administration hub now, each
+> gated on the Inventory grant its destination requires.
 
 > **Eligibility here is not the same screen as rank eligibility.**
-> **Scheduling → Settings → Eligibility** governs which _membership types_ may
+> **Scheduling Administration → Eligibility Rules** governs which _membership types_ may
 > self-sign-up for a shift; per-rank shift-**position** eligibility is set on
 > **Settings → Ranks**.
 

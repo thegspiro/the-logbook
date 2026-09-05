@@ -2550,6 +2550,13 @@ class RequirementStatusItem(BaseModel):
     waived_months: int = 0
     window_start: str | None = None
     window_end: str | None = None
+    # The date THIS cell was judged against. Requirements can each override
+    # include_current_month, so one cell may be settled through last month-end
+    # while its neighbour is settled through today. The top-level as_of is the
+    # earliest of these; a renewal warning measured from that earliest date
+    # would read a certificate as comfortably valid when it is in fact inside
+    # the renewal window today.
+    as_of: str | None = None
 
 
 class MemberComplianceRow(BaseModel):
@@ -2887,6 +2894,7 @@ async def get_compliance_matrix(
                     waived_months=ev.waived_months,
                     window_start=ev.window_start,
                     window_end=ev.window_end,
+                    as_of=ev.as_of,
                 )
             )
 

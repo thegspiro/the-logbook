@@ -562,3 +562,140 @@ class TestProfileMemberLoading:
         payload = await _call(db_session, org_id)
         assert len(payload["members"]) == 2
         assert all(m["standing"] == "non_compliant" for m in payload["members"])
+
+
+async def _insert_position(db_session: AsyncSession, org_id: str, *, name: str) -> str:
+    position_id = _uid()
+    await db_session.execute(
+        text(
+            "INSERT INTO positions "
+            "(id, organization_id, name, slug, permissions, is_system, "
+            "created_at, updated_at) "
+            "VALUES (:id, :org, :name, :slug, :perms, 0, :now, :now)"
+        ),
+        {
+            "id": position_id,
+            "org": org_id,
+            "name": name,
+            "slug": name.lower().replace(" ", "-"),
+            "perms": json.dumps([]),
+            "now": _NOW,
+        },
+    )
+    await db_session.flush()
+    return position_id
+
+
+class TestRoleBasedProfiles:
+    async def test_a_profile_scoped_by_position_matches_its_holders(
+        self, db_session: AsyncSession
+    ):
+        """A profile's `role_ids` hold *position* ids — `User.roles` is a
+        synonym for `User.positions`, and PUT /users/{id}/roles writes position
+        ids under that name. `_find_matching_profile` read a `role_id`
+        attribute that Position does not have, so it collected nothing and
+        every role-scoped profile silently failed to match anybody, falling
+        back to the org-wide requirements and thresholds it was configured to
+        replace.
+        """
+        org_id = await _insert_org(db_session)
+        user_id = await _insert_member(db_session, org_id, last_name="Ferraro")
+        position_id = await _insert_position(db_session, org_id, name="Driver")
+        await db_session.execute(
+            text(
+                "INSERT INTO user_positions (user_id, position_id) " "VALUES (:u, :p)"
+            ),
+            {"u": user_id, "p": position_id},
+        )
+        graded = await _insert_hours_req(db_session, org_id, name="Company Hours")
+        await _insert_hours_req(
+            db_session, org_id, name="Officer Hours", required_hours=100.0
+        )
+        await _insert_record(
+            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+        )
+        await db_session.flush()
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        await db_session.execute(
+            text(
+                "INSERT INTO compliance_profiles "
+                "(id, config_id, name, membership_types, role_ids, "
+                "required_requirement_ids, compliant_threshold_override, "
+                "at_risk_threshold_override, priority, is_active, "
+                "created_at, updated_at) "
+                "VALUES (:id, :cfg, 'Drivers', NULL, :roles, :rr, NULL, NULL, "
+                "10, 1, :now, :now)"
+            ),
+            {
+                "id": _uid(),
+                "cfg": config_id,
+                "roles": json.dumps([position_id]),
+                "rr": json.dumps([graded]),
+                "now": _NOW,
+            },
+        )
+        await db_session.flush()
+
+        payload = await _call(db_session, org_id)
+
+        member = payload["members"][0]
+        # Graded against the profile's single requirement, which they meet.
+        assert member["requirements_total"] == 1
+        assert member["standing"] == "compliant"
+
+    async def test_a_member_without_the_position_is_unaffected(
+        self, db_session: AsyncSession
+    ):
+        org_id = await _insert_org(db_session)
+        user_id = await _insert_member(db_session, org_id, last_name="Whitaker")
+        position_id = await _insert_position(db_session, org_id, name="Driver")
+        graded = await _insert_hours_req(db_session, org_id, name="Company Hours")
+        await _insert_hours_req(
+            db_session, org_id, name="Officer Hours", required_hours=100.0
+        )
+        await _insert_record(
+            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+        )
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        await db_session.execute(
+            text(
+                "INSERT INTO compliance_profiles "
+                "(id, config_id, name, membership_types, role_ids, "
+                "required_requirement_ids, compliant_threshold_override, "
+                "at_risk_threshold_override, priority, is_active, "
+                "created_at, updated_at) "
+                "VALUES (:id, :cfg, 'Drivers', NULL, :roles, :rr, NULL, NULL, "
+                "10, 1, :now, :now)"
+            ),
+            {
+                "id": _uid(),
+                "cfg": config_id,
+                "roles": json.dumps([position_id]),
+                "rr": json.dumps([graded]),
+                "now": _NOW,
+            },
+        )
+        await db_session.flush()
+
+        payload = await _call(db_session, org_id)
+
+        member = payload["members"][0]
+        # No matching profile, so both org-wide requirements grade them.
+        assert member["requirements_total"] == 2
+        assert member["standing"] == "non_compliant"
+
+
+class TestPerCellCutoff:
+    async def test_each_cell_reports_the_date_it_was_judged_against(
+        self, db_session: AsyncSession
+    ):
+        org_id = await _insert_org(db_session)
+        await _insert_member(db_session, org_id, last_name="Reyes")
+        await _insert_hours_req(db_session, org_id, name="Company Hours")
+
+        payload = await _call(db_session, org_id)
+
+        cell = payload["members"][0]["requirements"][0]
+        assert cell["as_of"] == date.today().isoformat()

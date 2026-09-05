@@ -28,6 +28,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   focus trap, body scroll lock and `role="dialog"` it never had. Escape still
   cancels an open inline notes editor before it closes anything.
 
+### Scheduling administration moved into the Administration section (2026-09-05)
+
+**Changed**
+
+- **Everything an officer administers about the schedule is now at
+  `/scheduling/admin`**, in the **Administration** section of the navigation
+  beside Training Admin and Inventory Admin. It was reachable only from a strip
+  of "Officer tools" on the member-facing `/scheduling` page — so an
+  administrator opened the schedule to find the settings, and the Administration
+  section, where the rest of the product puts this, had no scheduling entry at
+  all. The strip is gone.
+- **Each settings section is its own route**, so it can be linked to,
+  bookmarked, refreshed into and reached with the back button. It was a `?tab=`
+  that only client-side state read.
+- **The hub is a card grid on the shared administration frame**, with headline
+  metrics and a Needs attention queue like the other four: shifts still to close
+  out, short-staffed shifts, hours this month, shifts ahead, requests waiting.
+  Short-staffing counts only shifts that state a `min_staffing` — a shift naming
+  neither positions nor a minimum has never said how big its crew is, and the
+  board treats that as "crew size not set" rather than as a staffing level, so
+  inventing a number here would report an emergency nobody declared.
+
+**Breaking**
+
+- **Six URLs no longer resolve, and there is no redirect:**
+
+  | Was                          | Now                                                              |
+  | ---------------------------- | ---------------------------------------------------------------- |
+  | `/scheduling/settings`       | `/scheduling/admin/settings/general` (and five sibling sections) |
+  | `/scheduling/templates`      | `/scheduling/admin/templates`                                    |
+  | `/scheduling/patterns`       | `/scheduling/admin/patterns`                                     |
+  | `/scheduling/reports`        | `/scheduling/admin/reports`                                      |
+  | `/scheduling/platoons`       | `/scheduling/admin/platoons`                                     |
+  | `/scheduling/qualifications` | `/scheduling/admin/positions`                                    |
+
+  Every link inside the app was moved with them. A bookmark to one of the old
+  URLs will not.
+
+- **The Administration section now opens for two more grants.**
+  `scheduling.manage` and `training.view_all` were added to
+  `ADMIN_NAVIGATION_PERMISSIONS`. Without the first, a scheduling officer
+  holding nothing else administrative never saw the section open, so the new row
+  inside it would never have been built; without the second, neither would a
+  training officer, whose only page in here is the position roster. This widens
+  who sees the section open — not what anyone can do inside it, which is still
+  decided card by card and route by route.
+
+**Removed**
+
+- **The Equipment settings section.** Nothing on it was ever edited there —
+  checklists belong to Inventory, and so do the settings that govern them — so
+  what was left was two links sitting behind a settings tab, which is not where
+  anyone looks for a link. They are cards on the hub now, each gated on the
+  Inventory grant its own destination requires.
+
+**Fixed**
+
+- **Four "Manage templates" links in Inventory opened the wrong page for the
+  wrong people.** On the fleet board and My Checklists they pointed at the
+  Scheduling settings signpost rather than at the checklist console they name,
+  and were offered on `scheduling.manage || inventory.check_manage` while their
+  destination required `scheduling.manage` — so a checklist officer holding only
+  the check grant was shown four links that refused them. They now open
+  `/inventory/admin/checklists` and are gated on `inventory.check_manage`, the
+  grant that page actually requires.
+- **The top navigation's Admin dropdown drops itself when every row inside it is
+  gated away**, so widening the section without adding a row would have given a
+  scheduling officer an Administration section containing nothing. The row was
+  added to both navigation surfaces, and
+  `administrationDiscovery.test.tsx` now renders the section for a
+  scheduling-officer persona and a training-officer persona — the test exists
+  because a gate is only reachable if every gate above it also opens.
+
 ### Compliance Matrix: a grid you could read becomes a queue you can work (2026-09-05)
 
 **Changed**
@@ -84,6 +157,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The last three were found by running the app and looking at it. All 6,521
   frontend tests passed while they were on screen.
 
+### Training Programs offered members buttons they could not use (2026-09-05)
+
+**Fixed**
+
+- **Every management action on /training/programs was shown to every member.**
+  Creating, importing and exporting a pipeline, adding a sample template, and
+  creating, importing or editing a requirement all require `training.manage` on
+  the server, but the page rendered the controls for all three tabs to everyone.
+  Tapping "New Pipeline" or "Create Your First Pipeline" landed a member on the
+  access-denied page; a registry import returned 403. Those controls now render
+  only for training managers. The lists themselves stay readable — it is the
+  write affordances that are withheld.
+
+- **The Requirements tab was blank for anyone without `training.manage`.** It
+  loaded the registry list alongside the requirements in one batch, and that
+  endpoint is manager-only, so its 403 rejected the batch and the requirements
+  never rendered. Members no longer request it.
+
+**Changed**
+
+- **The Requirements and Templates tabs are gone for members.** Both are
+  manager-only views, so the whole tab strip is hidden and a member sees the
+  Programs list on its own.
+
+- **With no programs to show, a member now sees an empty panel** rather than a
+  card whose only content is a prompt to create the thing they cannot create. A
+  search that matched nothing still reports "No programs found" to everyone,
+  since that is feedback on the term they typed.
+
 ### Long notification lists could skip a notification while you paged (2026-09-05)
 
 **Fixed**
@@ -138,6 +240,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   me**, "Checked out" → **Temporary loans**. The widget already merged
   assignments and issuances into one figure; only its wording still described
   the split the page dropped. "Overdue" is unchanged.
+
+### Three data repairs silently did nothing for months (2026-09-05)
+
+**Fixed**
+
+- **Three repairs never ran on any department that upgraded.** Four migrations
+  named a table `positions` at a point in the chain where it was still called
+  `roles`. The models were renamed long before the database was, so each was
+  written against the model name; when that made a fresh install fail, a
+  table-existence guard was added, which turned the crash into a silent no-op.
+  The table was renamed six days later and the guards were never revisited. The
+  result: the **Membership Committee Chair** position was never renamed to
+  **Membership Coordinator**, role-targeted department messages were never
+  converted from position names to ids, and the default **Member** position
+  never received the equipment-check submit grant — so those members lost the
+  checklist on upgrade.
+- **A new migration performs all three repairs.** The four are left exactly as
+  they ran: an already-deployed migration is not rewritten, and a department
+  already past them would never execute a rewritten version anyway — which is
+  precisely the department carrying the un-repaired rows. The new migration runs
+  at the current head, where the table really is called `positions`, and is safe
+  to run against a department that already has some or all of the three.
+- **The coordinator rename is careful in three ways** that the original was not:
+  it skips any department that already has a Membership Coordinator (two rows
+  with one slug would be rejected by the database), it leaves alone a position a
+  department created for itself, and it converts message targeting **before**
+  renaming — otherwise a message addressed to "Membership Committee Chair" would
+  resolve to nothing and stay undeliverable.
+- **A message targeting a name two positions share is left as-is.** Departments
+  may have two positions with the same display name; replacing that name with
+  one position's id would silently drop the other's members from the audience.
+- **Two knock-on gaps are reported but not repaired here**, because each is a
+  separate decision about who holds which permission rather than a spelling
+  correction: a position still slugged `membership_committee_chair` was skipped
+  by three later grant migrations, and a member position that missed the grant
+  also failed a later exact-match check and so missed the storefront backfill.
+
+**Added**
+
+- A check that a migration cannot name a table before the chain creates it under
+  that name — the gap that let this survive. The two existing checks each pass
+  these four correctly on their own terms: one skips `positions` because a
+  migration _does_ create it, the other because the creating migration comes
+  _later_. Neither asked whether the name was right at that point in the chain.
+  Both directions are covered, including a migration still using a name a rename
+  has retired. The four known-inert migrations are a closed baseline that can
+  only shrink, so a newly written one still fails.
 
 ### Migration comments claimed a table was built at startup when a migration builds it (2026-09-05)
 

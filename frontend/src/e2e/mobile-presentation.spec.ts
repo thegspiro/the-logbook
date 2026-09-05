@@ -82,7 +82,8 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/scheduling/reports', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/scheduling/admin', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/scheduling/admin/reports', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
@@ -132,7 +133,8 @@ const ALL_ROUTES: RouteCheck[] = [
   // needs no grant. Two screens is what keeps the shared shell honest: a fix to
   // the section strip that only suits one screen's section list fails here.
   //
-  // The remaining five are not listed, and each has a reason: /scheduling/settings,
+  // The remaining five are not listed, and each has a reason:
+  // /scheduling/admin/settings/*,
   // /elections/settings and /communications/email-templates carry non-shell debt
   // of their own (17, 2 and 4 controls under 44px — mostly `toggle-track`, which
   // is 44x24 at every one of its call sites app-wide), and the events and
