@@ -301,14 +301,11 @@ export const SchedulingReportsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold">
-          <BarChart3 className="h-7 w-7" aria-hidden="true" />
-          Scheduling Reports
-        </h1>
-        <p className="text-theme-text-muted mt-1">View scheduling analytics, member hours, and coverage data</p>
-      </div>
+      {/* No heading here. This renders only inside SchedulingAdminReportsPage,
+          which supplies the page chrome — trail, back link, icon and the <h1>
+          naming this page. A second identical "Scheduling Reports" heading is a
+          duplicate landmark to a screen reader and a repeated title to everyone
+          else. */}
 
       {/* Tabs */}
       <div className="tab-scroll mb-6" role="tablist" aria-label="Scheduling reports">

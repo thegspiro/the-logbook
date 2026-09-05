@@ -29,6 +29,7 @@ import { organizationService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { CHECKIN_BOUNDS, DEFAULT_CHECKLIST_TIMING, type ChecklistTimingSettings } from '../types/checklistSettings';
 import { useSchedulingStore } from '../../scheduling/store/schedulingStore';
+import { Breadcrumbs } from '../../../components/ux';
 
 export const ChecklistSettingsPage: React.FC = () => {
   const [timing, setTiming] = useState<ChecklistTimingSettings>(DEFAULT_CHECKLIST_TIMING);
@@ -143,6 +144,8 @@ export const ChecklistSettingsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+      <Breadcrumbs />
+
       {/* mobile-touch-target, not a bare inline-flex: at text-sm this link is
           about 20px tall, which is under the 44px minimum the presentation
           ratchet enforces. justify-start keeps it left-aligned — the utility

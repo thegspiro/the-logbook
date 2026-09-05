@@ -35,6 +35,7 @@ import type {
   InventoryVendor,
   LowStockAlert,
 } from '../../../services/eventServices';
+import { Breadcrumbs } from '../../../components/ux';
 
 const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'] as const;
 const URGENCY_OPTIONS = ['low', 'normal', 'high', 'critical'] as const;
@@ -648,6 +649,8 @@ export const ReorderRequestsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
+        <Breadcrumbs />
+
         <Link
           to="/inventory/admin"
           className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"

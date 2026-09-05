@@ -191,6 +191,14 @@ const StoreAdminPage: React.FC = () => {
       moduleKey="storefront"
       title="Department Store"
       description="Order windows, catalog, orders, and payment reconciliation"
+      // The generated trail would be built from this page's URL, and every
+      // ancestor in it belongs to Inventory — a module this route does not
+      // require. A department running the store with Inventory switched off
+      // would get crumbs the hub refuses with "Inventory is not enabled", which
+      // is the same wrong link the back-link below is conditional to avoid. No
+      // trail rather than an unusable one; with Inventory on, the generated
+      // trail is correct and this passes nothing.
+      breadcrumbs={inventoryOn ? undefined : []}
       actions={actions}
       headerAside={
         <div className="flex items-center gap-2">

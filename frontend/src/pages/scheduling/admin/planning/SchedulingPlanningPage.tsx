@@ -53,9 +53,10 @@ const SchedulingPlanningPage: React.FC<SchedulingPlanningPageProps> = ({ section
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <SchedulingHeader
+          title="Shift Planning"
           backTo="/scheduling/admin"
           backLabel="Back to scheduling administration"
-          description={`Planning · ${active?.description ?? ''}`}
+          description={active?.description ?? ''}
         />
 
         {/* Scrolls sideways below md rather than wrapping, and says so, so its

@@ -27,9 +27,10 @@ const SchedulingCloseoutPage: React.FC = () => (
   <div className="min-h-screen">
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <SchedulingHeader
+        title="Shift Close-Out"
         backTo="/scheduling/admin"
         backLabel="Back to scheduling administration"
-        description="Close-out · Shifts that have ended and were never closed"
+        description="Shifts that have ended and were never closed"
       />
 
       <div className="space-y-6">

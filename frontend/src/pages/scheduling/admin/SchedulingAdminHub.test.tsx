@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { renderWithRouter } from '../../../test/utils';
 
 const mockCheckPermission = vi.fn();
@@ -39,7 +39,21 @@ import SchedulingAdminHub from './SchedulingAdminHub';
 const grant = (...held: string[]) =>
   mockCheckPermission.mockImplementation((permission: unknown) => held.includes(permission as string));
 
-const hrefs = () => screen.queryAllByRole('link').map((link) => link.getAttribute('href'));
+/**
+ * The cards this viewer is offered — which is what every assertion below is
+ * about. Scoped to the card grid's own landmark rather than sweeping the page:
+ * the frame also renders a breadcrumb trail, whose crumbs are links and are not
+ * cards, and an unscoped sweep reported that chrome as though the hub had
+ * offered it.
+ */
+const hrefs = () => {
+  const tools = screen.queryByRole('navigation', { name: 'Scheduling administration tools' });
+  return tools
+    ? within(tools)
+        .queryAllByRole('link')
+        .map((link) => link.getAttribute('href'))
+    : [];
+};
 
 describe('SchedulingAdminHub', () => {
   beforeEach(() => {
