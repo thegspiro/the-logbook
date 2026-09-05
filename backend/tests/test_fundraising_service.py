@@ -381,5 +381,120 @@ class TestFundraisingEventFkValidation:
             )
 
 
+class TestListPagination:
+    """GF-35: every list_* method applies skip/limit in SQL rather than
+    fetching the whole org-wide table and slicing in Python (Checklist #6 —
+    an unbounded list endpoint). A mocked session can't prove the *row
+    count* is bounded, but it can prove the LIMIT/OFFSET clause the
+    endpoint's `pagination.skip`/`pagination.limit` feed actually reaches
+    the compiled statement, which is the part a regression would silently
+    drop (e.g. reverting to `results[skip:skip+limit]` in Python)."""
+
+    @staticmethod
+    async def _compiled_sql(coro):
+        from sqlalchemy.dialects import mysql
+
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            return _scalars([])
+
+        db = MagicMock()
+        db.execute = execute
+        await coro(db)
+        assert captured, "list method never executed a query"
+        return str(
+            captured[-1].compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+
+    # MySQL's dialect renders LIMIT/OFFSET as a single clause,
+    # `LIMIT <offset>, <count>` — there is no separate "offset" keyword to
+    # assert on.
+
+    async def test_list_campaigns_applies_skip_and_limit(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_campaigns("org-1", skip=10, limit=5)
+        )
+        assert "limit 10, 5" in sql
+
+    async def test_list_donors_applies_skip_and_limit(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_donors("org-1", skip=20, limit=7)
+        )
+        assert "limit 20, 7" in sql
+
+    async def test_list_donations_applies_skip_and_limit(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_donations("org-1", skip=15, limit=3)
+        )
+        assert "limit 15, 3" in sql
+
+    async def test_list_pledges_applies_skip_and_limit(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_pledges("org-1", skip=1, limit=2)
+        )
+        assert "limit 1, 2" in sql
+
+    async def test_list_fundraising_events_applies_skip_and_limit(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_fundraising_events(
+                "org-1", skip=4, limit=9
+            )
+        )
+        assert "limit 4, 9" in sql
+
+    async def test_list_campaigns_defaults_are_bounded(self):
+        # No caller passes skip/limit explicitly except the endpoint layer —
+        # the defaults themselves must still bound the query, not fetch
+        # everything (an unbounded query would compile with no LIMIT clause
+        # at all).
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_campaigns("org-1")
+        )
+        assert "limit 0, 100" in sql
+
+    # --- Codex finding 1 (GF-35 follow-up): every ORDER BY above must end
+    # with the model's id as a tie-breaker, or two executions of the same
+    # paginated query can order tied rows differently and a page can
+    # duplicate or drop rows. ---
+
+    @staticmethod
+    def _order_by_clause(sql: str) -> str:
+        return sql.split("order by", 1)[1].split("limit", 1)[0].strip()
+
+    async def test_list_campaigns_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_campaigns("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("fundraising_campaigns.id asc")
+
+    async def test_list_donors_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_donors("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("donors.id asc")
+
+    async def test_list_donations_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_donations("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("donations.id asc")
+
+    async def test_list_pledges_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_pledges("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("pledges.id asc")
+
+    async def test_list_fundraising_events_orders_by_id_last(self):
+        sql = await self._compiled_sql(
+            lambda db: FundraisingService(db).list_fundraising_events("org-1")
+        )
+        assert self._order_by_clause(sql).endswith("fundraising_events.id asc")
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

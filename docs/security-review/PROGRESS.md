@@ -18,33 +18,146 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 22 (Grants & fundraising), pass 3** — branch
 `claude/security-review-grants-fundraising`,
-[PR #2251](https://github.com/thegspiro/the-logbook/pull/2251). One finding
-this pass (GF-35, all 11 `list_*` methods fetched the whole org table into
-memory before slicing in Python instead of pushing `LIMIT`/`OFFSET` into
-SQL) fixed; a Codex review round raised 3 more findings against that same
-fix (missing id tie-breaker on the modified `ORDER BY`s, and two
-list-endpoints still eager-loading full child collections before applying
-the page limit), all independently verified real and fixed. GF-7/8/9/27a/33
-re-confirmed open as unchanged product/design decisions. This watchdog
-check (2026-09-05, ~16:50 UTC) found the row still pointing at #2247 after
-it had already merged: CI is green on all 17 checks at head `5ab2ad4`, all
-3 review threads are resolved, and `git merge-tree` against current `main`
-found zero conflict markers — GitHub's `mergeable_state` just hadn't been
-recomputed yet. Nothing to push; awaiting owner merge. Full write-up is
-[PR #2251](https://github.com/thegspiro/the-logbook/pull/2251)'s own
-`docs/security-review/GF-22-grants-fundraising.md` → Pass 3 section — not
-yet on `main`, since that content lives only on the PR's branch until it
-merges.
+[PR #2251](https://github.com/thegspiro/the-logbook/pull/2251). Diff-scoped
+against pass 2's merge (`d7a0c456`, verified reachable after an unshallow
+fetch): zero code drift. One new finding — GF-35 (LOW-MED, fixed): all 11
+`list_*` methods across both services fetched an org's entire table before
+slicing `skip`/`limit` in Python; now paginated in SQL. All three Codex
+review threads addressed and resolved (eager-load-before-limit on the
+budget-item/expenditure/note parent check, missing id tie-breaker on
+paginated `ORDER BY`, and remaining child eager-loads on `list_applications`
+itself). All CI checks green.
+
+2026-09-05 tend: `main` had advanced past this PR's base since pass 2
+(PR #2255 and others merged in). Merged `origin/main` into the PR branch;
+the only conflict was two independently-added `[Unreleased]` blocks in
+`CHANGELOG.md`, resolved by keeping both. Re-ran the full completion gate
+post-merge (flake8/black/isort, migration validation, `pytest -k "grant or
+fundraising"` — 537 passed, migration `create_all` guard test — 33 passed,
+`tsc --noEmit`, `eslint .`) — all clean — and pushed. No review comments or
+CI failures outstanding.
+
+2026-09-05 tend (round 2): `main` had advanced another 16 commits past the
+prior tend's merge point (PRs #2257–#2261 and others). Merged `origin/main`
+into the PR branch again; the only conflict was, once more, two
+independently-added `[Unreleased]` blocks in `CHANGELOG.md`, resolved by
+keeping both. Re-ran the full completion gate post-merge:
+flake8/black/isort clean, `validate_migrations.py --strict` (425 revisions,
+single head), `pytest -k "grant or fundraising"` — 556 passed, full backend
+suite — 11100 passed/21 pre-existing skips/0 failed, `tsc --noEmit` 0
+errors, `eslint .` 0 errors/0 warnings — and pushed. All 17 CI checks green
+on the new head; no review comments outstanding.
+
+2026-09-05 tend (round 3): a watchdog check found the previous tend's
+narrative had itself gone stale — `main` had merged 10 more PRs
+(#2261–#2271, including #2269's own fix to this section's stale `#2247`
+pointer) since round 2, and this time `main`'s copy of both `CHANGELOG.md`
+and this file's own "Open PR" section had drifted enough to conflict on
+merge, not just `CHANGELOG.md` alone. Resolved `CHANGELOG.md` by keeping
+both `[Unreleased]` entries as before; resolved this file by keeping this
+section's own continuously-updated narrative (round 1/round 2 tends already
+cover the stale-pointer story `main`'s draft was independently describing)
+and dropping `main`'s duplicate, terser copy of the "Feature 21 merged" log
+entry below in favor of this branch's own richer one. Re-ran the full
+completion gate post-merge: flake8/black/isort clean,
+`validate_migrations.py --strict` single head, `pytest -k "grant or
+fundraising"` and the full backend suite green, `tsc --noEmit` 0 errors,
+`eslint .` 0 errors/0 warnings — and pushed. Still awaiting owner merge;
+this is a documentation-only conflict between two branches recording the
+same PR, not a code or CI problem.
+
+2026-09-05 tend (round 4, watchdog): `main` picked up PR #2270 (and others)
+since round 3, reintroducing the same `CHANGELOG.md` `[Unreleased]`
+conflict (this PR's grants/fundraising pagination entry against an
+unrelated equipment-request-catalog entry newly merged to `main`). No new
+review comments; all 3 Codex threads from earlier rounds remain resolved.
+Merged `origin/main` into the PR branch, kept both `[Unreleased]` blocks,
+and re-ran the completion gate scoped to the touched backend files plus
+`validate_migrations.py --strict` (428 revisions, single head — the merge
+pulled in `main`'s new `a1c7e93b2d54` equipment-request-size migration),
+`pytest -k "grant or fundraising"` (563 passed, 1 pre-existing skip), and
+`tsc --noEmit` (0 errors) — all clean — and pushed. Still awaiting owner
+merge; no code or CI problem, just `main`'s pace outrunning `mergeable_state`
+recomputation between tend passes.
 
 ---
 
-### 2026-09-05 — Feature 21 (Admin hours) ✅ merged — PR #2247
+### 2026-09-05 — Feature 22 (Grants & fundraising), pass 3 — 1 fixed, 0 flagged
 
-PR #2247 merged 2026-09-05 ~12:04 UTC (the pass's Codex-disputed 0/0 claim
-corrected to 8 real fixes across two follow-up commits — 6 in the first,
-plus 2 more Codex caught on that fix commit itself — see
-`docs/security-review/AH-21-admin-hours.md` → Pass 3, and the prior Open PR
-entry this replaces). Next: 22 Grants & fundraising.
+Diff-scoped against pass 2's merge commit (`d7a0c456`, PR #2073) after
+verifying it reachable from `HEAD` first — the repo arrived shallow-cloned,
+so `git fetch --unshallow` was run before trusting
+`git merge-base --is-ancestor` (Feature 21's pass 3 got burned once already
+for skipping this check). All six declared/adjacent backend files
+(`grants.py`, `grant_service.py`, `fundraising_service.py`, `grant.py`,
+`schemas/grant.py`, `dashboard_widget_service.py`) and the entire
+`frontend/src/modules/grants-fundraising/` module came back **byte-identical**
+to pass 2's merged state — zero code drift. The 1,348-file repo-wide diff
+since pass 2 was also grepped for grant/fundraising-shaped keywords to catch
+drift outside the declared file list: the only hits were unrelated seeded
+_permission_-grant migrations (Pitfall #23's meaning of "grant") and training
+docs/screenshots; independently re-confirmed neither `fundraising.view` nor
+`fundraising.manage` reaches the `member`/`firefighter` baseline.
+
+Re-verified GF-13 through GF-34 all still hold by reading the current code
+(not re-cited from the doc), and re-ran the endpoint enumeration from
+scratch: 45/45 routes in `grants.py` still carry
+`require_permission("fundraising.view"/"fundraising.manage")`, every `GET`
+gated `.view` and every mutating verb gated `.manage`, no exceptions.
+
+**GF-35 (LOW-MED, fixed)** — all 11 `list_*` service methods across both
+services built their query with every filter and an `ORDER BY` but no
+`LIMIT`/`OFFSET`; the endpoint layer then sliced the client's
+`skip`/`limit` in **Python** _after_ fetching the entire org-wide table from
+MySQL — `PaginationParams` existed precisely to be threaded into the query
+and never was. Not a tenant-isolation gap (`organization_id` was still
+filtered correctly throughout) but a Checklist §6 resource-exhaustion
+concern: a long-running department's full donation/donor/application
+history gets fetched and materialized on every list page view regardless of
+page size. Fixed by adding `skip`/`limit` parameters to all 11 methods and
+applying `.offset(skip).limit(limit)` in SQL (behavior-preserving — same
+`ORDER BY`, same rows returned for any request within the row count),
+threaded through from `PaginationParams` at all 11 corresponding endpoints.
+New guard tests (`TestListPagination`, 11 cases across
+`test_grant_service.py`/`test_fundraising_service.py`) assert the compiled
+SQL carries MySQL's `LIMIT <offset>, <count>` clause; verified to fail
+before the fix (temporarily reverted one method, confirmed the guard catches
+it) and pass after.
+
+Re-confirmed still open, unchanged from every prior pass, no new findings:
+GF-7 (state-machine/overspend, product decision), GF-8 (`is_anonymous` not
+enforced, product decision), GF-9 (float money math, deliberate-refactor
+decision), GF-27a (KPI multi-status link mismatch, filter-UI decision), GF-33
+(applications page still caps at 1,000, no real pagination UI — GF-35 makes
+that cap efficient to compute, not higher). All already in
+`KNOWN_LIMITATIONS.md`; no changes needed there this pass.
+
+Full local completion gate green: flake8/black/isort clean, migrations
+validated (422 revisions, single head, no schema change), 495/495
+grant+fundraising-scoped and 10,903/10,903 full backend suite pass,
+`tsc --noEmit` 0 errors, `eslint .` 0 errors/0 warnings. No frontend files
+touched (zero drift, no new frontend finding). Findings doc:
+`docs/security-review/GF-22-grants-fundraising.md` → Pass 3. PR opened and
+subscribed. Next: 23 medical supplies, once this PR merges.
+
+---
+
+### 2026-09-05 — Feature 21 (Admin hours) ✅ closed — PR #2247 merged
+
+**PR #2247 merged cleanly** (merge commit `4ba836420`, head `01e67afd`).
+Originally opened claiming 0 fixes/0 flagged; a Codex review round on the PR
+disputed that on all 6 points raised (plus 2 follow-up rounds on the fixes
+themselves), and all were verified real and fixed: unlocked
+overlap/entry-mutation races (Pitfall #27), a falsy-zero threshold-override
+bug, a quarterly-compliance year-filter bug (tightened twice — first to skip
+the mismatched year, then to reject the whole request rather than silently
+drop a quarterly item), a lock-order deadlock between `bulk_approve` and
+`edit_pending_entry`, and a DST fold duration bug in the pass's own new
+`entryTimes.ts`. All 8 review threads resolved, full CI green. See
+`docs/security-review/AH-21-admin-hours.md` → Pass 3 for the complete
+correction trail. Rotation row 21 → ✅. Next: 22 Grants & fundraising.
+
+---
 
 ### 2026-09-05 — Feature 21 (Admin hours), pass 3 — 0 fixes, 0 flagged
 

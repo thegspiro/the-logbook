@@ -87,13 +87,14 @@ async def list_opportunities(
     """
     try:
         service = GrantService(db)
-        opportunities = await service.list_opportunities(
+        return await service.list_opportunities(
             organization_id=str(current_user.organization_id),
             category=category,
             active_only=active_only,
             search=search,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return opportunities[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -168,13 +169,14 @@ async def list_applications(
     """
     try:
         service = GrantService(db)
-        applications = await service.list_applications(
+        return await service.list_applications(
             organization_id=str(current_user.organization_id),
             status=status_filter,
             priority=priority,
             assigned_to=str(assigned_to) if assigned_to else None,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return applications[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -410,11 +412,12 @@ async def list_budget_items(
     """
     try:
         service = GrantService(db)
-        items = await service.list_budget_items(
+        return await service.list_budget_items(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return items[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -567,11 +570,12 @@ async def list_expenditures(
     """
     try:
         service = GrantService(db)
-        expenditures = await service.list_expenditures(
+        return await service.list_expenditures(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return expenditures[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -728,13 +732,14 @@ async def list_compliance_tasks(
     """
     try:
         service = GrantService(db)
-        tasks = await service.list_compliance_tasks(
+        return await service.list_compliance_tasks(
             organization_id=str(current_user.organization_id),
             application_id=str(application_id) if application_id else None,
             status=status_filter,
             due_before=due_before,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return tasks[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -889,11 +894,12 @@ async def list_notes(
     """
     try:
         service = GrantService(db)
-        notes = await service.list_notes(
+        page = await service.list_notes(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        page = notes[pagination.skip : pagination.skip + pagination.limit]
         return await _notes_with_authors(db, page, str(current_user.organization_id))
     except ValueError as e:
         raise HTTPException(
@@ -973,12 +979,13 @@ async def list_campaigns(
     """
     try:
         service = FundraisingService(db)
-        campaigns = await service.list_campaigns(
+        return await service.list_campaigns(
             organization_id=str(current_user.organization_id),
             status=status_filter,
             campaign_type=campaign_type,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return campaigns[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1161,12 +1168,13 @@ async def list_donors(
     """
     try:
         service = FundraisingService(db)
-        donors = await service.list_donors(
+        return await service.list_donors(
             organization_id=str(current_user.organization_id),
             donor_type=donor_type,
             search=search,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return donors[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1318,14 +1326,15 @@ async def list_donations(
     """
     try:
         service = FundraisingService(db)
-        donations = await service.list_donations(
+        return await service.list_donations(
             organization_id=str(current_user.organization_id),
             campaign_id=str(campaign_id) if campaign_id else None,
             donor_id=str(donor_id) if donor_id else None,
             start_date=start_date,
             end_date=end_date,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return donations[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1440,12 +1449,13 @@ async def list_pledges(
     """
     try:
         service = FundraisingService(db)
-        pledges = await service.list_pledges(
+        return await service.list_pledges(
             organization_id=str(current_user.organization_id),
             status=status_filter,
             campaign_id=str(campaign_id) if campaign_id else None,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return pledges[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1560,12 +1570,13 @@ async def list_fundraising_events(
     """
     try:
         service = FundraisingService(db)
-        events = await service.list_fundraising_events(
+        return await service.list_fundraising_events(
             organization_id=str(current_user.organization_id),
             campaign_id=str(campaign_id) if campaign_id else None,
             status=status_filter,
+            skip=pagination.skip,
+            limit=pagination.limit,
         )
-        return events[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

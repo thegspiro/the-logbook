@@ -1,7 +1,7 @@
 # Security Review — Grants & Fundraising
 
 **Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-30 (pass 2) · **PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
+2026-08-30 (pass 2), 2026-09-05 (pass 3) · **PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
 (pass 1)
 
 ---
@@ -1224,3 +1224,304 @@ No backend files touched. Gate re-run:
 | `npx tsc --noEmit`                              | 0 errors             |
 | `npx eslint src/modules/grants-fundraising`     | 0 errors, 0 warnings |
 | `npx vitest run src/modules/grants-fundraising` | 4 files, 7 passed    |
+
+---
+
+## Pass 3 (2026-09-05)
+
+**Backend:** `app/api/v1/endpoints/grants.py` (1,897 L, 45 endpoints),
+`app/services/grant_service.py` (1,235 L), `app/services/fundraising_service.py`
+(765 L), `app/models/grant.py`, `app/schemas/grant.py`,
+`app/services/dashboard_widget_service.py` (its `fundraising()` method only,
+per pass 2's GF-21 scope correction).
+**Frontend:** `frontend/src/modules/grants-fundraising/` (all 8 pages,
+services, store, routes, types) — diff-scoped, not re-read line-by-line; see
+"Diff-scoping methodology" below for why a full re-read was not repeated.
+**Migrations:** none touching a grants/fundraising table since pass 2's merge.
+
+### Diff-scoping methodology
+
+Per this pass's instructions, the pass-2 merge commit was verified reachable
+from `HEAD` **before** trusting it as a diff base — this rotation was
+explicitly burned once already (Feature 21) for asserting a diff was
+"unreachable" without checking. The repository arrived shallow-cloned;
+`git merge-base --is-ancestor <sha> HEAD` on the shallow history could not
+even resolve the pass-2 merge sha (`fatal: Not a valid object name`), which
+is a different failure mode than "not an ancestor" and must not be treated as
+one. `git fetch --unshallow origin` was run first; afterward
+`git rev-parse --is-shallow-repository` returned `false` and
+`git merge-base --is-ancestor d7a0c456 HEAD` exited `0` (`d7a0c456` — PR
+#2073's merge, closing pass 2 per `PROGRESS.md`'s 2026-08-30 log entry).
+
+With reachability confirmed, `git diff d7a0c456 HEAD --stat` against every
+declared backend file (`grants.py`, `grant_service.py`,
+`fundraising_service.py`, `grant.py`, `schemas/grant.py`,
+`dashboard_widget_service.py`) and against
+`frontend/src/modules/grants-fundraising/` came back **empty — byte-identical**
+to pass 2's merged state. `git diff d7a0c456 HEAD --name-only` (1,348 changed
+files across the whole repo, all other features' 876 commits) was then
+grepped for `grant|fundrais|donor|donation|campaign|pledge` to catch drift
+outside the declared file list: the only hits were unrelated —
+seeded-_permission_-grant migrations and their tests
+(`restore_seeded_position_grants`, `repair_wizard_overwritten_baseline_grants`,
+`emt_seeded_grant_restoration`, etc. — CLAUDE.md Pitfall #23's "grant" meaning
+a permission grant on a position, not this module) and training
+documentation/screenshots. Confirmed by reading the migrations' actual
+content (not filename): none add `fundraising.view`/`fundraising.manage` to
+`DEFAULT_POSITIONS["member"]` or `"firefighter"` — every role touched is an
+officer/leadership position (`fire_chief`, `treasurer`, `president`,
+`fundraising_chair`, etc.), consistent with this module's existing baseline.
+Independently re-confirmed directly against the current
+`app/core/permissions.py`: `"fundraising"` does not appear anywhere in the
+`member` or `firefighter` `DEFAULT_POSITIONS` entries.
+
+**Conclusion: zero code drift in this module since pass 2's merge.** This
+pass is a full independent re-verification of unchanged code (not a diff
+review) plus a fresh, from-scratch endpoint enumeration and checklist sweep,
+per this pass's own instructions to enumerate rather than spot-check.
+
+### Re-verification of pass-1/pass-2 fixes
+
+Read the current `grants.py`, `grant_service.py`, `fundraising_service.py`,
+`grant.py`, and `schemas/grant.py` in full (not re-cited from either prior
+doc) and confirmed every fix is intact at its current line:
+
+- **GF-13** (opportunity→application cascade/`ondelete` mismatch) —
+  `GrantOpportunity.applications` still carries no cascade and
+  `passive_deletes=True` (`app/models/grant.py:332`).
+- **GF-14 / Codex P2** (idempotent compliance-task generation) —
+  `_generate_compliance_tasks` still checks the dedicated
+  `compliance_tasks_generated` boolean first (`grant_service.py:384-386`), not
+  a `task_type` query.
+- **GF-15 / Codex P1** (locked aggregate recomputes, parent-lock-before-child-
+  flush ordering) — `_update_budget_item_spent`, `_update_campaign_total`, and
+  `_update_donor_stats` all still lock the parent row first and make the SUM
+  itself a locking read; `_lock_budget_item`/`_lock_campaign`/`_lock_donor` are
+  still called before the child row is added/flushed in both create and
+  update paths, for old and (if reassigned) new parents.
+- **GF-16** (`apply_updates` instead of blind `setattr`) — all ten update
+  methods (`update_opportunity`, `update_application`, `update_budget_item`,
+  `update_expenditure`, `update_compliance_task`, `update_campaign`,
+  `update_donor`, `update_donation`, `update_pledge`,
+  `update_fundraising_event`) still route through `apply_updates`.
+- **GF-17** (`_notes_with_authors`' `User` lookup org filter) — still filters
+  `organization_id` (`grants.py:254`).
+- **GF-18** (`_update_budget_item_spent`'s org-scoped budget-item fetch) —
+  still joins through `GrantApplication` and filters `organization_id`.
+- **GF-24 / GF-24a** (end-of-day report boundary) — `get_grant_report`,
+  `get_fundraising_report`, and `list_donations` all still build the upper
+  bound with `datetime.combine(end_date, datetime.max.time(),
+tzinfo=timezone.utc)`; the hard-coded-UTC limitation (GF-24a) is unchanged
+  and still correctly flagged, not fixed, per pass 2's reasoning.
+- **GF-26** (fundraising report `donations_by_method` string-concatenation
+  bug) — `GrantsReportsPage.tsx` frontend fix unchanged (diff-confirmed).
+- **GF-27 through GF-34** (dashboard KPI links, status-filter whitelisting,
+  server-side status filtering, the resulting stale-response race, and the
+  failed-fetch-leaves-stale-rows bug) — all unchanged (diff-confirmed); no
+  re-read needed beyond the byte-identical diff check, since none of these
+  touch backend code this pass re-read line-by-line anyway.
+- **GF-19/GF-20/GF-21/GF-22/GF-23/GF-25** (doc-accuracy corrections and the
+  `dashboard_widget_service.py` scope gap) — the corrected doc text itself
+  re-read and still accurate; `DashboardWidgetService.fundraising()` re-read
+  in full again this pass (see below).
+
+### Fresh endpoint enumeration (not a re-count)
+
+Ran `grep -c "^@router\."` and `grep -c 'require_permission("fundraising'`
+independently against the current file rather than trusting the prior
+passes' "45/45" figure: both commands return **45**, and a third check
+(`awk` pairing each `@router.` decorator with its following `async def`)
+also returns 45 — no route lacks a decorator-adjacent handler. Every one of
+the 45 carries `Depends(require_permission("fundraising.view"))` or
+`Depends(require_permission("fundraising.manage"))` — no route with a bare
+`Depends(get_current_user)` or no auth dependency at all. Spot-checked the
+HTTP-verb-to-permission mapping across all 45 (not sampled): every `GET` is
+`.view`, every `POST`/`PUT`/`DELETE` is `.manage`, with no exceptions —
+matching Checklist §2's "permission string matches the sensitivity of the
+data" with no XC-2-shaped gap. Re-confirmed via `core/permissions.py` that
+neither string appears in the `member`/`firefighter` baseline (Pitfall #23 —
+see "Diff-scoping methodology" above).
+
+`DashboardWidgetService.fundraising()` (`dashboard_widget_service.py:146-203`)
+re-read in full again (GF-21's own scope gap, corrected in pass 2): still
+gates behind both `"grants" in enabled_modules` and
+`user_has_permission(current_user, "fundraising.view")`, still filters
+`organization_id` from `current_user` on every one of its four direct model
+queries including both sides of the `Donation`⋈`FundraisingCampaign` join.
+
+### New this pass
+
+#### GF-35 — LOW-MED — every list endpoint fetched the entire org-wide table into memory before slicing in Python — ✅ FIXED
+
+**What:** all 11 `list_*` service methods (`list_opportunities`,
+`list_applications`, `list_budget_items`, `list_expenditures`,
+`list_compliance_tasks`, `list_notes` in `grant_service.py`; `list_campaigns`,
+`list_donors`, `list_donations`, `list_pledges`, `list_fundraising_events` in
+`fundraising_service.py`) built their `SELECT` with every declared filter and
+an `ORDER BY`, but **no `LIMIT`/`OFFSET`** — the endpoint layer then took a
+`pagination.skip`/`pagination.limit` from the client and applied it as a
+**Python list slice** (`results[pagination.skip : pagination.skip +
+pagination.limit]`) _after_ the full result set had already been fetched
+from MySQL and materialized into application memory. `PaginationParams`
+itself (`app/api/dependencies.py:28-53`) exists precisely to be threaded into
+the query as `.offset(skip).limit(limit)` — its own docstring shows that
+usage — but none of the 11 call sites did.
+
+This is Checklist §6 ("List endpoints and exports are bounded — no `all()`
+over an org-wide table") for seven of the eleven (`opportunities`,
+`applications`, `campaigns`, `donors`, `donations`, `pledges`,
+`fundraising-events` are org-wide, unbounded by any parent); the remaining
+four (`budget-items`, `expenditures`, `compliance-tasks` when filtered by
+`application_id`, `notes`) are naturally bounded by their parent application
+in ordinary use, but `list_compliance_tasks` can also be called **unfiltered**
+across the whole org (`GET /compliance-tasks` with no `application_id`), so
+it carries the same org-wide exposure as the first seven.
+
+**Where:** `app/services/grant_service.py` (6 methods),
+`app/services/fundraising_service.py` (5 methods),
+`app/api/v1/endpoints/grants.py` (all 11 corresponding endpoints).
+
+**Failure scenario:** a fire department that has used this module for years —
+thousands of donations, a large historical donor roster, or a long-running
+grant-application pipeline — pays the full table-scan-and-materialize cost
+on **every single page view** of any list screen, including the very common
+case of viewing just the first page. This is a resource-exhaustion /
+availability concern rather than a data-exposure one (`organization_id` is
+still filtered correctly on every query, so this is not a cross-tenant leak):
+memory pressure and query latency scale with the org's total historical row
+count, not with the page size actually being displayed, and a large org's
+list pages get slower over time even though nothing about the request
+changed. It was not previously flagged: GF-31/32/33 (pass 2, round 5-6)
+addressed a related but distinct problem — the frontend's own effective
+fetch ceiling and a stale-response race — without examining how the backend
+serviced that fetch once it arrived.
+
+**Fix:** every one of the 11 `list_*` service methods now accepts
+`skip: int = 0, limit: int = 100` (matching `PaginationParams`' own
+defaults) and applies `.offset(skip).limit(limit)` in SQL, after the
+existing `ORDER BY`. The 11 corresponding endpoints in `grants.py` now pass
+`skip=pagination.skip, limit=pagination.limit` straight through and return
+the service result directly, with the Python slice removed. Verified no
+other backend caller of any of the 11 methods exists (only `grants.py`'s
+own endpoints call them; two test files call `list_notes`/`list_donations`
+with fewer than the default `limit=100` rows, so the new default does not
+change their outcome).
+
+Codex review on this PR raised three follow-up findings against the first
+cut of this fix, all confirmed and fixed in the same PR before merge:
+
+1. **Non-deterministic pagination.** None of the 11 `ORDER BY` clauses had a
+   unique tie-breaker, so tied rows (null deadlines, identical donor names,
+   same-day expenditures) could be ordered differently between two
+   `LIMIT`/`OFFSET` executions of the same query, duplicating or dropping
+   rows across pages. Every one of the 11 `ORDER BY` clauses now ends with
+   the model's own `id.asc()` as the final term, added after the existing
+   sort key(s) — the existing ordering is otherwise unchanged.
+2. **`list_budget_items`/`list_expenditures`/`list_notes` still eager-loaded
+   their parent's full child history.** These three resolved their parent
+   application by calling `get_application()` purely as an existence/org-scope
+   check, but `get_application()`'s loader options (`selectinload` on
+   budget_items, expenditures, compliance_tasks, grant_notes, opportunity)
+   materialize every child row on the application regardless of the page
+   size requested — defeating the pagination fix for exactly these three
+   routes. Replaced with a new `_application_in_org()` helper that runs a
+   bare `select(GrantApplication.id).where(id ==, organization_id ==)` with
+   no loader options, raising the same `ValueError("Application not
+   found")` as before when it finds nothing. `get_application()` itself is
+   unchanged and still used by callers that need the full eager-loaded
+   object (`update_application`, `delete_application`, `create_budget_item`,
+   etc.).
+3. **`list_applications` itself still carried `selectinload` for
+   `budget_items`/`compliance_tasks`.** Distinct from #2 above — this is the
+   list query's own eager loaders, not a parent-existence check. Those
+   loaders issue their own follow-up query fetching every child row for
+   every application on the page, unbounded by the page's `LIMIT`, and
+   `GrantApplicationListResponse` (this route's response model) serializes
+   neither collection. Both `selectinload` options were removed from
+   `list_applications()`'s query; `get_application()`'s eager loads (used by
+   the single-record fetch, whose response model does serialize both
+   collections) are untouched.
+
+**Guard tests added:** `TestListPagination` in both `test_grant_service.py`
+(11 cases: skip/limit application for `list_opportunities`,
+`list_applications`, `list_compliance_tasks`, `list_budget_items`; the
+bounded-default case for `list_opportunities`; and an id-tie-breaker
+ordering assertion for all 6 of that file's `list_*` methods) and
+`test_fundraising_service.py` (11 cases: skip/limit application and the
+id-tie-breaker assertion for all 5 of that file's `list_*` methods, plus
+the bounded-default case for `list_campaigns`). Each captures the compiled
+statement (mocked session, `mysql.dialect()`, `literal_binds=True`) and
+asserts the exact `LIMIT <offset>, <count>` clause MySQL's dialect renders
+(there is no separate `OFFSET` keyword in MySQL's syntax — verified
+empirically before writing the assertions, since an `OFFSET n LIMIT m`-shaped
+assertion would have silently never matched). Verified fail-before/pass-after
+by temporarily reverting the `.offset(skip).limit(limit)` line in
+`list_opportunities` alone: both of that method's new tests failed with the
+un-limited compiled SQL shown in the assertion diff, confirming the guard
+actually exercises the fix rather than passing vacuously; re-applied
+immediately after confirming.
+
+Follow-up findings #2 and #3 above have their own guard tests:
+`TestListDoesNotEagerLoadParent` (4 cases — `list_budget_items`,
+`list_expenditures` and `list_notes` each asserting `get_application` is
+never called, plus one compiling `_application_in_org()`'s query and
+asserting none of the four child table names appear in it) and
+`TestListApplicationsDoesNotEagerLoadChildren` (1 case, asserting neither
+`budget_items` nor `compliance_tasks` appears in `list_applications()`'s
+compiled loader options) in `test_grant_service.py`. Two more
+foreign-application-rejection cases (`list_budget_items`,
+`list_expenditures`) were added alongside the existing `list_notes` one to
+confirm the org-scoping guarantee (Pitfall #14) survived the swap from
+`get_application()` to `_application_in_org()`.
+
+### Re-confirmed still open (unchanged, per every prior pass)
+
+- **GF-7** (state-machine/overspend guards) — `update_application` still has
+  no transition guard; no overspend check exists anywhere in
+  `create_expenditure`/`update_expenditure`. Unchanged, still a product
+  decision.
+- **GF-8** (`is_anonymous` not enforced) — `DonationResponse`/`DonorResponse`
+  (`schemas/grant.py`) still serialize donor identity unconditionally; no
+  `model_validator` or permission-context suppression exists. Unchanged,
+  staff-only exposure (re-confirmed: no `api/public/` surface reads either
+  model), still a product decision.
+- **GF-9** (float money math in both report methods) — `get_grant_report`
+  and `get_fundraising_report` still accumulate `sum(float(...) for ...)`
+  rather than `Decimal`. Unchanged, still a deliberate-refactor decision.
+- **GF-27a** (dashboard KPI multi-status aggregate vs. single-status link) —
+  unchanged; still needs a filter-UI product decision, already in
+  `KNOWN_LIMITATIONS.md`.
+- **GF-33** (applications page still caps at 1,000 total, no real
+  pagination UI) — unchanged by GF-35 above: GF-35 fixes _how efficiently_
+  the backend computes a capped page (SQL `LIMIT` instead of fetching
+  everything and slicing), not _whether_ the frontend's own 1,000-row
+  request ceiling still truncates a larger org's result set. The frontend
+  still requests `limit: 1000` and still has no pagination control; that
+  remains open exactly as GF-33 describes it, already in
+  `KNOWN_LIMITATIONS.md`.
+
+### Guard tests added
+
+29 new/changed cases total, GF-35 (described above): `TestListPagination`
+(11 in `test_grant_service.py`, 11 in `test_fundraising_service.py`),
+`TestListDoesNotEagerLoadParent` (4) and
+`TestListApplicationsDoesNotEagerLoadChildren` (1) in
+`test_grant_service.py`, plus 2 new foreign-application-rejection cases in
+`test_grant_service.py`.
+
+### Completion gate (pass 3)
+
+| Check                                                   | Result                                         |
+| ------------------------------------------------------- | ---------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | 0 violations                                   |
+| `black --check app/ tests/ alembic/`                    | 1,477 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/`               | clean                                          |
+| `python3 scripts/validate_migrations.py --strict`       | PASSED — 422 revisions, single head            |
+| `python3 -m pytest tests/ -q -k "grant or fundraising"` | 495 passed, 1 pre-existing skip                |
+| `python3 -m pytest tests/ -q` (full suite)              | 10,903 passed, 21 pre-existing skips, 0 failed |
+| `npx tsc --noEmit`                                      | 0 errors                                       |
+| `npx eslint .`                                          | 0 errors, 0 warnings                           |
+
+No frontend files were touched this pass (diff-confirmed zero drift, and no
+new frontend finding), so no `vitest` run is reported separately from the
+full-suite gate above.
