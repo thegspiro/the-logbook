@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Long notification lists could skip a notification while you paged (2026-09-05)
+
+**Fixed**
+
+- **"Load more" could step over a notification entirely.** Both the Send Log
+  and the notification inbox are newest-first and asked the server for "rows
+  50-99 of the current answer". A notification arriving between two page
+  requests shifts every later row down one, so the next page re-served a row
+  already on screen and skipped another — and nothing on the page said so.
+  Demonstrated against a real database: with one notification arriving
+  mid-paging, the old paging repeated one row and lost another; the new paging
+  loses none. Both lists now ask for "the rows after this one".
+
+- **A fan-out was the worst case, not an edge case.** `sent_at` is stored to
+  the second, so every message sent to the whole department shares one
+  timestamp. Paging keyed on the timestamp alone would mis-handle exactly the
+  group that produces the most rows at once, so the key is the timestamp
+  paired with the row id.
+
+**Changed**
+
+- **"Load more" now stops when the server says the list has ended**, rather
+  than when a running total says so. The two disagree while notifications are
+  arriving, which is when the count is least trustworthy.
+
+- **The button no longer claims how many notifications are left.** It counted
+  the whole list against the rows on screen, and the list includes newer
+  notifications that arrived after you started paging — ones "load more" can
+  never reach, because it continues from where you were. So the number was
+  wrong by however many had come in, and wrong precisely during a
+  department-wide send. It now reads "Load more".
+
+- **API:** `GET /notifications/logs` and `GET /notifications/my` accept a
+  `cursor` and return `next_cursor`, which is `null` — never omitted — at the
+  end of the list. `skip` continues to work for existing callers; a cursor
+  supersedes it. **Schema:** `notification_logs.sent_at` is
+  now `NOT NULL` (it always had a default, and a NULL would have been
+  unreachable by any cursor), with a new index behind the paged query.
+
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
 **Fixed**
