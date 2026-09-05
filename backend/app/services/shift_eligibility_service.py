@@ -978,6 +978,29 @@ class ShiftEligibilityService:
             ),
         }
 
+    def stored_call_type_slugs(self, org: Organization) -> set:
+        """Only the slugs actually persisted in the org's settings.
+
+        Kept separate from :meth:`effective_call_type_slugs` because the two
+        answer different questions. This one measures the list a save is
+        replacing, which is what the ``MAX_CALL_TYPES`` ratchet compares
+        against; the defaults the reader falls back to are not entries in that
+        list, and counting them would raise the ceiling an already-over-cap
+        organization is allowed to hold — 49 legacy slugs the reader rejects
+        plus the nine built-in defaults would let a save of 51 through as
+        though the list had shrunk.
+        """
+        sched = self._get_scheduling_settings(org)
+        raw = sched.get("call_tracking")
+        types = raw.get("call_types") if isinstance(raw, dict) else None
+        if not isinstance(types, list):
+            return set()
+        return {
+            str(entry.get("slug") or "").strip()
+            for entry in types
+            if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
+        }
+
     def effective_call_type_slugs(self, org: Organization) -> set:
         """Every slug currently in force, before any normalization.
 
@@ -1001,22 +1024,10 @@ class ShiftEligibilityService:
         falls back to the defaults there, so the defaults are what is in
         force and a save omitting one of them is a deletion.
         """
-        sched = self._get_scheduling_settings(org)
-        raw = sched.get("call_tracking")
-        types = raw.get("call_types") if isinstance(raw, dict) else None
-        stored = (
-            {
-                str(entry.get("slug") or "").strip()
-                for entry in types
-                if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
-            }
-            if isinstance(types, list)
-            else set()
-        )
         resolved = {
             t["slug"] for t in self.get_call_tracking_settings(org)["call_types"]
         }
-        return stored | resolved
+        return self.stored_call_type_slugs(org) | resolved
 
     def get_call_tracking_settings(self, org: Organization) -> Dict[str, Any]:
         """Return the org's call-volume tracking config.

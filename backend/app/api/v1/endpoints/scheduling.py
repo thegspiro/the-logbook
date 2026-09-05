@@ -3503,18 +3503,23 @@ async def _reject_deleting_a_used_call_type(
     org = await eligibility._get_org(organization_id)
     if org is None:
         return
-    stored = eligibility.effective_call_type_slugs(org)
+    in_force = eligibility.effective_call_type_slugs(org)
 
     # The cap, enforced as a ratchet rather than a wall. A hand-edited
     # configuration already over it must still be able to save a list that
-    # does not grow, or the only way to shorten it is barred.
+    # does not grow, or the only way to shorten it is barred. Measured
+    # against the *persisted* list, not the set in force: the latter adds the
+    # defaults the reader falls back to, which are not entries this save is
+    # replacing, so counting them would raise the ceiling — 49 legacy slugs
+    # the reader rejects plus the nine defaults would let 51 through.
+    persisted = eligibility.stored_call_type_slugs(org)
     if len(incoming.call_types) > MAX_CALL_TYPES and len(incoming.call_types) > len(
-        stored
+        persisted
     ):
         raise ValueError(f"A department can have at most {MAX_CALL_TYPES} call types.")
 
     kept = {t.slug for t in incoming.call_types}
-    removed = stored - kept
+    removed = in_force - kept
     # The reserved bucket slug can never be kept — the reader hides it and the
     # schema refuses it — so counting its disappearance as a deletion left an
     # organization that had configured it unable to save its settings at all:
