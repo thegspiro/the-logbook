@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
-import type { EquipmentRequestItem, FulfillmentOptionsResponse } from '../types';
+import type { EquipmentRequestItem, FulfillmentOption, FulfillmentOptionsResponse } from '../types';
 import { REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -29,6 +29,39 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { Breadcrumbs } from '../../../components/ux';
+
+/**
+ * The status, but only when it is worth the reader's attention.
+ *
+ * Every row used to carry "— available —", which is the unremarkable case and
+ * so told the quartermaster nothing while eating the width that the requested-
+ * size marker and the issuable count needed. Naming only the exceptions makes
+ * a genuinely notable status stand out instead of hiding inside boilerplate.
+ */
+const notableStatus = (status?: string | null): string | null =>
+  !status || status === 'available' ? null : status.replace(/_/g, ' ');
+
+/**
+ * The facts a quartermaster is actually choosing between, without the name.
+ *
+ * A native `<select>` renders only the selected row, clipped to the control's
+ * width — and on a phone that width is the phone's. What gets clipped is the
+ * tail, which is precisely where the requested-size marker and the issuable
+ * count sit: the two things the choice turns on. Repeating them underneath
+ * costs one line, wraps instead of clipping, and cannot be cut off at any
+ * width. The name is omitted because the front of the label is the part that
+ * always survives.
+ */
+const optionDetail = (option: FulfillmentOption): string =>
+  [
+    option.size ? `size ${sizeLabel(option.size)}` : null,
+    option.matches_requested_size ? 'requested size' : null,
+    option.compatible ? null : 'substitution',
+    notableStatus(option.status),
+    `${option.available} issuable`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
 const EquipmentRequestsPage: React.FC = () => {
   const pageSize = 25;
@@ -296,6 +329,8 @@ const EquipmentRequestsPage: React.FC = () => {
       setSubmitting(false);
     }
   };
+
+  const selectedOption = fulfillOptions?.options.find((option) => option.item_id === fulfillItemId) ?? null;
 
   const fmtDate = (dateStr: string) => formatDate(dateStr, tz);
 
@@ -618,7 +653,7 @@ const EquipmentRequestsPage: React.FC = () => {
           isOpen={fulfillModal.open}
           onClose={() => setFulfillModal({ open: false, request: null })}
           title={`Fulfill: ${fulfillModal.request?.item_name ?? ''}`}
-          size="sm"
+          size="md"
         >
           {fulfillModal.request && (
             <div className="space-y-4">
@@ -676,20 +711,17 @@ const EquipmentRequestsPage: React.FC = () => {
                   <option value="">{optionsLoading ? 'Loading items…' : 'Select an item…'}</option>
                   {/* "issuable", not "available": the count is what `issue_from_pool`
                       would accept, which is deliberately lower than the shelf figure for
-                      stock in maintenance or poor condition — and the status beside it is
-                      already the word "available" on a healthy row, so reusing it read as
-                      "available; 5 available". */}
+                      stock in maintenance or poor condition. */}
                   {(fulfillOptions?.options ?? []).map((option) => (
                     <option key={option.item_id} value={option.item_id}>
-                      {option.name}
-                      {option.identifier ? ` — ${option.identifier}` : ''}
-                      {option.size ? ` — size ${sizeLabel(option.size)}` : ''}
-                      {option.matches_requested_size ? ' — requested size' : ''}
-                      {option.compatible ? '' : ' — substitution'}
-                      {` — ${option.status ?? 'unknown'} — ${option.available} issuable`}
+                      {`${option.name}${option.identifier ? ` — ${option.identifier}` : ''} — ${optionDetail(option)}`}
                     </option>
                   ))}
                 </select>
+                {selectedOption && (
+                  /* The same facts as the label, where nothing can clip them. */
+                  <p className="text-theme-text-secondary mt-1 text-xs">{optionDetail(selectedOption)}</p>
+                )}
                 <p className="text-theme-text-muted mt-1 text-xs">
                   The selected item must support the final fulfillment method above.
                 </p>
