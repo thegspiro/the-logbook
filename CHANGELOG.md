@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Requesting gear no longer requires knowing the department's name for it (2026-09-05)
+
+**Changed**
+
+- **The request form now browses.** It loads the department's gear the moment
+  it opens and offers the real category names as filters, so a member who does
+  not know what to type is no longer looking at an empty box. Search matches
+  the category and product-group names as well as the item's own — typing
+  "shirt" now finds a garment the catalog files as "Long Sleeve", which
+  previously returned nothing.
+- **One row per product, not one per stocked size.** A shirt kept in seven
+  sizes and two colours was fourteen near-identical lines to scroll; it is now
+  one line, with the sizes asked for as their own step after the product is
+  chosen. Serialized gear collapses the same way: ten radios read as "Portable
+  Radio — 7 on hand" rather than ten indistinguishable rows.
+- **The size step starts from the sizes you have on file.** A member with a
+  shirt size recorded has that size preselected, matched through the same alias
+  table the impact planner uses — so "Large" on file selects the row the
+  quartermaster stored as "L" — and any other size the department stocks is one
+  tap away.
+
+**Added**
+
+- **You can ask for gear that is out of stock, or not carried at all.** The
+  form was pinned to items marked available, so the one need a quartermaster
+  has no other way to learn about — a size or an item the department does not
+  hold — could not be recorded. Out-of-stock sizes now stay selectable and are
+  labelled as such, a member's own size is offered even when nothing is stocked
+  in it, and a free-text line covers gear that is not in the catalog. Requests
+  carry the size asked for as its own field, so a request with no matching
+  catalog row still tells the quartermaster exactly what was wanted; the review
+  screen says so explicitly.
+
+**Fixed**
+
+- **Rank- and position-restricted gear is filtered by the server**, not by the
+  browser after the fact. The old form listed restricted items and let the
+  member submit a request the API then refused, and the item's existence was
+  disclosed to everyone regardless.
+
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
 **Fixed**
