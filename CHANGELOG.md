@@ -124,6 +124,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   again on the positions screen; a position the department created itself is
   not touched at all.
 
+- **New departments no longer create the grant in the first place.** The
+  setup wizard offers an EMT position to every agency type, but the permission
+  registry had no EMT entry, so ticking it built the position from the setup
+  screen's own guesses instead of from the registry — the same guesses that
+  caused all of the above, on a position created fresh today. EMT is now
+  registered alongside Firefighter and Engineer and is set up from the same
+  list its rank already uses. Departments that never had an EMT position are
+  unaffected until they add one.
+
 - **The restored grants are handled the other way round.**
   `storefront.order` and `inventory.check_submit` are only added back to a row
   still recognisable as the old rule's output. Granting where it is not wanted
