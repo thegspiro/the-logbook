@@ -23,6 +23,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assignments and issuances into one figure; only its wording still described
   the split the page dropped. "Overdue" is unchanged.
 
+### Four migrations silently did nothing for months (2026-09-05)
+
+**Fixed**
+
+- **Three data repairs never ran on any department that upgraded.** Four
+  migrations queried a table called `positions` at a point in the chain where it
+  was still called `roles`. The models were renamed long before the database
+  was, so each was written against the model name; when that made a fresh
+  install fail, a table-existence guard was added, which turned the crash into a
+  silent no-op. The table was renamed six days later and the guards were never
+  revisited. The result: the **Membership Committee Chair** position was never
+  renamed to **Membership Coordinator**, role-targeted department messages were
+  never converted from position names to ids, and the default **Member**
+  position never received the equipment-check submit grant — so those members
+  lost the checklist on upgrade. The four now target the table by the name it
+  actually has at that point.
+- **A new migration repairs the departments already past them.** Correcting the
+  four only helps an installation that has not run them yet; one already past
+  them never re-executes the corrected version. A new revision re-applies all
+  three repairs, idempotently, so an existing department gets them on the next
+  upgrade. The coordinator rename skips any department that already has a
+  Membership Coordinator, and the member grant is added only where it is absent.
+- **Two knock-on gaps are reported but not repaired here**, because each is a
+  separate decision about who holds which permission rather than a spelling
+  correction: a position still slugged `membership_committee_chair` was skipped
+  by three later grant migrations, and a member position that missed the grant
+  also failed a later exact-match check and so missed the storefront backfill.
+
+**Added**
+
+- A check that a migration cannot name a table before the chain creates it under
+  that name — the gap that let this survive. The two existing checks each pass
+  these four correctly on their own terms: one skips `positions` because a
+  migration _does_ create it, the other because the creating migration comes
+  _later_. Neither asked whether the name was right at that point in the chain.
+  Both directions are covered, including a migration still using a name a rename
+  has retired.
+
 ### Migration comments claimed a table was built at startup when a migration builds it (2026-09-05)
 
 **Fixed**

@@ -127,7 +127,9 @@ def upgrade() -> None:
             ondelete="CASCADE",
         )
 
-    # positions.settings exists only in the model; the chain never added it.
+    # 20260610_0002 adds settings to `roles`, which the rename above carries
+    # across. This stays as the belt-and-braces path for a database that
+    # stamped that revision while it still silently no-opped.
     if "settings" not in {c["name"] for c in sa.inspect(bind).get_columns("positions")}:
         op.add_column("positions", sa.Column("settings", sa.JSON(), nullable=True))
 

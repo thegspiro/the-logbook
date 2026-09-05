@@ -904,7 +904,15 @@ def _false_claims(sources: dict[str, str]) -> list[str]:
             named = set(re.findall(r"[a-z_]{4,}", block)) & model_tables
             for table in sorted(named):
                 built_by = creators.get(table, set()) & forebears
-                if built_by:
+                # Citing the revision that creates the table is proof the block
+                # is not claiming the table is uncreated -- it is explaining
+                # where the table comes from. This exempts the concessive form
+                # ("`positions` looks create_all-only ... but 20260805_0008
+                # renames `roles` into it"), which is correct prose the shape
+                # pattern alone reads as a claim, while leaving a genuinely
+                # false claim reported: an author who believed no migration
+                # creates the table has no revision id to cite.
+                if built_by and not any(rev in block for rev in built_by):
                     offenders.append(
                         f"{name} says `{table}` is create_all-only, but "
                         f"{sorted(built_by)[0]} creates it and is an ancestor"
@@ -1004,6 +1012,31 @@ class TestTheClaimDetection:
         creation at all. A check that flags correct prose gets deleted."""
         assert not self._plant(innocuous), f"false positive on: {innocuous!r}"
 
+    def test_a_block_citing_the_creating_revision_is_not_a_claim(self):
+        """The concessive form, which is correct prose and must survive.
+
+        ``d5f2b8c04a19`` explains that ``positions`` only *looks* create_all-only
+        and names ``20260805_0008`` as the revision that renames ``roles`` into
+        it. The shape pattern matches the negative clause inside it; citing the
+        creating revision is what distinguishes explaining a table's origin from
+        denying it has one.
+        """
+        assert not self._plant(
+            "positions looks create_all-only -- no migration creates it under "
+            "that name -- but 20260805_0008 renames roles into it."
+        )
+
+    def test_citing_some_other_revision_does_not_buy_an_exemption(self):
+        """The other half: the exemption is not "mentions any revision id".
+
+        A false claim that happens to reference an unrelated revision is still
+        a false claim, or the exemption would be a hole big enough to drive
+        every future one through.
+        """
+        assert self._plant(
+            "positions is a model-only table; see 20260722_0001 for context."
+        )
+
     def test_a_sibling_is_not_an_ancestor(self):
         """The bug this replaced: a linear walk gives siblings adjacent
         positions, so comparing positions calls a sibling's correct claim an
@@ -1024,3 +1057,229 @@ class TestTheClaimDetection:
         ancestors = _ancestor_sets(_migration_sources())
 
         assert {"20260814_0003", "20260813_0020"} <= ancestors["20260814_0004"]
+
+
+# ---------------------------------------------------------------------------
+# A table name has to be valid *at the revision that uses it*
+# ---------------------------------------------------------------------------
+#
+# The two ratchets above ask whether a table is ever created by a migration.
+# Neither asks whether the name is correct *at the point in the chain where it
+# is written*, and that gap is a real defect class, not a hypothetical one:
+# 20260528_0001, 20260610_0002, 20260720_0002 and 20260801_0010 each queried
+# `positions` while the table was still called `roles`, guarded on its absence,
+# and therefore did nothing at all on every upgrade path they existed to repair.
+#
+# Both existing checks pass them, correctly on their own terms. The structural
+# tests skip `positions` because it *is* migration-created (by 20260805_0008's
+# rename). `_false_claims` exempts them because a claim is only false when the
+# creating revision is an ANCESTOR, and here the creator is a descendant -- for
+# a revision that truly runs before the table exists, the guard is load-bearing
+# and the claim is true.
+#
+# What neither asks is the follow-on question: if the table does not exist yet
+# under this name, what is this migration doing naming it? Either it means a
+# different table (the bug), or it is dead code.
+
+_SQL_TABLE_REF = re.compile(
+    r"\b(?:FROM|JOIN|UPDATE|INTO)\s+`?([a-z_][a-z0-9_]*)`?", re.IGNORECASE
+)
+_OP_TABLE_REF = re.compile(
+    r"op\.(?:add_column|drop_column|alter_column|create_index|drop_index|"
+    r"create_foreign_key|drop_constraint|bulk_insert|create_table|"
+    r"rename_table|drop_table)\(\s*[\"']([a-z0-9_]+)[\"']"
+)
+
+
+def _tables_referenced(text: str) -> set[str]:
+    """Every table name an ``upgrade()`` names, in ``op.*`` calls and in SQL.
+
+    Scoped to ``upgrade()`` for the same reason as
+    ``_tables_created_by_migrations``: a ``downgrade()`` runs against a
+    different schema and never establishes what the upgrade path sees.
+    """
+    body = _upgrade_body(text)
+    found = set(_OP_TABLE_REF.findall(body))
+    for match in re.finditer(r'"""(.*?)"""|"([^"\n]*)"|\'([^\'\n]*)\'', body, re.S):
+        literal = next((group for group in match.groups() if group), "")
+        found |= {name.lower() for name in _SQL_TABLE_REF.findall(literal)}
+    return found
+
+
+def _tables_renamed_away(sources: dict[str, str]) -> dict[str, set[str]]:
+    """Old name -> the revisions that rename it to something else."""
+    retired: dict[str, set[str]] = {}
+    for text in sources.values():
+        revision = _revision_of(text)
+        if revision is None:
+            continue
+        for old in re.findall(
+            r"op\.rename_table\(\s*[\"']([a-z0-9_]+)[\"']", _upgrade_body(text)
+        ):
+            retired.setdefault(old, set()).add(revision)
+    return retired
+
+
+def _names_not_yet_valid(sources: dict[str, str]) -> list[str]:
+    """Migrations naming a table whose only creators are NOT their ancestors."""
+    ancestors = _ancestor_sets(sources)
+
+    creators: dict[str, set[str]] = {}
+    revisions: dict[str, str] = {}
+    for name, text in sources.items():
+        revision = _revision_of(text)
+        if revision is None:
+            continue
+        revisions[name] = revision
+        for table in _tables_created_by_migrations({name: text}):
+            creators.setdefault(table, set()).add(revision)
+
+    offenders = []
+    for name, text in sources.items():
+        revision = revisions.get(name)
+        if revision is None:
+            continue
+        # A revision may of course create the table itself.
+        forebears = ancestors.get(revision, set()) | {revision}
+        for table in sorted(_tables_referenced(text)):
+            built_by = creators.get(table)
+            # No migration creates it: create_all-only, and the existing
+            # structural ratchets own that case.
+            if not built_by:
+                continue
+            if built_by & forebears:
+                continue
+            offenders.append(
+                f"{name} references `{table}`, which no ancestor creates -- "
+                f"only {sorted(built_by)[0]}, which runs later"
+            )
+    return offenders
+
+
+def _names_already_retired(sources: dict[str, str]) -> list[str]:
+    """Migrations naming a table an ancestor already renamed out of existence."""
+    ancestors = _ancestor_sets(sources)
+    retired = _tables_renamed_away(sources)
+
+    offenders = []
+    for name, text in sources.items():
+        revision = _revision_of(text)
+        if revision is None:
+            continue
+        forebears = ancestors.get(revision, set())
+        for table in sorted(_tables_referenced(text)):
+            movers = retired.get(table, set()) & forebears
+            if movers:
+                offenders.append(
+                    f"{name} references `{table}`, which {sorted(movers)[0]} "
+                    f"already renamed away"
+                )
+    return offenders
+
+
+def test_no_migration_references_a_table_before_it_exists():
+    """The defect the two older ratchets are each built not to see.
+
+    Measured before adopting: this reports exactly the four known offenders
+    against the pre-fix corpus and nothing at all against the corrected one, so
+    it catches the real defect without flagging a single correct migration.
+    """
+    assert _names_not_yet_valid(_migration_sources()) == []
+
+
+def test_no_migration_references_a_table_name_a_rename_retired():
+    """The mirror, and the half a one-directional check would miss.
+
+    After 20260805_0008 the rows are in `positions`; a later revision still
+    saying `roles` is the same bug pointing the other way, and would equally
+    read as working code. Measured clean on the current corpus before adopting.
+    """
+    assert _names_already_retired(_migration_sources()) == []
+
+
+class TestTheChainNameDetection:
+    """Guard the guard, as above: every assertion plants an offender.
+
+    The corpus is expected to be clean, so asserting cleanliness would prove
+    only that the detector returns something falsy.
+    """
+
+    def _sources_with(self, filename: str, body: str) -> dict[str, str]:
+        sources = dict(_migration_sources())
+        sources[filename] = body
+        return sources
+
+    def test_a_reference_to_a_later_created_table_is_reported(self):
+        """A revision early in the chain naming `positions`, which only the
+        much later 20260805_0008 brings into existence."""
+        planted = self._sources_with(
+            "planted_early.py",
+            'revision = "planted_early"\n'
+            'down_revision = "20260502_0004"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("UPDATE positions SET slug = :s"))\n',
+        )
+
+        offenders = _names_not_yet_valid(planted)
+
+        assert any("planted_early" in o and "positions" in o for o in offenders), (
+            "A migration querying `positions` before the rename creates it was "
+            "not reported."
+        )
+
+    def test_the_same_reference_after_the_rename_is_fine(self):
+        """The identical statement on a descendant of the rename is correct,
+        and reporting it would condemn every migration written since August."""
+        planted = self._sources_with(
+            "planted_late.py",
+            'revision = "planted_late"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("UPDATE positions SET slug = :s"))\n',
+        )
+
+        assert not [o for o in _names_not_yet_valid(planted) if "planted_late" in o]
+
+    def test_a_retired_name_used_after_the_rename_is_reported(self):
+        planted = self._sources_with(
+            "planted_stale.py",
+            'revision = "planted_stale"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("SELECT id FROM roles"))\n',
+        )
+
+        offenders = _names_already_retired(planted)
+
+        assert any("planted_stale" in o and "roles" in o for o in offenders)
+
+    def test_a_create_all_only_table_is_left_to_the_other_ratchets(self):
+        """No migration creates `event_requests`, so this check must stay
+        silent on it -- the guard-on-existence tests above own that case, and
+        two ratchets reporting one table would make both harder to act on."""
+        planted = self._sources_with(
+            "planted_createall.py",
+            'revision = "planted_createall"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("SELECT id FROM event_requests"))\n',
+        )
+
+        assert not [
+            o for o in _names_not_yet_valid(planted) if "planted_createall" in o
+        ]
+
+    def test_a_migration_creating_the_table_itself_is_not_an_offender(self):
+        """The table need not predate the revision that makes it."""
+        planted = self._sources_with(
+            "planted_selfcreate.py",
+            'revision = "planted_selfcreate"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.create_table("brand_new_widgets", sa.Column("id", sa.String(36)))\n'
+            '    op.execute(sa.text("SELECT id FROM brand_new_widgets"))\n',
+        )
+
+        assert not [
+            o for o in _names_not_yet_valid(planted) if "planted_selfcreate" in o
+        ]
