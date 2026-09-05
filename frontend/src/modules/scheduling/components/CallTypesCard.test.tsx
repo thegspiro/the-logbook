@@ -233,6 +233,20 @@ describe('CallTypesCard adding', () => {
     expect(screen.getByText('fire_2')).toBeInTheDocument();
   });
 
+  it('will not mint the reserved bucket slug', async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    // `unclassified` is the synthetic bucket for calls with no type. The
+    // backend refuses it, so minting it here would fail the save with nothing
+    // on screen explaining why.
+    await user.type(screen.getByLabelText('Add a call type'), 'Unclassified');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(screen.getByText('unclassified_2')).toBeInTheDocument();
+    expect(screen.queryByText('unclassified')).not.toBeInTheDocument();
+  });
+
   it('rejects a name with nothing sluggable in it', async () => {
     const user = userEvent.setup();
     renderCard();

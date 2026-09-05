@@ -76,6 +76,19 @@ interface SchedulingState {
    * timing behind `openEndedCushionHours` lives on another module's page.
    */
   invalidateSettings: () => void;
+  /**
+   * Drop everything this store holds for the current organization.
+   *
+   * Distinct from `invalidateSettings`, which says "one of these values is
+   * stale, refetch it". This says "none of this belongs to whoever is here
+   * now". The store is memory-only and keyed by nothing user-specific, so on
+   * a shared station computer it outlives the member: without this, signing
+   * in as somebody from another department left every screen reading the
+   * previous one's call types, signup window, roster, templates and
+   * apparatus, because each loader short-circuits on its own loaded flag.
+   * Called from the logout purge and from every sign-in path.
+   */
+  resetSettings: () => void;
   setPlatoonsEnabled: (enabled: boolean) => void;
   loadInitialData: () => Promise<void>;
 }
@@ -186,6 +199,36 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     settingsGeneration += 1;
     settingsRequest = null;
     set({ settingsLoaded: false });
+  },
+
+  resetSettings: () => {
+    // Shares the generation counter with `invalidateSettings`: a response in
+    // flight across an account boundary must be discarded for the same reason
+    // one in flight across a save must be, and for a stronger one — it would
+    // repopulate the previous department's values and mark them loaded.
+    settingsGeneration += 1;
+    settingsRequest = null;
+    set({
+      members: [],
+      membersLoaded: false,
+      membersLoading: false,
+      templates: [],
+      templatesLoaded: false,
+      templatesLoading: false,
+      apparatus: [],
+      apparatusLoaded: false,
+      summary: null,
+      summaryLoading: false,
+      summaryError: null,
+      settingsLoaded: false,
+      platoonsEnabled: false,
+      requireEndOfShiftChecks: false,
+      callTrackingMode: 'detailed',
+      callTypeLabels: {},
+      signupClosesMinutesBefore: DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
+      lateSignupGraceMinutes: DEFAULT_SIGNUP_WINDOW.graceMinutes,
+      openEndedCushionHours: DEFAULT_SIGNUP_WINDOW.openEndedCushionHours,
+    });
   },
 
   setPlatoonsEnabled: (enabled) => set({ platoonsEnabled: enabled }),

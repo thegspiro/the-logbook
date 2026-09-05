@@ -18,6 +18,8 @@ from sqlalchemy.orm import selectinload
 from app.models.apparatus import Apparatus, ApparatusOperator
 from app.models.call_tracking import (
     DEFAULT_CALL_TYPES,
+    MAX_CALL_TYPES,
+    UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
 )
 from app.models.operational_rank import OperationalRank
@@ -988,7 +990,14 @@ class ShiftEligibilityService:
                 # failed schema construction — turning the promised safe
                 # degradation into a 500 for the whole organization, on both
                 # the settings endpoint and every close-out.
-                if not _CALL_TYPE_SLUG.fullmatch(slug) or slug in seen:
+                # The reserved bucket slug is dropped for the same reason the
+                # schema refuses it: kept, it would fail the schema
+                # construction this function exists to make safe.
+                if (
+                    not _CALL_TYPE_SLUG.fullmatch(slug)
+                    or slug in seen
+                    or slug == UNCLASSIFIED_CALL_TYPE
+                ):
                     continue
                 label = str(entry.get("label") or "").strip()[:100] or slug
                 seen.add(slug)
@@ -1003,6 +1012,12 @@ class ShiftEligibilityService:
                 {"slug": t["slug"], "label": t["label"], "active": True}
                 for t in DEFAULT_CALL_TYPES
             ]
+        # Truncated, not rejected. The write schema caps the list, but this
+        # column predates that cap and is hand-editable, and the settings
+        # endpoint builds `CallTrackingSettings` from whatever comes back
+        # here — so an over-long stored list would fail schema construction
+        # and 500 the endpoint that is the only way to shorten it.
+        clean_types = clean_types[:MAX_CALL_TYPES]
 
         return {"mode": mode, "call_types": clean_types}
 

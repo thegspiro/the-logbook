@@ -15,14 +15,20 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
-import { useCallTypeLabels } from '../../modules/scheduling/hooks/useCallTypeLabels';
+import { useCallTypeLabels, useCallTypeLabelsReady } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
+
+/** Settle time for layout and webfonts before the print dialog opens. */
+const PRINT_DELAY_MS = 600;
+/** How long to wait on the call-type labels before printing without them. */
+const LABEL_WAIT_MS = 3000;
 
 const ShiftReportPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const reportId = searchParams.get('id') || '';
   const tz = useTimezone();
   const callTypeLabel = useCallTypeLabels();
+  const labelsReady = useCallTypeLabelsReady();
   const [report, setReport] = useState<ShiftCompletionReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,9 +48,18 @@ const ShiftReportPrintPage: React.FC = () => {
 
   useEffect(() => {
     if (!report) return;
-    const timer = setTimeout(() => window.print(), 600);
+    // The call-type labels arrive on their own request, and printing before
+    // they land commits raw slugs to paper — the one output a later re-render
+    // cannot repair. So a report that shows call types waits for them.
+    //
+    // Bounded, though, and that is the important half: `loadSettings`
+    // deliberately leaves `settingsLoaded` false when its request fails, so
+    // waiting for the flag outright would mean a print view that never prints.
+    // A slug on the page beats a blank stare at a dialog that never opens.
+    const waitingOnLabels = (report.call_types?.length ?? 0) > 0 && !labelsReady;
+    const timer = setTimeout(() => window.print(), waitingOnLabels ? LABEL_WAIT_MS : PRINT_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [report]);
+  }, [report, labelsReady]);
 
   if (loading) {
     return (

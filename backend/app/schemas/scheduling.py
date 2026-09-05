@@ -9,9 +9,14 @@ from enum import Enum as PyEnum
 from typing import Annotated, Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.call_tracking import MAX_CALLS_PER_SHIFT, CallTrackingMode
+from app.models.call_tracking import (
+    MAX_CALL_TYPES,
+    MAX_CALLS_PER_SHIFT,
+    UNCLASSIFIED_CALL_TYPE,
+    CallTrackingMode,
+)
 from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
@@ -287,6 +292,22 @@ class CallTypeOption(BaseModel):
 
     slug: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9_]+$")
     label: str = Field(..., min_length=1, max_length=100)
+
+    @field_validator("slug")
+    @classmethod
+    def _reject_reserved_slug(cls, v: str) -> str:
+        # `unclassified` is the synthetic bucket a call with no type falls
+        # into. A configured type sharing that slug is indistinguishable from
+        # the remainder: the call-volume report merges the two into one key,
+        # the label map overwrites whatever the department named it, and the
+        # combined count reconciles to neither.
+        if v == UNCLASSIFIED_CALL_TYPE:
+            raise ValueError(
+                f"'{UNCLASSIFIED_CALL_TYPE}' is reserved for calls with no "
+                f"type. Name the type something else."
+            )
+        return v
+
     # Retirement, not deletion. An inactive type is no longer offered at
     # close-out but stays configured, so the calls already filed under it keep
     # resolving to a label instead of reading as an orphaned slug in last
@@ -308,7 +329,9 @@ class CallTrackingSettings(BaseModel):
     # Bounded because this lands in an unvalidated JSON column that every
     # close-out and settings read deserializes. No department needs a hundred
     # of them, and the editor cannot produce one.
-    call_types: List[CallTypeOption] = Field(default_factory=list, max_length=50)
+    call_types: List[CallTypeOption] = Field(
+        default_factory=list, max_length=MAX_CALL_TYPES
+    )
 
     @model_validator(mode="after")
     def _validate(self) -> "CallTrackingSettings":

@@ -21,6 +21,9 @@ import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import type { PurgeResult } from '../utils/purgeLocalMemberData';
 import { clearQueuedReports } from '../services/errorReporting';
 import { invalidateRanksCache } from '../hooks/ranksCache';
+// Safe to import here: the scheduling store reaches only the API services and
+// shared utils, none of which import this store, so there is no cycle.
+import { useSchedulingStore } from '../modules/scheduling/store/schedulingStore';
 
 /** Number of failed attempts before client-side lockout kicks in. */
 const LOGIN_LOCKOUT_THRESHOLD = 5;
@@ -439,6 +442,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       clearInFlight();
       invalidateRanksCache();
       clearQueuedReports();
+      // SEC: the scheduling settings are a once-per-session cache holding
+      // department-wide values (call types, signup window, feature toggles).
+      // Like the caches above they are keyed by nothing user-specific, so on
+      // a shared terminal the next member — possibly from another department
+      // — read the previous one's until the tab was reloaded.
+      useSchedulingStore.getState().resetSettings();
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       // SEC (FE-6/FE-7): shift-report drafts (localStorage) and the offline

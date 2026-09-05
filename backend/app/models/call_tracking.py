@@ -93,6 +93,11 @@ class CallTrackingMode:
 # an untyped call has ``call_type`` NULL.
 UNCLASSIFIED_CALL_TYPE = "unclassified"
 
+# Ceiling on a department's configured type list. It lands in an unvalidated
+# JSON column that every close-out and settings read deserializes, and no
+# department needs a hundred of them.
+MAX_CALL_TYPES = 50
+
 
 # Seeded type list for a department that has not defined its own. Slugs are the
 # stored value and are permanent; labels are display-only and may be renamed
