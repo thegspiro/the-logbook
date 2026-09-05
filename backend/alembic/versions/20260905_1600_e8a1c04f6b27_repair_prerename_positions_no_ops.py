@@ -42,7 +42,7 @@ authority decision rather than a spelling correction, and belongs in its own
 change set.
 
 Revision ID: e8a1c04f6b27
-Revises: d5f2b8c04a19
+Revises: c8f4a1e6b309
 Create Date: 2026-09-05 16:00:00.000000
 """
 
@@ -53,7 +53,7 @@ from alembic import op
 
 # revision identifiers
 revision = "e8a1c04f6b27"
-down_revision = "d5f2b8c04a19"
+down_revision = "c8f4a1e6b309"
 branch_labels = None
 depends_on = None
 
