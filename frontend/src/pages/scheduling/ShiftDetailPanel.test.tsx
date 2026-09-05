@@ -379,3 +379,90 @@ describe('ShiftDetailPanel once the roster locks', () => {
     expect(await screen.findByRole('button', { name: /Withdraw from this shift/ })).toBeInTheDocument();
   });
 });
+
+/**
+ * The dialog shell.
+ *
+ * This surface was a right-edge `drawer-panel` until it became a centred
+ * modal, and the conversion moved three behaviours it had hand-rolled (or
+ * lacked) onto the shared dialog stack via `DialogPanel`. Each is asserted
+ * here because none of them is visible in the markup of the sections above.
+ */
+describe('ShiftDetailPanel dialog shell', () => {
+  const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
+  const mockAssignments = vi.mocked(schedulingService.getShiftAssignments);
+
+  // Not past: the notes control, and every other live affordance, is withdrawn
+  // once the roster locks.
+  const openShift = {
+    ...shift,
+    shift_date: '2099-01-01',
+    start_time: '2099-01-01T08:00:00Z',
+    end_time: '2099-01-01T16:00:00Z',
+  };
+
+  beforeEach(() => {
+    // Reset and re-install this block's own defaults rather than inheriting
+    // whatever a neighbouring block left behind (pitfall #28).
+    mockEligibility.mockReset();
+    mockEligibility.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    mockAssignments.mockReset();
+    mockAssignments.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    mockAssignments.mockResolvedValue([]);
+  });
+
+  it('exposes itself as a modal dialog named by its heading', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('closes on Escape', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    await screen.findByRole('dialog', { name: 'Shift Details' });
+    await user.keyboard('{Escape}');
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels an open notes editor on Escape instead of closing the dialog', async () => {
+    // The whole reason the close handler is not just `onClose`: a half-typed
+    // note must not take the dialog down with it.
+    mockAssignments.mockResolvedValue([
+      { id: 'a-1', user_id: 'user-2', user_name: 'A Member', position: 'firefighter', status: 'assigned' },
+    ] as never);
+
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit notes' }));
+    expect(screen.getByRole('textbox', { name: 'Assignment notes' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('textbox', { name: 'Assignment notes' })).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes on a backdrop click but not on a click inside the panel', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    // Inside the panel first: the container's handler sees a click whose target
+    // is a descendant, not the backdrop itself.
+    await user.click(await screen.findByRole('heading', { name: 'Shift Details' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('dialog', { name: 'Shift Details' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
