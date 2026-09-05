@@ -29,9 +29,7 @@ const sources = routeSources();
 
 const declaredRoutes = [
   ...new Set(
-    [...sources.matchAll(/<Route\s[^>]*?path=(?:"([^"]+)"|'([^']+)')/gs)].map(
-      (match) => match[1] ?? match[2] ?? ''
-    )
+    [...sources.matchAll(/<Route\s[^>]*?path=(?:"([^"]+)"|'([^']+)')/gs)].map((match) => match[1] ?? match[2] ?? '')
   ),
 ].filter(Boolean);
 

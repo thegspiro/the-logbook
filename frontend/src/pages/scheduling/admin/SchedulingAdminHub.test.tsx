@@ -49,7 +49,11 @@ const grant = (...held: string[]) =>
  */
 const hrefs = () => {
   const tools = screen.queryByRole('navigation', { name: 'Scheduling administration tools' });
-  return tools ? within(tools).queryAllByRole('link').map((link) => link.getAttribute('href')) : [];
+  return tools
+    ? within(tools)
+        .queryAllByRole('link')
+        .map((link) => link.getAttribute('href'))
+    : [];
 };
 
 describe('SchedulingAdminHub', () => {

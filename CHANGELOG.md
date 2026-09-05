@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Administration pages say where you are (2026-09-05)
+
+**Added**
+
+- **A breadcrumb trail on every administration hub and the pages beneath it.**
+  Nothing under `/scheduling/admin` had one: its sub-pages offered a single
+  unlabelled back arrow whose destination was only in its `aria-label`, and each
+  one was headed "Shift Scheduling" with its real name demoted to a prefix on
+  the description. Templates, Patterns, Reports, Platoons, Who Can Fill What and
+  the six Settings sections now name themselves and show the path back up.
+
+**Fixed**
+
+- **A crumb no longer offers a page it cannot open.** A generated trail is built
+  from URL prefixes, and a prefix is often either not a route at all
+  (`/scheduling/admin/settings`, whose six section routes it is not one of) or a
+  route the viewer lacks the grant for — a checklist manager holds
+  `inventory.check_manage`, which opens `/inventory/admin/checklists` but not
+  its parent `/inventory`. Both used to render as working links, landing on the
+  dashboard and on Access Denied respectively. Such a crumb is now plain text.
+- **The trail marks the page you are on when the URL ends in a record id.**
+  Member edit and audit history showed no current crumb at all and ended in a
+  link to `/members/admin/edit`, which is not a route.
+- **Equipment Checklists is no longer a dead end.** It carried no back link of
+  its own, and is reached from Scheduling Administration as well as Inventory
+  Administration.
+
 ### The Events page invited members to create an event (2026-09-05)
 
 **Fixed**
