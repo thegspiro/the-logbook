@@ -1,26 +1,34 @@
 /**
  * Scheduling Settings Page
  *
- * Admin page for department-wide scheduling settings. Owns the section
- * navigation (via the shared SettingsLayout) and the section's URL mirror;
- * ShiftSettingsPanel renders the active section's content.
+ * One department-wide scheduling settings section. The section is a route, not
+ * a tab: `/scheduling/admin/settings/general` and its five siblings each mount
+ * this page with their own `section`, so a settings screen can be linked to,
+ * bookmarked and reached with the back button. Selecting a section navigates.
+ *
+ * ShiftSettingsPanel renders the section's content; the section list and the
+ * page chrome belong here.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import { ShiftSettingsPanel } from '../../modules/scheduling/components/ShiftSettingsPanel';
-import { SCHEDULING_SETTINGS_SECTIONS } from '../../modules/scheduling/components/schedulingSettingsSections';
+import {
+  SCHEDULING_SETTINGS_SECTIONS,
+  settingsPathFor,
+} from '../../modules/scheduling/components/schedulingSettingsSections';
 import type { SettingsTab } from '../../modules/scheduling/components/schedulingSettingsSections';
 import { SettingsLayout } from '../../components/settings/SettingsLayout';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 
-const isSettingsTab = (value: string | null): value is SettingsTab =>
-  value !== null && SCHEDULING_SETTINGS_SECTIONS.some((s) => s.key === value);
+interface SchedulingSettingsPageProps {
+  /** Which section this route mounts. */
+  section: SettingsTab;
+}
 
-const SchedulingSettingsPage: React.FC = () => {
+const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section }) => {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const {
     templates: backendTemplates,
     apparatus: apparatusList,
@@ -29,31 +37,12 @@ const SchedulingSettingsPage: React.FC = () => {
   } = useSchedulingStore();
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
 
-  const tabParam = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<SettingsTab>(isSettingsTab(tabParam) ? tabParam : 'general');
-
-  // Selecting a section writes it to the URL, so a settings screen can be
-  // linked to, refreshed, and reached with the back button.
-  const handleTabChange = useCallback(
+  const handleSectionChange = useCallback(
     (tab: SettingsTab) => {
-      setActiveTab(tab);
-      const next = new URLSearchParams(searchParams);
-      if (tab === 'general') {
-        next.delete('tab');
-      } else {
-        next.set('tab', tab);
-      }
-      setSearchParams(next, { replace: true });
+      void navigate(settingsPathFor(tab));
     },
-    [searchParams, setSearchParams]
+    [navigate]
   );
-
-  useEffect(() => {
-    const param = searchParams.get('tab');
-    if (isSettingsTab(param)) {
-      setActiveTab(param);
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     if (!templatesLoaded) {
@@ -69,25 +58,25 @@ const SchedulingSettingsPage: React.FC = () => {
   );
 
   // Derived rather than corrected in state: platoonsEnabled arrives from the
-  // API a beat after mount, so resetting activeTab on a ?tab=platoons deep link
-  // would bounce the user off the section they asked for, before the setting
-  // that permits it has even loaded. Falling back for this render instead lets
-  // the section appear once the flag resolves.
-  const visibleTab = sections.some((s) => s.key === activeTab) ? activeTab : 'general';
+  // API a beat after mount, so redirecting off /settings/platoons would bounce
+  // the user out of the section they asked for, before the setting that permits
+  // it has even loaded. Falling back for this render instead lets the section
+  // appear once the flag resolves.
+  const visibleSection = sections.some((s) => s.key === section) ? section : 'general';
 
   return (
     <div className="min-h-screen">
       <SettingsLayout<SettingsTab>
         sections={sections}
-        activeSection={visibleTab}
-        onSectionChange={handleTabChange}
+        activeSection={visibleSection}
+        onSectionChange={handleSectionChange}
         navLabel="Scheduling settings sections"
         // Names the page, not the module: the module header said "Shift
         // Scheduling" on a screen whose subject is its settings.
         title="Scheduling Settings"
         subtitle="Department-wide scheduling defaults"
-        onBack={() => void navigate('/scheduling')}
-        backLabel="Back to scheduling"
+        onBack={() => void navigate('/scheduling/admin')}
+        backLabel="Back to scheduling administration"
       >
         {!templatesLoaded ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
@@ -97,9 +86,9 @@ const SchedulingSettingsPage: React.FC = () => {
           <ShiftSettingsPanel
             templates={backendTemplates}
             apparatusList={apparatusList}
-            onNavigateToTemplates={() => void navigate('/scheduling/templates')}
-            activeTab={visibleTab}
-            onTabChange={handleTabChange}
+            onNavigateToTemplates={() => void navigate('/scheduling/admin/templates')}
+            activeTab={visibleSection}
+            onTabChange={handleSectionChange}
           />
         )}
       </SettingsLayout>

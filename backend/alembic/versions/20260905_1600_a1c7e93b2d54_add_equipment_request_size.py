@@ -1,7 +1,7 @@
 """Record the size a member asked for on an equipment request.
 
 Revision ID: a1c7e93b2d54
-Revises: c8f4a1e6b309
+Revises: e8a1c04f6b27
 
 A member can need a size the department does not stock, and that request is
 how the quartermaster finds out. In that case ``item_id`` is NULL because no
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a1c7e93b2d54"
-down_revision = "c8f4a1e6b309"
+down_revision = "e8a1c04f6b27"
 branch_labels = None
 depends_on = None
 

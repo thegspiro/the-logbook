@@ -161,7 +161,11 @@ const PositionRosterPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-      <SchedulingHeader backTo="/scheduling" description="Who is cleared for each shift position, and why" />
+      <SchedulingHeader
+        backTo="/scheduling/admin"
+        backLabel="Back to scheduling administration"
+        description="Who is cleared for each shift position, and why"
+      />
 
       <div className="tab-scroll mb-4" role="tablist" aria-label="Qualification views">
         {TABS.map((tab) => (

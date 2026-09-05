@@ -21,9 +21,18 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # positions is a model-only table (the chain created roles/user_roles;
-    # deployments materialize positions via create_all, which already
-    # includes settings). On a fresh chain run there is nothing to alter.
+    # This runs BEFORE 20260805_0008 renames `roles` to `positions`, so the
+    # table this names does not exist yet and the guard below always fires:
+    # on every upgrade path this revision is inert. The models were renamed
+    # long before the database was, which is why it was written against the
+    # model name. The body stays as it ran -- an already-deployed migration is
+    # not edited to change its behaviour (AGENTS.md).
+    #
+    # Nothing supersedes this one, and nothing needs to. `positions.settings`
+    # is added by 20260805_0008's own fallback on the chain path, and by
+    # `create_all` from the model everywhere else, so the column exists either
+    # way. Do not delete that fallback on the assumption this revision covers
+    # it: this revision covers nothing.
     from sqlalchemy import inspect
 
     if "positions" not in inspect(op.get_bind()).get_table_names():
