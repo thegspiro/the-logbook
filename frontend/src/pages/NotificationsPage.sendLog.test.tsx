@@ -63,7 +63,7 @@ const emailLog = {
   created_at: '2026-09-01T12:00:00Z',
 };
 
-const emptyPage = { logs: [] as (typeof emailLog)[], total: 0, skip: 0, limit: 50 };
+const emptyPage = { logs: [] as (typeof emailLog)[], total: 0, skip: 0, limit: 50, next_cursor: null };
 
 const renderLogTab = () =>
   render(
@@ -81,6 +81,7 @@ beforeEach(() => {
     total: 1,
     skip: 0,
     limit: 50,
+    next_cursor: null,
   });
   vi.mocked(notificationsService.markAllLogsRead).mockReset();
   vi.mocked(notificationsService.markAllLogsRead).mockResolvedValue({ marked_read: 1 });
@@ -90,6 +91,7 @@ beforeEach(() => {
     total: 0,
     skip: 0,
     limit: 20,
+    next_cursor: null,
   });
   vi.mocked(notificationsService.getRules).mockReset();
   vi.mocked(notificationsService.getSummary).mockReset();
@@ -103,7 +105,6 @@ describe('NotificationsPage send log', () => {
     await waitFor(() => expect(notificationsService.getLogs).toHaveBeenCalled());
     expect(notificationsService.getLogs).toHaveBeenCalledWith({
       scope: NotificationLogScope.MINE,
-      skip: 0,
       limit: 50,
     });
     expect(await screen.findByText('Drill on Thursday')).toBeInTheDocument();
@@ -142,7 +143,7 @@ describe('NotificationsPage send log', () => {
     await screen.findByRole('tab', { name: /send log/i });
     expect(screen.queryByText('No Notifications Found')).toBeNull();
 
-    release({ logs: [emailLog], total: 1, skip: 0, limit: 50 });
+    release({ logs: [emailLog], total: 1, skip: 0, limit: 50, next_cursor: null });
 
     expect(await screen.findByText('Drill on Thursday')).toBeInTheDocument();
   });
@@ -190,6 +191,7 @@ describe('NotificationsPage send log', () => {
       total: 3,
       skip: 0,
       limit: 50,
+      next_cursor: 'cursor-page-2',
     });
 
     renderLogTab();
@@ -199,19 +201,39 @@ describe('NotificationsPage send log', () => {
     vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
       logs: [{ ...emailLog, id: 'log-2', subject: 'Hydrant testing' }],
       total: 3,
-      skip: 1,
+      skip: 0,
       limit: 50,
+      next_cursor: null,
     });
     await userEvent.setup().click(more);
 
     expect(await screen.findByText('Hydrant testing')).toBeInTheDocument();
     // Appended, not replaced.
     expect(screen.getByText('Drill on Thursday')).toBeInTheDocument();
+    // The cursor the server handed back, passed through untouched — never an
+    // offset derived from what the client happens to hold.
     expect(notificationsService.getLogs).toHaveBeenLastCalledWith({
       scope: NotificationLogScope.MINE,
-      skip: 1,
+      cursor: 'cursor-page-2',
       limit: 50,
     });
+  });
+
+  it('stops offering Load more when the server issues no next cursor', async () => {
+    // The end of the list is the server's statement, not an arithmetic
+    // comparison the client can get wrong while rows are arriving.
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [emailLog],
+      total: 9,
+      skip: 0,
+      limit: 50,
+      next_cursor: null,
+    });
+
+    renderLogTab();
+
+    await screen.findByText('Drill on Thursday');
+    expect(screen.queryByRole('button', { name: /load more/i })).toBeNull();
   });
 
   it('asks the server for the selected channel rather than filtering a page', async () => {
@@ -228,6 +250,7 @@ describe('NotificationsPage send log', () => {
       total: 1,
       skip: 0,
       limit: 50,
+      next_cursor: null,
     });
     await user.click(screen.getByRole('button', { name: 'In-App' }));
 
@@ -235,34 +258,8 @@ describe('NotificationsPage send log', () => {
     expect(notificationsService.getLogs).toHaveBeenLastCalledWith({
       scope: NotificationLogScope.MINE,
       channel: 'in_app',
-      skip: 0,
       limit: 50,
     });
-  });
-
-  it('does not re-render a row a newer notification shifted into the next page', async () => {
-    // The list is newest-first and `skip` is an offset, so a notification
-    // arriving between the two requests pushes a loaded row into the next
-    // page's range and it comes back a second time.
-    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
-      logs: [emailLog],
-      total: 3,
-      skip: 0,
-      limit: 50,
-    });
-    renderLogTab();
-
-    const more = await screen.findByRole('button', { name: /load more/i });
-    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
-      logs: [emailLog, { ...emailLog, id: 'log-3', subject: 'Hydrant testing' }],
-      total: 3,
-      skip: 1,
-      limit: 50,
-    });
-    await userEvent.setup().click(more);
-
-    await screen.findByText('Hydrant testing');
-    expect(screen.getAllByText('Drill on Thursday')).toHaveLength(1);
   });
 
   it('ignores a superseded channel fetch that resolves late', async () => {
@@ -286,6 +283,7 @@ describe('NotificationsPage send log', () => {
       total: 1,
       skip: 0,
       limit: 50,
+      next_cursor: null,
     });
     await user.click(screen.getByRole('button', { name: 'In-App' }));
     expect(await screen.findByText('Roster posted')).toBeInTheDocument();
@@ -299,46 +297,12 @@ describe('NotificationsPage send log', () => {
         total: 9,
         skip: 0,
         limit: 50,
+        next_cursor: null,
       });
     });
 
     expect(screen.queryByText('Stale email row')).toBeNull();
     expect(screen.getByText('Roster posted')).toBeInTheDocument();
-  });
-
-  it('advances paging by rows the server gave, not rows it kept', async () => {
-    // A page that re-serves an already-loaded row still consumed that offset.
-    // Deriving the next skip from the deduplicated length asked for the same
-    // row again and left Load more on screen forever.
-    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
-      logs: [emailLog],
-      total: 4,
-      skip: 0,
-      limit: 50,
-    });
-    renderLogTab();
-
-    const user = userEvent.setup();
-    const more = await screen.findByRole('button', { name: /load more/i });
-    // The second page re-serves the first row and adds two.
-    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
-      logs: [
-        emailLog,
-        { ...emailLog, id: 'log-4', subject: 'Ladder drill' },
-        { ...emailLog, id: 'log-5', subject: 'Pump test' },
-      ],
-      total: 4,
-      skip: 1,
-      limit: 50,
-    });
-    await user.click(more);
-
-    await screen.findByText('Pump test');
-    // Four rows consumed against a total of four: nothing left to fetch, even
-    // though the duplicate leaves only three on screen. Counting the retained
-    // three against the total kept the button up and re-requested an offset
-    // whose rows were already held.
-    await waitFor(() => expect(screen.queryByRole('button', { name: /load more/i })).toBeNull());
   });
 
   it('does not leave the previous channel on screen when a filtered fetch fails', async () => {
@@ -364,10 +328,17 @@ describe('NotificationsPage send log', () => {
       total: 5,
       skip: 0,
       limit: 50,
+      next_cursor: 'cursor-page-2',
     });
     renderLogTab();
 
-    let releaseStalePage!: (value: { logs: (typeof emailLog)[]; total: number; skip: number; limit: number }) => void;
+    let releaseStalePage!: (value: {
+      logs: (typeof emailLog)[];
+      total: number;
+      skip: number;
+      limit: number;
+      next_cursor: string | null;
+    }) => void;
     vi.mocked(notificationsService.getLogs).mockReturnValueOnce(
       new Promise((resolve) => {
         releaseStalePage = resolve;
@@ -381,12 +352,13 @@ describe('NotificationsPage send log', () => {
       total: 5,
       skip: 0,
       limit: 50,
+      next_cursor: 'cursor-in-app-2',
     });
     await user.click(screen.getByRole('button', { name: 'In-App' }));
     await screen.findByText('Roster posted');
 
     await act(async () => {
-      releaseStalePage({ logs: [], total: 5, skip: 1, limit: 50 });
+      releaseStalePage({ logs: [], total: 5, skip: 1, limit: 50, next_cursor: null });
     });
 
     const more = await screen.findByRole('button', { name: /load more/i });
@@ -414,6 +386,7 @@ describe('NotificationsPage send log', () => {
       total: 1,
       skip: 0,
       limit: 50,
+      next_cursor: null,
     });
     await user.click(screen.getByRole('button', { name: 'In-App' }));
     await screen.findByText('Roster posted');
@@ -424,6 +397,7 @@ describe('NotificationsPage send log', () => {
       total: 1,
       skip: 0,
       limit: 50,
+      next_cursor: null,
     });
     await act(async () => {
       releaseWrite({ marked_read: 1 });
@@ -432,7 +406,6 @@ describe('NotificationsPage send log', () => {
     expect(notificationsService.getLogs).toHaveBeenLastCalledWith({
       scope: NotificationLogScope.MINE,
       channel: 'in_app',
-      skip: 0,
       limit: 50,
     });
   });

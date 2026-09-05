@@ -20,6 +20,7 @@ from app.models.notification import (
     NotificationLog,
     NotificationRule,
 )
+from app.utils.cursor_pagination import keyset_before, next_cursor_for
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -198,14 +199,24 @@ class NotificationsService:
         recipient_id: Optional[UUID] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> Tuple[List[NotificationLog], int]:
-        """Get notification logs with pagination.
+        cursor: Optional[str] = None,
+    ) -> Tuple[List[NotificationLog], int, Optional[str]]:
+        """Get notification logs, by cursor when given and by offset otherwise.
 
         ``recipient_id`` narrows the result to one member's own deliveries.
         Every writer on this path sets ``recipient_id`` (``recipient_email``
         is only ever a copy of that user's address), so the id alone is the
         complete filter — matching on the email as well would widen the query
         without reaching a row the id misses.
+
+        A ``cursor`` supersedes ``skip``: the two answer different questions
+        ("rows after this one" against "rows 50-99 of the current answer") and
+        honouring both at once would apply the offset within the keyset page.
+        ``skip`` stays supported because it is the published contract, and
+        because the caller of a first page has no cursor to pass.
+
+        Raises :class:`~app.utils.cursor_pagination.InvalidCursor` for a cursor
+        this application did not issue.
         """
         query = select(NotificationLog).where(
             NotificationLog.organization_id == str(organization_id)
@@ -221,17 +232,26 @@ class NotificationsService:
             except ValueError:
                 pass
 
-        # Count
+        # Counted before the keyset predicate narrows the query: the total
+        # describes the whole filtered list, not the tail after the cursor.
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        # Paginated results
-        query = query.order_by(NotificationLog.sent_at.desc()).offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        logs = result.scalars().all()
+        if cursor:
+            query = query.where(
+                keyset_before(NotificationLog.sent_at, NotificationLog.id, cursor)
+            )
+        else:
+            query = query.offset(skip)
 
-        return logs, total
+        query = query.order_by(
+            NotificationLog.sent_at.desc(), NotificationLog.id.desc()
+        ).limit(limit)
+        result = await self.db.execute(query)
+        logs = list(result.scalars().all())
+
+        return logs, total, next_cursor_for(logs, limit)
 
     async def get_user_notifications(
         self,
@@ -241,11 +261,17 @@ class NotificationsService:
         include_read: bool = True,
         skip: int = 0,
         limit: int = 50,
-    ) -> Tuple[List[NotificationLog], int]:
+        cursor: Optional[str] = None,
+    ) -> Tuple[List[NotificationLog], int, Optional[str]]:
         """Get in-app notifications for a specific user.
 
         Active view (include_expired=False): hides notifications past their
         expires_at timestamp. History view (include_expired=True): returns all.
+
+        Paginates by cursor when one is given and by offset otherwise, on the
+        same terms as :meth:`get_logs` — the inbox grows at the front for the
+        same reason the send log does, so its Load more had the same skipped-row
+        problem.
         """
         query = (
             select(NotificationLog)
@@ -270,11 +296,20 @@ class NotificationsService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        query = query.order_by(NotificationLog.sent_at.desc()).offset(skip).limit(limit)
+        if cursor:
+            query = query.where(
+                keyset_before(NotificationLog.sent_at, NotificationLog.id, cursor)
+            )
+        else:
+            query = query.offset(skip)
+
+        query = query.order_by(
+            NotificationLog.sent_at.desc(), NotificationLog.id.desc()
+        ).limit(limit)
         result = await self.db.execute(query)
         logs = list(result.scalars().all())
 
-        return logs, total
+        return logs, total, next_cursor_for(logs, limit)
 
     async def get_user_unread_count(
         self,

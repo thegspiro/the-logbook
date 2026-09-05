@@ -214,7 +214,11 @@ class NotificationLog(Base):
     )  # e.g., "event_reminder", "action_items"
 
     # Status
-    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+    # NOT NULL because it is half the cursor-pagination ordering key: a NULL
+    # would sort last under `ORDER BY sent_at DESC` and be unreachable by any
+    # cursor, absent from a list claiming to be complete. See migration
+    # c8f4a1e6b309.
+    sent_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     delivered = Column(Boolean, default=_delivered_default)
     read = Column(Boolean, default=False)
     read_at = Column(DateTime(timezone=True))

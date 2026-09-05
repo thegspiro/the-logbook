@@ -180,12 +180,23 @@ class NotificationLogScope(str, Enum):
 
 
 class NotificationLogsListResponse(BaseModel):
-    """Schema for paginated notification logs list"""
+    """Schema for paginated notification logs list.
+
+    ``next_cursor`` is the authoritative "there is more" signal — absent means
+    the end of the list. A client comparing ``len(logs)`` against ``total``
+    instead can disagree with the server whenever a notification arrives
+    mid-paging, which is the case cursor pagination exists to handle.
+
+    ``skip`` and ``total`` remain for the offset callers that predate the
+    cursor, and ``total`` still describes the whole filtered list rather than
+    the tail after the cursor.
+    """
 
     logs: List[NotificationLogResponse]
     total: int
     skip: int
     limit: int
+    next_cursor: Optional[str] = None
 
 
 # ============================================

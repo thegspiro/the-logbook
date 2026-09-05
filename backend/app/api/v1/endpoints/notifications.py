@@ -38,6 +38,7 @@ from app.schemas.notifications import (
 )
 from app.services.notifications_service import NotificationsService
 from app.services.push_service import PushService, validate_push_endpoint
+from app.utils.cursor_pagination import InvalidCursor
 
 router = APIRouter()
 
@@ -202,6 +203,14 @@ async def list_logs(
             "requires notifications.manage."
         ),
     ),
+    cursor: str | None = Query(
+        None,
+        description=(
+            "Opaque cursor from a previous response's nextCursor. Supersedes "
+            "skip; pass back exactly what was returned. Absent nextCursor "
+            "means the end of the list."
+        ),
+    ),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -214,18 +223,26 @@ async def list_logs(
     """
     recipient_id = _resolve_log_scope(scope, current_user)
     service = NotificationsService(db)
-    logs, total = await service.get_logs(
-        current_user.organization_id,
-        channel=channel,
-        recipient_id=recipient_id,
-        skip=pagination.skip,
-        limit=pagination.limit,
-    )
+    try:
+        logs, total, next_cursor = await service.get_logs(
+            current_user.organization_id,
+            channel=channel,
+            recipient_id=recipient_id,
+            skip=pagination.skip,
+            limit=pagination.limit,
+            cursor=cursor,
+        )
+    except InvalidCursor as exc:
+        # The cursor is client-supplied, so a bad one is a bad request. Falling
+        # back to the first page would hand the caller rows they already have
+        # while they believed they were reading further in.
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
     return {
         "logs": logs,
         "total": total,
         "skip": pagination.skip,
         "limit": pagination.limit,
+        "next_cursor": next_cursor,
     }
 
 
@@ -288,6 +305,14 @@ async def get_my_notifications(
         False, description="Include expired notifications (for history view)"
     ),
     include_read: bool = Query(True, description="Include read notifications"),
+    cursor: str | None = Query(
+        None,
+        description=(
+            "Opaque cursor from a previous response's nextCursor. Supersedes "
+            "skip; pass back exactly what was returned. Absent nextCursor "
+            "means the end of the list."
+        ),
+    ),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -298,19 +323,24 @@ async def get_my_notifications(
     after the event). Set include_expired=true for the full history.
     """
     service = NotificationsService(db)
-    logs, total = await service.get_user_notifications(
-        organization_id=current_user.organization_id,
-        user_id=current_user.id,
-        include_expired=include_expired,
-        include_read=include_read,
-        skip=pagination.skip,
-        limit=pagination.limit,
-    )
+    try:
+        logs, total, next_cursor = await service.get_user_notifications(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            include_expired=include_expired,
+            include_read=include_read,
+            skip=pagination.skip,
+            limit=pagination.limit,
+            cursor=cursor,
+        )
+    except InvalidCursor as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
     return {
         "logs": logs,
         "total": total,
         "skip": pagination.skip,
         "limit": pagination.limit,
+        "next_cursor": next_cursor,
     }
 
 

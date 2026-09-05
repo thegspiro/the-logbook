@@ -590,6 +590,23 @@ export interface NotificationLogRecord {
   created_at: string;
 }
 
+/**
+ * One page of a notification list.
+ *
+ * `next_cursor` is the authoritative "there is more" signal: absent means the
+ * end of the list. Prefer it over comparing loaded rows against `total`, which
+ * a notification arriving mid-paging makes disagree with the server — the case
+ * cursor pagination exists to handle. `total` still describes the whole
+ * filtered list, so it remains right for a "N remaining" label.
+ */
+export interface NotificationLogPage {
+  logs: NotificationLogRecord[];
+  total: number;
+  skip: number;
+  limit: number;
+  next_cursor?: string | null;
+}
+
 export interface NotificationsSummary {
   total_rules: number;
   active_rules: number;
