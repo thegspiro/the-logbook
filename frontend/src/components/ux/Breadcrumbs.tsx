@@ -154,9 +154,22 @@ const titleCase = (segment: string): string =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 
-function generateBreadcrumbs(pathname: string, checkPermission: (permission: string) => boolean): BreadcrumbItem[] {
+/**
+ * Denies every permission, and so links no crumb.
+ *
+ * Used when the store hands back no `checkPermission` — which the type says
+ * cannot happen and which a partially-mocked store does constantly: eighteen
+ * suites stub `useAuthStore` with only the slice they need. A breadcrumb trail
+ * is an ornament on a page, so it must never be the reason that page fails to
+ * render; a missing predicate costs the trail its links, not the screen.
+ * Denying is also the direction the registry already fails in.
+ */
+const DENY_ALL = (): boolean => false;
+
+function generateBreadcrumbs(pathname: string, checkPermission?: (permission: string) => boolean): BreadcrumbItem[] {
   const segments = pathname.split('/').filter(Boolean);
   const crumbs: BreadcrumbItem[] = [];
+  const canCheck = checkPermission ?? DENY_ALL;
 
   let currentPath = '';
   for (const segment of segments) {
@@ -174,7 +187,7 @@ function generateBreadcrumbs(pathname: string, checkPermission: (permission: str
 
     crumbs.push({
       label: route?.label ?? PATH_LABELS[segment] ?? titleCase(segment),
-      path: canLinkCrumb(currentPath, checkPermission) ? currentPath : undefined,
+      path: canLinkCrumb(currentPath, canCheck) ? currentPath : undefined,
     });
   }
 
