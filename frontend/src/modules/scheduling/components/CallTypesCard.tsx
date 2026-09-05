@@ -59,13 +59,20 @@ interface CallTypesCardProps {
   types: CallTypeOption[];
   /** Calls on record per slug. A slug absent here has none. */
   usage: Record<string, number>;
+  /**
+   * Slugs the server will refuse to delete. Broader than a non-zero usage
+   * count — a filed shift report can outlive the calls it was built from —
+   * so this, not the count, is what gates the delete button. Gating on the
+   * count alone let the save come back refused with nothing having warned.
+   */
+  locked: string[];
   /** Current call-tracking mode, so the card can say when it is inert. */
   mode: string;
   saving: boolean;
   onSave: (types: CallTypeOption[]) => Promise<void>;
 }
 
-export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode, saving, onSave }) => {
+export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, locked, mode, saving, onSave }) => {
   const { confirm } = useConfirm();
   const [draft, setDraft] = useState<CallTypeOption[]>(types);
   const [newLabel, setNewLabel] = useState('');
@@ -87,6 +94,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
 
   const dirty = JSON.stringify(draft) !== serverKey;
   const activeCount = draft.filter((t) => t.active).length;
+  const lockedSlugs = useMemo(() => new Set(locked), [locked]);
 
   const patch = useCallback((slug: string, changes: Partial<CallTypeOption>) => {
     setDraft((prev) => prev.map((t) => (t.slug === slug ? { ...t, ...changes } : t)));
@@ -147,6 +155,19 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
       setError('Every call type needs a name.');
       return;
     }
+    // Close-out shows the name and not the slug, so two types sharing one
+    // name are two indistinguishable count fields. The backend refuses this
+    // too; catching it here says which name rather than failing the save.
+    const seen = new Map<string, string>();
+    for (const t of cleaned) {
+      const key = t.label.replace(/\s+/g, ' ').toLowerCase();
+      const clash = seen.get(key);
+      if (clash) {
+        setError(`Two call types are named "${t.label}". Officers see only the name, so it has to be unique.`);
+        return;
+      }
+      seen.set(key, t.slug);
+    }
     if (cleaned.length === 0) {
       // An empty stored list reads as "never configured" and the backend
       // serves the built-in nine again, so this would not do what it looks
@@ -181,6 +202,9 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
       <ul className="mt-4 space-y-2">
         {draft.map((type, index) => {
           const used = usage[type.slug] ?? 0;
+          // A filed report can name a type no call still carries, so the
+          // locked list — not the count — is what the server enforces.
+          const isLocked = lockedSlugs.has(type.slug);
           return (
             <li
               key={type.slug}
@@ -191,7 +215,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
                   type="button"
                   className="btn-icon-sm"
                   aria-label={`Move ${type.label} up`}
-                  disabled={index === 0}
+                  disabled={saving || index === 0}
                   onClick={() => move(index, -1)}
                 >
                   <ArrowUp className="h-3.5 w-3.5" />
@@ -200,7 +224,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
                   type="button"
                   className="btn-icon-sm"
                   aria-label={`Move ${type.label} down`}
-                  disabled={index === draft.length - 1}
+                  disabled={saving || index === draft.length - 1}
                   onClick={() => move(index, 1)}
                 >
                   <ArrowDown className="h-3.5 w-3.5" />
@@ -213,12 +237,17 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
                   value={type.label}
                   aria-label={`Name for ${type.slug}`}
                   maxLength={100}
+                  disabled={saving}
                   onChange={(e) => patch(type.slug, { label: e.target.value })}
                 />
                 <p className="text-theme-text-muted mt-1 text-xs">
                   <span className="font-mono">{type.slug}</span>
                   {' · '}
-                  {used > 0 ? `${used} call${used === 1 ? '' : 's'} on record` : 'no calls on record'}
+                  {used > 0
+                    ? `${used} call${used === 1 ? '' : 's'} on record`
+                    : isLocked
+                      ? 'named by a filed shift report'
+                      : 'no calls on record'}
                 </p>
               </div>
 
@@ -228,6 +257,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
                   role="switch"
                   aria-checked={type.active}
                   aria-label={`Offer ${type.label} at close-out`}
+                  disabled={saving}
                   onClick={() => patch(type.slug, { active: !type.active })}
                   className={`toggle-track-sm ${type.active ? 'bg-violet-600' : 'bg-theme-surface-border'}`}
                 >
@@ -237,11 +267,13 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
                   type="button"
                   className="btn-icon-sm text-red-700 disabled:opacity-40 dark:text-red-400"
                   aria-label={`Delete ${type.label}`}
-                  disabled={used > 0}
+                  disabled={saving || isLocked}
                   title={
                     used > 0
                       ? 'This type has calls filed under it. Turn it off to retire it instead — deleting it would leave those calls unlabelled.'
-                      : 'Delete this type'
+                      : isLocked
+                        ? 'A filed shift report still names this type. Turn it off to retire it instead — deleting it would leave that report unlabelled.'
+                        : 'Delete this type'
                   }
                   onClick={() => {
                     void removeType(type);
@@ -269,6 +301,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
             value={newLabel}
             maxLength={100}
             placeholder="e.g. Water Rescue"
+            disabled={saving}
             onChange={(e) => setNewLabel(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -278,7 +311,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
             }}
           />
         </label>
-        <button type="button" className="btn-secondary btn-sm" onClick={addType} disabled={!newLabel.trim()}>
+        <button type="button" className="btn-secondary btn-sm" onClick={addType} disabled={saving || !newLabel.trim()}>
           <Plus className="h-4 w-4" /> Add
         </button>
       </div>

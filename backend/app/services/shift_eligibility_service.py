@@ -979,6 +979,7 @@ class ShiftEligibilityService:
         types = raw.get("call_types")
         clean_types = []
         seen = set()
+        labels_seen = set()
         if isinstance(types, list):
             for entry in types:
                 if not isinstance(entry, dict):
@@ -1000,6 +1001,15 @@ class ShiftEligibilityService:
                 ):
                     continue
                 label = str(entry.get("label") or "").strip()[:100] or slug
+                # The schema now requires labels to be distinct, and this
+                # column predates that. Disambiguated rather than dropped: the
+                # entry may be the only thing that can label a type with years
+                # of calls behind it, so losing it is worse than a clumsy
+                # name an admin can correct on the settings screen.
+                label_key = " ".join(label.split()).casefold()
+                if label_key in labels_seen:
+                    label = f"{label} ({slug})"[:100]
+                labels_seen.add(" ".join(label.split()).casefold())
                 seen.add(slug)
                 # Missing means active: entries stored before retirement
                 # existed predate the key, and reading their absence as

@@ -338,10 +338,26 @@ class CallTrackingSettings(BaseModel):
         if self.mode not in CallTrackingMode.ALL:
             raise ValueError(f"mode must be one of {', '.join(CallTrackingMode.ALL)}")
         seen = set()
+        # Close-out renders the label and not the slug, so two types sharing
+        # one label are two indistinguishable count fields writing to
+        # different keys — and the officer has no way to tell which is which.
+        # Normalized, because "EMS" and "ems" are the same word on screen.
+        # Checked across retired types too: their labels still appear in
+        # reports, where the same ambiguity reads as one type counted twice.
+        labels_seen: dict = {}
         for entry in self.call_types:
             if entry.slug in seen:
                 raise ValueError(f"Duplicate call type slug: {entry.slug}")
             seen.add(entry.slug)
+
+            key = " ".join(entry.label.split()).casefold()
+            if key in labels_seen:
+                raise ValueError(
+                    f"Two call types share the name '{entry.label}' "
+                    f"({labels_seen[key]} and {entry.slug}). Officers see only "
+                    f"the name, so it has to be unique."
+                )
+            labels_seen[key] = entry.slug
         return self
 
 
@@ -1396,6 +1412,10 @@ class SchedulingFeatureSettings(BaseModel):
     # delete outright) from one carrying a decade of history (retire it
     # instead), and asking the client to supply that would let it decide.
     call_type_usage: dict[str, int] = Field(default_factory=dict)
+    # Types the editor must not offer to delete. Broader than a non-zero
+    # usage count: a filed shift report can outlive the calls it was built
+    # from, and deleting the type would leave that report showing a raw slug.
+    call_type_locked: List[str] = Field(default_factory=list)
 
 
 # ============================================

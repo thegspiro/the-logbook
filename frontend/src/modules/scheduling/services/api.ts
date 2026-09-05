@@ -199,6 +199,13 @@ export interface SchedulingFeatureSettings {
    * instead. Ignored if sent on a write.
    */
   call_type_usage?: Record<string, number>;
+  /**
+   * Types the editor must not offer to delete. Broader than a non-zero usage
+   * count: a filed shift report can outlive the calls it was built from, and
+   * deleting the type would leave that report showing a raw slug. Also
+   * server-computed and ignored on a write.
+   */
+  call_type_locked?: string[];
 }
 
 export interface PlatoonMember {

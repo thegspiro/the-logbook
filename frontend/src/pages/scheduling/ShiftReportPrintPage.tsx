@@ -15,7 +15,11 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
-import { useCallTypeLabels, useCallTypeLabelsReady } from '../../modules/scheduling/hooks/useCallTypeLabels';
+import {
+  callTypesAreOrgSlugs,
+  useCallTypeLabels,
+  useCallTypeLabelsReady,
+} from '../../modules/scheduling/hooks/useCallTypeLabels';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
 
 /** Settle time for layout and webfonts before the print dialog opens. */
@@ -56,7 +60,7 @@ const ShiftReportPrintPage: React.FC = () => {
     // deliberately leaves `settingsLoaded` false when its request fails, so
     // waiting for the flag outright would mean a print view that never prints.
     // A slug on the page beats a blank stare at a dialog that never opens.
-    const waitingOnLabels = (report.call_types?.length ?? 0) > 0 && !labelsReady;
+    const waitingOnLabels = callTypesAreOrgSlugs(report) && (report.call_types?.length ?? 0) > 0 && !labelsReady;
     const timer = setTimeout(() => window.print(), waitingOnLabels ? LABEL_WAIT_MS : PRINT_DELAY_MS);
     return () => clearTimeout(timer);
   }, [report, labelsReady]);
@@ -137,7 +141,9 @@ const ShiftReportPrintPage: React.FC = () => {
             {report.call_types && report.call_types.length > 0 && (
               <div className="shift-report-print__fact-wide">
                 <dt>Call Types</dt>
-                <dd>{report.call_types.map(callTypeLabel).join(', ')}</dd>
+                <dd>
+                  {(callTypesAreOrgSlugs(report) ? report.call_types.map(callTypeLabel) : report.call_types).join(', ')}
+                </dd>
               </div>
             )}
           </dl>
