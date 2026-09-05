@@ -4,14 +4,17 @@
  * All four tabs used to hang off one gate, `notifications.view`, and that
  * grant was seeded to every member (the `member` position and the junior
  * ranks). So a rank-and-file firefighter opened Notifications and got the
- * Send Log — `GET /notifications/logs`, which is scoped to the organization
+ * Send Log — `GET /notifications/logs`, which was scoped to the organization
  * and not to the recipient, returning the subject and body of every
- * notification the department has sent anyone.
+ * notification the department had sent anyone.
  *
  * The grant is revoked at the seed sites (and by migration `a1f7c34e9b02`
- * for departments already onboarded). These cover the screen's half: that the
- * tabs follow the permission each one's contents actually need, on the deep
- * link as well as the button.
+ * for departments already onboarded), and the endpoint now defaults to
+ * `scope=mine` _(2026-09-04)_ so the tab is the caller's own delivery
+ * history. That is their own data, so the tab is offered to every signed-in
+ * member — but only ever asks for the `mine` scope, which is the half these
+ * cover. The rest is that the remaining tabs still follow the permission each
+ * one's contents actually need, on the deep link as well as the button.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -21,6 +24,7 @@ import { render } from '@testing-library/react';
 import { ConfirmProvider } from '../contexts/ConfirmContext';
 import NotificationsPage from './NotificationsPage';
 import { notificationsService } from '../services/api';
+import { NotificationLogScope } from '../constants/enums';
 
 vi.mock('../services/api', () => ({
   notificationsService: {
@@ -83,20 +87,50 @@ afterEach(() => {
 });
 
 describe('NotificationsPage tab permissions', () => {
-  it('gives a plain member their inbox and nothing else', async () => {
+  it('gives a plain member their inbox and their own send log', async () => {
     renderAt('/notifications');
 
-    expect(await tabNames()).toEqual(['My Notifications']);
+    expect(await tabNames()).toEqual(['My Notifications', 'Send Log']);
   });
 
-  it('does not let a member reach the Send Log by deep link', async () => {
-    // The tab is not rendered, so the URL is the only way in. It must land on
-    // the inbox rather than falling through to an admin tab.
-    renderAt('/notifications?tab=log');
+  it('defaults a plain member to the inbox, not the send log', async () => {
+    renderAt('/notifications');
 
     await tabNames();
     expect(selectedTab()).toBe('My Notifications');
-    expect(notificationsService.getLogs).not.toHaveBeenCalled();
+  });
+
+  it('lets a member reach their own Send Log by deep link', async () => {
+    renderAt('/notifications?tab=log');
+
+    await tabNames();
+    expect(selectedTab()).toBe('Send Log');
+  });
+
+  it('only ever asks for the caller-scoped log, whatever the caller holds', async () => {
+    // The organization-wide scope exists but is not what this screen renders.
+    // Requesting it here would put every recipient's notification bodies back
+    // on the tab for anyone holding notifications.manage.
+    held = ['notifications.view', 'notifications.manage'];
+    renderAt('/notifications?tab=log');
+
+    await waitFor(() => expect(notificationsService.getLogs).toHaveBeenCalled());
+    // The scope is what this pins; pagination params are another test's
+    // business, and matching them exactly coupled this to that.
+    expect(notificationsService.getLogs).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: NotificationLogScope.MINE })
+    );
+  });
+
+  it('loads the send log for a member, whose rules request would 403', async () => {
+    // The two fetches are separate so a member keeps their own log. Sharing
+    // one Promise.all with the permission-gated rules/summary calls would
+    // lose it to their rejection.
+    vi.mocked(notificationsService.getRules).mockRejectedValue(new Error('403'));
+    renderAt('/notifications?tab=log');
+
+    await waitFor(() => expect(notificationsService.getLogs).toHaveBeenCalled());
+    expect(notificationsService.getRules).not.toHaveBeenCalled();
   });
 
   it('still fetches the inbox for a member, which needs no permission', async () => {

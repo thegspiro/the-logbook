@@ -19,6 +19,14 @@ import { MEDICAL_UNITS } from '../types';
 
 interface MedicalItemFormModalProps {
   categories: InventoryCategory[];
+  /**
+   * Why `categories` is empty, when it is empty because the list could not be
+   * loaded. Without it this modal reads an empty array as "none have been
+   * created yet" and tells the officer to create one -- advice that is wrong,
+   * and that sends them to duplicate a category the department already has.
+   * null when the list loaded.
+   */
+  categoriesError: string | null;
   /** Omit to create. */
   item?: InventoryItem | undefined;
   onClose: () => void;
@@ -51,7 +59,13 @@ function initialState(item?: InventoryItem): FormState {
   };
 }
 
-export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({ categories, item, onClose, onSaved }) => {
+export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
+  categories,
+  categoriesError,
+  item,
+  onClose,
+  onSaved,
+}) => {
   const isEdit = Boolean(item);
   // A lot-stocked item's real count is the sum of its in-date lots. `quantity`
   // is a separate ledger that receiving a lot never touches, so this form must
@@ -122,11 +136,28 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({ cate
     <Modal isOpen onClose={onClose} title={isEdit ? 'Edit medical supply' : 'Add medical supply'} size="lg">
       <form onSubmit={(e) => void handleSubmit(e)}>
         <div className="modal-body space-y-4">
-          {categories.length === 0 && (
+          {/*
+           * A failed category load is reported whether or not options survived
+           * it. With options retained the list is not empty, but it is out of
+           * date: a category another session just created is missing, and one
+           * that was deleted is still offered -- selectable right up to the
+           * save that rejects it.
+           */}
+          {categoriesError && categories.length === 0 ? (
+            <div className="alert-danger">
+              The category list could not be loaded, so there is nothing to file this supply under: {categoriesError}{' '}
+              Close this and retry the list from the All supplies tab.
+            </div>
+          ) : categoriesError ? (
+            <div className="alert-warning">
+              Showing previously loaded categories — the list could not be refreshed: {categoriesError} One added since
+              may be missing, and one removed since may still be listed.
+            </div>
+          ) : categories.length === 0 ? (
             <div className="alert-warning">
               No medical supply categories exist yet. Create one first — a supply is filed as medical by its category.
             </div>
-          )}
+          ) : null}
 
           <div>
             <label htmlFor="ms-name" className="form-label">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
@@ -31,6 +31,7 @@ import { notificationsService } from '../services/api';
 import type { NotificationRuleRecord, NotificationLogRecord, NotificationsSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
+import { NotificationLogScope } from '../constants/enums';
 import NotificationCard from '../components/NotificationCard';
 
 // Maps trigger enum values to display-friendly icons and colors
@@ -110,6 +111,10 @@ function formatCategory(category: string): string {
 }
 
 const INBOX_PAGE_SIZE = 20;
+// The send log is one row per delivery, so a long-serving member's history
+// runs well past a single page. The backend's own default is 100; naming it
+// here keeps the Load more arithmetic honest about what was asked for.
+const LOG_PAGE_SIZE = 50;
 
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -138,10 +143,32 @@ const NotificationsPage: React.FC = () => {
   const [myNotifications, setMyNotifications] = useState<NotificationLogRecord[]>([]);
   const [inboxTotal, setInboxTotal] = useState(0);
   const markingReadIds = useRef(new Set<string>());
+  // Only the newest send-log request may commit its result. A channel change
+  // or a mark-all can leave an earlier fetch in flight, and letting it land
+  // put the previous channel's rows under the new pill, or pre-write read
+  // state back over rows the server had already marked.
+  const logsRequestRef = useRef(0);
+  // The channel a fetch should ask for, resolved when the request is made
+  // rather than when its caller was rendered.
+  const logChannelFilterRef = useRef<'all' | 'email' | 'in_app'>('all');
 
   // UI states
   const [loading, setLoading] = useState(true);
   const [loadingInbox, setLoadingInbox] = useState(true);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [loadingMoreLogs, setLoadingMoreLogs] = useState(false);
+  const [logsTotal, setLogsTotal] = useState(0);
+  // Rows the server has handed over, which is not `logs.length`: a
+  // notification arriving mid-paging shifts a loaded row into the next page's
+  // range, and that duplicate is dropped on append. Deriving the next `skip`
+  // from the retained length would re-request the same row forever and leave
+  // Load more permanently on screen.
+  const [logsOffset, setLogsOffset] = useState(0);
+  // Kept apart from the page-wide `error`, which renders above every tab: the
+  // send log is prefetched on mount for a tab the member may never open, and
+  // its failure must not caption a working inbox with "Failed to load your
+  // send log".
+  const [logsError, setLogsError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showRead, setShowRead] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -159,17 +186,29 @@ const NotificationsPage: React.FC = () => {
   // still renders Rules. Deriving removes the state that could fall out of step
   // at all.
   //
-  // Each tab carries its own gate rather than sharing one, because Email
-  // Templates answers to `settings.manage` while Rules and the Send Log answer
-  // to `notifications.view`. A tab nobody can open must not be restorable from
-  // the URL either — the deep link is the same door as the button.
+  // Each tab carries its own gate rather than sharing one: Email Templates
+  // answers to `settings.manage`, Rules to `notifications.view`, and the Send
+  // Log to nothing beyond being signed in. A tab nobody can open must not be
+  // restorable from the URL either — the deep link is the same door as the
+  // button.
+  //
+  // The Send Log is ungated because it is no longer an org-wide view
+  // _(2026-09-04)_: `GET /notifications/logs` defaults to `scope=mine`, so
+  // the tab shows the caller their own delivery history — email as well as
+  // in-app, with delivered/failed status — which is their own data on the
+  // same footing as the inbox. The organization-wide view still exists behind
+  // `scope=organization` + `notifications.manage`, for auditing deliverability.
   const requestedTab = searchParams.get('tab');
   const tabIsAvailable: Record<'inbox' | 'rules' | 'templates' | 'log', boolean> = {
     inbox: true,
     rules: canView,
     templates: canManageTemplates,
-    log: canView,
+    log: true,
   };
+  // The buttons below render off this same map rather than repeating the
+  // permission expressions, so the button and the deep link cannot disagree
+  // about a tab — which is how the Send Log came to be restorable from the URL
+  // for a member before its button was.
   const isTabName = (value: string | null): value is keyof typeof tabIsAvailable =>
     value === 'inbox' || value === 'rules' || value === 'templates' || value === 'log';
   const activeTab: 'inbox' | 'rules' | 'templates' | 'log' =
@@ -203,6 +242,72 @@ const NotificationsPage: React.FC = () => {
     void fetchInbox();
   }, [showRead]);
 
+  // Fetch the send log on mount. Scoped to the caller, so it needs no
+  // permission — but kept separate from the rules/summary fetch below, which
+  // does, so a member's log is not lost to a 403 on a request they never
+  // needed to make.
+  //
+  // The channel filter is a query parameter, not a client-side pass over the
+  // loaded prefix. Filtering what happened to be fetched made the panel state
+  // "No email notifications sent to you" whenever the newest page held none,
+  // however many older ones the member had, and left `logsTotal` counting a
+  // different set than the list it sat above.
+  const loadLogPage = useCallback(async ({ append, skip }: { append: boolean; skip: number }) => {
+    // Read from the ref, not a closure. A write handler awaits its POST and
+    // only then reloads; closing over the filter meant a channel changed
+    // during that POST reloaded the *previous* channel — and, since the
+    // reload is newer, that stale answer won.
+    const channel = logChannelFilterRef.current;
+    const requestId = ++logsRequestRef.current;
+    if (append) setLoadingMoreLogs(true);
+    else setLoadingLogs(true);
+    setLogsError(null);
+    try {
+      const data = await notificationsService.getLogs({
+        scope: NotificationLogScope.MINE,
+        ...(channel === 'all' ? {} : { channel }),
+        skip,
+        limit: LOG_PAGE_SIZE,
+      });
+      if (requestId !== logsRequestRef.current) return;
+      const page = data.logs || [];
+      setLogs((prev) => {
+        if (!append) return page;
+        const seen = new Set(prev.map((entry) => entry.id));
+        return [...prev, ...page.filter((entry) => !seen.has(entry.id))];
+      });
+      setLogsOffset((prev) => (append ? prev + page.length : page.length));
+      setLogsTotal(data.total);
+    } catch (err: unknown) {
+      if (requestId !== logsRequestRef.current) return;
+      setLogsError(
+        getErrorMessage(err, append ? 'Failed to load more of your send log' : 'Failed to load your send log')
+      );
+      // A failed fetch for a newly selected channel must not leave the
+      // previous channel's rows sitting under the new pill, nor its length
+      // feeding that channel's pagination.
+      if (!append) {
+        setLogs([]);
+        setLogsOffset(0);
+        setLogsTotal(0);
+      }
+    } finally {
+      // The newest request clears *both* flags, not just the one it set. A
+      // superseded request must not clear anything (its winner is still
+      // running), which left a Load more that lost to a channel change
+      // stuck behind a spinner it could no longer switch off.
+      if (requestId === logsRequestRef.current) {
+        setLoadingLogs(false);
+        setLoadingMoreLogs(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    logChannelFilterRef.current = logChannelFilter;
+    void loadLogPage({ append: false, skip: 0 });
+  }, [logChannelFilter, loadLogPage]);
+
   // Fetch admin data on mount (only if user has permission)
   useEffect(() => {
     if (!canView) {
@@ -213,14 +318,12 @@ const NotificationsPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const [rulesRes, summaryRes, logsRes] = await Promise.all([
+        const [rulesRes, summaryRes] = await Promise.all([
           notificationsService.getRules(),
           notificationsService.getSummary(),
-          notificationsService.getLogs(),
         ]);
         setRules(rulesRes.rules);
         setSummary(summaryRes);
-        setLogs(logsRes.logs);
       } catch (err: unknown) {
         const message = getErrorMessage(err, 'Failed to load notification data');
         setError(message);
@@ -300,10 +403,49 @@ const NotificationsPage: React.FC = () => {
   );
 
   // Batch management: mark all as read (#76)
+  // Clears the caller's own logs across every channel, which is exactly the
+  // set the Send Log tab lists. That set includes their in-app notifications,
+  // so the inbox and the global unread badge are reconciled here too — leaving
+  // them alone showed the same notification read on one tab and unread on the
+  // next.
+  /**
+   * Reconcile the inbox tab after every one of the caller's notifications has
+   * been marked read.
+   *
+   * The inbox is a *filtered* list, so "mark them all read" is not a
+   * field update — under `showRead === false` the rows stop belonging to it.
+   * Mapping them to `read: true` in place left the unread-only view showing
+   * read notifications, and `inboxTotal` is the count of that same filtered
+   * set, so the Load more control went on advertising rows that were no
+   * longer in it.
+   *
+   * With `showRead` on, the list is unfiltered: the map is right and the
+   * total still counts every row.
+   */
+  const reconcileInboxAllRead = () => {
+    if (showRead) {
+      setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } else {
+      setMyNotifications([]);
+      setInboxTotal(0);
+    }
+    clearGlobalUnread();
+  };
+
+  const handleLoadMoreLogs = async () => {
+    await loadLogPage({ append: true, skip: logsOffset });
+  };
+
   const handleMarkAllRead = async () => {
     try {
-      await notificationsService.markAllLogsRead();
-      setLogs((prev) => prev.map((l) => ({ ...l, read: true })));
+      await notificationsService.markAllLogsRead({ scope: NotificationLogScope.MINE });
+      reconcileInboxAllRead();
+      // Re-read rather than patching the cached rows. Inferring which of them
+      // the write covered meant guessing at a snapshot from the client's
+      // request timing, which cannot tell a row the write marked from one
+      // created after it — and would have shown that new notification as
+      // already read.
+      await loadLogPage({ append: false, skip: 0 });
     } catch {
       setError('Failed to mark all as read');
     }
@@ -328,8 +470,8 @@ const NotificationsPage: React.FC = () => {
   const handleMarkAllInboxRead = async () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
-      setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      clearGlobalUnread();
+      reconcileInboxAllRead();
+      await loadLogPage({ append: false, skip: 0 });
     } catch {
       setError('Failed to mark all as read');
     }
@@ -365,7 +507,7 @@ const NotificationsPage: React.FC = () => {
     setSearchParams({ tab });
   };
 
-  if (loading && loadingInbox) {
+  if (loading && loadingInbox && loadingLogs) {
     return (
       <div className="min-h-screen">
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
@@ -392,7 +534,9 @@ const NotificationsPage: React.FC = () => {
               <p className="text-theme-text-muted text-sm">
                 {activeTab === 'inbox'
                   ? 'View and manage your notifications'
-                  : 'Manage automated notification rules and review send history across all channels'}
+                  : activeTab === 'log'
+                    ? 'Every notification sent to you, across all channels, with delivery status'
+                    : 'Manage automated notification rules and email templates'}
               </p>
             </div>
           </div>
@@ -423,8 +567,10 @@ const NotificationsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Stats - only show for admin tabs */}
-        {canView && activeTab !== 'inbox' && (
+        {/* Stats — organization-wide counts, so only on the organization-wide
+        tab. The Send Log below is scoped to the caller, and these numbers
+        sitting above it read as a tally of it. */}
+        {canView && activeTab === 'rules' && (
           <div
             className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3"
             role="region"
@@ -474,7 +620,7 @@ const NotificationsPage: React.FC = () => {
               </span>
             )}
           </button>
-          {canView && (
+          {tabIsAvailable.rules && (
             <button
               onClick={() => handleTabChange('rules')}
               role="tab"
@@ -488,7 +634,7 @@ const NotificationsPage: React.FC = () => {
               Notification Rules
             </button>
           )}
-          {canManageTemplates && (
+          {tabIsAvailable.templates && (
             <button
               onClick={() => handleTabChange('templates')}
               role="tab"
@@ -502,7 +648,7 @@ const NotificationsPage: React.FC = () => {
               Email Templates
             </button>
           )}
-          {canView && (
+          {tabIsAvailable.log && (
             <button
               onClick={() => handleTabChange('log')}
               role="tab"
@@ -745,121 +891,157 @@ const NotificationsPage: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'log' &&
-          (() => {
-            const filteredLogs = logChannelFilter === 'all' ? logs : logs.filter((l) => l.channel === logChannelFilter);
-            return (
-              <>
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                  <div className="bg-theme-surface-secondary flex items-center space-x-1 rounded-lg p-1">
-                    {(
-                      [
-                        ['all', 'All'],
-                        ['email', 'Email'],
-                        ['in_app', 'In-App'],
-                      ] as const
-                    ).map(([value, label]) => (
-                      <button
-                        key={value}
-                        onClick={() => setLogChannelFilter(value)}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                          logChannelFilter === value
-                            ? 'bg-orange-600 text-white'
-                            : 'text-theme-text-muted hover:text-theme-text-primary'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {filteredLogs.some((l) => !l.read) && (
-                    <button
-                      onClick={() => {
-                        void handleMarkAllRead();
-                      }}
-                      className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors max-md:min-h-[44px]"
-                    >
-                      <CheckCheck className="h-4 w-4" />
-                      Mark all as read
-                    </button>
-                  )}
-                </div>
-                {filteredLogs.length === 0 ? (
-                  <div className="card p-12 text-center">
-                    <Clock className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
-                    <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notifications Found</h3>
-                    <p className="text-theme-text-secondary mb-6">
-                      {logChannelFilter === 'all'
-                        ? 'The send log will show all sent notifications with delivery status and timestamps.'
-                        : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications found.`}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="card overflow-hidden">
-                      {/* Table Header — hidden on mobile, where each row stacks
+        {/* `logs` is server-filtered by channel, so it is the whole set for the
+        selected channel rather than a pass over whatever page is loaded. */}
+        {activeTab === 'log' && (
+          <div role="tabpanel">
+            {logsError && (
+              <div className="mb-4 flex items-start space-x-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
+                <p className="flex-1 text-sm text-red-700 dark:text-red-300">{logsError}</p>
+              </div>
+            )}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="bg-theme-surface-secondary flex items-center space-x-1 rounded-lg p-1">
+                {(
+                  [
+                    ['all', 'All'],
+                    ['email', 'Email'],
+                    ['in_app', 'In-App'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setLogChannelFilter(value)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      logChannelFilter === value
+                        ? 'bg-orange-600 text-white'
+                        : 'text-theme-text-muted hover:text-theme-text-primary'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {logs.some((l) => !l.read) && (
+                <button
+                  onClick={() => {
+                    void handleMarkAllRead();
+                  }}
+                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors max-md:min-h-[44px]"
+                >
+                  <CheckCheck className="h-4 w-4" />
+                  Mark all as read
+                </button>
+              )}
+            </div>
+            {/* The page-level skeleton cannot cover this tab: for a member
+                without notifications.view the permission effect sets `loading`
+                false synchronously, so the page renders while the log request
+                is still in flight and "No Notifications Found" claims an empty
+                log before one has been fetched. The inbox tab carries its own
+                flag for the same reason. */}
+            {loadingLogs ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="bg-theme-surface-hover h-16 animate-pulse rounded-lg" />
+                ))}
+              </div>
+            ) : logs.length === 0 ? (
+              <div className="card p-12 text-center">
+                <Clock className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+                <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Notifications Found</h3>
+                <p className="text-theme-text-secondary mb-6">
+                  {logChannelFilter === 'all'
+                    ? 'Your send log will show every notification sent to you, with delivery status and timestamps.'
+                    : `No ${logChannelFilter === 'email' ? 'email' : 'in-app'} notifications sent to you.`}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="card overflow-hidden">
+                  {/* Table Header — hidden on mobile, where each row stacks
                       into a card and the column headings would be meaningless */}
-                      <div className="border-theme-surface-border text-theme-text-muted hidden grid-cols-12 gap-4 border-b px-5 py-3 text-xs font-medium uppercase md:grid">
-                        <div className="col-span-4">Subject</div>
-                        <div className="col-span-3">Recipient</div>
-                        <div className="col-span-2">Channel</div>
-                        <div className="col-span-2">Sent At</div>
-                        <div className="col-span-1">Status</div>
-                      </div>
-                      {/* Table Rows */}
-                      {filteredLogs.map((log) => (
-                        <div
-                          key={log.id}
-                          className="border-theme-surface-border hover:bg-theme-surface-hover grid grid-cols-1 gap-1 border-b px-5 py-4 transition-colors last:border-b-0 md:grid-cols-12 md:gap-4"
-                        >
-                          <div className="md:col-span-4">
-                            <p className="text-theme-text-primary truncate text-sm">{log.subject || '(No subject)'}</p>
-                            {log.rule_name && (
-                              <p className="text-theme-text-muted mt-0.5 truncate text-xs">Rule: {log.rule_name}</p>
-                            )}
-                          </div>
-                          <div className="md:col-span-3">
-                            <p className="text-theme-text-secondary truncate text-sm">
-                              {log.recipient_name || log.recipient_email || 'Unknown'}
-                            </p>
-                            {log.recipient_name && log.recipient_email && (
-                              <p className="text-theme-text-muted mt-0.5 truncate text-xs">{log.recipient_email}</p>
-                            )}
-                          </div>
-                          <div className="md:col-span-2">
-                            <span className="bg-theme-surface-secondary text-theme-text-muted inline-flex items-center rounded-sm px-2 py-0.5 text-xs">
-                              {log.channel === 'in_app' ? 'In-App' : log.channel === 'email' ? 'Email' : log.channel}
-                            </span>
-                          </div>
-                          <div className="md:col-span-2">
-                            <p className="text-theme-text-secondary text-sm">{formatDate(log.sent_at, tz)}</p>
-                            <p className="text-theme-text-muted mt-0.5 text-xs">{formatTime(log.sent_at, tz)}</p>
-                          </div>
-                          <div className="md:col-span-1">
-                            {log.delivered ? (
-                              <span
-                                className="flex items-center space-x-1 text-green-700 dark:text-green-400"
-                                title="Delivered"
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </span>
-                            ) : (
-                              <span
-                                className="flex items-center space-x-1 text-red-700 dark:text-red-400"
-                                title={log.error || 'Not delivered'}
-                              >
-                                <AlertCircle className="h-4 w-4" />
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="border-theme-surface-border text-theme-text-muted hidden grid-cols-12 gap-4 border-b px-5 py-3 text-xs font-medium uppercase md:grid">
+                    <div className="col-span-4">Subject</div>
+                    <div className="col-span-3">Recipient</div>
+                    <div className="col-span-2">Channel</div>
+                    <div className="col-span-2">Sent At</div>
+                    <div className="col-span-1">Status</div>
                   </div>
-                )}
-              </>
-            );
-          })()}
+                  {/* Table Rows */}
+                  {logs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="border-theme-surface-border hover:bg-theme-surface-hover grid grid-cols-1 gap-1 border-b px-5 py-4 transition-colors last:border-b-0 md:grid-cols-12 md:gap-4"
+                    >
+                      <div className="md:col-span-4">
+                        <p className="text-theme-text-primary truncate text-sm">{log.subject || '(No subject)'}</p>
+                        {log.rule_name && (
+                          <p className="text-theme-text-muted mt-0.5 truncate text-xs">Rule: {log.rule_name}</p>
+                        )}
+                      </div>
+                      <div className="md:col-span-3">
+                        <p className="text-theme-text-secondary truncate text-sm">
+                          {log.recipient_name || log.recipient_email || 'Unknown'}
+                        </p>
+                        {log.recipient_name && log.recipient_email && (
+                          <p className="text-theme-text-muted mt-0.5 truncate text-xs">{log.recipient_email}</p>
+                        )}
+                      </div>
+                      <div className="md:col-span-2">
+                        <span className="bg-theme-surface-secondary text-theme-text-muted inline-flex items-center rounded-sm px-2 py-0.5 text-xs">
+                          {log.channel === 'in_app' ? 'In-App' : log.channel === 'email' ? 'Email' : log.channel}
+                        </span>
+                      </div>
+                      <div className="md:col-span-2">
+                        <p className="text-theme-text-secondary text-sm">{formatDate(log.sent_at, tz)}</p>
+                        <p className="text-theme-text-muted mt-0.5 text-xs">{formatTime(log.sent_at, tz)}</p>
+                      </div>
+                      <div className="md:col-span-1">
+                        {log.delivered ? (
+                          <span
+                            className="flex items-center space-x-1 text-green-700 dark:text-green-400"
+                            title="Delivered"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </span>
+                        ) : (
+                          <span
+                            className="flex items-center space-x-1 text-red-700 dark:text-red-400"
+                            title={log.error || 'Not delivered'}
+                          >
+                            <AlertCircle className="h-4 w-4" />
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {!loadingLogs && logsOffset < logsTotal && (
+              <div className="pt-4 text-center">
+                <button
+                  onClick={() => {
+                    void handleLoadMoreLogs();
+                  }}
+                  disabled={loadingMoreLogs}
+                  className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-50 max-md:min-h-[44px]"
+                >
+                  {loadingMoreLogs ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    `Load more (${logsTotal - logsOffset} remaining)`
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Create Rule Modal */}
         {showCreateModal && (

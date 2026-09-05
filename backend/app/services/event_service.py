@@ -15,9 +15,9 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
@@ -1304,6 +1304,34 @@ class EventService:
         if rsvp_deadline and datetime.now(dt_timezone.utc) > rsvp_deadline:
             return None, "RSVP deadline has passed"
 
+        # Fetched here, ahead of the guest/capacity checks below, so those
+        # checks can be computed from what will actually end up on the row —
+        # not from the raw request alone. EV-21's exclude_unset=True update
+        # means an existing RSVP's guest_count survives untouched when a
+        # client omits it (e.g. a PATCH-shaped `{"status": "going"}`), so
+        # `rsvp_data.guest_count` (which defaults to 0) and the row's true
+        # post-update guest_count can now genuinely differ.
+        existing_result = await self.db.execute(
+            select(EventRSVP)
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.user_id == str(user_id))
+        )
+        existing_rsvp = existing_result.scalar_one_or_none()
+
+        # The count every guest/capacity check below must use: the incoming
+        # value when the client actually sent one (a new RSVP always counts
+        # as sending one, via the schema default), otherwise whatever is
+        # already stored — because that stored value is what exclude_unset
+        # will leave in place. Using rsvp_data.guest_count directly here would
+        # let an update that omits guest_count evade every check below by
+        # appearing to be a 1-seat party while the row keeps its real,
+        # possibly much larger, party size.
+        effective_guest_count = (
+            rsvp_data.guest_count
+            if "guest_count" in rsvp_data.model_fields_set or existing_rsvp is None
+            else (existing_rsvp.guest_count or 0)
+        )
+
         # Validate RSVP status against allowed statuses
         allowed_statuses = event.allowed_rsvp_statuses or DEFAULT_ALLOWED_RSVP_STATUSES
         if rsvp_data.status not in allowed_statuses:
@@ -1323,7 +1351,7 @@ class EventService:
         # enforced the flag — the modal prefills that historical count, so an
         # unconditional guard rejected their decline outright and left them
         # holding seats they had tried to give back.
-        requested_guests = rsvp_data.guest_count or 0
+        requested_guests = effective_guest_count
         if rsvp_data.status == RSVPStatus.GOING.value:
             if requested_guests and not event.allow_guests:
                 return None, "This event does not allow guests"
@@ -1332,6 +1360,7 @@ class EventService:
             # rather than leaving the stale count is what lets a legacy guest
             # party actually release its capacity by declining.
             requested_guests = 0
+            effective_guest_count = 0
             rsvp_data = rsvp_data.model_copy(update={"guest_count": 0})
 
         # Refused here, with the other guards, rather than down at the capacity
@@ -1347,7 +1376,7 @@ class EventService:
         # to wait for, and since promote_from_waitlist refuses to skip the head
         # of the queue, admitting one would block everybody behind it.
         if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
-            party_size = 1 + (rsvp_data.guest_count or 0)
+            party_size = 1 + effective_guest_count
             if party_size > event.max_attendees:
                 return (
                     None,
@@ -1362,13 +1391,8 @@ class EventService:
             if phase_warning:
                 return None, PHASE_GATE_PREFIX + phase_warning
 
-        # Check if RSVP already exists
-        existing_result = await self.db.execute(
-            select(EventRSVP)
-            .where(EventRSVP.event_id == str(event_id))
-            .where(EventRSVP.user_id == str(user_id))
-        )
-        existing_rsvp = existing_result.scalar_one_or_none()
+        # existing_rsvp was already fetched above, ahead of the guest/capacity
+        # checks, so effective_guest_count could be computed from it.
 
         # Seats this member held before the write, for the promotion decision
         # below. Reducing a guest count while staying "going" frees capacity
@@ -1385,8 +1409,19 @@ class EventService:
             old_status = existing_rsvp.status
             if isinstance(old_status, RSVPStatus):
                 old_status = old_status.value
-            # Update existing RSVP
-            for field, value in rsvp_data.model_dump().items():
+            # Update existing RSVP. exclude_unset=True, not a full dump: an
+            # omitted key means "leave this alone" (Pitfall #1's update
+            # mirror). This matters most for dietary_restrictions/
+            # accessibility_needs — the RSVP modal deliberately can't show
+            # their current value (PHI, and GET /events/{id} is cacheable),
+            # so it always reopens them blank. A full dump would have sent
+            # that blank back as an explicit clear on every edit — silently
+            # deleting real accommodation data the next time a member changed
+            # an unrelated field like guest_count or status. The frontend
+            # sends `notes`/`status`/`guest_count` explicitly on every submit
+            # (including an explicit null to actually clear notes), so they
+            # are unaffected by this change.
+            for field, value in rsvp_data.model_dump(exclude_unset=True).items():
                 setattr(existing_rsvp, field, value)
             existing_rsvp.updated_at = datetime.now(dt_timezone.utc)
             rsvp = existing_rsvp
@@ -1439,7 +1474,7 @@ class EventService:
             # party of three does not fit a one-seat gap. (A party too big for
             # the event at all was already refused above, before this function
             # touched the session.)
-            requested_seats = 1 + (rsvp_data.guest_count or 0)
+            requested_seats = 1 + effective_guest_count
             if occupied_seats + requested_seats > event.max_attendees:
                 # Auto-waitlist instead of rejecting
                 rsvp.status = RSVPStatus.WAITLISTED
@@ -3240,15 +3275,40 @@ class EventService:
         Returns:
             Tuple of (stats_dict, error_message)
         """
-        # Get event
-        result = await self.db.execute(select(Event).where(Event.id == str(event_id)))
-        event = result.scalar_one_or_none()
+        # The organizer rides along on the event fetch rather than costing a
+        # query of its own: this screen polls every ten seconds, so a second
+        # round trip here is one per poll per open dashboard. The join is
+        # constrained to the event's own organization, so a created_by pointing
+        # outside it resolves to no row rather than naming a stranger.
+        creator = aliased(User)
+        result = await self.db.execute(
+            select(Event, creator)
+            .outerjoin(
+                creator,
+                and_(
+                    creator.id == Event.created_by,
+                    creator.organization_id == Event.organization_id,
+                ),
+            )
+            .where(Event.id == str(event_id))
+        )
+        row = result.first()
+        event = row[0] if row else None
 
         if not event:
             return None, "Event not found"
 
         if event.organization_id != organization_id:
             return None, "Event not found in your organization"
+
+        creator_row = row[1]
+        created_by_name = None
+        if creator_row:
+            created_by_name = (
+                f"{creator_row.first_name or ''} "
+                f"{creator_row.last_name or ''}".strip()
+                or creator_row.username
+            )
 
         # Use the same check-in window logic as the QR self-check-in page
         now = datetime.now(dt_timezone.utc)
@@ -3339,6 +3399,7 @@ class EventService:
             "event_id": str(event.id),
             "event_name": event.title,
             "event_type": event.event_type.value,
+            "created_by_name": created_by_name,
             "start_datetime": event.start_datetime,
             "end_datetime": event.end_datetime,
             "is_check_in_active": is_check_in_active,

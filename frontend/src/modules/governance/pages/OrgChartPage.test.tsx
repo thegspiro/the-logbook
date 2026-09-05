@@ -129,9 +129,10 @@ describe('OrgChartPage', () => {
     expect(screen.getByText('Shelly Hernandez')).toBeInTheDocument();
   });
 
-  it('says which role a seat is linked to so its names are not mistaken for a typed list', async () => {
+  it('tells a manager which role a seat is linked to, so its names are not mistaken for a typed list', async () => {
     mockGetChart.mockResolvedValue(
       chart({
+        canManage: true,
         nodes: [
           node({
             id: 'chief',
@@ -148,6 +149,31 @@ describe('OrgChartPage', () => {
     await screen.findByRole('heading', { name: /^Chief$/i });
     expect(screen.getByText(/Linked to Fire Chief/i)).toBeInTheDocument();
     expect(screen.getByText('Shelly Hernandez')).toBeInTheDocument();
+  });
+
+  it('keeps the link line off a reader\u2019s chart, where it answers a question only an editor asks', async () => {
+    mockGetChart.mockResolvedValue(
+      chart({
+        canManage: false,
+        nodes: [
+          node({
+            id: 'chief',
+            title: 'Chief',
+            positionId: 'pos-chief',
+            linkLabel: 'Fire Chief',
+            holders: [{ userId: 'user-1', name: 'Shelly Hernandez', fromLink: true }],
+          }),
+        ],
+      })
+    );
+    renderWithRouter(<OrgChartPage />);
+
+    // A member looking up the chain of command wants the seat and who holds
+    // it. Where the name came from is plumbing they cannot act on, and the
+    // holder must survive the line being hidden.
+    await screen.findByRole('heading', { name: /^Chief$/i });
+    expect(screen.getByText('Shelly Hernandez')).toBeInTheDocument();
+    expect(screen.queryByText(/Linked to/i)).not.toBeInTheDocument();
   });
 
   it('shows a linked seat and the people typed into it side by side', async () => {

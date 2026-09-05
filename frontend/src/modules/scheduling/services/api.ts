@@ -151,6 +151,21 @@ export interface ShiftRecord {
    */
   checkin_open?: boolean;
   checkin_closed_reason?: string | null;
+  /**
+   * Leadership's per-shift late-signup window, when one is open — the instant
+   * that reopening expires. Null on every shift nobody has opened one for.
+   * Carried on the list responses too, because the board gates its claim
+   * buttons on it.
+   */
+  late_signup_until?: string | null;
+  /**
+   * Whether signup is inside its window *for you*, decided by the backend so
+   * the rule is not reimplemented here. Actor-relative — a scheduling admin
+   * always reads open — so only the shift *detail* response carries them; the
+   * list endpoint leaves them undefined.
+   */
+  signup_open?: boolean;
+  signup_closed_reason?: string | null;
 }
 
 export interface PlatoonRosterEntry {
@@ -167,6 +182,10 @@ export interface SchedulingFeatureSettings {
   auto_generate_weeks: number;
   require_end_of_shift_checks: boolean;
   restrict_checkin_to_assigned: boolean;
+  /** Minutes before start_time that member self-signup closes. 0 = at the start. */
+  signup_closes_minutes_before: number;
+  /** Minutes after start_time an officer may still seat somebody. */
+  late_signup_grace_minutes: number;
   /** Block seating a driver who lacks the apparatus's required EVOC level. */
   enforce_evoc: boolean;
   /**
@@ -174,6 +193,12 @@ export interface SchedulingFeatureSettings {
    * behaviour every existing organisation already has.
    */
   call_tracking?: { mode: string; call_types: CallTypeOption[] } | null;
+  /**
+   * Calls on record per type slug, all dates. Server-computed: it says which
+   * types can be deleted outright and which carry history and must be retired
+   * instead. Ignored if sent on a write.
+   */
+  call_type_usage?: Record<string, number>;
 }
 
 export interface PlatoonMember {
@@ -221,6 +246,50 @@ export interface SchedulingSummary {
   shifts_scheduled_this_week: number;
   shifts_scheduled_this_month: number;
   hours_worked_this_month: number;
+}
+
+/**
+ * One calendar month of the signed-in member's own shift work.
+ *
+ * `hours`/`shifts`/`calls` are credited figures — attendance on a shift an
+ * officer has finalized, the same basis the department's member-hours report
+ * uses. `pending_*` is time the member has worked that close-out has not
+ * confirmed yet; it is shown alongside rather than added in, so the member's
+ * number and their officer's number never disagree without explanation.
+ */
+export interface MemberHoursMonth {
+  year: number;
+  /** 1-12. */
+  month: number;
+  shifts: number;
+  hours: number;
+  calls: number;
+  pending_shifts: number;
+  pending_hours: number;
+}
+
+export interface MemberHoursTotals {
+  shifts: number;
+  hours: number;
+  calls: number;
+  pending_shifts: number;
+  pending_hours: number;
+}
+
+export interface MemberHoursHistory {
+  year: number;
+  /** Earliest year the member has any attendance in; null when they have none. */
+  earliest_year: number | null;
+  timezone: string;
+  /** Always twelve entries, January first, so quiet months read as quiet. */
+  months: MemberHoursMonth[];
+  /** The selected year only. */
+  totals: MemberHoursTotals;
+  /** Every year on record, so the year picker does not move it. */
+  all_time: MemberHoursTotals;
+  /** Carry their own year: every January, last month was last year. */
+  current_month: MemberHoursMonth;
+  previous_month: MemberHoursMonth;
 }
 
 export interface SchedulingWidgetSummary {
@@ -539,6 +608,13 @@ export const schedulingService = {
     const response = await api.get<SchedulingSummary>('/scheduling/summary');
     return response.data;
   },
+  /** The signed-in member's own hours and calls for a year, month by month. */
+  async getMyHoursHistory(year?: number): Promise<MemberHoursHistory> {
+    const response = await api.get<MemberHoursHistory>('/scheduling/my-hours-history', {
+      params: year ? { year } : {},
+    });
+    return response.data;
+  },
   async getWidgetSummary(params: {
     start_date: string;
     end_date: string;
@@ -804,6 +880,22 @@ export const schedulingService = {
   },
   async withdrawSignup(shiftId: string): Promise<void> {
     await api.delete(`/scheduling/shifts/${shiftId}/signup`);
+  },
+
+  /**
+   * Reopen signup on one shift for `minutes` from now, for members and
+   * officers alike. A duration rather than an instant: the server resolves it
+   * against the same clock the enforcement reads, so a device running fast
+   * cannot open a window shorter than the officer intended.
+   */
+  async openLateSignup(shiftId: string, minutes: number): Promise<ShiftRecord> {
+    const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/late-signup`, { minutes });
+    return response.data;
+  },
+  /** Withdraw a late-signup window, returning the shift to the org rule. */
+  async closeLateSignup(shiftId: string): Promise<ShiftRecord> {
+    const response = await api.delete<ShiftRecord>(`/scheduling/shifts/${shiftId}/late-signup`);
+    return response.data;
   },
 
   /** Members who could take over the caller's seat on a shift. */

@@ -13,6 +13,10 @@ vi.mock('../services/api', () => ({
   notificationsService: {
     getMyNotifications: vi.fn(),
     markMyNotificationRead: vi.fn(),
+    // The screen fetches the caller's own send log on mount now, for every
+    // signed-in user rather than only permission holders. Omitting it here
+    // left the page rendering behind a "Failed to load your send log" banner.
+    getLogs: vi.fn(),
   },
 }));
 
@@ -51,6 +55,7 @@ describe('NotificationsPage read state', () => {
       limit: 20,
     });
     vi.mocked(notificationsService.markMyNotificationRead).mockResolvedValue({} as never);
+    vi.mocked(notificationsService.getLogs).mockResolvedValue({ logs: [], total: 0, skip: 0, limit: 50 });
 
     render(
       <MemoryRouter initialEntries={['/notifications']}>

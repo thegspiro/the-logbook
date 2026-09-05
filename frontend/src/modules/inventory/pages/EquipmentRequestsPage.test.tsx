@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
@@ -262,5 +262,115 @@ describe('EquipmentRequestsPage', () => {
       expect(screen.getByText(/Fulfilled via issuance/)).toBeInTheDocument();
     });
     expect(screen.queryByText('Fulfill')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Arriving from the inventory hub's attention queue.
+ *
+ * Own block, own resets: `vi.clearAllMocks()` clears calls but leaves
+ * implementations in place (CLAUDE.md #28). The URL is the fixture here, so
+ * it has to be put back or it leaks into whatever runs next.
+ */
+describe('EquipmentRequestsPage — opened from the attention queue', () => {
+  const onPageOne = makeRequest({ id: 'req-1', item_name: 'Gloves' });
+  const onPageTwo = makeRequest({ id: 'req-40', item_name: 'Nomex Hood' });
+  // 25 rows a page; this request sits at offset 25, i.e. the top of page two.
+  const wholeList = [...Array.from({ length: 25 }, (_, i) => makeRequest({ id: `filler-${i}` })), onPageTwo];
+
+  beforeEach(() => {
+    mockGetEquipmentRequests.mockReset();
+    mockGetItems.mockReset();
+    mockGetItems.mockResolvedValue({ items: [], total: 0 });
+    mockReviewEquipmentRequest.mockReset();
+    mockReviewEquipmentRequest.mockResolvedValue({});
+    mockToastError.mockReset();
+  });
+
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('opens a request that is already on the page', async () => {
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [onPageOne], total: 1, skip: 0, limit: 25 });
+    window.history.pushState({}, '', '/inventory/admin/requests?request=req-1');
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('turns to the page holding a request the first page does not carry', async () => {
+    // The queue links any pending request; this page shows 25 at a time, so a
+    // linked request can sit on a later page where it would never be found.
+    mockGetEquipmentRequests.mockImplementation((params: { skip?: number; limit?: number } = {}) => {
+      const skip = params.skip ?? 0;
+      const limit = params.limit ?? 25;
+      return Promise.resolve({
+        requests: wholeList.slice(skip, skip + limit),
+        total: wholeList.length,
+        skip,
+        limit,
+      });
+    });
+    window.history.pushState({}, '', '/inventory/admin/requests?request=req-40');
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    // Page two loads, and the hook then opens the record it names.
+    expect(await screen.findByText('Nomex Hood')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('never asks for more than the endpoint accepts', async () => {
+    // `list_equipment_requests` declares `limit=Query(50, ge=1, le=200)`. A
+    // single oversized request 422s, the catch swallows it and the ref blocks
+    // a second attempt — so for precisely the long queue this scan exists for,
+    // the modal never opened.
+    const long = [
+      ...Array.from({ length: 260 }, (_, i) => makeRequest({ id: `bulk-${i}` })),
+      makeRequest({ id: 'req-far', item_name: 'Bunker Coat' }),
+    ];
+    mockGetEquipmentRequests.mockImplementation((params: { skip?: number; limit?: number } = {}) => {
+      const skip = params.skip ?? 0;
+      const limit = params.limit ?? 25;
+      if (limit > 200) return Promise.reject(new Error('422 limit above maximum'));
+      return Promise.resolve({ requests: long.slice(skip, skip + limit), total: long.length, skip, limit });
+    });
+    window.history.pushState({}, '', '/inventory/admin/requests?request=req-far');
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    expect(await screen.findByText('Bunker Coat')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(mockToastError).not.toHaveBeenCalled();
+    for (const call of mockGetEquipmentRequests.mock.calls) {
+      expect((call[0] as { limit?: number } | undefined)?.limit ?? 0).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('reports a locator failure rather than silently opening nothing', async () => {
+    // Every rejection here is operational: a request that is simply gone comes
+    // back as a list not containing it, not as an error. The reader clicked
+    // Review expecting something to open.
+    // Keyed on the request, not on how many have been made: the page issues
+    // its own list loads alongside the locator's, and counting calls made this
+    // depend on their interleaving. The locator is the only caller asking for
+    // 200 at a time, so that is what identifies it.
+    mockGetEquipmentRequests.mockImplementation((params: { limit?: number } = {}) =>
+      params.limit === 200
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve({ requests: [onPageOne], total: 400, skip: 0, limit: 25 })
+    );
+    window.history.pushState({}, '', '/inventory/admin/requests?request=req-40');
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+  });
+
+  it('leaves the list alone for a request that no longer exists', async () => {
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [onPageOne], total: 1, skip: 0, limit: 25 });
+    window.history.pushState({}, '', '/inventory/admin/requests?request=gone');
+    renderWithRouter(<EquipmentRequestsPage />);
+    await screen.findByText('Gloves');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

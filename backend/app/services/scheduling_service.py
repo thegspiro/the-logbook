@@ -8,6 +8,7 @@ attendance tracking, and calendar views.
 import calendar
 import html as _html
 from datetime import date, datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -57,15 +58,44 @@ from app.models.user import (
 from app.services.call_tracking_service import CallTrackingService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.notifications_service import NotificationsService
+from app.services.shift_eligibility_service import (
+    DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
+    DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
+)
 from app.utils.apparatus_ref import (
     apparatus_ref_exists,
     resolve_apparatus_display_map,
     resolve_apparatus_ref,
 )
-from app.utils.hours import hours_from_minutes
+from app.utils.hours import hours_from_minutes, sum_hours_to_quarter
 from app.utils.membership import is_administrative
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions, position_label
+
+
+def _scheduling_minutes(
+    settings: Dict[str, Any], key: str, default: int, ceiling: int
+) -> int:
+    """Read one clamped minute count out of an org's scheduling settings.
+
+    Module-level rather than a closure inside ``_signup_window_error`` because
+    two rules now depend on the same number and must not drift: the officer's
+    signup deadline, and how long past a shift's end its signup may still be
+    reopened. A reopen bound looser than the window it lifts would hand the
+    officer a button whose only outcome is the refusal it just cleared.
+
+    Unvalidated JSON an admin can hand-edit. Degrade to the built-in window
+    rather than raising: an exception here would refuse every signup in the
+    department over one mistyped value (pitfall #19).
+    """
+    sched = settings.get("scheduling")
+    if not isinstance(sched, dict):
+        sched = {}
+    try:
+        value = int(sched.get(key, default))
+    except (TypeError, ValueError):
+        return default
+    return min(max(value, 0), ceiling)
 
 
 def _position_label(position) -> str:
@@ -90,11 +120,67 @@ def _position_label(position) -> str:
     return position_label(value)
 
 
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """A stored DATETIME as an aware UTC instant.
+
+    MySQL DATETIME carries no offset, so a value read back through
+    ``DateTime(timezone=True)`` arrives naive, and comparing it against an
+    aware ``now`` raises TypeError — which would 500 every check-in and every
+    signup. Everything is stored as UTC (see UTCResponseBase), so that is what
+    a naive value is.
+    """
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _minutes_phrase(total: int) -> str:
+    """ "90 minutes" as "an hour and a half" — how an officer would say it.
+
+    The refusal is read by somebody who has just been told they cannot work a
+    shift; "closed 120 minutes before" makes them do arithmetic to find out how
+    early they needed to act.
+    """
+    if total % 60 == 0 and total >= 60:
+        hours = total // 60
+        return f"{hours} hour{'s' if hours != 1 else ''}"
+    if total > 60:
+        hours, rest = divmod(total, 60)
+        return (
+            f"{hours} hour{'s' if hours != 1 else ''} "
+            f"{rest} minute{'s' if rest != 1 else ''}"
+        )
+    return f"{total} minute{'s' if total != 1 else ''}"
+
+
 # The widest span a member-facing shift listing will scan. Matches
 # MAX_OPEN_SHIFTS_DAYS on /shifts/open, which bounds the same kind of read for
 # the same reason: eligibility is not expressible in SQL, so the rows have to
 # be fetched before they can be filtered.
 MEMBER_SHIFT_WINDOW_DAYS = 366
+
+
+class SignupActor(str, Enum):
+    """Who is doing the seating, which is what decides the deadline.
+
+    The signup window is not one cutoff but three, because the three have
+    genuinely different jobs. A member choosing to work a shift is making a
+    commitment beforehand; an officer standing in front of a short crew is
+    solving a problem now; a scheduling administrator entering what actually
+    happened is keeping records, and records are written after the fact by
+    definition.
+
+    Resolved by the endpoint, not by the service — the service stays ignorant
+    of the caller's permissions, matching how every other check in this file
+    is layered.
+    """
+
+    #: Self-signup, a standing claim, or accepting a swap offer.
+    MEMBER = "member"
+    #: Holds ``scheduling.assign``, or is this shift's own officer.
+    ASSIGNER = "assigner"
+    #: Holds ``scheduling.manage``. Never bounded — this is the records path.
+    MANAGER = "manager"
 
 
 class SchedulingService:
@@ -1729,6 +1815,158 @@ class SchedulingService:
             await self.db.rollback()
             return False, str(e)
 
+    async def _roster_locked_error(
+        self, shift: Shift, organization_id: UUID, actor: SignupActor
+    ) -> Optional[str]:
+        """Why this shift's roster can no longer be changed by `actor`, or None.
+
+        The client withdraws confirm, decline, remove, withdraw and the seat
+        dropdown once a shift is this far past, but hiding a control is not
+        enforcing a rule: every one of those mutations is reachable by a direct
+        request, and withdraw deletes an assignment that hours have already
+        been recorded against. Same bound, same exemption, so the two agree.
+
+        Only ``scheduling.manage`` is exempt. An assigner and a member are
+        bounded alike here, unlike the signup window where an officer gets the
+        grace period to seat a late arrival: correcting a roster that is
+        already a record is the administrator's path.
+        """
+        if actor == SignupActor.MANAGER:
+            return None
+        deadline = await self._roster_deadline(shift, organization_id)
+        if deadline is None or datetime.now(timezone.utc) <= deadline:
+            return None
+        return (
+            "This shift ended too long ago to change its roster. "
+            "A scheduling administrator can still correct it."
+        )
+
+    async def _roster_deadline(
+        self, shift: Shift, organization_id: UUID
+    ) -> Optional[datetime]:
+        """The last instant this shift's roster may still change, or None.
+
+        Governs two rules, which is why it is a deadline rather than a
+        predicate: whether signup may be reopened, and whether the assignments
+        themselves may still be confirmed, edited or removed.
+
+        Anchored to the shift's *end* rather than its start: the whole point of
+        a reopening is to seat somebody while the crew is still out, and an
+        overnight shift's start is twelve hours behind its end. The same grace
+        period the officer's own signup deadline uses is added to it, so the
+        two rules move together when a department changes the setting.
+
+        ``end_time`` is genuinely optional — nullable on the model, ``None`` by
+        default on ``ShiftCreate``, and handled explicitly by the overlap query
+        — so a shift without one is open-ended, not malformed, and is left
+        unbounded. Substituting the start was wrong at this scale: it would
+        have locked an open-ended shift one grace period after it began, with
+        the crew still working. ``_checkin_window_error`` does make that
+        substitution, but against a twelve-*hour* cushion rather than a
+        sixty-minute one.
+        """
+        end = _as_utc(getattr(shift, "end_time", None))
+        if end is None:
+            return None
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        grace = _scheduling_minutes(
+            (org.settings or {}) if org else {},
+            "late_signup_grace_minutes",
+            DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
+            1440,
+        )
+        return end + timedelta(minutes=grace)
+
+    async def open_late_signup(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        minutes: int,
+    ) -> Tuple[Optional[Shift], Optional[str]]:
+        """Reopen signup on one shift for `minutes` from now.
+
+        A duration resolved against the server's clock, not an instant sent by
+        the browser: the enforcement reads the server's clock, so a device four
+        minutes fast would otherwise open a window the officer believes is a
+        quarter of an hour and is actually eleven minutes.
+
+        Extends only, under the row lock. Two officers each opening a window
+        while the crew is short would otherwise let the second, shorter one cut
+        the first short — and a member told they had until 19:45 would find the
+        seat gone at 19:30.
+
+        Bounded by the shift's own end plus the department's grace period. The
+        window used to have no upper bound on the shift's age, so an officer
+        looking at a shift three weeks gone was still shown "Reopen for 15 min"
+        — and taking it worked: ``create_assignment`` passes
+        ``window_checked=True`` for a non-manager, which suppresses the
+        day-granular ``reject_past`` fallback precisely so a reopened overnight
+        shift admits people, so the reopened window was the only rule left and
+        a member could self-signup onto a shift they had never worked and draw
+        hours for it. Correcting a roster that old is records work, which is
+        the scheduling administrator's path and is not bounded at all.
+        """
+        try:
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
+            if not shift:
+                return None, "Shift not found"
+            if shift.status == ShiftStatus.CANCELLED:
+                return None, "Cannot reopen signup on a cancelled shift"
+            if shift.is_finalized:
+                return None, "Cannot reopen signup on a finalized shift"
+
+            deadline = await self._roster_deadline(shift, organization_id)
+            now = datetime.now(timezone.utc)
+            if deadline is not None and now > deadline:
+                return None, (
+                    "This shift ended too long ago to reopen signup on. "
+                    "A scheduling administrator can still record who worked it."
+                )
+
+            until = now + timedelta(minutes=minutes)
+            # Clamped, not merely gated. `minutes` accepts up to 720, and
+            # `_signup_window_error` treats the later of the two as
+            # authoritative, so a reopening made a second inside the cutoff
+            # would otherwise carry the shift twelve hours past it — turning
+            # the bound above into a formality anyone could step around by
+            # reopening early.
+            if deadline is not None and until > deadline:
+                until = deadline
+            current = _as_utc(shift.late_signup_until)
+            if current is None or until > current:
+                shift.late_signup_until = until
+            await self.db.commit()
+            await self.db.refresh(shift)
+            return shift, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def close_late_signup(
+        self, shift_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Shift], Optional[str]]:
+        """Withdraw a late-signup window, returning the shift to the org rule."""
+        try:
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
+            if not shift:
+                return None, "Shift not found"
+            shift.late_signup_until = None
+            await self.db.commit()
+            await self.db.refresh(shift)
+            return shift, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
     async def cancel_shift(
         self,
         shift_id: UUID,
@@ -1916,18 +2154,9 @@ class SchedulingService:
         opens_before = timing.get("checkin_opens_hours_before", 2)
         closes_after = timing.get("checkin_closes_hours_after", 12)
 
-        # MySQL DATETIME carries no offset, so a value read back through
-        # DateTime(timezone=True) arrives naive and comparing it against an aware
-        # `now` raises TypeError — which would 500 every check-in. Everything is
-        # stored as UTC (see UTCResponseBase), so that is what a naive value is.
-        def as_utc(value: Optional[datetime]) -> Optional[datetime]:
-            if value is None:
-                return None
-            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
         now = datetime.now(timezone.utc)
-        start = as_utc(shift.start_time)
-        end = as_utc(shift.end_time) or start
+        start = _as_utc(shift.start_time)
+        end = _as_utc(shift.end_time) or start
         if start is None:
             return None
 
@@ -1943,6 +2172,117 @@ class SchedulingService:
                 "Ask an officer to record your attendance."
             )
         return None
+
+    async def signup_closed_reason(
+        self,
+        shift: Shift,
+        organization_id: UUID,
+        actor: SignupActor,
+    ) -> Optional[str]:
+        """Why signup is closed for this shift and this caller, or None.
+
+        The public form of _signup_window_error, for callers that want to show
+        the state rather than enforce it — the shift panel disables its own
+        button and prints this instead of offering an action the API refuses,
+        which is the same arrangement check-in already uses.
+        """
+        if actor == SignupActor.MANAGER:
+            return None
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        return self._signup_window_error(
+            shift, (org.settings or {}) if org else {}, actor
+        )
+
+    @staticmethod
+    def _signup_window_error(
+        shift: Any,
+        settings: Dict[str, Any],
+        actor: SignupActor,
+        *,
+        now: Optional[datetime] = None,
+    ) -> Optional[str]:
+        """Why this shift is outside its signup window for `actor`, or None.
+
+        Signup used to be refused only once the shift's calendar *day* had
+        passed, so a member could still claim a seat on a 06:00 shift at 23:00
+        that night — seventeen hours after a crew they were never part of went
+        out, and every hours and compliance report built on the assignment
+        accepted it. The bound is now the shift's own start.
+
+        Three deadlines, because the three actors are doing different things: a
+        member commits ahead of the shift, an officer solves a short crew on the
+        night, and a scheduling administrator records what happened, which is
+        necessarily afterwards. ``late_signup_until`` is an officer's override
+        for one shift and lifts the member's deadline too — "allow last-minute
+        additions" means letting people put themselves on, not only letting the
+        officer type names in.
+
+        Two deliberate pass-throughs:
+
+        * A shift with no recorded start cannot be bounded, so it is allowed
+          through rather than refused on data this rule cannot judge — the same
+          stance as ``_checkin_window_error``. The day-granular ``reject_past``
+          check in ``_validate_assignment_candidate`` still covers it.
+        * A cancelled or finalized shift is allowed through so the caller's
+          mutability check, which has a better answer than "already started",
+          is the one the member reads.
+        """
+        if actor == SignupActor.MANAGER:
+            return None
+
+        start = _as_utc(getattr(shift, "start_time", None))
+        if start is None:
+            return None
+        if getattr(shift, "status", None) == ShiftStatus.CANCELLED or getattr(
+            shift, "is_finalized", False
+        ):
+            return None
+
+        def minutes(key: str, default: int, ceiling: int) -> int:
+            return _scheduling_minutes(settings, key, default, ceiling)
+
+        now = now or datetime.now(timezone.utc)
+        override = _as_utc(getattr(shift, "late_signup_until", None))
+
+        if actor == SignupActor.MEMBER:
+            lead = minutes(
+                "signup_closes_minutes_before",
+                DEFAULT_SIGNUP_CLOSES_MINUTES_BEFORE,
+                10080,
+            )
+            deadline = start - timedelta(minutes=lead)
+            if override is not None and override > deadline:
+                deadline = override
+            if now <= deadline:
+                return None
+            if override is not None:
+                return (
+                    "Late signup for this shift has closed. "
+                    "Ask a duty officer to add you."
+                )
+            if lead and now < start:
+                return (
+                    f"Signup closed {_minutes_phrase(lead)} before this shift "
+                    "starts. Ask a duty officer to add you."
+                )
+            return "This shift has already started. Ask a duty officer to add you."
+
+        grace = minutes(
+            "late_signup_grace_minutes", DEFAULT_LATE_SIGNUP_GRACE_MINUTES, 1440
+        )
+        deadline = start + timedelta(minutes=grace)
+        if override is not None and override > deadline:
+            deadline = override
+        if now <= deadline:
+            return None
+        return (
+            "This shift started too long ago to add anyone to. "
+            "A scheduling admin can still record it."
+        )
 
     async def member_check_in(
         self,
@@ -2359,18 +2699,53 @@ class SchedulingService:
             if id_error:
                 return None, id_error
 
-        template, error = await self._crud_create(
-            ShiftTemplate, template_data, organization_id, created_by
-        )
-        if error or template is None:
-            return template, error
-        if validated_ids is not None:
-            await self._replace_equipment_check_links(
-                template, organization_id, validated_ids
-            )
+        # Not routed through _crud_create: that commits the template on its
+        # own, and a template referencing checklists is only a valid row once
+        # its links exist too. Committing it alone — even briefly — makes it
+        # visible to every other request in the org: one could list it, or
+        # create a shift against it (stamping the shift's own template_id),
+        # before a failed link write is cleaned up. A compensating delete at
+        # that point doesn't undo what the other request already did with the
+        # row in between — an ON DELETE SET NULL shift.template_id, for one.
+        # Flushing instead of committing keeps the template unobservable
+        # outside this transaction until both writes are ready to land
+        # together, so there is nothing for a concurrent request to see.
+        try:
+            kwargs: Dict[str, Any] = {
+                "organization_id": organization_id,
+                **template_data,
+            }
+            if created_by is not None:
+                kwargs["created_by"] = created_by
+            template = ShiftTemplate(**kwargs)
+            self.db.add(template)
+            await self.db.flush()
+            if validated_ids is not None:
+                await self._replace_equipment_check_links(
+                    template, organization_id, validated_ids
+                )
             await self.db.commit()
             await self.db.refresh(template)
-        return template, None
+            return template, None
+        except IntegrityError as e:
+            await self.db.rollback()
+            if validated_ids is not None:
+                # Confirm the cause rather than assume it from the exception
+                # type alone: a checklist named here is only actually the
+                # reason if it no longer validates. Any other integrity
+                # failure (e.g., a duplicate-link race, vanishingly unlikely
+                # against a template id that didn't exist a moment ago, but
+                # not to be misreported if it somehow happens) falls through
+                # to the same str(e) handling every other failure here gets.
+                still_valid, _ = await self._validated_check_ids(
+                    validated_ids, organization_id
+                )
+                if len(still_valid) != len(validated_ids):
+                    return None, "Equipment checklist not found"
+            return None, str(e)
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
 
     async def _validated_check_ids(
         self,
@@ -3083,6 +3458,7 @@ class SchedulingService:
         exclude_assignment_ids: Optional[set[str]] = None,
         require_mutable: bool = False,
         reject_past: bool = False,
+        window_checked: bool = False,
         enforce_position_eligibility: bool = True,
         enforce_capacity: bool = False,
         context: str = "shift",
@@ -3110,7 +3486,18 @@ class SchedulingService:
             if shift.is_finalized:
                 return f"{label} was finalized"
         if reject_past and shift.shift_date and shift.shift_date < date.today():
-            return "Cannot sign up for a past shift"
+            # A *fallback*, not a second opinion. When the caller has already
+            # run the instant-based signup window and the shift has a readable
+            # start, that window is the precise answer and this day-granular
+            # one must not overrule it: a 18:00–06:00 shift's `shift_date`
+            # rolls to yesterday at midnight, so an officer reopening signup at
+            # 00:30 — exactly when a crew is short and a reopening matters —
+            # got a live window that admitted nobody.
+            if (
+                not window_checked
+                or _as_utc(getattr(shift, "start_time", None)) is None
+            ):
+                return "Cannot sign up for a past shift"
         active_user_result = await self.db.execute(
             select(User.id).where(
                 User.id == str(user_id),
@@ -3335,6 +3722,7 @@ class SchedulingService:
         assignment_data: Dict[str, Any],
         assigned_by: UUID,
         self_signup: bool = False,
+        actor: Optional[SignupActor] = None,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
         """Create a new shift assignment.
 
@@ -3342,6 +3730,14 @@ class SchedulingService:
         assigning someone). Self-signup is restricted to an open, current shift
         and never confers shift-officer authority (see below); managers keep the
         flexibility to assign to cancelled/finalized/past shifts for records.
+
+        ``actor`` decides which signup-window deadline applies. It exists
+        because the service cannot see the caller's permissions and
+        ``self_signup`` only splits off the member path — the officer path
+        still divides into a bounded assigner and an unbounded scheduling
+        administrator. It defaults from ``self_signup``, so every existing
+        caller keeps the behaviour it has: a member is bounded as a member, and
+        anything else is treated as the records path it is today.
         """
         try:
             # Verify shift belongs to org, and lock the row on every path.
@@ -3356,6 +3752,22 @@ class SchedulingService:
             )
             if not shift:
                 return None, "Shift not found"
+
+            # Placed before the candidate checks so the specific "this shift
+            # has already started" wins over the generic capacity and
+            # eligibility refusals — a member told they are not cleared for a
+            # seat goes to an officer about their qualifications, when the real
+            # answer is that the shift went out an hour ago. Skipped entirely
+            # for the records path, which is also the hot path for backfill.
+            effective_actor = actor or (
+                SignupActor.MEMBER if self_signup else SignupActor.MANAGER
+            )
+            if effective_actor != SignupActor.MANAGER:
+                window_error = await self.signup_closed_reason(
+                    shift, organization_id, effective_actor
+                )
+                if window_error:
+                    return None, window_error
 
             user_id = assignment_data.get("user_id")
 
@@ -3372,6 +3784,7 @@ class SchedulingService:
                 position=assignment_data.get("position"),
                 require_mutable=self_signup,
                 reject_past=self_signup,
+                window_checked=effective_actor != SignupActor.MANAGER,
                 # Eligibility is enforced for officer-made assignments too
                 # (#1752): an officer seating a member on a position they are
                 # not cleared for is the same risk as the member doing it.
@@ -3566,7 +3979,11 @@ class SchedulingService:
         return result.scalar_one_or_none()
 
     async def update_assignment(
-        self, assignment_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
+        self,
+        assignment_id: UUID,
+        organization_id: UUID,
+        update_data: Dict[str, Any],
+        actor: SignupActor = SignupActor.MANAGER,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
         """Update a shift assignment"""
         try:
@@ -3578,6 +3995,19 @@ class SchedulingService:
             assignment = result.scalar_one_or_none()
             if not assignment:
                 return None, "Shift assignment not found"
+
+            # Actor first, so the exempt path costs no extra query: the
+            # default is MANAGER precisely so every existing caller — the
+            # standing-shift release among them, which only ever touches dates
+            # still ahead — behaves exactly as before and only the HTTP paths
+            # opt in.
+            if actor != SignupActor.MANAGER:
+                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
+                locked = shift is not None and await self._roster_locked_error(
+                    shift, organization_id, actor
+                )
+                if locked:
+                    return None, locked
 
             training_error = await self._validate_training_slot_fields(
                 update_data, organization_id
@@ -3664,7 +4094,10 @@ class SchedulingService:
             return None, str(e)
 
     async def delete_assignment(
-        self, assignment_id: UUID, organization_id: UUID
+        self,
+        assignment_id: UUID,
+        organization_id: UUID,
+        actor: SignupActor = SignupActor.MANAGER,
     ) -> Tuple[bool, Optional[str]]:
         """Delete a shift assignment"""
         try:
@@ -3676,6 +4109,19 @@ class SchedulingService:
             assignment = result.scalar_one_or_none()
             if not assignment:
                 return False, "Shift assignment not found"
+
+            # Actor first, so the exempt path costs no extra query: the
+            # default is MANAGER precisely so every existing caller — the
+            # standing-shift release among them, which only ever touches dates
+            # still ahead — behaves exactly as before and only the HTTP paths
+            # opt in.
+            if actor != SignupActor.MANAGER:
+                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
+                locked = shift is not None and await self._roster_locked_error(
+                    shift, organization_id, actor
+                )
+                if locked:
+                    return False, locked
 
             # Capture info before deletion for notification
             shift_id = assignment.shift_id
@@ -3700,7 +4146,11 @@ class SchedulingService:
             return False, str(e)
 
     async def confirm_assignment(
-        self, assignment_id: UUID, user_id: UUID, organization_id: UUID
+        self,
+        assignment_id: UUID,
+        user_id: UUID,
+        organization_id: UUID,
+        actor: SignupActor = SignupActor.MANAGER,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
         """Confirm a shift assignment (by the assigned user).
 
@@ -3718,6 +4168,19 @@ class SchedulingService:
             assignment = result.scalar_one_or_none()
             if not assignment:
                 return None, "Shift assignment not found or not assigned to you"
+
+            # Actor first, so the exempt path costs no extra query: the
+            # default is MANAGER precisely so every existing caller — the
+            # standing-shift release among them, which only ever touches dates
+            # still ahead — behaves exactly as before and only the HTTP paths
+            # opt in.
+            if actor != SignupActor.MANAGER:
+                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
+                locked = shift is not None and await self._roster_locked_error(
+                    shift, organization_id, actor
+                )
+                if locked:
+                    return None, locked
 
             assignment.assignment_status = AssignmentStatus.CONFIRMED
             assignment.confirmed_at = datetime.now(timezone.utc)
@@ -4666,6 +5129,19 @@ class SchedulingService:
             if not offering_shift:
                 return await reject("That shift no longer exists")
 
+            # Accepting an offer is, as the docstring above says, exactly
+            # equivalent to the offerer withdrawing and the accepter signing
+            # up. So it is bounded by the same member deadline: without this,
+            # a targeted offer is a way to be seated on a shift that already
+            # ran, which is the hole the signup window exists to close. The
+            # offerer keeps the seat, which is the truthful record — they are
+            # who the roster committed.
+            window_error = await self.signup_closed_reason(
+                offering_shift, organization_id, SignupActor.MEMBER
+            )
+            if window_error:
+                return await reject(window_error)
+
             assignment_result = await self.db.execute(
                 select(ShiftAssignment)
                 .where(
@@ -4696,6 +5172,9 @@ class SchedulingService:
                 exclude_assignment_ids={str(offered_assignment.id)},
                 require_mutable=True,
                 reject_past=True,
+                # The member window ran above, so the day-granular check is
+                # only the fallback for a shift it could not judge.
+                window_checked=True,
                 enforce_position_eligibility=True,
                 enforce_capacity=True,
             )
@@ -5813,6 +6292,171 @@ class SchedulingService:
             reverse=True,
         )
 
+    @staticmethod
+    def _empty_month_totals(year: int, month: int) -> Dict[str, Any]:
+        """A month with nothing in it, so every month of the year is present.
+
+        A year view that omits the quiet months makes a gap look like missing
+        data rather than like a month the member did not work.
+        """
+        return {
+            "year": year,
+            "month": month,
+            "shifts": 0,
+            "hours": 0.0,
+            "calls": 0,
+            "pending_shifts": 0,
+            "pending_hours": 0.0,
+        }
+
+    async def get_member_month_totals(
+        self,
+        user_id: UUID | str,
+        organization_id: UUID | str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> Dict[Tuple[int, int], Dict[str, Any]]:
+        """One member's worked hours and call credit, bucketed by month.
+
+        Keyed ``(year, month)`` rather than by month alone so a caller can
+        span a year boundary in one query: "last month" in January is
+        December of the previous year, and a member checking the month that
+        just ended should not have to change a year selector to find it.
+
+        Either bound may be omitted for an open-ended span. Both omitted is
+        the member's whole career, which the database still returns as one
+        aggregated row per month worked — that is what backs the all-time
+        figure without a second, differently-shaped query that could round
+        its hours to a total disagreeing with the months beside it.
+
+        **Credited and pending are separate figures, never summed.** Hours
+        become credit when an officer finalizes the shift — the same rule
+        :meth:`get_member_hours_report` applies, so a member's own screen and
+        the department's report cannot disagree — and ``call_count`` is only
+        snapshotted at finalization, so an unfinalized shift has hours the
+        member can see are not counted yet and no call credit to show at all.
+
+        Scoped through ``Shift.organization_id``: ``shift_attendance`` carries
+        no org column of its own, and the shift is the row that has one.
+        """
+        year_col = func.year(Shift.shift_date)
+        month_col = func.month(Shift.shift_date)
+
+        query = (
+            select(
+                year_col.label("year"),
+                month_col.label("month"),
+                Shift.is_finalized.label("finalized"),
+                func.count(ShiftAttendance.id).label("shift_count"),
+                func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0).label(
+                    "minutes"
+                ),
+                func.coalesce(func.sum(ShiftAttendance.call_count), 0).label("calls"),
+            )
+            .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .where(ShiftAttendance.user_id == str(user_id))
+            .where(Shift.organization_id == str(organization_id))
+        )
+        if start_date is not None:
+            query = query.where(Shift.shift_date >= start_date)
+        if end_date is not None:
+            query = query.where(Shift.shift_date <= end_date)
+
+        result = await self.db.execute(
+            query.group_by(year_col, month_col, Shift.is_finalized)
+        )
+
+        buckets: Dict[Tuple[int, int], Dict[str, Any]] = {}
+        for row in result.all():
+            key = (int(row.year), int(row.month))
+            entry = buckets.setdefault(key, self._empty_month_totals(*key))
+            if row.finalized:
+                entry["shifts"] = int(row.shift_count or 0)
+                entry["hours"] = hours_from_minutes(row.minutes or 0)
+                entry["calls"] = int(row.calls or 0)
+            else:
+                entry["pending_shifts"] = int(row.shift_count or 0)
+                entry["pending_hours"] = hours_from_minutes(row.minutes or 0)
+        return buckets
+
+    async def get_my_hours_history(
+        self,
+        user_id: UUID | str,
+        organization_id: UUID | str,
+        year: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """A member's own year of shift hours and calls, month by month.
+
+        ``current_month`` and ``previous_month`` are resolved against the
+        department's local date, and are reported whatever year is being
+        viewed: in January the month that just ended is in the previous year,
+        and it is still the figure the member came to check.
+
+        One unbounded bucket query answers all of it. Every figure here — the
+        selected year, the month that just ended, the earliest year the picker
+        offers, the all-time totals — is a slice of the same per-month
+        aggregate, so a narrower query per figure would cost more round trips
+        and risk the slices disagreeing over rounding.
+
+        ``previous_month`` is no longer read by the member's own screen. It
+        stays in the response because removing it is a breaking change to the
+        endpoint contract with nothing gained.
+        """
+        tz = await resolve_scheduling_timezone(self.db, organization_id)
+        today = datetime.now(tz).date()
+        selected_year = int(year) if year else today.year
+
+        months_by_key = await self.get_member_month_totals(user_id, organization_id)
+
+        months = [
+            months_by_key.get((selected_year, m))
+            or self._empty_month_totals(selected_year, m)
+            for m in range(1, 13)
+        ]
+
+        current_key = (today.year, today.month)
+        first_of_month = today.replace(day=1)
+        previous_end = first_of_month - timedelta(days=1)
+        previous_key = (previous_end.year, previous_end.month)
+
+        def _bucket(key: Tuple[int, int]) -> Dict[str, Any]:
+            return months_by_key.get(key) or self._empty_month_totals(*key)
+
+        def _fold(buckets: List[Dict[str, Any]]) -> Dict[str, Any]:
+            """Total a set of months the way the screen displays them.
+
+            Hours fold through :func:`sum_hours_to_quarter` over the already
+            rounded monthly figures, never over raw minutes: a total rounded
+            from the raw sum can differ from the parts printed beside it by an
+            increment, and the all-time card sits next to the year total that
+            is one of its own parts.
+            """
+            return {
+                "shifts": sum(b["shifts"] for b in buckets),
+                "hours": sum_hours_to_quarter([b["hours"] for b in buckets]),
+                "calls": sum(b["calls"] for b in buckets),
+                "pending_shifts": sum(b["pending_shifts"] for b in buckets),
+                "pending_hours": sum_hours_to_quarter(
+                    [b["pending_hours"] for b in buckets]
+                ),
+            }
+
+        # Any attendance at all, credited or not — the picker offers a year the
+        # member worked even while every shift in it is still awaiting
+        # close-out.
+        earliest_year = min((k[0] for k in months_by_key), default=None)
+
+        return {
+            "year": selected_year,
+            "earliest_year": earliest_year,
+            "timezone": str(tz),
+            "months": months,
+            "totals": _fold(months),
+            "all_time": _fold(list(months_by_key.values())),
+            "current_month": _bucket(current_key),
+            "previous_month": _bucket(previous_key),
+        }
+
     async def get_shift_coverage_report(
         self, organization_id: UUID, start_date: date, end_date: date
     ) -> List[Dict]:
@@ -6915,6 +7559,18 @@ class SchedulingService:
         # the picker lands — it is served empty until something can use it.
         attachable: List[Dict[str, Any]] = []
 
+        # What the wizard offers as rows. Retired types are dropped so no new
+        # count can be filed under one — except where this shift already has
+        # calls against it, because dropping the row there would take the
+        # count off the screen while leaving it in the total, and the officer
+        # would have no field to correct it in.
+        reported_types = await call_service.shift_type_counts(str(shift_id))
+        offered_types = [
+            t
+            for t in tracking.get("call_types", [])
+            if t.get("active", True) or reported_types.get(t["slug"])
+        ]
+
         return {
             "shift_id": str(shift_id),
             "is_finalized": bool(shift.is_finalized),
@@ -6924,7 +7580,7 @@ class SchedulingService:
                 0 if shift.is_finalized else int(shift.closeout_step or 0)
             ),
             "call_tracking_mode": tracking.get("mode"),
-            "call_types": tracking.get("call_types", []),
+            "call_types": offered_types,
             "members": members,
             # "Combined hours" and not "hours": summed across the crew, it is
             # several times the length of the shift and reads as a mistake
@@ -6933,7 +7589,7 @@ class SchedulingService:
             "reported_call_count": await call_service.shift_response_count(
                 str(shift_id)
             ),
-            "reported_call_types": await call_service.shift_type_counts(str(shift_id)),
+            "reported_call_types": reported_types,
             "attachable_calls": attachable,
         }, None
 

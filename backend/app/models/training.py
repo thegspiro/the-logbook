@@ -2984,6 +2984,16 @@ class Shift(Base):
     # count was never asked for.
     closeout_step = Column(Integer, nullable=True)
 
+    # Leadership reopening signup after the department's cutoff has passed:
+    # an absolute UTC instant until which this shift still accepts additions,
+    # from members and officers alike. NULL — every shift, until somebody
+    # opens one — means "use the organization's grace window".
+    #
+    # Stored as an instant rather than a duration because the officer's
+    # decision is "until quarter past", not "for fifteen minutes from whenever
+    # this row is next read".
+    late_signup_until = Column(DateTime(timezone=True), nullable=True)
+
     # Finalization — officer formally closes the shift after review
     is_finalized = Column(Boolean, default=False, nullable=False, server_default="0")
     finalized_at = Column(DateTime(timezone=True), nullable=True)

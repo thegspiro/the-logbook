@@ -35,11 +35,16 @@ from app.core.permissions import DEFAULT_POSITIONS, OPERATIONAL_RANKS
 #: than repeating it — same standing, different discipline. It is named here
 #: anyway: a future edit could split the two, and a source that stops aliasing
 #: must not thereby stop being checked.
+#:
+#: The EMT *position* is the fifth, registered 2026-09-05. It aliases the rank,
+#: which aliases Firefighter's list — two hops — and is listed for the same
+#: reason as the rank: an alias that stops aliasing must not stop being checked.
 BASELINE_SOURCES = (
     ("member position", DEFAULT_POSITIONS, "member", "permissions"),
     ("firefighter position", DEFAULT_POSITIONS, "firefighter", "permissions"),
     ("firefighter rank", OPERATIONAL_RANKS, "firefighter", "default_permissions"),
     ("emt rank", OPERATIONAL_RANKS, "emt", "default_permissions"),
+    ("emt position", DEFAULT_POSITIONS, "emt", "permissions"),
 )
 
 
@@ -61,20 +66,24 @@ NOTIFICATIONS_REVOKED_SOURCES = BASELINE_SOURCES + (
 
 
 def test_notifications_view_is_not_a_baseline_grant():
-    """The Send Log it opens is scoped to the org, not to the recipient.
+    """It opens the department's notification rules, which are not a member's.
 
-    ``notifications.view`` gates ``GET /notifications/logs``, and
-    ``NotificationsService.get_logs`` filters on ``organization_id`` alone —
-    there is no recipient scoping anywhere on that path. ``NotificationLog``
-    stores ``recipient_email``, ``subject`` and ``message``, so a grant seeded
-    to the whole department let any member read the body of every notification
-    sent to every other member.
+    The grant was revoked for a sharper reason: it gated ``GET
+    /notifications/logs``, which filtered on ``organization_id`` alone.
+    ``NotificationLog`` stores ``recipient_email``, ``subject`` and
+    ``message``, so a grant seeded to the whole department let any member read
+    the body of every notification sent to every other member. The endpoint
+    now defaults to ``scope=mine`` and gates the org-wide view on
+    ``notifications.manage`` (``tests/test_notification_log_scope.py``), so
+    that leak is closed at the endpoint as well as at the grant.
 
-    Withholding it costs a member nothing they can act on: their own inbox is
-    ``GET /notifications/my``, which depends on ``get_current_user`` and no
-    permission at all. What they lose is three admin tabs, one of which
-    (Email Templates) was already a dead end — its only control navigates to a
-    route requiring ``settings.manage``.
+    Withholding it still costs a member nothing they can act on: their own
+    inbox is ``GET /notifications/my`` and their own send log is the default
+    scope of ``GET /notifications/logs``, both of which depend on
+    ``get_current_user`` and no permission at all. What they lose is the
+    department's notification rules and Email Templates, the latter already a
+    dead end — its only control navigates to a route requiring
+    ``settings.manage``.
 
     Revoked from the seeded rows by migration ``a1f7c34e9b02``; per the
     ``compliance.view`` precedent, the registry edit alone would have left the
@@ -132,6 +141,41 @@ def test_facilities_view_is_not_a_baseline_grant():
             f"the seeded {label} carries facilities.view, which opens the "
             "leadership facilities workspace to regular members"
         )
+
+
+def test_apparatus_view_is_not_a_baseline_grant():
+    """The fleet record is a maintenance and compliance workspace.
+
+    Inspection expirations, out-of-service status, deficiency flags and driver
+    qualifications are what the apparatus pages show, and ``apparatus.view`` is
+    one alternative on the OR-gate of some thirty endpoints behind them. The
+    crew work a member actually does on a rig — reporting a used item, running
+    a check — lives under ``/inventory/checklists/*`` on the
+    ``inventory.check_*`` grants and needs none of it.
+    """
+    for label, registry, slug, field in BASELINE_SOURCES:
+        assert "apparatus.view" not in registry[slug][field], (
+            f"the seeded {label} carries apparatus.view, which opens the fleet "
+            "maintenance and driver-qualification record to regular members"
+        )
+
+
+def test_the_operational_grant_holders_keep_apparatus_view():
+    """The revocation above is a narrowing, not a removal.
+
+    Engineer is the driver/operator rank and holds ``apparatus.maintenance``
+    beside this — two merged migrations (``d1c7f4a92e63``, ``f3b8d0c26a17``)
+    narrow a stored ``apparatus.*`` on an engineer row *to* exactly those two,
+    so gutting the grant registry-wide would leave them writing something the
+    registry no longer intends.
+    """
+    for registry, slug, field in (
+        (OPERATIONAL_RANKS, "engineer", "default_permissions"),
+        (DEFAULT_POSITIONS, "engineer", "permissions"),
+        (OPERATIONAL_RANKS, "captain", "default_permissions"),
+        (DEFAULT_POSITIONS, "apparatus_officer", "permissions"),
+    ):
+        assert "apparatus.view" in registry[slug][field], slug
 
 
 def test_baseline_excludes_the_reporting_and_audit_grants():

@@ -18,7 +18,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ArrowLeft, CalendarClock, Clock3, Loader2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { AdminHubFrame } from '../../../components/admin';
+import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
@@ -28,6 +28,7 @@ import { StoreOrdersTab } from '../components/StoreOrdersTab';
 import { StorePaymentsTab } from '../components/StorePaymentsTab';
 import { StoreSettingsTab } from '../components/StoreSettingsTab';
 import { StoreWindowsTab } from '../components/StoreWindowsTab';
+import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { storefrontService } from '../services/api';
 import {
   ORDER_STATUS_BADGES,
@@ -95,6 +96,14 @@ const activityDescription = (activity: StoreDashboard['recentActivity'][number])
 };
 
 const StoreAdminPage: React.FC = () => {
+  // `isLoading` as well as the answer: `isModuleOn` reports every module on
+  // while the lookup is in flight, which is right for a nav bar that must not
+  // flicker and wrong here. Rendering optimistically puts the link on screen
+  // for the width of that request, and a click inside it lands on the refusal
+  // this is meant to prevent. `ProtectedRoute`'s module gate waits for the
+  // same reason.
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
+  const inventoryOn = !modulesLoading && isModuleOn('inventory');
   const tz = useTimezone();
   // Mirrored into `?tab=` like every other admin page, so the inventory hub
   // can link at a tab rather than dropping the reader on Overview to find it.
@@ -107,6 +116,18 @@ const StoreAdminPage: React.FC = () => {
     },
     [setSearchParams]
   );
+
+  // The one filter that does travel in the URL. The frame's attention queue
+  // links in from outside the page ("Verify payments"), so its filter cannot
+  // be local state the way the overview's hand-offs below are — arriving on an
+  // unfiltered order list leaves the counted work to be found by eye. A value
+  // the Orders tab does not offer is ignored rather than forwarded to the API.
+  const paymentParam = searchParams.get('payment') ?? '';
+  // `hasOwnProperty`, not `in`: `?payment=toString` walks the prototype chain
+  // and would be forwarded to the API as a payment_status nothing matches.
+  const urlPaymentFilter = Object.prototype.hasOwnProperty.call(PAYMENT_STATUS_LABELS, paymentParam)
+    ? paymentParam
+    : '';
 
   // The overview's hand-off into a pre-filtered Orders tab. These stay local
   // rather than joining `?tab=` in the URL: they are one click's worth of
@@ -180,14 +201,24 @@ const StoreAdminPage: React.FC = () => {
           )}
           {/* The frame has no back-link prop, and this page sits one level
               inside Inventory Administration — so the way back rides here,
-              beside the actions, as TrainingAdminPage does with its HelpLink. */}
-          <Link
-            to="/inventory/admin"
-            className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Inventory
-          </Link>
+              beside the actions, as TrainingAdminPage does with its HelpLink.
+
+              Only where there is an Inventory to go back to. This route is
+              gated on the storefront module, not on inventory, so a department
+              can run the store with Inventory switched off — and the hub then
+              refuses with "Inventory is not enabled". A link the app knows will
+              be turned away is worse than no link: it reads as a permission
+              problem with the member rather than a module the department chose
+              not to run. */}
+          {inventoryOn && (
+            <Link
+              to="/inventory/admin"
+              className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Inventory
+            </Link>
+          )}
         </div>
       }
       tabs={TABS}
@@ -438,17 +469,32 @@ const StoreAdminPage: React.FC = () => {
         {activeTab === 'catalog' && <StoreCatalogTab />}
         {activeTab === 'orders' && (
           <StoreOrdersTab
-            key={`${ordersStatusFilter}:${ordersPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
+            key={`${ordersStatusFilter}:${ordersPaymentFilter || urlPaymentFilter}:${ordersDetailId}:${ordersRecentHours ?? ''}:${ordersOpenOnly}`}
             onChanged={handleChanged}
             initialStatusFilter={ordersStatusFilter}
-            initialPaymentFilter={ordersPaymentFilter}
+            initialPaymentFilter={ordersPaymentFilter || urlPaymentFilter}
             initialOrderId={ordersDetailId}
             initialSubmittedWithinHours={ordersRecentHours}
             initialOpenOnly={ordersOpenOnly}
           />
         )}
         {activeTab === 'payments' && <StorePaymentsTab onChanged={handleChanged} />}
-        {activeTab === 'settings' && <StoreSettingsTab onChanged={handleChanged} />}
+        {activeTab === 'settings' && (
+          <div className="space-y-8">
+            <StoreSettingsTab onChanged={handleChanged} />
+            {/* The frame's three open headline slots. The store's registry
+                offers six metrics and defaults to three, so without this an
+                admin could never reach Pending verification, Ready for pickup
+                or Active items — every other module's admin page carries the
+                same control. */}
+            <AdminMetricsSettings
+              moduleKey="storefront"
+              moduleLabel="Department Store"
+              permission="storefront.manage"
+              onSaved={() => setFrameToken((token) => token + 1)}
+            />
+          </div>
+        )}
       </div>
     </AdminHubFrame>
   );

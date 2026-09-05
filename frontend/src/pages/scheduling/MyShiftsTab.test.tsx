@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { MyShiftsTab } from './MyShiftsTab';
 
@@ -8,6 +9,7 @@ const mockGetMyAssignments = vi.fn();
 const mockGetMyShifts = vi.fn();
 const mockConfirmAssignment = vi.fn();
 const mockGetOpenShifts = vi.fn();
+const mockGetMyHoursHistory = vi.fn();
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -15,6 +17,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getMyShifts: (...args: unknown[]) => mockGetMyShifts(...args) as unknown,
     confirmAssignment: (...args: unknown[]) => mockConfirmAssignment(...args) as unknown,
     getOpenShifts: (...args: unknown[]) => mockGetOpenShifts(...args) as unknown,
+    getMyHoursHistory: (...args: unknown[]) => mockGetMyHoursHistory(...args) as unknown,
     getShifts: vi.fn().mockResolvedValue({ shifts: [], total: 0 }),
     createSwapRequest: vi.fn().mockResolvedValue({}),
     createTimeOff: vi.fn().mockResolvedValue({}),
@@ -47,6 +50,25 @@ describe('MyShiftsTab', () => {
     vi.clearAllMocks();
     mockGetMyAssignments.mockResolvedValue([]);
     mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
+    mockGetMyHoursHistory.mockReset();
+    mockGetMyHoursHistory.mockResolvedValue({
+      year: 2026,
+      earliest_year: 2026,
+      timezone: 'America/New_York',
+      months: Array.from({ length: 12 }, (_, i) => ({
+        year: 2026,
+        month: i + 1,
+        shifts: 0,
+        hours: 0,
+        calls: 0,
+        pending_shifts: 0,
+        pending_hours: 0,
+      })),
+      totals: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+      all_time: { shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+      current_month: { year: 2026, month: 2, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+      previous_month: { year: 2026, month: 1, shifts: 0, hours: 0, calls: 0, pending_shifts: 0, pending_hours: 0 },
+    });
   });
 
   it('should render and resolve loading state', async () => {
@@ -96,6 +118,22 @@ describe('MyShiftsTab', () => {
     await waitFor(() => {
       expect(screen.getByText(/^Upcoming/)).toBeInTheDocument();
     });
+  });
+
+  it('swaps the shift list for the hours summary on the Hours view', async () => {
+    const user = userEvent.setup();
+    mockGetMyAssignments.mockResolvedValue([]);
+
+    renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No upcoming shifts')).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Hours' }));
+
+    expect(await screen.findByText('My Hours')).toBeInTheDocument();
+    expect(screen.queryByText('No upcoming shifts')).not.toBeInTheDocument();
   });
 
   it('should show view toggle for upcoming and past shifts', async () => {

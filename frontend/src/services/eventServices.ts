@@ -248,8 +248,8 @@ export const eventService = {
    */
   async getEligibleMembers(
     eventId: string
-  ): Promise<Array<{ id: string; first_name: string; last_name: string; email: string }>> {
-    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string }>>(
+  ): Promise<Array<{ id: string; first_name: string; last_name: string; email: string | null }>> {
+    const response = await api.get<Array<{ id: string; first_name: string; last_name: string; email: string | null }>>(
       `/events/${eventId}/eligible-members`
     );
     return response.data;
@@ -298,7 +298,16 @@ export const eventService = {
    * Get QR code check-in data for an event
    */
   async getQRCheckInData(eventId: string): Promise<import('../types/event').QRCheckInData> {
-    const response = await api.get<import('../types/event').QRCheckInData>(`/events/${eventId}/qr-check-in-data`);
+    // `_skipCache`: this payload reports whether the check-in window is open
+    // *right now*, and both callers poll it to react to that flipping. The
+    // shared client would serve it from cache for 30s and serve it stale for a
+    // further 60s while revalidating in the background, so a window that opened
+    // could go unnoticed for up to 90 seconds — the QR page would keep showing
+    // its placeholder and the self-check-in page would keep withholding its
+    // button while the backend was already accepting scans.
+    const response = await api.get<import('../types/event').QRCheckInData>(`/events/${eventId}/qr-check-in-data`, {
+      _skipCache: true,
+    });
     return response.data;
   },
 
@@ -1340,6 +1349,15 @@ export interface InventorySummary {
    * no breakdown. Empty means "no breakdown", never "no items".
    */
   items_by_type: Record<string, number>;
+  /**
+   * Active non-medical items, counted as rows so the figure matches the
+   * listing at `/inventory/admin/items` — which carves medical stock out with
+   * the same predicate, and which `total_items` does not agree with because it
+   * sums quantities across every type, medical included.
+   *
+   * 0 for a caller the API serves the member-scoped summary to.
+   */
+  non_medical_items: number;
   total_value: number;
   active_checkouts: number;
   overdue_checkouts: number;

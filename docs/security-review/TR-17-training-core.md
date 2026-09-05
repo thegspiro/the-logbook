@@ -14,6 +14,625 @@
 
 ---
 
+## Pass 3 (2026-09-04) — Codex follow-up: 1 fix, 1 flagged, 1 corrected claim
+
+**PR:** [#2217](https://github.com/thegspiro/the-logbook/pull/2217) merged
+at its stale first-draft state before this correction could be pushed to
+it (CLAUDE.md pitfall #24 — the same race that hit #2213; see
+`PROGRESS.md`'s Log for detail). The fix carried forward through four more
+recovery branches/PRs of the identical shape, three of which again raced an
+in-progress Codex review and had to move on in turn:
+[#2218](https://github.com/thegspiro/the-logbook/pull/2218) (rounds 1-3,
+premature merge) → [#2220](https://github.com/thegspiro/the-logbook/pull/2220)
+(round 4, premature merge) → [#2221](https://github.com/thegspiro/the-logbook/pull/2221)
+(round 5, premature merge) → **[#2222](https://github.com/thegspiro/the-logbook/pull/2222)**
+(rounds 6-9, `claude/security-review-training-core-tr3-round6`), which
+**merged cleanly** — the first merge in this pass not to race an
+in-progress review, closing out the TR3-1 finding after nine rounds total.
+See `PROGRESS.md`'s Log for each recovery's detail.
+**Scoped since pass 2's merge:** `0b8b5bd4` (PR #1981).
+
+> **Correction (Codex review of this PR).** The first draft of this section
+> claimed "no findings, no code changes" and described two things as
+> "already reviewed"/"clean" that were not quite either. Codex raised three
+> comments; all three real. One is a genuine bug in this feature's own code
+> (fixed below); the other two are corrections to this draft's own claims,
+> not new code defects. The section below is the corrected one.
+
+Diffed the seven declared files (six pass-1 files plus `training_compliance.py`,
+already declared) against the pass-2 merge commit, plus a fresh grep for any
+other file instantiating `TrainingService` or importing the training models —
+one found, `app/mcp/tools/training.py`, reviewed below as a scope addition
+(the same class of gap Codex caught in the Events pass immediately before
+this one: a feature-specific MCP tool file added after the last pass and
+never swept in).
+
+**Of the seven, two changed:** `services/training_service.py` (+329/-91)
+and `services/training_compliance.py` (+27/-14). `training.py`,
+`training_programs.py`, `training_sessions.py`, `training_program_service.py`,
+and `training_session_service.py` are byte-identical to pass 2 — confirmed
+via `git diff --stat`, not assumed. No new migration touches any table this
+feature owns (checked `alembic/versions/` by content, not filename — several
+new migrations matched a bare `training` grep only inside the word
+"cons**training**" or by restoring `training.*` permission strings across
+seeded positions, which is the Permissions & roles feature's own domain, not
+this one's).
+
+**Two adjacent files this feature also declares carry another feature's
+already-reviewed fix, not new surface of this one's:** `models/training.py`
+(+109/-4) and `types/training.ts` (+32/-9) are both misleadingly-named shared
+files. The former's entire diff is `Shift`/`ShiftTemplate`/
+`ShiftTemplateEquipmentCheck` — Scheduling's models, already reviewed in
+`SCH-15-scheduling.md` pass 3 (the `equipment_check_template_ids` feature).
+The latter's entire diff is `ComplianceProfile*`/`ComplianceConfig*` type
+widenings citing `CMP2-2`/`CMP2-3`/`CMP2-4` — the Compliance feature's own
+security-review fixes (Pitfall #1 explicit-null-vs-omitted correctness for
+its config forms). `training_compliance.py`'s own change
+(`compute_org_compliance_pct`) is likewise cited as **CMP2-3** in its own
+comment — read directly to confirm the fix is what it claims: `if profile.
+required_requirement_ids is not None:` now correctly treats an explicitly
+empty list as "zero requirements," and the threshold-override reads were
+un-nested from that same conditional so they apply whenever the profile
+matched, independent of whether it also overrides the requirement list.
+Correct, matches the CMP2-3 description, not a re-finding.
+
+> **Correction (Codex): `schemas/training.py`'s SSRF-hardening change was
+> not, in fact, already reviewed.** The first draft claimed this — a
+> `field_validator` on `ExternalProviderConfig`'s four endpoint fields,
+> using `relative_endpoint` — belonged to and was covered by feature 18
+> ("training extended"). Codex checked the dates: the validator landed
+> September 2, after Training Extended's own pass 2 (August 29), and
+> feature 18's pass 3 has not run yet — so nothing had actually reviewed it,
+> and feature 18's own declared file list doesn't name `schemas/training.py`
+> at all, which could have let it fall through that future pass too.
+> Reviewed it directly here instead of continuing to defer it:
+> `relative_endpoint` (`app/utils/ssrf_transport.py`) rejects any value that
+> isn't a bare path starting with a single `/` (no scheme, no netloc, no
+> `//` protocol-relative trick, no fragment) — correct for its purpose. More
+> importantly, the actual outbound call sites in
+> `external_training_service.py` (`join_endpoint(provider.api_base_url,
+records_endpoint)`, four call sites) already run every configured endpoint
+> through this exact same `relative_endpoint` check at request time,
+> independent of whether the schema validates it at save time — confirmed by
+> reading `join_endpoint`'s own body. So this schema-level addition is
+> defense-in-depth (an early, clean 400 instead of a 500 deep in an outbound
+> call), not the closing of a live gap: the SSRF vector was already closed
+> at the point that actually matters. Not a finding against this feature,
+> and — now that it has actually been read — not an open item to hand to
+> feature 18 either.
+
+**`training_service.py`'s diff is squarely this feature's own: an N+1
+performance rework, org/tenant isolation preserved throughout.**
+`check_requirement_progress` gained optional `requirement`/
+`completed_records` parameters so a caller checking many requirements for
+one member (`get_requirements_progress_for`, new) can preload the member's
+completed records **once** and have every requirement's check filter that
+same in-memory set, instead of each requirement issuing its own query.
+Read every branch (HOURS, CERTIFICATION, SHIFTS, CALLS, and the
+skills/checklist fallback) to confirm the in-memory path filters
+identically to the SQL path it replaces (training_type, required_courses,
+frequency window via `_windowed()`/`_all_completed()`):
+
+- The preload itself (`get_requirements_progress_for`) is the only place
+  `TrainingRecord` rows are fetched for this path, and it filters
+  `user_id`, `organization_id`, and `status == COMPLETED` before anything
+  downstream ever sees a row — every requirement's in-memory filtering
+  inherits this scoping; there is no path where a preloaded row could
+  belong to another org or another member.
+- `get_all_requirements_progress` (TR-12's original fix site) no longer
+  does its own `User` lookup at all — that responsibility moved to
+  `get_applicable_requirements`, which already carries an org-scoped
+  `User` query (`User.id == ... , User.organization_id == ...`, confirmed
+  at its current location). `generate_training_report`'s tier-exemption
+  block (TR-12's other fix site, using the locally-aliased `_User`, which
+  is why a bare `select(User)` grep alone would have missed it — checked
+  both spellings) still carries its own org filter, unchanged.
+- Only columns the checks actually read are preloaded
+  (`_PROGRESS_RECORD_COLUMNS`, a fixed tuple — never notes, attachments, or
+  anything PHI-adjacent beyond what these checks already handled), loaded
+  as plain rows rather than ORM instances specifically to avoid colliding
+  with a fully-loaded copy of the same row already in the session.
+  `_preload_window` bounds the date range read to the union of what the
+  page's own requirements can use, returning `None` (no bound — read
+  everything) only when a requirement type that inherently ignores the
+  window is present (certification, or biannual hours' expired-cert
+  override) — matches `check_requirement_progress`'s own per-requirement
+  window logic exactly, so the preload can't under-fetch what a later
+  per-requirement check needs.
+- No new client-supplied FK, no new unauthenticated route, no schema
+  change. `training.py` (the endpoint file) is untouched, so
+  `get_training_dashboard_summary` (TR2-4, flagged, unbounded per-request
+  scan) is not this refactor's target and remains exactly as flagged —
+  confirmed, not assumed, since the file has zero diff.
+
+### Scope addition — `app/mcp/tools/training.py` (following the EV-16 lesson)
+
+Not part of any prior pass's declared scope; predates this diff (unchanged
+in it) but was never swept into a security-review pass. Read in full (170
+L, 4 tools): `list_expiring_certifications` and `list_member_training_records`
+are both directly org/member-scoped and paginated with a real `total` count
+(the former org-wide with a bounded `days_ahead` clamped to 1–730 days, the
+latter through `require_member` — the same shared, already-reviewed
+org-scoped-or-`ValueError` helper the Events MCP tools use). `get_member_
+training_summary` and `get_member_requirements_progress` both resolve the
+target member through `require_member` before calling into
+`TrainingService`. Tenant isolation is correct on all four; no cross-org
+or cross-member read is reachable.
+
+> **Correction (Codex): `get_member_requirements_progress` is not fully
+> bounded, and the first draft should not have called it clean.** `limit`
+> only bounds the number of _returned_ progress rows. Two unbounded reads
+> still happen underneath on every call: `get_applicable_requirements`
+> itself has no page bound (mitigated only by the pass-2 finding that
+> configuration data — requirements — is naturally small per org, tens not
+> thousands); and if the requested page happens to include a CERTIFICATION-
+> type requirement (or a BIANNUAL-hours one), `_preload_window` returns
+> `None`, so `get_requirements_progress_for` preloads the member's _entire_
+> completed-training history rather than a date-bounded slice. Neither is
+> new: both are the same characteristic `check_requirement_progress` always
+> had per-requirement (a certification check has always ignored the
+> frequency window, by design — a cert is valid until it expires, not per
+> period), just newly reachable through this MCP tool, which had never been
+> reviewed before this pass. **Flagged, not fixed** — same disposition as
+> TR2-4, for the same reason: bounding a certification check's window
+> without breaking its correctness is a service-level redesign
+> (`training_compliance.py`'s date-window logic would need to change what
+> "ignoring the window" means for this class of call), not a safe drive-by
+> change. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+## Findings (pass 3)
+
+### TR3-1 — LOW/MED (correctness) — `RequirementProgress.days_until_due` was never populated — ✅ FIXED
+
+**Reported by Codex on this PR; confirmed.** All three `RequirementProgress(...)`
+construction sites in `check_requirement_progress` set `due_date=requirement.
+due_date` but never `days_until_due`, so the field always serialized as its
+schema default, `None` — regardless of whether the requirement actually had
+a due date. This is pre-existing (none of the three sites is part of this
+pass's own diff) and was never caught before because nothing consuming
+`RequirementProgress` had an explicit, checkable contract naming the field
+until this pass's own `app/mcp/tools/training.py` scope addition — its
+`get_member_requirements_progress` docstring promises "days until due
+(negative when overdue)" verbatim, which this pass should have verified
+rather than taken on faith when declaring that tool "clean."
+
+**Where:** `app/services/training_service.py` — `check_requirement_progress`,
+all three `return RequirementProgress(...)` sites.
+
+**Impact:** LOW/MED. Not a tenant-isolation or auth defect — every consumer
+of this field (the training UI's own due-date badges, this pass's MCP tool)
+simply received a silently-wrong `null` where a real day count belonged, in
+both the ordinary and the negative-when-overdue case. An MCP-driven
+automation deciding whether to escalate an overdue requirement based on
+`days_until_due` being negative would never fire.
+
+**Fix (round 1, incomplete):** computed `days_until_due = (requirement.
+due_date - today).days if requirement.due_date else None` once near the top
+of the method and passed it to all three construction sites. Verified against
+an explicit `due_date` — missed that most requirements don't have one.
+
+**Round 2 — Codex caught the round-1 fix still broken for the common case.**
+A `calendar_period` requirement (the default `due_date_type`, covering every
+annual/quarterly/monthly requirement) carries no `due_date` of its own — its
+deadline is the _end of its evaluation window_, which `_get_date_window()`
+already returns as `end_date` and which `evaluate_requirement_detail()`
+already uses as exactly this fallback (`effective_due_date = req.due_date if
+req.due_date else (end_date if end_date else None)`). Computing solely from
+`requirement.due_date` therefore left `days_until_due` (and `due_date`) null
+for every calendar-period requirement — the case this fix exists for — and
+only worked for the rare requirement with an explicit fixed date. Fixed by
+computing `effective_due_date = requirement.due_date or end_date` right after
+`_get_date_window()` (before the recency-cutoff logic below it can overwrite
+`end_date`), and using `effective_due_date` for both the `due_date` and
+`days_until_due` fields at all three construction sites — mirroring
+`evaluate_requirement_detail()`'s own fallback rather than duplicating a
+divergent one. The `BIANNUAL` cert-expiration override that
+`evaluate_requirement_detail()` layers on top of that fallback was left alone:
+out of scope for this finding, and unchanged from pre-existing behavior.
+
+**Guard tests:** `test_training_compliance_integration.py::
+TestHoursRequirementCompliance::test_days_until_due_is_populated` and
+`::test_days_until_due_is_negative_when_overdue` — insert a requirement with
+an explicit `due_date` 10 days out / 5 days past, assert the returned
+`RequirementProgress.days_until_due` is `10` / `-5` respectively.
+`::test_days_until_due_falls_back_to_the_period_window_end` — insert an
+ordinary `calendar_period` annual requirement with no explicit `due_date`,
+assert `RequirementProgress.due_date`/`days_until_due` resolve to the
+window's Dec 31 end date rather than `None` — this is the test that would
+have caught round 1's gap.
+
+**Round 3 — Codex caught round 2's own fallback broken for `rolling`
+requirements.** `effective_due_date = requirement.due_date or end_date`
+is correct for `calendar_period` (`end_date` really is the period's
+deadline) but wrong for `due_date_type="rolling"`: `_get_date_window()`
+always returns `today` as `end_date` for a rolling requirement — it is a
+trailing evaluation window (`today - rolling_period_months` to `today`),
+not a deadline — so round 2 reported `due_date=today` /
+`days_until_due=0` for every rolling requirement regardless of when it
+was last completed. A rolling deadline is genuinely defined as _last
+applicable completion + the configured interval_, which has no
+relationship to the evaluation window at all. Fixed by adding a third
+branch (`explicit due_date` → `rolling` anchor → `calendar_period` window
+fallback, in that order) that resolves the rolling case via a new
+`_rolling_due_date()` helper: the latest completed record matching the
+requirement's `training_type` (mirroring the filter every other branch of
+`check_requirement_progress` already applies), plus
+`rolling_period_months`, via the preloaded `completed_records` when given
+or a `MAX(completion_date)` query otherwise. Returns `None` — not `today`
+— when the member has no applicable completion yet, since there is no
+anchor to compute a deadline from and reporting "due today" for an
+untouched requirement would be actively misleading.
+
+While fixing this, found and fixed the same latent bug in the sibling
+function `evaluate_requirement_detail()` (the `/my-training` endpoint's
+own detailed-breakdown path) — it uses the identical `req.due_date or
+end_date` fallback this pass's round 2 had copied, and reading it closely
+after Codex's finding confirmed it has carried the exact same rolling-mode
+flaw since it was introduced (pass 1, PR #1851), independent of anything
+in this pass's diff. Not reported by Codex on this PR (out of this PR's
+declared diff, and evaluate_requirement_detail's own days_until_due logic
+predates this pass entirely) — found by inspection while fixing the
+sibling copy of the same pattern, and fixed in the same commit per
+CLAUDE.md's "no acceptable pre-existing errors" rule rather than left for
+a future pass to rediscover. Uses the same anchor logic, adapted to work
+in-memory against the already-fetched `member_records` list (this
+function takes no `db` session) instead of a query.
+
+**Guard tests (round 3):**
+`test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_days_until_due_for_rolling_requirement_anchors_on_last_completion` and
+`::test_days_until_due_for_rolling_requirement_with_no_completion_is_none`
+for `check_requirement_progress`;
+`test_training_compliance.py::TestEvaluateRequirementDetailFields::
+test_days_until_due_for_rolling_requirement_anchors_on_last_completion` and
+`::test_days_until_due_for_rolling_requirement_with_no_completion_is_none`
+for `evaluate_requirement_detail`. All four confirmed failing (reproducing
+`due_date=today`/`days_until_due=0`) against the round-2 code before the
+round-3 fix, via `git stash` on just `training_service.py`.
+
+**Round 4 — Codex found three more gaps in round 3's own rolling-anchor
+fix**, all real:
+
+1. **No `certification_period` branch at all.** The fallback chain
+   (`explicit due_date` → `rolling` anchor → `calendar_period` window end)
+   never checked for `due_date_type="certification_period"`, so a
+   certification-period requirement fell through to the window-end
+   fallback: `None` for a BIANNUAL-frequency cert requirement (no window
+   at all) or the calendar year end for any other frequency — neither of
+   which is the certificate's actual expiration date. A
+   certification-period requirement never resets on a schedule; it comes
+   due when the currently-held certificate itself expires. Fixed with a
+   new `_certification_due_date()` helper: the latest matching completed
+   record's own `expiration_date` (mirroring `check_requirement_progress`'s
+   own CERTIFICATION branch — latest matching completion, by completion
+   date, then read that record's expiration), `None` when the member holds
+   no matching certification.
+2. **Rolling/certification anchor matching used a bare `training_type`
+   check, over- and under-matching in opposite directions.** When
+   `training_type` was unset (common for a course-specific requirement
+   restricted by `required_courses` instead), the round-3 filter matched
+   _any_ completed record of any type — Codex's example: an overdue
+   course-specific requirement gets a future deadline anchored on an
+   unrelated recent record. Swapping in `certification_record_matches`
+   wholesale (the obvious fix, and Codex's own suggested reference) turned
+   out to be wrong in the opposite direction for non-CERTIFICATION types:
+   its OR-of-criteria semantics report _no_ match at all for a requirement
+   that legitimately restricts nothing (e.g. "24 hours of any training
+   every 24 months," a valid, common rolling HOURS configuration) — a
+   round-1-draft regression caught only by this pass's own tests before
+   it shipped. Fixed with a new `_anchor_matches()` static method that
+   dispatches on requirement type and mirrors each type's own crediting
+   filter exactly: `certification_record_matches` for CERTIFICATION;
+   `required_courses` membership for COURSES; `training_type` AND
+   `required_courses` (each optional) for HOURS; `training_type` only for
+   SHIFTS/CALLS; `training_type` or name-substring for the
+   skills/checklist fallback. Used by both `check_requirement_progress`
+   (via a new shared `_anchor_records()`) and
+   `evaluate_requirement_detail()`, replacing round 3's ad-hoc filters in
+   both.
+3. **The batch/preload path's window bound excludes the very completions
+   an overdue anchor needs.** `get_requirements_progress_for` preloads
+   `completed_records` once via `_preload_window`, bounded to the union of
+   every requirement's own evaluation window — for an ordinary rolling
+   requirement, that window is `today - rolling_period_months` to `today`.
+   An _overdue_ rolling requirement's anchor is, by definition, older than
+   that window, so the preload silently excluded it and the batch/API/MCP
+   path reported `None` instead of a correctly negative
+   `days_until_due` — while the same requirement, checked standalone
+   (`completed_records=None`, an unbounded query), reported correctly.
+   Fixed by extending `_preload_window`'s existing unbounded-window
+   exemption (already applied to CERTIFICATION and BIANNUAL-hours, for the
+   identical reason) to any requirement using a rolling or
+   certification-period due date.
+
+**Guard tests (round 4):** `test_training_compliance_integration.py::
+TestCertificationCompliance::test_certification_period_due_date_is_the_certs_own_expiration`
+and `::test_rolling_anchor_does_not_match_an_unrelated_record` (finding 2,
+inserts a real FK-satisfying course + an unrelated newer record via raw SQL
+to prove the anchor picks the right one) for `check_requirement_progress`;
+`TestMultipleRequirements::test_rolling_due_date_survives_the_batch_preload_window`
+(finding 3) for `get_all_requirements_progress`; and the
+`test_training_compliance.py::TestEvaluateRequirementDetailFields` mirrors
+of findings 1 and 2 for `evaluate_requirement_detail`. All five confirmed
+failing against the round-3 code before this fix.
+
+**Round 5 — Codex found two more gaps, both introduced by round 4 itself**,
+this time on the new PR (#2220, opened after round 4 merged prematurely —
+see `PROGRESS.md`'s Log):
+
+1. **P1 (the more severe): the legacy BIANNUAL override in
+   `evaluate_requirement_detail()` unconditionally overwrote round 4's
+   correctly-anchored certification-period due date.** That block (added
+   long before due_date_type awareness existed) selects the newest
+   expiration across _any_ completed record passing a bare `training_type`
+   check — not `_anchor_matches` — whenever `freq == BIANNUAL`, with no
+   awareness that a certification-period (or rolling) anchor might already
+   have computed the correct value earlier in the same function. Concrete
+   scenario: an EMT certification due in 30 days, with an unrelated
+   certification expiring next year also on file and no `training_type`
+   set on the requirement (so the override's filter is a no-op) — the
+   override picked the later, unrelated date, silently replacing the real
+   deadline. Downstream, `generate_compliance_forecast`'s 90-day at-risk
+   list would never surface the actually-overdue-soon EMT renewal. Fixed
+   by skipping the legacy override whenever `rolling_months` or
+   `due_date_type == "certification_period"` already computed
+   `effective_due_date` via the new anchor logic — the override's original
+   scope (a BIANNUAL requirement with no due-date-type awareness at all)
+   is unaffected. `check_requirement_progress`'s own BIANNUAL handling was
+   checked and does _not_ have this bug: it only reads the already-computed
+   `effective_due_date` for its early-return's `due_date=` field rather
+   than reassigning it.
+2. **P2: `_anchor_records` (and `evaluate_requirement_detail`'s parallel
+   in-memory filter) dropped every record with `completion_date is None`
+   before a certification-period anchor could ever see it**, even though
+   `TrainingRecord.completion_date` is nullable and every other
+   certification-matching site in this file (four of them) deliberately
+   still considers such a record via a `r.completion_date or date.min`
+   sort-key fallback rather than excluding it. A completed certification
+   with a known `expiration_date` but an unrecorded completion date (e.g.
+   a grandfathered/imported record) was silently marked compliant while
+   reporting `due_date=None`/`days_until_due=None`. Fixed by removing the
+   `completion_date is not None` filter from `_anchor_records` (it now
+   returns every record `_anchor_matches`, regardless of completion date)
+   and having each caller apply the correct convention itself:
+   `_rolling_due_date` still filters `None` internally — a rolling anchor
+   genuinely cannot add an interval to an unknown date — while
+   `_certification_due_date` and `evaluate_requirement_detail`'s own
+   certification-period branch use `r.completion_date or date.min` as the
+   sort key, matching the other four sites exactly.
+
+**Guard tests (round 5):**
+`test_training_compliance.py::TestEvaluateRequirementDetailFields::
+test_biannual_certification_period_keeps_the_matched_certs_expiration`
+(P1) and `::test_certification_period_anchor_includes_unknown_completion_date`
+(P2) for `evaluate_requirement_detail`;
+`test_training_compliance_integration.py::TestCertificationCompliance::
+test_certification_period_anchor_includes_unknown_completion_date` (P2) for
+`check_requirement_progress` — `check_requirement_progress` needed no P1
+test since it doesn't have that bug (see above). All three confirmed
+failing against the round-4 code before this fix, via `git stash` on just
+`training_service.py`.
+
+**Round 6 — Codex found two more gaps in round 5's own fixes**, on the
+next PR (#2221, opened after round 5 merged prematurely — see
+`PROGRESS.md`'s Log):
+
+1. **A stale `due_date` left over from a prior `fixed_date` configuration
+   defeated the rolling/certification-period anchor.** `RequirementModal.
+tsx` seeds its `due_date` form field from the existing row and only
+   edits or clears it on the `fixed_date` screen (confirmed by reading the
+   component: line 77 seeds state, lines 181-183 submit `due_date`
+   whenever it's still truthy alongside whatever `due_date_type` was
+   actually selected). An officer switching an existing fixed-date
+   requirement to Cert Period therefore leaves the old `due_date` in the
+   payload. Every round since round 1 gave `req.due_date`/`requirement.
+due_date` top priority unconditionally, so this stale value would
+   silently defeat round 4's certification-period anchor (and round 3's
+   rolling anchor, sharing the identical root cause though not raised by
+   Codex against it directly) — the exact inverse failure mode of P1
+   (round 5 fixed the BIANNUAL override clobbering a _correct_ anchor;
+   this is a stale explicit date clobbering it instead). Fixed by only
+   honoring the explicit `due_date` when the requirement's `due_date_type`
+   is _not_ `rolling`/`certification_period` (an `anchored_type` flag in
+   both functions) — `calendar_period` keeps its existing, deliberately
+   tested precedent of an explicit-date override
+   (`test_days_until_due_calculated`) unchanged, since Codex's finding and
+   the frontend behavior it traced are specific to switching _out of_
+   `fixed_date`, not that combination.
+2. **A certification anchor could publish a due date for a record the
+   compliance calculation itself rejects as unverifiable.** When a
+   requirement sets `recency_days`, `is_recent_enough()` requires a known
+   `completion_date` to check a record's freshness — a record with
+   `completion_date is None` fails it and is excluded from the actual
+   compliance result (`check_requirement_progress`'s own CERTIFICATION
+   branch applies `apply_recency` for exactly this). Round 5's P2 fix,
+   however, let `_anchor_records` admit that same record for the _due
+   date_ calculation regardless, since it deliberately stopped filtering
+   on `completion_date` at all. Result: `is_complete=False` (correctly
+   unmet) alongside a future `due_date`/`days_until_due` computed from the
+   very record the compliance check excluded — a contradiction on the
+   same response object. `evaluate_requirement_detail()` needed no
+   equivalent fix: its `completed` list already has `apply_recency`
+   applied once, upstream of everything including the anchor block, so it
+   never received an unverifiable record in the first place. Fixed by
+   threading `today` into `_anchor_records` and filtering with the same
+   `is_recent_enough()` predicate the compliance calculation uses —
+   inert when `recency_days` is unset (matching the round-5 P2 fix's
+   behavior for the common case), and correctly exclusionary only when a
+   freshness window is actually configured.
+
+**Guard tests (round 6):** `test_training_compliance.py::
+TestEvaluateRequirementDetailFields::test_rolling_ignores_a_stale_fixed_due_date`
+and `::test_certification_period_ignores_a_stale_fixed_due_date` (finding
+
+1. for `evaluate_requirement_detail`;
+   `test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_rolling_ignores_a_stale_fixed_due_date`,
+   `TestCertificationCompliance::test_certification_period_ignores_a_stale_fixed_due_date`
+   (finding 1), and `::test_certification_period_anchor_excludes_unverifiable_completion_when_recency_required`
+   (finding 2) for `check_requirement_progress`. All five confirmed failing
+   against the round-5 code before this fix, via `git stash` on just
+   `training_service.py`.
+
+**Round 7 — Codex found round 6's own fix drew the line in the wrong
+place**, pushed as a further commit onto the same still-open PR (#2222) —
+no premature merge this time:
+
+Round 6 excluded `rolling`/`certification_period` from honoring a stale
+`due_date`, reasoning that `calendar_period` was unaffected because an
+explicit override there was "an established, deliberate override" per
+`test_days_until_due_calculated`. Codex pointed out that reasoning doesn't
+hold: `RequirementModal.tsx`'s stale-value behavior (seeds `due_date` from
+the existing row, only clears/edits it on the `fixed_date` screen) applies
+identically when switching to `calendar_period` — there is no UI path that
+lets an officer deliberately set both a period configuration _and_ an
+override date at once, so a `calendar_period` row carrying a `due_date` is
+just as likely to be the same stale leftover, not a real feature. The
+existing test had been asserting the bug's shape as if it were a
+requirement, and round 6 preserved it as a carve-out for exactly that
+reason.
+
+Fixed by replacing the round-6 `anchored_type` (rolling/certification_period)
+exclusion with an inclusion list: an explicit `due_date` now wins only when
+`due_date_type` is `None` (a legacy row from before the field existed) or
+`fixed_date` — never `calendar_period`, `rolling`, or `certification_period`,
+all three of which compute their own deadline. This required updating (not
+just adding to) two round-1/2 tests in `test_training_compliance_integration.py`
+(`test_days_until_due_is_populated`, `test_days_until_due_is_negative_when_overdue`)
+that relied on the default `due_date_type="calendar_period"` while asserting
+an explicit `due_date` wins — both now pass `due_date_type="fixed_date"`
+explicitly, which is what they were actually testing all along. The unit-test
+equivalents in `test_training_compliance.py` were unaffected: `_make_requirement`
+defaults `due_date_type` to `None`, which the new rule still honors.
+
+**Guard tests (round 7):**
+`test_training_compliance.py::TestEvaluateRequirementDetailFields::
+test_calendar_period_ignores_a_stale_fixed_due_date` for
+`evaluate_requirement_detail`;
+`test_training_compliance_integration.py::TestHoursRequirementCompliance::
+test_calendar_period_ignores_a_stale_fixed_due_date` for
+`check_requirement_progress`. Both confirmed failing against the round-6
+code before this fix.
+
+**Round 8 — Codex found rounds 6-7 only masked the symptom, not the root
+cause**, pushed as a further commit onto the same still-open PR (#2222):
+
+Rounds 6-7 made `check_requirement_progress`/`evaluate_requirement_detail`
+ignore a stale `due_date` for every type but `fixed_date` — but the stale
+value itself was still sitting in the database, unpersisted-corrected. Codex
+found two other active paths read `requirement.due_date` directly, bypassing
+both calculators entirely: the requirements dashboard widget
+(`api/v1/endpoints/training.py:330`, rendered by
+`frontend/.../widgets/training/index.tsx`) and the requirement detail page
+(`frontend/src/pages/TrainingRequirementsPage.tsx`). An officer would see
+the calculated (correct) due date on the progress screens and the raw
+(stale) one on the dashboard and detail page simultaneously — the
+calculators were never going to be a complete fix on their own, because the
+bug is in what gets _written_, not just what gets _read_.
+
+Fixed at the actual root: `create_requirement`/`update_requirement`
+(`api/v1/endpoints/training.py`) now null out `due_date` whenever the
+resulting `due_date_type` isn't `fixed_date` (or unset, for a legacy row) —
+regardless of what the client sent, so `RequirementModal.tsx`'s stale-value
+behavior can never reach the database in the first place, and every reader
+(the two calculators, the two raw-read paths Codex found, any future one)
+sees a consistent, correct value with no further per-site patching needed.
+`update_requirement` normalizes even when the update payload doesn't
+mention `due_date_type` or `due_date` at all, cleaning up a row that
+already carries a stale value from before this fix existed the next time
+it's touched. The calculators' rounds 6-7 defensive logic is left in place
+as harmless, correct defense-in-depth for any row not yet touched since.
+
+**Guard tests (round 8):** new file
+`test_training_requirement_due_date_write_normalization.py` — four
+`update_requirement` cases (switching away from `fixed_date` to `rolling`
+or `calendar_period` clears a stale `due_date`; a genuine `fixed_date`
+update keeps its own `due_date`; touching an already-stale row with an
+unrelated field change cleans it up) and one `create_requirement` case
+(a non-`fixed_date` create ignores a client-sent `due_date`). Four of the
+five confirmed failing without the endpoint fix (the "genuine fixed_date
+update" case correctly still passed, since it's unaffected).
+
+**Round 9 — Codex found round 8's write-path fix doesn't reach a row
+nobody edits**, pushed as a further commit onto the same still-open PR
+(#2222):
+
+Round 8's normalization runs on `create`/`update`, which stops _new_
+staleness but does nothing for a `calendar_period`/`rolling`/
+`certification_period` row that already carries a stale `due_date` and is
+never edited again. Until an officer happens to touch it, the same two raw
+reads (the dashboard widget, the requirement detail page) keep showing the
+pre-fix value — exactly the CLAUDE.md pitfall #20 pattern applied to a
+plain column instead of a JSON one: _a write-path fix alone never reaches
+a row nobody revisits; it needs a migration to settle the rows already
+there._
+
+Fixed with `20260904_0530_bbdaca0844df_backfill_stale_due_date_non_fixed.py`:
+a single `UPDATE training_requirements SET due_date = NULL WHERE due_date
+IS NOT NULL AND due_date_type IN (...)` for the three non-`fixed_date`
+types, guarded on the table's existence (per CLAUDE.md pitfall #26 — even
+though `training_requirements` is migration-created, not `create_all`-only,
+matching the same defensive check the precedent migration
+(`20260903_1300_e3a9c1d5b7f2`, the `email_service` settle) uses).
+`downgrade()` is deliberately a no-op: the cleared values were never valid
+for these three types (there's no UI path to set both a period/anchor
+config and a deliberate override date at once), so there's nothing correct
+to restore.
+
+**Guard tests (round 9):** new file
+`test_backfill_stale_training_due_date_migration.py` — a real-database
+integration test (`db_session`, not a mocked bind) proving the actual
+UPDATE statement, including its expanding `IN`-list bindparam, clears
+`calendar_period`/`rolling`/`certification_period` rows while leaving
+`fixed_date` and legacy (`due_date_type IS NULL`) rows untouched; plus the
+standard mocked-bind unit test for the table-missing guard, in the manner
+of the `email_service` migration's own test.
+
+### TR3-2 — LOW (abuse resistance) — `get_member_requirements_progress`'s pagination bounds the response, not the scan behind it — 🚩 FLAGGED
+
+**Reported by Codex on this PR; confirmed.** See the "Scope addition"
+correction above for the mechanism. `limit`/`offset` on the MCP tool
+genuinely bound the number of `RequirementProgress` rows returned, but not
+the work done to produce them: `get_applicable_requirements` has no page
+bound of its own (mitigated by requirements being naturally few per org),
+and a page containing a CERTIFICATION or BIANNUAL-hours requirement causes
+`_preload_window` to return `None`, preloading the member's entire
+completed-training history rather than a bounded slice.
+
+**Not fixed.** Both characteristics are pre-existing in `TrainingService`
+(the certification case is deliberate — a cert doesn't expire per period,
+so its check has always looked at everything), newly reachable only because
+this pass swept `app/mcp/tools/training.py` into scope for the first time.
+Bounding the certification case without changing its correctness needs a
+service-level redesign of `training_compliance.py`'s date-window logic —
+the same class of fix TR2-4 already flagged for `get_training_dashboard_
+summary`, and not a safe drive-by alongside this pass's other work.
+Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+**Impact:** LOW. Per-member, not org-wide — the ceiling on a single call's
+work is one member's own training history, not the whole department's, and
+every caller is an authenticated MCP principal.
+
+**No regression in any pass-1/pass-2 fix.** Rotation row 17 → see
+`PROGRESS.md`.
+
+## Completion gate (pass 3)
+
+| Check                                             | Result                                            |
+| ------------------------------------------------- | ------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | 0 violations                                      |
+| `black --check app/ tests/ alembic/`              | clean                                             |
+| `isort --check-only app/ tests/ alembic/`         | clean                                             |
+| `python3 scripts/validate_migrations.py --strict` | single head, 414 revisions (no schema change)     |
+| `pytest tests/ -k "training"`                     | 844 passed, 1 skipped (pre-existing)              |
+| `pytest tests/` (full backend suite)              | 10556 passed, 21 skipped (pre-existing), 0 failed |
+| `tsc --noEmit`                                    | 0 errors                                          |
+| `eslint .`                                        | 0 errors                                          |
+
+---
+
+---
+
 ## Scope
 
 This is the training module's first pass through the security-review

@@ -3512,6 +3512,20 @@ class InventoryService:
         )
         items_by_type = {row.item_type.value: row.count for row in type_result.all()}
 
+        # Row count of the non-medical catalog, deliberately unlike the
+        # quantity-summing ``total_items`` above: this is the number a card
+        # linking to /inventory/admin/items shows, and that listing carves
+        # medical stock out with this same predicate. ``_outside_domains``
+        # rather than a category join, so an item nobody has filed yet is
+        # counted here exactly as the listing counts it.
+        non_medical_result = await self.db.execute(
+            select(func.count(InventoryItem.id)).where(
+                *item_filters,
+                self._outside_domains(organization_id, MEDICAL_ITEM_TYPES),
+            )
+        )
+        non_medical_items = non_medical_result.scalar() or 0
+
         # Total value (multiply per-unit value by quantity for accurate totals)
         value_result = await self.db.execute(
             select(
@@ -3563,6 +3577,7 @@ class InventoryService:
             "items_by_status": items_by_status,
             "items_by_condition": items_by_condition,
             "items_by_type": items_by_type,
+            "non_medical_items": non_medical_items,
             "total_value": float(total_value),
             "active_checkouts": effective_checkouts,
             "overdue_checkouts": overdue_checkouts or 0,
@@ -3826,11 +3841,22 @@ class InventoryService:
         }
 
     async def get_members_inventory_summary(
-        self, organization_id: UUID, search: Optional[str] = None
+        self,
+        organization_id: UUID,
+        search: Optional[str] = None,
+        include_user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Return every active member in the organization with counts of their
         permanent assignments, active checkouts, active issuances, and overdue items.
+
+        ``include_user_id`` keeps one named member in the result whatever their
+        status. A departure clearance is created *after* the drop sets the
+        member inactive, so the one person whose outstanding gear the clearance
+        queue is about is precisely the one the active-only filter removes —
+        and the hub's "Review" link then landed on a list they were not in.
+        The named member still has to pass ``search``: a caller who has typed a
+        filter means it.
 
         Uses subquery aggregation to produce the result in a single round-trip.
         """
@@ -3896,8 +3922,14 @@ class InventoryService:
             .outerjoin(overdue_sub, User.id == overdue_sub.c.uid)
             .outerjoin(issue_sub, User.id == issue_sub.c.uid)
             .where(User.organization_id == org_id)
-            .where(User.status == "active")
         )
+
+        if include_user_id:
+            query = query.where(
+                or_(User.status == "active", User.id == str(include_user_id))
+            )
+        else:
+            query = query.where(User.status == "active")
 
         if search:
             pattern = like_pattern(search)

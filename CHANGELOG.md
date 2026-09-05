@@ -7,6 +7,739 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
+
+**Fixed**
+
+- **7 on the rail, 4 on the page, for one locker.** The dashboard's gear widget
+  counted a pool issuance once per _unit_ while `/inventory/my-equipment`
+  counted it once per _row_, so a member holding two assignments plus three
+  pairs of gloves and two shirts saw two different totals for the same gear.
+  The widget now counts entries, matching the page's tile and the `(N)` on its
+  section header — three figures that finally agree. The units are still on the
+  row itself as `Qty: 3`.
+- **The widget's labels now match the page**: "Assigned items" → **Issued to
+  me**, "Checked out" → **Temporary loans**. The widget already merged
+  assignments and issuances into one figure; only its wording still described
+  the split the page dropped. "Overdue" is unchanged.
+
+### Migration comments claimed a table was built at startup when a migration builds it (2026-09-05)
+
+**Fixed**
+
+- **Twenty migrations justified a table-existence guard with a reason that was
+  not true.** They stated that `positions` (and in a handful of cases
+  `security_alerts`, `shifts`, `shift_templates`, `basic_apparatus`,
+  `skill_test_viewers`) is never created by a migration and only appears when
+  the application calls `create_all()` at startup. Each of those tables is in
+  fact created by an earlier migration — `positions` by the one that renames
+  `roles` into it — so the guard they were explaining can never fire. Nothing
+  behaved differently; the comments were wrong, and comments are what the next
+  author copies. This is the same mistaken reasoning that once produced an
+  unnecessary guard which had to be reverted after testing against a real
+  database.
+- **Four migrations that make the same statement were left alone**, because for
+  them it is effectively right: they run _before_ the rename, so the table
+  genuinely is absent and their guard is doing real work. Which case applies
+  depends on position in the migration chain, which is nothing like the order
+  the filenames suggest.
+
+**Added**
+
+- **A test that checks the claim against the chain**, so the next copy fails
+  rather than spreading. It reads each migration's prose, and fails when a
+  table called startup-built is created by a migration the claiming one
+  descends from.
+
+  It recognizes the claim by its shape — a negation, near the word "migration",
+  near a creation verb — rather than from a list of known phrasings. A list was
+  tried first and does not converge: two successive reviews each found a wording
+  it had not anticipated, and each time the check passed while the wrong comment
+  stood. The wordings it has to survive are now pinned by tests, including
+  several invented for the purpose that appear nowhere in the codebase.
+
+### My Issued Gear splits a member's kit down a line they never drew (2026-09-05)
+
+**Changed**
+
+- **"Permanent Assignments" and "Issued Items" are now one section.** The split
+  was the stockroom's, not the member's: an assignment is one serialized unit
+  out of `item_assignments`, an issuance is N units drawn from bulk stock in
+  `item_issuances`, and a member holds both open-endedly with nothing to do
+  differently about either. Both now render in one **Issued to Me** list,
+  sorted by when the gear was received, with each row still showing what its
+  record type actually carries — serial, asset tag and condition for an
+  assignment; quantity and size for an issuance. The four quick-stat tiles
+  collapse to three to match.
+- **Active Temporary Loans stays its own section**, because a due date is the
+  one distinction a member has to act on, and folding it in would have buried
+  the overdue badge.
+- Nothing changed on the wire. The two record types remain separate tables with
+  separate return endpoints, and a row's "Notify quartermaster of return" still
+  posts `return_type: assignment` or `issuance` against the right reference id
+  — pinned by a test per row type, since one merged list makes flattening them
+  onto a single shape an easy mistake to make later. The return buttons also
+  gained per-item accessible names; one list of identically-labelled buttons
+  gave a screen reader nothing to tell the rows apart with.
+- The quartermaster's member view (`/inventory/admin/members`) and the
+  dashboard gear widget are untouched.
+
+### Apparatus: the fleet record becomes officer-only (2026-09-05)
+
+**Changed**
+
+- **Regular members no longer see the Apparatus pages.** `apparatus.view` was
+  seeded to every rank-and-file position, so any member could open the fleet
+  maintenance and compliance record — inspection expirations, out-of-service
+  status, deficiency flags and driver qualifications. The grant is removed from
+  the `member` position and from the shared line-member list behind the
+  Firefighter and EMT ranks and positions. Migration `b6e4a0d17c93` takes it off
+  the rows already stored, including the `apparatus.manage` and `apparatus.*`
+  forms the setup screen's Manage checkbox could have written.
+- Officers, chiefs, administrators and the **Engineer** rank keep it —
+  Engineer is the driver/operator and holds `apparatus.maintenance` beside it.
+  A department that wants members to see the fleet can re-add the grant to its
+  Member position on the positions screen.
+- The Apparatus navigation entry is now gated on the same permissions as the
+  route, so it disappears rather than leading to Access Denied. The lightweight
+  `/apparatus-basic` page, shown when the Apparatus module is off, is
+  unaffected and stays open to everyone.
+
+**Fixed**
+
+- The crew-level **Apparatus Inventory** page (`/inventory/checklists/apparatus-inventory`)
+  filled its apparatus picker from the Apparatus module's roster, which the
+  same members are no longer permitted to read. It now reads the
+  authentication-only scheduling endpoint that already backs the shift board,
+  so recording a used item keeps working.
+
+### `text-right` on a table header did nothing, everywhere (2026-09-05)
+
+**Fixed**
+
+- **108 table headers ignored the alignment they were written with.**
+  `styles/index.css` declared `thead th { text-align: left }` outside any
+  cascade layer, and unlayered CSS outranks every layer — so the `text-right`
+  Tailwind emits into `@layer utilities` was discarded on every one of them. The
+  heading sat hard left while the figures under it sat at the far right of the
+  column, which on a wide table leaves a number a hundred-odd pixels from its own
+  label. It was 71 `text-right` and 37 `text-center` headers across 37 files,
+  every one written by somebody who meant it, and nothing failed: the markup was
+  correct and only the cascade disagreed. Worst affected were the scheduling
+  reports (19), the compliance officer dashboard (13), and the finance, grants
+  and inventory tables.
+- **Only `text-align` moved**, into `@layer base`, where it is still the default
+  for a header that asks for nothing and now yields to one that asks for
+  something. The other five declarations in that rule — colour, size, weight,
+  tracking, casing — stay unlayered on purpose: moving them too would unlock
+  those on every `<th>` in the app, which is a much larger change than this bug.
+  Verified by measurement rather than by reading the diff: across header shapes
+  carrying colour, size and weight utilities, `text-align` changes and
+  `color` / `font-size` / `font-weight` / `text-transform` / `letter-spacing` are
+  byte-identical before and after.
+- Every one of the 37 files was checked for a header that would now disagree with
+  its own column. Four looked like candidates and none were: all are Actions or
+  matrix columns whose cells already align by `flex justify-end` / `justify-center`
+  rather than by `text-align`, so the header now sits over its content instead of
+  away from it.
+- The `th-numeric` escape hatch added for the My Hours table is **removed** —
+  `text-right` works now, and two mechanisms for one job is how the next table
+  ends up half-fixed. `styles/tableHeaderAlignment.test.ts` pins both halves of
+  the split, since jsdom compiles no Tailwind and applies no cascade, so no
+  render can catch this.
+
+### Admin Hours: compliance threshold and duration fixes (2026-09-05)
+
+**Fixed**
+
+- **A profile's at-risk-threshold override of `0` was silently discarded.**
+  Compliance grading fell back to the organization's default threshold
+  instead — a profile configured to grade any shortfall `non_compliant`
+  with no at-risk buffer had that choice ignored.
+- **A DST fall-back could silently shorten a logged shift by up to an
+  hour.** Picking a quick-duration preset (or letting the end time follow a
+  moved start) across the one hour per year that repeats when clocks fall
+  back could submit a shorter entry than the one selected and previewed —
+  e.g. a 2-hour entry recorded as 1 hour.
+- Admin Hours compliance for a quarterly requirement ignored a requested
+  historical year and graded the live quarter instead; it is now skipped
+  for any year other than the current one rather than silently mis-dated.
+  (Superseded the same day — see "lock-order and quarterly-compliance
+  follow-up fixes" below: skipping was itself replaced with an explicit
+  error.)
+
+### Admin Hours: lock-order and quarterly-compliance follow-up fixes (2026-09-05)
+
+**Fixed**
+
+- **API behavior change:** `GET /admin-hours/compliance/{user_id}?year=...`
+  now returns `400 Bad Request` when the requested year is not the current
+  year and the resolved compliance profile has a quarterly requirement,
+  instead of `200 OK` with the quarterly item silently missing from the
+  list. The endpoint's only shipped caller always uses the default (current)
+  year, so this is not expected to affect any in-app flow — but any external
+  caller passing an explicit `year` against a quarterly-graded profile will
+  now get an error instead of a response that looked complete while quietly
+  omitting an item. Passing the current year, or omitting `year` entirely,
+  is unaffected.
+- **Bulk-approving admin hours entries could still deadlock against a
+  concurrent single-entry edit.** The previous fix had `bulk_approve` lock
+  its own batch of entries in sorted order, and had `edit_pending_entry`
+  lock the owning member's `User` row before the entry row — but the two
+  methods didn't share one global lock order. A batch containing two
+  entries for the same member, racing an edit whose locking overlap check
+  reached into the other entry in that batch, could still deadlock (InnoDB
+  aborting one side as a `500`). `bulk_approve` now also locks every
+  affected member's `User` row, in sorted order, before locking any entry
+  row — the same "member rows first, then entry rows, both in a stable
+  order" protocol `edit_pending_entry` already followed.
+
+### My Hours: a career total, and figures under their own headings (2026-09-05)
+
+**Fixed**
+
+- **Every number in the monthly table sat about 170px right of the heading it
+  belonged to.** `frontend/src/styles/index.css` carries a global
+  `thead th { text-align: left }` written outside any cascade layer, and
+  unlayered CSS outranks every layer — so the `text-right` on each `<th>`,
+  which Tailwind emits inside `@layer utilities`, was discarded and the
+  headings stayed hard left over right-aligned figures. A `th-numeric` class in
+  the same unlayered tier now wins on specificity. Roughly 56 `<th>` elements
+  elsewhere in the app are overridden the same way and are deliberately left
+  alone: moving those base table rules into `@layer base` would shift every one
+  of them at once, which is its own reviewable change.
+- **The unlabelled bar column was also making the table wider than it needed
+  to be.** Its `w-1/3` claim inflated all four numeric columns under the
+  default auto layout, spreading four figures across the whole card. The table
+  is `table-fixed` with explicit column widths, and the bar takes what is left.
+
+**Changed**
+
+- **The three cards read this month, this year and all time**, each with
+  hours, shifts and calls, replacing last month / this month / year to date.
+  "Last month" answered a narrower question than the table beneath it already
+  answered month by month, while the one figure the table could never show —
+  what a member has done over their whole time with the department — was not
+  reported anywhere.
+- **The middle card follows the year picker.** Selecting an earlier year
+  retitles it to that year and "Full year", so it cannot claim "this year"
+  over a table showing a different one. The all-time card does not move.
+- **The bar column has a visible heading, "vs. busiest month."** It was an
+  `sr-only` heading over an `aria-hidden` bar, so on screen it read as
+  decoration with nothing saying what it measured. Each bar also carries the
+  hours it represents against the busiest month of the selected year.
+
+**Added**
+
+- **`GET /api/v1/scheduling/my-hours-history` returns `all_time`**, totalled
+  the same way the year is: over the already rounded monthly figures, never
+  over raw minutes, so the all-time card cannot read lower than the year total
+  printed beside it. Purely additive — `previous_month` and every other field
+  are unchanged.
+- Resolving it made the endpoint **cheaper, not dearer**: one unbounded
+  per-month aggregate now answers the selected year, the current and previous
+  month, the earliest year the picker offers and the career total, replacing
+  the year query plus a separate `MIN(shift_date)` scan (plus a third query
+  whenever the current or previous month fell outside the year being viewed).
+
+### The notification Send Log is your own send log (2026-09-05)
+
+**Fixed**
+
+- **The Send Log listed every notification the department had sent anyone.**
+  `GET /notifications/logs` filtered on the organization and nothing else, so
+  the tab showed the subject, body and recipient address of every colleague's
+  notifications to anyone who could open it — a grant that was seeded to the
+  whole department until it was revoked in August. The endpoint now defaults
+  to the caller's own deliveries, and the tab asks for nothing else.
+
+**Changed**
+
+- **The Send Log is offered to every member.** What it shows is now their own
+  delivery history — email as well as in-app, with delivered/failed status —
+  which is their own data on the same footing as their inbox, so it no longer
+  sits behind `notifications.view`.
+
+- **The organization-wide view survives for auditing deliverability**, as an
+  explicit `scope=organization` request on `GET /notifications/logs` and
+  `POST /notifications/logs/read-all`. It requires `notifications.manage`,
+  matching the org-wide "mark all read" it sits beside rather than the
+  read-only permission that let the leak happen. **API note:** `read-all`
+  previously always swept the whole organization and now defaults to the
+  caller; pass `scope=organization` for the old behaviour.
+
+- **"Mark all as read" clears exactly the rows the tab showed**, across both
+  channels, and reconciles the inbox tab and the unread badge with it — the
+  same notification no longer reads as read on one tab and unread on the next.
+
+### The event check-in QR code was scannable before its window opened (2026-09-05)
+
+**Fixed**
+
+- **A greyed-out QR code is still a QR code.** Outside the check-in window,
+  the event QR page rendered the real code at 40% opacity so the page would be
+  "ready" when the window opened. A phone camera reads a code straight through
+  that, so members scanned early, hit a check-in that refuses them, and had
+  nothing on the page explaining why. The code is now withheld entirely until
+  `can_check_in`, and a same-size placeholder holds the space so the layout
+  does not shift when the real code takes over on the next 30-second refresh.
+  The gate is `can_check_in`, not the stricter `is_valid`, because a
+  Flexible/Window event admits a scan up to an hour before its official window
+  — withholding the code there would have blocked a check-in the backend was
+  ready to accept, and `EventSelfCheckInPage` already gates its button on the
+  same field.
+
+- **The check-in window could open without the page noticing for 90 seconds.**
+  `getQRCheckInData` is a cacheable GET, so the 30-second poll on both the QR
+  page and the self-check-in page was answered from the shared client's cache
+  — fresh for 30s, then served stale for a further 60s while revalidating in
+  the background. The whole point of that payload is reporting whether the
+  window is open right now, so it now sets `_skipCache`.
+
+### The dashboard's Administrative hours read "Unavailable", then read the whole department's (2026-09-05)
+
+**Fixed**
+
+- **Administrative hours said "Unavailable" to every ordinary member.**
+  "Unavailable" is a claim the figure is unknown; the figure was simply never
+  fetched. The dashboard gated the admin-hours read on `admin_hours.view`, a
+  permission that exists in the registry and that no default position or rank
+  grants — while every other gate on the same feature is open: `/admin-hours`
+  carries no `ProtectedRoute`, the member-facing sidebar entry carries no
+  permission, and `GET /admin-hours/summary` requires only authentication. So
+  the row sat at "Unavailable" beside a control that navigates to a page the
+  member can in fact open. The read is now unconditional, and a member who has
+  logged no administrative time this month reads `0`.
+
+- **An officer's "My Hours" card totalled the whole department.**
+  `GET /admin-hours/summary` only falls back to the caller's own id for someone
+  _without_ `admin_hours.manage`, and the service applies no user filter when
+  none is supplied — so a manage holder saw every member's administrative hours
+  summed under a card headed "My Hours". Removing the gate above widened this
+  from wildcard holders to every officer, so the request now passes the
+  member's own id explicitly, as the Admin Hours page already did.
+
+- **Everything logged today fell outside the month.** The month-to-date range
+  went as a bare `YYYY-MM-DD`; the endpoint parses that as midnight and filters
+  `clock_in_at <= end_date`, so the current day was excluded entirely, and the
+  start bound cut the month at UTC midnight rather than the department's —
+  pulling the tail of the previous month in for any department west of UTC.
+  Both bounds now go through the same `startOfReportingDayUTC` /
+  `endOfReportingDayUTC` helpers the Admin Hours screens use.
+
+**Changed**
+
+- **The month's hours are stated once.** The dashboard header carried a
+  "N hrs in Month" chip duplicating the total on the hours card directly below
+  it, with none of the per-source split behind it — so a member reading the
+  chip had no way to see which source the figure came from. The card, which
+  carries the same total plus the breakdown and its own failure state, is now
+  the single statement.
+
+### A shift that ran weeks ago still offered its live controls (2026-09-04)
+
+**Fixed**
+
+- **"Reopen for 15 min" was offered on a shift three weeks gone, and it
+  worked.** The shift detail panel showed the late-signup escape hatch to
+  anyone who can seat crew on any past, unfinalized shift, under copy that
+  reads "Reopen it if you are a body short and somebody can still get here" —
+  a sentence about a shift under way. `open_late_signup` had no upper bound on
+  the shift's age either, so taking it was not cosmetic: `create_assignment`
+  passes `window_checked=True` for a non-manager, which deliberately
+  suppresses the day-granular `reject_past` fallback so a reopened overnight
+  shift admits people. The reopened window was therefore the only rule left,
+  and a member could sign themselves onto a shift they had never worked and
+  draw hours for it. A reopening is now refused once the shift's end plus the
+  department's `late_signup_grace_minutes` has passed, and the banner is
+  withdrawn at the same moment.
+
+- **Confirm, decline and remove outlived the shift they belonged to.**
+  `AssignmentActions` decided what to render from the assignment's status and
+  the viewer's permissions alone, with no notion of time, so a member looking
+  at a shift they had worked a fortnight earlier — twelve hours already
+  recorded against it — was still offered a button to decline the assignment
+  those hours hang off, and an officer was still offered Remove beside every
+  name. All three are withdrawn once the roster locks.
+
+- **The lock is now enforced, not just displayed.** Hiding a control is not
+  enforcing a rule: confirm, the assignment PATCH and DELETE, and self-withdraw
+  were all still reachable by a direct request, and withdraw deletes an
+  assignment that hours have already been recorded against. All four now carry
+  the same end-plus-grace bound the client does, with the same
+  `scheduling.manage` exemption, so the two agree. An assigner is bounded here
+  even though the signup window gives them a grace period to seat a late
+  arrival — repairing a roster that is already a record is the administrator's
+  path. Internal callers are unaffected: the bound is opt-in, and the
+  standing-shift release that shares the delete path only ever touches dates
+  still ahead.
+
+- **An empty seat still offered "Assign someone", and the button did
+  nothing.** The crew board's empty-slot branch gated on `isPast` alone, while
+  the form it opens is withdrawn by the officer's own signup deadline — which
+  has necessarily passed by then — so on a same-day shift the control sat there
+  all evening and swallowed every tap.
+
+- **The lock is no longer applied on a grace period nobody has fetched.** The
+  signup window falls back to a built-in sixty minutes until the department's
+  settings arrive, a default chosen to be permissive for a claim button; for a
+  lock it is the reverse, so a department running a longer grace watched
+  controls vanish on a shift the server still accepts, and a failed settings
+  fetch left them gone for the life of the panel. Unknown now means unlocked.
+
+- **Withdraw outlived the lock, beside the hours it would have deleted.** The
+  "You are assigned to this shift" card gated its Withdraw button on `isPast`
+  alone, which is day-granular, so on a shift that ended at seven it stayed
+  offered until midnight — directly beneath the line reporting the twelve
+  hours recorded against that assignment.
+
+- **The reopen banner came back for the one viewer it is not for.** A
+  scheduling admin is exempt from the roster lock and from the signup window,
+  so neither of the banner's own conditions could withhold it, and
+  `memberSignupClosed` rendered it on every old unfinalized shift — offering
+  an admin a reopening they never needed and the newly bounded endpoint now
+  refuses. The exemption is its own gate, as the endpoint's contract already
+  said.
+
+- **A reopening cannot carry a shift past that deadline either.** The bound
+  above refuses a late reopening, but `minutes` accepts up to 720 and
+  `_signup_window_error` treats the later override as authoritative, so a
+  reopening made a second inside the cutoff would have carried an ended shift
+  twelve hours beyond it — leaving the bound as something anyone could step
+  around by being early rather than late. `late_signup_until` is now clamped
+  to the deadline as well as gated by it.
+
+- **An open-ended shift is never locked.** `end_time` is nullable on the
+  model and defaults to `None` on `ShiftCreate`, so a shift without one is
+  open-ended rather than malformed. Standing its start in for the missing end
+  would have locked its roster, and refused its officer's escape hatch, one
+  grace period after it began with the crew still working — a false lock on a
+  live shift, which is worse than no lock on one nothing can bound.
+
+- **The lock is the shift's end, not its date.** A new `rosterLocked` rule
+  counts from `end_time` plus the same grace period the officer's own signup
+  deadline uses, so the two move together when a department changes the
+  setting, and an overnight crew keeps every control through the night — the
+  day-granular `isPast` is true from midnight and would have taken them away
+  mid-shift, which is the same trap `isShiftOpen` is only a fallback for. A
+  scheduling administrator is never locked out: correcting a past roster is
+  the records path, and that is where a change to a shift this old belongs.
+  The lock also covers the seat dropdown beside each name, which is
+  day-granular on its own and would otherwise have stayed live for the rest of
+  the evening on a shift that ended at seven.
+
+### A regular member could open Administration → Reports (2026-09-04)
+
+**Fixed**
+
+- **The rank and file could reach department-wide reporting.** Every gate on
+  the Reports page asks for `reports.view` — the route, both navigation bars
+  and all seven report endpoints — and the permission registry seeds it to no
+  rank-and-file position. The grant was in the stored row. The old onboarding
+  position editor took its checkbox defaults from a "a member views every
+  module whose category is not System" rule rather than from the registry, and
+  saved that over each seeded position on the first Continue. Reports is its
+  own category, so the rule ticked it, and because a member's permissions are
+  the union of their positions' stored lists it became a live grant. Holding
+  it also opened the Administration section itself, so the whole admin area
+  appeared for anyone affected.
+
+- **The same overwrite left other discrepancies, now settled.**
+  `integrations.view`, `medical_supplies.view`, `mobile.view` and
+  `prospective_members.view` are revoked from Member, Firefighter, Engineer and
+  EMT — including the `.manage` and module-wildcard forms, which the setup
+  screen stored instead whenever Manage was ticked and which grant the same
+  access by another name. Engineer additionally loses `positions.view`, `reports.view` and
+  `settings.view`, and its `apparatus.*` wildcard — which carried apparatus
+  management and driver-exception approval — is narrowed to the
+  `apparatus.view` and `apparatus.maintenance` the registry actually seeds for
+  a driver/operator. The overwrite also dropped grants: `storefront.order` is
+  restored to all three and `inventory.check_submit` to Member, so an affected
+  member can submit a store order and an equipment check again.
+
+- **Why the earlier repair missed these rows.** A migration written for this
+  overwrite already held the correct target list per position, but rewrote
+  only a row matching the old rule's output in full. Four migrations edit
+  those same rows before it runs, so a department that onboarded before them
+  was a permission or two off, its row was skipped, and every discrepancy
+  survived. The new migrations remove and restore one permission at a time,
+  which does not depend on the rest of the row.
+
+- **A deliberate grant is removed too, and has to be re-added.** A built-in
+  position stays marked as built-in even after an administrator edits its
+  permissions on the positions screen, so nothing in the stored row separates
+  a grant the old rule wrote from one somebody chose. An attempt to tell them
+  apart — by looking for other grants the rule left behind — turned out to
+  miss any department that had switched those modules off during setup, which
+  left the original problem in place for exactly the smaller departments least
+  likely to notice. Because this grant exposes every member's aggregated
+  hours, training and roster data, it is now removed wherever it is found. A
+  department that deliberately gave its members Reports will need to grant it
+  again on the positions screen; a position the department created itself is
+  not touched at all.
+
+- **New departments no longer create the grant in the first place.** The
+  setup wizard offers an EMT position to every agency type, but the permission
+  registry had no EMT entry, so ticking it built the position from the setup
+  screen's own guesses instead of from the registry — the same guesses that
+  caused all of the above, on a position created fresh today. EMT is now
+  registered alongside Firefighter and Engineer and is set up from the same
+  list its rank already uses. Departments that never had an EMT position are
+  unaffected until they add one.
+
+- **An existing EMT position regains what the setup screen could not say.**
+  The screen only has two checkboxes per module, so an EMT position created
+  through it never received four grants the EMT rank carries: seeing the
+  department's own information, its locations and its meetings, and asking to
+  swap a shift. They are restored on a position holding none of the four, which
+  is the mark of one the screen built — no checkbox in any version of the screen
+  can produce them. A department that took some of the four off keeps that
+  choice: none are put back.
+
+  The first attempt recognized the position by its whole permission list
+  instead, and repaired only one written by the current build — every older one
+  was skipped without a word. That attempt had already shipped, so widening it
+  is a second, follow-up step rather than a correction to the first: an
+  installation that has run the earlier one would never see an edit to it.
+  Departments that never had an EMT position are unaffected throughout.
+
+- **Setting up a position now starts from the registry on either path.** The
+  setup screen's save had two routes: updating a position the system had
+  already created, which filled in from the permission registry, and creating
+  one it had not, which stored only what the screen's own checkboxes could say.
+  The second route is what gave EMT its wrong permissions, and it also loses
+  every grant no checkbox can express. Both routes now start from the registry
+  for a position the system knows.
+
+- **The restored grants are handled the other way round.**
+  `storefront.order` and `inventory.check_submit` are only added back to a row
+  still recognisable as the old rule's output. Granting where it is not wanted
+  would override a department that removed them on purpose, and neither
+  discloses anything, so that direction errs toward leaving the row alone.
+
+### The org chart's link line is for the people who maintain it (2026-09-04)
+
+**Changed**
+
+- **A seat filled from a roster record no longer explains itself to
+  everyone.** Each seat whose holders come from a position or rank carried
+  a "Linked to ..." line naming that record. It answers "why can I not type
+  a name here", which is a question only somebody who can edit the chart
+  asks; for a member looking up the chain of command it is application
+  plumbing they cannot act on. The line is now shown only to people who can
+  manage the chart, in both the diagram and the outline. Who holds a seat is
+  unchanged for every reader.
+
+### A member can see their own hours and calls for the year (2026-09-04)
+
+**Added**
+
+- **My Shifts has a third view, Hours.** It opens on last month, this month
+  and the year to date, then lists every month of the selected year with the
+  shifts worked, hours credited and calls responded to. Until now a member
+  could see the hours on each past shift but had no total for a month or a
+  year, so "how many hours do I have this year?" was a question only an
+  officer with the department-wide report could answer.
+- **`GET /api/v1/scheduling/my-hours-history`** returns that year, month by
+  month, plus the current and previous month. It reports the caller's own
+  attendance and needs no permission beyond being signed in — the
+  department-wide member-hours report, which names every member, stays behind
+  `scheduling.report`.
+- **Credited and pending hours are reported separately.** Hours count once an
+  officer finalizes the shift, which is the rule the department's report
+  already applies, so a member's number and their officer's number agree.
+  Time on a shift still awaiting close-out is shown as its own line rather
+  than folded into the total, so a figure never drops without explanation.
+- **The previous month is reported whatever year is being viewed**, because
+  every January the month that just ended is in the previous year — and it is
+  the figure the card exists to show.
+- The calls column is dropped entirely for a department whose call tracking
+  is off, rather than showing a column of zeros that reads as a broken
+  counter.
+
+### Checklist officers and store managers can open the admin hub (2026-09-04)
+
+**Fixed**
+
+- **The inventory admin hub refused the officers whose consoles it links
+  to.** The page carries cards for the equipment-check console and the
+  department store, and those pages accept grants the hub itself did not —
+  so a checklist officer or a store manager was turned away from the only
+  page that links to the console they run. The hub now admits any of the
+  three, and each card still resolves its own permission, so widening the
+  door did not widen what is behind it.
+- **The checklist console had no way in at all.** Its grant appeared in no
+  navigation entry, so the officer who holds it and nothing else could
+  reach their own console only by typing the address. Inventory Admin now
+  appears for them.
+- **A visit by one of those officers reported the page as broken.** The hub
+  asked for ten sets of inventory figures on every visit regardless of who
+  was looking. For anyone without the inventory grant every one of them was
+  refused, and the page then listed all ten as unavailable — telling an
+  officer the system was failing when it was working as configured. The
+  figures are now requested only for the people they describe.
+- **A viewer no card is open to now gets told so.** Previously that was a
+  heading over blank space, which reads as a page that failed to load.
+
+### A successful edit no longer reads as though it had not happened (2026-09-04)
+
+**Fixed**
+
+- **A response fetched just before an edit could be served as fresh just
+  after it.** The shared API client caches GET responses and evicts a
+  resource's entries whenever a POST/PATCH/DELETE against it succeeds. A GET
+  that was already in flight when the edit landed was not covered by either
+  step: it settled afterwards and wrote the pre-edit body straight back into
+  the cache it had just been cleared from, where it was served as fresh for
+  the next 30 seconds. Saving a change and seeing the old value come back —
+  and an explicit refresh in that window returning data older than the edit —
+  is what that looked like. Cache writes are now versioned against
+  per-resource invalidations as well as against the whole-cache purge on
+  logout, so a response that describes a state the app has already moved past
+  is discarded rather than stored.
+
+### The delivery item picker reaches every match, and keeps your place (2026-09-04)
+
+**Fixed**
+
+- **Searching the medical catalogue could stop returning results after
+  enough "Show more" activations.** The picker asked for a larger page each
+  time rather than the next one, and the endpoint refuses a page size above
+  500 — so a heavily paged search eventually got an error back, cleared every
+  match already on screen, and left "Try again" repeating the request that
+  could not succeed. It now asks for the following page and adds it to the
+  list, and a page that fails no longer discards the ones before it.
+- **Choosing a supply dropped keyboard focus.** Selecting an item replaced
+  the search box with the chosen-item row, and focus fell to the page body,
+  so the next Tab restarted at the top of the delivery dialog instead of
+  carrying on to Qty. Focus now moves to the row's Clear button.
+- **Arrowing through search results could highlight something off-screen.**
+  The results list scrolls after a few rows, and the highlight was not
+  brought into view — so a keyboard user could not see which supply Enter
+  would pick.
+- **A failed page of the supply table left no way back.** When a page
+  request failed, Previous was disabled because it keyed off the last
+  _loaded_ page rather than the requested one, stranding the officer on an
+  empty table with no control that returned to a page that loads. Previous
+  now recovers, and the range above the table reads as a plain page number
+  while it does not describe what is on screen.
+
+### Email settings: Microsoft 365 OAuth submission, and a Cloudflare test that checks the account (2026-09-03)
+
+**Added**
+
+- **Microsoft 365 can now authenticate with an Entra ID app registration
+  instead of an App Password.** Exchange Online is retiring Basic
+  authentication for Client Submission (SMTP AUTH): unchanged through
+  December 2026, disabled by default for existing tenants at the end of it,
+  unavailable to tenants created after, with final removal announced for the
+  second half of 2027. An App Password is Basic auth, so every department on
+  that path has a deadline. Settings → Email and the onboarding step now
+  offer **App registration (OAuth)** alongside **App Password** for Microsoft
+  365, collecting the directory (tenant) ID, application (client) ID and
+  client secret. `app/utils/microsoft_oauth.py` exchanges them for an
+  Exchange Online token through `msal` (already a pinned dependency) and both
+  the sender and Test Connection present it to `smtp.office365.com` over SASL
+  XOAUTH2. The app registration needs the `SMTP.SendAsApp` application
+  permission and `SendAs` on the sending mailbox; the screens say so, and a
+  token Exchange Online refuses is reported as the mailbox grant rather than
+  as bad credentials, because those are fixed in different places.
+
+  **Nothing changes for an existing configuration.** `microsoft_auth_method`
+  is absent on every row written before this, and absent reads as
+  `app_password` on both the backend and the form — the behaviour those rows
+  already have. Selecting Microsoft 365 afresh preselects OAuth; a
+  configuration that already carries an App Password keeps the method it is
+  working with. The App Password option carries a dated notice of the
+  retirement rather than being removed.
+
+  The client secret is encrypted at rest like every other email secret, is
+  redacted to `••••••••` in API responses, and is bound to the app
+  registration it was saved for: changing the tenant, the client ID or the
+  method means a redacted marker resolves to nothing rather than presenting
+  the stored secret to a different application.
+
+**Changed**
+
+- **The Cloudflare connection test now verifies the token against the account
+  it will send from.** It checked `/user/tokens/verify`, which reports a token
+  as valid without saying which accounts it reaches — so a token for one
+  account paired with another account's ID passed, and the failure surfaced
+  later as unexplained send failures. The account-scoped endpoint
+  (`/accounts/{id}/tokens/verify`) is asked first, and its answer is the one
+  reported. A user-owned token can only be verified at the user endpoint;
+  rather than fail every department already sending fine with one, it passes
+  and the message names the account whose access could not be confirmed
+  (`details.account_scope_verified` carries the same fact). A network failure
+  is still reported as a network failure, not as an unconfirmed scope.
+
+- **Every email connection test is now audited, however it ends.** The
+  timeout and executor-exception paths returned before writing
+  `email_settings_tested`, so an attempt that hung against an
+  administrator-supplied mail server, or failed inside the probe, left no
+  trace beside the attempts that completed. The audit record now carries the
+  error class alongside the platform and result.
+
+- **A connection test result is discarded if the form changed while it ran.**
+  A test can take up to 30 seconds with the fields still editable, so a
+  success toast could vouch for a password the administrator had already
+  replaced. Settings → Email now reports that the settings changed and asks
+  for another test instead.
+
+### Inventory Administration follow-ups (2026-09-03)
+
+**Fixed**
+
+- **The Archive button on an apparatus went to the dashboard.** It navigated to
+  `/apparatus/:id/archive` — the _API_ path, which matches no route, so it fell
+  through the router's catch-all and left the apparatus in service with no
+  error. Archiving takes a disposal record (method, date, and buyer details for
+  a sale), so it is now a form posting to `apparatusService.archiveApparatus`.
+  Sale fields are dropped for a truck that was scrapped or donated, rather than
+  filing a buyer nobody can explain later.
+- **An election's linked meeting was a link to nowhere.** There is no meeting
+  detail screen, so naming the meeting cost the reader their place. It is text
+  now; the "(change)" control is unaffected.
+- **The clearance queue's "Review" landed on a list without the member.** A
+  departure clearance is created _after_ the drop has already made the member
+  inactive, and the members list is active-only — so the one person the queue
+  links to was the one it filtered out. `GET /inventory/members-summary` takes
+  an additive `userId` that keeps that member in the result whatever their
+  status, still org-scoped.
+- **"Verify payments" opened every order.** The store's attention row now
+  carries `payment=pending_verification` in its URL and the admin page seeds
+  the Orders tab from it, restoring the filter the old "To verify" tile
+  supplied. A value the tab does not offer is ignored rather than forwarded.
+- **The "All Items" card promised more than its list.** It described every type
+  and its (never-rendered) figure was `total_items`, which sums quantities
+  across every type including medical, while `/inventory/admin/items` excludes
+  medical and reports rows. `GET /inventory/summary` gained an additive,
+  defaulted `non_medical_items` counted with the same predicate the listing
+  uses, and the card now shows it.
+- **The store's old address broke the mobile-coverage check.** `/store/admin`
+  was added as a redirect but never entered in the route-coverage manifest.
+- **Archiving an apparatus would have failed with a 422.** `ApparatusArchive`
+  and `ApparatusStatusChange` were the only apparatus request schemas without
+  `alias_generator=to_camel`, so the camelCase payload the frontend types
+  declare populated none of their fields. Both accept camelCase now, and
+  snake_case still validates, so no existing caller changes.
+- **The equipment-request locator asked for more than the API allows.**
+  `list_equipment_requests` caps `limit` at 200 and the scan requested up to
+  500, so a department with a long queue got a 422 that the `catch` swallowed —
+  precisely the case the scan exists for. It now walks the list in the API's own
+  page size, and reports a failure rather than opening nothing.
+- **A failed maintenance deep-link looked like a retired item.** Only a 404 is
+  silent now; a network, authorization or server failure says so.
+- **`?payment=toString` was accepted as a payment status.** The Orders tab's
+  URL filter checked the label map with `in`, which walks the prototype chain.
+- **The verification link showed orders its own headline had not counted.** The
+  attention queue excludes cancelled orders — cancelling leaves
+  `payment_status` untouched, and a cancelled order cannot be paid — so the
+  Orders tab now excludes them too whenever that payment filter is active, via
+  an additive `exclude_cancelled` on `GET /store/orders`. Narrower than the
+  existing `open_only`, which would also hide a fulfilled order still awaiting
+  verification — money the department is still owed.
+
 ### The gear admin hub is now Inventory Administration (2026-09-03)
 
 **Changed**

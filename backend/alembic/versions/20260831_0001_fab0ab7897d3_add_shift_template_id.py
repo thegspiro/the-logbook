@@ -12,12 +12,15 @@ Existing shifts therefore carry NULL and fall back to apparatus-based checklist
 resolution, which is exactly the behaviour they have today, so nothing changes
 for them.
 
-``shifts`` is one of the tables no migration creates — startup ``create_all``
-builds it, and CI runs ``alembic upgrade head`` against an empty database
-before anything calls that (CLAUDE.md pitfall #26). Reflecting it unguarded
-raises NoSuchTableError and kills the whole upgrade rather than this one step.
-Skipping is correct rather than merely safe: a table create_all builds later is
-built from the models, which already declare this column.
+Guarded on the table existing, defensively rather than out of necessity:
+``shifts`` IS created by the migration chain — 20260122_0015 creates it
+outright, which makes that a required ancestor of this revision, so the table
+is present by the time this runs. An earlier version of this paragraph claimed
+the opposite, which is the false positive CLAUDE.md pitfall #26 records being
+reverted after an empirical ``alembic upgrade head`` against an empty database.
+The guard is kept because it costs one reflection and cannot be wrong, but it
+is not load-bearing, and it is not the pattern to copy for a genuinely
+create_all-only table.
 
 Revision ID: 20260831_0001
 Revises: 20260830_0002

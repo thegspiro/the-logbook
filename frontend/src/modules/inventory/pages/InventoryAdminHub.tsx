@@ -17,7 +17,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { RefreshCw, UserPlus, Sparkles, ArrowRight, AlertTriangle } from 'lucide-react';
+import { RefreshCw, UserPlus, Sparkles, ArrowRight, AlertTriangle, Package } from 'lucide-react';
+import { EmptyState } from '../../../components/ux';
 import { inventoryService } from '../../../services/api';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
@@ -240,10 +241,18 @@ const TABS: AdminHubTab<AdminTab>[] = [
   { id: 'settings', label: 'Settings' },
 ];
 
+/** For the administrators this page admits who cannot edit inventory metrics. */
+const OVERVIEW_ONLY_TABS: AdminHubTab<AdminTab>[] = [{ id: 'overview', label: 'Overview' }];
+
 export const InventoryAdminHub: React.FC = () => {
   const checkPermission = useAuthStore((s) => s.checkPermission);
   const canManage = checkPermission('inventory.manage');
-  const { isModuleOn } = useEnabledModules();
+  // `isLoading` as well as the answer: `isModuleOn` reports every module on
+  // while the lookup is in flight. That default is right for a nav bar, which
+  // must not flicker its rows, and wrong here -- it puts the store cards on
+  // screen for the width of that request, suppresses the empty state that
+  // should have shown instead, and offers links the storefront route refuses.
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const tz = useTimezone();
 
   // Every card resolves its own gate here rather than inheriting the page's.
@@ -254,16 +263,27 @@ export const InventoryAdminHub: React.FC = () => {
   // is the grant everyone reaching this page holds.
   const visibleCards = useMemo(
     () =>
-      INVENTORY_HUB_CARDS.filter((card) => {
-        if (card.requiresModule && !isModuleOn(card.requiresModule)) return false;
-        if (card.anyPermission) return card.anyPermission.some((permission) => checkPermission(permission));
-        return card.permission ? checkPermission(card.permission) : true;
-      }),
-    [checkPermission, isModuleOn]
+      // Nothing until the module flags are known -- see the hook comment above.
+      // This also keeps `showsMedical` false for that window, so the EMS
+      // request is raised once against the settled answer rather than twice.
+      modulesLoading
+        ? []
+        : INVENTORY_HUB_CARDS.filter((card) => {
+            if (card.requiresModule && !isModuleOn(card.requiresModule)) return false;
+            if (card.anyPermission) return card.anyPermission.some((permission) => checkPermission(permission));
+            return card.permission ? checkPermission(card.permission) : true;
+          }),
+    [checkPermission, isModuleOn, modulesLoading]
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
-  const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
+  // Settings edits the inventory headline metrics; both its read and its write
+  // require `inventory.manage`. Offering the tab to a checklist officer or a
+  // store manager gives them a panel that reports itself unavailable and can
+  // never save, and `?tab=settings` reaches it whether or not the tab is drawn
+  // -- so the URL is refused here too, not just the control hidden.
+  const activeTab: AdminTab = tabParam === 'settings' && canManage ? 'settings' : 'overview';
+  const tabs = canManage ? TABS : OVERVIEW_ONLY_TABS;
   // Bumped when the settings tab saves, so the metrics row above it reflects
   // the new selection without a page reload.
   const [frameToken, setFrameToken] = useState(0);
@@ -288,40 +308,57 @@ export const InventoryAdminHub: React.FC = () => {
   const loadSummary = useCallback(async () => {
     setLoading(true);
 
-    // Medical stock is its own module with its own grant, so it is fetched
-    // apart from the batch below and only when the card that shows the number
-    // is on screen — folding it in would spend a 403 on every department that
-    // runs no EMS supply line. The count is what expires soon rather than what
-    // is on the shelf: that is the number an EMS officer opens the page for,
-    // and it is what /medical-supplies itself leads with.
-    if (showsMedical) {
-      void medicalSuppliesService
-        .getSummary()
-        .then((medical) => setMedicalExpiring(medical.expiring_soon))
-        // A missing figure leaves the card without its stat rather than
-        // taking the hub down; the card still works as a door.
-        .catch(() => setMedicalExpiring(null));
-    } else {
-      setMedicalExpiring(null);
-    }
+    // Medical stock is its own module with its own grant, so it is requested
+    // separately, and only when the card that shows the number is on screen —
+    // folding it into the tuple below would spend a 403 on every department
+    // that runs no EMS supply line. The count is what expires soon rather than
+    // what is on the shelf: that is the number an EMS officer opens the page
+    // for, and it is what /medical-supplies itself leads with.
+    //
+    // It is settled alongside the batch and reports into the same
+    // `failedSources` banner. Swallowing its rejection would show the card
+    // without a stat, which is indistinguishable from a department that has
+    // nothing expiring — and would leave no Retry for the one request the
+    // banner could not mention.
+    const medicalRequest = showsMedical ? medicalSuppliesService.getSummary() : null;
 
-    const sources = [
-      ['summary', inventoryService.getSummary()],
-      ['low stock', inventoryService.getLowStockItems()],
-      ['returns', inventoryService.getReturnRequests({ status: 'pending' })],
-      ['gear requests', inventoryService.getEquipmentRequests({ status: 'pending' })],
-      ['setup', inventoryService.getSetupStatus()],
-      ['temporary loans', inventoryService.getOverdueCheckouts()],
-      ['maintenance', inventoryService.getMaintenanceDueItems(30)],
-      ['write-offs', inventoryService.getWriteOffRequests({ status: 'pending' })],
-      ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
-      ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
-    ] as const;
-    const results = await Promise.allSettled(sources.map(([, promise]) => promise));
-    const failed = results.flatMap((result, index) => {
+    // Only for the inventory grant. This page also admits a checklist officer
+    // and a store manager -- they come for their own card -- and every one of
+    // these ten endpoints requires an inventory grant they do not hold. Firing
+    // them anyway spends ten 403s on every visit and names all ten in the
+    // "some figures are unavailable" banner, which tells an officer the system
+    // is broken when it is working exactly as configured. The figures these
+    // fill are inventory figures; there is nothing for them to say to someone
+    // who administers neither.
+    const sources: readonly (readonly [string, Promise<unknown>])[] = canManage
+      ? [
+          ['summary', inventoryService.getSummary()],
+          ['low stock', inventoryService.getLowStockItems()],
+          ['returns', inventoryService.getReturnRequests({ status: 'pending' })],
+          ['gear requests', inventoryService.getEquipmentRequests({ status: 'pending' })],
+          ['setup', inventoryService.getSetupStatus()],
+          ['temporary loans', inventoryService.getOverdueCheckouts()],
+          ['maintenance', inventoryService.getMaintenanceDueItems(30)],
+          ['write-offs', inventoryService.getWriteOffRequests({ status: 'pending' })],
+          ['purchase deliveries', inventoryService.getReorderRequests({ status: 'ordered' })],
+          ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
+        ]
+      : [];
+    const [results, medicalSettled] = await Promise.all([
+      Promise.allSettled(sources.map(([, promise]) => promise)),
+      Promise.allSettled(medicalRequest ? [medicalRequest] : []),
+    ]);
+    // Widened from the `as const` tuple's literal union: the medical request is
+    // not one of its members, and it reports into the same banner.
+    const failed: string[] = results.flatMap((result, index) => {
       const source = sources[index];
       return result.status === 'rejected' && source ? [source[0]] : [];
     });
+
+    const medicalResult = medicalSettled[0];
+    if (medicalResult?.status === 'rejected') failed.push('EMS supplies');
+    setMedicalExpiring(medicalResult?.status === 'fulfilled' ? medicalResult.value.expiring_soon : null);
+
     setFailedSources(failed);
     const value = <T,>(index: number, fallback: T): T => {
       const result = results[index];
@@ -456,11 +493,15 @@ export const InventoryAdminHub: React.FC = () => {
     ];
     setAttentionRows(rows.sort((a, b) => a.rank - b.rank || a.when.localeCompare(b.when)));
     setLoading(false);
-  }, [tz, showsMedical]);
+  }, [tz, showsMedical, canManage]);
 
   useEffect(() => {
+    // Waits for the module answer too: `showsMedical` is derived from the card
+    // list, so firing before it settles spends one request set on a guess and
+    // a second on the truth.
+    if (modulesLoading) return;
     void loadSummary();
-  }, [loadSummary]);
+  }, [loadSummary, modulesLoading]);
 
   const actions: AdminHubAction[] = [
     {
@@ -480,7 +521,13 @@ export const InventoryAdminHub: React.FC = () => {
     'supply-ppe': { stat: summary?.items_by_type?.ppe, statLabel: 'items' },
     'supply-uniform': { stat: summary?.items_by_type?.uniform, statLabel: 'items' },
     'supply-medical': { stat: medicalExpiring ?? undefined, statLabel: 'expiring soon' },
-    items: { stat: summary?.total_items, statLabel: 'total' },
+    // A badge, not a `stat`: NavCard renders only the former, so the `stat`
+    // this entry used to carry was never on screen at all. And
+    // non_medical_items rather than total_items, because the latter sums
+    // quantities across every type including medical while this card opens a
+    // row listing that excludes it — a headline of 150 over a list of 127
+    // reads as a bug in the list.
+    items: { badge: summary?.non_medical_items },
     checkouts: {
       badge: summary?.overdue_checkouts,
       badgeColor: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
@@ -516,6 +563,7 @@ export const InventoryAdminHub: React.FC = () => {
   return (
     <AdminHubFrame<AdminTab>
       moduleKey="inventory"
+      summary={canManage}
       title="Inventory Administration"
       description="Gear, uniforms and EMS supplies — stock, issuance, and what needs a decision today"
       actions={actions}
@@ -529,7 +577,7 @@ export const InventoryAdminHub: React.FC = () => {
             }
           : undefined
       }
-      tabs={TABS}
+      tabs={tabs}
       activeTab={activeTab}
       onTabChange={(tab) => setSearchParams(tab === 'overview' ? {} : { tab })}
       refreshToken={frameToken}
@@ -546,12 +594,37 @@ export const InventoryAdminHub: React.FC = () => {
         </div>
       ) : (
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-          <NeedsAttention
-            rows={attentionRows}
-            loading={loading}
-            failedSources={failedSources}
-            onRetry={() => void loadSummary()}
-          />
+          {/* Only for the viewer it describes. Its empty state reads "Nothing
+              needs attention. All inventory work is up to date." -- a claim
+              about inventory nobody asked the server about, since the batch
+              behind it is raised only for `inventory.manage`. Shown to a store
+              manager it sat directly above "Nothing here for your role",
+              telling them in consecutive lines that everything is fine and
+              that none of it is theirs. */}
+          {canManage ? (
+            <NeedsAttention
+              rows={attentionRows}
+              loading={loading}
+              failedSources={failedSources}
+              onRetry={() => void loadSummary()}
+            />
+          ) : (
+            // The queue is gone for this viewer, and it was the only thing
+            // rendering `failedSources`. The EMS request is raised off the card
+            // being visible rather than off `inventory.manage`, so a checklist
+            // or store administrator holding the medical grant still makes it
+            // -- and a rejection would have vanished silently, leaving the card
+            // with no figure and nothing to say why. They are entitled to the
+            // number, so they are entitled to know it did not arrive.
+            failedSources.length > 0 && (
+              <div className="alert-warning mb-8 flex items-center gap-2 text-sm" role="alert">
+                <span className="flex-1">Some figures on this page did not load ({failedSources.join(', ')}).</span>
+                <button type="button" className="font-semibold underline" onClick={() => void loadSummary()}>
+                  Retry
+                </button>
+              </div>
+            )
+          )}
           {/* Setup prompt — shown until rooms, storage, categories, and items all exist.
             Without it a new quartermaster meets the item form first and fills in
             three dropdowns that have nothing in them. */}
@@ -580,6 +653,22 @@ export const InventoryAdminHub: React.FC = () => {
               </div>
               <ArrowRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
             </Link>
+          )}
+
+          {/* Every card gated away. Reachable now that the hub admits three
+              different administrators: a store manager whose department has
+              Storefront switched off holds a grant this route accepts and none
+              that opens a card behind it. The header and an empty page read as
+              a failure to load -- which is what a Retry in the banner above
+              invites them to sit through -- so say plainly that there is
+              nothing here for them rather than showing a page that looks
+              broken. */}
+          {!modulesLoading && supplyLines.length === 0 && bodySections.length === 0 && (
+            <EmptyState
+              icon={Package}
+              title="Nothing here for your role"
+              description="Your permissions do not open any of this page's tools, or the modules they belong to are switched off for your department. An administrator can review this under Settings → Modules."
+            />
           )}
 
           {/* Supply lines — the three stock lines a department staffs.

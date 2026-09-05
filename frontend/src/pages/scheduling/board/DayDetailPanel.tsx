@@ -10,7 +10,13 @@ import React from 'react';
 import { ArrowLeftRight, CalendarDays, Info, Repeat } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
 import type { SwapRequest } from '../../../types/scheduling';
-import { isShiftOpen, shiftCrewName, shiftPeriodLetter, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
+import {
+  isShiftClaimable,
+  shiftCrewName,
+  shiftPeriodLetter,
+  toDateKey,
+} from '../../../modules/scheduling/utils/shiftBoard';
+import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
 import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
 import ShiftSeatList from './ShiftSeatList';
 
@@ -65,6 +71,7 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
   onCancelOffer,
   onViewShift,
 }) => {
+  const signupWindow = useSignupWindow();
   // A calendar day belongs to no timezone: pushing one through a
   // timezone-aware formatter renders "Aug 26" as "Aug 25" for any viewer west
   // of the department, so the panel and the cell that opened it disagree.
@@ -165,7 +172,7 @@ export const DayDetailPanel: React.FC<DayDetailPanelProps> = ({
                       see before agreeing to it. Hidden on a shift nobody can
                       sign up for, where it would only lead to an empty
                       preview. */}
-                  {isShiftOpen(shift) && (
+                  {isShiftClaimable(shift, signupWindow) && (
                     <button
                       type="button"
                       onClick={() => onOpenStanding(shift)}

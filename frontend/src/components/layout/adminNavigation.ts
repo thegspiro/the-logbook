@@ -5,6 +5,11 @@ export const ADMIN_NAVIGATION_PERMISSIONS = [
   'events.manage',
   'training.manage',
   'inventory.manage',
+  // The equipment-check console is administered from inside the Inventory
+  // Administration hub and this is the grant that runs it. Without it here the
+  // section never renders, so the officer's row inside it is never built --
+  // a child gate cannot admit anyone its parent has already turned away.
+  'inventory.check_manage',
   'storefront.manage',
   'admin_hours.manage',
   'medical_screening.view',

@@ -148,6 +148,21 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
     view: ['members', 'apparatus', 'storefront', 'positions'],
     manage: [],
   },
+  emt: {
+    view: [
+      'members',
+      'events',
+      'documents',
+      'forms',
+      'training',
+      'inventory',
+      'scheduling',
+      'storefront',
+      'elections',
+      'minutes',
+    ],
+    manage: [],
+  },
   engineer: {
     view: [
       'members',
@@ -215,7 +230,6 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'training',
       'inventory',
       'scheduling',
-      'apparatus',
       'storefront',
       'elections',
       'minutes',
@@ -310,7 +324,6 @@ export const SEEDED_POSITION_GRANTS: Readonly<Record<string, SeededPositionGrant
       'training',
       'inventory',
       'scheduling',
-      'apparatus',
       'storefront',
       'elections',
       'minutes',

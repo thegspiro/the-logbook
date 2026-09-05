@@ -16,6 +16,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
+import { memberSignupClosedReason, rosterLocked, signupClosedReason } from '../../modules/scheduling/utils/shiftBoard';
+import { useSignupWindow } from '../../modules/scheduling/hooks/useSignupWindow';
 import {
   X,
   Users,
@@ -85,6 +87,15 @@ interface ShiftDetailPanelProps {
   onRefresh?: () => void;
 }
 
+/**
+ * How long an officer may reopen signup for, in one tap.
+ *
+ * Short by design: this is the crew that turned up one short, not a way to
+ * leave a shift open all evening. Anything longer is records work, which a
+ * scheduling admin does without an override.
+ */
+const LATE_SIGNUP_MINUTES = [15, 30, 60] as const;
+
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initialShift, onClose, onRefresh }) => {
   // Mounted only while open. Takes the mobile bottom bar off the drawer, whose
   // full-height panel otherwise runs behind it.
@@ -93,6 +104,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const navigate = useNavigate();
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
+  const signupWindow = useSignupWindow();
   const canManage = checkPermission('scheduling.manage');
   const {
     apparatus: apparatusList,
@@ -103,6 +115,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     requireEndOfShiftChecks,
     callTrackingMode,
     loadSettings,
+    settingsLoaded,
   } = useSchedulingStore();
   useEffect(() => {
     void loadSettings();
@@ -173,6 +186,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     loadingMembers: false,
     bulkAssigning: false,
     assigningRoster: false,
+    lateSignup: false,
   });
   const setPendingFlag = useCallback(
     (key: keyof typeof pending, value: boolean) => setPending((prev) => ({ ...prev, [key]: value })),
@@ -393,8 +407,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       schedulingService.getUnavailableMembers(shift.id),
     ]);
     setAssignments(assignData);
-    setShift(shiftData);
-    setPlatoonRoster(shiftData.platoon_roster ?? []);
+    // Keep the shift we already have if the refetch comes back empty — a
+    // deleted shift, or an error shape the client cannot read. Assigning it
+    // blindly put `null` into state and took the whole panel down on the next
+    // render, which is a worse answer than briefly stale times.
+    if (shiftData) {
+      setShift(shiftData);
+      setPlatoonRoster(shiftData.platoon_roster ?? []);
+    }
     setUnavailableIds(new Set(unavailable));
   };
 
@@ -465,6 +485,43 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       );
     } finally {
       setPendingFlag('signingUp', false);
+    }
+  };
+
+  const handleOpenLateSignup = async (minutes: number) => {
+    if (pending.lateSignup) return;
+    setPendingFlag('lateSignup', true);
+    try {
+      await schedulingService.openLateSignup(shift.id, minutes);
+      toast.success('Signup reopened — members can claim a seat again');
+      // Re-fetch through the panel's own loader, not just `onRefresh`: that
+      // callback bumps the *board's* refresh key, while this panel renders its
+      // own `shift` state. Without this the toast said signup was reopened and
+      // the banner carried on saying it was closed until the drawer was
+      // reopened. `getShift` also recomputes the actor-relative
+      // `signup_closed_reason`, so the panel reads the server's answer rather
+      // than trusting the mutation response (pitfall #11).
+      await refreshAssignments();
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to reopen signup'));
+    } finally {
+      setPendingFlag('lateSignup', false);
+    }
+  };
+
+  const handleCloseLateSignup = async () => {
+    if (pending.lateSignup) return;
+    setPendingFlag('lateSignup', true);
+    try {
+      await schedulingService.closeLateSignup(shift.id);
+      toast.success('Late signup closed');
+      await refreshAssignments();
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to close late signup'));
+    } finally {
+      setPendingFlag('lateSignup', false);
     }
   };
 
@@ -805,6 +862,34 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
 
+  // Whether *this viewer* may still be seated. The server computes it for the
+  // caller's own permissions on the detail fetch — including the shift-officer
+  // case, which the client cannot resolve — so prefer its answer and fall back
+  // to the local actor-aware rule, which covers the org-wide permissions.
+  const memberSignupClosed = memberSignupClosedReason(shift, signupWindow);
+  const viewerSignupClosed =
+    shift.signup_closed_reason ?? signupClosedReason(shift, signupWindow, { canAssign, canManage });
+  // Officers keep their own controls until *their* deadline, not the member's:
+  // the grace period exists precisely so an officer can seat somebody after
+  // the crew has gone out. Past it, `create_assignment` refuses them too, so
+  // leaving the form enabled only makes them fill it in to earn an error.
+  const canAssignNow = canAssign && viewerSignupClosed === null;
+  const lateSignupOpen = shift.late_signup_until != null && Date.parse(shift.late_signup_until) > Date.now();
+  // Past the shift's end plus the grace period the roster is a record, and its
+  // live controls stop applying — see `rosterLocked`. Deliberately not
+  // `isPast`: that is day-granular and true from midnight, which would take an
+  // overnight crew's controls away mid-shift.
+  //
+  // Never locked on a grace period that has not been fetched. `useSignupWindow`
+  // returns the built-in 60 minutes until the department's settings land, and
+  // that default is chosen to be permissive for a *claim* button — for a lock
+  // it is the opposite, so a department running a four-hour grace would watch
+  // its controls vanish on a shift the server still accepts, and a failed
+  // settings fetch would leave them gone for the life of the panel. Unknown
+  // means unlocked, which is the stance the rest of the signup rules take, and
+  // the server refuses either way.
+  const isRosterLocked = settingsLoaded && rosterLocked(shift, signupWindow, { canAssign, canManage });
+
   /**
    * Has the shift begun? Nobody can be present for a shift eight days out, so
    * "0/2 present" on one read as an alarm rather than as a fact not yet
@@ -933,7 +1018,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               onSave={(id, newPos, curPos) => {
                 void handlePositionChange(id, newPos, curPos);
               }}
-              editable={canAssign && !isPast}
+              editable={canAssign && !isPast && !isRosterLocked}
               updatingPosition={pending.updatingPosition}
             />
             {assignment.is_training && (
@@ -956,6 +1041,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             effectiveStatus={assignment.status || 'assigned'}
             isCurrentUser={isCurrentUser || false}
             canAssign={canAssign}
+            locked={isRosterLocked}
             onConfirm={(id) => {
               void handleConfirm(id);
             }}
@@ -1884,6 +1970,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                     currentUserId={user?.id}
                     canAssign={canAssign}
                     isPast={isPast}
+                    rosterLocked={isRosterLocked}
                     isUserAssigned={isUserAssigned}
                     canSignUp={canSignUpFor(position)}
                     positionOptions={positionOptions}
@@ -1941,7 +2028,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                 <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
                   <Users className="h-4 w-4" /> Crew Roster
                 </h3>
-                {canAssign && !isPast && (
+                {canAssignNow && !isPast && (
                   <button
                     onClick={() => setShowAssignForm(!showAssignForm)}
                     className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
@@ -1972,7 +2059,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           )}
 
           {/* Admin Assign Form — with member search dropdown */}
-          {canAssign && (showAssignForm || showBulkAssign || (hasApparatusPositions && !isPast)) && (
+          {canAssignNow && (showAssignForm || showBulkAssign || (hasApparatusPositions && !isPast)) && (
             <>
               {!showAssignForm && !showBulkAssign && hasApparatusPositions && (
                 <div className="flex items-center gap-2">
@@ -2209,8 +2296,85 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
             </>
           )}
 
+          {/* Leadership's escape hatch once the department's cutoff has passed.
+              Offered only to somebody who can seat crew, and only when there
+              is something to reopen — a scheduling admin is never bound by the
+              window, so they have nothing to open. That exemption has to be
+              its own gate: `rosterLocked` returns false for an admin and
+              `memberSignupClosed` is non-null on any old shift, so without
+              `!canManage` the banner reappeared for exactly the viewer the
+              comment says it is not for, and the bounded endpoint refused the
+              click.
+
+              Withdrawn once the roster locks. "Reopen it if you are a body
+              short and somebody can still get here" is a sentence about a
+              shift under way; on one that ran three weeks ago it offered to
+              admit a member to a crew that has long since gone home, and the
+              server used to let it. */}
+          {canAssign &&
+            !canManage &&
+            !isCancelled &&
+            !shift.is_finalized &&
+            !isRosterLocked &&
+            (lateSignupOpen || viewerSignupClosed || memberSignupClosed) && (
+              <div className={lateSignupOpen ? 'alert-warning' : 'alert-info'}>
+                {lateSignupOpen ? (
+                  <>
+                    <p className="text-theme-text-primary text-sm font-bold">
+                      Late signup is open until {formatTime(shift.late_signup_until ?? undefined, tz)}
+                    </p>
+                    <p className="text-theme-text-secondary mt-0.5 text-xs">
+                      Members can claim a seat on this shift until then, and so can you.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={pending.lateSignup}
+                      onClick={() => {
+                        void handleCloseLateSignup();
+                      }}
+                      className="btn-secondary btn-sm mt-2.5 rounded-lg px-3 font-semibold"
+                    >
+                      Close it now
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-theme-text-primary text-sm font-bold">Signup is closed for this shift</p>
+                    <p className="text-theme-text-secondary mt-0.5 text-xs">
+                      {viewerSignupClosed ?? memberSignupClosed} Reopen it if you are a body short and somebody can
+                      still get here.
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      {LATE_SIGNUP_MINUTES.map((minutes) => (
+                        <button
+                          key={minutes}
+                          type="button"
+                          disabled={pending.lateSignup}
+                          onClick={() => {
+                            void handleOpenLateSignup(minutes);
+                          }}
+                          className="btn-secondary btn-sm rounded-lg px-3 font-semibold"
+                        >
+                          Reopen for {minutes} min
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+          {/* Signup closed and nothing this member can do about it. Named
+              rather than left as a missing block — a panel that silently drops
+              its only action reads as a broken page. */}
+          {!canAssign && !hasApparatusPositions && !isPast && !isUserAssigned && memberSignupClosed && (
+            <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
+              {memberSignupClosed} Ask a duty officer to add you.
+            </p>
+          )}
+
           {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
-          {!hasApparatusPositions && !isPast && !isUserAssigned && !eligibilityLoading && (
+          {!hasApparatusPositions && !isPast && !isUserAssigned && !eligibilityLoading && !memberSignupClosed && (
             <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
               <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
                 <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this shift
@@ -2260,7 +2424,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                   <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
                 </div>
-                {!isPast && !shift.is_finalized && (
+                {/* `isPast` alone is day-granular, so on a shift that ended at
+                    seven this stayed offered until midnight — beside the very
+                    line reporting the hours it would have deleted. */}
+                {!isPast && !isRosterLocked && !shift.is_finalized && (
                   <button
                     onClick={() => {
                       void handleWithdraw();
@@ -2371,7 +2538,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                             label: 'Available',
                             cls: 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border',
                           };
-                  const canFillIn = entry.status === 'available' && canAssign && !shift.is_finalized;
+                  const canFillIn = entry.status === 'available' && canAssignNow && !shift.is_finalized;
                   return (
                     <div
                       key={entry.user_id}

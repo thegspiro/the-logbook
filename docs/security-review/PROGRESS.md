@@ -16,18 +16,748 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**[#2203](https://github.com/thegspiro/the-logbook/pull/2203)** (branch
-`claude/security-review-equipment-check-shifts`) — Feature 14, Equipment
-check & shifts, pass 3, plus Step 0 bookkeeping for PR #2200's merge. No
-fixes, no findings — every pass-1/2 fix re-verified intact, ten new routes
-(the module's move from Scheduling to Inventory, catalog linking, bulk
-item add/delete, compartment replace/clone/reorder, sealed-container
-support) read in full and confirmed correctly org-scoped and gated. Three
-new tables' migrations checked, no Pitfall #2 exposure. Full completion
-gate green. Rotation row 14 → ⏳ awaiting PR merge. Next: 15 Scheduling,
-once this PR merges.
+**Feature 21 (Admin hours), pass 3** — branch
+`claude/security-review-admin-hours-pass3`,
+[PR #2247](https://github.com/thegspiro/the-logbook/pull/2247). Originally
+opened claiming 0 fixes/0 flagged; a Codex review round on the PR disputed
+that on all 6 points raised, all 6 verified real and fixed (unlocked
+overlap/entry-mutation races, a falsy-zero threshold-override bug, a
+quarterly-compliance year bug, and a DST fold duration bug in the pass's own
+new `entryTimes.ts`) — see `docs/security-review/AH-21-admin-hours.md` →
+Pass 3's correction notice.
 
 ---
+
+### 2026-09-05 — Feature 21 (Admin hours), pass 3 — 0 fixes, 0 flagged
+
+No security-review PR was open, so the rotation continued directly to
+feature 21 per the pass order. Scoped against the current code rather than a
+diff against pass 2's merge commit (this repo's git history required an
+unshallow fetch mid-pass; the doc records why a hash-based diff wasn't used).
+Of the four backend files, only `admin_hours_service.py` changed since pass
+2, and by exactly one commit (`eb9c2f957`, confirmed via `git log --follow`):
+an unrelated, already-correct fix for a `Decimal`/`float` `TypeError` in
+`get_user_hours_compliance`'s percentage calculation — the AH-7 org-scoping
+filter it sits inside is untouched, re-verified at its current line.
+
+**Extended scope to a change outside this rotation that this iteration's own
+declared scope required checking:** `Dashboard.tsx` (one of pass 2's 6 listed
+outside consumers) went through two merged PRs (#2233, #2236) since pass 2 —
+removing a client-side permission gate that didn't match the actual
+`admin_hours.manage`-only backend semantics, then a same-day Codex-reviewed
+follow-up fixing an unscoped summary read (an officer's card totaled the
+whole department) and bare-date bounds (today's entries fell outside the
+month). Both re-verified fixed and correct at the current code — no action
+needed, but recorded here because this exact gap (an outside consumer
+changing between passes) is precisely what a feature's declared scope exists
+to catch.
+
+Re-ran the route inventory from scratch: 27/27, unchanged, every route
+gated. Freshly swept every `select(...)` call site (~65) for a missing
+`organization_id` filter: none found. All 8 pass-1 fixes (AH-7–AH-14) and all
+4 pass-2 fixes (AH21-1–AH21-4) re-verified intact by reading the current
+code. Three new frontend files this pass (`utils/entryTimes.ts`,
+`components/QuickDurationButtons.tsx`, `utils/reportingRange.ts`) are pure
+client-side form/date-math helpers with no network call, swept clean for the
+standing pitfalls. Both open product-decision items (per-org SoD toggle;
+`credit_event_attendance`'s resync-can-grow-a-decided-entry gap) re-read
+against the current code — unchanged, still deliberate, still mirrored in
+`docs/KNOWN_LIMITATIONS.md`.
+
+Full local completion gate green: flake8/black/isort clean (isort 9.0.1,
+CI's pinned version), `validate_migrations.py --strict` 422 revisions/single
+head, 72/72 admin_hours-scoped and 10876/10876 full backend suite pass,
+`tsc --noEmit` 0 errors, `eslint .` 0 errors/0 warnings, `vitest run` 88/88
+(admin-hours module) + 151/151 (adjacent consumers). No code changes this
+pass — everything that changed since pass 2 was independently verified
+already correct. Findings doc: `docs/security-review/AH-21-admin-hours.md` →
+Pass 3. Next: 22 Grants & fundraising, once this PR merges.
+
+---
+
+### 2026-09-05 — Feature 20 (Compliance) ✅ closed — PR #2245 merged
+
+**PR #2245 merged cleanly** (merge commit `062464a`, head `d7f37d6`). Pass 3
+found 0 fixes, 0 flagged — the only compliance-adjacent file that changed
+since pass 2 (`ComplianceRequirementsConfigPage.tsx`) had already been fixed
+correctly by an unrelated commit, re-verified rather than re-fixed. No
+review findings arrived on the PR itself. Rotation row 20 → ✅. Next: 21
+Admin hours.
+
+---
+
+### 2026-09-05 — Feature 20 (Compliance), pass 3 — 0 fixes, 0 flagged
+
+Picked up after a watchdog check found the rotation's bookkeeping commit
+("start Feature 20 pass 3") sitting idle for ~5 hours with no findings work
+and no PR. Diff-scoped against pass 2's merge (`4931fbb5`, PR #2059): all
+four declared backend files and all three declared frontend files are
+**byte-identical** to pass 2. The only compliance-adjacent file that changed
+(`ComplianceRequirementsConfigPage.tsx`, +19/-3) was fixed correctly by an
+unrelated change outside this rotation — a "Not yet active" notice on the
+`grace_period_days` field plus a new backend guard test
+(`test_compliance_grace_period_is_unwired.py`), the same CLAUDE.md Pitfall
+#19 shape CMP2-1 already flagged for this page's two notification settings.
+Re-verified it does what it claims (no reader exists, notice is present) —
+no finding, just confirmation. Re-verified all of CMP-1..7, CMP2-1..4, and
+CS-8/CS-9 still hold (file unchanged, so nothing to re-derive). Route
+inventory unchanged (20/20, all `require_permission`-gated).
+`scheduled_tasks.py` grew substantially this cycle but entirely in
+unrelated scheduled-task logic (feature 31's scope); its one compliance
+touch-point (`ComplianceReportService`) is unchanged. Full local completion
+gate green: flake8/black/isort clean at CI's pinned versions
+(`isort==9.0.1`), `validate_migrations.py --strict` 422 revisions/single
+head, 321/321 compliance+attestation-scoped and 10876/10876 full backend
+suite pass, `tsc --noEmit` 0 errors, `eslint .` 0 errors/0 warnings. Findings
+doc: `docs/security-review/CMP-20-compliance.md` → **Pass 3**. Next: 21
+Admin hours, once this PR merges.
+
+---
+
+### 2026-09-04 — Feature 19 (Skills testing) ✅ closed — PR #2230 merged
+
+**PR #2230 merged cleanly** (merge commit `d5b716ff8`, head `ae004266`).
+Codex flagged one P2 finding after the PR opened (`add_test_viewer`'s new
+examiner self-dealing check was write-time only, leaving any pre-existing
+`SkillTestViewer` rows with `user_id == examiner_id` in place); fixed with a
+one-time idempotent backfill migration (`9d2b4492faba`) plus a guard test,
+pushed as a same-PR follow-up commit, thread replied to and resolved.
+Codex's re-review of the final commit found nothing further. Rotation row 19
+→ ✅. Next: 20 Compliance.
+
+---
+
+### 2026-09-04 — Feature 19 (Skills testing), pass 3 — 1 fixed (LOW), 1 flagged (LOW/MED)
+
+Picked up after a watchdog session closed out Feature 18 and started this
+feature's row (see the entry immediately below). Diff-scoped against the
+pass-2 merge commit (`793bbebb4b03ddbe8f65ca171de261a4dd13fb1f`, PR #2017)
+across the full backend surface: endpoint file, service file, schema file,
+model file all came back **byte-identical**. `models/training.py` changed,
+but the diff is entirely unrelated `Shift`/`ShiftTemplate` scheduling
+additions, confirmed by reading it — no skills-testing model touched. No new
+migration touches a skills-testing table.
+
+Re-verified all four pass-1 fixes (SKT-1 through SKT-4, including both halves
+of SKT-4's Pitfall #27 capacity lock and its lock-ordering fix) and pass 2's
+SKT2-1 cleanup by reading the current code directly — all intact. Re-ran an
+AST route enumeration from scratch: 29/29 routes unchanged from pass 1/2's
+table. Found and closed a frontend-inventory gap in pass 2's own scope note:
+two files that import `skillsTestingService` directly
+(`ScoreBreakdownPanel.tsx`, `TestViewersPanel.tsx`, both pre-dating pass 1)
+were never named in either prior pass's file list. Read both in full this
+pass — no finding in `ScoreBreakdownPanel.tsx` (pure presentation, and its
+data source, `build_score_breakdown()`, is correctly redacted only on the
+`pending` disclosure branch, not `scores`, since it carries template step
+labels rather than examiner commentary).
+
+**SKT3-1** (LOW, fixed) — `add_test_viewer` rejected naming the test's
+candidate as their own viewer grant, but had no matching check for the
+examiner, who already holds FULL disclosure unconditionally and so gets
+nothing from a grant. `TestViewersPanel.tsx`'s own docstring claims the API
+rejects granting to either the candidate or the examiner; only the candidate
+half was actually true. No live data exposure (a grant to the examiner would
+be a no-op), but a real gap between the frontend's stated assumption and
+backend behavior, worth closing before a future audit view or disclosure-rule
+change silently inherits a grant written on a false premise. Fixed by mirroring
+the existing candidate check for `test.examiner_id`. Guard tests (new file,
+`tests/test_skill_test_viewers.py`): the new examiner rejection, the
+pre-existing candidate rejection (which had no dedicated endpoint-level test
+before this pass), and a genuine third party still reaching the grant path.
+
+**SKT3-2** (LOW/MED, flagged) — `GET /tests`, open to every member via
+`get_current_user`, has no `.limit()`/pagination anywhere in `list_tests`.
+Traced the live call path: `SkillsTestingTestRecordsTab.tsx`'s default "All"
+status filter sends zero query params, so every unfiltered load of the Test
+Records tab fetches the org's entire non-practice skill-test history in one
+response, plus batch user/template fetches and (for non-officers) a per-row
+disclosure-resolution loop. Not a data-exposure issue — everything returned is
+already org-scoped and disclosure-filtered — but an unbounded-work-per-request
+resource concern (CHECKLIST dimension 6) that grows with an organization's
+accumulated testing history. Not fixed: closing it needs a paging contract,
+a chosen cap, and matching frontend pagination work, which changes behavior
+and needs a product decision rather than a same-commit fix. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+Completion gate: flake8/black/isort clean (`isort==9.0.1`, matching CI's
+current pin — updated from 8.0.1 since pass 2, confirmed against
+`.github/workflows/ci.yml`); `validate_migrations.py --strict` 418 revisions,
+single head; `pytest -k skill` 395 passed/1 pre-existing skip (392 + 3 new);
+`tsc --noEmit`/`npm run typecheck` 0 errors; `npm run lint` 0 errors, 1
+pre-existing warning in an unrelated scheduling test file, well under the
+`--max-warnings 10` cap. One environment wrinkle worth recording for the next
+pass rather than as a finding: this review's isolated worktree started with no
+`node_modules` installed, and running `eslint`/`tsc` under that condition
+silently fell back to a global toolchain that could not resolve `@types/node`,
+producing 942 spurious warnings across 38 unrelated files before `npm ci`
+(from the worktree root) fixed it — recorded in
+`SKT-19-skills-testing.md`'s Pass 3 completion-gate section so it isn't
+mistaken for a real `main`-red finding by a future reader skimming this log.
+Full write-up: `docs/security-review/SKT-19-skills-testing.md` → **Pass 3**.
+Rotation row 19 → ⏳ awaiting PR merge. Next: 20 compliance, once this PR
+merges.
+
+---
+
+### 2026-09-04 — Feature 18 (Training extended) ✅ closed — PR #2223 merged
+
+**PR #2223 merged cleanly** (merge recorded on `main`, head `6c95229a`),
+closing out pass 3 for Feature 18. This entry exists because the prior
+"Open PR" note above was found stale during a watchdog check: the PR had
+merged roughly ten hours earlier but the rotation had not picked up Feature
+19, and no new security-review PR had been opened in the interim. Rotation
+row 18 → ✅. Next: 19 Skills testing (pass 3).
+
+---
+
+### 2026-09-04 — Feature 18 (Training extended), pass 3 — 0 code fixes, 2 doc corrections (one caught by Codex on this pass's own PR)
+
+Diff-scoped against pass 2's merge commit (`e094e66e1c94604e00c9143e73bc27c8cb0f1014`)
+across all twenty-five pass-2 artifacts (the thirteen pass-1 artifacts, the
+two cache artifacts pass 2 itself added for the TRX2-1 fix and its guard
+test, and the ten frontend files pass 2's own frontend-surface inventory
+named — successive Codex reviews of this pass's own PR caught this count
+first excluding the cache artifacts, then the frontend ones): five changed.
+`external_training.py` was a no-op import reformat.
+`frontend/src/pages/SubmitTrainingPage.tsx` was an unrelated one-line
+layout fix (`7509263a`, a cross-cutting action-bar-positioning sweep).
+`external_training_service.py`'s 37-line diff turned out to be the repo
+owner's own 2026-09-02 fix (`803eff25`, "Harden external training requests
+against DNS rebinding") — closes the DNS-rebinding TOCTOU this feature's own
+pass 1 had catalogued `external_training_service.py` as sharing (the
+"eighth site" note in `KNOWN_LIMITATIONS.md`). Verified the fix directly
+(read `ssrf_transport.py`, ran its 5-test suite) rather than assuming from
+the commit message. A second Codex review round on this pass's own PR then
+found that `push_service.py` had been independently DNS-rebinding-hardened
+the same day, by a separate commit (`d50a9037`) this pass's declared file
+list never covered — verified that fix too (`_pinned_session`/
+`_PinnedHTTPSAdapter`, its own test file). `KNOWN_LIMITATIONS.md`'s
+affected-site count corrected twice in this pass: eight → seven (after
+`external_training_service.py`) → six (after `push_service.py`).
+`apiCache.ts`/`apiCache.test.ts`'s combined diff was unrelated to training
+(an RPT-29 `/dashboard/action-items` prefix plus an `/attendees` substring
+plus a cache-generation/epoch race-condition fix, each with its matching
+test); confirmed none of this feature's eleven cache-exclusion entries
+moved. All of pass 1/2's fixes re-verified present and unchanged. Full
+write-up: `docs/security-review/TRX-18-training-extended.md` (Pass 3
+section). Rotation row 18 → ⏳ awaiting PR merge.
+
+### 2026-09-04 — Feature 17 (Training core) ✅ closed — PR #2222 merged clean after 9 rounds
+
+**PR #2222 merged cleanly** via merge commit `0d1f92c4` (head `802086b3`),
+fully green (all 17 checks passing including `CI Success` and
+`Migration Chain`) and with Codex's final review finding nothing new — the
+first merge in this feature's pass
+3 not to race an in-progress review. This closes out the TR3-1 finding
+(`RequirementProgress.days_until_due` was never populated) after nine
+rounds of Codex-driven correction, four of which required a fresh
+branch/PR under CLAUDE.md pitfall #24 (#2218 → #2220 → #2221 → #2222) when
+the owner merged mid-review. Full round-by-round technical detail is in
+`TR-17-training-core.md`'s Pass 3 section; the premature-merge recoveries
+are logged individually below. Next: 18 Training extended.
+
+### 2026-09-04 — Feature 17 (Training core, pass 3, rounds 6-9) — full detail while PR #2222 was open
+
+Feature 17, Training
+core, pass 3, rounds 6-9. **#2221 (rounds 1-5) merged before round 6's
+fixes could be pushed to it** — the owner merged while Codex's review of
+that PR was still in progress, the same race that hit #2213, #2217,
+#2218, and #2220 before it (CLAUDE.md pitfall #24: never reuse a branch
+whose PR has merged — round 6 moved to this fresh branch/PR off current
+`main`, which already carries rounds 1-5). Rounds 7-9 are further pushes
+to this same still-open PR — no premature merge since.
+
+This PR is entirely rounds 1-9 of the same TR3-1 finding
+(`RequirementProgress.days_until_due` was never populated), each round
+fixing a real gap Codex found in the previous round's own fix. Brief
+summary (full technical detail in `TR-17-training-core.md`'s Pass 3
+section):
+
+- **Rounds 1-2** (merged in #2218): `days_until_due` from `requirement.
+due_date` only, then a `calendar_period` window-end fallback for the
+  common annual/quarterly/monthly case.
+- **Round 3** (merged in #2218): fixed `rolling` requirements always
+  reporting due `today` with a `_rolling_due_date()` last-completion
+  anchor, in both `check_requirement_progress` and the sibling
+  `evaluate_requirement_detail()`.
+- **Round 4** (merged in #2220): added a `certification_period` branch
+  (`_certification_due_date()`); a type-aware `_anchor_matches()`
+  dispatcher replacing a bare `training_type` filter; exempted
+  rolling/certification-period requirements from the batch-preload's
+  window bound.
+- **Round 5** (merged in #2221): stopped the legacy BIANNUAL override
+  from clobbering a correctly-anchored certification-period due date;
+  stopped `_anchor_records` from dropping matching records with an
+  unknown `completion_date`.
+- **Round 6** (this PR): a stale `due_date` left over from switching a
+  requirement away from `fixed_date` (confirmed in `RequirementModal.
+tsx`) was still taking top priority over the rolling/certification-
+  period anchor — fixed by excluding those two types from honoring it, on
+  the reasoning that `calendar_period` was an "established, deliberate
+  override." Also fixed a certification anchor publishing a due date for
+  a record the compliance calculation itself rejects as unverifiable
+  under `recency_days`.
+- **Round 7** (this PR, pushed after Codex reviewed round 6): Codex found
+  round 6's own carve-out was wrong — `calendar_period` has the identical
+  stale-`due_date` exposure as rolling/certification_period (the frontend
+  behavior isn't type-specific; there's no UI path to deliberately set
+  both a period config and an override date), so round 6's "established,
+  deliberate override" reasoning didn't hold. Fixed by replacing the
+  exclusion list with an inclusion list: an explicit `due_date` now wins
+  only for `due_date_type` `None` (legacy) or `fixed_date` — never
+  `calendar_period`, `rolling`, or `certification_period`. Required
+  updating two round-1/2 tests that had been asserting the bug's shape
+  (relying on the default `due_date_type="calendar_period"` while
+  asserting an explicit date wins) to use `due_date_type="fixed_date"`
+  explicitly instead.
+
+- **Round 8** (this PR, pushed after Codex reviewed round 7): rounds 6-7
+  only made the two `days_until_due` calculators ignore a stale
+  `due_date` — the value itself was still persisted, and Codex found two
+  other active paths read `requirement.due_date` directly, bypassing both
+  calculators: the requirements dashboard widget
+  (`api/v1/endpoints/training.py:330`) and the requirement detail page.
+  Fixed at the actual root instead of a third calculator patch:
+  `create_requirement`/`update_requirement` now null out `due_date`
+  whenever the resulting `due_date_type` isn't `fixed_date` (or unset),
+  regardless of what the client sent — so the stale value can never reach
+  the database, and every reader (present or future) sees a consistent
+  value. `update_requirement` also cleans up a row already carrying a
+  stale value from before this fix, the next time it's touched, even if
+  the update doesn't mention `due_date` at all.
+
+- **Round 9** (this PR, pushed after Codex reviewed round 8): round 8's
+  write-path fix stops _new_ staleness but does nothing for a row that
+  already carries a stale `due_date` and is never edited again — Codex
+  named the same CLAUDE.md pitfall #20 pattern applied to a plain column:
+  a write-path fix alone never reaches a row nobody revisits. Fixed with
+  migration `20260904_0530_bbdaca0844df`: a single `UPDATE ... SET
+due_date = NULL WHERE due_date_type IN (calendar_period, rolling,
+certification_period)`, table-existence-guarded per pitfall #26,
+  irreversible by design (nothing correct to restore the cleared values
+  to).
+
+Fourteen new guard tests across rounds 6-9, all confirmed failing against
+the code before their respective fix (round 9's migration test runs the
+real UPDATE against a live database, not a mocked bind). Full completion
+gate re-run green (10583/10583 backend). See `TR-17-training-core.md`'s Pass 3 section and the
+Log below for full detail on every round. Rotation row 17 stays ⏳
+awaiting merge. Next: 18 Training extended, once this PR merges.
+
+---
+
+### 2026-09-04 — Feature 17 (Training core, pass 3, round 6) — PR #2221 merged at round 5's commit; round-6 fixes moved to a new PR
+
+**PR #2221 merged (rounds 1-5) before round 6's fixes could be pushed to
+it** — the owner merged while Codex's review of it was still in progress,
+the same race that hit #2213, #2217, #2218, and #2220 before it. Per
+CLAUDE.md pitfall #24, the merged branch is not reused: round 6's two
+fixes (the stale-due-date priority bug, the unverifiable-anchor/recency
+contradiction) moved to a new branch off current `main` and a new PR,
+**[#2222](https://github.com/thegspiro/the-logbook/pull/2222)**
+(`claude/security-review-training-core-tr3-round6`). Rounds 7-9 pushed as
+further commits onto this same PR — no further premature merges. Next: 18
+Training extended, once this PR merges.
+
+### 2026-09-04 — Feature 17 (Training core, pass 3, round 5) — PR #2220 merged at round 4's commit; round-5 fixes moved to a new PR
+
+**PR #2220 merged (rounds 1-4) before round 5's fixes could be pushed to
+it** — the owner merged while Codex's review of it was still in progress,
+the same race that hit #2213, #2217, and #2218 before it. Per CLAUDE.md
+pitfall #24, the merged branch is not reused: round 5's two fixes (the
+BIANNUAL-override clobber, the unknown-completion-date anchor exclusion)
+moved to a new branch off current `main` and a new PR,
+**[#2221](https://github.com/thegspiro/the-logbook/pull/2221)**
+(`claude/security-review-training-core-tr3-round5`), which merged before
+round 6's fixes could be pushed — see the entry immediately above. Next:
+18 Training extended, once the follow-up PR merges.
+
+### 2026-09-04 — Feature 17 (Training core, pass 3, round 4) — PR #2218 merged at round 3's commit; round-4 fixes moved to a new PR
+
+**PR #2218 merged (`f7073cd5`, rounds 1-3) before round 4's fixes could be
+pushed to it** — the owner merged while Codex's review of that commit was
+still in progress, the same race that hit #2213 and #2217. Per CLAUDE.md
+pitfall #24, the merged branch is not reused: round 4's three fixes
+(certification-period due dates, type-aware anchor matching, the
+batch-preload window exemption) moved to a new branch off current `main`
+and a new PR, **[#2220](https://github.com/thegspiro/the-logbook/pull/2220)**
+(`claude/security-review-training-core-tr3-round4`), which merged before
+round 5's fixes could be pushed — see the entry immediately above. Next:
+18 Training extended, once the follow-up PR merges.
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2213 merged at its stale draft state; fixes moved to a new PR
+
+**PR #2213 merged (`5b70834e`, the "no findings" first-draft state) before
+this pass's Codex-driven corrections could be pushed to it** — the owner
+merged while Codex's review was still being addressed, the same race
+PR #2210/#2212 hit for SCH-12. Per CLAUDE.md pitfall #24, the merged branch
+is not reused: the corrected findings and the three real fixes (EV-20,
+EV-21, EV-22) moved to a new branch off current `main` and a new PR,
+**[#2216](https://github.com/thegspiro/the-logbook/pull/2216)**
+(`claude/security-review-events-ev20-24-followup`), which also
+updates this doc's Log and Open PR entries to point at itself. See the
+entry immediately below for the full corrected write-up. Next: 17 Training
+core, once the follow-up PR merges.
+
+### 2026-09-04 — Feature 17 (Training core, pass 3) — PR #2217 merged at its stale draft state; fixes moved to a new PR
+
+**PR #2217 merged (`db454093`, the "no findings" first-draft state) before
+this pass's Codex-driven corrections could be pushed to it** — the same
+race that hit #2213 for Feature 16, the owner merging while Codex's review
+was still being addressed. Per CLAUDE.md pitfall #24, the merged branch is
+not reused: TR3-1's fix, the TR3-2 flag, and the corrected SSRF claim moved
+to a new branch off current `main` and a new PR,
+`claude/security-review-training-core-tr3-followup`, which also updates
+this doc's Log and Open PR entries to point at itself. See the entry
+immediately below for the full corrected write-up. Next: 18 Training
+extended, once the follow-up PR merges.
+
+### 2026-09-04 — Feature 17 (Training core, pass 3) — no new findings, PR pending
+
+Diff-scoped against pass 2's merge (`0b8b5bd4`, PR #1981). Of the seven
+declared files, only `services/training_service.py` (+329/-91) and
+`services/training_compliance.py` (+27/-14) changed; the other five are
+byte-identical. A grep for any other file instantiating `TrainingService`
+or importing the training models found one addition,
+`app/mcp/tools/training.py` — predates this diff but was never swept into
+a security-review pass, the same class of gap Codex caught reviewing the
+Events pass immediately before this one.
+
+Two files this feature also declares turned out to carry another feature's
+already-reviewed fix, not new surface of this one: `models/training.py`
+(+109/-4, entirely `Shift`/`ShiftTemplate`/`ShiftTemplateEquipmentCheck` —
+Scheduling's own models, already covered in `SCH-15-scheduling.md` pass 3)
+and `types/training.ts` (+32/-9, entirely `ComplianceProfile*`/
+`ComplianceConfig*` type widenings citing CMP2-2/3/4 — Compliance's own
+Pitfall #1 fixes). `training_compliance.py`'s change is likewise already
+covered (cited as CMP2-3 in its own comment) — read directly to confirm
+the fix does what it claims (`profile.required_requirement_ids is not
+None`, not truthy, so an explicitly-empty override list is no longer
+confused with "no override"). `schemas/training.py`'s one change (an SSRF
+hardening validator on `ExternalProviderConfig`) belongs to
+`external_training.py`, declared as feature 18 ("training extended") since
+pass 1 — out of this feature's scope.
+
+`training_service.py`'s own diff is a genuine N+1 performance rework:
+`check_requirement_progress` gained optional preload parameters so
+`get_requirements_progress_for` (new) can preload a member's completed
+records once and have every requirement's check filter that same in-memory
+set instead of issuing its own query. Read every branch (HOURS,
+CERTIFICATION, SHIFTS, CALLS, fallback) to confirm the in-memory path
+filters identically to the SQL path it replaces, and confirmed the preload
+itself is the only fetch point and is correctly scoped to `user_id`/
+`organization_id`/`status == COMPLETED` before anything downstream sees a
+row. TR-12's two org-scoping fixes (pass 1) both survive: one consolidated
+into `get_applicable_requirements`'s already-org-scoped `User` query, the
+other (`generate_training_report`'s tier-exemption block, using a
+locally-aliased `_User` — checked both spellings) unchanged in place.
+`training.py` itself (the endpoint file) is untouched, so TR2-4 (flagged,
+unbounded dashboard scan) remains exactly as flagged — confirmed via zero
+diff, not assumed.
+
+`app/mcp/tools/training.py` read in full (170 L, 4 tools): every tool
+resolves its target member through the same shared, already-reviewed
+`require_member` helper the Events MCP tools use (org-scoped,
+`ValueError` on a foreign/missing id); `get_member_requirements_progress`
+is the new paginated API's first outside caller and uses it correctly —
+resolves applicable requirements once, hands only the requested page-slice
+to `get_requirements_progress_for`, so an MCP caller cannot trigger an
+unbounded scan. Response builder excludes score/certification-number
+fields as credential detail. Clean, no finding.
+
+**No findings, no code changes.** Full completion gate green: flake8/black/
+isort clean, migrations single-head (414 revisions, no schema change), 842
+training-scoped and 10554 full backend suite pass, `tsc --noEmit`/
+`eslint .` both 0 errors. Findings doc:
+`docs/security-review/TR-17-training-core.md` pass 3. Rotation row 17 →
+⏳ awaiting PR merge. Next: 18 Training extended, once this PR merges.
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) ✅ merged — PR #2216
+
+`7af79795`. Merged cleanly — no conflict, base `main` unaffected. CI was
+fully green on the final head (`acf298aa`, 17/17 checks); Codex's review of
+the round-2 fix found no new issues. No unresolved review threads — all
+four addressed findings' threads (EV-20, EV-21, EV-22, EV-25) were resolved
+in-PR with replies describing each fix. EV-23/EV-24 remain open findings,
+tracked in `docs/security-review/EV-16-events-requests.md` and (EV-23)
+`docs/KNOWN_LIMITATIONS.md` — not blocking, since both are flagged rather
+than fixed by design. Rotation row 16 → ✅. Next: 17 Training core.
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — PR #2216 round 2: 1 more P1 fix (EV-25) + accommodation-clear gap closed
+
+Second Codex round, against PR #2216 (the round-1 fix PR itself). Found a
+real gap in round 1's own EV-21 fix: `create_or_update_rsvp`'s
+`allow_guests` check, party-size guard, and occupied-seats capacity sum all
+read `rsvp_data.guest_count` directly. That was safe under the old
+full-dump update (request value and stored value were always the same by
+construction) but not under EV-21's `exclude_unset=True` — an update that
+omits `guest_count` now preserves the existing row's value (correct for
+the write) while every guest/capacity check still evaluated the
+omitted-and-zero-defaulting request value instead. Concretely: a
+three-seat waitlisted party resubmitting `{"status": "going"}` (omitting
+`guest_count`) would be evaluated as a one-seat party, wrongly promoted
+into a two-seat gap, while the row silently kept its real three-seat
+`guest_count` — oversubscribing the event. Not reachable through this
+app's own RSVP modal (always sends `guest_count` explicitly), but
+reachable by any other API client.
+
+**Fixed (EV-25, P1):** `existing_rsvp` is now fetched ahead of the
+guest/capacity guards (not just ahead of the update-application branch),
+and a single `effective_guest_count` is resolved once — the incoming value
+when the client actually sent one, otherwise what's already on the row —
+and used by every guest/capacity check instead of the raw request value.
+Guard test reproduces the exact scenario and was confirmed to fail without
+the fix before being committed with it.
+
+**Also closed, same round (P2):** round 1's omit-when-blank behavior for
+`dietary_restrictions`/`accessibility_needs` correctly stopped the silent
+wipe, but left no way to distinguish "member didn't touch this field" from
+"member touched it and emptied it on purpose" — both looked like a blank
+box. Net effect: once set, these fields could never be cleared again, only
+overwritten with different text. Fixed with per-field `dietaryTouched`/
+`accessibilityTouched` tracking in `useRSVPForm.ts`, set on that field's
+own `onChange` and reset whenever the modal opens; the field is only
+included in the submit payload (with an explicit `null` to actually clear
+it) when it was touched this time, otherwise omitted exactly as before.
+
+Full completion gate re-run and green: 674 events-scoped, 10554 full
+backend suite (+1 guard test), 0 frontend errors. Findings doc updated in
+place under EV-21/EV-25. Rotation row 16 stays ⏳ awaiting merge. Next: 17
+Training core, once this PR merges.
+
+### 2026-09-04 — Feature 16 (Events & requests, pass 3) — Codex follow-up (same PR): 3 fixes (2 P1), 2 flagged, 1 scope correction
+
+Diff-scoped against pass 2's merge (`fef19238`, PR #1973). Five of the nine
+declared files changed since then — `events.py`, `models/event.py`,
+`schemas/event.py`, `event_service.py`, `event_attachments.py` (comment-only)
+— plus one migration; `event_requests.py`, `event_request_service.py`,
+`models/event_request.py` and `schemas/event_request.py` are byte-identical
+to pass 2. The whole diff is one feature: member-visible attendee rosters,
+built on a reworked seat-accurate capacity/waitlist model.
+
+**First draft claimed "no findings, no code changes" — wrong.** Codex raised
+six comments against it; five real.
+
+**Fixed in this PR:**
+
+- **EV-20 (P1, correctness).** `EligibleMemberResponse.email` was a required
+  `str`, but the endpoint's own switch to `contact_visibility.email_for()`
+  (this same diff, described in the first draft as "a narrowing, not a new
+  exposure") can return `None` — so FastAPI's response-model validation
+  failed the **entire** check-in roster the first time any member in the org
+  had a hidden email. Fixed by making the field `Optional[str]`; frontend
+  widened to match and a `.toLowerCase()` call Codex separately flagged as
+  the resulting frontend crash is now null-safe.
+- **EV-21 (P1, data loss, pre-existing).** `create_or_update_rsvp`'s update
+  branch applied a full `model_dump()` over the existing row, so the RSVP
+  modal's long-standing, deliberate blanking of
+  `dietary_restrictions`/`accessibility_needs` (they're PHI and the event
+  detail response is cacheable, so the modal can't show their current value)
+  silently wiped real accommodation data on _any_ unrelated edit — changing
+  guest count, notes, or status. Predates this diff; owned per CLAUDE.md's
+  "no acceptable pre-existing errors." Fixed with
+  `exclude_unset=True` on the update dump (an omitted key now means "leave
+  alone"), plus making the frontend's notes-clearing behavior explicit
+  (`notes` always sent, with an explicit `null` to clear) so that field's
+  existing clear-by-blanking behavior didn't silently break.
+- **EV-22 (P2, schema gap).** `RecurringEventCreate` was the one
+  event-create schema missing `attendee_visibility` (Pydantic silently drops
+  unknown fields), so a series' explicit visibility choice was dropped and
+  every occurrence inherited the org default instead — a real exposure risk
+  if that default is member-visible. Fixed by adding the field + validator;
+  no service change needed since `create_recurring_event` already spreads
+  `**event_data` onto each occurrence.
+
+**Flagged, not fixed (both need a design/product call, not a mechanical
+patch):**
+
+- **EV-23 (P2).** Series RSVP (`rsvp_to_series`, rewritten this pass to
+  delegate to `create_or_update_rsvp`) passes `override=True`
+  unconditionally, so the training phase-gate warning an individual RSVP
+  must acknowledge never fires for a series — despite a code comment
+  claiming it was "already confirmed once." No such confirmation exists
+  anywhere in the series path. Needs a decision on what "the" warning means
+  when a series spans multiple training phases.
+- **EV-24 (P2).** Resubmitting an existing _waitlisted_ RSVP (e.g. editing
+  notes) can promote it straight to `going` if there happens to be room for
+  that one party — without checking whether anyone is ahead of them in the
+  queue, bypassing the ordering `promote_from_waitlist` otherwise guarantees.
+  Not a capacity or tenancy defect (the event is never oversubscribed), a
+  fairness/ordering one. Needs the same "earliest fitting row" check
+  `promote_from_waitlist` already has, ported into this path carefully
+  rather than patched same-day alongside an unrelated review.
+
+**Scope correction:** the events-specific MCP tools
+(`app/mcp/tools/events.py`, `app/mcp/tools/writes.py`'s
+`create_event_draft`) were missed by the file-diff scoping — they predate
+this diff and were never swept into a security-review pass. Read in full
+this round: both mirror the REST endpoints' org-scoping and visibility
+protections correctly. Clean, no finding.
+
+Full completion gate green: flake8/black/isort clean, migrations single-head
+(414 revisions, no schema change), 673 events-scoped and 10553 full backend
+suite pass (+4 guard tests), `tsc --noEmit`/`eslint .` both 0 errors.
+Findings doc: `docs/security-review/EV-16-events-requests.md` pass 3.
+Rotation row 16 → ⏳ awaiting PR merge. Next: 17 Training core, once this
+PR merges.
+
+### 2026-09-03 — Feature 15 (Scheduling, pass 3) ✅ merged — PR #2212
+
+`8b89f319`. SCH-12's third-round fix (fully atomic `create_template`)
+merged cleanly — no conflict, base `main` unaffected. CI was fully green
+on the final head (`46b8a671`, 17/17 checks); Codex reported it was over
+its usage limit for security reviews (no review produced, informational
+only) so there were no review threads to resolve. Rotation row 15 → ✅.
+Next: 16 Events & requests.
+
+### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) ✅ merged
+
+PR #2203 merged 2026-09-03. No review threads to resolve — CI ran clean.
+Next: 15 Scheduling.
+
+### 2026-09-03 — Feature 15 (Scheduling, pass 3) — no new findings, PR pending
+
+Diff-scoped against baseline `299a163a` (2026-08-31; pass 2's own merge
+commit was unreachable in this worktree's shallow history, the same gap
+EC-14 pass 3 hit — deepened the clone to reach this point). Of the six
+declared backend files, only `scheduling_service.py` (+250/-38) and
+`scheduling_module_config_service.py` (-6, dead field removed) had real
+churn; `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`,
+`standing_shift_service.py`, and `calcom_service.py` are byte-identical to
+pass 2. Five frontend files changed, all read in full.
+
+The substantive new logic is a shift template naming which Inventory
+equipment checklists its shifts carry (`equipment_check_template_ids`, part
+of the same 2026-08-31 module move EC-14 pass 3 covered from the Inventory
+side). The new client-supplied FK id list is validated in-org **before**
+either create or update writes anything (`_validated_check_ids`, ordered
+deliberately so a bad id never leaves an orphan template row), and the two
+new migrations (`shifts.template_id` SET NULL/nullable=True;
+`shift_template_equipment_checks` CASCADE/nullable=False with a unique
+constraint) are both correctly guarded per Pitfall #2/#26. Also found and
+verified clean, not new findings: `get_member_visible_shifts` now bounds
+its date window to 366 days (previously unbounded — closed since pass 2,
+matching SCH-3's shape); a new Claude MCP integration
+(`app/mcp/tools/scheduling.py`, 377 L, the only scheduling-relevant slice
+of a 5,068 L cross-cutting surface) correctly org-scopes every query to the
+calling principal's own org, gates the elevated "full schedule" view behind
+an explicit `expose_full_schedule` flag, redacts notes through `scrub_text`,
+and bounds every listing — the wider MCP surface is not a declared file of
+this feature and already carries its own `KNOWN_LIMITATIONS.md` entry from
+outside this rotation, so not duplicated here. SCH-9/SCH-10/SCH-11 (prior
+findings) sit outside this pass's diff and were not re-verified from
+scratch — noted as a scope choice, not silently assumed. Full local
+completion gate green: flake8/black/isort clean, migrations validated (414
+revisions, single head), 803/803 scheduling-scoped and 10485/10485 full
+backend suite pass, 0 frontend type/lint errors. Findings doc:
+`docs/security-review/SCH-15-scheduling.md` (pass 3 section appended). PR
+opening next. Next: 16 Events & requests, once this PR merges.
+
+### 2026-09-03 — Feature 15 (Scheduling, pass 3) — Codex follow-up (same PR, same day): 1 fix, 1 finding
+
+Codex review of PR #2210's first draft caught three real gaps, all verified
+and corrected rather than argued with:
+
+- **Baseline excluded its own content.** `299a163a` was used as the diff's
+  exclusive lower bound, but the commit itself adds `Shift.template_id` and
+  its org-validation in `create_shift` — genuinely scheduling-relevant
+  content the draft's scope silently dropped. Re-reviewed against
+  `299a163a` directly: `ondelete="SET NULL"` + `nullable=True` holds
+  (Pitfall #2), and the client-supplied `template_id` is org-validated
+  before storage (XC-1/Pitfall #14c). Clean, no finding — the gap was in
+  scope, not in the code.
+- **17 frontend files grep-swept, not read.** The draft claimed "five
+  frontend files changed, all read in full" when 21 had real (non-deletion)
+  diffs. All 17 missed ones now read in full: the same mechanical
+  `POSITION_LABELS[token]` → `positionLabel()` rollout and two Inventory
+  route-target updates already described for the four originally-read
+  files. Clean, no finding, but the "read in full" claim in the first draft
+  was false for these and is corrected in the findings doc.
+- **SCH-12 (LOW, fixed)** — `create_template`'s first draft claimed its
+  validate-before-create ordering meant "a bad id never leaves an orphan
+  template row." True only for an id bad _at request time_. If the
+  checklist is deleted between `_validated_check_ids` and the later link
+  write, the FK insert fails and the already-committed template survives as
+  a checklist-less orphan. Fixed: the link write now runs inside
+  `self.db.begin_nested()` (a SAVEPOINT) with an explicit `flush()`, so a
+  failure rolls back only that write; on failure the orphan template is
+  deleted in the same outer transaction and the caller gets the same
+  "Equipment checklist not found" either direction of the race would have
+  produced. (A plain `session.rollback()` was tried first and does not
+  compose with this repo's `join_transaction_mode="create_savepoint"` test
+  fixture — see the finding for why the nested-savepoint form is also the
+  more correct production behavior, not just the test-compatible one.)
+  Guard test added: `test_shift_template_equipment_checks.py::
+TestLinkManagement::test_a_checklist_deleted_after_validation_leaves_no_orphan_template`.
+
+The stale `check_run.completed` failure the PR also received (for the
+first-push commit, superseded moments later by a second push) was addressed
+with a PR comment rather than a fix — not this PR's failure, see the PR
+thread. Completion gate re-run in full after these changes, now including
+frontend vitest (375/375, 26 files) and `npm run build` (Codex separately
+noted these were missing from the recorded gate — CLAUDE.md's own gate list
+doesn't mandate them for a backend-only fix, but a "full completion gate
+green" claim shouldn't omit a check there's a means to run): flake8/black
+/isort clean, migrations still single-head, 804/804 scheduling-scoped and
+10486/10486 full backend suite pass (+1 each, the new guard test), 0
+frontend type/lint errors. Findings doc and Open PR row both updated.
+Pushed to PR #2210. Next: 16 Events & requests, once this PR merges.
+
+### 2026-09-03 — Feature 15 (Scheduling, pass 3) — third Codex round: SCH-12 rewritten atomic
+
+Third round of Codex review on PR #2210, against the commit that narrowed
+SCH-12 to `except IntegrityError`. Two comments, both real:
+
+- **The `IntegrityError` narrowing still didn't verify which constraint
+  fired.** A same-pair unique-constraint hit on this exact template's own
+  links is effectively unreachable for a brand-new template id (nothing
+  else can yet reference it), but the code shouldn't assume the cause from
+  the exception type alone.
+- **The bigger one: the template was still committed before the link
+  write, just now inside a nested savepoint instead of the outer commit.**
+  That window — however short — makes the template observable (listable,
+  or referenceable as a shift's `template_id`) before the link write is
+  known to succeed. A shift created against it in that window would have
+  its `template_id` silently `SET NULL`ed by the cleanup delete once it
+  ran, detaching a real shift from its intended checklist configuration
+  with no error to anyone.
+
+Fixed by dropping `_crud_create` for `create_template` and inlining an
+atomic create: `add()` + `flush()` the template (assigns its id, executes
+the INSERT, commits nothing), write the links against the flushed
+template, **one** `commit()` for both. Nothing is observable to any other
+transaction until both writes are ready, closing the window entirely rather
+than shrinking it further. On `IntegrityError`, a plain `session.rollback()`
+is now safe (nothing committed yet in this attempt, unlike the abandoned
+first-draft approach that rolled back partway through an already-committed
+sequence and broke this repo's `join_transaction_mode="create_savepoint"`
+test fixture), and the named checklists are re-validated via
+`_validated_check_ids` before choosing the error message — only a
+confirmed-missing checklist gets `"Equipment checklist not found"`; any
+other integrity failure falls through to the same `str(e)` handling every
+other failure in this method already gets.
+
+Guard test added: `test_an_unrelated_integrity_error_is_not_misreported`
+(the existing `test_a_checklist_deleted_after_validation_leaves_no_orphan_template`
+rewritten to simulate the race via a wrapped `_replace_equipment_check_links`
+rather than bypassing validation, since the new design has no gap left for
+the old bypass-validation trick to stand in for). Also updated
+`test_position_slots.py::TestWritePathWiring._service()`'s mock to include
+`db.flush` — two pre-existing tests there broke because the rewritten
+`create_template` now calls it unconditionally. Full gate re-run: flake8
+/black/isort clean, migrations still single-head (414 revisions), 805/805
+scheduling-scoped and 10487/10487 full backend suite pass (+1 each over
+the prior round).
+
+**PR #2210 merged (at the second-round state, `c2e66b2c`) before this fix
+could be pushed to it** — the owner merged while this third round was
+still being addressed. Per CLAUDE.md pitfall #24, the merged branch is not
+reused: this fix moved to a new branch off current `main` and a new PR,
+**[#2212](https://github.com/thegspiro/the-logbook/pull/2212)**, which
+also updates this doc's Log and Open PR entries to point at itself. Full
+suite re-run once more against the new base (10549/10549, main's own
+count having moved since #2210 merged other work too). Next: 16 Events &
+requests, once #2212 merges.
 
 ### 2026-09-03 — Feature 14 (Equipment check & shifts, pass 3) — no new findings, PR pending
 
@@ -7957,14 +8687,14 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⏳     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |

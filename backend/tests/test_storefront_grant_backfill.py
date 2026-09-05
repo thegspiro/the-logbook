@@ -40,11 +40,31 @@ _STOREFRONT_GRANTS = ("storefront.view", "storefront.order", "storefront.manage"
 # of the same slugs. See ``_pristine_registry_set``. Each one leaves today's
 # registry one grant shorter than the row the backfill actually meets, so each
 # has to be added back here rather than trimmed out of the frozen snapshot.
+#
+# The seeded permission is named here rather than read off the migration,
+# because a migration may revoke more strings than the registry ever seeded:
+# ``b6e4a0d17c93`` removes ``apparatus.manage`` and ``apparatus.*`` alongside
+# ``apparatus.view`` to close the wildcard, and a pristine row carried only the
+# last of those. The slug list still comes from the migration itself.
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 _LATER_REVOCATIONS = (
-    _VERSIONS / "20260825_2015_a1f7c34e9b02_revoke_baseline_notifications_view.py",
-    _VERSIONS / "20260826_1700_e4f5a6b7c8d9_revoke_regular_member_facilities_view.py",
-    _VERSIONS / "20260827_1000_c7e2b9a41f83_revoke_officer_facilities_view.py",
+    (
+        _VERSIONS / "20260825_2015_a1f7c34e9b02_revoke_baseline_notifications_view.py",
+        "notifications.view",
+    ),
+    (
+        _VERSIONS
+        / "20260826_1700_e4f5a6b7c8d9_revoke_regular_member_facilities_view.py",
+        "facilities.view",
+    ),
+    (
+        _VERSIONS / "20260827_1000_c7e2b9a41f83_revoke_officer_facilities_view.py",
+        "facilities.view",
+    ),
+    (
+        _VERSIONS / "20260905_1420_b6e4a0d17c93_revoke_baseline_apparatus_view.py",
+        "apparatus.view",
+    ),
 )
 
 
@@ -79,10 +99,10 @@ def _pristine_registry_set(slug: str) -> set[str]:
     The names are translated back rather than the snapshot being respelled.
     """
     permissions = set(DEFAULT_POSITIONS[slug].get("permissions") or [])
-    for index, path in enumerate(_LATER_REVOCATIONS):
+    for index, (path, permission) in enumerate(_LATER_REVOCATIONS):
         revocation = _load_module(path, f"_later_revocation_{index}")
         if slug in revocation._SLUGS:
-            permissions.add(revocation._PERMISSION)
+            permissions.add(permission)
     return {_RENAMED_SINCE.get(p, p) for p in permissions}
 
 
@@ -106,12 +126,26 @@ def _granted_later() -> set[str]:
     return set(_load_module(_LATER_CORPORATE_GRANT, "_corp_storefront")._PRIOR_DEFAULTS)
 
 
+#: Registered after this migration was written, and with nothing for it to
+#: repair. The rule this module enforces — a seeded position holding the
+#: storefront grants must be backfilled, or existing departments are left
+#: without what fresh installs get — rests on the row having come from the
+#: seed. ``emt`` never did: until 2026-09-05 the registry had no EMT position,
+#: so every stored EMT row was written by the onboarding editor's create
+#: branch, and ``expand_module_checkboxes`` emits ``storefront.order``
+#: alongside ``storefront.view`` for a ticked View box
+#: (``_VIEW_IMPLIED_PERMISSIONS``). Those rows already hold both grants. A
+#: position registered later that *would* be seeded belongs in a backfill of
+#: its own, not in this frozen one (CLAUDE.md pitfall #20).
+_REGISTERED_AFTER_THIS_MIGRATION = frozenset({"emt"})
+
+
 def _seeded_slugs_with_storefront() -> set[str]:
     later = _granted_later()
     return {
         slug
         for slug, entry in DEFAULT_POSITIONS.items()
-        if slug not in later
+        if slug not in later and slug not in _REGISTERED_AFTER_THIS_MIGRATION
         # A wildcard position already covers every storefront grant, so the
         # migration deliberately leaves it out rather than cluttering it.
         and "*" not in (entry.get("permissions") or []) and _registry_grants(slug)

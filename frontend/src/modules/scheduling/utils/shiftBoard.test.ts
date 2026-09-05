@@ -12,6 +12,11 @@ import {
   memberInitials,
   monthMatrix,
   shiftCapacity,
+  DEFAULT_SIGNUP_WINDOW,
+  isShiftClaimable,
+  memberSignupClosedReason,
+  rosterLocked,
+  signupClosedReason,
   shiftCrewName,
   shiftPeriodLetter,
   shiftStatusInfo,
@@ -39,14 +44,23 @@ const seat = (userId: string, position: string, name = 'A Member') => ({
 // fixture to today so it stays an open shift for good. Tests that pin an
 // explicit `today` (see TODAY below) keep their literal dates on purpose.
 const TODAY_KEY = toDateKey(new Date());
-const TOMORROW_KEY = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+// The default fixture's start must be an *instant* in the future, not a fixed
+// wall-clock time: `memberSignupClosedReason` compares it against `Date.now()`,
+// so a literal `T22:00:00Z` would close every default-fixture shift after 22:00
+// UTC and take this file and ShiftSeatList's red on a commit that touched
+// neither — the same time-bomb class the comment above describes, one level
+// down. Tests that care about the *hour* (day/night classification) override
+// `start_time` with a literal on purpose.
+const FUTURE_START = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+const FUTURE_END = new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString();
 
 const shift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 's1',
   organization_id: 'org',
   shift_date: TODAY_KEY,
-  start_time: `${TODAY_KEY}T22:00:00Z`,
-  end_time: `${TOMORROW_KEY}T10:00:00Z`,
+  start_time: FUTURE_START,
+  end_time: FUTURE_END,
   positions: [
     { position: 'officer', required: true },
     { position: 'driver', required: true },
@@ -411,6 +425,12 @@ describe('a shift nobody can sign up for any more', () => {
   // A board that counted their empty chairs would report a shortage nobody
   // can act on, and would offer a button whose only outcome is an error.
   const TODAY = new Date('2026-08-25T12:00:00Z');
+  // A shift that ran yesterday, and whose start says so too. The two have to
+  // agree: `shift_date` and `start_time` describe one shift, and since the
+  // claim rules now take the start instant as the authority (so an overnight
+  // shift's midnight rollover cannot close a live reopening), a fixture with
+  // a past date and a future start is not a shift any department could have.
+  const RAN_YESTERDAY = { shift_date: '2026-08-24', start_time: '2026-08-24T18:00:00Z' };
 
   it('is closed once cancelled', () => {
     expect(isShiftOpen(shift({ status: 'cancelled' }), TODAY)).toBe(false);
@@ -421,7 +441,7 @@ describe('a shift nobody can sign up for any more', () => {
   });
 
   it('is closed once the day has passed', () => {
-    expect(isShiftOpen(shift({ shift_date: '2026-08-24' }), TODAY)).toBe(false);
+    expect(isShiftOpen(shift(RAN_YESTERDAY), TODAY)).toBe(false);
   });
 
   it('is still open on its own day', () => {
@@ -443,14 +463,14 @@ describe('a shift nobody can sign up for any more', () => {
 
   it('offers no seat to claim', () => {
     expect(firstClaimableSeat(shift({ status: 'cancelled' }), ['firefighter'], ME, TODAY)).toBeNull();
-    expect(firstClaimableSeat(shift({ shift_date: '2026-08-24' }), ['firefighter'], ME, TODAY)).toBeNull();
+    expect(firstClaimableSeat(shift(RAN_YESTERDAY), ['firefighter'], ME, TODAY)).toBeNull();
   });
 
   it('still shows a member the shift they were on', () => {
     // Precedence: a member scanning the month for what they worked last week
     // is asking the same question as one scanning for next week.
     const worked = shift({
-      shift_date: '2026-08-24',
+      ...RAN_YESTERDAY,
       roster: [seat(ME, 'driver')],
       attendee_count: 1,
     });
@@ -461,5 +481,246 @@ describe('a shift nobody can sign up for any more', () => {
     const info = shiftStatusInfo(shift({ status: 'cancelled' }), null, TODAY);
     expect(chipLabel(info)).toBe('Cancelled');
     expect(statusBadgeLabel(info)).toBe('Cancelled');
+  });
+});
+
+describe('memberSignupClosedReason', () => {
+  const at = (minutesFromNow: number) =>
+    shift({ start_time: new Date(Date.now() + minutesFromNow * 60_000).toISOString() });
+
+  it('is open before the shift starts', () => {
+    expect(memberSignupClosedReason(at(60))).toBeNull();
+  });
+
+  it('closes once the shift has started', () => {
+    // The regression this exists for: the old rule compared calendar days, so
+    // a shift that began ten hours ago was still "today" and still claimable.
+    expect(memberSignupClosedReason(at(-600))).toBe('This shift has already started.');
+  });
+
+  it('closes early when the department set a lead time', () => {
+    const window = { closesMinutesBefore: 30, graceMinutes: 60 };
+    expect(memberSignupClosedReason(at(31), window)).toBeNull();
+    expect(memberSignupClosedReason(at(29), window)).toBe('Signup for this shift has closed.');
+  });
+
+  it('is reopened by a live late-signup window', () => {
+    const reopened = {
+      ...at(-600),
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    };
+    expect(memberSignupClosedReason(reopened)).toBeNull();
+  });
+
+  it('names an expired late-signup window rather than the generic reason', () => {
+    const expired = {
+      ...at(-600),
+      late_signup_until: new Date(Date.now() - 5 * 60_000).toISOString(),
+    };
+    expect(memberSignupClosedReason(expired)).toBe('Late signup for this shift has closed.');
+  });
+
+  it('never lets an expired override shorten the natural deadline', () => {
+    const future = {
+      ...at(60),
+      late_signup_until: new Date(Date.now() - 60 * 60_000).toISOString(),
+    };
+    expect(memberSignupClosedReason(future)).toBeNull();
+  });
+
+  it('falls back to the lifecycle rule when the start is not an instant', () => {
+    // A bare "HH:MM" still reaches the client from some responses. Returning
+    // null beats NaN, which compares false in both directions and would close
+    // every shift in the department.
+    expect(memberSignupClosedReason(shift({ start_time: '07:00' }))).toBeNull();
+    expect(memberSignupClosedReason(shift({ start_time: '' }))).toBeNull();
+  });
+
+  it('does not close a future shift under the pre-settings default', () => {
+    expect(memberSignupClosedReason(at(1), DEFAULT_SIGNUP_WINDOW)).toBeNull();
+  });
+});
+
+describe('isShiftClaimable', () => {
+  const started = shift({ start_time: new Date(Date.now() - 60 * 60_000).toISOString() });
+
+  it('is false on a shift that has started', () => {
+    expect(isShiftClaimable(started)).toBe(false);
+  });
+
+  it('is false on a cancelled shift even inside a late-signup window', () => {
+    const cancelled = {
+      ...started,
+      status: 'cancelled' as const,
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    };
+    expect(isShiftClaimable(cancelled)).toBe(false);
+  });
+});
+
+describe('shiftStatusInfo after the start', () => {
+  it('stops counting the empty chairs of a shift that has gone out', () => {
+    // A started shift's open seats are not a shortage anybody browsing the
+    // board can fix, which is the same argument a cancelled shift's are not.
+    const started = shift({ start_time: new Date(Date.now() - 60 * 60_000).toISOString() });
+    const info = shiftStatusInfo(started);
+    expect(info.isOpen).toBe(false);
+    expect(info.openSeats).toBe(0);
+  });
+});
+
+describe('signupClosedReason by actor', () => {
+  const at = (minutesFromNow: number) =>
+    shift({ start_time: new Date(Date.now() + minutesFromNow * 60_000).toISOString() });
+  const MEMBER = { canAssign: false, canManage: false };
+  const OFFICER = { canAssign: true, canManage: false };
+  const ADMIN = { canAssign: false, canManage: true };
+
+  it('bounds an officer by the grace period, not the member cutoff', () => {
+    // The whole point of the grace: an officer seats somebody after the crew
+    // has gone out. Gating their controls on the member rule would block a
+    // path the server accepts.
+    const started = at(-30);
+    expect(signupClosedReason(started, DEFAULT_SIGNUP_WINDOW, MEMBER)).not.toBeNull();
+    expect(signupClosedReason(started, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBeNull();
+  });
+
+  it('closes for an officer past the grace period', () => {
+    expect(signupClosedReason(at(-90), DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(
+      'This shift started too long ago to add anyone to.'
+    );
+  });
+
+  it('never bounds a scheduling admin', () => {
+    const window = { closesMinutesBefore: 10080, graceMinutes: 0 };
+    expect(signupClosedReason(at(-100_000), window, ADMIN)).toBeNull();
+  });
+
+  it('does not apply the member lead time to an officer', () => {
+    const window = { closesMinutesBefore: 10080, graceMinutes: 60 };
+    expect(signupClosedReason(at(60), window, MEMBER)).not.toBeNull();
+    expect(signupClosedReason(at(60), window, OFFICER)).toBeNull();
+  });
+
+  it('lets a late-signup window reopen the shift for an officer too', () => {
+    const reopened = {
+      ...at(-600),
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    };
+    expect(signupClosedReason(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBeNull();
+  });
+
+  it('defaults to the member rule when no viewer is given', () => {
+    expect(signupClosedReason(at(-30))).toBe(memberSignupClosedReason(at(-30)));
+  });
+});
+
+describe('an overnight shift after its date has rolled over', () => {
+  // A 18:00–06:00 shift is "yesterday" from midnight. The day-granular rule is
+  // only a fallback, or an officer's 00:30 reopening — exactly when a crew is
+  // short — shows a live window with every button disabled.
+  const overnight = (overrides: Partial<ShiftRecord> = {}) =>
+    shift({
+      shift_date: toDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000)),
+      start_time: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+      end_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+      ...overrides,
+    });
+
+  it('is claimable again while a reopening is live', () => {
+    const reopened = overnight({
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    });
+    expect(isShiftClaimable(reopened)).toBe(true);
+    expect(shiftStatusInfo(reopened).isOpen).toBe(true);
+  });
+
+  it('is not claimable without one', () => {
+    expect(isShiftClaimable(overnight())).toBe(false);
+  });
+
+  it('still falls back to the day rule when the start cannot be read', () => {
+    const unreadable = overnight({ start_time: '18:00' });
+    expect(isShiftClaimable(unreadable)).toBe(false);
+  });
+});
+
+describe('rosterLocked', () => {
+  const MEMBER = { canAssign: false, canManage: false };
+  const OFFICER = { canAssign: true, canManage: false };
+  const ADMIN = { canAssign: false, canManage: true };
+
+  // Minutes from now, as an instant pair. `ran` is the shift the bug was
+  // reported on: over, days ago, still offering every live control it had.
+  const window = (startMinutes: number, endMinutes: number) =>
+    shift({
+      shift_date: toDateKey(new Date(Date.now() + startMinutes * 60_000)),
+      start_time: new Date(Date.now() + startMinutes * 60_000).toISOString(),
+      end_time: new Date(Date.now() + endMinutes * 60_000).toISOString(),
+    });
+  const ran = window(-20 * 24 * 60 - 720, -20 * 24 * 60);
+
+  it('locks a shift that ran weeks ago', () => {
+    expect(rosterLocked(ran, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+    expect(rosterLocked(ran, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(true);
+  });
+
+  it('leaves an upcoming shift alone', () => {
+    expect(rosterLocked(shift(), DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+  });
+
+  it('keeps an overnight crew’s controls through the shift', () => {
+    // Six hours in, six to go. `isPast` is already true — the date rolled at
+    // midnight — which is exactly why this rule cannot be day-granular.
+    const overnight = window(-6 * 60, 6 * 60);
+    expect(rosterLocked(overnight, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(overnight, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
+  });
+
+  it('holds the roster open through the grace period after the end', () => {
+    // Signup closed for the officer long ago — the officer bound counts from
+    // the *start* — but the crew has only just come in, so the roster is still
+    // being settled.
+    const justEnded = window(-12 * 60 - 30, -30);
+    expect(signupClosedReason(justEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).not.toBeNull();
+    expect(rosterLocked(justEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+  });
+
+  it('locks once the grace period past the end has run out', () => {
+    const window90 = { closesMinutesBefore: 0, graceMinutes: 60 };
+    expect(rosterLocked(window(-12 * 60 - 90, -90), window90, OFFICER)).toBe(true);
+    expect(rosterLocked(window(-12 * 60 - 30, -30), window90, OFFICER)).toBe(false);
+  });
+
+  it('never locks a scheduling admin out', () => {
+    // The records path. Correcting a roster from last month is the whole job.
+    expect(rosterLocked(ran, DEFAULT_SIGNUP_WINDOW, ADMIN)).toBe(false);
+  });
+
+  it('stays open while a late-signup window an officer opened is live', () => {
+    const reopened = { ...ran, late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString() };
+    expect(rosterLocked(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+  });
+
+  it('leaves an open-ended shift unlocked however long ago it began', () => {
+    // `end_time` is optional on a shift, and an open-ended one is real rather
+    // than malformed. Standing the start in for the missing end would lock it
+    // one grace period after it began, with the crew still working — a false
+    // lock on a live shift, which is worse than no lock on one nothing can
+    // bound.
+    const openEnded = { ...ran, end_time: undefined };
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
+  });
+
+  it('leaves an end it cannot read unlocked', () => {
+    // A bare "HH:MM" end still reaches the client from some responses. It is
+    // the same unjudgeable case, and takes the same permissive answer.
+    const unreadable = { ...ran, end_time: '19:00' };
+    expect(rosterLocked(unreadable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+  });
+
+  it('defaults to the member view when no viewer is given', () => {
+    expect(rosterLocked(ran)).toBe(true);
   });
 });

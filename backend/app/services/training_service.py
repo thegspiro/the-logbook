@@ -288,6 +288,19 @@ class TrainingService:
         )
 
     @staticmethod
+    def _due_date_type_str(requirement) -> Optional[str]:
+        """Normalize ``due_date_type`` (enum member or bare string) to its
+        string value, or ``None`` when unset."""
+        due_date_type = getattr(requirement, "due_date_type", None)
+        if not due_date_type:
+            return None
+        return (
+            due_date_type.value
+            if hasattr(due_date_type, "value")
+            else str(due_date_type)
+        )
+
+    @staticmethod
     def _get_date_window(requirement, today: date):
         """Return (start_date, end_date) for a requirement's evaluation period.
 
@@ -295,13 +308,7 @@ class TrainingService:
         standard frequency-based windows (annual, quarterly, monthly, etc.).
         """
         # Rolling period takes precedence over frequency-based window
-        due_date_type = getattr(requirement, "due_date_type", None)
-        if due_date_type:
-            due_date_type = (
-                due_date_type.value
-                if hasattr(due_date_type, "value")
-                else str(due_date_type)
-            )
+        due_date_type = TrainingService._due_date_type_str(requirement)
         rolling_months = getattr(requirement, "rolling_period_months", None)
 
         if due_date_type == "rolling" and rolling_months:
@@ -343,6 +350,183 @@ class TrainingService:
                 return custom
             yr = requirement.year if requirement.year else current_year
             return date(yr, 1, 1), date(yr, 12, 31)
+
+    @staticmethod
+    def _anchor_matches(requirement, record, req_type: str) -> bool:
+        """Does ``record`` count toward ``requirement``, for the purpose of
+        anchoring a due-date (rolling last-completion, or
+        certification-period expiration)?
+
+        Mirrors each requirement type's own crediting criteria -- the exact
+        filters ``check_requirement_progress``/``evaluate_requirement_detail``
+        already apply for that type -- rather than a single blanket
+        ``training_type`` check or a one-size-fits-all matcher. Both are
+        wrong in opposite directions: a bare ``training_type`` check
+        over-matches (any record of any type) when it's unset, even for a
+        course-specific requirement; ``certification_record_matches``
+        (correct for CERTIFICATION, whose match is "any of several specific
+        criteria") under-matches HOURS/SHIFTS/CALLS to zero when a
+        requirement legitimately has no restriction at all -- e.g. "24
+        hours of *any* training every 24 months" is a valid, common
+        configuration whose semantics are "unset criterion = no
+        restriction", not "match nothing."
+        """
+        from app.models.training import RequirementType
+        from app.services.training_compliance import certification_record_matches
+
+        if req_type == RequirementType.CERTIFICATION.value:
+            return certification_record_matches(requirement, record)
+
+        if req_type == RequirementType.COURSES.value:
+            course_ids = {str(c) for c in (requirement.required_courses or [])}
+            return bool(record.course_id) and str(record.course_id) in course_ids
+
+        if req_type == RequirementType.HOURS.value:
+            if (
+                requirement.training_type
+                and record.training_type != requirement.training_type
+            ):
+                return False
+            required_courses = getattr(requirement, "required_courses", None)
+            if required_courses:
+                course_ids = {str(c) for c in required_courses}
+                return bool(record.course_id) and str(record.course_id) in course_ids
+            return True
+
+        if req_type in (RequirementType.SHIFTS.value, RequirementType.CALLS.value):
+            return (
+                not requirement.training_type
+                or record.training_type == requirement.training_type
+            )
+
+        # Fallback (skills_evaluation, checklist, etc.): training_type
+        # match, or the requirement name appearing in the record's course
+        # name -- the same two criteria the fallback branch itself uses.
+        if requirement.training_type:
+            return record.training_type == requirement.training_type
+        return bool(
+            requirement.name
+            and record.course_name
+            and requirement.name.lower() in record.course_name.lower()
+        )
+
+    async def _anchor_records(
+        self,
+        requirement,
+        user_id: UUID,
+        organization_id: UUID,
+        completed_records: Optional[Sequence[Any]],
+        today: date,
+    ) -> List[Any]:
+        """The member's completed records that satisfy ``requirement``,
+        for deriving a due-date anchor (rolling last-completion, or
+        certification-period expiration).
+
+        Deliberately unbounded by any evaluation *window* -- an overdue
+        anchor is often *older* than the window, which is exactly the case
+        a window-bounded search would miss (``_preload_window`` exempts
+        rolling and certification-period requirements for this reason,
+        when a caller passes preloaded ``completed_records``). Freshness is
+        a different axis and is still enforced: when the requirement sets
+        ``recency_days``, ``is_recent_enough`` requires a known
+        ``completion_date`` to verify it, matching the freshness filtering
+        the actual compliance calculation applies elsewhere in this file
+        (``apply_recency``) -- without it, this could anchor a due date on
+        a record the compliance result itself treats as unverifiable and
+        excludes, contradicting it on the very same response.
+
+        Does not otherwise filter on ``completion_date`` -- it's optional
+        even on a completed record, and the certification-matching logic
+        elsewhere (``r.completion_date or date.min``) deliberately still
+        considers such a record rather than dropping it when no freshness
+        window applies; each caller here applies that same convention
+        itself, since a rolling anchor genuinely cannot use a missing date
+        (nothing to add the interval to) while a certification-period
+        anchor can (it only needs the record's ``expiration_date``).
+        """
+        from app.services.training_compliance import is_recent_enough
+
+        req_type = (
+            requirement.requirement_type.value
+            if hasattr(requirement.requirement_type, "value")
+            else str(requirement.requirement_type)
+        )
+
+        if completed_records is None:
+            result = await self.db.execute(
+                select(TrainingRecord).where(
+                    TrainingRecord.user_id == str(user_id),
+                    TrainingRecord.organization_id == str(organization_id),
+                    TrainingRecord.status == TrainingStatus.COMPLETED,
+                )
+            )
+            completed_records = result.scalars().all()
+
+        return [
+            r
+            for r in completed_records
+            if self._anchor_matches(requirement, r, req_type)
+            and is_recent_enough(requirement, r, today)
+        ]
+
+    async def _rolling_due_date(
+        self,
+        requirement,
+        user_id: UUID,
+        organization_id: UUID,
+        completed_records: Optional[Sequence[Any]],
+        rolling_months: int,
+        today: date,
+    ) -> Optional[date]:
+        """Next due date for a rolling-due-date requirement.
+
+        Anchored to the member's most recent applicable completion plus the
+        configured interval -- not the evaluation window, which always ends
+        `today` for a rolling requirement and so cannot itself be a deadline.
+        Returns ``None`` when the member has no applicable completion yet;
+        there is no anchor to compute a deadline from.
+        """
+        from dateutil.relativedelta import relativedelta
+
+        anchors = await self._anchor_records(
+            requirement, user_id, organization_id, completed_records, today
+        )
+        # Unlike _certification_due_date, a rolling anchor genuinely cannot
+        # use a record with no completion_date -- there is no date to add
+        # the interval to -- so it's filtered out here rather than in
+        # _anchor_records, which both callers share.
+        latest = max(
+            (r.completion_date for r in anchors if r.completion_date is not None),
+            default=None,
+        )
+        return latest + relativedelta(months=rolling_months) if latest else None
+
+    async def _certification_due_date(
+        self,
+        requirement,
+        user_id: UUID,
+        organization_id: UUID,
+        completed_records: Optional[Sequence[Any]],
+        today: date,
+    ) -> Optional[date]:
+        """Next due date for a certification-period requirement: the
+        current matching certification's own expiration date -- i.e. when
+        it needs to be renewed. Mirrors the matching/selection
+        `check_requirement_progress`'s own CERTIFICATION branch uses
+        (latest completed matching record, by completion date -- falling
+        back to `date.min` for a matching record with an unknown
+        completion date, same as every other certification-matching site
+        in this file, rather than dropping it: it can still have a known
+        `expiration_date` worth reporting). Returns ``None`` when the
+        member holds no matching certification.
+        """
+        anchors = await self._anchor_records(
+            requirement, user_id, organization_id, completed_records, today
+        )
+        if not anchors:
+            return None
+        latest = max(anchors, key=lambda r: r.completion_date or date.min)
+        return latest.expiration_date
 
     @staticmethod
     def evaluate_requirement_detail(
@@ -569,10 +753,76 @@ class TrainingService:
         is_met = pct >= 100 and not cert_expired
 
         # Effective due date
-        effective_due_date = (
-            req.due_date if req.due_date else (end_date if end_date else None)
-        )
-        if freq == RequirementFrequency.BIANNUAL.value:
+        rolling_months = get_rolling_period_months(req)
+        req_due_date_type = TrainingService._due_date_type_str(req)
+        # A stale req.due_date can survive a switch away from "fixed_date"
+        # to *any* other type: RequirementModal.tsx seeds due_date from the
+        # existing row and only clears/edits it on the fixed_date screen,
+        # so changing the type keeps sending the old value regardless of
+        # which type it's switched to. An explicit due_date therefore only
+        # means anything for "fixed_date" (or a legacy row with no
+        # due_date_type at all, from before the field existed) -- never
+        # calendar_period, rolling, or certification_period, all three of
+        # which compute their own deadline below.
+        honors_explicit_due_date = req_due_date_type in (None, "fixed_date")
+        anchored_type = rolling_months or req_due_date_type == "certification_period"
+        if req.due_date and honors_explicit_due_date:
+            effective_due_date = req.due_date
+        else:
+            if anchored_type:
+                # Rolling/certification-period due dates are anchored to a
+                # completion, not the window end: end_date is always `today`
+                # for a rolling requirement (a trailing evaluation window,
+                # not a deadline), and a certification-period requirement
+                # never resets on a schedule at all -- it comes due when the
+                # certificate itself expires. Matching mirrors this
+                # requirement type's own crediting criteria (see
+                # _anchor_matches) rather than a bare training_type check,
+                # so a course-specific requirement with no training_type set
+                # isn't anchored on an unrelated record of any type. Uses
+                # the full (recency-filtered, not window-filtered) completed
+                # set so a completion older than the window -- i.e. one that
+                # makes the requirement overdue -- is still found.
+                anchors = [
+                    r
+                    for r in completed
+                    if TrainingService._anchor_matches(req, r, req_type)
+                ]
+                if rolling_months:
+                    from dateutil.relativedelta import relativedelta
+
+                    latest_completion = max(
+                        (r.completion_date for r in anchors if r.completion_date),
+                        default=None,
+                    )
+                    effective_due_date = (
+                        latest_completion + relativedelta(months=rolling_months)
+                        if latest_completion
+                        else None
+                    )
+                else:
+                    # A matching record's completion_date can be unknown
+                    # even when it's completed and carries a known
+                    # expiration_date -- date.min is the same fallback
+                    # every other certification-matching site in this file
+                    # uses, rather than dropping such a record outright.
+                    latest = (
+                        max(anchors, key=lambda r: r.completion_date or date.min)
+                        if anchors
+                        else None
+                    )
+                    effective_due_date = latest.expiration_date if latest else None
+            else:
+                effective_due_date = end_date if end_date else None
+        # This legacy BIANNUAL override predates due_date_type awareness and
+        # is skipped for rolling/certification-period requirements: it
+        # selects the newest expiration across *any* record with a bare
+        # training_type filter (not _anchor_matches), which can overwrite
+        # the just-computed, correctly-anchored due date with an unrelated
+        # certification's expiration -- e.g. a biannual EMT cert due in 30
+        # days getting silently replaced by an unrelated cert expiring next
+        # year, which would then never surface in a 90-day at-risk forecast.
+        if freq == RequirementFrequency.BIANNUAL.value and not anchored_type:
             with_exp = [r for r in completed if r.expiration_date]
             if req.training_type:
                 with_exp = [r for r in with_exp if r.training_type == req.training_type]
@@ -656,6 +906,55 @@ class TrainingService:
 
         today = date.today()
         start_date, end_date = self._get_date_window(requirement, today)
+        # Every RequirementProgress this method returns carries this, so
+        # consumers (the MCP `get_member_requirements_progress` tool
+        # explicitly promises "days until due, negative when overdue") don't
+        # each have to re-derive it themselves. Computed from the raw window
+        # before the recency cutoff below can overwrite end_date.
+        rolling_months = get_rolling_period_months(requirement)
+        due_date_type = self._due_date_type_str(requirement)
+        # A stale requirement.due_date can survive a switch away from
+        # "fixed_date" to *any* other type: RequirementModal.tsx seeds
+        # due_date from the existing row and only clears/edits it on the
+        # fixed_date screen, so changing the type keeps sending the old
+        # value regardless of which type it's switched to. An explicit
+        # due_date therefore only means anything for "fixed_date" (or a
+        # legacy row with no due_date_type at all) -- never
+        # calendar_period, rolling, or certification_period, all three of
+        # which compute their own deadline below.
+        honors_explicit_due_date = due_date_type in (None, "fixed_date")
+        if requirement.due_date and honors_explicit_due_date:
+            effective_due_date = requirement.due_date
+        elif rolling_months:
+            # Rolling due dates are anchored to the member's last applicable
+            # completion, not the window end: _get_date_window() always
+            # returns `today` as end_date for a rolling requirement (it's a
+            # trailing evaluation window, not a deadline), which would
+            # otherwise report every rolling requirement as due today.
+            effective_due_date = await self._rolling_due_date(
+                requirement,
+                user_id,
+                organization_id,
+                completed_records,
+                rolling_months,
+                today,
+            )
+        elif due_date_type == "certification_period":
+            # A certification-period requirement's deadline is the current
+            # matching certification's own expiration date, not a calendar
+            # window -- the requirement never "resets" on a schedule, it
+            # comes due when the certificate itself expires.
+            effective_due_date = await self._certification_due_date(
+                requirement, user_id, organization_id, completed_records, today
+            )
+        else:
+            # A calendar-period requirement (annual/quarterly/monthly) has no
+            # due_date of its own -- the window's end_date IS its deadline,
+            # the same fallback evaluate_requirement_detail() uses.
+            effective_due_date = end_date
+        days_until_due = (
+            (effective_due_date - today).days if effective_due_date else None
+        )
         # Narrow the window by the freshness cutoff up front so every query
         # below inherits it. A one_time requirement has no frequency window at
         # all, so recency supplies both bounds rather than tightening them.
@@ -826,7 +1125,8 @@ class TrainingService:
                         completed_hours=completed_value,
                         percentage_complete=0.0,
                         is_complete=False,
-                        due_date=requirement.due_date,
+                        due_date=effective_due_date,
+                        days_until_due=days_until_due,
                     )
 
             # A requirement with no positive target (required_hours unset/0) must
@@ -854,7 +1154,8 @@ class TrainingService:
                     completed_hours=0,
                     percentage_complete=0.0,
                     is_complete=False,
-                    due_date=requirement.due_date,
+                    due_date=effective_due_date,
+                    days_until_due=days_until_due,
                 )
 
             records = await _windowed()
@@ -999,7 +1300,8 @@ class TrainingService:
             completed_hours=completed_value,
             percentage_complete=round(percentage, 2),
             is_complete=is_complete,
-            due_date=requirement.due_date,
+            due_date=effective_due_date,
+            days_until_due=days_until_due,
         )
 
     async def get_all_requirements_progress(
@@ -1078,8 +1380,12 @@ class TrainingService:
         the earliest window start to the latest window end.
 
         ``None`` when some requirement counts records regardless of the
-        frequency window — a certification, or a biannual hours requirement
-        whose expired-certificate override looks at every record — or when a
+        frequency window — a certification, a biannual hours requirement
+        whose expired-certificate override looks at every record, or a
+        rolling/certification-period requirement whose due-date anchor
+        (`_rolling_due_date`/`_certification_due_date`) must see every
+        completion to find one older than the window (the overdue case a
+        window-bounded search would otherwise miss) — or when a
         requirement's own window is open-ended.
         """
         from app.models.training import RequirementType
@@ -1090,9 +1396,14 @@ class TrainingService:
         for req in requirements:
             req_type = getattr(req.requirement_type, "value", req.requirement_type)
             freq = getattr(req.frequency, "value", req.frequency)
-            if req_type == RequirementType.CERTIFICATION.value or (
-                req_type == RequirementType.HOURS.value
-                and freq == RequirementFrequency.BIANNUAL.value
+            if (
+                req_type == RequirementType.CERTIFICATION.value
+                or (
+                    req_type == RequirementType.HOURS.value
+                    and freq == RequirementFrequency.BIANNUAL.value
+                )
+                or get_rolling_period_months(req)
+                or cls._due_date_type_str(req) == "certification_period"
             ):
                 return None
             start, end = cls._get_date_window(req, today)

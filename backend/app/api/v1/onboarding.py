@@ -199,6 +199,10 @@ def _email_settings_from_onboarding(platform: str, raw_config: dict) -> dict:
         "use_tls": raw_config.get("smtpEncryption", "tls") != "none",
         "google_app_password": raw_config.get("googleAppPassword"),
         "microsoft_app_password": raw_config.get("microsoftAppPassword"),
+        "microsoft_auth_method": raw_config.get("microsoftAuthMethod"),
+        "microsoft_tenant_id": raw_config.get("microsoftTenantId"),
+        "microsoft_client_id": raw_config.get("microsoftClientId"),
+        "microsoft_client_secret": raw_config.get("microsoftClientSecret"),
         "cloudflare_account_id": raw_config.get("cloudflareAccountId"),
         "cloudflare_api_token": raw_config.get("cloudflareApiToken"),
     }
@@ -1475,7 +1479,8 @@ async def verify_email_configuration(
             # Gmail: SMTP submission with an App Password
             test_func = partial(test_gmail_connection, config)
         elif platform == "microsoft":
-            # Microsoft 365: SMTP submission with an App Password
+            # Microsoft 365: SMTP submission with an App Password, or an
+            # Entra ID app-registration token over XOAUTH2
             test_func = partial(test_microsoft_connection, config)
         elif platform == "cloudflare":
             # Test Cloudflare Email Service API token
@@ -2302,7 +2307,39 @@ async def save_session_roles(
                 existing_role.description = role_data.description
             updated_roles.append(role_data.name)
         else:
-            # Create new role
+            # A slug the registry seeds gets the registry's grants, exactly as
+            # the update branch above gives them to a row that already exists.
+            #
+            # The two branches disagreeing is what made `emt` a live disclosure:
+            # the wizard offered it, nothing had seeded a row, so this branch
+            # stored the editor's checkbox expansion verbatim — a role-type
+            # heuristic's output, `reports.view` among it — as an `is_system`
+            # row. The registry entry alone does not close that, because an
+            # organization created before the entry shipped has no seeded row
+            # for a resumed session to update, and lands here.
+            #
+            # It also recovers what the checkboxes cannot express at all. They
+            # only produce `{module}.view`, `{module}.manage`, `{module}.*` and
+            # the entries in `_VIEW_IMPLIED_PERMISSIONS`, so a row built from
+            # them alone loses every action grant the registry seeds —
+            # `scheduling.swap` and the rest.
+            # Only for a position the wizard offered, never one the department
+            # invented: a custom position that happened to reuse a registry slug
+            # is theirs, and its grants are whatever they ticked.
+            registry_defaults = (
+                []
+                if role_data.is_custom
+                else DEFAULT_ROLES.get(role_data.id, {}).get("permissions", [])
+            )
+            if registry_defaults:
+                permission_list = (
+                    ["*"]
+                    if "*" in registry_defaults
+                    else _merge_default_permissions(
+                        role_data.permissions, registry_defaults
+                    )
+                )
+
             new_role = Role(
                 organization_id=organization_id,
                 name=role_data.name,

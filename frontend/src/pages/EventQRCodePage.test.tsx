@@ -185,6 +185,7 @@ describe('EventQRCodePage', () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);
@@ -197,10 +198,11 @@ describe('EventQRCodePage', () => {
       });
     });
 
-    it('should show greyed-out QR code when check-in is invalid', async () => {
+    it('should withhold the QR code and show a placeholder when check-in is invalid', async () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);
@@ -208,15 +210,19 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        // The QR code is still rendered but with reduced opacity
-        expect(screen.getByTestId('qr-code')).toBeInTheDocument();
+        expect(screen.getByTestId('qr-code-placeholder')).toBeInTheDocument();
       });
+
+      // A greyed-out code is still scannable, so no code may be rendered at all
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+      expect(screen.getByText(/QR code hidden until check-in opens/)).toBeInTheDocument();
     });
 
     it('should not show print button when check-in is invalid', async () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);
@@ -228,10 +234,34 @@ describe('EventQRCodePage', () => {
       });
     });
 
+    it('should still show the QR code during the flexible early-arrival grace', async () => {
+      // is_valid is the strict on-time window; can_check_in is what a tap
+      // would actually be allowed to do. A Flexible/Window event admits a scan
+      // up to an hour early, and the two fields diverge only there. Gating the
+      // code on is_valid would withhold it while the backend accepted scans.
+      const earlyGraceData = {
+        ...mockQRCheckInData,
+        is_valid: false,
+        can_check_in: true,
+      };
+
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(earlyGraceData);
+
+      renderWithRouter(<EventQRCodePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('qr-code')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('qr-code-placeholder')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /print qr code/i })).toBeInTheDocument();
+    });
+
     it('should show note when event was ended early', async () => {
       const earlyEndData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
         actual_end_time: '2026-01-25T19:00:00Z',
       };
 
@@ -281,6 +311,7 @@ describe('EventQRCodePage', () => {
         return Promise.resolve({
           ...mockQRCheckInData,
           is_valid: callCount === 1, // Valid on first call, invalid after
+          can_check_in: callCount === 1,
         });
       });
 
@@ -296,6 +327,30 @@ describe('EventQRCodePage', () => {
       await act(() => vi.advanceTimersByTimeAsync(30000));
 
       expect(screen.getByText('Check-in Not Available')).toBeInTheDocument();
+    });
+
+    it('should reveal the QR code once the check-in window opens', async () => {
+      let callCount = 0;
+      vi.mocked(eventService.getQRCheckInData).mockImplementation(() => {
+        callCount++;
+        return Promise.resolve({
+          ...mockQRCheckInData,
+          is_valid: callCount > 1, // Window opens on the first refresh
+          can_check_in: callCount > 1,
+        });
+      });
+
+      renderWithRouter(<EventQRCodePage />);
+
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(screen.getByTestId('qr-code-placeholder')).toBeInTheDocument();
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+
+      await act(() => vi.advanceTimersByTimeAsync(30000));
+
+      expect(screen.getByTestId('qr-code')).toBeInTheDocument();
+      expect(screen.queryByTestId('qr-code-placeholder')).not.toBeInTheDocument();
     });
 
     it('should keep displaying existing data when auto-refresh errors', async () => {

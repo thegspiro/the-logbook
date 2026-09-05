@@ -17,6 +17,11 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
   // are still counted twice, calling the number "calls" overstates the
   // department's volume; "unit responses" is true either way.
   const unitResponses = data.counts_unit_responses === true;
+  // The breakdown keys are storage slugs. Underscore-stripping them turned
+  // "Alarm / Good Intent" into "alarm" and ignored the department's own name
+  // for it entirely; the server sends the labels, including for types it has
+  // since retired.
+  const typeLabel = (slug: string): string => data.call_type_labels?.[slug] ?? slug.replace(/_/g, ' ');
   const totalLabel = unitResponses ? 'Unit Responses' : 'Total Calls';
   const perDayLabel = unitResponses ? 'Avg Responses/Day' : 'Avg Calls/Day';
   const peakLabel = unitResponses ? 'Peak Responses' : 'Peak Calls';
@@ -35,7 +40,7 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
           <div className="flex flex-wrap gap-1">
             {Object.entries(types).map(([type, count]) => (
               <span key={type} className="bg-theme-surface rounded-sm px-1.5 py-0.5 text-xs">
-                {type.replace(/_/g, ' ')}: {count}
+                {typeLabel(type)}: {count}
               </span>
             ))}
           </div>
@@ -65,7 +70,7 @@ export const CallVolumeRenderer: React.FC<Props> = ({ data }) => {
           <div className="flex flex-wrap gap-2">
             {Object.entries(summary.by_type_totals).map(([type, count]) => (
               <span key={type} className="bg-theme-surface text-theme-text-secondary rounded-sm px-2 py-1 text-xs">
-                {type.replace(/_/g, ' ')}: <span className="text-theme-text-primary font-semibold">{count}</span>
+                {typeLabel(type)}: <span className="text-theme-text-primary font-semibold">{count}</span>
               </span>
             ))}
           </div>
@@ -91,9 +96,11 @@ export function getCallVolumeExportData(data: CallVolumeReport) {
     }
   }
 
+  // Column headers carry the department's label, not the slug — an export
+  // lands in a spreadsheet somebody else reads, with no legend beside it.
   const typeColumns = [...allTypes].map((t) => ({
     key: `type_${t}`,
-    header: t.replace(/_/g, ' '),
+    header: data.call_type_labels?.[t] ?? t.replace(/_/g, ' '),
   }));
 
   const rows = data.entries.map((entry) => {

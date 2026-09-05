@@ -61,12 +61,13 @@ here.
 
 ## Training Module
 
-| Item                                                                   | Status               | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`BIANNUAL` requirement frequency has no date window**                | Verify               | `training_compliance.py` sums lifetime totals for hours/shift/call requirements on a `BIANNUAL` cadence instead of a 2-year window. Confirm `BIANNUAL` is only used with expiry-bearing certs; otherwise add a 2-year window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **`enrolled_count` is a placeholder**                                  | Open (small feature) | `TrainingProgramsPage` shows a hardcoded "0 enrolled" — there is no `enrolled_count` on the program response yet. Wiring it is a small backend + schema addition (the per-program enrollments endpoint `GET /training/programs/programs/{id}/enrollments` now exists to source it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **No knowledge-test engine (officer-entered scores only)**             | Open (feature)       | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **Skills-test completion does not enforce requirement `max_attempts`** | ✅ Resolved          | `assert_attempts_remaining` (`app/services/skills_testing_service.py`) now guards the cap at both ends of the flow: creating an official test — so an examiner is refused before running an evaluation that could not count — and, **since 2026-08-08, validating one** rather than completing it. Opening the examiner role to every member means completion is no longer the moment a result counts, so the cap is spent where the credit is granted; a submission that is never validated never costs the candidate a chance. An attempt is a completed, official, **validated**, non-voided test against that requirement, pass or fail; voided results and unvalidated submissions do not consume a chance, and practice attempts never do. A requirement already completed, verified, or waived is exempt, matching the knowledge-test path and keeping recertification testing possible. |
+| Item                                                                     | Status                                             | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`BIANNUAL` requirement frequency has no date window**                  | Verify                                             | `training_compliance.py` sums lifetime totals for hours/shift/call requirements on a `BIANNUAL` cadence instead of a 2-year window. Confirm `BIANNUAL` is only used with expiry-bearing certs; otherwise add a 2-year window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **`enrolled_count` is a placeholder**                                    | Open (small feature)                               | `TrainingProgramsPage` shows a hardcoded "0 enrolled" — there is no `enrolled_count` on the program response yet. Wiring it is a small backend + schema addition (the per-program enrollments endpoint `GET /training/programs/programs/{id}/enrollments` now exists to source it).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **No knowledge-test engine (officer-entered scores only)**               | Open (feature)                                     | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Skills-test completion does not enforce requirement `max_attempts`**   | ✅ Resolved                                        | `assert_attempts_remaining` (`app/services/skills_testing_service.py`) now guards the cap at both ends of the flow: creating an official test — so an examiner is refused before running an evaluation that could not count — and, **since 2026-08-08, validating one** rather than completing it. Opening the examiner role to every member means completion is no longer the moment a result counts, so the cap is spent where the credit is granted; a submission that is never validated never costs the candidate a chance. An attempt is a completed, official, **validated**, non-voided test against that requirement, pass or fail; voided results and unvalidated submissions do not consume a chance, and practice attempts never do. A requirement already completed, verified, or waived is exempt, matching the knowledge-test path and keeping recertification testing possible. |
+| **`GET /training/skills-testing/tests` has no pagination or result cap** | Open (LOW/MED, security review SKT3-2, 2026-09-04) | `list_tests` (`app/api/v1/endpoints/skills_testing.py`) — open to every member, not just officers — builds no `.limit()` into its query, and `SkillsTestingTestRecordsTab.tsx`'s default "All" filter calls it with zero params, fetching the org's entire non-practice skill-test history (plus a batch user/template fetch and, for non-officers, a per-row disclosure resolution) on every unfiltered load. No data-exposure risk (every row is already org-scoped and disclosure-filtered) — this is a resource-exhaustion/latency concern that scales with an organization's accumulated testing history. Closing it needs a paging contract (`limit`/`offset` or cursor), a chosen default/cap, and matching frontend pagination in `SkillsTestingTestRecordsTab.tsx` and `skillsTestingService.getTests()` — a product decision and coordinated frontend change, not a same-commit fix.  |
 
 ## Claude (MCP) — claude.ai Custom Connectors Need an OAuth Server (2026-09-03)
 
@@ -1599,12 +1600,48 @@ is now marked as such and the screenshot placeholder is retired.
 Needs an owner decision on whether the panel should be built. This loop does
 not make that call.
 
+## Events — Series RSVP Never Shows the Training Phase-Gate Warning (2026-09-04, security review EV-23)
+
+An individual RSVP to a training session ahead of the member's current
+pipeline phase gets a soft, overridable 409 warning that the member must
+confirm before it proceeds. `rsvp_to_series` (rewritten 2026-09 to delegate
+to `create_or_update_rsvp` per occurrence, closing a separate set of
+capacity/deadline/`allow_guests` gaps) passes `override=True`
+unconditionally for every occurrence, with a code comment claiming the
+member "already confirmed once for the series." No such confirmation
+exists anywhere in the series path — `useRSVPForm.ts`'s series branch
+calls the series endpoint directly with no warning/retry handling, and
+`POST /events/{id}/rsvp-series` has no `override` parameter to receive one.
+A member applying to a whole series therefore never sees the warning an
+individual RSVP to the identical session would have required.
+
+Soft and overridable even when working correctly — a training-pipeline
+advisory, not an authorization or tenancy boundary — so the gap is a member
+proceeding without a nudge, not unauthorized access.
+
+**Needs an owner decision, not a mechanical fix:** a series can span
+sessions in different training phases, so "the" phase-gate warning for a
+series submission isn't single-valued the way it is for one event. Does the
+series endpoint warn once for the _first_ ahead-of-phase occurrence found,
+list every one, or warn only if _any_ occurrence would? Any is defensible;
+picking one needs a real response-shape change (a 409 from
+`POST /events/{id}/rsvp-series`, matching frontend confirm-and-retry
+handling). Full write-up: `docs/security-review/EV-16-events-requests.md`
+(EV-23). A related ordering bug in the same review (EV-24: editing an
+existing waitlisted RSVP can promote it ahead of an earlier-queued party)
+is a straightforward engineering fix rather than an owner decision, and is
+tracked only in that findings doc.
+
 ## Inventory — Nothing In The UI Can Choose a Temporary Assignment (2026-08-12)
 
 An item assignment carries an `assignment_type` of `permanent` or `temporary`,
 `assign_item_to_user` accepts both along with an `expected_return_date`, and the
-member-facing equipment lists render a "Permanent Assignments" group and a
-"Due:" date — so the concept is visible throughout. No screen can create one:
+quartermaster's member view (`/inventory/admin/members`) renders a "Permanent
+Assignments" group while the member's own gear page shows a "Due:" date on a
+loan — so the concept is visible throughout. (A member's own page stopped
+splitting assignments from pool issuances on 2026-09-05; the quartermaster
+view still does, because the two are separate custody records with separate
+return endpoints.) No screen can create one:
 
 - `ItemDetailPage` is the only UI caller of `inventoryService.assignItem`, and
   it passes no options, so the API default (`permanent`) always applies.
@@ -2451,39 +2488,71 @@ already records this pairing as deliberately unadjudicated, for the same
 reason. (Security review EC-14 residual,
 `docs/security-review/EC-14-equipment-check-shifts.md`.)
 
-## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26)
+## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26, `external_training_service.py` and `push_service.py` closed 2026-09-02)
 
 `assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
 org-configured integration URL's hostname via `socket.getaddrinfo()`
 immediately before an outbound request, to catch a hostname that was
-repointed at an internal address since it was saved. **Eight** call sites
-share the gap, across three distinct transports:
+repointed at an internal address since it was saved. **Six** call sites
+still share the gap. All six use `httpx`, via two different
+client-construction paths — the distinction that matters for scoping a fix,
+since a factory-only fix would miss the one that doesn't use the factory:
 
 - **Five** go through the shared `create_integration_client()` (plain
   `httpx.AsyncClient`) and share one remediation:
   `integration_services/{teams,webhook,slack,discord,calcom}_service.py`.
-- **Two** construct their own `httpx.AsyncClient` directly rather than going
+- **One** constructs its own `httpx.AsyncClient` directly rather than going
   through `create_integration_client` — a `create_integration_client` fix
-  alone would not reach either; each needs either migrating onto the shared
-  client or its own equivalent fix: `audit_ship_service.py`, and
-  `external_training_service.py` (`ExternalTrainingSyncService.__init__`,
-  found during the training-extended security-review pass — its provider
-  base URL is `validate_integration_url`'d at write time and re-validated
-  before every outbound call exactly like the other seven, so it shares this
-  same TOCTOU shape; not itself a new/distinct gap, just an undercounted
-  instance of this one. Its 30s timeout is deliberately longer than the
-  shared factory's 10s — a full-catalog LMS sync legitimately runs longer
-  than a webhook POST — so migrating it onto `create_integration_client`
-  isn't a drop-in swap; the factory would need a per-call timeout override
-  first).
-- **`push_service.py`** doesn't use `httpx` at all — `_send_one` dispatches
-  through `pywebpush.webpush()`, a synchronous library with its own
-  connection handling. Pinning a resolved address here needs a
-  transport-specific approach, not the httpx-level fix the other seven
-  share; it would remain vulnerable if a fix were scoped only to
-  `create_integration_client`.
+  alone would not reach it; it needs either migrating onto the shared
+  client or its own equivalent fix: `audit_ship_service.py`.
 
-In every one of the eight, the actual request performs its **own**
+**`external_training_service.py` and `push_service.py` are no longer in
+this list.** Both previously shared this same TOCTOU shape and were
+independently closed on 2026-09-02, outside any security-review PR:
+
+- `ExternalTrainingSyncService` (found as the eighth site during the
+  training-extended security-review pass) was closed by `803eff25`,
+  "Harden external training requests against DNS rebinding". The fix
+  resolves the provider host once via `app/utils/ssrf_transport.py`'s
+  `resolve_public_addresses()` (rejecting the request unless every answer
+  is a global address) and then connects the actual `httpx` request to
+  that resolved IP directly (`SSRFSafeAsyncTransport`, pinning
+  `url.copy_with(host=approved_ip)` while preserving the original `Host`
+  header and TLS SNI) — the same resolve-once-and-pin shape this note
+  calls for below, rather than a second, independent `getaddrinfo()` at
+  connect time. `join_endpoint()`/`relative_endpoint()` additionally
+  reject an endpoint override that isn't a bare relative path, closing off
+  a client from redirecting the request to a different host via a
+  configured endpoint string. Re-verified during the training-extended
+  pass 3 re-review (`docs/security-review/TRX-18-training-extended.md`) —
+  the fix carries its own test file
+  (`backend/tests/test_external_training_ssrf_transport.py`), including a
+  DNS-rebinding-simulation test and a redirect-not-followed test.
+- `push_service.py` (previously listed here as needing a
+  transport-specific fix, since `_send_one` dispatches through
+  `pywebpush.webpush()` rather than `httpx`) was closed by `d50a9037`,
+  "Harden web push delivery against DNS rebinding", the same day. The fix
+  is the transport-specific approach this note previously said it would
+  need: `_resolve_public_address()` resolves once and rejects a mixed or
+  non-global answer set, and `_pinned_session()` hands `webpush()` a
+  `requests.Session` mounted with a custom `_PinnedHTTPSAdapter` that
+  connects to the validated IP while still asserting the original
+  hostname for TLS verification, with redirects disabled
+  (`_NoRedirectSession`). The pinned session is used only in
+  `production`/`staging` (`settings.ENVIRONMENT`) — outside those, `_send_one`
+  skips it entirely and lets `webpush()` use its own default session, so
+  this is a push-specific exception, not an instance of a codebase-wide
+  convention: `SSRFSafeAsyncTransport` above relaxes only the HTTPS-scheme
+  requirement in development and still unconditionally calls
+  `resolve_public_addresses()` (address validation always runs). Re-verified
+  during the training-extended pass 3 re-review: read the adapter and
+  session code directly and confirmed `_pinned_session`'s output is the
+  session actually passed to `webpush()`; its own test file,
+  `backend/tests/test_push_rebinding_guard.py`, predates this note's
+  correction (added by the same commit) and was not re-run as part of this
+  correction since no code changed.
+
+In each of the remaining six, the actual request performs its **own**
 independent DNS resolution when it connects, separate from the
 `assert_outbound_url_safe` check. A hostname that resolves to a public IP
 for the check and an internal one moments later (classic DNS rebinding)
@@ -2492,18 +2561,29 @@ docstring says it "shrink[s] the rebinding window... versus
 save-time-to-send" — narrows, not closes — which is accurate; a security
 review draft that read this as "closed," and then first wrote it up as six
 files sharing one fix, was corrected twice (SCH-10, then a Codex review of
-that correction itself), and the count was corrected again when the
-training-extended pass found the eighth site.
+that correction itself), the count was corrected again when the
+training-extended pass found the eighth site, and corrected twice more when
+that eighth site and `push_service.py` were independently closed.
 
-Not fixed: closing it means pinning the address `assert_outbound_url_safe`
-resolved for the actual connection (while preserving the original Host
-header / SNI), separately for each of the three transports above — not one
-shared-infrastructure change, and not a fix scoped to any single file. Needs
-a dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
-for all three transports, not a unilateral fix inside a feature-scoped
-review. (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`;
+Not fixed: closing the remaining six means pinning the address
+`assert_outbound_url_safe` resolved for the actual connection (while
+preserving the original Host header / SNI) across both client-construction
+paths above — not one shared-infrastructure change, and not a fix scoped
+to any single file, but narrower than before now that the two sites
+outside this `httpx` family (`external_training_service.py`'s own client,
+and `push_service.py`'s non-`httpx` `pywebpush` transport) are closed.
+`external_training_service.py`'s fix (above) is the reference shape for
+the six remaining `httpx` sites; `push_service.py`'s is the reference shape
+should a future non-`httpx` transport need the same treatment. Needs a
+dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
+for both `httpx` client-construction paths, not a unilateral fix inside a
+feature-scoped review.
+(Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`;
 count corrected by the training-extended pass,
-`docs/security-review/TRX-18-training-extended.md`.)
+`docs/security-review/TRX-18-training-extended.md`;
+`external_training_service.py` and `push_service.py` closed independently,
+both re-verified in the training-extended pass 3 re-review, the latter
+following a Codex finding on that pass's own PR.)
 
 ## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
 
@@ -2600,6 +2680,36 @@ resistance class as the `GET /training/records` limitation above; this one
 is now more pressing since a cache-based mitigation was correctly removed
 out from under it. (Security review TR-17 pass 2,
 `docs/security-review/TR-17-training-core.md`.)
+
+## Training — The MCP Requirement-Progress Tool Is Paginated, Not Bounded (2026-09-04)
+
+`app/mcp/tools/training.py`'s `get_member_requirements_progress` looks
+paginated (`limit`/`offset`, a real `total`), and its returned rows are —
+but two unbounded reads still happen underneath on every call, both
+pre-existing characteristics of `TrainingService` that this pass's first
+scope addition of this MCP file surfaced without previously being flagged:
+
+- `get_applicable_requirements` has no page bound of its own; a page is cut
+  from its full result only in Python, after the whole thing is fetched.
+  Mitigated in practice (per TR-17 pass 2) by configuration data — a
+  department's requirements — being naturally small (tens, not thousands),
+  unlike the per-member `TrainingRecord` case below.
+- If the requested page includes a CERTIFICATION-type requirement (or a
+  BIANNUAL-hours one), `get_requirements_progress_for`'s `_preload_window`
+  returns `None`, and the member's **entire** completed-training history is
+  preloaded rather than a date-bounded slice — a cert check has always
+  ignored the frequency window by design (valid until it expires, not per
+  period), so this is not new behavior, just newly reachable through an
+  MCP caller that never existed before.
+
+Not fixed: bounding a certification check's window without breaking its
+correctness is a service-level redesign of what "ignoring the window" means
+for this class of check (`training_compliance.py`'s date-window logic), not
+a safe drive-by change. Same abuse-resistance class as "Dashboard Summary Is
+an Unbounded Per-Request Scan" above (TR2-4) — a per-member, not org-wide,
+scan, so the ceiling is one member's training history rather than the whole
+department's. (Security review TR-17 pass 3,
+`docs/security-review/TR-17-training-core.md`, TR3-2.)
 
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 
@@ -3241,6 +3351,47 @@ and `CheckTemplateCompartment.children` after their fixes):
   confirmed finding (a plain code read is not sufficient; that is exactly
   what missed the `DocumentFolder` and `CheckTemplateCompartment` instances
   of this bug for as long as they existed).
+
+## Medical Supplies — The Item Picker Pages by Offset, and a Concurrent Edit Can Hide a Match (2026-09-04)
+
+**Severity:** LOW · **Status:** Accepted trade-off · **Verified against code:**
+2026-09-04
+
+`MedicalSupplyItemPicker` (the delivery-line catalogue search) pages with
+`skip`/`limit` against `GET /medical-supplies/items`. Offset paging is not
+stable over a set that changes between requests: if another officer archives or
+deletes a matching item **before** the page boundary while a search is open,
+every later match shifts back into a range already read, so the next page starts
+past a match that was never returned. The officer sees "Show more" retire on a
+list that is missing one row, with nothing on screen indicating it.
+
+**Why there is no client-side fix.** A revision of this component tried to
+detect the shift by comparing the new `total` against the previous one and
+rewinding the offset by the difference. It was wrong in both directions and
+introduced two defects of its own:
+
+- A removal paired with an insertion leaves `total` unchanged, so a net-count
+  comparison never fires while the boundary has still moved.
+- When the corrective request failed, the recorded total had already been
+  updated, so the retry saw no decrease, skipped the rewind, and omitted the row
+  permanently. The corrective request was also not chained into the original
+  promise, so "Show more" re-enabled mid-correction and could discard it.
+
+The compensation was removed rather than deepened. A client cannot reconstruct a
+boundary shift it did not observe; inferring one from a net count is a guess
+that fails silently.
+
+**The fix, when it is worth doing.** A cursor (keyset) on
+`GET /medical-supplies/items`, so a page is anchored to the last row returned
+rather than to a positional offset. That endpoint is shared with the gear
+inventory side, so it is a public-API change with its own schema, service and
+test surface — deliberately out of scope for the picker fix and needing its own
+change set.
+
+**Why it is accepted for now.** The window is a live search open across a
+concurrent catalogue edit, the impact is one hidden row in a search the officer
+can re-run, and the search box narrows results directly. This does not affect
+what is delivered or recorded — only which matches a picker lists.
 
 ## Process
 

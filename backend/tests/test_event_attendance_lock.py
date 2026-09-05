@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.api.v1.endpoints.events import _resolve_display_names
 from app.core.permissions import ALL_PERMISSIONS, OPERATIONAL_RANKS
 from app.models.admin_hours import AdminHoursEntryMethod
 from app.services.admin_hours_service import AdminHoursService
@@ -728,22 +729,35 @@ class TestNewQueriesAreOrgScoped:
         await EventService(db).reopen_event_attendance("event-1", "org-1")
         assert "organization_id" in self._compiled(db.execute.await_args.args[0])
 
-    async def test_the_finalizer_name_lookup_is_org_scoped(self):
+    async def test_the_name_lookup_is_org_scoped(self):
         """The id is not client-supplied, but a bare by-id read on users is the
-        exact shape the 2026-07 audit kept finding."""
-        from pathlib import Path
+        exact shape the 2026-07 audit kept finding.
 
-        endpoint = (
-            Path(__file__).resolve().parents[1]
-            / "app"
-            / "api"
-            / "v1"
-            / "endpoints"
-            / "events.py"
+        Asserted against the helper rather than a window of characters after the
+        call site: the finalizer's name and the organizer's are resolved
+        together now, and a source slice would only ever cover one of them.
+        """
+        db = AsyncMock()
+        db.execute.return_value = _all([])
+
+        await _resolve_display_names(db, {"user-1", "user-2"}, "org-1")
+
+        compiled = str(
+            db.execute.await_args.args[0].compile(
+                compile_kwargs={"literal_binds": True}
+            )
         )
-        source = endpoint.read_text(encoding="utf-8")
-        lookup = source.split("attendance_finalized_by:", 1)[1][:500]
-        assert "User.organization_id == current_user.organization_id" in lookup
+        assert "organization_id" in compiled
+        # One round trip for both ids, which is the reason the helper batches.
+        assert db.execute.await_count == 1
+
+    async def test_an_empty_id_set_queries_nothing(self):
+        """An event with no finalizer and no organizer to resolve must not cost
+        a query for the privilege of resolving nothing."""
+        db = AsyncMock()
+
+        assert await _resolve_display_names(db, set(), "org-1") == {}
+        db.execute.assert_not_awaited()
 
 
 class TestReopenPermissionIsSeparate:

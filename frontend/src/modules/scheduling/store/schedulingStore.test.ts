@@ -5,13 +5,14 @@ const mockGetUsers = vi.fn();
 const mockGetTemplates = vi.fn();
 const mockGetBasicApparatus = vi.fn();
 const mockGetSummary = vi.fn();
+const mockGetFeatureSettings = vi.fn();
 
 vi.mock('../services/api', () => ({
   schedulingService: {
     getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
     getBasicApparatus: (...args: unknown[]) => mockGetBasicApparatus(...args) as unknown,
     getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
-    getFeatureSettings: () => Promise.resolve({ platoons_enabled: false }),
+    getFeatureSettings: (...args: unknown[]) => mockGetFeatureSettings(...args) as unknown,
   },
 }));
 
@@ -39,7 +40,16 @@ describe('schedulingStore', () => {
       summary: null,
       summaryLoading: false,
       summaryError: null,
+      settingsLoaded: false,
+      signupClosesMinutesBefore: 0,
+      lateSignupGraceMinutes: 60,
+      callTypeLabels: {},
     });
+    // `vi.clearAllMocks` resets calls but not implementations, so this block
+    // installs its own default rather than running on a neighbour's (pitfall
+    // #28).
+    mockGetFeatureSettings.mockReset();
+    mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
   });
 
   describe('loadMembers', () => {
@@ -203,6 +213,128 @@ describe('schedulingStore', () => {
       expect(mockGetUsers).not.toHaveBeenCalled();
       expect(mockGetTemplates).not.toHaveBeenCalled();
       expect(mockGetBasicApparatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('loadSettings signup window', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('maps the department window onto the store', async () => {
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        signup_closes_minutes_before: 30,
+        late_signup_grace_minutes: 15,
+      });
+
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().signupClosesMinutesBefore).toBe(30);
+      expect(useSchedulingStore.getState().lateSignupGraceMinutes).toBe(15);
+    });
+
+    it('keeps a zero rather than treating it as unset', async () => {
+      // 0 means "closes exactly at the start"; `||` would silently replace it
+      // with the default and quietly widen the department's window.
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        signup_closes_minutes_before: 0,
+        late_signup_grace_minutes: 0,
+      });
+
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().lateSignupGraceMinutes).toBe(0);
+    });
+
+    it('falls back to the built-in window when the server omits the fields', async () => {
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().signupClosesMinutesBefore).toBe(0);
+      expect(useSchedulingStore.getState().lateSignupGraceMinutes).toBe(60);
+    });
+  });
+
+  describe('loadSettings call type labels', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('indexes the department labels by slug', async () => {
+      // Every screen that shows a stored call type resolves it through here;
+      // the slug is what is stored precisely so the label can change.
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        call_tracking: {
+          mode: 'count_only',
+          call_types: [
+            { slug: 'mutual_aid', label: 'Mutual Aid', active: true },
+            { slug: 'brush', label: 'Brush', active: false },
+          ],
+        },
+      });
+
+      await useSchedulingStore.getState().loadSettings();
+
+      // The retired one is in the map too — its history still has to render.
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({
+        mutual_aid: 'Mutual Aid',
+        brush: 'Brush',
+      });
+    });
+
+    it('is empty rather than absent when the server sends no types', async () => {
+      await useSchedulingStore.getState().loadSettings();
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
+    });
+  });
+
+  describe('loadSettings request sharing', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('shares one request across concurrent callers', async () => {
+      // A board mounts the shift board, two calendar variants, a day panel and
+      // one seat list per shift, each reading the signup window; the
+      // `settingsLoaded` guard cannot dedupe them because none has resolved.
+      let resolve: ((v: unknown) => void) | undefined;
+      mockGetFeatureSettings.mockReturnValue(
+        new Promise((r) => {
+          resolve = r;
+        })
+      );
+
+      const load = useSchedulingStore.getState().loadSettings;
+      const inFlight = [load(), load(), load()];
+      resolve?.({ platoons_enabled: false });
+      await Promise.all(inFlight);
+
+      expect(mockGetFeatureSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries after a failed load rather than caching the fallback', async () => {
+      // The settings now carry the signup window. Caching the permissive
+      // fallback for the session would make every scheduling screen offer
+      // signups the server refuses, for a department with a real cutoff.
+      mockGetFeatureSettings.mockRejectedValueOnce(new Error('network'));
+
+      await useSchedulingStore.getState().loadSettings();
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        signup_closes_minutes_before: 45,
+        late_signup_grace_minutes: 15,
+      });
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(true);
+      expect(useSchedulingStore.getState().signupClosesMinutesBefore).toBe(45);
     });
   });
 });

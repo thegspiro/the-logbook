@@ -156,7 +156,7 @@ describe('OverviewSection — a lookup that was deactivated after the fact', () 
 
   const renderRetained = async (user: ReturnType<typeof userEvent.setup>) => {
     renderWithRouter(
-      <OverviewSection facility={retained} facilityTypes={types} facilityStatuses={statuses} canManage />,
+      <OverviewSection facility={retained} facilityTypes={types} facilityStatuses={statuses} canManage />
     );
     await user.click(screen.getByRole('button', { name: /Edit/ }));
   };

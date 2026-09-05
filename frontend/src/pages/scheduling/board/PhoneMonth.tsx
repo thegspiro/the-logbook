@@ -18,6 +18,7 @@ import {
   weeksOf,
   type BoardFilter,
 } from '../../../modules/scheduling/utils/shiftBoard';
+import { useSignupWindow } from '../../../modules/scheduling/hooks/useSignupWindow';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { STATUS_STYLES, legendFor } from './statusStyles';
 
@@ -49,19 +50,22 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
   today = new Date(),
   hasUnsizedShift = false,
   onSelect,
-}) => (
-  <div>
-    {/* Same grid geometry as the day cells below, gap included, or the
-        weekday initials stop lining up with their columns. */}
-    <div className="mb-1 grid grid-cols-7 gap-0" aria-hidden="true">
-      {WEEKDAY_INITIALS.map((label, index) => (
-        <div key={index} className="text-theme-text-muted text-center text-[10px] font-bold">
-          {label}
-        </div>
-      ))}
-    </div>
+}) => {
+  const signupWindow = useSignupWindow();
 
-    {/* A distinct name from the desktop grid: both are in the document at
+  return (
+    <div>
+      {/* Same grid geometry as the day cells below, gap included, or the
+        weekday initials stop lining up with their columns. */}
+      <div className="mb-1 grid grid-cols-7 gap-0" aria-hidden="true">
+        {WEEKDAY_INITIALS.map((label, index) => (
+          <div key={index} className="text-theme-text-muted text-center text-[10px] font-bold">
+            {label}
+          </div>
+        ))}
+      </div>
+
+      {/* A distinct name from the desktop grid: both are in the document at
         once and only CSS decides which is shown, so sharing one would give
         assistive tech two identically-named calendars.
 
@@ -73,60 +77,61 @@ export const PhoneMonth: React.FC<PhoneMonthProps> = ({
         `mobile-presentation.spec.ts` fails on. Each cell carries its own
         border, so adjacent edges still read as a divider. Re-introducing a
         gap here means finding the width somewhere else first. */}
-    <div className="grid grid-cols-7 gap-0" role="grid" aria-label="Month calendar, compact">
-      {weeksOf(days).map((week, index) => (
-        <div key={`week-${index}`} role="row" className="contents">
-          {week.map((day) => {
-            const key = toDateKey(day);
-            if (visibleMonth !== null && day.getMonth() !== visibleMonth) {
-              return <div key={key} aria-hidden="true" />;
-            }
+      <div className="grid grid-cols-7 gap-0" role="grid" aria-label="Month calendar, compact">
+        {weeksOf(days).map((week, index) => (
+          <div key={`week-${index}`} role="row" className="contents">
+            {week.map((day) => {
+              const key = toDateKey(day);
+              if (visibleMonth !== null && day.getMonth() !== visibleMonth) {
+                return <div key={key} aria-hidden="true" />;
+              }
 
-            const shifts = shiftsByDate.get(key) ?? [];
-            const summary = daySummary(shifts, currentUserId);
-            const dimmed = isPastDay(day, today) || !dayMatchesFilter(summary, filter);
-            const selected = isSameDay(day, selectedDate);
+              const shifts = shiftsByDate.get(key) ?? [];
+              const summary = daySummary(shifts, currentUserId, signupWindow);
+              const dimmed = isPastDay(day, today) || !dayMatchesFilter(summary, filter);
+              const selected = isSameDay(day, selectedDate);
 
-            return (
-              <button
-                key={key}
-                type="button"
-                role="gridcell"
-                aria-selected={selected}
-                onClick={() => onSelect(day)}
-                className={`bg-theme-surface border-theme-surface-border flex min-h-[46px] flex-col items-center gap-[3px] rounded-md border px-0.5 py-1.5 transition-opacity duration-200 ease-out ${
-                  selected ? 'border-2 border-red-600 dark:border-red-500' : ''
-                } ${dimmed ? 'opacity-45' : ''}`}
-              >
-                <span className="text-theme-text-primary font-mono text-xs font-bold">{day.getDate()}</span>
-                {shifts.slice(0, MAX_BARS).map((shift) => (
-                  <span
-                    key={shift.id}
-                    className={`h-1 w-[18px] rounded-full ${STATUS_STYLES[shiftStatusInfo(shift, currentUserId).status].bar}`}
-                  />
-                ))}
-                <span className="sr-only">
-                  {formatCalendarDate(key, { weekday: 'long', month: 'long', day: 'numeric' })}
-                  {summary.shiftCount === 0
-                    ? ', no shifts'
-                    : `, ${summary.openSeats} open seat${summary.openSeats === 1 ? '' : 's'}`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ))}
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="gridcell"
+                  aria-selected={selected}
+                  onClick={() => onSelect(day)}
+                  className={`bg-theme-surface border-theme-surface-border flex min-h-[46px] flex-col items-center gap-[3px] rounded-md border px-0.5 py-1.5 transition-opacity duration-200 ease-out ${
+                    selected ? 'border-2 border-red-600 dark:border-red-500' : ''
+                  } ${dimmed ? 'opacity-45' : ''}`}
+                >
+                  <span className="text-theme-text-primary font-mono text-xs font-bold">{day.getDate()}</span>
+                  {shifts.slice(0, MAX_BARS).map((shift) => (
+                    <span
+                      key={shift.id}
+                      className={`h-1 w-[18px] rounded-full ${STATUS_STYLES[shiftStatusInfo(shift, currentUserId, new Date(), signupWindow).status].bar}`}
+                    />
+                  ))}
+                  <span className="sr-only">
+                    {formatCalendarDate(key, { weekday: 'long', month: 'long', day: 'numeric' })}
+                    {summary.shiftCount === 0
+                      ? ', no shifts'
+                      : `, ${summary.openSeats} open seat${summary.openSeats === 1 ? '' : 's'}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+        {legendFor(hasUnsizedShift).map((status) => (
+          <li key={status} className="flex items-center gap-1.5">
+            <span className={`h-[5px] w-4 rounded-full ${STATUS_STYLES[status].bar}`} aria-hidden="true" />
+            <span className="text-theme-text-secondary text-[11px]">{STATUS_STYLES[status].label}</span>
+          </li>
+        ))}
+      </ul>
     </div>
-
-    <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
-      {legendFor(hasUnsizedShift).map((status) => (
-        <li key={status} className="flex items-center gap-1.5">
-          <span className={`h-[5px] w-4 rounded-full ${STATUS_STYLES[status].bar}`} aria-hidden="true" />
-          <span className="text-theme-text-secondary text-[11px]">{STATUS_STYLES[status].label}</span>
-        </li>
-      ))}
-    </ul>
-  </div>
-);
+  );
+};
 
 export default PhoneMonth;

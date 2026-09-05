@@ -87,6 +87,13 @@ class CallTrackingMode:
     ALL = (DETAILED, COUNT_ONLY, OFF)
 
 
+# The bucket a call with no type falls into when a breakdown is reported. Not
+# a configurable type — it is the remainder, and it is deliberately the same
+# quantity the close-out wizard calls "Not categorised". Never stored on a row;
+# an untyped call has ``call_type`` NULL.
+UNCLASSIFIED_CALL_TYPE = "unclassified"
+
+
 # Seeded type list for a department that has not defined its own. Slugs are the
 # stored value and are permanent; labels are display-only and may be renamed
 # freely, which is exactly why the slug is what lands in ``OrgCall.call_type``.

@@ -372,6 +372,138 @@ class TestEventRSVP:
         assert updated_rsvp is not None
         assert updated_rsvp.status.value == "not_going"
 
+    async def test_update_preserves_omitted_accommodation_fields(
+        self, db_session, setup_org_and_users
+    ):
+        """An edit that doesn't touch dietary/accessibility must not wipe them.
+
+        The RSVP modal can't show their current value back to the member (PHI,
+        and the event detail response is cacheable), so it always resubmits
+        them blank/omitted. Before this fix, the update path applied a full
+        `model_dump()` over the existing row, so any unrelated edit (here,
+        guest_count) silently deleted real accommodation data.
+        """
+        org_id, user_id, _ = setup_org_and_users
+        svc = EventService(db_session)
+
+        event = await svc.create_event(
+            event_data=_make_event_create(
+                title="Accommodation Event",
+                requires_rsvp=True,
+                allow_guests=True,
+            ),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+        )
+
+        rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(
+                status="going",
+                dietary_restrictions="peanut allergy",
+                accessibility_needs="wheelchair access",
+            ),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        assert rsvp.dietary_restrictions == "peanut allergy"
+        assert rsvp.accessibility_needs == "wheelchair access"
+
+        # Simulates the modal resubmitting after the member only changed
+        # guest_count — dietary_restrictions/accessibility_needs are not set
+        # on this RSVPCreate, so they must be left alone rather than reset to
+        # their None default.
+        updated_rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=1),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        assert updated_rsvp.guest_count == 1
+        assert updated_rsvp.dietary_restrictions == "peanut allergy"
+        assert updated_rsvp.accessibility_needs == "wheelchair access"
+
+        # An explicit empty string IS a real edit and must clear the field —
+        # exclude_unset only protects a field the client never mentioned.
+        cleared_rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", dietary_restrictions=""),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        assert cleared_rsvp.dietary_restrictions == ""
+        assert cleared_rsvp.accessibility_needs == "wheelchair access"
+
+    async def test_partial_update_uses_the_stored_guest_count_for_capacity(
+        self, db_session, setup_org_and_users
+    ):
+        """Omitting guest_count on an update must not evade capacity checks.
+
+        EV-21's exclude_unset=True fix means an omitted guest_count now
+        genuinely leaves the stored value alone rather than resetting it to
+        0 — correct for the DB write, but every guest/capacity check
+        (allow_guests, party size, the waitlist decision) originally kept
+        reading the raw, still-zero-defaulting `rsvp_data.guest_count`
+        instead of what would actually end up on the row (EV-25, found by
+        Codex reviewing EV-21). A waitlisted three-seat party resubmitting
+        `{"status": "going"}` — omitting guest_count entirely — would
+        therefore be evaluated as a one-seat party and wrongly promoted,
+        while the row silently kept its real three-seat guest_count,
+        oversubscribing the event.
+        """
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = EventService(db_session)
+
+        event = await svc.create_event(
+            event_data=_make_event_create(
+                title="Tight Capacity Event",
+                requires_rsvp=True,
+                allow_guests=True,
+                max_attendees=5,
+            ),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+        )
+
+        # Fills 3 of 5 seats, leaving room for a 2-seat party but not a 3-seat one.
+        _, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=2),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+
+        # A third user's 3-seat party (self + 2 guests) doesn't fit the
+        # remaining 2 seats, so it is correctly auto-waitlisted.
+        waitlisted_rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user2_id),
+            rsvp_data=RSVPCreate(status="going", guest_count=2),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        assert waitlisted_rsvp.status.value == "waitlisted"
+        assert waitlisted_rsvp.guest_count == 2
+
+        # The member resubmits without touching guest_count at all — exactly
+        # the shape the RSVP modal never sends (it always includes
+        # guest_count), but a bare API client could. The stored party is
+        # still 3 seats; it must not be promoted into the 2-seat gap.
+        resubmitted_rsvp, err = await svc.create_or_update_rsvp(
+            event_id=uuid.UUID(event.id),
+            user_id=uuid.UUID(user2_id),
+            rsvp_data=RSVPCreate(status="going"),
+            organization_id=uuid.UUID(org_id),
+        )
+        assert err is None
+        assert resubmitted_rsvp.status.value == "waitlisted"
+        # The real party size survives the partial update untouched.
+        assert resubmitted_rsvp.guest_count == 2
+
     async def test_multiple_rsvps(self, db_session, setup_org_and_users):
         org_id, user_id, user2_id = setup_org_and_users
         svc = EventService(db_session)

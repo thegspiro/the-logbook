@@ -531,3 +531,241 @@ every check the security-review completion gate actually specifies (the eight
 commands above) was run directly and is green, including the equivalent
 `vitest run` on the one frontend test file this pass touched. Committed with
 `--no-verify` for this reason; documented here rather than silently skipped.
+
+---
+
+## Pass 3 (2026-09-04)
+
+**Prefix:** `TRX3` · **PR:** [#2223](https://github.com/thegspiro/the-logbook/pull/2223)
+
+**Scope check:** diffed the current tree against `e094e66e1c94604e00c9143e73bc27c8cb0f1014`
+(the pass-2 merge commit for PR #2012) across all twenty-five pass-2
+artifacts — the thirteen pass-1 artifacts (twelve feature files plus
+`training_program_service.py`, per pass 2's own scope-check above), the two
+cache artifacts pass 2 itself added (`frontend/src/utils/apiCache.ts` and
+`apiCache.test.ts`, for the TRX2-1 fix and its guard test — an earlier
+draft of this sentence said "fourteen pass-1 files plus `apiCache.test.ts`",
+which both undercounted pass 1 and backdated `apiCache.ts`'s own coverage
+to pass 1), and the ten frontend files pass 2's own frontend-surface
+inventory named (below, "Verified good ✅ (pass 2, ...)"), missed by this
+same earlier draft — corrected across two Codex review rounds on this
+pass's own PR. **Five** changed:
+
+- `backend/app/api/v1/endpoints/external_training.py` — a no-op import
+  reformat (`from app.schemas.training import (TestConnectionResponse,)`
+  collapsed to one line). No functional change.
+- `backend/app/services/external_training_service.py` (37 lines) —
+  see TRX3-1 below.
+- `frontend/src/utils/apiCache.ts` (81 lines added) and its test file
+  `frontend/src/utils/apiCache.test.ts` (10 lines added) — see "Verified
+  good" below; neither is a training-extended-specific change. The test
+  diff mirrors only the two new cache-exclusion tests
+  (`/dashboard/action-items`, `/attendees`) in the source diff — it does
+  not touch the cache-generation/epoch mechanism the same source diff also
+  adds, which is exercised elsewhere (see `apiClient.test.ts` below, not a
+  mirror of this file).
+- `frontend/src/pages/SubmitTrainingPage.tsx` (1 line changed) — the
+  mobile sticky action bar's positioning classes changed from a bare
+  `inset-x-0` to `right-0 left-[var(--side-nav-width,0px)]` and its z-index
+  from 40 to 30 (`7509263a`, "Give every action bar the content inset, not
+  just the ones that needed it" — a cross-cutting layout sweep, not
+  training-specific or security-relevant). Confirmed no other file in pass
+  2's ten-file frontend inventory changed.
+
+**Not on the declared list, but part of the same unrelated diff and
+directly relevant to the claim above:** `frontend/src/services/
+apiClient.test.ts` (352 lines, new file, from the same frontend-shared
+security-review round as the `apiCache.ts` cache-generation/epoch
+mechanism — caught by a second Codex review round on this pass's own PR,
+which correctly called out that an earlier draft of this section claimed no
+test exercised that mechanism). It does: `describe('apiClient — background
+revalidation of a stale entry', ...)` drives the real interceptor chain
+against a stubbed adapter and asserts the exact two races
+`cacheWriteToken`/`setCacheIfCurrent` close — a mutation's `PATCH` landing
+while an earlier GET's background revalidation is still in flight, and a
+`clearCache()` (logout) landing the same way — proving in both cases that
+the stale in-flight response does not get written back into the cache.
+Neither the mechanism nor this test is training-extended-specific, so no
+finding here; the correction is to the claim, not the code.
+
+No new migration touches a training-extended table. `models/training.py`'s
+entire diff since pass 2 was read directly (not inferred from the file
+diff-stat): it is `Shift`/`ShiftTemplate`/the new
+`ShiftTemplateEquipmentCheck` table (an equipment-checklist-linking feature),
+with nothing touching `TrainingSubmission`, `TrainingWaiver`, `CourseCohort`,
+`CourseClass`, `ExternalTrainingProvider`, `ExternalCategoryMapping`,
+`ExternalUserMapping`, `ExternalTrainingSyncLog`, `ExternalTrainingImport`,
+`RecertificationPathway`, `RenewalTask`, `MemberCompetency`,
+`CompetencyMatrix`, `InstructorQualification`,
+`TrainingEffectivenessEvaluation`, `MultiAgencyTraining`, `XAPIStatement`,
+`CourseCohortClass`, `CourseCohortMember`, or `SelfReportConfig`. This list
+is what this feature's service/endpoint files were found to query or create
+against `models/training.py`, not asserted as exhaustive by construction —
+an earlier draft asserted an unverified count ("twelve") instead, and a
+first attempt at naming the set individually still missed `RenewalTask`/
+`MemberCompetency` (both directly used by
+`training_enhancement_service.py`), each caught by a Codex review of this
+pass's own PR. Given a five-file diff this small, this pass is a targeted
+re-verification of what changed plus a re-confirmation of pass 1/2's
+claims, not a first-read of grown files.
+
+### TRX3-1 — Corrects a prior write-up — `external_training_service.py`'s DNS-rebinding TOCTOU is now closed, not narrowed
+
+`docs/KNOWN_LIMITATIONS.md`'s "Outbound Integration Requests" entry (last
+touched by this feature's own pass 1, which added
+`external_training_service.py` as the previously-undercounted eighth site
+sharing the module-wide DNS-rebinding TOCTOU) is now stale: the repo owner
+independently closed this specific site on 2026-09-02
+(`803eff25`, "Harden external training requests against DNS rebinding"),
+outside any security-review PR, so this pass caught it as a diff rather than
+having driven it.
+
+**What changed:** `ExternalTrainingSyncService.__init__` now builds its
+`httpx.AsyncClient` with `transport=SSRFSafeAsyncTransport()`,
+`follow_redirects=False`, `trust_env=False` (`app/utils/ssrf_transport.py`,
+new file) instead of a plain client re-validated only at the
+`_validate_provider_url` call sites. `SSRFSafeAsyncTransport` resolves the
+target host once (`resolve_public_addresses()` — rejects the request unless
+**every** answer `getaddrinfo()` returns is a global address, closed
+correctly rather than checking only the first answer), then connects the
+actual request to that resolved IP directly
+(`url.copy_with(host=approved_ip)`) while preserving the original `Host`
+header and setting `extensions["sni_hostname"]` so TLS verification still
+matches the configured hostname. Because the resolved IP is what the
+connection actually uses — not a second, independent `getaddrinfo()` at
+connect time — there is no window between the check and the request for a
+hostname to be rebound. This is structurally the same "resolve once and
+pin" shape this file's own KNOWN_LIMITATIONS entry says the eventual fix for
+the other remaining sites needs (six, after this pass's own further
+correction below).
+
+Two smaller pieces close adjacent gaps in the same change: `join_endpoint`/
+`relative_endpoint` now build every request URL from a strictly relative
+`endpoint` string (rejects an absolute URL, a `//host` authority, or a
+fragment), so an admin-configured `records_endpoint`/`test_endpoint`/etc.
+cannot redirect a request to a different host; and the
+`ExternalProviderConfig` schema now runs the same `relative_endpoint` check
+as a field validator on all four configurable endpoint fields, closing the
+gap at write time as well as at request time.
+
+**Verified, not merely read:** ran the endpoint's own new test file,
+`backend/tests/test_external_training_ssrf_transport.py` (5 tests: a
+DNS-rebinding simulation parametrized over five forbidden-address shapes
+including the AWS metadata address, a mixed-public-and-private-answer
+fail-closed test, a test asserting the pinned connection still carries the
+original `Host`/SNI, a test proving a redirect to an internal address is
+never followed, and a test asserting `join_endpoint` rejects an absolute/
+authority-carrying override) — all pass. Confirmed every remaining
+`self.http_client.get/request` call site in the file still goes through the
+now-hardened client (grep for `http_client\b`, 8 call sites, all on the one
+`__init__`-constructed instance — no call site builds its own client that
+would bypass the transport).
+
+**Disposition:** documentation-only fix here — the code was already fixed,
+by the repo owner, outside this rotation. Corrected
+`docs/KNOWN_LIMITATIONS.md`'s count from eight sites to seven and added a
+paragraph naming the closure and its mechanism (see that file for the
+updated text) rather than re-writing a fix that already exists and is
+already tested.
+
+**A Codex review round on this pass's own PR (#2223) caught two further
+corrections, both applied:**
+
+1. (**P2**) `push_service.py` — listed in `KNOWN_LIMITATIONS.md` as still
+   needing a transport-specific fix (it doesn't use `httpx`, so the
+   `create_integration_client`/`SSRFSafeAsyncTransport` remediation
+   wouldn't reach it) — was itself independently closed the same day as
+   `external_training_service.py`, by a separate commit (`d50a9037`,
+   "Harden web push delivery against DNS rebinding") this pass's diff-scope
+   check never looked at, because `push_service.py` isn't one of this
+   feature's fourteen files and so was never diffed. Verified directly:
+   `_resolve_public_address()` resolves once and fails closed on a mixed or
+   non-global answer set, and `_send_one` passes `_pinned_session()`'s
+   `requests.Session` (mounted with `_PinnedHTTPSAdapter`, which connects
+   to the validated IP while still asserting the original hostname for TLS)
+   straight into `webpush(requests_session=session)` — the same
+   resolve-once-and-pin shape, applied to `push_service.py`'s own
+   `pywebpush`/`requests.Session` transport family (distinct from the
+   `httpx` family `create_integration_client`'s siblings share), which
+   still needed a bespoke non-`httpx` fix. **Fix:** removed
+   `push_service.py` from `KNOWN_LIMITATIONS.md`'s affected-site list too,
+   correcting the count a second time in the same pass, from seven to six,
+   with its own paragraph naming the mechanism.
+2. (**P2**) This section's own "Verified good" scope-check bullet (below)
+   understated what its stated `git diff --stat` command actually returns —
+   six files, not four — by silently excluding three files that are
+   legitimately out of scope (feature 17's own) without saying so. **Fix:**
+   rewrote the bullet to list and classify all six.
+
+### Re-verification of pass-1/pass-2 fixes and claims
+
+Re-read the current code directly for each (not re-cited from the doc):
+
+- **TRX-1 / TRX-6 / TRX-7 / TRX-8 / TRX-9 / TRX-10** — all still present and
+  unchanged; none of their five files (`training_program_service.py`,
+  `training_waivers.py`, `training_submission_service.py`,
+  `recertification`/`multi_agency`/`xapi` services inside
+  `training_enhancements.py`'s service module) appear in this pass's
+  five-file diff.
+- **TRX-2 / TRX-4 / TRX-5 / TRX-5b** — `external_training.py`'s only change
+  is the import reformat; `update_provider`'s `apply_updates` call
+  (TRX-2) is untouched. Cohort/syllabus files (TRX-4/5/5b) aren't in this
+  pass's diff at all.
+- **TRX-3 / TRX2-1** — `training_enhancements.py` isn't in this pass's diff;
+  `get_effectiveness_evaluations`'s officer-scoping and
+  `/training/effectiveness/evaluations`'s `UNCACHEABLE_PREFIXES` entry (line
+  66, confirmed present and unmoved by the `apiCache.ts` diff below) both
+  stand unchanged.
+
+### Verified good ✅ (pass 3, not previously stated this way)
+
+- **`apiCache.ts`'s 81-line addition is unrelated to training-extended.** Two
+  independent changes, neither touching this feature's eleven
+  `UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` entries (all eleven
+  confirmed still present, unmoved, and worded identically to pass 2): a
+  `/dashboard/action-items` prefix addition (unrelated feature, tagged
+  RPT-29) and an `/attendees` substring addition, plus a cache-generation/
+  per-prefix-epoch mechanism (`cacheWriteToken`/`setCacheIfCurrent`) that
+  closes a race where a GET issued before a mutation or logout could still
+  write its stale response into the cache after the purge. Read in full;
+  sound, and not this feature's to claim credit for or re-review further.
+- **Route/model/migration surface stable.** `git diff --stat` against the
+  pass-2 merge commit across the broader glob
+  `api/v1/endpoints/*training*`, `api/v1/endpoints/course_*`,
+  `services/*training*`, `services/course_*`, `schemas/*training*` (wider
+  than this feature's own twelve-file list, to catch a new file the
+  declared list wouldn't) returns **six** files, not four as an earlier
+  draft of this bullet claimed (caught by a Codex review of this pass's own
+  PR): the three already covered above
+  (`external_training.py`/`external_training_service.py`/
+  `schemas/training.py`), plus `api/v1/endpoints/training.py`,
+  `services/training_service.py`, and `services/training_compliance.py`.
+  Those three are **feature 17's (Training core) own files, not this
+  feature's** — matched only because the glob is name-based, not
+  scope-based — and their 700+-line diff is the TR3-1 fix arc that pass
+  reviewed and merged the same day (PR #2222). Confirmed by checking each
+  filename directly against this feature's twelve-file list (`training_
+submissions`/`training_waivers`/`training_enhancements`/
+  `external_training`/`course_cohorts`/`course_syllabus`, endpoint and
+  service pairs): none of the three match. No new endpoint file, model
+  change, or training-extended migration since pass 2.
+
+## Corrections to prior write-ups
+
+- **`docs/KNOWN_LIMITATIONS.md`, "Outbound Integration Requests"** — see
+  TRX3-1 above: `external_training_service.py` and `push_service.py` (the
+  latter caught by a Codex review of this pass's own PR) removed from the
+  affected-site count (eight → seven → six); both closures and their
+  mechanisms documented in place.
+
+## Completion gate (pass 3)
+
+| Check                                                                                                             | Result                                                                    |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                     | ✅ 0 violations (no Python file changed this pass)                        |
+| `black --check app/ tests/ alembic/`                                                                              | ✅ unchanged                                                              |
+| `isort --check-only app/ tests/ alembic/`                                                                         | ✅ clean                                                                  |
+| `python3 scripts/validate_migrations.py --strict`                                                                 | ✅ single head                                                            |
+| `pytest tests/ -q -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ all passed (no new backend test needed — no code change, doc-only fix) |
+| `cd frontend && npx tsc --noEmit`                                                                                 | ✅ 0 errors (no frontend file changed this pass)                          |
+| `cd frontend && npx eslint .`                                                                                     | ✅ 0 errors                                                               |

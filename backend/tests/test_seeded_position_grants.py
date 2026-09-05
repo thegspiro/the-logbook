@@ -10,7 +10,7 @@ position, in both directions:
   department pressed Continue without seeing a box. That wrote `facilities.view`
   and `notifications.view` back onto the `member` row on every fresh install —
   undoing migrations e4f5a6b7c8d9 and c7e2b9a41f83 and the registry decision
-  behind them, and handing every member `GET /notifications/logs`.
+  behind them, and handing every member the department's notification rules.
 * `board_of_directors` was ticked Manage on eighteen modules the registry does
   not seed it with.
 * `fire_chief` lost `positions.create` / `positions.delete` /
@@ -132,8 +132,10 @@ def test_the_member_position_is_not_granted_the_two_withheld_views():
     """The grants the registry withholds by name, and the wizard re-granted.
 
     `facilities.view` was revoked from the baseline member positions on
-    2026-08-26; `notifications.view` opens org-wide `GET /notifications/logs`
-    and is withheld from `member` with a comment saying so.
+    2026-08-26; `notifications.view` opens the department's notification rules
+    and is withheld from `member` with a comment saying so. (It also opened
+    the org-wide send log until that endpoint was scoped to the caller by
+    default — see `test_notification_log_scope.py`.)
     """
     member = _parse(_TARGET.read_text())["member"]
 

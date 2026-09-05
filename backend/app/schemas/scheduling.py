@@ -152,6 +152,9 @@ class ShiftResponse(UTCResponseBase):
     # The template this shift came from, when it came from one. NULL on ad-hoc
     # shifts and on every shift created before the column existed.
     template_id: Optional[UUID] = None
+    # Set when leadership reopened signup on this shift past the department's
+    # cutoff; the instant that reopening expires. NULL on every other shift.
+    late_signup_until: Optional[datetime] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
     shift_officer_name: Optional[str] = None
@@ -284,6 +287,13 @@ class CallTypeOption(BaseModel):
 
     slug: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9_]+$")
     label: str = Field(..., min_length=1, max_length=100)
+    # Retirement, not deletion. An inactive type is no longer offered at
+    # close-out but stays configured, so the calls already filed under it keep
+    # resolving to a label instead of reading as an orphaned slug in last
+    # year's reports. Defaults True: entries stored before this field existed
+    # are active, and an absent setting must mean current behaviour
+    # (pitfall #19).
+    active: bool = True
 
 
 class CallTrackingSettings(BaseModel):
@@ -295,7 +305,10 @@ class CallTrackingSettings(BaseModel):
     """
 
     mode: str = Field(default=CallTrackingMode.DETAILED)
-    call_types: List[CallTypeOption] = Field(default_factory=list)
+    # Bounded because this lands in an unvalidated JSON column that every
+    # close-out and settings read deserializes. No department needs a hundred
+    # of them, and the editor cannot produce one.
+    call_types: List[CallTypeOption] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def _validate(self) -> "CallTrackingSettings":
@@ -412,6 +425,17 @@ class ShiftReopenRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class LateSignupOpenRequest(BaseModel):
+    """Reopen signup on one shift for a bounded number of minutes.
+
+    Capped at twelve hours: an officer needs minutes to fill a seat on the
+    night, and an unbounded value would silently switch the cutoff off for
+    that shift forever, which is the state this feature exists to end.
+    """
+
+    minutes: int = Field(..., ge=1, le=720)
+
+
 class ShiftAttendanceResponse(UTCResponseBase):
     """Schema for shift attendance response"""
 
@@ -506,6 +530,13 @@ class ShiftDetailResponse(ShiftResponse):
     # undeclared keys leave it offering an action the API refuses.
     checkin_open: bool = True
     checkin_closed_reason: Optional[str] = None
+    # Whether *this viewer* may still be seated on the shift, and why not when
+    # they may not. Resolved against the viewer's own deadline — a member's
+    # closes at the start, an officer's after the department's grace window —
+    # so the panel disables the right button rather than reimplementing the
+    # rule and drifting from what the API enforces.
+    signup_open: bool = True
+    signup_closed_reason: Optional[str] = None
 
     model_config = _response_config
 
@@ -536,6 +567,59 @@ class SchedulingSummary(BaseModel):
     shifts_scheduled_this_week: int
     shifts_scheduled_this_month: int
     hours_worked_this_month: float
+
+
+class MemberHoursMonth(BaseModel):
+    """One calendar month of a member's own shift work.
+
+    Credited and pending are reported side by side rather than combined:
+    hours count toward the member's record once an officer finalizes the
+    shift, and showing the two as one number would have a member believe
+    time is credited that a close-out could still change.
+    """
+
+    year: int
+    month: int = Field(ge=1, le=12)
+    shifts: int = 0
+    hours: float = 0.0
+    calls: int = 0
+    pending_shifts: int = 0
+    pending_hours: float = 0.0
+
+
+class MemberHoursTotals(BaseModel):
+    """Totals over a run of :class:`MemberHoursMonth`, on the same terms."""
+
+    shifts: int = 0
+    hours: float = 0.0
+    calls: int = 0
+    pending_shifts: int = 0
+    pending_hours: float = 0.0
+
+
+class MemberHoursHistoryResponse(BaseModel):
+    """A member's own year of shift hours and calls, month by month.
+
+    ``months`` always holds twelve entries, so a quiet month reads as a
+    quiet month rather than as missing data. ``current_month`` and
+    ``previous_month`` carry their own year because the month that just
+    ended is in the previous year every January.
+    """
+
+    year: int
+    # None when the member has no attendance at all — the year picker then
+    # has only the current year to offer.
+    earliest_year: Optional[int] = None
+    timezone: str
+    months: List[MemberHoursMonth]
+    #: The selected year only. ``all_time`` is every year on record.
+    totals: MemberHoursTotals
+    all_time: MemberHoursTotals
+    current_month: MemberHoursMonth
+    # Kept for the endpoint contract. The member's own screen stopped
+    # rendering it when the summary cards moved to this month / this year /
+    # all time; dropping the field would break any other caller for nothing.
+    previous_month: MemberHoursMonth
 
 
 class SchedulingWidgetFilters(BaseModel):
@@ -1267,6 +1351,16 @@ class SchedulingFeatureSettings(BaseModel):
     # Lifecycle enforcement
     require_end_of_shift_checks: bool = False
     restrict_checkin_to_assigned: bool = False
+    # Signup window. Self-signup closes this many minutes *before* the shift
+    # starts; 0 keeps it open right up to the start instant, which is the
+    # behaviour every existing department has (pitfall #19 — an absent setting
+    # must mean "current behaviour", never a new restriction nobody asked for).
+    signup_closes_minutes_before: int = Field(default=0, ge=0, le=10080)
+    # How long past the start an officer holding scheduling.assign may still
+    # seat somebody. Members are already closed out by then. scheduling.manage
+    # is never bounded, and an officer can reopen an individual shift for
+    # longer, so this is the routine case rather than the only way in.
+    late_signup_grace_minutes: int = Field(default=60, ge=0, le=1440)
     # Driver qualification. Defaults on: a member without the EVOC level an
     # apparatus requires cannot be seated as its driver. Inert until an admin
     # sets required_evoc_level_id on an apparatus, so switching it on for
@@ -1274,6 +1368,11 @@ class SchedulingFeatureSettings(BaseModel):
     enforce_evoc: bool = True
     # Call-volume tracking mode and the department's own call-type list.
     call_tracking: Optional[CallTrackingSettings] = None
+    # Calls on record per type slug, all dates. Server-computed and ignored on
+    # write — the settings screen needs it to tell an unused type (safe to
+    # delete outright) from one carrying a decade of history (retire it
+    # instead), and asking the client to supply that would let it decide.
+    call_type_usage: dict[str, int] = Field(default_factory=dict)
 
 
 # ============================================

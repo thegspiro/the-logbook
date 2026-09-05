@@ -91,10 +91,36 @@ export const getInventoryRoutes = () => {
       />
 
       {/* Inventory - Admin Hub */}
+      {/*
+        Any-of, not `inventory.manage`: the hub carries checklist and store
+        cards whose own routes accept grants this page did not, so a checklist
+        officer or a store manager was refused the only page that links to the
+        console they administer. Each card still resolves its own gate in
+        `InventoryAdminHub`, so widening the door does not widen what is behind
+        it.
+
+        `requiredModule` stays. This is inventory's own page; a store manager
+        whose department runs no inventory reaches the store console directly,
+        which is a storefront route carrying its own module gate and its own
+        navigation entry.
+
+        Two constraints on editing this block, both enforced by
+        `testingRegistry.test.ts`, which proves the registry repeats the real
+        gate by parsing this source. It reads a 900-character window from each
+        route tag, so a comment placed *inside* the element pushes the gate
+        attributes out of that window and the gate reads as absent. And it
+        finds routes by scanning for the opening tag name, so writing that
+        token in prose registers a phantom route whose scope holds no gate at
+        all -- which is why this paragraph talks around it.
+      */}
       <Route
         path="/inventory/admin"
         element={
-          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.manage', 'inventory.check_manage', 'storefront.manage']}
+          >
             <Suspense fallback={null}>
               <InventoryAdminHub />
             </Suspense>

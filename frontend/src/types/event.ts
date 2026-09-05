@@ -69,6 +69,13 @@ export interface Event {
    * actor was recorded. */
   attendance_finalized_by_name?: string | null;
   created_by?: string;
+  /**
+   * Who organized the event. Resolved on the detail endpoint only, and only for
+   * a caller holding `events.manage` — the server withholds it from everyone
+   * else, so an absent name here means "not yours to see" or "no creator
+   * recorded", never "the field was forgotten".
+   */
+  created_by_name?: string | null;
   created_at: string;
   updated_at: string;
   rsvp_count?: number;
@@ -292,9 +299,16 @@ export interface RSVP {
 export interface RSVPCreate {
   status: RSVPStatus;
   guest_count?: number | undefined;
-  notes?: string | undefined;
-  dietary_restrictions?: string | undefined;
-  accessibility_needs?: string | undefined;
+  // An explicit null clears each field; omitting the key on an update leaves
+  // the stored value alone (backend applies exclude_unset). For
+  // dietary_restrictions/accessibility_needs specifically, the modal only
+  // ever sends the key once the member has actually touched that field this
+  // time it was open — see useRSVPForm's *Touched flags — since the field
+  // always starts blank regardless of what is stored (PHI, cacheable
+  // response) and a blank box alone can't mean "clear it".
+  notes?: string | null | undefined;
+  dietary_restrictions?: string | null | undefined;
+  accessibility_needs?: string | null | undefined;
 }
 
 export interface CheckInRequest {
@@ -382,6 +396,8 @@ export interface CheckInMonitoringStats {
   event_id: string;
   event_name: string;
   event_type: string;
+  /** The organizer. This route has no event payload of its own to read it from. */
+  created_by_name?: string | null;
   start_datetime: string;
   end_datetime: string;
   is_check_in_active: boolean;

@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.api.v1.endpoints.events import get_eligible_members
+from app.schemas.event import EligibleMemberResponse
 from app.utils.contact_visibility import ContactPolicy
 
 pytestmark = [pytest.mark.unit]
@@ -84,6 +85,32 @@ class TestEligibleMembersEmail:
             )
 
         assert rows[0]["email"] == "jsmith@example.com"
+
+    async def test_hidden_email_survives_response_model_validation(self):
+        """A hidden email must not make FastAPI's response-model validation
+        fail the whole roster.
+
+        `test_check_in_staff_do_not_see_an_email_the_member_hid` above calls
+        the endpoint function directly and never exercises FastAPI's
+        `response_model=list[EligibleMemberResponse]` gate — the one that
+        actually raised, because `email` was declared as a required `str`
+        while `policy.email_for()` can return None. Constructing the schema
+        directly is what catches a regression here; calling the endpoint
+        function alone would not.
+        """
+        member = _member({"email": False})
+        with patch(
+            "app.api.v1.endpoints.events.load_contact_policy",
+            new=AsyncMock(return_value=ALL_ON),
+        ):
+            rows = await get_eligible_members(
+                event_id=uuid.uuid4(),
+                db=_db(SimpleNamespace(id="e1"), [member]),
+                current_user=_caller("events.manage"),
+            )
+
+        validated = EligibleMemberResponse(**rows[0])
+        assert validated.email is None
 
     async def test_members_manager_is_marked_as_such(self):
         with patch(

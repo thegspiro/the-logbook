@@ -26,6 +26,7 @@ import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
 import { ResourceTypeDefaultsCard } from './ResourceTypeDefaultsCard';
 import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
 import { PositionNamesCard } from './PositionNamesCard';
+import { CallTypesCard } from './CallTypesCard';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
@@ -109,6 +110,14 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         platoonsEnabled: updated.platoons_enabled,
         requireEndOfShiftChecks: updated.require_end_of_shift_checks,
         callTrackingMode: updated.call_tracking?.mode || 'detailed',
+        // Without this a rename shows the old label everywhere else in the
+        // session — loadSettings is a once-per-session cache and will not
+        // fetch again.
+        callTypeLabels: Object.fromEntries((updated.call_tracking?.call_types ?? []).map((t) => [t.slug, t.label])),
+        // `??`, not `||`: 0 means "closes exactly at the start", which `||`
+        // would silently replace with the default.
+        signupClosesMinutesBefore: updated.signup_closes_minutes_before ?? 0,
+        lateSignupGraceMinutes: updated.late_signup_grace_minutes ?? 60,
         settingsLoaded: true,
       });
       toast.success('Settings saved');
@@ -464,6 +473,19 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               </div>
             </div>
           )}
+          {feature && (
+            <CallTypesCard
+              types={feature.call_tracking?.call_types ?? []}
+              usage={feature.call_type_usage ?? {}}
+              mode={feature.call_tracking?.mode ?? 'detailed'}
+              saving={savingFeature}
+              onSave={(call_types) =>
+                saveFeature({
+                  call_tracking: { mode: feature.call_tracking?.mode ?? 'detailed', call_types },
+                })
+              }
+            />
+          )}
           <TemplatesOverviewCard templates={templates} onNavigateToTemplates={onNavigateToTemplates} />
           <DepartmentDefaultsCard settings={settings} onSettingsChange={setSettings} />
           <PositionNamesCard
@@ -546,6 +568,72 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       {activeTab === 'eligibility' && (
         <div className="space-y-6">
           <EligibilitySettingsCard />
+          {feature && (
+            <div className="card space-y-4 p-5">
+              <div>
+                <h3 className="text-theme-text-primary text-base font-semibold">Signup window</h3>
+                <p className="text-theme-text-muted mt-0.5 text-sm">
+                  When a shift stops accepting people. A scheduling admin can always add someone, whatever these are set
+                  to, and any officer can reopen one shift on the night.
+                </p>
+              </div>
+
+              {/* Selects rather than number inputs on purpose: 0 is a
+                  meaningful value here — it means "closes exactly at the
+                  start" — so an admin who cleared a number field would
+                  silently impose the tightest possible setting. */}
+              <div className="border-theme-surface-border/60 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Members can sign up until</p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    Signing up after a shift has gone out puts somebody on a crew they were never part of.
+                  </p>
+                </div>
+                <select
+                  aria-label="Members can sign up until"
+                  disabled={savingFeature}
+                  value={String(feature.signup_closes_minutes_before ?? 0)}
+                  onChange={(e) => {
+                    void saveFeature({ signup_closes_minutes_before: Number(e.target.value) });
+                  }}
+                  className="form-input w-56"
+                >
+                  <option value="0">The shift starts</option>
+                  <option value="15">15 minutes before it starts</option>
+                  <option value="30">30 minutes before it starts</option>
+                  <option value="60">1 hour before it starts</option>
+                  <option value="120">2 hours before it starts</option>
+                  <option value="1440">1 day before it starts</option>
+                </select>
+              </div>
+
+              <div className="border-theme-surface-border/60 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
+                <div>
+                  <p className="text-theme-text-primary text-sm font-medium">Officers can add members until</p>
+                  <p className="text-theme-text-muted mt-0.5 text-sm">
+                    How long past the start an officer can still seat somebody who turned up. Past this, a scheduling
+                    admin records it instead.
+                  </p>
+                </div>
+                <select
+                  aria-label="Officers can add members until"
+                  disabled={savingFeature}
+                  value={String(feature.late_signup_grace_minutes ?? 60)}
+                  onChange={(e) => {
+                    void saveFeature({ late_signup_grace_minutes: Number(e.target.value) });
+                  }}
+                  className="form-input w-56"
+                >
+                  <option value="0">The shift starts</option>
+                  <option value="15">15 minutes after it starts</option>
+                  <option value="30">30 minutes after it starts</option>
+                  <option value="60">1 hour after it starts</option>
+                  <option value="240">4 hours after it starts</option>
+                  <option value="1440">1 day after it starts</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

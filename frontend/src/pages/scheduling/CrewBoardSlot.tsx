@@ -24,6 +24,12 @@ interface CrewBoardSlotProps {
   currentUserId: string | undefined;
   canAssign: boolean;
   isPast: boolean;
+  /**
+   * The shift is past its end plus the department's grace period, so its
+   * roster is a record. Distinct from `isPast`, which is day-granular and true
+   * from midnight — an overnight crew is still on the truck then.
+   */
+  rosterLocked: boolean;
   isUserAssigned: boolean;
   /**
    * Whether the viewer may claim this particular seat. The signup endpoint is
@@ -56,6 +62,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
   currentUserId,
   canAssign,
   isPast,
+  rosterLocked,
   isUserAssigned,
   canSignUp,
   positionOptions,
@@ -99,7 +106,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
                 displayLabel={seatLabel}
                 positionOptions={positionOptions}
                 onSave={onPositionChange}
-                editable={canAssign && !isPast}
+                editable={canAssign && !isPast && !rosterLocked}
                 updatingPosition={pendingStates.updatingPosition}
               />
               {assignment.is_training && (
@@ -140,6 +147,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
               effectiveStatus={assignment.status || 'assigned'}
               isCurrentUser={isCurrentUser || false}
               canAssign={canAssign}
+              locked={rosterLocked}
               onConfirm={onConfirm}
               onDecline={onDecline}
               onRemove={onRemove}
@@ -149,7 +157,12 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
             />
           </>
         ) : (
-          !isPast && (
+          /* `rosterLocked` as well as `isPast`: past the shift's end plus the
+             grace, `canAssignNow` in the parent has already withdrawn the form
+             this button opens, so "Assign someone" stayed visible on a
+             same-day shift all evening and did nothing when tapped. */
+          !isPast &&
+          !rosterLocked && (
             /* "Assign" and "Sign Up" side by side never said which was which —
                and on a phone the first collapsed to a bare icon. The labels
                carry the difference: one puts somebody else in the seat, the

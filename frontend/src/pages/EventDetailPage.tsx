@@ -41,6 +41,7 @@ import {
   StopCircle,
   Lock,
   Unlock,
+  UserRound,
 } from 'lucide-react';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { PromptDialog } from '../components/ux';
@@ -145,7 +146,7 @@ export const EventDetailPage: React.FC = () => {
   const [reopeningAttendance, setReopeningAttendance] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [eligibleMembers, setEligibleMembers] = useState<
-    Array<{ id: string; first_name: string; last_name: string; email: string }>
+    Array<{ id: string; first_name: string; last_name: string; email: string | null }>
   >([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [actualStartTime, setActualStartTime] = useState('');
@@ -1259,6 +1260,27 @@ export const EventDetailPage: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Who to hand a discrepancy back to. Any officer holding
+                    events.manage can close an event, but the member who
+                    organized it is the one who reconciles its attendance, and
+                    nothing else on this page says who that was.
+
+                    The server withholds the name from callers without
+                    events.manage, so the canManage check here only keeps it off
+                    a screen it would never be populated for anyway. Renders
+                    nothing when absent: an event predating the column, or one
+                    whose organizer has left the department, has no honest name
+                    to show, and an "Unknown" row would read as a data error. */}
+                {canManage && event.created_by_name && (
+                  <div className="flex items-start">
+                    <UserRound className="text-theme-text-muted mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="text-theme-text-secondary text-sm font-medium">Organized by</p>
+                      <p className="text-theme-text-secondary text-sm">{event.created_by_name}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1741,6 +1763,7 @@ export const EventDetailPage: React.FC = () => {
         {showCheckInModal && (
           <EventCheckInModal
             eligibleMembers={eligibleMembers}
+            organizerName={event.created_by_name ?? null}
             rsvps={rsvps}
             memberSearch={memberSearch}
             onMemberSearchChange={setMemberSearch}
@@ -1781,6 +1804,7 @@ export const EventDetailPage: React.FC = () => {
         {override.showOverrideModal && override.editingRsvp && (
           <EventOverrideAttendanceModal
             editingRsvp={override.editingRsvp}
+            organizerName={event.created_by_name ?? null}
             overrideCheckIn={override.overrideCheckIn}
             onOverrideCheckInChange={override.setOverrideCheckIn}
             overrideCheckOut={override.overrideCheckOut}

@@ -20,24 +20,41 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../components/StoreCatalogTab', () => ({ StoreCatalogTab: () => null }));
 vi.mock('../components/StorePaymentsTab', () => ({ StorePaymentsTab: () => null }));
 vi.mock('../components/StoreSettingsTab', () => ({ StoreSettingsTab: () => null }));
+vi.mock('../../../components/admin/AdminMetricsSettings', () => ({
+  __esModule: true,
+  default: () => <div>metrics-settings</div>,
+  AdminMetricsSettings: () => <div>metrics-settings</div>,
+}));
 vi.mock('../components/StoreWindowsTab', () => ({ StoreWindowsTab: () => null }));
 vi.mock('../components/StoreOrdersTab', () => ({
   StoreOrdersTab: ({
     initialStatusFilter,
+    initialPaymentFilter,
     initialOrderId,
     initialSubmittedWithinHours,
     initialOpenOnly,
   }: {
     initialStatusFilter?: string;
+    initialPaymentFilter?: string;
     initialOrderId?: string;
     initialSubmittedWithinHours?: number;
     initialOpenOnly?: boolean;
   }) => (
     <div>
-      Orders filter: {initialStatusFilter || 'all'}; detail: {initialOrderId || 'none'}; recent:{' '}
-      {initialSubmittedWithinHours ?? 'none'}; open: {initialOpenOnly ? 'yes' : 'no'}
+      Orders filter: {initialStatusFilter || 'all'}; payment: {initialPaymentFilter || 'all'}; detail:{' '}
+      {initialOrderId || 'none'}; recent: {initialSubmittedWithinHours ?? 'none'}; open:{' '}
+      {initialOpenOnly ? 'yes' : 'no'}
     </div>
   ),
+}));
+
+const mockIsModuleOn = vi.fn();
+const mockModulesLoading = vi.fn();
+vi.mock('../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    isModuleOn: (...args: unknown[]) => mockIsModuleOn(...args) as boolean,
+    isLoading: mockModulesLoading() as boolean,
+  }),
 }));
 
 import StoreAdminPage from './StoreAdminPage';
@@ -87,6 +104,12 @@ const dashboard = {
 describe('StoreAdminPage overview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Per CLAUDE.md #28: reset before installing, so a per-test override in one
+    // block cannot become another block's silent default.
+    mockIsModuleOn.mockReset();
+    mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
     mockGetDashboard.mockResolvedValue(dashboard);
     mockGetAdminHubSummary.mockResolvedValue({
       moduleKey: 'storefront',
@@ -153,6 +176,37 @@ describe('StoreAdminPage overview', () => {
 
     expect(await screen.findByText(/open: yes/)).toBeInTheDocument();
   });
+
+  it('offers the way back to Inventory when that module is on', async () => {
+    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+
+    expect(await screen.findByRole('link', { name: /Inventory/ })).toHaveAttribute('href', '/inventory/admin');
+  });
+
+  it('offers no way back while the module answer is still in flight', async () => {
+    // `isModuleOn` reports every module on until the lookup settles, so
+    // trusting it alone renders the link for the width of that request -- and
+    // a click inside that window reaches the refusal this hides.
+    mockModulesLoading.mockReturnValue(true);
+
+    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+    await screen.findByText('Department Store');
+
+    expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+  });
+
+  it('offers no way back when the department runs no Inventory', async () => {
+    // This route is gated on the storefront module, not on inventory, so the
+    // store can run with Inventory off -- and the hub then refuses with
+    // "Inventory is not enabled". Offering a link the app knows will be turned
+    // away reads to the manager as their own permissions being wrong.
+    mockIsModuleOn.mockImplementation((module: string) => module !== 'inventory');
+
+    render(<StoreAdminPage />, { wrapper: MemoryRouter });
+    await screen.findByText('Department Store');
+
+    expect(screen.queryByRole('link', { name: /Inventory/ })).not.toBeInTheDocument();
+  });
 });
 
 /**
@@ -164,6 +218,10 @@ describe('StoreAdminPage overview', () => {
  */
 describe('StoreAdminPage — tabs in the URL', () => {
   beforeEach(() => {
+    mockIsModuleOn.mockReset();
+    mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
     mockGetDashboard.mockReset();
     mockGetDashboard.mockResolvedValue(dashboard);
     mockGetAdminHubSummary.mockReset();
@@ -196,6 +254,30 @@ describe('StoreAdminPage — tabs in the URL', () => {
     expect(screen.queryByText('Order workflow')).not.toBeInTheDocument();
   });
 
+  it('carries the attention queue\u2019s payment filter in from the URL', async () => {
+    // The frame's "Verify payments" row links in from outside the page, so its
+    // filter cannot be the local state the overview's own hand-offs use. Landing
+    // on an unfiltered list leaves the counted work to be found by eye.
+    renderAt('/inventory/admin/store?tab=orders&payment=pending_verification');
+
+    expect(await screen.findByText(/payment: pending_verification/)).toBeInTheDocument();
+  });
+
+  it('ignores a payment filter the Orders tab does not offer', async () => {
+    renderAt('/inventory/admin/store?tab=orders&payment=not-a-status');
+
+    expect(await screen.findByText(/payment: all/)).toBeInTheDocument();
+  });
+
+  it('does not mistake an inherited property for a payment status', async () => {
+    // `'toString' in PAYMENT_STATUS_LABELS` is true via Object.prototype, and
+    // the value would then be forwarded to the API as a payment_status that
+    // matches nothing — an empty list instead of the documented fallback.
+    renderAt('/inventory/admin/store?tab=orders&payment=toString');
+
+    expect(await screen.findByText(/payment: all/)).toBeInTheDocument();
+  });
+
   it('falls back to the overview for a tab that does not exist', async () => {
     renderAt('/inventory/admin/store?tab=not-a-tab');
 
@@ -212,6 +294,19 @@ describe('StoreAdminPage — tabs in the URL', () => {
     // The frame owns the tab bar; selecting one is what writes ?tab=, which is
     // what makes a deep link possible in the first place.
     expect(screen.getByRole('tab', { name: 'Payments' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('offers the headline-metric picker on the settings tab', async () => {
+    // The store's registry defines six metrics and defaults to three, so
+    // without this control an admin can never reach the other three — every
+    // other module's admin page carries the same one.
+    const user = userEvent.setup();
+    renderAt('/inventory/admin/store');
+    await screen.findByText('Order workflow');
+
+    await user.click(screen.getByRole('tab', { name: 'Settings' }));
+
+    expect(await screen.findByText('metrics-settings')).toBeInTheDocument();
   });
 
   it('keeps the overview hand-off into a pre-filtered Orders tab', async () => {

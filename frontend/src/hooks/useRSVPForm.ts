@@ -25,18 +25,37 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>(RSVPStatusEnum.GOING);
   const [guestCount, setGuestCount] = useState(0);
   const [rsvpNotes, setRsvpNotes] = useState('');
-  const [rsvpDietaryRestrictions, setRsvpDietaryRestrictions] = useState('');
-  const [rsvpAccessibilityNeeds, setRsvpAccessibilityNeeds] = useState('');
+  const [rsvpDietaryRestrictions, setRsvpDietaryRestrictionsRaw] = useState('');
+  const [rsvpAccessibilityNeeds, setRsvpAccessibilityNeedsRaw] = useState('');
+  // Whether the member has actually interacted with each accommodation field
+  // this time the modal is open. These fields always start blank regardless
+  // of what is stored (see openModal below), so "blank" alone can't tell
+  // "never touched, leave it alone" from "touched and deliberately emptied to
+  // clear it" — only this flag can. Reset alongside the fields themselves.
+  const [dietaryTouched, setDietaryTouched] = useState(false);
+  const [accessibilityTouched, setAccessibilityTouched] = useState(false);
   const [rsvpApplyToSeries, setRsvpApplyToSeries] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const setRsvpDietaryRestrictions = useCallback((value: string) => {
+    setRsvpDietaryRestrictionsRaw(value);
+    setDietaryTouched(true);
+  }, []);
+
+  const setRsvpAccessibilityNeeds = useCallback((value: string) => {
+    setRsvpAccessibilityNeedsRaw(value);
+    setAccessibilityTouched(true);
+  }, []);
 
   const resetForm = useCallback(() => {
     setRsvpStatus(RSVPStatusEnum.GOING);
     setGuestCount(0);
     setRsvpNotes('');
-    setRsvpDietaryRestrictions('');
-    setRsvpAccessibilityNeeds('');
+    setRsvpDietaryRestrictionsRaw('');
+    setRsvpAccessibilityNeedsRaw('');
+    setDietaryTouched(false);
+    setAccessibilityTouched(false);
     setRsvpApplyToSeries(false);
     setSubmitError(null);
   }, []);
@@ -64,8 +83,13 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
       setRsvpNotes(existing.notes ?? '');
       // Accommodation fields are not echoed back by the API — they are PHI and
       // event detail is cacheable — so they start empty, as they always did.
-      setRsvpDietaryRestrictions('');
-      setRsvpAccessibilityNeeds('');
+      // Untouched, not just empty: the raw setters (not the touched-tracking
+      // wrappers) so submitting without visiting these fields omits them —
+      // leaving whatever is actually stored alone — rather than clearing it.
+      setRsvpDietaryRestrictionsRaw('');
+      setRsvpAccessibilityNeedsRaw('');
+      setDietaryTouched(false);
+      setAccessibilityTouched(false);
       setRsvpApplyToSeries(false);
       setSubmitError(null);
     } else {
@@ -91,9 +115,25 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
         const rsvpPayload = {
           status: rsvpStatus,
           guest_count: guestCount,
-          notes: rsvpNotes || undefined,
-          dietary_restrictions: rsvpDietaryRestrictions || undefined,
-          accessibility_needs: rsvpAccessibilityNeeds || undefined,
+          // Always sent, with an explicit null to clear: the modal prefills
+          // notes from the existing RSVP, so a blank box here means the
+          // member actually deleted it, not "unknown" (contrast the two
+          // fields below).
+          notes: rsvpNotes.trim() || null,
+          // dietary_restrictions/accessibility_needs are never echoed back by
+          // the API (PHI, and this modal's data is cacheable), so this modal
+          // always reopens them blank regardless of what is actually stored —
+          // "blank" alone can't distinguish "never touched" from "touched and
+          // deliberately cleared". The *Touched flags make that distinction:
+          // omitted (key absent) when the member never interacted with the
+          // field this time, so the backend's exclude_unset leaves whatever
+          // is stored alone; sent — including an explicit null — the moment
+          // they do, so clearing the box is actually how a member removes an
+          // old allergy or accommodation note rather than being unable to.
+          ...(dietaryTouched && { dietary_restrictions: rsvpDietaryRestrictions.trim() || null }),
+          ...(accessibilityTouched && {
+            accessibility_needs: rsvpAccessibilityNeeds.trim() || null,
+          }),
         };
 
         if (rsvpApplyToSeries && event && (event.is_recurring || event.recurrence_parent_id)) {
@@ -141,6 +181,8 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
       rsvpNotes,
       rsvpDietaryRestrictions,
       rsvpAccessibilityNeeds,
+      dietaryTouched,
+      accessibilityTouched,
       rsvpApplyToSeries,
       onSuccess,
       resetForm,

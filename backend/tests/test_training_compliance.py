@@ -1054,6 +1054,206 @@ class TestEvaluateRequirementDetailFields:
         result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
         assert result["days_until_due"] == (date(2026, 12, 31) - date(2026, 6, 15)).days
 
+    def test_calendar_period_ignores_a_stale_fixed_due_date(self):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `calendar_period` must not suppress the
+        period-window deadline -- the same stale-value failure mode as the
+        rolling/certification_period cases, which a prior round wrongly
+        assumed didn't apply to calendar_period because an explicit
+        `due_date_type` was set explicitly here (unlike
+        `test_days_until_due_calculated` above, which leaves it at the
+        default `None` and is a different, legitimate legacy case).
+        """
+        req = _make_requirement(
+            due_date_type="calendar_period", due_date=date(2020, 1, 1)
+        )
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["due_date"] == str(date(2026, 12, 31))
+        assert result["due_date"] != str(date(2020, 1, 1))
+
+    def test_days_until_due_for_rolling_requirement_anchors_on_last_completion(self):
+        """A rolling requirement's deadline is the last completion plus its
+        interval, not the evaluation window's end (which is always `today`
+        for a rolling requirement and would otherwise report every rolling
+        requirement as due today, regardless of when it was last done).
+        Caught by Codex reviewing this fix's own first draft.
+        """
+        req = _make_requirement(
+            due_date_type="rolling", rolling_period_months=24, due_date=None
+        )
+        records = [_make_record(completion_date=date(2025, 1, 10))]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        expected_due = date(2027, 1, 10)
+        assert result["due_date"] == str(expected_due)
+        assert result["days_until_due"] == (expected_due - date(2026, 6, 15)).days
+
+    def test_days_until_due_for_rolling_requirement_with_no_completion_is_none(self):
+        """With no applicable completion there is no anchor to compute a
+        rolling deadline from — must stay null, not fall back to `today`
+        (which would misreport an untouched requirement as due right now)."""
+        req = _make_requirement(
+            due_date_type="rolling", rolling_period_months=24, due_date=None
+        )
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["due_date"] is None
+        assert result["days_until_due"] is None
+
+    def test_rolling_ignores_a_stale_fixed_due_date(self):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `rolling` must not defeat the rolling anchor.
+        `RequirementModal.tsx` seeds its `due_date` field from the existing
+        row and only edits/clears it on the fixed_date screen, so switching
+        the type away from fixed_date can still submit the old date
+        alongside the new `due_date_type`. Codex found the top-priority
+        `req.due_date` check would silently defeat the just-added rolling
+        anchor with this stale value.
+        """
+        stale_due = date(2020, 1, 1)
+        req = _make_requirement(
+            due_date_type="rolling", rolling_period_months=24, due_date=stale_due
+        )
+        records = [_make_record(completion_date=date(2025, 1, 10))]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        expected_due = date(2027, 1, 10)
+        assert result["due_date"] == str(expected_due)
+        assert result["due_date"] != str(stale_due)
+
+    def test_rolling_anchor_does_not_match_an_unrelated_record(self):
+        """A course-specific rolling requirement (required_courses set, no
+        training_type) must not be anchored on some unrelated record just
+        because it's the member's most recent completion. Codex's exact
+        example: filtering the anchor by training_type alone skips the
+        filter entirely when training_type is unset, matching *any* record
+        of any type. Proven here with a more recent unrelated-course record
+        present -- a training_type-only filter would anchor on it instead.
+        """
+        req = _make_requirement(
+            due_date_type="rolling",
+            rolling_period_months=24,
+            due_date=None,
+            required_courses=["course-abc"],
+        )
+        satisfying = _make_record(
+            course_id="course-abc", completion_date=date(2025, 1, 10)
+        )
+        unrelated = _make_record(
+            course_id="course-xyz", completion_date=date(2026, 5, 1)
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, [satisfying, unrelated], date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2027, 1, 10))
+
+    def test_days_until_due_for_certification_period_requirement_uses_cert_expiration(
+        self,
+    ):
+        """A certification-period requirement never resets on a schedule --
+        it comes due when the held certificate itself expires. Codex found
+        the rolling-anchor fallback chain had no branch at all for
+        due_date_type="certification_period", so it fell through to the
+        calendar-period window-end fallback instead of the certificate's
+        actual expiration.
+        """
+        req = _make_requirement(
+            requirement_type=SimpleNamespace(value="certification"),
+            due_date_type="certification_period",
+            due_date=None,
+            required_hours=None,
+        )
+        records = [
+            _make_record(
+                course_name="Test Requirement Cert",
+                completion_date=date(2025, 1, 10),
+                expiration_date=date(2027, 1, 10),
+            ),
+        ]
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2027, 1, 10))
+        assert result["days_until_due"] == (date(2027, 1, 10) - date(2026, 6, 15)).days
+
+    def test_biannual_certification_period_keeps_the_matched_certs_expiration(self):
+        """A BIANNUAL-frequency certification-period requirement's
+        correctly-anchored due date must not be overwritten by the legacy
+        BIANNUAL override below it, which selects the newest expiration
+        across *any* record passing a bare `training_type` check -- not
+        `_anchor_matches`. Codex's exact scenario: an EMT cert due in 30
+        days silently replaced by an unrelated cert expiring next year,
+        which would then never surface in a 90-day at-risk forecast.
+        """
+        req = _make_requirement(
+            requirement_type=SimpleNamespace(value="certification"),
+            frequency=SimpleNamespace(value="biannual"),
+            due_date_type="certification_period",
+            name="EMT Certification",
+            required_hours=None,
+        )
+        matching = _make_record(
+            course_name="EMT Certification",
+            completion_date=date(2025, 6, 1),
+            expiration_date=date(2026, 7, 15),
+        )
+        unrelated = _make_record(
+            course_name="Unrelated Cert",
+            completion_date=date(2025, 1, 1),
+            expiration_date=date(2027, 1, 1),
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, [matching, unrelated], date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2026, 7, 15))
+
+    def test_certification_period_anchor_includes_unknown_completion_date(self):
+        """A matching certification with a known expiration but an unknown
+        completion date must still anchor the due date -- `date.min` is
+        the same fallback every other certification-matching site in this
+        file uses for exactly this case, not a reason to drop the record.
+        """
+        req = _make_requirement(
+            requirement_type=SimpleNamespace(value="certification"),
+            due_date_type="certification_period",
+            name="EMT Certification",
+            required_hours=None,
+        )
+        record = _make_record(
+            course_name="EMT Certification",
+            completion_date=None,
+            expiration_date=date(2027, 3, 1),
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, [record], date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2027, 3, 1))
+
+    def test_certification_period_ignores_a_stale_fixed_due_date(self):
+        """A leftover `due_date` from before the requirement was switched
+        from `fixed_date` to `certification_period` must not defeat the
+        certification anchor -- same root cause as the rolling case.
+        """
+        stale_due = date(2099, 1, 1)
+        req = _make_requirement(
+            requirement_type=SimpleNamespace(value="certification"),
+            due_date_type="certification_period",
+            due_date=stale_due,
+            name="EMT Certification",
+            required_hours=None,
+        )
+        record = _make_record(
+            course_name="EMT Certification",
+            completion_date=date(2025, 6, 1),
+            expiration_date=date(2026, 7, 15),
+        )
+        result = TrainingService.evaluate_requirement_detail(
+            req, [record], date(2026, 6, 15)
+        )
+        assert result["due_date"] == str(date(2026, 7, 15))
+        assert result["due_date"] != str(stale_due)
+
 
 # =====================================================
 # check_requirement_progress — the dashboard path

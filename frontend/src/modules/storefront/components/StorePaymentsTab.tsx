@@ -100,6 +100,10 @@ export const StorePaymentsTab: React.FC<StorePaymentsTabProps> = ({ onChanged })
       await storefrontService.ignorePaymentEvent(event.id);
       toast.success('Payment dismissed');
       await load();
+      // Dismissing clears the event from the admin frame's unreconciled count
+      // and its attention row, the same as applying one does — without this
+      // the headline stays stale until a manual refresh.
+      onChanged();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to dismiss payment'));
     } finally {

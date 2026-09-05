@@ -2048,8 +2048,34 @@ a:not([class]):hover {
 table {
   @apply w-full border-collapse;
 }
+/*
+ * A header's alignment is a DEFAULT, so it lives in `@layer base`. The rest of
+ * the header treatment below does not, and that split is the whole point.
+ *
+ * Unlayered CSS outranks every cascade layer, and Tailwind emits utilities into
+ * `@layer utilities`. So for as long as `text-align` sat in the unlayered rule
+ * below, a `text-right` written on a <th> did nothing at all: the heading stayed
+ * hard left while the figures under it sat at the far right of the column, which
+ * on a wide table leaves a number a hundred-odd pixels from its own label. That
+ * was live at 108 headers across 37 files — 71 `text-right` and 37
+ * `text-center` — every one written by somebody who meant it.
+ *
+ * In `base` this is still the default for a header that asks for nothing, and
+ * now yields to a header that asks for something.
+ *
+ * The other five declarations stay unlayered ON PURPOSE. Moving them too would
+ * let any utility on any <th> change a header's colour, size, weight or casing
+ * across every table in the app — a far larger change than the alignment bug
+ * this fixes, and not one to make as a side effect of it.
+ * `styles/tableHeaderAlignment.test.ts` pins both halves.
+ */
+@layer base {
+  thead th {
+    text-align: left;
+  }
+}
 thead th {
-  @apply text-theme-text-muted text-left text-xs font-semibold tracking-wider uppercase;
+  @apply text-theme-text-muted text-xs font-semibold tracking-wider uppercase;
 }
 tbody tr {
   @apply border-theme-surface-border border-b transition-colors duration-100;

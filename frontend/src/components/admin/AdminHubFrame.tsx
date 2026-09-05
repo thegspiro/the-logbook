@@ -41,6 +41,16 @@ export interface AdminHubAction {
 interface AdminHubFrameProps<K extends string> {
   /** Module key the summary endpoint is keyed on. */
   moduleKey: string;
+  /**
+   * Whether to ask for the headline summary at all. Default true.
+   *
+   * `/admin-hub/{module}/summary` resolves the module to its manage grant, so
+   * for a hub that admits more than one kind of administrator the request is a
+   * guaranteed 404 for everyone but the manager -- and the frame reports that
+   * as a failed summary with a Retry that repeats it. Pass false rather than
+   * showing an error for a figure the viewer was never entitled to.
+   */
+  summary?: boolean;
   title: string;
   description: string;
   /** Small caps line above the title. */
@@ -75,6 +85,7 @@ interface AdminHubFrameProps<K extends string> {
 
 export function AdminHubFrame<K extends string>({
   moduleKey,
+  summary: wantsSummary = true,
   title,
   description,
   eyebrow = 'Administration',
@@ -95,6 +106,12 @@ export function AdminHubFrame<K extends string>({
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const load = useCallback(async () => {
+    if (!wantsSummary) {
+      setSummary(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       setSummary(await adminHubService.getSummary(moduleKey));
@@ -107,7 +124,7 @@ export function AdminHubFrame<K extends string>({
     } finally {
       setLoading(false);
     }
-  }, [moduleKey]);
+  }, [moduleKey, wantsSummary]);
 
   useEffect(() => {
     void load();

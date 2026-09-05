@@ -39,8 +39,13 @@ export interface EmailConfig {
   // Gmail / Google Workspace — signs in to smtp.gmail.com as fromEmail
   googleAppPassword?: string;
 
-  // Microsoft 365 — signs in to smtp.office365.com as fromEmail
+  // Microsoft 365 — signs in to smtp.office365.com as fromEmail, with an App
+  // Password (Basic auth, retiring) or an Entra ID app registration.
+  microsoftAuthMethod?: 'app_password' | 'oauth';
   microsoftAppPassword?: string;
+  microsoftTenantId?: string;
+  microsoftClientId?: string;
+  microsoftClientSecret?: string;
 
   // Self-hosted SMTP
   smtpHost?: string;

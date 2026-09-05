@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import Dashboard from './Dashboard';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
-import { getTodayLocalDate, addCalendarDays } from '../utils/dateFormatting';
+import { getTodayLocalDate, addCalendarDays, toLocalISODate } from '../utils/dateFormatting';
 
 // Capture the pull-to-refresh handler the page registers, so a test can drive
 // the gesture without mounting the layout provider.
@@ -270,7 +270,7 @@ describe('Dashboard', () => {
       days_until_next_expiration: null,
     });
     mockCheckPermission.mockImplementation((permission: string) =>
-      ['scheduling.view', 'training.view', 'admin_hours.view'].includes(permission)
+      ['scheduling.view', 'training.view'].includes(permission)
     );
     mockGetEnabledModules.mockResolvedValue({
       configured: true,
@@ -440,7 +440,7 @@ describe('Dashboard', () => {
       // gated-off source counted as a failure the banner would be permanent
       // and its Retry would re-run the same gate, so this pins the direction:
       // only an attempted-and-rejected source raises the error.
-      mockCheckPermission.mockImplementation((permission: string) => permission === 'admin_hours.view');
+      mockCheckPermission.mockImplementation(() => false);
       mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: [] });
       mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
 
@@ -457,6 +457,108 @@ describe('Dashboard', () => {
       expect(screen.queryByText('Hours could not be fully verified.')).not.toBeInTheDocument();
     });
 
+    it('reads administrative hours for a member holding no permissions at all', async () => {
+      // /admin-hours, the sidebar entry that opens it and GET
+      // /admin-hours/summary are all ungated for a member's own entries, and
+      // admin_hours.view is granted by no default position or rank -- so
+      // gating this read on it left every ordinary member's Administrative row
+      // reading "Unavailable" beside a row that navigates to a page they can
+      // in fact open.
+      mockCheckPermission.mockImplementation(() => false);
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 6 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(within(card).getAllByText('6')).toHaveLength(2);
+      });
+      expect(mockGetAdminHoursSummary).toHaveBeenCalledTimes(1);
+    });
+
+    it('scopes the administrative summary to the member', async () => {
+      // The endpoint only falls back to the caller for someone *without*
+      // admin_hours.manage. A manage holder who omits userId gets the whole
+      // department's totals -- under a card headed "My Hours".
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'admin_hours.manage');
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 6 });
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(mockGetAdminHoursSummary).toHaveBeenCalled();
+      });
+      const args = mockGetAdminHoursSummary.mock.calls[0]?.[0] as {
+        userId?: string;
+        startDate: string;
+        endDate: string;
+      };
+      expect(args.userId).toBe('user-1');
+    });
+
+    it('sends the administrative month as UTC instants, not bare dates', async () => {
+      // A bare "YYYY-MM-DD" end date is parsed as midnight and filtered with
+      // `clock_in_at <= end`, so everything logged today falls outside the
+      // month -- and a bare start cuts the month at UTC midnight rather than
+      // the department's.
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 6 });
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(mockGetAdminHoursSummary).toHaveBeenCalled();
+      });
+      const args = mockGetAdminHoursSummary.mock.calls[0]?.[0] as { startDate: string; endDate: string };
+
+      // Instants, so the backend's fromisoformat gets a time of day at all.
+      expect(args.startDate).toMatch(/T\d{2}:\d{2}/);
+      expect(args.endDate).toMatch(/T\d{2}:\d{2}/);
+      // The end bound is still ahead of now, which is the whole point: an
+      // entry clocked in this morning is inside the month, not outside it.
+      expect(new Date(args.endDate).getTime()).toBeGreaterThan(Date.now());
+      // And the bounds land on the department's month, not UTC's.
+      const tz = 'America/New_York';
+      expect(toLocalISODate(args.startDate, tz)).toBe(`${getTodayLocalDate(tz).slice(0, 7)}-01`);
+      expect(toLocalISODate(args.endDate, tz)).toBe(getTodayLocalDate(tz));
+    });
+
+    it('shows a zero administrative month as 0, not Unavailable', async () => {
+      // "Unavailable" means the figure is unknown. A member who has logged no
+      // administrative time this month has a known figure, and it is zero.
+      mockCheckPermission.mockImplementation(() => false);
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: [] });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 0 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        // The Administrative row and the headline total, both zero.
+        expect(within(card).getAllByText('0')).toHaveLength(2);
+      });
+      expect(screen.queryByText('Hours could not be fully verified.')).not.toBeInTheDocument();
+    });
+
+    it('states the month total once, on the card', async () => {
+      // The header carried a second copy of the same figure with none of the
+      // split behind it, so a member reading "0 hrs in September" had no way
+      // to see which source it came from.
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyTraining.mockResolvedValue({
+        hours_summary: { total_hours: 4, hours_this_month: 4 },
+        certifications: [],
+      });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      expect(await within(card).findByText('9')).toBeInTheDocument();
+      expect(screen.getAllByText('9')).toHaveLength(1);
+    });
+
     it('does not call enabled sources without their view permissions', async () => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'scheduling.view');
       mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 4 });
@@ -469,8 +571,6 @@ describe('Dashboard', () => {
       });
       expect(mockGetSchedulingSummary).toHaveBeenCalledTimes(1);
       expect(mockGetMyTraining).not.toHaveBeenCalled();
-      expect(mockGetAdminHoursSummary).not.toHaveBeenCalled();
-      expect(mockCheckPermission).toHaveBeenCalledWith('admin_hours.view');
     });
   });
 
@@ -760,10 +860,10 @@ describe('Dashboard', () => {
       });
     });
 
-    it('keeps the stale hours total off the header while the retry is in flight', async () => {
-      // The header reads hoursError directly and never consults loadingHours,
-      // so clearing the flag up front would put the partial sum back as an
-      // exact figure for as long as the retry takes.
+    it('keeps the stale hours total off the card while the retry is in flight', async () => {
+      // `totalUnverified` reads hoursError directly and a retry never raises
+      // loadingHours, so clearing the flag up front would put the partial sum
+      // back as an exact figure for as long as the retry takes.
       mockGetMyTraining.mockRejectedValueOnce(new Error('offline')).mockImplementation(() => new Promise(() => {}));
       mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
       mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
@@ -776,7 +876,9 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: 'Retry hours' }));
 
       expect(within(card).getByText('Total unavailable')).toBeInTheDocument();
-      expect(screen.queryByText(/5 hrs in/)).not.toBeInTheDocument();
+      // 3 + 2 -- the sum of the sources that did answer, which is not the
+      // month's real total while training is still unknown.
+      expect(within(card).queryByText('5')).not.toBeInTheDocument();
     });
   });
 
@@ -905,7 +1007,7 @@ describe('Dashboard', () => {
       });
 
       expect(within(card).getByText('Total unavailable')).toBeInTheDocument();
-      expect(screen.queryByText(/5 hrs in/)).not.toBeInTheDocument();
+      expect(within(card).queryByText('5')).not.toBeInTheDocument();
     });
 
     it('drops stale certifications from the readiness verdict when a refresh fails', async () => {
@@ -2350,6 +2452,45 @@ describe('Dashboard', () => {
       const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
       expect(within(equipment).getByText('2')).toBeInTheDocument();
       expect(within(equipment).queryByText('51')).not.toBeInTheDocument();
+    });
+
+    // The rail and /inventory/my-equipment carry the same "Issued to me"
+    // label, so they have to reach the same number. That page's tile and its
+    // section header both count list entries; summing `quantity_issued` here
+    // put 7 beside the page's 4 for one locker.
+    it('counts an issuance once however many units it covers', async () => {
+      mockGetUserInventory.mockResolvedValue({
+        permanent_assignments: [
+          { item_id: 'coat', quantity: 1 },
+          { item_id: 'helmet', quantity: 1 },
+        ],
+        active_checkouts: [],
+        issued_items: [
+          { item_id: 'gloves', quantity_issued: 3 },
+          { item_id: 'shirt', quantity_issued: 2 },
+        ],
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
+      expect(within(equipment).getByText('Issued to me')).toBeInTheDocument();
+      expect(within(equipment).getByText('4')).toBeInTheDocument();
+      expect(within(equipment).queryByText('7')).not.toBeInTheDocument();
+    });
+
+    it('names the loan row as the gear page does', async () => {
+      mockGetUserInventory.mockResolvedValue({
+        permanent_assignments: [],
+        active_checkouts: [{ checkout_id: 'co-1', item_id: 'camera', is_overdue: false }],
+        issued_items: [],
+      });
+
+      renderWithRouter(<Dashboard />);
+
+      const equipment = await screen.findByRole('region', { name: 'My Issued Gear' });
+      expect(within(equipment).getByText('Temporary loans')).toBeInTheDocument();
+      expect(within(equipment).queryByText('Checked out')).not.toBeInTheDocument();
     });
 
     // Every permission here is granted to DEFAULT_POSITIONS["member"], so gating

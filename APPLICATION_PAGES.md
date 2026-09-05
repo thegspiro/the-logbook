@@ -443,10 +443,21 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 ### Inventory Admin Hub (`/inventory/admin`)
 
-Requires `inventory.manage`. Titled **Inventory Administration**, reached from
-the nav as **Inventory Admin**. The launching point for whoever runs the
-department's stock — gear, PPE, uniforms and EMS supplies, which share one
-catalog partitioned by `InventoryCategory.item_type`.
+Requires `inventory.manage`, `inventory.check_manage` or `storefront.manage`
+_(widened 2026-09-04)_. The page carries cards for the equipment-check console
+and the department store, whose own routes accept those grants, so gating the
+hub on `inventory.manage` alone refused each officer the only page linking to
+the console they run — and `inventory.check_manage` appears in no navigation
+entry, which left it reachable by typed URL and no other way. Every card still
+resolves its own gate, so a viewer sees only what they can open, and one who
+can open nothing is told so rather than shown a blank page. The nav entry
+carries the first two: a store manager already has **Store Admin**, which lands
+on the console itself.
+
+Titled **Inventory Administration**, reached from the nav as **Inventory
+Admin**. The launching point for whoever runs the department's stock — gear,
+PPE, uniforms and EMS supplies, which share one catalog partitioned by
+`InventoryCategory.item_type`.
 
 Body, top to bottom: a **Needs attention** queue of record-level work (each row
 links to the record itself, not to a list); a **supply-line** row — PPE &
@@ -468,30 +479,30 @@ Compliance, Department Store, and Setup & Tools.
 
 ### Inventory Admin Pages
 
-| URL                               | Page                      | Permission         |
-| --------------------------------- | ------------------------- | ------------------ |
-| `/inventory/admin`                | Admin Dashboard           | `inventory.manage` |
-| `/inventory/admin/setup`          | Inventory Setup           | `inventory.manage` |
-| `/inventory/admin/items`          | Manage Items              | `inventory.manage` |
-| `/inventory/admin/pool`           | Pool Items                | `inventory.manage` |
-| `/inventory/admin/categories`     | Categories                | `inventory.manage` |
-| `/inventory/admin/maintenance`    | Maintenance Records       | `inventory.manage` |
-| `/inventory/admin/members`        | Members Inventory         | `inventory.manage` |
-| `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage` |
-| `/inventory/admin/vendors`        | Vendors                   | `inventory.manage` |
-| `/inventory/admin/returns`        | Return Requests           | `inventory.manage` |
-| `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage` |
-| `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage` |
-| `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage` |
-| `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage` |
-| `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage` |
-| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage` |
-| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
-| `/inventory/checkouts`            | Active Checkouts          | `inventory.manage` |
-| `/inventory/import`               | CSV Import                | `inventory.manage` |
-| `/inventory/admin/kits`           | Equipment Kits            | `inventory.manage` |
-| `/inventory/admin/variant-groups` | Variant Groups            | `inventory.manage` |
-| `/inventory/print-labels`         | Barcode Label Printing    | `inventory.manage` |
+| URL                               | Page                      | Permission                                                                    |
+| --------------------------------- | ------------------------- | ----------------------------------------------------------------------------- |
+| `/inventory/admin`                | Admin Dashboard           | `inventory.manage` **OR** `inventory.check_manage` **OR** `storefront.manage` |
+| `/inventory/admin/setup`          | Inventory Setup           | `inventory.manage`                                                            |
+| `/inventory/admin/items`          | Manage Items              | `inventory.manage`                                                            |
+| `/inventory/admin/pool`           | Pool Items                | `inventory.manage`                                                            |
+| `/inventory/admin/categories`     | Categories                | `inventory.manage`                                                            |
+| `/inventory/admin/maintenance`    | Maintenance Records       | `inventory.manage`                                                            |
+| `/inventory/admin/members`        | Members Inventory         | `inventory.manage`                                                            |
+| `/inventory/admin/charges`        | Charges & Fees            | `inventory.manage`                                                            |
+| `/inventory/admin/vendors`        | Vendors                   | `inventory.manage`                                                            |
+| `/inventory/admin/returns`        | Return Requests           | `inventory.manage`                                                            |
+| `/inventory/admin/requests`       | Equipment Requests        | `inventory.manage`                                                            |
+| `/inventory/admin/write-offs`     | Write-Off Requests        | `inventory.manage`                                                            |
+| `/inventory/admin/reorder`        | Reorder Requests          | `inventory.manage`                                                            |
+| `/inventory/admin/allowances`     | Issuance Allowances       | `inventory.manage`                                                            |
+| `/inventory/admin/impact-planner` | Impact Planner            | `inventory.manage`                                                            |
+| `/inventory/admin/kits`           | Equipment Kits Management | `inventory.manage`                                                            |
+| `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage`                                                            |
+| `/inventory/checkouts`            | Active Checkouts          | `inventory.manage`                                                            |
+| `/inventory/import`               | CSV Import                | `inventory.manage`                                                            |
+| `/inventory/admin/kits`           | Equipment Kits            | `inventory.manage`                                                            |
+| `/inventory/admin/variant-groups` | Variant Groups            | `inventory.manage`                                                            |
+| `/inventory/print-labels`         | Barcode Label Printing    | `inventory.manage`                                                            |
 
 > **Receiving a delivery and stocking the catalog are both one-pass jobs now** _(2026-08-10)_. Two modals open from the items list (`/inventory`, and the same screen at `/inventory/admin/items`):
 >
@@ -557,6 +568,8 @@ Compliance, Department Store, and Setup & Tools.
 | `/scheduling?tab=<tab>` | Scheduling (deep-link) | Authenticated |
 
 Supports `?tab=` query parameter for deep-linking to specific tabs: `schedule`, `my-shifts`, `open-shifts`, `requests`, `equipment-checks`. Shift notifications deep-link to the scheduling page with the relevant shift pre-selected.
+
+The My Shifts tab has three sub-views, deep-linked with `?view=`: `upcoming` (default), `past`, and `hours` — the member's own hours and calls by month for a year.
 
 Tab-based interface with the following views:
 

@@ -86,9 +86,18 @@ import type {
 import { asArray } from '../utils/asArray';
 
 export const inventoryService = {
-  async getMembersSummary(search?: string): Promise<MembersInventoryListResponse> {
+  /**
+   * `includeUserId` keeps that one member in the result whatever their status.
+   * A departure clearance is created after the drop has already made the
+   * member inactive, so the person the clearance queue links to is the one the
+   * active-only default leaves out.
+   */
+  async getMembersSummary(search?: string, includeUserId?: string): Promise<MembersInventoryListResponse> {
+    const params: Record<string, string> = {};
+    if (search) params.search = search;
+    if (includeUserId) params.userId = includeUserId;
     const response = await api.get<MembersInventoryListResponse>('/inventory/members-summary', {
-      params: search ? { search } : undefined,
+      params: Object.keys(params).length > 0 ? params : undefined,
     });
     return response.data;
   },

@@ -261,6 +261,7 @@ export const storefrontService = {
     search?: string | undefined;
     submittedWithinHours?: number | undefined;
     openOnly?: boolean | undefined;
+    excludeCancelled?: boolean | undefined;
     page?: number;
     pageSize?: number;
   }): Promise<StoreOrderListResponse> {
@@ -273,6 +274,7 @@ export const storefrontService = {
         search: params?.search,
         submitted_within_hours: params?.submittedWithinHours,
         open_only: params?.openOnly,
+        exclude_cancelled: params?.excludeCancelled,
         page: params?.page ?? 1,
         page_size: params?.pageSize ?? 25,
       },

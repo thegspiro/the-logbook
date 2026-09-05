@@ -22,6 +22,7 @@ import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idC
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
+import { APPARATUS_ENTRY_PERMISSIONS } from '../../modules/apparatus/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -194,8 +195,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               },
             ]
           : []),
+        // See SideNavigation for why the module-on row is gated and the
+        // module-off `/apparatus-basic` row is not.
         ...(isModuleOn('apparatus')
-          ? [{ label: 'Apparatus', path: '/apparatus' }]
+          ? [{ label: 'Apparatus', path: '/apparatus', anyPermission: [...APPARATUS_ENTRY_PERMISSIONS] }]
           : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
         ...(isModuleOn('facilities')
           ? [{ label: 'Facilities', path: '/facilities', anyPermission: [...FACILITY_ENTRY_PERMISSIONS] }]
@@ -261,7 +264,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                 ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
                 : []),
               ...(isModuleOn('inventory')
-                ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
+                ? // Gate mirrors SideNavigation; the reasoning is documented there.
+                  // Keep the gate adjacent to `path`: navGateIntegrity reads a
+                  // 300-character window around it and otherwise picks up the
+                  // neighbouring row's gate instead of this one.
+                  [
+                    {
+                      label: 'Inventory Admin',
+                      path: '/inventory/admin',
+                      anyPermission: ['inventory.manage', 'inventory.check_manage'],
+                    },
+                  ]
                 : []),
               ...(isModuleOn('storefront')
                 ? [{ label: 'Store Admin', path: '/inventory/admin/store', permission: 'storefront.manage' }]

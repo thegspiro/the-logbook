@@ -54,9 +54,11 @@ vi.mock('../../../stores/authStore', () => ({
 // The hook reads organizationService from the same module mocked above, so it
 // is stubbed here rather than left to resolve against a partial mock.
 const mockIsModuleOn = vi.fn();
+const mockModulesLoading = vi.fn();
 vi.mock('../../../hooks/useEnabledModules', () => ({
   useEnabledModules: () => ({
     enabledModules: null,
+    isLoading: mockModulesLoading() as boolean,
     isModuleOn: (...args: unknown[]) => mockIsModuleOn(...args) as boolean,
   }),
 }));
@@ -66,6 +68,7 @@ import { InventoryAdminHub } from './InventoryAdminHub';
 const mockSummary = {
   total_items: 150,
   items_by_type: { ppe: 62, uniform: 45, tool: 20 },
+  non_medical_items: 127,
   items_by_status: { available: 80, assigned: 40, checked_out: 20, in_maintenance: 5, retired: 5 },
   active_checkouts: 20,
   overdue_checkouts: 3,
@@ -99,6 +102,8 @@ describe('InventoryAdminHub', () => {
     mockGetDepartureClearances.mockResolvedValue({ clearances: [], total: 0 });
     mockCheckPermission.mockReturnValue(true);
     mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
     mockGetMedicalSummary.mockResolvedValue({
       total_items: 88,
       expiring_soon: 7,
@@ -259,7 +264,11 @@ describe('InventoryAdminHub', () => {
     // an empty body rather than a wall of links that all refuse them.
     mockCheckPermission.mockReturnValue(false);
     renderWithRouter(<InventoryAdminHub />);
-    await screen.findByRole('region', { name: 'Needs attention' });
+    // Settles on the empty state rather than on the attention queue: the queue
+    // is raised only for `inventory.manage` now, so for this viewer -- who
+    // holds nothing -- it is deliberately absent and can no longer serve as
+    // the anchor. The assertions below are unchanged.
+    await screen.findByText('Nothing here for your role');
 
     expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
     expect(screen.queryByText('All Items')).not.toBeInTheDocument();
@@ -449,6 +458,8 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     grantAll();
     mockIsModuleOn.mockReset();
     mockIsModuleOn.mockReturnValue(true);
+    mockModulesLoading.mockReset();
+    mockModulesLoading.mockReturnValue(false);
   });
 
   it('opens each supply line on the catalogue filtered to it', async () => {
@@ -474,6 +485,17 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
     expect(within(screen.getByRole('link', { name: /Uniforms/ })).getByText('45')).toBeInTheDocument();
   });
 
+  it('counts All Items as the non-medical rows its listing shows', async () => {
+    // total_items is 150 and sums quantities across every type, medical
+    // included; /inventory/admin/items excludes medical and reports rows. A
+    // card that shows 150 over a list of 127 reads as a bug in the list.
+    renderWithRouter(<InventoryAdminHub />);
+    const items = await screen.findByRole('link', { name: /All Items/ });
+
+    expect(within(items).getByText('127')).toBeInTheDocument();
+    expect(within(items).queryByText('150')).not.toBeInTheDocument();
+  });
+
   it('reports what is expiring on the EMS card, not what is on the shelf', async () => {
     // 7 expiring soon, out of 88 items — the number an EMS officer opens the
     // page for is the one with a deadline on it.
@@ -482,6 +504,26 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
 
     expect(within(medical).getByText('7')).toBeInTheDocument();
     expect(within(medical).queryByText('88')).not.toBeInTheDocument();
+  });
+
+  it('names the EMS request in the failure banner rather than swallowing it', async () => {
+    // A silently-dropped stat is indistinguishable from a department with
+    // nothing expiring, and leaves no Retry for the one request that failed.
+    mockGetMedicalSummary.mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryAdminHub />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('EMS supplies');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(mockGetMedicalSummary).toHaveBeenCalledTimes(2));
+  });
+
+  it('leaves the EMS card without a stat when its request fails', async () => {
+    mockGetMedicalSummary.mockRejectedValue(new Error('offline'));
+    renderWithRouter(<InventoryAdminHub />);
+    const medical = await screen.findByRole('link', { name: /EMS Supplies/ });
+
+    expect(within(medical).queryByText('7')).not.toBeInTheDocument();
   });
 
   it('hides the EMS card, and asks nothing of its API, without the medical grant', async () => {
@@ -571,5 +613,174 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       'href',
       '/inventory/admin/reorder?request=ro-1'
     );
+  });
+  // Per CLAUDE.md #28 these reset before installing their own defaults:
+  // `vi.clearAllMocks()` leaves the outer block's implementations in place, so
+  // a block about *not* calling a service must own what that service does.
+  describe('administrators who are not the quartermaster', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockIsModuleOn.mockReset();
+      mockIsModuleOn.mockReturnValue(true);
+      mockModulesLoading.mockReset();
+      mockModulesLoading.mockReturnValue(false);
+      mockModulesLoading.mockReset();
+      mockModulesLoading.mockReturnValue(false);
+      mockGetMedicalSummary.mockReset();
+      mockGetMedicalSummary.mockResolvedValue({
+        total_items: 0,
+        expiring_soon: 0,
+        expired: 0,
+        low_stock: 0,
+        expiring_within_days: 30,
+      });
+    });
+
+    it('asks for no inventory figures on behalf of a checklist officer', async () => {
+      // The route admits `inventory.check_manage` so this officer can reach
+      // the checklist card. Every endpoint behind the metrics needs an
+      // inventory grant they do not hold, so requesting them spends ten 403s
+      // and then reports all ten as unavailable -- the page accusing itself of
+      // being broken.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(mockGetSummary).not.toHaveBeenCalled();
+      expect(mockGetLowStockItems).not.toHaveBeenCalled();
+      expect(mockGetSetupStatus).not.toHaveBeenCalled();
+      expect(mockGetDepartureClearances).not.toHaveBeenCalled();
+    });
+
+    it('still asks for them on behalf of the quartermaster', async () => {
+      // The other half of the gate: pinning only the negative would pass just
+      // as well with the batch removed outright.
+      mockCheckPermission.mockReturnValue(true);
+
+      renderWithRouter(<InventoryAdminHub />);
+      await waitFor(() => expect(mockGetSummary).toHaveBeenCalled());
+      expect(mockGetLowStockItems).toHaveBeenCalled();
+    });
+
+    it('asks for no headline summary either', async () => {
+      // The frame raises its own request, separate from the ten above.
+      // `/admin-hub/inventory/summary` resolves the module to its manage
+      // grant, so for these officers it is a guaranteed 404 -- reported as a
+      // failed summary with a Retry that repeats it on every press.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(mockGetAdminHubSummary).not.toHaveBeenCalled();
+    });
+
+    it('does not claim the inventory queue is clear without having asked', async () => {
+      // The queue's empty state reads "All inventory work is up to date". With
+      // the batch behind it skipped, that is a statement about data nobody
+      // requested -- and for a store manager it sat directly above "Nothing
+      // here for your role".
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.queryByText('Nothing needs attention. All inventory work is up to date.')).not.toBeInTheDocument();
+    });
+
+    it('offers no metrics Settings tab, and refuses it by URL as well', async () => {
+      // Both the read and the write behind Settings require `inventory.manage`,
+      // so the panel would report itself unavailable and could never save.
+      // Hiding only the tab leaves `?tab=settings` reaching it anyway.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
+      window.history.pushState({}, '', '/inventory/admin?tab=settings');
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Headline metrics')).not.toBeInTheDocument();
+      window.history.pushState({}, '', '/inventory/admin');
+    });
+
+    it('keeps the Settings tab for the quartermaster', async () => {
+      mockCheckPermission.mockReturnValue(true);
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
+    });
+
+    it('still reports an EMS failure it can no longer show in the queue', async () => {
+      // The EMS request is raised off the card being visible, not off
+      // `inventory.manage`, so this administrator makes it. The queue that used
+      // to render `failedSources` is gone for them, and without a replacement
+      // the rejection vanished: card present, figure missing, no explanation.
+      mockCheckPermission.mockImplementation(
+        (permission: string) => permission === 'inventory.check_manage' || permission === 'inventory.view_medical'
+      );
+      mockGetMedicalSummary.mockRejectedValue(new Error('nope'));
+
+      renderWithRouter(<InventoryAdminHub />);
+
+      expect(await screen.findByText(/Some figures on this page did not load/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    });
+
+    it('stays quiet when that request succeeds', async () => {
+      // The other half: a banner rendered unconditionally would satisfy the
+      // case above while telling every visitor something had failed.
+      mockCheckPermission.mockImplementation(
+        (permission: string) => permission === 'inventory.check_manage' || permission === 'inventory.view_medical'
+      );
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.queryByText(/Some figures on this page did not load/)).not.toBeInTheDocument();
+    });
+
+    it('shows neither cards nor the empty state until the module flags settle', async () => {
+      // `isModuleOn` reports every module on while loading, so the store cards
+      // would render for the width of that request -- suppressing the empty
+      // state that belongs there and offering links the storefront route
+      // refuses.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'storefront.manage');
+      mockModulesLoading.mockReturnValue(true);
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
+      expect(screen.queryByText('Nothing here for your role')).not.toBeInTheDocument();
+    });
+
+    it('says so plainly when the viewer opens none of the cards', async () => {
+      // A store manager whose department runs no storefront: the route accepts
+      // their grant, and nothing behind it does. Without this they get a
+      // heading over blank space, which reads as a page that failed to load.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'storefront.manage');
+      mockIsModuleOn.mockImplementation((module: string) => module !== 'storefront');
+
+      renderWithRouter(<InventoryAdminHub />);
+
+      expect(await screen.findByText('Nothing here for your role')).toBeInTheDocument();
+    });
+
+    it('shows cards rather than the empty state when one is open to them', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'storefront.manage');
+      mockIsModuleOn.mockReturnValue(true);
+      mockModulesLoading.mockReset();
+      mockModulesLoading.mockReturnValue(false);
+      mockModulesLoading.mockReset();
+      mockModulesLoading.mockReturnValue(false);
+
+      renderWithRouter(<InventoryAdminHub />);
+      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+
+      expect(screen.queryByText('Nothing here for your role')).not.toBeInTheDocument();
+    });
   });
 });

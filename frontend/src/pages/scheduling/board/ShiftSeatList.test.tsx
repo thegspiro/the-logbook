@@ -22,11 +22,30 @@ const seat = (userId: string, position: string, name: string) => ({
 const TODAY_KEY = toDateKey(new Date());
 const TOMORROW_KEY = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
 
+// The default fixture's start must be an *instant* in the future, not a fixed
+// wall-clock time: `memberSignupClosedReason` compares it against `Date.now()`,
+// so a literal `T22:00:00Z` would close every default-fixture shift after 22:00
+// UTC and take this file and ShiftSeatList's red on a commit that touched
+// neither — the same time-bomb class the comment above describes, one level
+// down.
+const FUTURE_START = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+
+// A shift that ran long ago, and whose start says so too. The two have to
+// agree: the claim rules take the start instant as the authority (so an
+// overnight shift's midnight rollover cannot close a live reopening), and a
+// past date paired with a future start is not a shift any department could
+// have had.
+const LONG_PAST = {
+  shift_date: '2000-01-01',
+  start_time: '2000-01-01T08:00:00Z',
+  end_time: '2000-01-01T20:00:00Z',
+};
+
 const shift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 's1',
   organization_id: 'org',
   shift_date: TODAY_KEY,
-  start_time: `${TODAY_KEY}T22:00:00Z`,
+  start_time: FUTURE_START,
   end_time: `${TOMORROW_KEY}T10:00:00Z`,
   positions: [
     { position: 'officer', required: true },
@@ -165,12 +184,12 @@ describe('a shift nobody can sign up for', () => {
   });
 
   it('offers no claim on a shift that has already run', () => {
-    renderList({ shift: shift({ shift_date: '2000-01-01' }) });
+    renderList({ shift: shift(LONG_PAST) });
     expect(screen.getByText(/has already run/i)).toBeInTheDocument();
   });
 
   it('does not offer to give up a shift that has already run', () => {
-    const past = shift({ shift_date: '2000-01-01', roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
+    const past = shift({ ...LONG_PAST, roster: [seat(ME, 'driver', 'You')], attendee_count: 1 });
     renderList({ shift: past });
     expect(screen.queryByRole('button', { name: /give up this shift/i })).not.toBeInTheDocument();
   });
@@ -269,5 +288,118 @@ describe('a pending offer of this seat', () => {
     renderList();
     expect(screen.queryByText(/offered you this seat/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/offered to/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('a shift that has already started', () => {
+  const started = () => shift({ start_time: new Date(Date.now() - 60 * 60_000).toISOString() });
+
+  it('says it has started rather than that it has already run', () => {
+    render(
+      <ShiftSeatList
+        shift={started()}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+      />
+    );
+    expect(screen.getByText('This shift has already started.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /take a seat on this shift/i })).not.toBeInTheDocument();
+  });
+
+  it('still says cancelled when the shift was cancelled', () => {
+    // Cancelled is the more informative answer, and it is the precedence the
+    // backend rule uses too — its window check defers to the mutability check.
+    render(
+      <ShiftSeatList
+        shift={{ ...started(), status: 'cancelled' }}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+      />
+    );
+    expect(screen.getByText('This shift was cancelled.')).toBeInTheDocument();
+  });
+
+  it('offers the seats again inside a late-signup window', () => {
+    render(
+      <ShiftSeatList
+        shift={{ ...started(), late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString() }}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button', { name: /take a seat on this shift/i })).toBeInTheDocument();
+  });
+
+  it("prefers the server's own reason when the detail response supplied one", () => {
+    render(
+      <ShiftSeatList
+        shift={{ ...started(), signup_closed_reason: 'Late signup for this shift has closed.' }}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Late signup for this shift has closed.')).toBeInTheDocument();
+  });
+});
+
+describe('a swap offer on a shift past its signup deadline', () => {
+  const started = () => shift({ start_time: new Date(Date.now() - 60 * 60_000).toISOString() });
+  const offer = {
+    id: 'sw1',
+    offering_shift_id: 's1',
+    requesting_user_id: 'other-1',
+    requesting_user_name: 'Dana Reed',
+    target_user_id: ME,
+    status: 'pending',
+  };
+
+  it('withdraws "Take the shift" but keeps Decline', () => {
+    // Accepting is the offerer withdrawing and the accepter signing up, so the
+    // server refuses it past the deadline. The offerer is still owed an answer.
+    const onAnswerOffer = vi.fn();
+    render(
+      <ShiftSeatList
+        shift={started()}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+        offerToMe={offer as never}
+        onAnswerOffer={onAnswerOffer}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: /take the shift/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /decline/i })).toBeInTheDocument();
+  });
+
+  it('offers acceptance while the shift is still ahead', () => {
+    render(
+      <ShiftSeatList
+        shift={shift()}
+        currentUserId={ME}
+        timezone="UTC"
+        eligiblePositions={['firefighter']}
+        onClaim={vi.fn()}
+        onRelease={vi.fn()}
+        offerToMe={offer as never}
+        onAnswerOffer={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /take the shift/i })).toBeInTheDocument();
   });
 });
