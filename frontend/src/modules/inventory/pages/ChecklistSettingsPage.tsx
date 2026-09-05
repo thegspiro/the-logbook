@@ -28,6 +28,7 @@ import toast from 'react-hot-toast';
 import { organizationService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { CHECKIN_BOUNDS, DEFAULT_CHECKLIST_TIMING, type ChecklistTimingSettings } from '../types/checklistSettings';
+import { useSchedulingStore } from '../../scheduling/store/schedulingStore';
 
 export const ChecklistSettingsPage: React.FC = () => {
   const [timing, setTiming] = useState<ChecklistTimingSettings>(DEFAULT_CHECKLIST_TIMING);
@@ -68,6 +69,19 @@ export const ChecklistSettingsPage: React.FC = () => {
     try {
       await organizationService.updateSettings({ shift_reports: { checklist_timing: updated } });
       setTiming(updated);
+      // The scheduling store mirrors this setting: an open-ended shift counts
+      // as running for `checkin_closes_hours_after` past its start, which is
+      // what its roster lock reads. That store is a once-per-session cache, so
+      // without this an administrator who widened check-in here would go back
+      // to scheduling in the same tab and still find the roster locking on the
+      // old number — hiding controls the server now accepts.
+      //
+      // Invalidated rather than recomputed here. The server resolves the
+      // cushion (a floor, and a ceiling) and reports it on
+      // `/scheduling/settings`; clamping a second copy of that rule in this
+      // file is how the two would come to disagree. The next scheduling mount
+      // refetches, and reads the permissive default until it lands.
+      useSchedulingStore.setState({ settingsLoaded: false });
       toast.success('Checklist settings saved');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save checklist settings'));

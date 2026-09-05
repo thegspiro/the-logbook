@@ -759,3 +759,55 @@ describe('rosterLocked', () => {
     expect(rosterLocked(ran)).toBe(true);
   });
 });
+
+describe('a stale late-signup window', () => {
+  // A window stored while reopening was still unbounded can sit months past
+  // the roster deadline. The server caps it at evaluation; taking it as
+  // authoritative here kept claim buttons on the board, the dashboard and the
+  // open-shifts list for shifts every attempt is rejected on.
+  const longPast = (overrides: Partial<ShiftRecord> = {}) =>
+    shift({
+      shift_date: toDateKey(new Date(Date.now() - 90 * 24 * 60 * 60_000)),
+      start_time: new Date(Date.now() - 90 * 24 * 60 * 60_000).toISOString(),
+      end_time: new Date(Date.now() - 90 * 24 * 60 * 60_000 + 12 * 60 * 60_000).toISOString(),
+      ...overrides,
+    });
+
+  const live = new Date(Date.now() + 60 * 60_000).toISOString();
+
+  it('does not reopen a months-old shift for a member', () => {
+    expect(memberSignupClosedReason(longPast({ late_signup_until: live }))).not.toBeNull();
+  });
+
+  it('does not reopen it for an officer either', () => {
+    const closed = signupClosedReason(longPast({ late_signup_until: live }), DEFAULT_SIGNUP_WINDOW, {
+      canAssign: true,
+      canManage: false,
+    });
+    expect(closed).not.toBeNull();
+  });
+
+  it('leaves a scheduling admin unbounded', () => {
+    const closed = signupClosedReason(longPast({ late_signup_until: live }), DEFAULT_SIGNUP_WINDOW, {
+      canAssign: false,
+      canManage: true,
+    });
+    expect(closed).toBeNull();
+  });
+
+  it('still honours a window inside the deadline', () => {
+    // The cap only trims; a reopening on a shift that is genuinely still live
+    // is untouched.
+    const running = shift({
+      start_time: new Date(Date.now() - 90 * 60_000).toISOString(),
+      end_time: new Date(Date.now() + 10 * 60 * 60_000).toISOString(),
+      late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString(),
+    });
+    expect(memberSignupClosedReason(running)).toBeNull();
+  });
+
+  it('caps an open-ended shift against its cushion too', () => {
+    const openEnded = longPast({ end_time: undefined, late_signup_until: live });
+    expect(memberSignupClosedReason(openEnded)).not.toBeNull();
+  });
+});

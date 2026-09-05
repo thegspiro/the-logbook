@@ -216,7 +216,14 @@ export const signupClosedReason = (
   const start = startInstant(shift);
   if (start === null) return null;
 
-  const override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
+  // Capped at the roster deadline, as the server caps it. A window stored
+  // while reopening was still unbounded can sit months past it, and taking it
+  // as authoritative kept claim buttons on the board, the dashboard and the
+  // open-shifts list for shifts every attempt is rejected on.
+  let override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
+  const roster = rosterDeadline(shift, window);
+  if (!Number.isNaN(override) && roster !== null && override > roster) override = roster;
+
   const offsetMinutes = viewer.canAssign ? window.graceMinutes : -window.closesMinutesBefore;
   let deadline = start + offsetMinutes * 60_000;
   if (!Number.isNaN(override) && override > deadline) deadline = override;
@@ -265,6 +272,30 @@ export const isShiftClaimable = (
 };
 
 /**
+ * The last instant this shift's roster may change, or null when it cannot be
+ * judged. Mirrors the backend's `_roster_deadline_from`.
+ *
+ * Two rules read it, which is why it is a value rather than a predicate:
+ * `rosterLocked`, and the cap `signupClosedReason` applies to a stored
+ * `late_signup_until`. Keeping them on one number is what stops the client
+ * drifting from the server the way it did when each computed its own.
+ *
+ * An open-ended shift is a real shift, not a malformed one — but "no end, no
+ * deadline" left it unbounded on both sides. The cushion is what keeps
+ * standing in the start from locking a live shift one grace period after it
+ * began, which is why the naive substitution was rejected on both sides.
+ */
+const rosterDeadline = (shift: ShiftRecord, window: SignupWindow): number | null => {
+  let end = endInstant(shift);
+  if (end === null) {
+    const start = startInstant(shift);
+    if (start === null) return null;
+    end = start + window.openEndedCushionHours * 60 * 60_000;
+  }
+  return end + window.graceMinutes * 60_000;
+};
+
+/**
  * Whether this shift's roster has stopped being a plan and become a record.
  *
  * Signup closing and the roster locking are two different moments, and
@@ -281,10 +312,10 @@ export const isShiftClaimable = (
  * already sets for late signup, so an overnight crew keeps its controls
  * through the night and past the hand-over — the day-granular `isShiftOpen`
  * cannot be used here for exactly the reason it is only a fallback elsewhere.
- * A live `late_signup_until` holds the roster open too: an officer who has
- * legitimately reopened the shift needs to seat whoever answers. The server
- * now clamps that override to the same deadline, so it can only ever move the
- * answer for a row written before it did.
+ * A shift with no recorded end is bounded by `rosterDeadline`'s cushion rather
+ * than left open forever. A live `late_signup_until` does *not* extend the
+ * bound — see the body — because reopening signup lets somebody join a shift,
+ * it does not reopen the roster of one that is over.
  *
  * A scheduling admin is never locked out. That is the same three-actor split
  * the whole signup window uses — the admin path is records work, which happens
@@ -302,20 +333,8 @@ export const rosterLocked = (
 ): boolean => {
   if (viewer.canManage) return false;
 
-  // An open-ended shift is a real shift, not a malformed one — but "no end, no
-  // lock" left it unbounded, and the server no longer agrees: it stands in the
-  // start plus a cushion, so leaving this permissive kept Reopen and the roster
-  // controls on screen for exactly the shifts the API had begun refusing.
-  //
-  // The cushion is what keeps standing in the start from locking a live shift
-  // one grace period after it began, which is why the naive substitution was
-  // rejected on both sides.
-  let end = endInstant(shift);
-  if (end === null) {
-    const start = startInstant(shift);
-    if (start === null) return false;
-    end = start + window.openEndedCushionHours * 60 * 60_000;
-  }
+  const deadline = rosterDeadline(shift, window);
+  if (deadline === null) return false;
 
   // `late_signup_until` deliberately plays no part. The server's
   // `_roster_locked_reason` reads the deadline alone, and letting a stored
@@ -323,7 +342,7 @@ export const rosterLocked = (
   // it kept withdraw and the seat dropdown on screen past a lock the API
   // enforces. Reopening signup lets somebody *join*; it does not reopen the
   // roster of a shift that is over.
-  return now.getTime() > end + window.graceMinutes * 60_000;
+  return now.getTime() > deadline;
 };
 
 /**

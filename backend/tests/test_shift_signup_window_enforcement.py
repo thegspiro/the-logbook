@@ -1129,3 +1129,42 @@ class TestTheCushionFollowsTheDepartmentsCheckInSetting:
 
         assert err is None
         assert reopened.late_signup_until is not None
+
+
+class TestMalformedChecklistSettingsDegrade:
+    """`or {}` only survives a *falsy* wrong type.
+
+    A legacy or hand-edited organization holding a truthy non-object at either
+    level reached `.get` on a string or a list and raised AttributeError. That
+    is not a degraded window but a 500, on an endpoint every member reads and
+    on the roster deadline itself.
+    """
+
+    async def test_the_roster_deadline_still_resolves(
+        self, db_session, org_and_members
+    ):
+        org_id, officer_id, _ = org_and_members
+        await _set_scheduling_settings(db_session, org_id)
+        row = await db_session.execute(
+            text("SELECT settings FROM organizations WHERE id = :id"), {"id": org_id}
+        )
+        raw = row.scalar_one()
+        settings = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        settings["shift_reports"] = "legacy string"
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :id"),
+            {"s": json.dumps(settings), "id": org_id},
+        )
+        await db_session.flush()
+
+        svc = SchedulingService(db_session)
+        shift = await _open_ended_shift(
+            svc, org_id, officer_id, minutes_from_now=-(8 * 60)
+        )
+
+        reopened, err = await svc.open_late_signup(
+            uuid.UUID(shift.id), uuid.UUID(org_id), minutes=15
+        )
+
+        assert err is None
+        assert reopened.late_signup_until is not None

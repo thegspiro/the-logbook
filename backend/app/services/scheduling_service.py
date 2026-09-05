@@ -170,6 +170,24 @@ def _minutes_phrase(total: int) -> str:
 OPEN_ENDED_SHIFT_CUSHION_HOURS = 12
 
 
+def _checklist_timing(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """The department's checklist-timing block, or an empty one.
+
+    `or {}` alone only survives a *falsy* wrong type. A legacy or hand-edited
+    organization holding a truthy non-object at either level — a string, a
+    list — reached `.get` on it and raised AttributeError, which is not a
+    degraded window but a 500: `/scheduling/settings` is read by every member,
+    and the roster deadline resolves through here too. Both readers of this
+    block now go through one function so neither can drift back (pitfall #19:
+    unvalidated JSON degrades, it does not raise).
+    """
+    reports = settings.get("shift_reports")
+    if not isinstance(reports, dict):
+        return {}
+    timing = reports.get("checklist_timing")
+    return timing if isinstance(timing, dict) else {}
+
+
 def open_ended_cushion_hours(settings: Dict[str, Any]) -> int:
     """How long past its start an open-ended shift still counts as running.
 
@@ -183,7 +201,7 @@ def open_ended_cushion_hours(settings: Dict[str, Any]) -> int:
     Unvalidated JSON an admin can hand-edit, so a bad value degrades to the
     floor rather than raising (pitfall #19).
     """
-    timing = (settings.get("shift_reports") or {}).get("checklist_timing") or {}
+    timing = _checklist_timing(settings)
     try:
         configured = int(timing.get("checkin_closes_hours_after", 0))
     except (TypeError, ValueError):
@@ -2211,7 +2229,7 @@ class SchedulingService:
         through: refusing it would block check-in on data this function cannot
         judge.
         """
-        timing = (settings.get("shift_reports") or {}).get("checklist_timing") or {}
+        timing = _checklist_timing(settings)
         opens_before = timing.get("checkin_opens_hours_before", 2)
         closes_after = timing.get("checkin_closes_hours_after", 12)
 
