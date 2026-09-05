@@ -18,7 +18,6 @@ from sqlalchemy.orm import selectinload
 from app.models.apparatus import Apparatus, ApparatusOperator
 from app.models.call_tracking import (
     DEFAULT_CALL_TYPES,
-    MAX_CALL_TYPES,
     UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
 )
@@ -979,27 +978,35 @@ class ShiftEligibilityService:
             ),
         }
 
-    def raw_call_type_slugs(self, org: Organization) -> set:
-        """Every slug present in the stored JSON, before any normalization.
+    def effective_call_type_slugs(self, org: Organization) -> set:
+        """Every slug currently in force, before any normalization.
 
-        The defensive reader drops and truncates; this does not. The deletion
-        guard has to compare against what is *stored*, because a slug the
-        reader hid — beyond the cap, or a duplicate — is still the value its
-        calls are filed under, and a save built from the reader's shortened
-        list would drop it without the guard ever seeing it go.
+        Two things the defensive reader does not give a caller that needs to
+        know what a save would drop:
+
+        * It drops and truncates. A slug it hid is still the value its calls
+          are filed under, so the deletion guard compares against what is
+          *stored*, not against the shortened list the editor was handed.
+        * An organization that has never materialized a list is not running
+          without call types — it is running on the built-in nine, and its
+          calls are filed under those slugs. Returning an empty set for it
+          made the guard skip its check entirely and the editor offer to
+          delete a default type with a decade of calls behind it, which is
+          the normal state of every existing installation.
         """
         sched = self._get_scheduling_settings(org)
         raw = sched.get("call_tracking")
-        if not isinstance(raw, dict):
-            return set()
-        types = raw.get("call_types")
-        if not isinstance(types, list):
-            return set()
-        return {
-            str(entry.get("slug") or "").strip()
-            for entry in types
-            if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
-        }
+        types = raw.get("call_types") if isinstance(raw, dict) else None
+        stored = (
+            {
+                str(entry.get("slug") or "").strip()
+                for entry in types
+                if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
+            }
+            if isinstance(types, list)
+            else set()
+        )
+        return stored or {t["slug"] for t in DEFAULT_CALL_TYPES}
 
     def get_call_tracking_settings(self, org: Organization) -> Dict[str, Any]:
         """Return the org's call-volume tracking config.
@@ -1072,12 +1079,11 @@ class ShiftEligibilityService:
                 {"slug": t["slug"], "label": t["label"], "active": True}
                 for t in DEFAULT_CALL_TYPES
             ]
-        # Truncated, not rejected. The write schema caps the list, but this
-        # column predates that cap and is hand-editable, and the settings
-        # endpoint builds `CallTrackingSettings` from whatever comes back
-        # here — so an over-long stored list would fail schema construction
-        # and 500 the endpoint that is the only way to shorten it.
-        clean_types = clean_types[:MAX_CALL_TYPES]
+        # Deliberately not truncated. The cap is enforced on writes, where it
+        # belongs; hiding stored entries here made a used type past the cap
+        # unrepresentable in any payload the editor could produce, and the
+        # deletion guard then rejected every one of those payloads — leaving
+        # the organization unable to edit its call types at all.
 
         return {"mode": mode, "call_types": clean_types}
 

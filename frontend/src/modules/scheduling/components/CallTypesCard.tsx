@@ -203,8 +203,11 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, lock
         {draft.map((type, index) => {
           const used = usage[type.slug] ?? 0;
           // A filed report can name a type no call still carries, so the
-          // locked list — not the count — is what the server enforces.
-          const isLocked = lockedSlugs.has(type.slug);
+          // locked list is broader than the count — but the count still gates
+          // on its own. Relying on the list alone left delete enabled for a
+          // caller the server served an empty one to, which is what a
+          // permission gap or an older backend produces.
+          const isLocked = lockedSlugs.has(type.slug) || used > 0;
           return (
             <li
               key={type.slug}

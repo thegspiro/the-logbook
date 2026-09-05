@@ -121,9 +121,16 @@ class CallTrackingService:
         conditions = [
             ShiftCompletionReport.organization_id == str(organization_id),
             ShiftCompletionReport.call_types.isnot(None),
-            # Only a count-only report stores slugs; the rest hold the
-            # officer's own wording, which must not lock anything.
+            # Provenance filtered in SQL, not in Python. A detailed-tracking
+            # department whose officers typed a common word — "fire" — matches
+            # the text prefilter on every report it has ever filed, and
+            # discarding those rows after loading them is what made this grow
+            # with history. Excluded here, such an organization returns none.
             ShiftCompletionReport.data_sources.isnot(None),
+            func.json_unquote(
+                func.json_extract(ShiftCompletionReport.data_sources, "$.call_types")
+            )
+            == CALL_TYPES_FROM_ORG_CALLS,
         ]
         if candidates is not None:
             conditions.append(

@@ -12,7 +12,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.call_tracking import (
-    MAX_CALL_TYPES,
     MAX_CALLS_PER_SHIFT,
     UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
@@ -326,12 +325,13 @@ class CallTrackingSettings(BaseModel):
     """
 
     mode: str = Field(default=CallTrackingMode.DETAILED)
-    # Bounded because this lands in an unvalidated JSON column that every
-    # close-out and settings read deserializes. No department needs a hundred
-    # of them, and the editor cannot produce one.
-    call_types: List[CallTypeOption] = Field(
-        default_factory=list, max_length=MAX_CALL_TYPES
-    )
+    # Deliberately unbounded *here*. This class is built on the read path too,
+    # from a JSON column that predates the cap and is hand-editable, so a
+    # length limit on the field turns an over-long stored list into a 500 on
+    # the one endpoint that could shorten it. The cap is enforced where it
+    # means something — on a write, and as a ratchet, so an organization
+    # already over it can still save a list that does not grow.
+    call_types: List[CallTypeOption] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate(self) -> "CallTrackingSettings":

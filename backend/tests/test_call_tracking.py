@@ -643,12 +643,17 @@ class TestCallTypeRetirement:
         )
         assert [t.active for t in s.call_types] == [True, False]
 
-    def test_schema_bounds_the_list(self):
-        """It lands in an unvalidated JSON column every close-out reads."""
-        with pytest.raises(ValidationError):
-            CallTrackingSettings(
-                call_types=[{"slug": f"t{i}", "label": f"T{i}"} for i in range(51)]
-            )
+    def test_schema_does_not_bound_the_list(self):
+        """The cap is enforced on the write path, not on this class — it is
+        built on the read path too, from a hand-editable column, and a length
+        limit here turns an over-long stored list into a 500 on the one
+        endpoint that could shorten it."""
+        s = CallTrackingSettings(
+            call_types=[
+                {"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 1)
+            ]
+        )
+        assert len(s.call_types) == MAX_CALL_TYPES + 1
 
     async def test_submitting_a_retired_slug_is_still_accepted(self):
         """Retirement stops a type being *offered*; it is not grounds to
@@ -698,14 +703,14 @@ class TestReservedAndBoundedTypeList:
         )
         assert [t["slug"] for t in resolved] == ["fire"]
 
-    def test_an_oversized_legacy_list_is_truncated_not_rejected(self):
-        """The write cap is new; the column is older and hand-editable. An
-        org holding 51 valid entries must not get a 500 from the one endpoint
-        that could shorten the list."""
+    def test_an_oversized_legacy_list_is_served_whole(self):
+        """Not truncated: hiding a stored entry made a used type past the cap
+        unrepresentable in any payload the editor could produce, and the
+        deletion guard then rejected every one of them."""
         resolved = self._resolve(
             [{"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 5)]
         )
-        assert len(resolved) == MAX_CALL_TYPES
+        assert len(resolved) == MAX_CALL_TYPES + 5
         # The whole point: this is what the settings endpoint then builds.
         assert CallTrackingSettings(call_types=resolved).call_types
 
@@ -1538,7 +1543,7 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             ),
             patch.object(
                 ShiftEligibilityService,
-                "raw_call_type_slugs",
+                "effective_call_type_slugs",
                 MagicMock(return_value=set(stored_slugs)),
             ),
             patch.object(
@@ -1797,9 +1802,10 @@ class TestLabelDisambiguationStaysValid:
         assert CallTrackingSettings(call_types=resolved).call_types
 
 
-class TestRawCallTypeSlugs:
-    """What the deletion guard compares against. The reader hides entries; the
-    calls filed under them do not care."""
+class TestEffectiveCallTypeSlugs:
+    """What the deletion guard compares against: everything actually in force,
+    including entries the reader normalizes away and the built-in defaults an
+    organization has never materialized."""
 
     def _svc(self, call_types):
         svc = ShiftEligibilityService(MagicMock())
@@ -1808,26 +1814,31 @@ class TestRawCallTypeSlugs:
         )
         return svc, org
 
-    def test_includes_entries_the_reader_would_truncate(self):
+    def test_includes_every_stored_entry(self):
         entries = [
             {"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 3)
         ]
         svc, org = self._svc(entries)
-        raw = svc.raw_call_type_slugs(org)
+        raw = svc.effective_call_type_slugs(org)
         assert len(raw) == MAX_CALL_TYPES + 3
         assert f"t{MAX_CALL_TYPES + 2}" in raw
-        # The reader's list is what the editor is handed, and it is shorter.
-        assert len(svc.get_call_tracking_settings(org)["call_types"]) == MAX_CALL_TYPES
 
     def test_includes_the_reserved_slug_the_reader_drops(self):
         svc, org = self._svc([{"slug": UNCLASSIFIED_CALL_TYPE, "label": "x"}])
-        assert svc.raw_call_type_slugs(org) == {UNCLASSIFIED_CALL_TYPE}
+        assert svc.effective_call_type_slugs(org) == {UNCLASSIFIED_CALL_TYPE}
 
-    def test_empty_when_nothing_is_stored(self):
+    def test_falls_back_to_the_defaults_in_force(self):
+        """An org that never materialized a list is not running without call
+        types — it is running on the built-in nine, and its calls are filed
+        under those slugs. Returning an empty set made the deletion guard skip
+        its check and the editor offer to delete a default with history."""
+        expected = {t["slug"] for t in DEFAULT_CALL_TYPES}
         svc, org = self._svc([])
-        assert svc.raw_call_type_slugs(org) == set()
+        assert svc.effective_call_type_slugs(org) == expected
         svc2 = ShiftEligibilityService(MagicMock())
-        assert svc2.raw_call_type_slugs(SimpleNamespace(settings=None)) == set()
+        assert (
+            svc2.effective_call_type_slugs(SimpleNamespace(settings=None)) == expected
+        )
 
 
 @pytest.mark.integration
@@ -1973,3 +1984,88 @@ class TestProvenanceBackfillNeedsPositiveEvidence:
             )
         ).scalar_one()
         assert rows == 1
+
+
+class TestTheEditorCannotDeleteADefaultWithHistory:
+    """The normal state of every existing installation: no stored list, calls
+    filed under the built-in slugs. An empty "stored" set made the guard skip
+    its check entirely, and the editor gates delete on the server's answer."""
+
+    async def _save(self, incoming_slugs, stored_settings, locked):
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[{"slug": s, "label": s} for s in incoming_slugs],
+        )
+        org = SimpleNamespace(settings=stored_settings)
+        with patch.object(
+            ShiftEligibilityService, "_get_org", AsyncMock(return_value=org)
+        ), patch.object(
+            CallTrackingService,
+            "slugs_locked_by_history",
+            AsyncMock(return_value=set(locked)),
+        ):
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_deleting_a_used_default_is_refused(self):
+        kept = [t["slug"] for t in DEFAULT_CALL_TYPES if t["slug"] != "ems"]
+        with pytest.raises(ValueError, match="ems"):
+            await self._save(kept, {}, {"ems"})
+
+    async def test_deleting_an_unused_default_is_allowed(self):
+        kept = [t["slug"] for t in DEFAULT_CALL_TYPES if t["slug"] != "ems"]
+        await self._save(kept, {}, {"fire"})
+
+
+class TestTheCapIsARatchet:
+    """A hand-edited configuration already over the cap must still be able to
+    save a list that does not grow, or the only way to shorten it is barred."""
+
+    async def _save(self, incoming_count, stored_count):
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[
+                {"slug": f"t{i}", "label": f"T{i}"} for i in range(incoming_count)
+            ],
+        )
+        org = SimpleNamespace(
+            settings={
+                "scheduling": {
+                    "call_tracking": {
+                        "call_types": [
+                            {"slug": f"t{i}", "label": f"T{i}"}
+                            for i in range(stored_count)
+                        ]
+                    }
+                }
+            }
+        )
+        with patch.object(
+            ShiftEligibilityService, "_get_org", AsyncMock(return_value=org)
+        ), patch.object(
+            CallTrackingService,
+            "slugs_locked_by_history",
+            AsyncMock(return_value=set()),
+        ):
+            await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_a_new_list_may_not_exceed_the_cap(self):
+        with pytest.raises(ValueError, match="at most"):
+            await self._save(MAX_CALL_TYPES + 1, 3)
+
+    async def test_an_over_cap_org_may_save_without_growing(self):
+        await self._save(MAX_CALL_TYPES + 5, MAX_CALL_TYPES + 5)
+
+    async def test_an_over_cap_org_may_shorten(self):
+        await self._save(MAX_CALL_TYPES + 2, MAX_CALL_TYPES + 5)
+
+    async def test_an_over_cap_org_may_not_grow_further(self):
+        with pytest.raises(ValueError, match="at most"):
+            await self._save(MAX_CALL_TYPES + 6, MAX_CALL_TYPES + 5)

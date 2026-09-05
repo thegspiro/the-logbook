@@ -24,7 +24,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, CodedValueError
 from app.core.utils import ensure_found, safe_error_detail
-from app.models.call_tracking import UNCLASSIFIED_CALL_TYPE
+from app.models.call_tracking import MAX_CALL_TYPES, UNCLASSIFIED_CALL_TYPE
 from app.models.event_request import EventRequest
 from app.models.training import (
     AssignmentStatus,
@@ -3503,8 +3503,18 @@ async def _reject_deleting_a_used_call_type(
     org = await eligibility._get_org(organization_id)
     if org is None:
         return
+    stored = eligibility.effective_call_type_slugs(org)
+
+    # The cap, enforced as a ratchet rather than a wall. A hand-edited
+    # configuration already over it must still be able to save a list that
+    # does not grow, or the only way to shorten it is barred.
+    if len(incoming.call_types) > MAX_CALL_TYPES and len(incoming.call_types) > len(
+        stored
+    ):
+        raise ValueError(f"A department can have at most {MAX_CALL_TYPES} call types.")
+
     kept = {t.slug for t in incoming.call_types}
-    removed = eligibility.raw_call_type_slugs(org) - kept
+    removed = stored - kept
     # The reserved bucket slug can never be kept — the reader hides it and the
     # schema refuses it — so counting its disappearance as a deletion left an
     # organization that had configured it unable to save its settings at all:
@@ -3563,10 +3573,10 @@ async def _call_type_locked_for(db: AsyncSession, user: User) -> list[str]:
     org = await eligibility._get_org(user.organization_id)
     if org is None:
         return []
-    # Bounded by what the org actually has configured — at most the cap. The
-    # answer can only ever contain those slugs, and asking unbounded made the
-    # settings screen's cost grow with the department's whole report history.
-    candidates = eligibility.raw_call_type_slugs(org)
+    # Bounded by what is actually in force. The answer can only contain those
+    # slugs, and asking unbounded made the settings screen's cost grow with
+    # the department's whole report history.
+    candidates = eligibility.effective_call_type_slugs(org)
     if not candidates:
         return []
     return sorted(
