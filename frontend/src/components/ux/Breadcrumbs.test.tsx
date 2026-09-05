@@ -79,13 +79,14 @@ describe('Breadcrumbs', () => {
   });
 
   it('does not link a path no route declares', () => {
-    // Six section routes live under /scheduling/admin/settings and it is not
-    // one of them; App.tsx's catch-all would redirect to the dashboard.
-    grant('scheduling.manage');
-    renderAt('/scheduling/admin/settings/eligibility');
+    // Only /new and /:templateId are declared under
+    // /inventory/admin/checklists/templates; the bare path is not a route, so
+    // App.tsx's catch-all would redirect to the dashboard.
+    grant('inventory.manage', 'inventory.check_manage');
+    renderAt('/inventory/admin/checklists/templates/new');
 
-    expect(within(trail()).getByText('Settings')).not.toHaveAttribute('href');
-    expect(crumbLinks()).toEqual(['/scheduling', '/scheduling/admin']);
+    expect(within(trail()).getByText('Templates')).not.toHaveAttribute('href');
+    expect(crumbLinks()).toEqual(['/inventory', '/inventory/admin', '/inventory/admin/checklists']);
   });
 
   it('does not link a route the viewer cannot open', () => {

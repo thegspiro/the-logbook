@@ -9,6 +9,9 @@
  * Administration section, which is where the rest of the product puts this,
  * had no scheduling entry at all.
  *
+ * One grant runs the whole area: `scheduling.manage`, on this route, on every
+ * page behind it, and on the nav rows that offer it.
+ *
  * The body is a card grid rather than tabs: the pages behind it are separate
  * screens, not views of one, and the grid is the shape Inventory Administration
  * already established for that.
@@ -80,9 +83,10 @@ const SchedulingAdminHub: React.FC = () => {
   const canManage = checkPermission('scheduling.manage');
 
   // Every card resolves its own gate here rather than inheriting the page's.
-  // The route admits training officers, who hold no scheduling grant at all, and
-  // two cards point into Inventory, whose grants scheduling.manage does not
-  // imply. A card nobody filtered is a link to Access Denied.
+  // Two cards point into Inventory, whose grants `scheduling.manage` does not
+  // imply — `checkPermission` is exact match plus module wildcard — so a card
+  // nobody filtered is a link to Access Denied for the officer this page is
+  // built for.
   const visibleCards = useMemo(
     () =>
       // Nothing until the module flags are known — see the hook's own comment.
@@ -99,10 +103,10 @@ const SchedulingAdminHub: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
   // Settings edits the scheduling headline metrics; both its read and its write
-  // require `scheduling.manage`. Offering the tab to a training officer gives
-  // them a panel that reports itself unavailable and can never save, and
-  // `?tab=settings` reaches it whether or not the tab is drawn — so the URL is
-  // refused here too, not just the control hidden.
+  // require `scheduling.manage`, which this route now also requires. Kept
+  // guarded rather than simplified away: `?tab=settings` reaches this panel
+  // whether or not the tab is drawn, so the refusal belongs on the URL and not
+  // only on the control — and that stays true however the route's gate moves.
   const activeTab: AdminTab = tabParam === 'settings' && canManage ? 'settings' : 'overview';
   const tabs = canManage ? TABS : OVERVIEW_ONLY_TABS;
   const [frameToken, setFrameToken] = useState(0);
@@ -115,9 +119,13 @@ const SchedulingAdminHub: React.FC = () => {
   return (
     <AdminHubFrame<AdminTab>
       moduleKey="scheduling"
-      // `/admin-hub/scheduling/summary` resolves the module to scheduling.manage,
-      // so for a training officer the request is a guaranteed 404 and the frame
-      // would report it as a failed summary with a Retry that repeats it.
+      // `/admin-hub/scheduling/summary` resolves the module to
+      // `scheduling.manage`, and so does this route, so today every viewer who
+      // reaches here holds it. Kept as a guard rather than dropped: the frame's
+      // own docstring is that a hub admitting more than one kind of
+      // administrator must not make this request for the others, and a guard
+      // removed because the current gate happens to make it redundant is a
+      // guard that has to be rediscovered when the gate next widens.
       summary={canManage}
       title="Scheduling Administration"
       description="Shifts, the crews that fill them, and what needs a decision today"
@@ -137,11 +145,11 @@ const SchedulingAdminHub: React.FC = () => {
         </div>
       ) : (
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-          {/* Reachable, because this hub admits two different administrators: a
-              training officer whose department has the Scheduling module off
-              holds a grant this route accepts and none that opens a card behind
-              it. A header over an empty page reads as a failure to load, so say
-              plainly that there is nothing here for them. */}
+          {/* Reachable when the department has the Scheduling module switched
+              off: the module gate is a usability gate, not access control, so
+              this route still opens and every card filters itself away. A
+              header over an empty page reads as a failure to load, so say
+              plainly that there is nothing here rather than showing one. */}
           {!modulesLoading && sections.length === 0 && (
             <EmptyState
               icon={CalendarClock}

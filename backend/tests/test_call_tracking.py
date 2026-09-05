@@ -1534,9 +1534,11 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
 
     @staticmethod
     def _guard(stored_slugs, locked):
-        """Patch the two reads the guard makes: the raw stored slugs and the
-        locked set. Raw, not the reader's normalized list — a slug the reader
-        hid is still what its calls are filed under."""
+        """Patch the reads the guard makes: the slugs in force, the persisted
+        list the cap ratchet measures, and the locked set. Raw, not the
+        reader's normalized list — a slug the reader hid is still what its
+        calls are filed under. These cases are all well under the cap, so both
+        slug reads answer the same set."""
         return (
             patch.object(
                 ShiftEligibilityService, "_get_org", AsyncMock(return_value=object())
@@ -1544,6 +1546,11 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             patch.object(
                 ShiftEligibilityService,
                 "effective_call_type_slugs",
+                MagicMock(return_value=set(stored_slugs)),
+            ),
+            patch.object(
+                ShiftEligibilityService,
+                "stored_call_type_slugs",
                 MagicMock(return_value=set(stored_slugs)),
             ),
             patch.object(
@@ -1562,8 +1569,8 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": s, "label": s} for s in incoming_slugs],
         )
-        a, b, c = self._guard(stored_slugs, locked)
-        with a, b, c:
+        a, b, s, c = self._guard(stored_slugs, locked)
+        with a, b, s, c:
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
     async def test_the_reserved_slug_does_not_deadlock_the_settings_screen(self):
@@ -1597,8 +1604,8 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             mode=CallTrackingMode.COUNT_ONLY,
             call_types=[{"slug": "fire", "label": "Fire", "active": False}],
         )
-        a, b, c = self._guard(["fire"], {"fire"})
-        with a, b, c:
+        a, b, s, c = self._guard(["fire"], {"fire"})
+        with a, b, s, c:
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
 
     async def test_an_unchanged_list_costs_no_usage_query(self):
@@ -1613,8 +1620,10 @@ class TestDeletingAUsedTypeIsRefusedServerSide:
             call_types=[{"slug": "fire", "label": "Fire"}],
         )
         locked = AsyncMock(return_value=set())
-        a, b, _ = self._guard(["fire"], set())
-        with a, b, patch.object(CallTrackingService, "slugs_locked_by_history", locked):
+        a, b, s, _ = self._guard(["fire"], set())
+        with a, b, s, patch.object(
+            CallTrackingService, "slugs_locked_by_history", locked
+        ):
             await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
         locked.assert_not_called()
 
@@ -1825,7 +1834,30 @@ class TestEffectiveCallTypeSlugs:
 
     def test_includes_the_reserved_slug_the_reader_drops(self):
         svc, org = self._svc([{"slug": UNCLASSIFIED_CALL_TYPE, "label": "x"}])
-        assert svc.effective_call_type_slugs(org) == {UNCLASSIFIED_CALL_TYPE}
+        assert UNCLASSIFIED_CALL_TYPE in svc.effective_call_type_slugs(org)
+
+    def test_a_list_the_reader_rejects_entirely_still_yields_the_defaults(self):
+        """Nonempty but all-invalid — an uppercase or over-long legacy slug.
+        The reader falls back to the defaults, so the defaults are what is in
+        force, and a save omitting one of them is a deletion. Returning only
+        the stored set here let that save through."""
+        svc, org = self._svc(
+            [{"slug": "EMS", "label": "Upper"}, {"slug": "x" * 60, "label": "Long"}]
+        )
+        effective = svc.effective_call_type_slugs(org)
+        assert {t["slug"] for t in DEFAULT_CALL_TYPES} <= effective
+
+    def test_the_stored_set_alone_adds_nothing(self):
+        """``stored_call_type_slugs`` is what the cap ratchet measures, so it
+        must report only the persisted list. Adding the defaults the reader
+        fell back to would let an org whose stored slugs are all invalid save
+        a list that grows past the cap."""
+        svc, org = self._svc(
+            [{"slug": "EMS", "label": "Upper"}, {"slug": "x" * 60, "label": "Long"}]
+        )
+        assert svc.stored_call_type_slugs(org) == {"EMS", "x" * 60}
+        svc2 = ShiftEligibilityService(MagicMock())
+        assert svc2.stored_call_type_slugs(SimpleNamespace(settings=None)) == set()
 
     def test_falls_back_to_the_defaults_in_force(self):
         """An org that never materialized a list is not running without call
@@ -2024,7 +2056,7 @@ class TestTheCapIsARatchet:
     """A hand-edited configuration already over the cap must still be able to
     save a list that does not grow, or the only way to shorten it is barred."""
 
-    async def _save(self, incoming_count, stored_count):
+    async def _save(self, incoming_count, stored_count, stored_entries=None):
         from app.api.v1.endpoints.scheduling import (
             _reject_deleting_a_used_call_type,
         )
@@ -2035,17 +2067,12 @@ class TestTheCapIsARatchet:
                 {"slug": f"t{i}", "label": f"T{i}"} for i in range(incoming_count)
             ],
         )
+        if stored_entries is None:
+            stored_entries = [
+                {"slug": f"t{i}", "label": f"T{i}"} for i in range(stored_count)
+            ]
         org = SimpleNamespace(
-            settings={
-                "scheduling": {
-                    "call_tracking": {
-                        "call_types": [
-                            {"slug": f"t{i}", "label": f"T{i}"}
-                            for i in range(stored_count)
-                        ]
-                    }
-                }
-            }
+            settings={"scheduling": {"call_tracking": {"call_types": stored_entries}}}
         )
         with patch.object(
             ShiftEligibilityService, "_get_org", AsyncMock(return_value=org)
@@ -2069,3 +2096,14 @@ class TestTheCapIsARatchet:
     async def test_an_over_cap_org_may_not_grow_further(self):
         with pytest.raises(ValueError, match="at most"):
             await self._save(MAX_CALL_TYPES + 6, MAX_CALL_TYPES + 5)
+
+    async def test_a_list_the_reader_rejects_does_not_raise_the_ceiling(self):
+        """The ratchet measures the persisted list, not the set in force. An
+        org storing near-cap slugs the reader rejects falls back to the nine
+        defaults, and counting those toward the baseline let a save one over
+        the cap through as though the list had shrunk."""
+        legacy = [
+            {"slug": f"T{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES - 1)
+        ]
+        with pytest.raises(ValueError, match="at most"):
+            await self._save(MAX_CALL_TYPES + 1, 0, stored_entries=legacy)

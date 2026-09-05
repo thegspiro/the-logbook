@@ -366,7 +366,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/scheduling/admin',
         label: 'Scheduling administration',
-        anyPermission: ['scheduling.manage', 'training.view_all', 'training.manage'],
+        permission: 'scheduling.manage',
         module: 'scheduling',
       },
       {
@@ -391,7 +391,13 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/scheduling/admin/positions',
         label: 'Position roster / qualifications',
-        anyPermission: ['scheduling.manage', 'training.view_all', 'training.manage'],
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/admin/settings',
+        label: 'Scheduling settings — ?tab= redirect',
+        permission: 'scheduling.manage',
         module: 'scheduling',
       },
       {

@@ -1035,6 +1035,12 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/scheduling/admin/settings',
+    source: 'src/modules/scheduling/routes.tsx',
+    coverage: 'exempt',
+    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+  },
+  {
     path: '/scheduling/admin/settings/general',
     source: 'src/modules/scheduling/routes.tsx',
     coverage: 'exempt',

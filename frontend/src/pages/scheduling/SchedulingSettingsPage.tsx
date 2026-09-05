@@ -79,8 +79,8 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
         backLabel="Back to scheduling administration"
         // Six section routes sit three levels down, so the trail is the only
         // thing on the page that says so. The "Settings" crumb between the hub
-        // and the section renders as plain text — no `/scheduling/admin/settings`
-        // route exists, only its six children.
+        // and the section is a link: `/scheduling/admin/settings` redirects to
+        // the General section rather than falling through to the dashboard.
         showBreadcrumbs
       >
         {!templatesLoaded ? (

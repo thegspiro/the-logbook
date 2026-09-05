@@ -5,10 +5,10 @@
  * An auto-generated trail is built by accumulating URL segments, and two things
  * go wrong if it links every prefix it produces:
  *
- * 1. **The prefix is not a route.** `/scheduling/admin/settings/eligibility`
- *    yields `/scheduling/admin/settings`, which no `<Route>` declares — six
- *    section routes live under it and it is not one of them. App.tsx's
- *    catch-all swallows the miss and drops the user on the dashboard, which is
+ * 1. **The prefix is not a route.** `/inventory/admin/checklists/templates/new`
+ *    yields `/inventory/admin/checklists/templates`, which no `<Route>`
+ *    declares — only `/new` and `/:templateId` beneath it. App.tsx's catch-all
+ *    swallows the miss and drops the user on the dashboard, which is
  *    indistinguishable from a crumb that simply does not work. This is the same
  *    failure `routeIntegrity.test.ts` exists to catch, except a computed path
  *    has no `to="…"` literal for that scan to read.
@@ -58,10 +58,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   // ── Administration hubs ────────────────────────────────────────────────
   // Labels match each hub's own `title` prop; the test asserts that against
   // the hub sources, so a renamed hub cannot leave a stale crumb behind.
-  '/scheduling/admin': {
-    label: 'Scheduling Administration',
-    permissions: ['scheduling.manage', 'training.view_all', 'training.manage'],
-  },
+  '/scheduling/admin': { label: 'Scheduling Administration', permissions: ['scheduling.manage'] },
   '/inventory/admin': {
     label: 'Inventory Administration',
     permissions: ['inventory.manage', 'inventory.check_manage', 'storefront.manage'],
@@ -105,6 +102,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/inventory/checklists': { permissions: ['inventory.check_view', 'scheduling.manage'] },
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/onboarding/modules': {},
+  '/scheduling/admin/settings': { permissions: ['scheduling.manage'] },
   '/scheduling/checkin': { label: 'Shift Check-In' },
   '/training/cohorts': { permissions: ['training.manage'] },
   '/training/programs': {},
