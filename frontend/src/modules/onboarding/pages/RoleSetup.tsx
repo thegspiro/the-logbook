@@ -124,6 +124,37 @@ const STALE_SEEDED_MARKERS: Readonly<Record<string, string>> = {
   'firefighter@apparatus-view': 'firefighter',
 };
 
+/**
+ * What a draft has already been through, including work an earlier build
+ * recorded under a name this one no longer uses.
+ *
+ * The build that first revoked apparatus (#2248) reconciled `emt`, `member`
+ * and `firefighter` but recorded them as bare slugs, because markers did not
+ * carry the change they stood for yet. Read literally, none of those satisfies
+ * a `@apparatus-view` marker, so a draft from that build would be reconciled a
+ * second time — overwriting permissions and priority an administrator had
+ * edited since, which is the exact harm the once-only design exists to
+ * prevent.
+ *
+ * A bare `member` or `firefighter` can only have come from that build: no
+ * earlier one listed either. So each already carries its apparatus
+ * reconciliation. A bare `emt` is ambiguous — the build before it recorded
+ * `emt` alone, for the heuristic-grants change — and carries the apparatus work
+ * only if this draft also went through the build that wrote the other two. The
+ * effect below records the whole set on every visit, so their presence is a
+ * reliable signal of which build a draft last saw.
+ */
+const satisfiedMarkers = (recorded: readonly string[]): Set<string> => {
+  const satisfied = new Set(recorded);
+  for (const slug of ['member', 'firefighter'] as const) {
+    if (satisfied.has(slug)) satisfied.add(`${slug}@apparatus-view`);
+  }
+  if (satisfied.has('emt') && (satisfied.has('member') || satisfied.has('firefighter'))) {
+    satisfied.add('emt@apparatus-view');
+  }
+  return satisfied;
+};
+
 const RETIRED_STANDING_SLUGS = new Set([
   'probationary_member',
   'junior_member',
@@ -190,10 +221,11 @@ const PositionSetup: React.FC = () => {
   const slugsToReconcileRef = useRef<string[] | null>(null);
   if (slugsToReconcileRef.current === null) {
     const saved = savedPositionsConfig ?? {};
+    const done = satisfiedMarkers(reconciledSeededSlugs);
     slugsToReconcileRef.current = [
       ...new Set(
         Object.entries(STALE_SEEDED_MARKERS)
-          .filter(([marker, slug]) => slug in saved && !reconciledSeededSlugs.includes(marker))
+          .filter(([marker, slug]) => slug in saved && !done.has(marker))
           .map(([, slug]) => slug)
       ),
     ];
