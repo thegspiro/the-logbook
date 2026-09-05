@@ -226,13 +226,19 @@ export const evaluateCell = (
   requirement: ComplianceMatrixRequirement | undefined,
   asOf: string
 ): EvaluatedCell => {
-  const tone = toneOf(cell, asOf);
+  // Each requirement can override include_current_month, so a cell may be
+  // settled through a different date than its neighbour. Prefer the cell's own
+  // cutoff; the matrix-level one is the earliest across all of them, and
+  // measuring a renewal warning from that earliest date reads a certificate as
+  // comfortably valid when it is inside the window today.
+  const basis = cell.as_of || asOf;
+  const tone = toneOf(cell, basis);
   return {
     cell,
     requirement,
     tone,
     pct: percentOf(cell, tone),
-    progressLabel: progressLabelOf(cell, tone, asOf),
+    progressLabel: progressLabelOf(cell, tone, basis),
     dateLabel: dateLabelOf(cell, tone),
     waiverNote: waiverNoteOf(cell),
   };
