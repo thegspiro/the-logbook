@@ -88,6 +88,7 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
   '/inventory/members/', // member size preferences — body measurements (PII)
   '/inventory/my/', // current user's own size preferences (PII)
+  '/inventory/requestable-catalog', // request form: embeds the caller's own size preferences (PII)
   '/inventory/charges', // per-member cost-recovery / financial liability (PII)
   '/store/', // member orders: names, email/phone, shipping addresses, payment references, amounts owed (PII)
   '/documents', // private organizational documents (list + detail)
