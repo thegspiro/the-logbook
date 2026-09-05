@@ -26,6 +26,7 @@ import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
 import { ResourceTypeDefaultsCard } from './ResourceTypeDefaultsCard';
 import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
 import { PositionNamesCard } from './PositionNamesCard';
+import { CallTypesCard } from './CallTypesCard';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
@@ -109,6 +110,10 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         platoonsEnabled: updated.platoons_enabled,
         requireEndOfShiftChecks: updated.require_end_of_shift_checks,
         callTrackingMode: updated.call_tracking?.mode || 'detailed',
+        // Without this a rename shows the old label everywhere else in the
+        // session — loadSettings is a once-per-session cache and will not
+        // fetch again.
+        callTypeLabels: Object.fromEntries((updated.call_tracking?.call_types ?? []).map((t) => [t.slug, t.label])),
         // `??`, not `||`: 0 means "closes exactly at the start", which `||`
         // would silently replace with the default.
         signupClosesMinutesBefore: updated.signup_closes_minutes_before ?? 0,
@@ -467,6 +472,19 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 </button>
               </div>
             </div>
+          )}
+          {feature && (
+            <CallTypesCard
+              types={feature.call_tracking?.call_types ?? []}
+              usage={feature.call_type_usage ?? {}}
+              mode={feature.call_tracking?.mode ?? 'detailed'}
+              saving={savingFeature}
+              onSave={(call_types) =>
+                saveFeature({
+                  call_tracking: { mode: feature.call_tracking?.mode ?? 'detailed', call_types },
+                })
+              }
+            />
           )}
           <TemplatesOverviewCard templates={templates} onNavigateToTemplates={onNavigateToTemplates} />
           <DepartmentDefaultsCard settings={settings} onSettingsChange={setSettings} />

@@ -1,9 +1,10 @@
 /**
  * My Equipment Page
  *
- * Personal equipment view for members — shows permanent assignments,
- * active checkouts, and issued items. Supports check-in, extend,
- * return requests, and new equipment requests.
+ * Personal equipment view for members — shows the gear a member holds
+ * open-endedly (permanent assignments and pool issuances, in one list) plus
+ * active temporary loans. Supports extend, return requests, and new
+ * equipment requests.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -12,7 +13,6 @@ import {
   Package,
   AlertTriangle,
   Clock,
-  CheckCircle,
   RefreshCw,
   Plus,
   ClipboardList,
@@ -25,7 +25,14 @@ import {
   Ruler,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
-import type { UserInventoryResponse, InventoryItem, EquipmentRequestItem, ReturnRequestItem } from '../types';
+import type {
+  UserInventoryResponse,
+  UserInventoryItem,
+  UserIssuedItem,
+  InventoryItem,
+  EquipmentRequestItem,
+  ReturnRequestItem,
+} from '../types';
 import { getConditionColor, REQUEST_STATUS_BADGES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { useRanks } from '../../../hooks/useRanks';
@@ -38,6 +45,58 @@ import { Modal } from '../../../components/Modal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { SizePreferencesModal } from '../components/SizePreferencesModal';
 import toast from 'react-hot-toast';
+
+/* ---------- Open-ended holdings, as one list ----------
+   A permanent assignment (one serialized unit, `item_assignments`) and a pool
+   issuance (N units drawn from bulk stock, `item_issuances`) are separate
+   custody records with separate return endpoints, and they stay separate on
+   the wire — the quartermaster screens depend on the distinction. A member
+   holds both with no due date, so the difference is the stockroom's rather
+   than theirs, and this page renders them as one list. Active temporary loans
+   keep their own section: a due date is the one difference a member has to
+   act on. */
+type GearRow = {
+  /** `assignment_id` and `issuance_id` are unrelated id spaces; prefix so a
+      collision between the two cannot silently reuse a React key. */
+  key: string;
+  itemId: string;
+  itemName: string;
+  refId: string;
+  receivedAt: string;
+  maxQty: number;
+} & ({ kind: 'assignment'; assignment: UserInventoryItem } | { kind: 'issuance'; issuance: UserIssuedItem });
+
+/** Sort key for the merged list. Both timestamps are UTC ISO strings from the
+    same serializer, but parse rather than compare lexically so a future
+    offset-suffixed value cannot silently reorder the list. */
+const receivedMs = (value: string): number => {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const mergeGear = (assignments: UserInventoryItem[], issued: UserIssuedItem[]): GearRow[] =>
+  [
+    ...assignments.map((a): GearRow => ({
+      key: `assignment:${a.assignment_id}`,
+      itemId: a.item_id,
+      itemName: a.item_name,
+      refId: a.assignment_id,
+      receivedAt: a.assigned_date,
+      maxQty: 1,
+      kind: 'assignment',
+      assignment: a,
+    })),
+    ...issued.map((i): GearRow => ({
+      key: `issuance:${i.issuance_id}`,
+      itemId: i.item_id,
+      itemName: i.item_name,
+      refId: i.issuance_id,
+      receivedAt: i.issued_at,
+      maxQty: i.quantity_issued,
+      kind: 'issuance',
+      issuance: i,
+    })),
+  ].sort((a, b) => receivedMs(b.receivedAt) - receivedMs(a.receivedAt) || a.itemName.localeCompare(b.itemName));
 
 /* ---------- Collapsible section ---------- */
 const Section: React.FC<{
@@ -155,9 +214,10 @@ const MyEquipmentPage: React.FC = () => {
   const assignments = inventory?.permanent_assignments ?? [];
   const checkouts = inventory?.active_checkouts ?? [];
   const issued = inventory?.issued_items ?? [];
+  const myGear = mergeGear(assignments, issued);
   const overdueCount = checkouts.filter((c) => c.is_overdue).length;
   const pendingReqCount = equipRequests.filter((r) => r.status === 'pending').length;
-  const totalItems = assignments.length + checkouts.length + issued.length;
+  const totalItems = myGear.length + checkouts.length;
 
   /* ---------- Item search for request modal ---------- */
   const handleReqSearch = useCallback(
@@ -319,12 +379,8 @@ const MyEquipmentPage: React.FC = () => {
         </div>
 
         {/* Quick stats */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            icon={<CheckCircle className="h-5 w-5 text-blue-500" />}
-            label="Assignments"
-            value={assignments.length}
-          />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <StatCard icon={<Package className="h-5 w-5 text-green-500" />} label="Issued to me" value={myGear.length} />
           <StatCard
             icon={<Clock className="h-5 w-5 text-yellow-500" />}
             label="Temporary loans"
@@ -335,7 +391,6 @@ const MyEquipmentPage: React.FC = () => {
               ) : undefined
             }
           />
-          <StatCard icon={<Package className="h-5 w-5 text-green-500" />} label="Issued" value={issued.length} />
           <StatCard
             icon={<ClipboardList className="h-5 w-5 text-purple-500" />}
             label="Pending"
@@ -433,46 +488,59 @@ const MyEquipmentPage: React.FC = () => {
           </div>
         )}
 
-        {/* Permanent Assignments */}
-        <Section
-          title="Permanent Assignments"
-          count={assignments.length}
-          icon={<CheckCircle className="h-4 w-4 text-blue-500" />}
-        >
-          {assignments.length === 0 && <p className="text-theme-text-muted py-2 text-sm">No permanent assignments.</p>}
-          {assignments.map((a) => (
+        {/* Gear held open-endedly: assignments and pool issuances together */}
+        <Section title="Issued to Me" count={myGear.length} icon={<Package className="h-4 w-4 text-green-500" />}>
+          {myGear.length === 0 && <p className="text-theme-text-muted py-2 text-sm">Nothing issued to you.</p>}
+          {myGear.map((g) => (
             <div
-              key={a.assignment_id}
+              key={g.key}
               className="bg-theme-surface-secondary/50 flex flex-col justify-between gap-2 rounded-md p-3 sm:flex-row sm:items-center"
             >
               <div className="space-y-1">
                 <Link
-                  to={`/inventory/items/${a.item_id}`}
+                  to={`/inventory/items/${g.itemId}`}
                   className="text-theme-text-primary font-medium hover:underline"
                 >
-                  {a.item_name}
+                  {g.itemName}
                 </Link>
                 <div className="text-theme-text-muted flex flex-wrap gap-2 text-xs">
-                  {a.serial_number && <span>SN: {a.serial_number}</span>}
-                  {a.asset_tag && <span>Tag: {a.asset_tag}</span>}
-                  {/* `capitalize` as on the items list: condition is stored
-                      lowercase, and without it a member's own kit reads "good"
-                      where the same value on every other screen reads "Good". */}
-                  <span className={`capitalize ${getConditionColor(a.condition)}`}>{a.condition}</span>
-                  <span>Assigned {formatDate(a.assigned_date, tz)}</span>
+                  {g.kind === 'assignment' ? (
+                    <>
+                      {g.assignment.serial_number && <span>SN: {g.assignment.serial_number}</span>}
+                      {g.assignment.asset_tag && <span>Tag: {g.assignment.asset_tag}</span>}
+                      {/* `capitalize` as on the items list: condition is stored
+                          lowercase, and without it a member's own kit reads "good"
+                          where the same value on every other screen reads "Good". */}
+                      <span className={`capitalize ${getConditionColor(g.assignment.condition)}`}>
+                        {g.assignment.condition}
+                      </span>
+                      <span>Assigned {formatDate(g.receivedAt, tz)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Qty: {g.issuance.quantity_issued}</span>
+                      <VariantCapsules item={{ size: g.issuance.size } as InventoryItem} />
+                      <span>Issued {formatDate(g.receivedAt, tz)}</span>
+                    </>
+                  )}
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() =>
+                // One list now carries rows whose return actions hit different
+                // endpoints; naming the item keeps the buttons distinguishable
+                // to a screen reader instead of repeating one label per row.
+                aria-label={`Notify quartermaster of return: ${g.itemName}`}
+                onClick={() => {
+                  setRetQty(1);
                   setReturnModal({
                     open: true,
-                    returnType: 'assignment',
-                    itemId: a.item_id,
-                    refId: a.assignment_id,
-                    maxQty: 1,
-                  })
-                }
+                    returnType: g.kind,
+                    itemId: g.itemId,
+                    refId: g.refId,
+                    maxQty: g.maxQty,
+                  });
+                }}
                 className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded border px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
               >
                 <CornerDownLeft className="mr-1 inline h-3 w-3" />
@@ -542,48 +610,6 @@ const MyEquipmentPage: React.FC = () => {
                   Notify quartermaster of return
                 </button>
               </div>
-            </div>
-          ))}
-        </Section>
-
-        {/* Issued Items */}
-        <Section title="Issued Items" count={issued.length} icon={<Package className="h-4 w-4 text-green-500" />}>
-          {issued.length === 0 && <p className="text-theme-text-muted py-2 text-sm">No issued items.</p>}
-          {issued.map((iss) => (
-            <div
-              key={iss.issuance_id}
-              className="bg-theme-surface-secondary/50 flex flex-col justify-between gap-2 rounded-md p-3 sm:flex-row sm:items-center"
-            >
-              <div className="space-y-1">
-                <Link
-                  to={`/inventory/items/${iss.item_id}`}
-                  className="text-theme-text-primary font-medium hover:underline"
-                >
-                  {iss.item_name}
-                </Link>
-                <div className="text-theme-text-muted flex flex-wrap gap-2 text-xs">
-                  <span>Qty: {iss.quantity_issued}</span>
-                  <VariantCapsules item={{ size: iss.size } as InventoryItem} />
-                  <span>Issued {formatDate(iss.issued_at, tz)}</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setRetQty(1);
-                  setReturnModal({
-                    open: true,
-                    returnType: 'issuance',
-                    itemId: iss.item_id,
-                    refId: iss.issuance_id,
-                    maxQty: iss.quantity_issued,
-                  });
-                }}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded border px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
-              >
-                <CornerDownLeft className="mr-1 inline h-3 w-3" />
-                Notify quartermaster of return
-              </button>
             </div>
           ))}
         </Section>

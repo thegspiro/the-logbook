@@ -7559,6 +7559,18 @@ class SchedulingService:
         # the picker lands — it is served empty until something can use it.
         attachable: List[Dict[str, Any]] = []
 
+        # What the wizard offers as rows. Retired types are dropped so no new
+        # count can be filed under one — except where this shift already has
+        # calls against it, because dropping the row there would take the
+        # count off the screen while leaving it in the total, and the officer
+        # would have no field to correct it in.
+        reported_types = await call_service.shift_type_counts(str(shift_id))
+        offered_types = [
+            t
+            for t in tracking.get("call_types", [])
+            if t.get("active", True) or reported_types.get(t["slug"])
+        ]
+
         return {
             "shift_id": str(shift_id),
             "is_finalized": bool(shift.is_finalized),
@@ -7568,7 +7580,7 @@ class SchedulingService:
                 0 if shift.is_finalized else int(shift.closeout_step or 0)
             ),
             "call_tracking_mode": tracking.get("mode"),
-            "call_types": tracking.get("call_types", []),
+            "call_types": offered_types,
             "members": members,
             # "Combined hours" and not "hours": summed across the crew, it is
             # several times the length of the shift and reads as a mistake
@@ -7577,7 +7589,7 @@ class SchedulingService:
             "reported_call_count": await call_service.shift_response_count(
                 str(shift_id)
             ),
-            "reported_call_types": await call_service.shift_type_counts(str(shift_id)),
+            "reported_call_types": reported_types,
             "attachable_calls": attachable,
         }, None
 

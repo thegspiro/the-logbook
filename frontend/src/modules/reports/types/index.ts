@@ -440,6 +440,14 @@ export interface CallVolumeReport {
   summary: CallVolumeSummary;
   entries: CallVolumeEntry[];
   /**
+   * Call-type slug to the department's own label, served alongside the
+   * breakdowns because the keys in `by_type` are storage slugs. Retired types
+   * are included, so a report covering last year still labels a type the
+   * department has since stopped offering. A key absent here falls back to
+   * the stored value, which on detailed tracking is already readable text.
+   */
+  call_type_labels?: Record<string, string>;
+  /**
    * True when the figures count *unit responses* rather than deduplicated
    * incidents — one call two units rolled on appears twice. Set by the
    * count-only source, where nothing yet links two units to one incident.
