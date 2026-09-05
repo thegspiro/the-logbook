@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduling administration is one grant, and the review findings on it (2026-09-05)
+
+Follow-up to "Scheduling administration moved into the Administration section",
+which merged before a review of it came back.
+
+**Breaking**
+
+- **Every scheduling administration page now requires `scheduling.manage`** —
+  the hub, the settings sections, and the position roster. The roster accepted
+  `training.view_all` / `training.manage` as well, because it reads as a
+  training-compliance view. **A training officer holding neither scheduling
+  grant can no longer open it.** No navigation path is lost: nothing in the app
+  has ever linked them to that page, so the wider gate bought a screen reachable
+  only by typing its URL — while forcing every gate above it, including the one
+  that decides whether the Administration section opens at all, to widen to
+  match. A hub gate wider than every card behind it only opens an empty page.
+  `training.view_all` leaves `ADMIN_NAVIGATION_PERMISSIONS` with it.
+
+**Fixed**
+
+- **A shift with a pending assignment was counted as staffed.** The Short-staffed
+  metric counted PENDING as a held seat; every staffing calculation in
+  `scheduling_service` — open shifts, the coverage report, the overtime window,
+  trade candidates — counts only ASSIGNED and CONFIRMED. PENDING appears in "My
+  Upcoming Shifts", which answers "what am I on", not "is this shift covered", so
+  the metric reported a shift as staffed while the coverage report beside it
+  still showed the seat open.
+- **A crew still working read as a close-out backlog.** A shift with no recorded
+  end was treated as having ended the instant it started, so an open-ended shift
+  sat in "To close out" from the moment it began and nothing could clear it until
+  somebody finalized a shift they were still on. It now uses the department's own
+  `open_ended_cushion_hours` — the same number the roster lock reads, so the two
+  cannot say different things about one shift.
+- **A missing Driver could be hidden by a headcount.** Short-staffed counted
+  against `min_staffing` alone, so a three-seat brush truck carrying one person —
+  which states its crew in `positions` and may set no minimum at all — was
+  reported as fully staffed. It reads the seat list first, as the board and the
+  coverage report do. The `JSON_TYPE` guard on that query is load-bearing:
+  SQLAlchemy stores a Python `None` as the JSON literal `null`, and
+  `JSON_LENGTH('null')` is **1**, so a shift that named no seats read as a
+  one-seat crew.
+- **"Hours this month" counted next month.** The query had only a lower bound, so
+  attendance recorded against a later-dated shift inflated it — a figure that
+  went up when somebody planned ahead. Bounded at both ends, as the canonical
+  scheduling summary is.
+- **A time-off alert opened the swaps view.** The Requests tab opens on swaps, so
+  clicking a time-off warning landed on "No swap requests" whenever there were
+  none. The alert names the view, and the tab honours it.
+- **The documentation screenshot workflow was capturing the home page.**
+  `scripts/screenshots/manifest.mjs` still visited the moved scheduling routes;
+  they hit the catch-all redirect to the dashboard, which fails silently because
+  the page it lands on looks fine. 22 entries repointed.
+- **`/scheduling/admin/settings?tab=…` resolves again.** The sections are routes,
+  so the bare path names none of them; it now forwards to the section its
+  parameter names, and an unknown or absent one to General.
+- New tests reset each mock before installing its default rather than relying on
+  `vi.clearAllMocks()`, which keeps implementations and queued one-shot results
+  (CLAUDE.md pitfall #28).
+
+**Changed**
+
+- **`CLAUDE.md`'s settings-screen rule now records that Scheduling differs.** It
+  required the selected section mirrored into `?tab=` and named all three
+  screens; Scheduling's sections became routes when it moved into the
+  administration hub, where a section is a destination — a hub card, a link from
+  Inventory, a bookmark — and a `?tab=` only client state reads cannot be linked
+  to, refreshed into, or reached with the back button. The rule now says which
+  screens use which, and why, so the next author does not "fix" it back.
+
+**Known, not fixed here**
+
+- Attention-queue ages compare a UTC timestamp against the organization's local
+  date, so around midnight an age can be off by a day. `_age_days` is shared and
+  every module in `MODULE_REGISTRY` does this; scheduling did not introduce it,
+  and correcting only scheduling would make it the one module that disagrees with
+  the rest. Worth its own change.
+
 ### Scheduling administration moved into the Administration section (2026-09-05)
 
 **Changed**
@@ -79,6 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `administrationDiscovery.test.tsx` now renders the section for a
   scheduling-officer persona and a training-officer persona — the test exists
   because a gate is only reachable if every gate above it also opens.
+
 ### Compliance Matrix: a grid you could read becomes a queue you can work (2026-09-05)
 
 **Changed**
@@ -202,7 +280,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supersedes it. **Schema:** `notification_logs.sent_at` is
   now `NOT NULL` (it always had a default, and a NULL would have been
   unreachable by any cursor), with a new index behind the paged query.
-
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 

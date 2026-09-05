@@ -606,36 +606,40 @@ Inventory Admin. Cards are declared in
 route it targets; `schedulingHubCards.test.ts` resolves that route's real gate
 out of the route source and fails if the two drift.
 
-| Card                 | Route                                      | Permission                                                         |
-| -------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
-| Shift Templates      | `/scheduling/admin/templates`              | `scheduling.manage`                                                |
-| Shift Patterns       | `/scheduling/admin/patterns`               | `scheduling.manage`                                                |
-| Equipment Checklists | `/inventory/admin/checklists`              | `inventory.check_manage`                                           |
-| Checklist Timing     | `/inventory/admin/checklists/settings`     | any of `settings.manage`, `organization.update_settings`           |
-| Who Can Fill What    | `/scheduling/admin/positions`              | any of `scheduling.manage`, `training.view_all`, `training.manage` |
-| Platoons             | `/scheduling/admin/platoons`               | `scheduling.manage`                                                |
-| Eligibility Rules    | `/scheduling/admin/settings/eligibility`   | `scheduling.manage`                                                |
-| Scheduling Reports   | `/scheduling/admin/reports`                | `scheduling.manage`                                                |
-| Shift Report Options | `/scheduling/admin/settings/shift-reports` | `scheduling.manage`                                                |
-| General              | `/scheduling/admin/settings/general`       | `scheduling.manage`                                                |
-| Apparatus Defaults   | `/scheduling/admin/settings/apparatus`     | `scheduling.manage`                                                |
-| Notifications        | `/scheduling/admin/settings/notifications` | `scheduling.manage`                                                |
+| Card                 | Route                                      | Permission                                               |
+| -------------------- | ------------------------------------------ | -------------------------------------------------------- |
+| Shift Templates      | `/scheduling/admin/templates`              | `scheduling.manage`                                      |
+| Shift Patterns       | `/scheduling/admin/patterns`               | `scheduling.manage`                                      |
+| Equipment Checklists | `/inventory/admin/checklists`              | `inventory.check_manage`                                 |
+| Checklist Timing     | `/inventory/admin/checklists/settings`     | any of `settings.manage`, `organization.update_settings` |
+| Who Can Fill What    | `/scheduling/admin/positions`              | `scheduling.manage`                                      |
+| Platoons             | `/scheduling/admin/platoons`               | `scheduling.manage`                                      |
+| Eligibility Rules    | `/scheduling/admin/settings/eligibility`   | `scheduling.manage`                                      |
+| Scheduling Reports   | `/scheduling/admin/reports`                | `scheduling.manage`                                      |
+| Shift Report Options | `/scheduling/admin/settings/shift-reports` | `scheduling.manage`                                      |
+| General              | `/scheduling/admin/settings/general`       | `scheduling.manage`                                      |
+| Apparatus Defaults   | `/scheduling/admin/settings/apparatus`     | `scheduling.manage`                                      |
+| Notifications        | `/scheduling/admin/settings/notifications` | `scheduling.manage`                                      |
 
-**The hub admits two different administrators.** Its route accepts
-`training.view_all` / `training.manage` because the position roster inside it
-does, and the roster has always been open to a training officer holding no
-scheduling grant. The frame's summary request is therefore made only for
-`scheduling.manage` — `/admin-hub/scheduling/summary` resolves the module to
-that grant, so for anyone else it is a guaranteed 404 the frame would report as
-a failed summary with a Retry that repeats it. The body shows each viewer only
-the cards their own permissions open, and says so plainly when that is none.
+**One grant runs the whole area** _(2026-09-05)_: `scheduling.manage`, on this
+route, on every page behind it, and on the nav rows that offer it. The hub and
+the position roster briefly accepted `training.view_all` / `training.manage`,
+because the roster reads as a training-compliance view — but nothing has ever
+linked a training officer to it, so the wider gate bought a page reachable only
+by typing its URL while forcing every gate above it, `ADMIN_NAVIGATION_PERMISSIONS`
+included, to widen to match. A hub gate wider than every card behind it only
+opens an empty page.
 
-**The nav row stays on `scheduling.manage`.** A row labelled "Scheduling Admin"
-offered to someone who can open one card in it is a worse offer than no row; a
-training officer reaches the roster from Training, or from the hub directly.
-Both `scheduling.manage` and `training.view_all` are in
-`ADMIN_NAVIGATION_PERMISSIONS` — a child gate cannot admit anyone its parent has
-already turned away.
+The frame's summary request is still made under a `canManage` guard rather than
+unconditionally. `/admin-hub/scheduling/summary` resolves the module to
+`scheduling.manage`, which this route now also requires, so the guard is
+redundant today — and kept, because the frame's own docstring is that a hub
+admitting more than one kind of administrator must not make the request for the
+others, and a guard dropped because the current gate makes it redundant is one
+that has to be rediscovered when the gate next moves.
+
+Cards still resolve their own gates: two of them point into Inventory, whose
+grants `scheduling.manage` does not imply.
 
 **The Equipment settings section is gone.** Nothing on it was ever edited there;
 it held two links into Inventory, behind a settings tab, which is not where

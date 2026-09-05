@@ -89,14 +89,18 @@ describe('scheduling hub cards', () => {
     }
   });
 
-  // The position roster is a training-compliance view as much as a scheduling
-  // one, and its route has always admitted a training officer holding no
-  // scheduling grant. Narrowing the card would hide the only page such a
-  // viewer can open on this hub.
-  it('keeps the position roster open to training permissions', () => {
-    const positions = SCHEDULING_HUB_CARDS.find((card) => card.id === 'positions');
+  // Everything but the two Inventory cards runs on the one grant, the position
+  // roster included. It briefly accepted the training grants, which made every
+  // gate above it widen to match and opened the Administration section for a
+  // viewer with one card in it.
+  it('gates every scheduling card on scheduling.manage', () => {
+    const ownCards = SCHEDULING_HUB_CARDS.filter((card) => card.requiresModule === 'scheduling');
+    expect(ownCards.length).toBeGreaterThan(5);
 
-    expect(positions?.anyPermission).toEqual(['scheduling.manage', 'training.view_all', 'training.manage']);
+    for (const card of ownCards) {
+      expect(card.permission, `${card.id} does not require scheduling.manage`).toBe('scheduling.manage');
+      expect(card.anyPermission, `${card.id} still carries a wider gate`).toBeUndefined();
+    }
   });
 
   it('offers no card ungated', () => {

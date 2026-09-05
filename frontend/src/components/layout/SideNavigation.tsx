@@ -515,12 +515,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   label: 'Scheduling Admin',
                   path: '/scheduling/admin',
                   icon: CalendarClock,
-                  // The hub's route also admits training officers, for the
-                  // position roster inside it. The nav row stays on the
-                  // scheduling grant: a training officer reaches that roster
-                  // from Training, and a row promising "Scheduling Admin" to
-                  // someone who can open one card in it is a worse offer than
-                  // no row.
+                  // Mirrors the hub's own route. Both were briefly wider, to
+                  // admit the training grants the position roster accepted;
+                  // narrowing the roster narrowed these with it, which is the
+                  // order that keeps a row from ever leading somewhere its
+                  // holder is refused.
                   permission: 'scheduling.manage',
                 } as NavItem,
               ]

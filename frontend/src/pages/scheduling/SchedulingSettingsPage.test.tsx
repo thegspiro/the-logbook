@@ -33,7 +33,9 @@ const settingsNav = () => screen.getAllByRole('navigation', { name: 'Scheduling 
 
 describe('SchedulingSettingsPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Reset, not clear — implementations and queued one-shot results survive
+    // `vi.clearAllMocks()` (CLAUDE.md pitfall #28).
+    storeState.loadInitialData.mockReset();
     storeState.platoonsEnabled = false;
     window.history.replaceState({}, '', '/scheduling/admin/settings/general');
   });

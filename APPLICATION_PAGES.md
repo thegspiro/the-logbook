@@ -593,38 +593,44 @@ only from a row of cards on the member-facing `/scheduling` page — so an
 administrator opened the schedule to find the settings, and the Administration
 section had no scheduling entry at all. That row is gone.
 
-| URL                                        | Page                          | Permission                                                         |
-| ------------------------------------------ | ----------------------------- | ------------------------------------------------------------------ |
-| `/scheduling/admin`                        | Scheduling Administration hub | any of `scheduling.manage`, `training.view_all`, `training.manage` |
-| `/scheduling/admin/templates`              | Shift Templates Management    | `scheduling.manage`                                                |
-| `/scheduling/admin/patterns`               | Shift Pattern Management      | `scheduling.manage`                                                |
-| `/scheduling/admin/reports`                | Scheduling Reports            | `scheduling.manage`                                                |
-| `/scheduling/admin/platoons`               | Platoon Management            | `scheduling.manage`                                                |
-| `/scheduling/admin/positions`              | Position Qualification Roster | any of `scheduling.manage`, `training.view_all`, `training.manage` |
-| `/scheduling/admin/settings/general`       | Scheduling Settings — General | `scheduling.manage`                                                |
-| `/scheduling/admin/settings/apparatus`     | Settings — Apparatus          | `scheduling.manage`                                                |
-| `/scheduling/admin/settings/platoons`      | Settings — Platoons           | `scheduling.manage`                                                |
-| `/scheduling/admin/settings/eligibility`   | Settings — Eligibility        | `scheduling.manage`                                                |
-| `/scheduling/admin/settings/notifications` | Settings — Notifications      | `scheduling.manage`                                                |
-| `/scheduling/admin/settings/shift-reports` | Settings — Shift Reports      | `scheduling.manage`                                                |
-| `/scheduling/checkin`                      | Shift Check-In                | Authenticated                                                      |
+| URL                                        | Page                          | Permission          |
+| ------------------------------------------ | ----------------------------- | ------------------- |
+| `/scheduling/admin`                        | Scheduling Administration hub | `scheduling.manage` |
+| `/scheduling/admin/templates`              | Shift Templates Management    | `scheduling.manage` |
+| `/scheduling/admin/patterns`               | Shift Pattern Management      | `scheduling.manage` |
+| `/scheduling/admin/reports`                | Scheduling Reports            | `scheduling.manage` |
+| `/scheduling/admin/platoons`               | Platoon Management            | `scheduling.manage` |
+| `/scheduling/admin/positions`              | Position Qualification Roster | `scheduling.manage` |
+| `/scheduling/admin/settings`               | `?tab=` → the section's route | `scheduling.manage` |
+| `/scheduling/admin/settings/general`       | Scheduling Settings — General | `scheduling.manage` |
+| `/scheduling/admin/settings/apparatus`     | Settings — Apparatus          | `scheduling.manage` |
+| `/scheduling/admin/settings/platoons`      | Settings — Platoons           | `scheduling.manage` |
+| `/scheduling/admin/settings/eligibility`   | Settings — Eligibility        | `scheduling.manage` |
+| `/scheduling/admin/settings/notifications` | Settings — Notifications      | `scheduling.manage` |
+| `/scheduling/admin/settings/shift-reports` | Settings — Shift Reports      | `scheduling.manage` |
+| `/scheduling/checkin`                      | Shift Check-In                | Authenticated       |
 
 > **The old URLs are gone, with no redirect.** `/scheduling/templates`,
 > `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/platoons`,
 > `/scheduling/qualifications` and `/scheduling/settings` no longer resolve.
 
-> **The hub admits two different administrators.** Its route accepts the
-> training grants because the position roster inside it does; the hub's body
-> shows each viewer only the cards their own permissions open, and says so
-> plainly when that is none. The **nav row** stays on `scheduling.manage`,
-> because a row labelled "Scheduling Admin" that opens one card is a worse offer
-> than no row.
+> **One grant runs the whole area** _(2026-09-05)_: `scheduling.manage`, on the
+> hub's route, on every page behind it, and on the nav rows that offer it. The
+> hub and the position roster briefly accepted `training.view_all` /
+> `training.manage`, on the grounds that the roster reads as a training-compliance
+> view — but nothing in the app has ever linked a training officer to it, so the
+> wider gate bought a page reachable only by typing its URL while forcing every
+> gate above it to widen to match. A hub gate wider than every card behind it
+> only opens an empty page.
 
-> **`scheduling.manage` and `training.view_all` are both in
-> `ADMIN_NAVIGATION_PERMISSIONS`.** Without the first, a scheduling officer
-> holding nothing else administrative never sees the Administration section open;
-> without the second, neither does a training officer whose only page here is the
-> roster. A child gate cannot admit anyone its parent has already turned away.
+> **`scheduling.manage` is in `ADMIN_NAVIGATION_PERMISSIONS`.** Without it a
+> scheduling officer holding nothing else administrative never sees the
+> Administration section open, so the row inside it is never built — a child gate
+> cannot admit anyone its parent has already turned away.
+
+> **`/scheduling/admin/settings?tab=…` still resolves.** The sections are routes,
+> so the bare path names none; `SchedulingSettingsRedirect` forwards it to the
+> section its parameter names, and an unknown or absent one to General.
 
 > **`/scheduling/checkin` accepts `?shift=<id>` or `?apparatus=<id>`**
 > _(2026-08-18)_. Prefer the **apparatus** form for anything physically mounted:
@@ -650,10 +656,10 @@ profile does not show; the roster names the source next to each member. A
 second tab lists **driver exceptions**: members whose rank alone clears them
 to sign up as a driver with no EVOC certification behind it.
 
-> **Training permissions open it, not just scheduling ones.** The screen is a
-> training-compliance view as much as a scheduling one, so `training.view_all`
-> and `training.manage` admit a training officer who holds no scheduling
-> grant.
+> **It requires `scheduling.manage`** _(2026-09-05)_. It accepted the training
+> grants until the administration hub was locked down: the screen reads as a
+> training-compliance view, but it is administered from Scheduling and nothing
+> has ever linked a training officer to it.
 
 > **Tab clicks now write `?tab=`** _(2026-08-09)_. Until this was fixed, clicking
 > any tab on `/scheduling` selected it and immediately snapped back to

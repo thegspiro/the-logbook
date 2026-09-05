@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import { DialogPanel } from '../../components/ux/DialogPanel';
 import { ArrowLeftRight, CalendarOff, Check, X, Loader2, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -24,7 +25,14 @@ export const RequestsTab: React.FC = () => {
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
 
-  const [activeView, setActiveView] = useState<'swaps' | 'timeoff'>('swaps');
+  // Honoured on mount so a link can name the view. Without it, a notification
+  // or an administration alert about a *time-off* request landed on the swaps
+  // view — and on "No swap requests" whenever there were none, leaving the
+  // officer to discover the other view themselves.
+  const [searchParams] = useSearchParams();
+  const [activeView, setActiveView] = useState<'swaps' | 'timeoff'>(
+    searchParams.get('view') === 'timeoff' ? 'timeoff' : 'swaps'
+  );
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [swapRequests, setSwapRequests] = useState<SwapRequest[]>([]);
   const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([]);
