@@ -1,7 +1,9 @@
-"""Revoke the EMT over-grants from rows written after ``f3b8d0c26a17`` ran.
+"""Revoke the heuristic's over-grants from every seeded EMT row.
 
-``f3b8d0c26a17`` already revokes these from ``emt``. This repeats that one slug,
-and the reason is release ordering rather than anything wrong with it.
+Two distinct gaps, both ending on the same rows.
+
+**Release ordering.** ``f3b8d0c26a17`` revokes most of these from ``emt``
+already, and this repeats that one slug because a migration runs once.
 
 Until the registry gained an ``emt`` entry, the onboarding wizard offered EMT to
 every agency type with nothing seeded behind it, so ``save_session_roles`` took
@@ -17,9 +19,24 @@ bounded — it opens when ``f3b8d0c26a17`` is deployed and closes when that entr
 is. This covers whatever fell inside it, which makes the fix independent of
 whether the two land in the same release.
 
+**Two modules no revision ever revoked from this slug.** The heuristic ticked
+View for every non-System module, so an EMT row also holds ``facilities.view``
+and ``notifications.view``, neither of which the line-member set grants.
+
+* ``notifications.view`` — ``a1f7c34e9b02`` lists ``member``, ``firefighter``
+  and ``engineer`` and **not** ``emt``, so *every* wizard-written EMT row still
+  carries it, window or not. It opens ``GET /notifications/logs``, the org-wide
+  Send Log, which ``NotificationsService.get_logs`` filters on
+  ``organization_id`` alone — the recipient, subject and body of every
+  notification the department has sent anyone.
+* ``facilities.view`` — ``e4f5a6b7c8d9`` does list ``emt``, so the rows that
+  existed when it ran were cleaned; every EMT row created since keeps it.
+
+Both are revoked here, in the same three stored forms.
+
 Scoped to ``emt`` alone: the other slugs were seeded throughout, so no row was
-being created from the heuristic for them during the window, and ``f3b8d0c26a17``
-already settled the rows that existed.
+being created from the heuristic for them, and the revisions above already
+settled the rows that existed for those slugs.
 
 A no-op for a row that is already correct, and for an installation where the
 window never opened.
@@ -45,17 +62,21 @@ depends_on = None
 
 _SLUG = "emt"
 
-# The same set ``f3b8d0c26a17`` revokes from this slug, in every form the
-# editor could have stored — ``{module}.view`` for a ticked View box, and
+# Every module the heuristic granted this slug and the registry seeds it none
+# of, in every form the editor could have stored — ``{module}.view`` for a ticked View box, and
 # ``{module}.manage`` plus ``{module}.*`` for a ticked Manage box. Frozen
 # rather than imported (CLAUDE.md pitfall #20); the accompanying test asserts
-# it still matches that revision and the registry.
+# it against the registry and against what ``f3b8d0c26a17`` revokes.
 _OVER_GRANTED_MODULES = (
+    # Repeated from f3b8d0c26a17 for this slug.
     "integrations",
     "medical_supplies",
     "mobile",
     "prospective_members",
     "reports",
+    # Never revoked from ``emt`` by any revision — see the docstring.
+    "facilities",
+    "notifications",
 )
 
 _REVOKE = tuple(

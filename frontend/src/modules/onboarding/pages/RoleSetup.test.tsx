@@ -130,11 +130,20 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
   // initializer, and the failure to catch is a well-meant simplification of it.
   const source = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'RoleSetup.tsx'), 'utf8');
 
-  it('refreshes permissions from the template for a seeded position', () => {
-    expect(source).toMatch(/seeded \? \{ permissions: template\.permissions \} : \{\}/);
+  it('refreshes permissions and priority from the template', () => {
+    // Priority as well as permissions: save_session_roles writes the submitted
+    // value over the seeded one, so a stale 10 would put EMT back on the
+    // baseline Member position's rung.
+    expect(source).toMatch(/permissions: template\.permissions/);
+    expect(source).toMatch(/priority: template\.priority/);
   });
 
-  it('decides that by whether the backend seeds the slug', () => {
-    expect(source).toMatch(/const seeded = template && SEEDED_POSITION_GRANTS\[posId\]/);
+  it('does it only for a slug whose seeded grants actually moved', () => {
+    // Not every seeded position. This reconciliation overwrites what was
+    // saved, and an administrator's own edits to a built-in position are saved
+    // the same way — resetting all of them would discard the customization
+    // they made before stepping away to the modules page.
+    expect(source).toMatch(/const stale = template && STALE_SEEDED_SLUGS\.has\(posId\)/);
+    expect(source).toMatch(/const STALE_SEEDED_SLUGS = new Set\(\['emt'\]\)/);
   });
 });

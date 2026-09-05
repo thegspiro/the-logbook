@@ -21,9 +21,7 @@ import sqlalchemy as sa
 from app.core.permissions import DEFAULT_POSITIONS, OPERATIONAL_RANKS
 
 _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
-_PATH = _VERSIONS / (
-    "20260905_0110_a2e9f6b04c71_revoke_emt_over_grants_written_after_f3b8d0c26a17.py"
-)
+_PATH = _VERSIONS / ("20260905_0110_a2e9f6b04c71_revoke_emt_heuristic_over_grants.py")
 _PRIOR = _VERSIONS / (
     "20260904_2050_f3b8d0c26a17_revoke_wizard_over_grants_unconditionally.py"
 )
@@ -172,11 +170,49 @@ class TestWhatItMustNotTouch:
         _run_upgrade(engine)
 
 
+class TestTheModulesNoRevisionEverRevokedFromEmt:
+    """``notifications.view`` and ``facilities.view``, which the heuristic
+    ticked because both modules are non-System.
+
+    ``a1f7c34e9b02`` lists ``member``, ``firefighter`` and ``engineer`` and not
+    ``emt``, so every wizard-written EMT row still carries the org-wide Send Log
+    grant. ``e4f5a6b7c8d9`` does list ``emt``, so it cleaned the rows that
+    existed when it ran and nothing has touched one created since.
+    """
+
+    @pytest.mark.parametrize(
+        "permission",
+        [
+            "notifications.view",
+            "notifications.manage",
+            "notifications.*",
+            "facilities.view",
+            "facilities.manage",
+            "facilities.*",
+        ],
+    )
+    def test_they_are_revoked(self, positions_table, permission):
+        result = _revoke_row(positions_table, "emt", ["members.view", permission])
+
+        assert result == ["members.view"]
+
+    def test_the_prior_revisions_really_did_leave_them(self):
+        """Guards the premise, not just the fix: if a revision starts covering
+        ``emt`` for these, this migration is doing someone else's work."""
+        notifications = _load(
+            _VERSIONS
+            / "20260825_2015_a1f7c34e9b02_revoke_baseline_notifications_view.py",
+            "_notifications",
+        )
+        assert "emt" not in notifications._SLUGS
+        assert notifications._PERMISSION == "notifications.view"
+
+
 class TestItAgreesWithWhatItRepeats:
-    def test_it_revokes_what_the_prior_revision_revokes_from_emt(self):
-        """A divergence would mean one of the two is wrong about the same row."""
+    def test_it_covers_everything_the_prior_revision_revokes_from_emt(self):
+        """A gap would mean a window row keeps something f3b8d0c26a17 removes."""
         prior = _load(_PRIOR, "_prior")
-        assert set(_migration()._REVOKE) == set(prior._REVOKE["emt"])
+        assert set(prior._REVOKE["emt"]) <= set(_migration()._REVOKE)
 
     def test_nothing_it_revokes_is_seeded_to_emt(self):
         seeded = set(OPERATIONAL_RANKS["emt"]["default_permissions"])
