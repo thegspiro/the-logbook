@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Members and Membership Coordinators were missing store and training access (2026-09-05)
+
+**Fixed**
+
+- **The store never appeared for members on departments that upgraded.** The
+  migration that was meant to give every department's **Member** position store
+  access only rewrote a position whose permissions still matched the expected
+  list exactly — and that list included the equipment-check permission which a
+  separate broken migration never actually granted. Every upgraded department
+  therefore failed the comparison and was skipped, so their members never got
+  **View store** or **Place orders**. Repaired for exactly those departments;
+  one that has customized its Member position keeps what it chose.
+- **Membership Coordinators were missing store access and training
+  configuration.** Three migrations grant permissions by looking for the
+  `membership_coordinator` position, but on upgraded departments that position
+  was still named **Membership Committee Chair**, so all three passed it by.
+  Renaming it (fixed separately) does not hand back what they skipped, so the
+  store grants and **Configure training** are granted now where absent. A
+  coordinator whose permissions already cover them through a module-wide grant
+  is left alone, as is any position a department created itself.
+- **Both repairs bring a position to exactly what a new department is given
+  today** — nothing beyond that, asserted by test rather than assumed.
+
+**Not yet addressed:** a Membership Coordinator on an upgraded department is
+still missing the larger set of member-management permissions a third migration
+restores. That is a bigger change to who can do what, so it is being decided
+separately.
+
 ### Requesting gear no longer requires knowing the department's name for it (2026-09-05)
 
 **Changed**
