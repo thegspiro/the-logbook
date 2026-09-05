@@ -13,6 +13,7 @@ import {
   monthMatrix,
   shiftCapacity,
   DEFAULT_SIGNUP_WINDOW,
+  effectiveLateSignupUntil,
   isShiftClaimable,
   memberSignupClosedReason,
   rosterLocked,
@@ -777,6 +778,32 @@ describe('a stale late-signup window', () => {
 
   it('does not reopen a months-old shift for a member', () => {
     expect(memberSignupClosedReason(longPast({ late_signup_until: live }))).not.toBeNull();
+  });
+
+  it('reports the capped instant, which is what the detail panel displays', () => {
+    // The panel gates and prints the reopening from this rather than from the
+    // stored column, so a window that outruns the deadline cannot promise an
+    // officer that members may claim until tomorrow.
+    const shiftRow = longPast({ late_signup_until: live });
+    const deadline = Date.parse(shiftRow.end_time as string) + DEFAULT_SIGNUP_WINDOW.graceMinutes * 60_000;
+
+    expect(effectiveLateSignupUntil(shiftRow)).toBe(deadline);
+    expect(effectiveLateSignupUntil(shiftRow)).toBeLessThan(Date.parse(live));
+  });
+
+  it('leaves a window inside the deadline exactly as stored', () => {
+    const stillLive = shift({
+      shift_date: toDateKey(new Date()),
+      start_time: new Date(Date.now() - 30 * 60_000).toISOString(),
+      end_time: new Date(Date.now() + 6 * 60 * 60_000).toISOString(),
+      late_signup_until: live,
+    });
+
+    expect(effectiveLateSignupUntil(stillLive)).toBe(Date.parse(live));
+  });
+
+  it('is null when no reopening is stored', () => {
+    expect(effectiveLateSignupUntil(longPast())).toBeNull();
   });
 
   it('does not reopen it for an officer either', () => {

@@ -216,13 +216,8 @@ export const signupClosedReason = (
   const start = startInstant(shift);
   if (start === null) return null;
 
-  // Capped at the roster deadline, as the server caps it. A window stored
-  // while reopening was still unbounded can sit months past it, and taking it
-  // as authoritative kept claim buttons on the board, the dashboard and the
-  // open-shifts list for shifts every attempt is rejected on.
-  let override = shift.late_signup_until ? Date.parse(shift.late_signup_until) : NaN;
-  const roster = rosterDeadline(shift, window);
-  if (!Number.isNaN(override) && roster !== null && override > roster) override = roster;
+  const capped = effectiveLateSignupUntil(shift, window);
+  const override = capped ?? NaN;
 
   const offsetMinutes = viewer.canAssign ? window.graceMinutes : -window.closesMinutesBefore;
   let deadline = start + offsetMinutes * 60_000;
@@ -293,6 +288,31 @@ const rosterDeadline = (shift: ShiftRecord, window: SignupWindow): number | null
     end = start + window.openEndedCushionHours * 60 * 60_000;
   }
   return end + window.graceMinutes * 60_000;
+};
+
+/**
+ * When late signup actually closes, or null when none is open.
+ *
+ * The stored `late_signup_until` is not that answer on its own. The server
+ * caps it at the roster deadline when it evaluates a signup, so a window
+ * written while reopening was still unbounded — one that can sit months past
+ * the deadline — is honoured only up to that point. Everything that gates on
+ * or displays the reopening reads this instead of the raw column, or it tells
+ * an officer members may claim until tomorrow while the API stops accepting
+ * them in half an hour.
+ *
+ * Advisory, like the rules built on it: the server remains authoritative.
+ */
+export const effectiveLateSignupUntil = (
+  shift: ShiftRecord,
+  window: SignupWindow = DEFAULT_SIGNUP_WINDOW
+): number | null => {
+  if (!shift.late_signup_until) return null;
+  const override = Date.parse(shift.late_signup_until);
+  if (Number.isNaN(override)) return null;
+
+  const roster = rosterDeadline(shift, window);
+  return roster !== null && override > roster ? roster : override;
 };
 
 /**

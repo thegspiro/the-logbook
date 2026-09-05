@@ -69,6 +69,13 @@ interface SchedulingState {
   loadApparatus: () => Promise<void>;
   loadSummary: () => Promise<void>;
   loadSettings: () => Promise<void>;
+  /**
+   * Drop the cached settings so the next mount refetches them.
+   *
+   * For a screen that writes a setting this store mirrors — the checklist
+   * timing behind `openEndedCushionHours` lives on another module's page.
+   */
+  invalidateSettings: () => void;
   setPlatoonsEnabled: (enabled: boolean) => void;
   loadInitialData: () => Promise<void>;
 }
@@ -81,6 +88,21 @@ interface SchedulingState {
  * next caller in the same tick.
  */
 let settingsRequest: Promise<void> | null = null;
+
+/**
+ * Bumped by `invalidateSettings`, captured by each `loadSettings` call.
+ *
+ * Clearing `settingsLoaded` alone does not undo a request already in flight:
+ * an administrator who leaves scheduling while the GET is pending and then
+ * saves the checklist timing would have that older response land afterwards
+ * and write the pre-save cushion back with `settingsLoaded: true`. The window
+ * is small and the result is silent — the roster locks on a number the server
+ * has already replaced, and nothing refetches until the tab is reloaded.
+ *
+ * A response whose generation no longer matches is therefore discarded rather
+ * than applied.
+ */
+let settingsGeneration = 0;
 
 export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   // ─── Initial State ──────────────────────────────────────────────────────
@@ -121,9 +143,14 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     // `refreshPromise` in services/api.ts.
     if (settingsRequest) return settingsRequest;
 
+    const generation = settingsGeneration;
     settingsRequest = (async () => {
       try {
         const settings = await schedulingService.getFeatureSettings();
+        // Superseded while in flight: this response predates a save that
+        // changed one of these settings, so applying it would reinstate the
+        // old value and mark it loaded.
+        if (generation !== settingsGeneration) return;
         set({
           platoonsEnabled: settings.platoons_enabled,
           requireEndOfShiftChecks: settings.require_end_of_shift_checks,
@@ -146,11 +173,19 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
         // until the tab is reloaded. Leaving it unloaded lets the next mount
         // retry; the shared promise above stops that becoming a storm.
       } finally {
-        settingsRequest = null;
+        // Only if this is still the current request: `invalidateSettings` has
+        // already cleared it, and a later mount may have stored its own.
+        if (generation === settingsGeneration) settingsRequest = null;
       }
     })();
 
     return settingsRequest;
+  },
+
+  invalidateSettings: () => {
+    settingsGeneration += 1;
+    settingsRequest = null;
+    set({ settingsLoaded: false });
   },
 
   setPlatoonsEnabled: (enabled) => set({ platoonsEnabled: enabled }),

@@ -81,7 +81,12 @@ export const ChecklistSettingsPage: React.FC = () => {
       // `/scheduling/settings`; clamping a second copy of that rule in this
       // file is how the two would come to disagree. The next scheduling mount
       // refetches, and reads the permissive default until it lands.
-      useSchedulingStore.setState({ settingsLoaded: false });
+      //
+      // Through the store's own action rather than `setState`: a GET issued
+      // before this save may still be in flight, and clearing the flag alone
+      // would let that older response land afterwards and write the pre-save
+      // cushion back as loaded.
+      useSchedulingStore.getState().invalidateSettings();
       toast.success('Checklist settings saved');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save checklist settings'));
