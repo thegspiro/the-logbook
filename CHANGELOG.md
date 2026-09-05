@@ -16,8 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "ready" when the window opened. A phone camera reads a code straight through
   that, so members scanned early, hit a check-in that refuses them, and had
   nothing on the page explaining why. The code is now withheld entirely until
-  `is_valid`, and a same-size placeholder holds the space so the layout does
-  not shift when the real code takes over on the next 30-second refresh.
+  `can_check_in`, and a same-size placeholder holds the space so the layout
+  does not shift when the real code takes over on the next 30-second refresh.
+  The gate is `can_check_in`, not the stricter `is_valid`, because a
+  Flexible/Window event admits a scan up to an hour before its official window
+  — withholding the code there would have blocked a check-in the backend was
+  ready to accept, and `EventSelfCheckInPage` already gates its button on the
+  same field.
+
+- **The check-in window could open without the page noticing for 90 seconds.**
+  `getQRCheckInData` is a cacheable GET, so the 30-second poll on both the QR
+  page and the self-check-in page was answered from the shared client's cache
+  — fresh for 30s, then served stale for a further 60s while revalidating in
+  the background. The whole point of that payload is reporting whether the
+  window is open right now, so it now sets `_skipCache`.
 
 ### The dashboard's Administrative hours read "Unavailable", then read the whole department's (2026-09-05)
 
