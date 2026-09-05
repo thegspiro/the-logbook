@@ -23,8 +23,20 @@ vi.mock('../../../services/api', () => ({
 }));
 
 vi.mock('../../../stores/authStore', () => ({
-  useAuthStore: (selector?: (s: { user: { full_name: string; email: string } }) => unknown) => {
-    const state = { user: { full_name: 'Quartermaster', email: 'qm@x.c' } };
+  // checkPermission is here because the page's breadcrumb trail reads it to
+  // decide which ancestors this viewer may follow. The component tolerates its
+  // absence rather than taking the page down, so a stub without it would still
+  // pass — silently exercising the fallback instead of the real path.
+  useAuthStore: (
+    selector?: (s: {
+      user: { full_name: string; email: string };
+      checkPermission: (permission: string) => boolean;
+    }) => unknown
+  ) => {
+    const state = {
+      user: { full_name: 'Quartermaster', email: 'qm@x.c' },
+      checkPermission: (permission: string) => permission === 'inventory.manage',
+    };
     return selector ? selector(state) : state;
   },
 }));

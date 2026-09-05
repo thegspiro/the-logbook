@@ -7,12 +7,15 @@
 import React, { Suspense } from 'react';
 import { Link } from 'react-router';
 import { ArrowLeft, CornerDownLeft, Loader2 } from 'lucide-react';
+import { Breadcrumbs } from '../../../components/ux';
 
 const ReturnRequestsPanel = React.lazy(() => import('../../../components/ReturnRequestsPanel'));
 
 const ReturnRequestsPage: React.FC = () => (
   <div className="min-h-screen">
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+      <Breadcrumbs />
+
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
