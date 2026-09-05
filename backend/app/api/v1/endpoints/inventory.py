@@ -3764,6 +3764,16 @@ async def list_equipment_requests(
     result = await db.execute(query)
     requests = result.scalars().all()
 
+    # Hang the ready-lot figures on the referenced items before reading their
+    # availability. `quantity` and stock lots are separate ledgers and only one
+    # is live for a given item, so without this a consumable held as dated
+    # stock reports the stale column -- and the quartermaster's number would
+    # disagree with the member's for exactly the items where it matters.
+    await InventoryService(db)._attach_lot_stock(
+        str(current_user.organization_id),
+        list({r.item.id: r.item for r in requests if r.item}.values()),
+    )
+
     return {
         "requests": [
             {
@@ -3790,25 +3800,16 @@ async def list_equipment_requests(
                             if hasattr(r.item.status, "value")
                             else r.item.status
                         ),
-                        "available_quantity": (
-                            r.item.quantity
-                            if (
-                                r.item.tracking_type.value
-                                if hasattr(r.item.tracking_type, "value")
-                                else r.item.tracking_type
-                            )
-                            == "pool"
-                            else (
-                                1
-                                if (
-                                    r.item.status.value
-                                    if hasattr(r.item.status, "value")
-                                    else r.item.status
-                                )
-                                == "available"
-                                else 0
-                            )
+                        # The same count the member's request form shows, from
+                        # the same method: this figure decides whether the
+                        # review screen offers "Approve & fulfill now", and
+                        # the ledger quantity alone counts stock that
+                        # `issue_from_pool` refuses -- offering a fulfilment
+                        # that then fails.
+                        "available_quantity": InventoryService._requestable_available(
+                            r.item
                         ),
+                        "size": InventoryService._item_stock_size_value(r.item),
                         "min_rank_order": r.item.min_rank_order,
                         "restricted_to_positions": r.item.restricted_to_positions,
                     }

@@ -92,8 +92,9 @@ describe('SchedulingAdminHub', () => {
 
     const offered = hrefs();
     expect(offered).toContain('/scheduling/admin/settings/general');
-    expect(offered).toContain('/scheduling/admin/templates');
-    expect(offered).toContain('/scheduling/admin/patterns');
+    expect(offered).toContain('/scheduling/admin/planning');
+    expect(offered).toContain('/scheduling/admin/planning/templates');
+    expect(offered).toContain('/scheduling/admin/planning/patterns');
     expect(offered).toContain('/scheduling/admin/reports');
     expect(offered).toContain('/scheduling/admin/platoons');
     expect(offered).toContain('/scheduling/admin/positions');

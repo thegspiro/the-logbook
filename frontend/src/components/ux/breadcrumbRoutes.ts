@@ -111,6 +111,7 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/inventory/checklists': { permissions: ['inventory.check_view', 'scheduling.manage'] },
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/onboarding/modules': {},
+  '/scheduling/admin/planning': { label: 'Shift Planning', permissions: ['scheduling.manage'] },
   '/scheduling/admin/settings': { permissions: ['scheduling.manage'] },
   '/scheduling/checkin': { label: 'Shift Check-In' },
   '/training/cohorts': { permissions: ['training.manage'] },

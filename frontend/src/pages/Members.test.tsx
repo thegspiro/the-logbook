@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { User } from '../types/user';
@@ -224,10 +224,44 @@ describe('Members roster — regular member (no members.manage)', () => {
     await user.type(search, 'brian.a@example.org');
     expect(await within(table()).findByText('Brian Anderson')).toBeInTheDocument();
   });
+
+  it('leaves the roster blank when it is empty and nothing is filtered', async () => {
+    mockGetUsers.mockResolvedValue([]);
+    renderWithRouter(<Members />);
+
+    // The card exists to offer Add Member / Import CSV, so a member with an
+    // unfiltered empty roster gets nothing rather than a prompt they cannot act on.
+    await waitFor(() => expect(mockGetUsers).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('No Members Found')).not.toBeInTheDocument());
+    expect(screen.queryByText(/Get started by adding your first member/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add Member/i })).not.toBeInTheDocument();
+  });
+
+  it('still reports an empty filter result', async () => {
+    const user = userEvent.setup();
+    await renderRoster();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /filter by status/i }), 'retired');
+
+    // Feedback on the filter they chose, without the create prompt.
+    expect(await screen.findByText('No Members Found')).toBeInTheDocument();
+    expect(screen.getByText('Try adjusting your search or filters')).toBeInTheDocument();
+    expect(screen.queryByText(/Get started by adding your first member/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('Members roster — membership coordinator (members.manage)', () => {
   beforeEach(() => installDefaults(true));
+
+  it('offers the add and import prompt on an empty roster', async () => {
+    mockGetUsers.mockResolvedValue([]);
+    renderWithRouter(<Members />);
+
+    expect(await screen.findByText('No Members Found')).toBeInTheDocument();
+    expect(screen.getByText('Get started by adding your first member or importing from CSV')).toBeInTheDocument();
+    // Two: the toolbar's, which a manager always has, plus the card's own action.
+    expect(screen.getAllByRole('button', { name: /Add Member/i })).toHaveLength(2);
+  });
 
   it('keeps the username, Hire Date and Actions columns', async () => {
     await renderRoster();

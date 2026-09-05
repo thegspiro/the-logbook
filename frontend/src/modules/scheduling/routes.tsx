@@ -23,9 +23,9 @@ const SchedulingPage = lazyWithRetry(() => import('../../pages/SchedulingPage'))
 
 const SchedulingAdminHub = lazyWithRetry(() => import('../../pages/scheduling/admin/SchedulingAdminHub'));
 
-const SchedulingTemplatesPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingTemplatesPage'));
-
-const SchedulingPatternsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingPatternsPage'));
+const SchedulingPlanningPage = lazyWithRetry(
+  () => import('../../pages/scheduling/admin/planning/SchedulingPlanningPage')
+);
 
 const SchedulingAdminReportsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingAdminReportsPage'));
 
@@ -71,22 +71,35 @@ export const getSchedulingRoutes = () => {
           </Suspense>
         }
       />
+      {/* Templates and patterns are sections of planning, not screens beside it:
+          the reason to open a template is a shift that keeps coming up short,
+          and that is on the gaps view one tab away. */}
       <Route
-        path="/scheduling/admin/templates"
+        path="/scheduling/admin/planning"
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingTemplatesPage />
+              <SchedulingPlanningPage section="gaps" />
             </ProtectedRoute>
           </Suspense>
         }
       />
       <Route
-        path="/scheduling/admin/patterns"
+        path="/scheduling/admin/planning/templates"
         element={
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <SchedulingPatternsPage />
+              <SchedulingPlanningPage section="templates" />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/admin/planning/patterns"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
+              <SchedulingPlanningPage section="patterns" />
             </ProtectedRoute>
           </Suspense>
         }
