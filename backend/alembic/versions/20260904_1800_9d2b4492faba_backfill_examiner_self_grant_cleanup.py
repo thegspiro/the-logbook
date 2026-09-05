@@ -22,15 +22,21 @@ matches nothing once the offending rows are gone, so re-running this upgrade
 after a clean database (or a second `alembic upgrade head`) is a no-op rather
 than an error.
 
-Guarded on the table existing, defensively rather than out of necessity:
-``skill_test_viewers`` IS created by the migration chain — 20260807_0009
-creates it outright, which makes that a required ancestor of this revision, so
-the table is present by the time this runs. An earlier version of this
-paragraph claimed the opposite, which is the false positive CLAUDE.md pitfall
-#26 records being reverted after an empirical ``alembic upgrade head`` against
-an empty database. The guard is kept because it costs one reflection and cannot
-be wrong, but it is not load-bearing, and it is not the pattern to copy for a
-genuinely create_all-only table.
+Guarded on both tables existing, and the two halves are not the same kind of
+check.
+
+``skill_tests`` is genuinely create_all-only: no migration creates it under any
+name, so on a fresh migration-only database it is absent when this runs and
+**that half of the guard is load-bearing** (CLAUDE.md pitfall #26). Removing it
+would let the DELETE below fail the whole upgrade before startup
+``create_all()`` ever gets to build the table.
+
+``skill_test_viewers`` is not: 20260807_0009 creates it outright and is a
+required ancestor of this revision, so it is present by the time this runs. An
+earlier version of this paragraph claimed both tables were create_all-only,
+which is the false positive pitfall #26 records being reverted. Its half of the
+guard is kept for symmetry and costs one reflection, but it is not what makes
+the check necessary.
 
 **This migration is not reversible.** The rows it removes should never have
 been creatable in the first place (that is what SKT3-1 enforces going
