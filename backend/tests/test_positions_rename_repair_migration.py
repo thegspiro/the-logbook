@@ -300,6 +300,83 @@ class TestTheTargetRolesBackfill:
 
         assert _targets(engine, messages) == ["Safety Officer"]
 
+    def test_an_ambiguous_name_the_rename_will_change_is_materialized(
+        self, engine, tables
+    ):
+        """The interaction between the ambiguity rule and the rename.
+
+        Leaving an ambiguous name alone preserves the fallback only while the
+        names stay put. Here one of them moves: the seeded row is renamed, so
+        afterwards the fallback would match only the department's own position
+        and the seeded position's holders would silently drop out of an
+        audience they were in before this migration ran. For the names being
+        renamed, the audience is pinned to ids first.
+        """
+        positions, messages = tables
+        _insert(
+            engine,
+            positions,
+            id="seeded",
+            organization_id="org1",
+            name="Membership Committee Chair",
+            slug="membership_committee_chair",
+            permissions="[]",
+            is_system=True,
+        )
+        _insert(
+            engine,
+            positions,
+            id="custom",
+            organization_id="org1",
+            name="Membership Committee Chair",
+            slug="mcc_custom",
+            permissions="[]",
+            is_system=False,
+        )
+        _insert(
+            engine,
+            messages,
+            id="m1",
+            organization_id="org1",
+            target_type="roles",
+            target_roles=json.dumps(["Membership Committee Chair"]),
+        )
+
+        _run(engine)
+
+        assert sorted(_targets(engine, messages)) == ["custom", "seeded"]
+        assert _rows(engine, positions)["seeded"].slug == "membership_coordinator"
+        assert _rows(engine, positions)["custom"].slug == "mcc_custom"
+
+    def test_an_ambiguous_name_no_rename_touches_stays_a_name(self, engine, tables):
+        """The rule is unchanged where nothing moves: an ambiguous name that
+        this revision does not rename keeps its fallback, which still reaches
+        the holders of every position sharing it."""
+        positions, messages = tables
+        for pid, slug in (("p1", "safety_officer"), ("p2", "safety_officer_2")):
+            _insert(
+                engine,
+                positions,
+                id=pid,
+                organization_id="org1",
+                name="Safety Officer",
+                slug=slug,
+                permissions="[]",
+                is_system=False,
+            )
+        _insert(
+            engine,
+            messages,
+            id="m1",
+            organization_id="org1",
+            target_type="roles",
+            target_roles=json.dumps(["Safety Officer"]),
+        )
+
+        _run(engine)
+
+        assert _targets(engine, messages) == ["Safety Officer"]
+
     def test_an_unresolvable_name_is_left_alone(self, engine, tables):
         positions, messages = tables
         _insert(

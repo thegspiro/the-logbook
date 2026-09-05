@@ -115,7 +115,9 @@ def _unambiguous_name_map(bind) -> dict:
     return {key: value for key, value in ids.items() if counts[key] == 1}
 
 
-def _backfill_target_roles(bind, name_to_id: dict, known_ids: set) -> int:
+def _backfill_target_roles(
+    bind, name_to_id: dict, known_ids: set, expansions: dict
+) -> int:
     """Rewrite role-targeted messages from position names to position ids.
 
     Idempotent by construction: a stored id never matches a position *name*, so
@@ -140,14 +142,19 @@ def _backfill_target_roles(bind, name_to_id: dict, known_ids: set) -> int:
         if not isinstance(target, list):
             continue
 
-        new_target = [
-            (
-                entry
-                if entry in known_ids
-                else name_to_id.get((row.organization_id, entry), entry)
-            )
-            for entry in target
-        ]
+        new_target = []
+        for entry in target:
+            if entry in known_ids:
+                new_target.append(entry)
+                continue
+            key = (row.organization_id, entry)
+            if key in expansions:
+                # A name this revision is about to change: pin the audience.
+                for position_id in expansions[key]:
+                    if position_id not in new_target:
+                        new_target.append(position_id)
+                continue
+            new_target.append(name_to_id.get(key, entry))
         if new_target != target:
             bind.execute(
                 sa.text(
@@ -160,8 +167,69 @@ def _backfill_target_roles(bind, name_to_id: dict, known_ids: set) -> int:
     return changed
 
 
-def _rename_coordinator(bind) -> int:
-    """Rename seeded ``membership_committee_chair`` rows to the coordinator slug.
+def _rows_to_rename(bind) -> list:
+    """The seeded rows this revision will rename, resolved before anything moves.
+
+    The backfill needs these in advance: renaming a position changes what its
+    *name* resolves to, and a message may still be targeting that name. See
+    ``_expansions``.
+    """
+    taken = {
+        row.organization_id
+        for row in bind.execute(
+            sa.text("SELECT organization_id FROM positions WHERE slug = :slug"),
+            {"slug": _NEW_SLUG},
+        )
+    }
+    return [
+        row
+        for row in bind.execute(
+            sa.text(
+                "SELECT id, organization_id, name FROM positions "
+                "WHERE slug = :slug AND is_system = 1"
+            ),
+            {"slug": _OLD_SLUG},
+        ).fetchall()
+        if row.organization_id not in taken
+    ]
+
+
+def _expansions(bind, to_rename: list) -> dict:
+    """``(organization_id, name) -> [every id under that name]`` for the names
+    this revision is about to change.
+
+    An ambiguous name is normally left alone so the service's name fallback
+    keeps reaching the holders of every position sharing it. That reasoning
+    holds only while the names stay put -- and here one of them is about to
+    move. If a department has a custom position sharing the seeded row's name,
+    leaving the message on the name and then renaming the seeded row would
+    quietly drop the seeded position's holders from the audience: afterwards
+    the fallback matches only the custom position.
+
+    So for exactly the names being renamed, the audience is materialized as ids
+    first. That preserves who the message reaches across the rename, which
+    leaving it as a name would not.
+    """
+    expansions: dict = {}
+    for row in to_rename:
+        key = (row.organization_id, row.name)
+        if key in expansions:
+            continue
+        expansions[key] = [
+            match.id
+            for match in bind.execute(
+                sa.text(
+                    "SELECT id FROM positions "
+                    "WHERE organization_id = :org AND name = :name ORDER BY id"
+                ),
+                {"org": row.organization_id, "name": row.name},
+            )
+        ]
+    return expansions
+
+
+def _rename_coordinator(bind, to_rename: list) -> int:
+    """Rename the seeded ``membership_committee_chair`` rows to the coordinator slug.
 
     ``idx_position_org_slug`` is UNIQUE on ``(organization_id, slug)``, so an
     organization already holding the target slug would make a blind UPDATE
@@ -180,25 +248,8 @@ def _rename_coordinator(bind) -> int:
     this state has both rows visible on the positions screen and can merge them
     deliberately.
     """
-    taken = {
-        row.organization_id
-        for row in bind.execute(
-            sa.text("SELECT organization_id FROM positions WHERE slug = :slug"),
-            {"slug": _NEW_SLUG},
-        )
-    }
-    rows = bind.execute(
-        sa.text(
-            "SELECT id, organization_id FROM positions "
-            "WHERE slug = :slug AND is_system = 1"
-        ),
-        {"slug": _OLD_SLUG},
-    ).fetchall()
-
     renamed = 0
-    for row in rows:
-        if row.organization_id in taken:
-            continue
+    for row in to_rename:
         bind.execute(
             sa.text("UPDATE positions SET slug = :slug, name = :name WHERE id = :id"),
             {"slug": _NEW_SLUG, "name": _NEW_NAME, "id": row.id},
@@ -235,8 +286,14 @@ def _grant_check_submit(bind) -> int:
 def upgrade() -> None:
     bind = op.get_bind()
     # Before the rename -- see "Order matters here" above.
-    _backfill_target_roles(bind, _unambiguous_name_map(bind), _position_ids(bind))
-    _rename_coordinator(bind)
+    to_rename = _rows_to_rename(bind)
+    _backfill_target_roles(
+        bind,
+        _unambiguous_name_map(bind),
+        _position_ids(bind),
+        _expansions(bind, to_rename),
+    )
+    _rename_coordinator(bind, to_rename)
     _grant_check_submit(bind)
 
 
