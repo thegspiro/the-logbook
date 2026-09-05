@@ -31,7 +31,7 @@ import {
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
-import { MODULE_REGISTRY, isAgencyFilteredOut, type ModuleDefinition } from '../config';
+import { MODULE_REGISTRY, SEEDED_POSITION_GRANTS, isAgencyFilteredOut, type ModuleDefinition } from '../config';
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildPositionTemplates } from './positionTemplates';
@@ -191,9 +191,23 @@ const PositionSetup: React.FC = () => {
         //    service resuming an older session still has `firefighter` ticked.
         const template = templatesById.get(posId);
         if (!template && isAgencyFilteredOut(posId, organizationType)) continue;
+        // Permissions are refreshed from the template too, and only for a
+        // position the backend seeds. A config read from localStorage can
+        // predate the grants this build presents: an EMT saved on an earlier
+        // build carries the ticks a role-type heuristic chose — `reports`
+        // among them — and handleContinue submits whatever is here, so the
+        // stale set would be written after every migration had already run.
+        // The templates have been through `applySeededGrants`, so taking
+        // theirs is the same answer a fresh session gets.
+        //
+        // Confined to seeded slugs on purpose: a custom position built in this
+        // session, or a template the registry does not seed, has no other
+        // source for its permissions and must keep what was saved.
+        const seeded = template && SEEDED_POSITION_GRANTS[posId];
         restored[posId] = {
           ...saved,
           ...(template ? { name: template.name } : {}),
+          ...(seeded ? { permissions: template.permissions } : {}),
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
         };
       }
