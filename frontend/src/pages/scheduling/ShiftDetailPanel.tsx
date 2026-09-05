@@ -869,18 +869,25 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   /**
    * Close only on a press that both began and ended on the backdrop.
    *
-   * A click resolves to the common ancestor of its mousedown and mouseup, so a
-   * text selection dragged from inside the panel and released over the backdrop
-   * arrives here with `target === currentTarget` — indistinguishable, on the
-   * click alone, from a deliberate backdrop click. Closing on it discards a
-   * half-typed cancellation reason or a screen of close-out hours with no undo,
-   * and selecting a member's notes to copy is an ordinary thing to do on this
-   * panel.
+   * A click resolves to the common ancestor of its mousedown and mouseup, so
+   * either half of a drag between the panel and the backdrop arrives here with
+   * `target === currentTarget` — indistinguishable, on the click alone, from a
+   * deliberate backdrop click. Both directions happen: selecting a member's
+   * notes to copy and releasing past the panel edge, and pressing just outside
+   * the panel then dragging in. Closing on either discards a half-typed
+   * cancellation reason or a screen of close-out hours with no undo.
+   *
+   * So the gesture has to start and finish on the backdrop. mouseup runs before
+   * click, which is what lets the release invalidate a press that qualified.
    */
   const backdropPressRef = useRef(false);
 
   const handleBackdropMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     backdropPressRef.current = event.target === event.currentTarget;
+  }, []);
+
+  const handleBackdropMouseUp = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) backdropPressRef.current = false;
   }, []);
 
   const handleBackdropClick = useCallback(
@@ -1154,12 +1161,24 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
           viewport while no ancestor establishes a containing block, and the
           app's `card` utility carries backdrop-blur, which does. */}
       <DialogPortal>
+        {/* `inert` while the driver-qualification dialog is up. That dialog
+            renders through <Modal>, which portals to the body — so it is a DOM
+            *sibling* of this container, not a descendant, and two sibling
+            dialogs both asserting aria-modal each claim everything outside
+            themselves is inert. Assistive technology can then keep the reader
+            in this surface or treat the one on top as unavailable. `inert`
+            drops this subtree from the accessibility tree and from focus for
+            exactly as long as the other dialog owns the screen; the outer
+            focus trap goes quiet on its own, since nothing it can reach is
+            focusable while the attribute is set. */}
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="shift-detail-title"
+          inert={driverBlock !== null}
           onMouseDown={handleBackdropMouseDown}
+          onMouseUp={handleBackdropMouseUp}
           onClick={handleBackdropClick}
         >
           {/* Scrim as an empty sibling of the panel, so it carries no z-index

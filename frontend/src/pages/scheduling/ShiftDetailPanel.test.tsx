@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftDetailPanel } from './ShiftDetailPanel';
@@ -27,6 +28,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getShiftHandoff: vi.fn().mockResolvedValue(null),
     getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'], is_excluded: false }),
     getUnavailableMembers: vi.fn().mockResolvedValue([]),
+    signupForShift: vi.fn().mockResolvedValue({}),
     openLateSignup: vi.fn().mockResolvedValue({}),
     closeLateSignup: vi.fn().mockResolvedValue({}),
   },
@@ -89,9 +91,24 @@ vi.mock('../../stores/authStore', () => {
     checkPermission: (permission: string) =>
       grantedPermissions.current === null || grantedPermissions.current.includes(permission),
   });
-  return { useAuthStore: Object.assign(() => state(), { getState: state }) };
+  // Selector-aware, as the real store is: DriverBlockedDialog reads a single
+  // action (`useAuthStore((s) => s.checkPermission)`), and a mock that ignored
+  // the selector handed it the whole state object instead.
+  return {
+    useAuthStore: Object.assign(
+      (selector?: (s: ReturnType<typeof state>) => unknown) => (selector ? selector(state()) : state()),
+      { getState: state }
+    ),
+  };
 });
 
+vi.mock('../../modules/apparatus/services/api', () => ({
+  driverExceptionService: {
+    approvers: vi.fn().mockResolvedValue([]),
+    request: vi.fn().mockResolvedValue({}),
+  },
+}));
+vi.mock('../../hooks/useRanks', () => ({ useRanks: () => ({ ranks: [], loading: false }) }));
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../hooks/useOverlaySurface', () => ({ useOverlaySurface: vi.fn() }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -401,6 +418,12 @@ describe('ShiftDetailPanel dialog shell', () => {
     end_time: '2099-01-01T16:00:00Z',
   };
 
+  // Apparatus seats, so the crew board offers a self-signup button to click.
+  const crewSignupShift = {
+    ...openShift,
+    apparatus_positions: [{ position: 'driver', required: true }],
+  };
+
   beforeEach(() => {
     // Reset and re-install this block's own defaults rather than inheriting
     // whatever a neighbouring block left behind (pitfall #28).
@@ -465,6 +488,47 @@ describe('ShiftDetailPanel dialog shell', () => {
     fireEvent.click(dialog);
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close when a press starts on the backdrop and is released inside the panel', async () => {
+    // The mirror of the case above, and it reaches the handler identically:
+    // the click still resolves to the container. mouseup is what distinguishes
+    // them, so it has to be able to invalidate a press that already qualified.
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    const heading = screen.getByRole('heading', { name: 'Shift Details' });
+
+    fireEvent.mouseDown(dialog);
+    fireEvent.mouseUp(heading);
+    fireEvent.click(dialog);
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('goes inert while the driver-qualification dialog is on top of it', async () => {
+    // Both dialogs portal to the body, so they are siblings rather than nested:
+    // two aria-modal surfaces at once leave assistive technology to guess which
+    // one is live.
+    vi.mocked(schedulingService.signupForShift).mockRejectedValueOnce({
+      response: {
+        status: 409,
+        statusText: 'Conflict',
+        data: { code: DRIVER_NOT_QUALIFIED_CODE, detail: 'Not signed off to drive' },
+      },
+    });
+    mockEligibility.mockResolvedValue({ positions: ['driver'], is_excluded: false });
+
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={crewSignupShift as never} onClose={vi.fn()} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    expect(dialog).not.toHaveAttribute('inert');
+
+    await user.click(await screen.findByRole('button', { name: 'Sign myself up as Driver/Operator' }));
+
+    await waitFor(() => expect(dialog).toHaveAttribute('inert'));
   });
 
   it('closes on a backdrop click but not on a click inside the panel', async () => {
