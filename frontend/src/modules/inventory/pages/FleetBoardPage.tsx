@@ -58,7 +58,13 @@ const lateness = (days: number | null): { label: string; overdue: boolean } => {
 export const FleetBoardPage: React.FC = () => {
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
-  const canManage = checkPermission('scheduling.manage') || checkPermission('inventory.check_manage');
+  // The links this gates all open the checklist admin console, whose route
+  // requires `inventory.check_manage`. It used to accept `scheduling.manage`
+  // too, from when they pointed at a signpost card inside Scheduling Settings —
+  // which meant a checklist officer holding only the check grant was shown a
+  // link that refused them, and now would mean a scheduling officer without it
+  // is. A control is offered to whoever its destination admits, and nobody else.
+  const canManage = checkPermission('inventory.check_manage');
 
   const [fleet, setFleet] = useState<FleetReadinessResponse | null>(null);
   const [mine, setMine] = useState<ActiveChecklistRecord[]>([]);
@@ -137,7 +143,7 @@ export const FleetBoardPage: React.FC = () => {
           </Link>
           {canManage && (
             <Link
-              to="/scheduling/settings?tab=equipment"
+              to="/inventory/admin/checklists"
               className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
             >
               <Settings className="h-3.5 w-3.5" aria-hidden="true" />
@@ -212,7 +218,7 @@ export const FleetBoardPage: React.FC = () => {
           </p>
           {canManage && (
             <Link
-              to="/scheduling/settings?tab=equipment"
+              to="/inventory/admin/checklists"
               className="mt-3 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               Set up check templates

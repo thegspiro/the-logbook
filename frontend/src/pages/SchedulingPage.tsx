@@ -10,16 +10,12 @@ import {
   Users,
   UserPlus,
   ArrowLeftRight,
-  ClipboardList,
-  BarChart3,
   Settings,
-  Repeat,
   FileText,
   Truck,
-  ShieldCheck,
   ChevronDown,
 } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatTimeOfDay, localToUTC } from '../utils/dateFormatting';
@@ -123,24 +119,6 @@ const TAB_CONFIG: {
   { id: 'shift-reports', label: 'Shift Reports', icon: FileText },
 ];
 
-const ADMIN_LINKS: {
-  label: string;
-  path: string;
-  icon: React.ElementType;
-  description: string;
-}[] = [
-  { label: 'Templates', path: '/scheduling/templates', icon: ClipboardList, description: 'Manage shift templates' },
-  { label: 'Patterns', path: '/scheduling/patterns', icon: Repeat, description: 'Configure shift patterns' },
-  { label: 'Reports', path: '/scheduling/reports', icon: BarChart3, description: 'View scheduling reports' },
-  {
-    label: 'Qualifications',
-    path: '/scheduling/qualifications',
-    icon: ShieldCheck,
-    description: 'Who is cleared per position',
-  },
-  { label: 'Settings', path: '/scheduling/settings', icon: Settings, description: 'Department settings' },
-];
-
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
     <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
@@ -167,22 +145,9 @@ const SchedulingPage: React.FC = () => {
     templatesLoaded,
     apparatus: apparatusList,
     summary,
-    platoonsEnabled,
     loadInitialData,
     loadSummary,
   } = useSchedulingStore();
-
-  // Platoons admin page is only relevant when platoon scheduling is enabled.
-  const adminLinks = useMemo(
-    () =>
-      platoonsEnabled
-        ? [
-            ...ADMIN_LINKS,
-            { label: 'Platoons', path: '/scheduling/platoons', icon: Users, description: 'Assign platoon rosters' },
-          ]
-        : ADMIN_LINKS,
-    [platoonsEnabled]
-  );
 
   // Tab state — honour ?tab= query param for deep-linking
   const initialTabParam = searchParams.get('tab');
@@ -495,37 +460,6 @@ const SchedulingPage: React.FC = () => {
           />
         </div>
 
-        {/* Officer tools.
-            These sat under the month grid as seven cards headed
-            "ADMINISTRATION", so an officer reached them only by scrolling a
-            whole calendar past — and on a phone each carried an
-            external-link arrow, though every one is an ordinary page in this
-            app. A strip above the content instead: same links, no scrolling,
-            and the Supply count says what it is counting. */}
-        {canManage && (
-          <nav className="mb-6" aria-labelledby="officer-tools-heading">
-            <h2 id="officer-tools-heading" className="text-theme-text-muted mb-2 text-xs font-semibold">
-              Officer tools
-            </h2>
-            <div className="hscroll flex gap-2">
-              {adminLinks.map((link) => {
-                const Icon = link.icon;
-                return (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    title={link.description}
-                    className="btn-secondary btn-auto mobile-touch-target inline-flex shrink-0 items-center gap-2 px-3 text-sm font-medium"
-                  >
-                    <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
-                    {link.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
-        )}
-
         {/* Tab Content */}
         {activeTab === 'schedule' && (
           <>
@@ -803,7 +737,7 @@ const SchedulingPage: React.FC = () => {
                             type="button"
                             onClick={() => {
                               setShowCreateShift(false);
-                              void navigate('/scheduling/templates');
+                              void navigate('/scheduling/admin/templates');
                             }}
                             className="text-violet-600 hover:underline dark:text-violet-400"
                           >

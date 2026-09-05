@@ -6,6 +6,7 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 """
 
 import calendar
+from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Dict, List, Optional, Tuple
 
@@ -233,17 +234,47 @@ def certification_record_matches(req, record) -> bool:
     return False
 
 
-def evaluate_member_requirement(
+@dataclass(frozen=True)
+class RequirementEvaluation:
+    """A single member's standing against a single requirement.
+
+    Carries the numbers the evaluator already computes internally so callers
+    can render "9 of 12 hours" rather than re-deriving it from raw records —
+    notably the compliance matrix, which has to show *why* a member is short.
+
+    ``progress_required`` is the target after waiver adjustment;
+    ``base_required`` is what it would have been without a waiver. They differ
+    only when ``waived_months`` is non-zero, which is the signal a UI needs to
+    explain a reduced target to the person reading it.
+    """
+
+    status: str
+    completion_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+    progress_current: Optional[float] = None
+    progress_required: Optional[float] = None
+    progress_unit: Optional[str] = None
+    base_required: Optional[float] = None
+    waived_months: int = 0
+    window_start: Optional[str] = None
+    window_end: Optional[str] = None
+    as_of: Optional[str] = None
+
+
+def evaluate_member_requirement_detail(
     req,
     member_records,
     today: date,
     waivers=None,
     org_include_current_month: bool = True,
-):
+) -> RequirementEvaluation:
     """
     Evaluate a single member's status for a single requirement.
 
-    Returns (status, latest_completion_date, latest_expiry_date).
+    Returns a :class:`RequirementEvaluation`. ``evaluate_member_requirement``
+    wraps this and returns only the (status, completion, expiry) triple that
+    predates it; the two must stay in lockstep on status, so keep the decision
+    logic here and never branch on which caller is asking.
 
     ``today`` is the real current date; the effective evaluation date is
     resolved per requirement from its ``include_current_month`` override
@@ -282,6 +313,31 @@ def evaluate_member_requirement(
     start_date, end_date = get_requirement_date_window(req, today)
     _waivers = waivers or []
 
+    def _ev(
+        status,
+        comp=None,
+        exp=None,
+        *,
+        current=None,
+        required=None,
+        unit=None,
+        base=None,
+        waived=0,
+    ) -> RequirementEvaluation:
+        return RequirementEvaluation(
+            status=status,
+            completion_date=comp,
+            expiry_date=exp,
+            progress_current=current,
+            progress_required=required,
+            progress_unit=unit,
+            base_required=base,
+            waived_months=waived,
+            window_start=start_date.isoformat() if start_date else None,
+            window_end=end_date.isoformat() if end_date else None,
+            as_of=today.isoformat(),
+        )
+
     # Filter completed records within the date window
     completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
     # A freshness window narrows the pool for every requirement type before the
@@ -310,9 +366,11 @@ def evaluate_member_requirement(
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)
         required = req.required_hours or 0
+        base_required = required
+        waived_months = 0
 
         if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(
+            required, waived_months, _ = adjust_required(
                 required,
                 start_date,
                 end_date,
@@ -320,6 +378,14 @@ def evaluate_member_requirement(
                 str(req.id),
                 period_months=get_rolling_period_months(req),
             )
+
+        progress = {
+            "current": total_hours,
+            "required": required,
+            "unit": "hours",
+            "base": base_required,
+            "waived": waived_months,
+        }
 
         latest = (
             max(type_matched, key=lambda r: r.completion_date or date.min)
@@ -348,23 +414,30 @@ def evaluate_member_requirement(
                         else latest_comp
                     )
                     exp_exp = newest_cert.expiration_date.isoformat()
-                    return "expired", exp_comp, exp_exp
+                    return _ev("expired", exp_comp, exp_exp, **progress)
 
         if required > 0 and total_hours >= required:
-            return "completed", latest_comp, latest_exp
+            return _ev("completed", latest_comp, latest_exp, **progress)
         elif total_hours > 0:
-            return "in_progress", latest_comp, latest_exp
+            return _ev("in_progress", latest_comp, latest_exp, **progress)
         else:
-            return "not_started", None, None
+            return _ev("not_started", None, None, **progress)
 
     # ---- COURSES requirements: check required course IDs ----
     if req_type == RequirementType.COURSES.value:
         course_ids = req.required_courses or []
         if not course_ids:
-            return "not_started", None, None
+            return _ev("not_started", None, None)
 
         completed_course_ids = {str(r.course_id) for r in windowed if r.course_id}
         matched_count = sum(1 for cid in course_ids if cid in completed_course_ids)
+
+        progress = {
+            "current": matched_count,
+            "required": len(course_ids),
+            "unit": "courses",
+            "base": len(course_ids),
+        }
 
         latest = (
             max(windowed, key=lambda r: r.completion_date or date.min)
@@ -393,14 +466,14 @@ def evaluate_member_requirement(
                         else latest_comp
                     )
                     exp_exp = newest_cert.expiration_date.isoformat()
-                    return "expired", exp_comp, exp_exp
+                    return _ev("expired", exp_comp, exp_exp, **progress)
 
         if matched_count >= len(course_ids):
-            return "completed", latest_comp, latest_exp
+            return _ev("completed", latest_comp, latest_exp, **progress)
         elif matched_count > 0:
-            return "in_progress", latest_comp, latest_exp
+            return _ev("in_progress", latest_comp, latest_exp, **progress)
         else:
-            return "not_started", None, None
+            return _ev("not_started", None, None, **progress)
 
     # ---- CERTIFICATION requirements: match by linked course, name, type, or
     # cert number (see certification_record_matches) ----
@@ -415,9 +488,9 @@ def evaluate_member_requirement(
                 latest.expiration_date.isoformat() if latest.expiration_date else None
             )
             if latest.expiration_date and latest.expiration_date < today:
-                return "expired", latest_comp, latest_exp
-            return "completed", latest_comp, latest_exp
-        return "not_started", None, None
+                return _ev("expired", latest_comp, latest_exp)
+            return _ev("completed", latest_comp, latest_exp)
+        return _ev("not_started", None, None)
 
     # ---- SHIFTS requirements ----
     if req_type == RequirementType.SHIFTS.value:
@@ -426,9 +499,11 @@ def evaluate_member_requirement(
             type_matched = [r for r in windowed if r.training_type == req.training_type]
         count = len(type_matched)
         required = req.required_shifts or 0
+        base_required = required
+        waived_months = 0
 
         if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(
+            required, waived_months, _ = adjust_required(
                 required,
                 start_date,
                 end_date,
@@ -436,6 +511,14 @@ def evaluate_member_requirement(
                 str(req.id),
                 period_months=get_rolling_period_months(req),
             )
+
+        progress = {
+            "current": count,
+            "required": required,
+            "unit": "shifts",
+            "base": base_required,
+            "waived": waived_months,
+        }
 
         latest = (
             max(type_matched, key=lambda r: r.completion_date or date.min)
@@ -450,10 +533,10 @@ def evaluate_member_requirement(
         latest_exp = None
 
         if required > 0 and count >= required:
-            return "completed", latest_comp, latest_exp
+            return _ev("completed", latest_comp, latest_exp, **progress)
         elif count > 0:
-            return "in_progress", latest_comp, latest_exp
-        return "not_started", None, None
+            return _ev("in_progress", latest_comp, latest_exp, **progress)
+        return _ev("not_started", None, None, **progress)
 
     # ---- CALLS requirements ----
     if req_type == RequirementType.CALLS.value:
@@ -462,9 +545,11 @@ def evaluate_member_requirement(
             type_matched = [r for r in windowed if r.training_type == req.training_type]
         count = len(type_matched)
         required = req.required_calls or 0
+        base_required = required
+        waived_months = 0
 
         if required > 0 and start_date and end_date and _waivers:
-            required, _, _ = adjust_required(
+            required, waived_months, _ = adjust_required(
                 required,
                 start_date,
                 end_date,
@@ -472,6 +557,14 @@ def evaluate_member_requirement(
                 str(req.id),
                 period_months=get_rolling_period_months(req),
             )
+
+        progress = {
+            "current": count,
+            "required": required,
+            "unit": "calls",
+            "base": base_required,
+            "waived": waived_months,
+        }
 
         latest = (
             max(type_matched, key=lambda r: r.completion_date or date.min)
@@ -486,10 +579,10 @@ def evaluate_member_requirement(
         latest_exp = None
 
         if required > 0 and count >= required:
-            return "completed", latest_comp, latest_exp
+            return _ev("completed", latest_comp, latest_exp, **progress)
         elif count > 0:
-            return "in_progress", latest_comp, latest_exp
-        return "not_started", None, None
+            return _ev("in_progress", latest_comp, latest_exp, **progress)
+        return _ev("not_started", None, None, **progress)
 
     # ---- Fallback (skills_evaluation, checklist, knowledge_test, etc.) ----
     matching = []
@@ -511,8 +604,8 @@ def evaluate_member_requirement(
             latest.expiration_date.isoformat() if latest.expiration_date else None
         )
         if latest.expiration_date and latest.expiration_date < today:
-            return "expired", latest_comp, latest_exp
-        return "completed", latest_comp, latest_exp
+            return _ev("expired", latest_comp, latest_exp)
+        return _ev("completed", latest_comp, latest_exp)
     else:
         in_progress = [
             r for r in member_records if r.status == TrainingStatus.IN_PROGRESS
@@ -529,8 +622,36 @@ def evaluate_member_requirement(
                 if r.course_name and req.name.lower() in r.course_name.lower()
             ]
         if ip_matching:
-            return "in_progress", None, None
-    return "not_started", None, None
+            return _ev("in_progress", None, None)
+    return _ev("not_started", None, None)
+
+
+def evaluate_member_requirement(
+    req,
+    member_records,
+    today: date,
+    waivers=None,
+    org_include_current_month: bool = True,
+):
+    """
+    Evaluate a single member's status for a single requirement.
+
+    Returns (status, latest_completion_date, latest_expiry_date).
+
+    Thin wrapper over :func:`evaluate_member_requirement_detail`, which is
+    where the logic lives. Kept because four call sites and a large test suite
+    depend on this exact triple; callers that need the underlying counts
+    (hours logged against hours required, waived months) should call the
+    detail function directly rather than widening this one.
+    """
+    ev = evaluate_member_requirement_detail(
+        req,
+        member_records,
+        today,
+        waivers=waivers,
+        org_include_current_month=org_include_current_month,
+    )
+    return ev.status, ev.completion_date, ev.expiry_date
 
 
 def _find_matching_profile(
@@ -544,12 +665,17 @@ def _find_matching_profile(
     if no profile matches.
     """
     member_type = getattr(member, "membership_type", None)
+    # A profile's "role_ids" hold *position* ids: User.roles is a synonym for
+    # User.positions, and PUT /users/{id}/roles writes position ids under that
+    # name. Position has no `role_id` column, so reading one collected nothing
+    # and every profile carrying role_ids failed to match anybody — silently,
+    # since an unmatched profile just falls back to the org-wide settings.
     member_role_ids: List[str] = []
     if hasattr(member, "positions") and member.positions:
         for pos in member.positions:
-            role_id = getattr(pos, "role_id", None)
-            if role_id:
-                member_role_ids.append(str(role_id))
+            position_id = getattr(pos, "id", None)
+            if position_id:
+                member_role_ids.append(str(position_id))
 
     for profile in profiles:
         if not profile.is_active:
@@ -568,6 +694,40 @@ def _find_matching_profile(
             return profile
 
     return None
+
+
+def classify_standing(
+    completed_count: int,
+    total_count: int,
+    compliant_threshold: float = 100.0,
+    at_risk_threshold: float = 75.0,
+    threshold_type: str = "percentage",
+) -> Tuple[str, float]:
+    """Turn a met/total tally into a standing plus its percentage.
+
+    Returns (status, compliance_pct) where status is one of:
+    "compliant", "at_risk", "non_compliant".
+
+    Split out of ``_evaluate_member_compliance`` so the compliance matrix can
+    label a member without evaluating every requirement a second time. Both
+    paths must agree — a member shown as "at risk" on the matrix and
+    "non-compliant" on the dashboard is a support call — so the thresholds are
+    applied here and nowhere else.
+    """
+    if total_count <= 0:
+        return "compliant", 100.0
+
+    pct = round(completed_count / total_count * 100, 1)
+
+    if threshold_type == "all_required":
+        if completed_count >= total_count:
+            return "compliant", pct
+    elif pct >= compliant_threshold:
+        return "compliant", pct
+
+    if pct >= at_risk_threshold:
+        return "at_risk", pct
+    return "non_compliant", pct
 
 
 def _evaluate_member_compliance(
@@ -600,23 +760,13 @@ def _evaluate_member_compliance(
         if req_status == TrainingStatus.COMPLETED.value:
             completed_count += 1
 
-    pct = round(completed_count / len(member_reqs) * 100, 1)
-
-    if threshold_type == "all_required":
-        if completed_count >= len(member_reqs):
-            return "compliant", pct
-        elif pct >= at_risk_threshold:
-            return "at_risk", pct
-        else:
-            return "non_compliant", pct
-    else:
-        # percentage mode
-        if pct >= compliant_threshold:
-            return "compliant", pct
-        elif pct >= at_risk_threshold:
-            return "at_risk", pct
-        else:
-            return "non_compliant", pct
+    return classify_standing(
+        completed_count,
+        len(member_reqs),
+        compliant_threshold,
+        at_risk_threshold,
+        threshold_type,
+    )
 
 
 async def _load_compliance_config(
@@ -660,8 +810,16 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     If there are no active members, returns 0.0.
     """
     # Get active members (exclude compliance-exempt members)
+    # positions is eager-loaded because _find_matching_profile reads it for
+    # every member below, and it is a lazy relationship: touching it unloaded
+    # on an AsyncSession raises MissingGreenlet. Only the *caller* arrives with
+    # positions warmed by the auth dependency, so an org that configures any
+    # compliance profile raised on the first member who was not the caller —
+    # which is to say, on every real request.
     members_result = await db.execute(
-        select(User).where(
+        select(User)
+        .options(selectinload(User.positions))
+        .where(
             User.organization_id == org_id,
             User.status == UserStatus.ACTIVE,
             User.compliance_exempt.is_(False),

@@ -48,6 +48,24 @@ suite — 11100 passed/21 pre-existing skips/0 failed, `tsc --noEmit` 0
 errors, `eslint .` 0 errors/0 warnings — and pushed. All 17 CI checks green
 on the new head; no review comments outstanding.
 
+2026-09-05 tend (round 3): a watchdog check found the previous tend's
+narrative had itself gone stale — `main` had merged 10 more PRs
+(#2261–#2271, including #2269's own fix to this section's stale `#2247`
+pointer) since round 2, and this time `main`'s copy of both `CHANGELOG.md`
+and this file's own "Open PR" section had drifted enough to conflict on
+merge, not just `CHANGELOG.md` alone. Resolved `CHANGELOG.md` by keeping
+both `[Unreleased]` entries as before; resolved this file by keeping this
+section's own continuously-updated narrative (round 1/round 2 tends already
+cover the stale-pointer story `main`'s draft was independently describing)
+and dropping `main`'s duplicate, terser copy of the "Feature 21 merged" log
+entry below in favor of this branch's own richer one. Re-ran the full
+completion gate post-merge: flake8/black/isort clean,
+`validate_migrations.py --strict` single head, `pytest -k "grant or
+fundraising"` and the full backend suite green, `tsc --noEmit` 0 errors,
+`eslint .` 0 errors/0 warnings — and pushed. Still awaiting owner merge;
+this is a documentation-only conflict between two branches recording the
+same PR, not a code or CI problem.
+
 ---
 
 ### 2026-09-05 — Feature 22 (Grants & fundraising), pass 3 — 1 fixed, 0 flagged

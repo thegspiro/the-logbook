@@ -33,9 +33,14 @@ _PERMISSION = "equipment_check.submit"
 
 def upgrade() -> None:
     bind = op.get_bind()
-    # positions is a model-only table (materialized by startup create_all,
-    # which runs AFTER migrations on fresh installs) — skip when absent;
-    # brand-new orgs seed the permission from DEFAULT_POSITIONS anyway.
+    # This runs BEFORE 20260805_0008 renames `roles` to `positions`, so the
+    # table this names does not exist yet and the guard below always fires:
+    # on every upgrade path this revision is inert. The models were renamed
+    # long before the database was, which is why it was written against the
+    # model name. The body stays as it ran (AGENTS.md: an already-deployed
+    # migration is not edited to change its behaviour); the repair it was
+    # meant to perform is carried by e8a1c04f6b27, which runs at head where
+    # the table really is called `positions`.
     if "positions" not in sa.inspect(bind).get_table_names():
         return
     rows = bind.execute(

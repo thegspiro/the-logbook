@@ -77,7 +77,13 @@ beforeEach(() => {
   );
 
   vi.mocked(notificationsService.getLogs).mockReset();
-  vi.mocked(notificationsService.getLogs).mockResolvedValue({ logs: [logRow], total: 1, skip: 0, limit: 50 });
+  vi.mocked(notificationsService.getLogs).mockResolvedValue({
+    logs: [logRow],
+    total: 1,
+    skip: 0,
+    limit: 50,
+    next_cursor: null,
+  });
 
   vi.mocked(notificationsService.markAllLogsRead).mockReset();
   vi.mocked(notificationsService.markAllLogsRead).mockResolvedValue({ marked_read: 2 });
@@ -156,6 +162,7 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
       total: 1,
       skip: 0,
       limit: 50,
+      next_cursor: null,
     });
     renderPage('/notifications');
 
@@ -164,6 +171,7 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
       total: 1,
       skip: 0,
       limit: 50,
+      next_cursor: null,
     });
     await user.click(await screen.findByRole('button', { name: /mark all as read/i }));
     await waitFor(() => expect(notificationsService.markAllMyNotificationsRead).toHaveBeenCalled());
@@ -186,6 +194,7 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
       total: 2,
       skip: 0,
       limit: 50,
+      next_cursor: 'cursor-page-2',
     });
     renderPage('/notifications?tab=log');
 
@@ -204,6 +213,7 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
       total: 1,
       skip: 0,
       limit: 50,
+      next_cursor: null,
     });
     await user.click(screen.getByRole('button', { name: /mark all as read/i }));
     await waitFor(() => expect(notificationsService.markAllLogsRead).toHaveBeenCalled());
@@ -217,6 +227,7 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
         total: 2,
         skip: 1,
         limit: 50,
+        next_cursor: null,
       });
     });
 

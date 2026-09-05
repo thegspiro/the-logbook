@@ -7,6 +7,7 @@ import type { NotificationLogScope } from '../constants/enums';
 import type {
   NotificationRuleRecord,
   NotificationLogRecord,
+  NotificationLogPage,
   NotificationsSummary,
   DepartmentMessageRecord,
   InboxMessage,
@@ -66,17 +67,19 @@ export const notificationsService = {
    * stores the subject, body and recipient address of every notification the
    * department has sent, so the org-wide view is an explicit request and
    * requires `notifications.manage`.
+   *
+   * Pass `cursor` from a previous response's `next_cursor` to get the page
+   * after it. The value is opaque — hand back exactly what was returned and do
+   * not parse it. A cursor supersedes `skip`, so send one or the other.
    */
   async getLogs(params?: {
     channel?: string;
     scope?: NotificationLogScope;
+    cursor?: string;
     skip?: number;
     limit?: number;
-  }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>(
-      '/notifications/logs',
-      { params }
-    );
+  }): Promise<NotificationLogPage> {
+    const response = await api.get<NotificationLogPage>('/notifications/logs', { params });
     return response.data;
   },
 
@@ -95,17 +98,16 @@ export const notificationsService = {
     return response.data;
   },
 
-  // User-facing notification inbox
+  // User-facing notification inbox. Paginates by cursor on the same terms as
+  // getLogs above — the inbox grows at the front for the same reason.
   async getMyNotifications(params?: {
     include_expired?: boolean;
     include_read?: boolean;
+    cursor?: string;
     skip?: number;
     limit?: number;
-  }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>(
-      '/notifications/my',
-      { params }
-    );
+  }): Promise<NotificationLogPage> {
+    const response = await api.get<NotificationLogPage>('/notifications/my', { params });
     return response.data;
   },
 
@@ -227,23 +229,60 @@ export interface MainDashboardWidgets {
   };
 }
 
+/**
+ * One cell of the compliance matrix.
+ *
+ * Everything past `expiry_date` is optional: the backend added it for the
+ * triage view, a certification has no count to report, and an older server
+ * omits the lot. Read every one of them defensively.
+ */
+export interface ComplianceMatrixCell {
+  requirement_id: string;
+  requirement_name: string;
+  status: string;
+  completion_date?: string;
+  expiry_date?: string;
+  progress_current?: number | null;
+  progress_required?: number | null;
+  progress_unit?: string | null;
+  /** The target before waiver proration; differs only when waived_months > 0. */
+  base_required?: number | null;
+  waived_months?: number;
+  window_start?: string | null;
+  window_end?: string | null;
+  /** The date this cell was judged against; overrides the matrix-level as_of. */
+  as_of?: string | null;
+}
+
 export interface ComplianceMatrixMember {
   user_id: string;
   member_name: string;
-  requirements: Array<{
-    requirement_id: string;
-    requirement_name: string;
-    status: string;
-    completion_date?: string;
-    expiry_date?: string;
-  }>;
+  requirements: ComplianceMatrixCell[];
   completion_pct: number;
+  membership_type?: string | null;
+  /** Counts of requirements that apply to this member, not to the whole org. */
+  requirements_met?: number;
+  requirements_total?: number;
+  standing?: 'compliant' | 'at_risk' | 'non_compliant';
+}
+
+export interface ComplianceMatrixRequirement {
+  id: string;
+  name: string;
+  recurrence_months?: number;
+  requirement_type?: string | null;
+  frequency?: string | null;
+  target?: number | null;
+  target_unit?: string | null;
 }
 
 export interface ComplianceMatrix {
   members: ComplianceMatrixMember[];
-  requirements: Array<{ id: string; name: string; recurrence_months?: number }>;
+  requirements: ComplianceMatrixRequirement[];
   generated_at: string;
+  /** Calendar date through which every cell is settled. */
+  as_of?: string;
+  threshold_type?: string;
 }
 
 export interface ExpiringCertification {

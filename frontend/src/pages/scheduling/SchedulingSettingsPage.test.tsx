@@ -35,7 +35,7 @@ describe('SchedulingSettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     storeState.platoonsEnabled = false;
-    window.history.replaceState({}, '', '/scheduling/settings');
+    window.history.replaceState({}, '', '/scheduling/admin/settings/general');
   });
 
   // The header names the page, not the module. It used to read "Shift
@@ -43,76 +43,80 @@ describe('SchedulingSettingsPage', () => {
   // that module's settings, which left the tab strip as the only thing saying
   // where you were.
   it('renders the page header once, naming the page rather than the module', () => {
-    renderWithRouter(<SchedulingSettingsPage />);
+    renderWithRouter(<SchedulingSettingsPage section="general" />);
 
     expect(screen.getByRole('heading', { name: 'Scheduling Settings' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByText('Department-wide scheduling defaults')).toBeInTheDocument();
   });
 
-  it('offers a way back to the scheduling module', async () => {
+  it('offers a way back to the administration hub it is reached from', async () => {
     const user = userEvent.setup();
-    renderWithRouter(<SchedulingSettingsPage />);
+    renderWithRouter(<SchedulingSettingsPage section="general" />);
 
-    await user.click(screen.getByRole('button', { name: 'Back to scheduling' }));
+    await user.click(screen.getByRole('button', { name: 'Back to scheduling administration' }));
 
-    expect(window.location.pathname).toBe('/scheduling');
+    expect(window.location.pathname).toBe('/scheduling/admin');
   });
 
-  it('opens on General and lists the settings sections', () => {
-    renderWithRouter(<SchedulingSettingsPage />);
+  it('renders the section the route mounts, and lists the rest', () => {
+    renderWithRouter(<SchedulingSettingsPage section="general" />);
 
     expect(screen.getByText('section:general')).toBeInTheDocument();
     const nav = settingsNav();
-    for (const label of ['General', 'Apparatus', 'Eligibility', 'Notifications', 'Equipment', 'Shift Reports']) {
+    for (const label of ['General', 'Apparatus', 'Eligibility', 'Notifications', 'Shift Reports']) {
       expect(within(nav).getByRole('button', { name: new RegExp(label) })).toBeInTheDocument();
     }
   });
 
-  it('switches section and mirrors the choice into the URL', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<SchedulingSettingsPage />);
+  // The Equipment section is gone: nothing on it was ever edited there, and its
+  // two links now sit on the administration hub, where an officer looks for a
+  // link rather than behind a settings tab.
+  it('no longer offers an Equipment section', () => {
+    renderWithRouter(<SchedulingSettingsPage section="general" />);
 
-    await user.click(within(settingsNav()).getByRole('button', { name: /Equipment/ }));
-
-    expect(screen.getByText('section:equipment')).toBeInTheDocument();
-    expect(window.location.search).toContain('tab=equipment');
+    expect(within(settingsNav()).queryByRole('button', { name: /Equipment/ })).not.toBeInTheDocument();
   });
 
-  it('drops the tab param when returning to General', async () => {
+  // A section is a route, not a `?tab=` that only client state reads: the
+  // previous screen could not be linked to, bookmarked, or reached with the
+  // back button, because selecting a section changed nothing the router saw.
+  it('navigates to the chosen section rather than mirroring it into a query param', async () => {
     const user = userEvent.setup();
-    renderWithRouter(<SchedulingSettingsPage />);
+    renderWithRouter(<SchedulingSettingsPage section="general" />);
 
-    await user.click(within(settingsNav()).getByRole('button', { name: /Equipment/ }));
-    await user.click(within(settingsNav()).getByRole('button', { name: /General/ }));
+    await user.click(within(settingsNav()).getByRole('button', { name: /Notifications/ }));
 
-    expect(screen.getByText('section:general')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/scheduling/admin/settings/notifications');
     expect(window.location.search).not.toContain('tab=');
   });
 
-  it('honours a ?tab= deep link', () => {
-    window.history.replaceState({}, '', '/scheduling/settings?tab=notifications');
+  it('renders whichever section its route mounts', () => {
+    window.history.replaceState({}, '', '/scheduling/admin/settings/notifications');
 
-    renderWithRouter(<SchedulingSettingsPage />);
+    renderWithRouter(<SchedulingSettingsPage section="notifications" />);
 
     expect(screen.getByText('section:notifications')).toBeInTheDocument();
   });
 
+  // Not a redirect: platoonsEnabled arrives a beat after mount, and sending the
+  // user away would bounce them off the section they asked for before the
+  // setting that permits it has loaded.
   it('falls back to General for a section the department has turned off', () => {
-    window.history.replaceState({}, '', '/scheduling/settings?tab=platoons');
+    window.history.replaceState({}, '', '/scheduling/admin/settings/platoons');
 
-    renderWithRouter(<SchedulingSettingsPage />);
+    renderWithRouter(<SchedulingSettingsPage section="platoons" />);
 
     expect(screen.getByText('section:general')).toBeInTheDocument();
   });
 
   it('hides Platoons until platoon scheduling is enabled', () => {
-    const { unmount } = renderWithRouter(<SchedulingSettingsPage />);
+    const { unmount } = renderWithRouter(<SchedulingSettingsPage section="general" />);
     expect(within(settingsNav()).queryByRole('button', { name: /Platoons/ })).not.toBeInTheDocument();
     unmount();
 
     storeState.platoonsEnabled = true;
-    renderWithRouter(<SchedulingSettingsPage />);
+    renderWithRouter(<SchedulingSettingsPage section="general" />);
     expect(within(settingsNav()).getByRole('button', { name: /Platoons/ })).toBeInTheDocument();
   });
 });

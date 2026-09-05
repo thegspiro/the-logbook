@@ -584,17 +584,71 @@ worked a shift they were never assigned to appears in the report with
 
 ### SchedulingPage (Main Hub)
 
-The main scheduling interface is a 7-tab hub accessible at `/scheduling` (supports `?tab=` deep-linking):
+`/scheduling` is the **member's** page (supports `?tab=` deep-linking). Nothing
+administrative is reached from it: a strip of "Officer tools" used to sit above
+the board, which meant an administrator opened the schedule to find the
+settings — see **Scheduling Administration** below.
 
-| Tab                  | Access              | Description                                                                                                                                |
-| -------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Schedule**         | All members         | The shift board (see below) — month/week grid beside a day panel with the crew roster and one-tap claim. Admins see "Create Shift" button. |
-| **My Shifts**        | All members         | Personal upcoming/past shifts. Confirm or decline assignments. Request swaps or time off.                                                  |
-| **Open Shifts**      | All members         | Browse upcoming shifts grouped by date. Sign up for positions with inline position selector.                                               |
-| **Requests**         | All members         | View swap and time-off requests. Admins can approve/deny with reviewer notes.                                                              |
-| **Templates**        | `scheduling.manage` | Manage shift templates and scheduling patterns. Generate shifts from patterns.                                                             |
-| **Equipment Checks** | All members         | Browse apparatus checklists, perform ad-hoc or shift-linked equipment checks                                                               |
-| **Reports**          | `scheduling.manage` | Scheduling analytics: member hours, coverage, call volume, availability.                                                                   |
+| Tab               | Access      | Description                                                                                                                                |
+| ----------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Schedule**      | All members | The shift board (see below) — month/week grid beside a day panel with the crew roster and one-tap claim. Admins see "Create Shift" button. |
+| **My Shifts**     | All members | Personal upcoming/past shifts. Confirm or decline assignments. Request swaps or time off.                                                  |
+| **Open Shifts**   | All members | Browse upcoming shifts grouped by date. Sign up for positions with inline position selector.                                               |
+| **Requests**      | All members | View swap and time-off requests. Admins can approve/deny with reviewer notes.                                                              |
+| **Shift Reports** | All members | End-of-shift reports the member filed or is named on.                                                                                      |
+
+### Scheduling Administration _(2026-09-05)_
+
+`/scheduling/admin` — a card hub built on the shared `AdminHubFrame`, listed in
+the **Administration** section of the navigation beside Training Admin and
+Inventory Admin. Cards are declared in
+`pages/scheduling/admin/schedulingHubCards.ts`, each carrying the gate of the
+route it targets; `schedulingHubCards.test.ts` resolves that route's real gate
+out of the route source and fails if the two drift.
+
+| Card                 | Route                                      | Permission                                                         |
+| -------------------- | ------------------------------------------ | ------------------------------------------------------------------ |
+| Shift Templates      | `/scheduling/admin/templates`              | `scheduling.manage`                                                |
+| Shift Patterns       | `/scheduling/admin/patterns`               | `scheduling.manage`                                                |
+| Equipment Checklists | `/inventory/admin/checklists`              | `inventory.check_manage`                                           |
+| Checklist Timing     | `/inventory/admin/checklists/settings`     | any of `settings.manage`, `organization.update_settings`           |
+| Who Can Fill What    | `/scheduling/admin/positions`              | any of `scheduling.manage`, `training.view_all`, `training.manage` |
+| Platoons             | `/scheduling/admin/platoons`               | `scheduling.manage`                                                |
+| Eligibility Rules    | `/scheduling/admin/settings/eligibility`   | `scheduling.manage`                                                |
+| Scheduling Reports   | `/scheduling/admin/reports`                | `scheduling.manage`                                                |
+| Shift Report Options | `/scheduling/admin/settings/shift-reports` | `scheduling.manage`                                                |
+| General              | `/scheduling/admin/settings/general`       | `scheduling.manage`                                                |
+| Apparatus Defaults   | `/scheduling/admin/settings/apparatus`     | `scheduling.manage`                                                |
+| Notifications        | `/scheduling/admin/settings/notifications` | `scheduling.manage`                                                |
+
+**The hub admits two different administrators.** Its route accepts
+`training.view_all` / `training.manage` because the position roster inside it
+does, and the roster has always been open to a training officer holding no
+scheduling grant. The frame's summary request is therefore made only for
+`scheduling.manage` — `/admin-hub/scheduling/summary` resolves the module to
+that grant, so for anyone else it is a guaranteed 404 the frame would report as
+a failed summary with a Retry that repeats it. The body shows each viewer only
+the cards their own permissions open, and says so plainly when that is none.
+
+**The nav row stays on `scheduling.manage`.** A row labelled "Scheduling Admin"
+offered to someone who can open one card in it is a worse offer than no row; a
+training officer reaches the roster from Training, or from the hub directly.
+Both `scheduling.manage` and `training.view_all` are in
+`ADMIN_NAVIGATION_PERMISSIONS` — a child gate cannot admit anyone its parent has
+already turned away.
+
+**The Equipment settings section is gone.** Nothing on it was ever edited there;
+it held two links into Inventory, behind a settings tab, which is not where
+anyone looks for a link. They are the two Inventory cards above.
+
+**Headline metrics and the attention queue** come from the `scheduling`
+`ModuleSpec` in `backend/app/services/admin_hub_service.py`: shifts still to
+close out, short-staffed shifts, hours this month, shifts ahead, and requests
+waiting. The queue raises short-staffed shifts inside 48 hours, pending swaps
+and pending time-off. Short-staffing counts only shifts that state a
+`min_staffing` — a shift naming neither positions nor a minimum has never said
+how big its crew is, and the board treats that as "crew size not set" rather
+than as a staffing level.
 
 ### The Shift Board _(2026-08-23)_
 
@@ -938,8 +992,9 @@ generated shift is stored on the row (`Shift.platoon`, migration
 
 ### Department Platoon Overview & Bulk Assignment
 
-A dedicated **Platoon Management** page (`/scheduling/platoons`,
-`scheduling.manage`, linked from Scheduling Settings → Platoons) shows every
+A dedicated **Platoon Management** page (`/scheduling/admin/platoons`,
+`scheduling.manage`, a card on Scheduling Administration and linked from its
+Settings → Platoons section) shows every
 platoon and the unassigned bucket with their active members at a glance, and
 lets a manager **bulk-assign** many members to a platoon (or clear it) in one
 operation:
@@ -952,7 +1007,7 @@ groups: [{ platoon, member_count, members: [{ user_id, user_name, rank }] }] }`
   > **Breaking for existing users.** `scheduling.view` is implicit for every
   > authenticated member, so this endpoint published the entire department's
   > platoon assignments to anyone signed in. Members who reached
-  > `/scheduling/platoons` before the change and do not hold
+  > the platoon overview before the change and do not hold
   > `scheduling.manage` now get a permission error; grant `scheduling.manage`
   > to the roles that legitimately need the department-wide roster.
 
@@ -1234,7 +1289,7 @@ See the [CHANGELOG](../CHANGELOG.md) and [Wiki Scheduling Module](../wiki/Module
 
 - Shift position eligibility system
 - Rank eligible positions UI redesign
-- Scheduling admin sub-pages (`/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`, `/scheduling/settings`)
+- Scheduling admin sub-pages, since moved under `/scheduling/admin` (see **Scheduling Administration** below)
 - Structured position slots with decline handling
 - Dashboard shift display fixes
 - Equipment check template builder, phone-first check form, and reports
@@ -2241,7 +2296,8 @@ Requires `scheduling.view` or `scheduling.manage`. Returns every active member
 eligible for the position with the _sources_ of that eligibility (rank,
 completed training, or the org's open-position list), their highest current EVOC
 level, and the apparatus they hold an operator record on. Surfaced at
-`/scheduling/qualifications` via the **Qualifications** admin card.
+`/scheduling/admin/positions` via the **Who Can Fill What** card on Scheduling
+Administration.
 
 Eligibility mirrors `get_eligible_positions()` exactly — same union behind the
 same membership-type gate — so the roster can never disagree with what
@@ -2301,7 +2357,7 @@ Scheduling → Settings → General.
 ### Driver exceptions
 
 New `driver_exceptions` table and `/api/v1/apparatus/driver-exceptions`
-endpoints, surfaced at `/scheduling/qualifications` under the **Driver
+endpoints, surfaced at `/scheduling/admin/positions` under the **Driver
 exceptions** tab. Four controls make the override trustworthy:
 
 | Control                                                            | Where                                |
