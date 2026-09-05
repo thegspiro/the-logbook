@@ -14,7 +14,6 @@ import { Truck, Users } from 'lucide-react';
 import type { ShiftTemplateRecord, SchedulingFeatureSettings, PositionSlot } from '../services/api';
 import { schedulingService } from '../services/api';
 import { useSchedulingStore } from '../store/schedulingStore';
-import { useAuthStore } from '../../../stores/authStore';
 import type { ShiftSettings } from '../types/shiftSettings';
 import { BUILTIN_POSITIONS } from '../types/shiftSettings';
 import { getCachedShiftSettings, loadShiftSettings, shiftSettingsService } from '../services/shiftSettingsApi';
@@ -136,13 +135,6 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   const [settings, setSettings] = useState<ShiftSettings>(() => getCachedShiftSettings());
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const { checkPermission } = useAuthStore();
-  const canEditOrgSettings = checkPermission('settings.manage') || checkPermission('organization.update_settings');
-  // Matches the gate on /inventory/admin/checklists. Authoring a checklist and
-  // editing the department settings that govern one are separate grants, so
-  // each signpost link below is shown only to whoever its destination admits.
-  const canManageChecklists = checkPermission('inventory.check_manage');
 
   useEffect(() => {
     let cancelled = false;
@@ -554,7 +546,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
         <div className="space-y-6">
           <div className="flex justify-end">
             <Link
-              to="/scheduling/platoons"
+              to="/scheduling/admin/platoons"
               className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm"
             >
               <Users className="h-4 w-4" /> Department platoon overview
@@ -641,46 +633,6 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       {activeTab === 'notifications' && (
         <div className="space-y-6">
           <SchedulingNotificationsPanel />
-        </div>
-      )}
-
-      {/* ─── Equipment Tab ─── */}
-      {/* Nothing on this section is edited here any more. Checklists are
-          Inventory's, and so are the settings that govern them; what is left is
-          a signpost, which is why the section is no longer in
-          LOCALLY_SAVED_SECTIONS and shows no Save footer. */}
-      {activeTab === 'equipment' && (
-        <div className="space-y-6">
-          <div className="card p-4">
-            <h3 className="text-theme-text-primary text-sm font-semibold">Equipment checklists</h3>
-            <p className="text-theme-text-muted mt-1 text-xs">
-              Checklists are managed in Inventory, along with the settings for when crews are prompted to run them. A
-              shift template can name which of them its shifts carry — edit that on the template itself, under the
-              vehicle picker.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {/* Same reasoning as the settings link below, and the same grant
-                  the route itself requires: a scheduling officer who cannot
-                  author checklists would otherwise be pointed at a page that
-                  turns them away. */}
-              {canManageChecklists && (
-                <Link to="/inventory/admin/checklists" className="btn-secondary inline-flex text-sm font-semibold">
-                  Manage equipment checklists
-                </Link>
-              )}
-              {/* Those settings are stored in org.settings, so they need the
-                  department-settings grant. A scheduling officer without it
-                  would otherwise be pointed at a page that turns them away. */}
-              {canEditOrgSettings && (
-                <Link
-                  to="/inventory/admin/checklists/settings"
-                  className="btn-secondary inline-flex text-sm font-semibold"
-                >
-                  Checklist settings
-                </Link>
-              )}
-            </div>
-          </div>
         </div>
       )}
 

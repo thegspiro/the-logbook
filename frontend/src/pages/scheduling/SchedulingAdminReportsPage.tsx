@@ -16,7 +16,11 @@ const SchedulingAdminReportsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingHeader backTo="/scheduling" description="Reports · Review staffing, coverage, and member hours" />
+        <SchedulingHeader
+          backTo="/scheduling/admin"
+          backLabel="Back to scheduling administration"
+          description="Reports · Review staffing, coverage, and member hours"
+        />
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
