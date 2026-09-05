@@ -10,7 +10,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
@@ -19,6 +24,7 @@ from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.notifications import (
     NotificationLogResponse,
+    NotificationLogScope,
     NotificationLogsListResponse,
     NotificationRuleCreate,
     NotificationRuleResponse,
@@ -159,18 +165,59 @@ async def toggle_rule(
 # ============================================
 
 
+def _resolve_log_scope(scope: NotificationLogScope, current_user: User) -> UUID | None:
+    """Translate a requested log ``scope`` into a recipient filter.
+
+    Returns the recipient id to filter on for ``mine``, or ``None`` for the
+    org-wide view. The org-wide view is gated on ``notifications.manage``
+    rather than ``notifications.view``: ``NotificationLog`` stores the
+    ``subject``, ``message`` and ``recipient_email`` of every notification the
+    department has sent anyone, so read-only view holders (officers, and
+    historically every member) got the body of every colleague's
+    notifications. It matches the gate on the org-wide read-all write beside
+    it.
+    """
+    if scope == NotificationLogScope.ORGANIZATION:
+        if not user_has_permission(current_user, "notifications.manage"):
+            raise CodedHTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "The organization-wide send log requires the "
+                    "notifications.manage permission."
+                ),
+                error_code=ErrorCode.PERM_INSUFFICIENT,
+            )
+        return None
+    return current_user.id
+
+
 @router.get("/logs", response_model=NotificationLogsListResponse)
 async def list_logs(
     channel: str | None = None,
+    scope: NotificationLogScope = Query(
+        NotificationLogScope.MINE,
+        description=(
+            "Whose logs to return. 'mine' (default) returns only the caller's "
+            "own deliveries; 'organization' returns every recipient's and "
+            "requires notifications.manage."
+        ),
+    ),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("notifications.view")),
+    current_user: User = Depends(get_current_user),
 ):
-    """List notification logs"""
+    """List notification logs for the caller, or for the whole organization.
+
+    Authentication alone is enough for the default ``mine`` scope — it is the
+    caller's own delivery history, the same standing as ``GET
+    /notifications/my``.
+    """
+    recipient_id = _resolve_log_scope(scope, current_user)
     service = NotificationsService(db)
     logs, total = await service.get_logs(
         current_user.organization_id,
         channel=channel,
+        recipient_id=recipient_id,
         skip=pagination.skip,
         limit=pagination.limit,
     )
@@ -184,12 +231,27 @@ async def list_logs(
 
 @router.post("/logs/read-all")
 async def mark_all_logs_read(
+    scope: NotificationLogScope = Query(
+        NotificationLogScope.MINE,
+        description=(
+            "Whose logs to mark read. 'mine' (default) clears only the "
+            "caller's own; 'organization' clears every recipient's and "
+            "requires notifications.manage."
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("notifications.manage")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Mark all notification logs as read for the organization."""
+    """Mark notification logs as read.
+
+    The scope mirrors ``GET /logs`` so the Send Log's "Mark all as read"
+    clears exactly the rows it displayed.
+    """
+    recipient_id = _resolve_log_scope(scope, current_user)
     service = NotificationsService(db)
-    count = await service.mark_all_logs_read(current_user.organization_id)
+    count = await service.mark_all_logs_read(
+        current_user.organization_id, recipient_id=recipient_id
+    )
     return {"marked_read": count}
 
 

@@ -717,3 +717,22 @@ export const CONSENT_STATUS_COLORS: Record<ConsentStatus, string> = {
   declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
   not_answered: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
 };
+
+// ============================================
+// Notifications
+// ============================================
+
+/**
+ * Whose rows a notification send-log request addresses.
+ *
+ * `mine` is the server default on `GET /notifications/logs` and
+ * `POST /notifications/logs/read-all`. A notification log row carries the
+ * subject, body and recipient address of what was sent, so the organization
+ * view is an explicit request and requires `notifications.manage` — the same
+ * gate as the org-wide read-all write beside it.
+ */
+export const NotificationLogScope = {
+  MINE: 'mine',
+  ORGANIZATION: 'organization',
+} as const;
+export type NotificationLogScope = (typeof NotificationLogScope)[keyof typeof NotificationLogScope];
