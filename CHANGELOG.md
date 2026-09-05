@@ -11,16 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Fixed**
 
-- **Seventeen migrations justified a table-existence guard with a reason that
-  was not true.** They stated that `positions` (and in three cases
-  `security_alerts`, `shifts`, `skill_test_viewers`) is never created by a
-  migration and only appears when the application calls `create_all()` at
-  startup. Each of those tables is in fact created by an earlier migration —
-  `positions` by the one that renames `roles` into it — so the guard they were
-  explaining can never fire. Nothing behaved differently; the comments were
-  wrong, and comments are what the next author copies. This is the same
-  mistaken reasoning that once produced an unnecessary guard which had to be
-  reverted after testing against a real database.
+- **Twenty migrations justified a table-existence guard with a reason that was
+  not true.** They stated that `positions` (and in a handful of cases
+  `security_alerts`, `shifts`, `shift_templates`, `basic_apparatus`,
+  `skill_test_viewers`) is never created by a migration and only appears when
+  the application calls `create_all()` at startup. Each of those tables is in
+  fact created by an earlier migration — `positions` by the one that renames
+  `roles` into it — so the guard they were explaining can never fire. Nothing
+  behaved differently; the comments were wrong, and comments are what the next
+  author copies. This is the same mistaken reasoning that once produced an
+  unnecessary guard which had to be reverted after testing against a real
+  database.
 - **Four migrations that make the same statement were left alone**, because for
   them it is effectively right: they run _before_ the rename, so the table
   genuinely is absent and their guard is doing real work. Which case applies
@@ -31,7 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A test that checks the claim against the chain**, so the next copy fails
   rather than spreading. It reads each migration's prose, and fails when a
-  table called startup-built is created by a migration that runs earlier.
+  table called startup-built is created by a migration the claiming one
+  descends from.
+
+  It recognizes the claim by its shape — a negation, near the word "migration",
+  near a creation verb — rather than from a list of known phrasings. A list was
+  tried first and does not converge: two successive reviews each found a wording
+  it had not anticipated, and each time the check passed while the wrong comment
+  stood. The wordings it has to survive are now pinned by tests, including
+  several invented for the purpose that appear nowhere in the codebase.
 
 ### My Issued Gear splits a member's kit down a line they never drew (2026-09-05)
 
