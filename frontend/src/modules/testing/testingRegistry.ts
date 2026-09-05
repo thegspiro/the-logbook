@@ -370,13 +370,19 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'scheduling',
       },
       {
-        path: '/scheduling/admin/templates',
+        path: '/scheduling/admin/planning',
+        label: 'Shift planning — staffing gaps',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/admin/planning/templates',
         label: 'Shift templates',
         permission: 'scheduling.manage',
         module: 'scheduling',
       },
       {
-        path: '/scheduling/admin/patterns',
+        path: '/scheduling/admin/planning/patterns',
         label: 'Shift patterns',
         permission: 'scheduling.manage',
         module: 'scheduling',

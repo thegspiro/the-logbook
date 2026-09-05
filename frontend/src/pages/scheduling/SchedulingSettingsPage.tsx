@@ -86,7 +86,7 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
           <ShiftSettingsPanel
             templates={backendTemplates}
             apparatusList={apparatusList}
-            onNavigateToTemplates={() => void navigate('/scheduling/admin/templates')}
+            onNavigateToTemplates={() => void navigate('/scheduling/admin/planning/templates')}
             activeTab={visibleSection}
             onTabChange={handleSectionChange}
           />

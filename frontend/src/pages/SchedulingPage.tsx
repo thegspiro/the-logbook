@@ -737,7 +737,7 @@ const SchedulingPage: React.FC = () => {
                             type="button"
                             onClick={() => {
                               setShowCreateShift(false);
-                              void navigate('/scheduling/admin/templates');
+                              void navigate('/scheduling/admin/planning/templates');
                             }}
                             className="text-violet-600 hover:underline dark:text-violet-400"
                           >
