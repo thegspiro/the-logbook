@@ -21,6 +21,9 @@ import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
 import type { PurgeResult } from '../utils/purgeLocalMemberData';
 import { clearQueuedReports } from '../services/errorReporting';
 import { invalidateRanksCache } from '../hooks/ranksCache';
+// Safe to import here: the scheduling store reaches only the API services and
+// shared utils, none of which import this store, so there is no cycle.
+import { useSchedulingStore } from '../modules/scheduling/store/schedulingStore';
 
 /** Number of failed attempts before client-side lockout kicks in. */
 const LOGIN_LOCKOUT_THRESHOLD = 5;
@@ -182,6 +185,15 @@ const claimDeviceForMember = async (userId: string | undefined): Promise<void> =
   if (previous !== userId && (fresh || previous !== null)) {
     await purgeLocalMemberData();
   }
+  // SEC: every sign-in runs through here — password, MFA, registration and
+  // the OAuth callback — which is the only place that covers the boundary
+  // logout misses. A session that expires and is replaced by another member
+  // signing in never calls logout(), so without this the scheduling store
+  // keeps `settingsLoaded` true and the new member reads the previous
+  // department's call types, signup window, roster and templates. Costs a
+  // refetch when the member is unchanged, which is what a page load does
+  // anyway.
+  useSchedulingStore.getState().resetSettings();
   writeDeviceMember(userId);
 };
 
@@ -439,6 +451,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       clearInFlight();
       invalidateRanksCache();
       clearQueuedReports();
+      // SEC: the scheduling store holds department-wide values (call types,
+      // signup window, feature toggles, roster, templates, apparatus) behind
+      // once-per-session loaded flags. Like the caches above it is keyed by
+      // nothing user-specific, so on a shared terminal the next member —
+      // possibly from another department — read the previous one's until the
+      // tab was reloaded. `claimDeviceForMember` covers the sign-in side.
+      useSchedulingStore.getState().resetSettings();
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       // SEC (FE-6/FE-7): shift-report drafts (localStorage) and the offline

@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.inventory import ItemCondition, ItemStatus
 from app.models.user import User
 from app.services.inventory_service import InventoryService
 
@@ -78,6 +79,28 @@ async def _uniform_variants(svc, org_id, user_id, *, quantities):
         by_size[size] = item
     await svc.db.flush()
     return cat, group_id, by_size
+
+
+async def _pool_item(svc, org_id, user_id, *, quantity):
+    cat, _ = await svc.create_category(
+        organization_id=uuid.UUID(org_id),
+        category_data={"name": "Gloves", "item_type": "ppe"},
+        created_by=uuid.UUID(user_id),
+    )
+    item, err = await svc.create_item(
+        organization_id=uuid.UUID(org_id),
+        item_data={
+            "name": "Structural Gloves",
+            "condition": "good",
+            "status": "available",
+            "tracking_type": "pool",
+            "quantity": quantity,
+            "category_id": cat.id,
+        },
+        created_by=uuid.UUID(user_id),
+    )
+    assert err is None
+    return cat, item
 
 
 class TestRequestableCatalogGrouping:
@@ -288,6 +311,100 @@ class TestRequestableCatalogSizeDefaults:
         # it down to the bare number.
         assert products[0]["member_size"] == "10 (wide)"
 
+    @pytest.mark.asyncio
+    async def test_a_qualified_size_does_not_match_plain_stock(
+        self, db_session, org_and_member
+    ):
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        cat, _ = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "Boots", "item_type": "ppe"},
+            created_by=uuid.UUID(user.id),
+        )
+        await svc.create_size_variants(
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user.id),
+            base_name="Structural Boot",
+            sizes=["10", "11"],
+            create_variant_group=True,
+            category_id=cat.id,
+            tracking_type="pool",
+            quantity_per_variant=2,
+        )
+        await svc.upsert_member_size_preferences(
+            user_id=uuid.UUID(user.id),
+            organization_id=uuid.UUID(org_id),
+            data={"boot_size": "10", "boot_width": "wide"},
+        )
+
+        products = await svc.get_requestable_catalog(
+            organization_id=uuid.UUID(org_id), user=user
+        )
+
+        # The department stocks a plain 10, which is not a 10 wide. Suggesting
+        # it would preselect the wrong boot, suppress the unstocked-size option
+        # the member needs, and file a request that has lost the width.
+        assert products[0]["member_size"] == "10 (wide)"
+        assert products[0]["suggested_size"] is None
+
+
+class TestRequestableCatalogAvailability:
+
+    @pytest.mark.asyncio
+    async def test_quarantined_pool_stock_is_not_advertised(
+        self, db_session, org_and_member
+    ):
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        cat, item = await _pool_item(svc, org_id, str(user.id), quantity=12)
+
+        item.status = ItemStatus.IN_MAINTENANCE
+        await db_session.flush()
+
+        products = await svc.get_requestable_catalog(
+            organization_id=uuid.UUID(org_id), user=user
+        )
+
+        # `issue_from_pool` refuses this item outright, so counting its ledger
+        # quantity advertises stock no quartermaster can hand over.
+        assert products[0]["total_available"] == 0
+
+    @pytest.mark.asyncio
+    async def test_unserviceable_pool_stock_is_not_advertised(
+        self, db_session, org_and_member
+    ):
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        cat, item = await _pool_item(svc, org_id, str(user.id), quantity=12)
+
+        item.condition = ItemCondition.DAMAGED
+        await db_session.flush()
+
+        products = await svc.get_requestable_catalog(
+            organization_id=uuid.UUID(org_id), user=user
+        )
+
+        assert products[0]["total_available"] == 0
+
+
+class TestRequestableSizeFieldInference:
+
+    @pytest.mark.asyncio
+    async def test_short_sleeve_is_a_shirt_not_trousers(self):
+        # "short" is a substring of "Short Sleeve"; with the trouser rule first
+        # the commonest summer uniform shirt was offered a waist and inseam.
+        assert InventoryService._infer_size_field("Short Sleeve", None) == "shirt"
+        assert (
+            InventoryService._infer_size_field("Short Sleeve — L — Navy", "Uniforms")
+            == "shirt"
+        )
+
+    @pytest.mark.asyncio
+    async def test_shorts_still_reach_the_trouser_rule(self):
+        assert InventoryService._infer_size_field("Duty Shorts", None) == "pant"
+        assert InventoryService._infer_size_field("Bunker Pants", None) == "pant"
+
 
 class TestRequestableCatalogRestrictions:
 
@@ -324,3 +441,48 @@ class TestRequestableCatalogRestrictions:
         # rather than only at submit keeps the modal from listing gear the
         # member is then refused.
         assert products == []
+
+    @pytest.mark.asyncio
+    async def test_a_restricted_only_category_is_not_offered_as_a_chip(
+        self, db_session, org_and_member
+    ):
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        cat, _ = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "Command", "item_type": "equipment"},
+            created_by=uuid.UUID(user.id),
+        )
+        item, err = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Command Vehicle Keys",
+                "condition": "good",
+                "status": "available",
+                "tracking_type": "individual",
+                "quantity": 1,
+                "category_id": cat.id,
+            },
+            created_by=uuid.UUID(user.id),
+        )
+        assert err is None
+        item.min_rank_order = 1
+        await db_session.flush()
+
+        categories = await svc.get_requestable_categories(uuid.UUID(org_id), user)
+
+        # Withholding the products and still offering the chip would disclose
+        # that restricted stock exists in that category, and filter to nothing.
+        assert [c["name"] for c in categories] == []
+
+    @pytest.mark.asyncio
+    async def test_a_category_with_any_eligible_item_is_still_offered(
+        self, db_session, org_and_member
+    ):
+        org_id, user = org_and_member
+        svc = InventoryService(db_session)
+        await _pool_item(svc, org_id, str(user.id), quantity=4)
+
+        categories = await svc.get_requestable_categories(uuid.UUID(org_id), user)
+
+        assert [c["name"] for c in categories] == ["Gloves"]

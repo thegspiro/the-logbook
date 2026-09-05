@@ -256,7 +256,8 @@ describe('EventsPage', () => {
       });
     });
 
-    it('should show empty state when no events', async () => {
+    it('should show empty state with a create prompt to a manager when no events', async () => {
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
       vi.mocked(eventService.getEvents).mockResolvedValue([]);
 
       renderWithRouter(<EventsPage />);
@@ -265,6 +266,48 @@ describe('EventsPage', () => {
         expect(screen.getByText('No events found')).toBeInTheDocument();
         expect(screen.getByText('Get started by creating a new event.')).toBeInTheDocument();
       });
+    });
+
+    it('should leave the list blank for a member when there are no events at all', async () => {
+      vi.mocked(eventService.getEvents).mockResolvedValue([]);
+
+      renderWithRouter(<EventsPage />);
+
+      // The whole page is a skeleton while loading, so the Upcoming toggle
+      // appearing is what proves the loaded empty list rendered.
+      await screen.findByRole('button', { name: 'Upcoming' });
+      expect(screen.queryByText('No events found')).not.toBeInTheDocument();
+      expect(screen.queryByText('Get started by creating a new event.')).not.toBeInTheDocument();
+    });
+
+    it('should still report an empty search result to a member', async () => {
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventsPage />);
+      await screen.findByText('Monthly Business Meeting');
+
+      await user.type(screen.getByPlaceholderText(/search events/i), 'nothing matches this');
+
+      // Feedback on the term they typed, not an invitation to create.
+      expect(await screen.findByText('No events found')).toBeInTheDocument();
+      expect(screen.getByText('No events matching "nothing matches this".')).toBeInTheDocument();
+      expect(screen.queryByText('Get started by creating a new event.')).not.toBeInTheDocument();
+    });
+
+    it('should not prompt a member to create when My Events narrows the list to nothing', async () => {
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventsPage />);
+      await screen.findByText('Monthly Business Meeting');
+
+      // My Events narrows the list without changing the description branch, so
+      // this is the path that reaches the create prompt with the card shown.
+      await user.click(screen.getByRole('button', { name: /my events/i }));
+
+      expect(await screen.findByText('No events found')).toBeInTheDocument();
+      expect(screen.queryByText('Get started by creating a new event.')).not.toBeInTheDocument();
     });
 
     it('should link each event to its detail page', async () => {
@@ -429,7 +472,7 @@ describe('EventsPage', () => {
 
       renderWithRouter(<EventsPage />);
 
-      await screen.findByText('No events found');
+      await screen.findByRole('button', { name: 'Upcoming' });
       expect(screen.queryByRole('button', { name: /more event actions/i })).not.toBeInTheDocument();
     });
 
