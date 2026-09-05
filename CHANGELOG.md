@@ -55,6 +55,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the year query plus a separate `MIN(shift_date)` scan (plus a third query
   whenever the current or previous month fell outside the year being viewed).
 
+### The event check-in QR code was scannable before its window opened (2026-09-05)
+
+**Fixed**
+
+- **A greyed-out QR code is still a QR code.** Outside the check-in window,
+  the event QR page rendered the real code at 40% opacity so the page would be
+  "ready" when the window opened. A phone camera reads a code straight through
+  that, so members scanned early, hit a check-in that refuses them, and had
+  nothing on the page explaining why. The code is now withheld entirely until
+  `can_check_in`, and a same-size placeholder holds the space so the layout
+  does not shift when the real code takes over on the next 30-second refresh.
+  The gate is `can_check_in`, not the stricter `is_valid`, because a
+  Flexible/Window event admits a scan up to an hour before its official window
+  — withholding the code there would have blocked a check-in the backend was
+  ready to accept, and `EventSelfCheckInPage` already gates its button on the
+  same field.
+
+- **The check-in window could open without the page noticing for 90 seconds.**
+  `getQRCheckInData` is a cacheable GET, so the 30-second poll on both the QR
+  page and the self-check-in page was answered from the shared client's cache
+  — fresh for 30s, then served stale for a further 60s while revalidating in
+  the background. The whole point of that payload is reporting whether the
+  window is open right now, so it now sets `_skipCache`.
+
+### The dashboard's Administrative hours read "Unavailable", then read the whole department's (2026-09-05)
+
+**Fixed**
+
+- **Administrative hours said "Unavailable" to every ordinary member.**
+  "Unavailable" is a claim the figure is unknown; the figure was simply never
+  fetched. The dashboard gated the admin-hours read on `admin_hours.view`, a
+  permission that exists in the registry and that no default position or rank
+  grants — while every other gate on the same feature is open: `/admin-hours`
+  carries no `ProtectedRoute`, the member-facing sidebar entry carries no
+  permission, and `GET /admin-hours/summary` requires only authentication. So
+  the row sat at "Unavailable" beside a control that navigates to a page the
+  member can in fact open. The read is now unconditional, and a member who has
+  logged no administrative time this month reads `0`.
+
+- **An officer's "My Hours" card totalled the whole department.**
+  `GET /admin-hours/summary` only falls back to the caller's own id for someone
+  _without_ `admin_hours.manage`, and the service applies no user filter when
+  none is supplied — so a manage holder saw every member's administrative hours
+  summed under a card headed "My Hours". Removing the gate above widened this
+  from wildcard holders to every officer, so the request now passes the
+  member's own id explicitly, as the Admin Hours page already did.
+
+- **Everything logged today fell outside the month.** The month-to-date range
+  went as a bare `YYYY-MM-DD`; the endpoint parses that as midnight and filters
+  `clock_in_at <= end_date`, so the current day was excluded entirely, and the
+  start bound cut the month at UTC midnight rather than the department's —
+  pulling the tail of the previous month in for any department west of UTC.
+  Both bounds now go through the same `startOfReportingDayUTC` /
+  `endOfReportingDayUTC` helpers the Admin Hours screens use.
+
+**Changed**
+
+- **The month's hours are stated once.** The dashboard header carried a
+  "N hrs in Month" chip duplicating the total on the hours card directly below
+  it, with none of the per-source split behind it — so a member reading the
+  chip had no way to see which source the figure came from. The card, which
+  carries the same total plus the breakdown and its own failure state, is now
+  the single statement.
+
 ### A shift that ran weeks ago still offered its live controls (2026-09-04)
 
 **Fixed**
@@ -80,6 +144,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recorded against it — was still offered a button to decline the assignment
   those hours hang off, and an officer was still offered Remove beside every
   name. All three are withdrawn once the roster locks.
+
+- **The lock is now enforced, not just displayed.** Hiding a control is not
+  enforcing a rule: confirm, the assignment PATCH and DELETE, and self-withdraw
+  were all still reachable by a direct request, and withdraw deletes an
+  assignment that hours have already been recorded against. All four now carry
+  the same end-plus-grace bound the client does, with the same
+  `scheduling.manage` exemption, so the two agree. An assigner is bounded here
+  even though the signup window gives them a grace period to seat a late
+  arrival — repairing a roster that is already a record is the administrator's
+  path. Internal callers are unaffected: the bound is opt-in, and the
+  standing-shift release that shares the delete path only ever touches dates
+  still ahead.
+
+- **An empty seat still offered "Assign someone", and the button did
+  nothing.** The crew board's empty-slot branch gated on `isPast` alone, while
+  the form it opens is withdrawn by the officer's own signup deadline — which
+  has necessarily passed by then — so on a same-day shift the control sat there
+  all evening and swallowed every tap.
+
+- **The lock is no longer applied on a grace period nobody has fetched.** The
+  signup window falls back to a built-in sixty minutes until the department's
+  settings arrive, a default chosen to be permissive for a claim button; for a
+  lock it is the reverse, so a department running a longer grace watched
+  controls vanish on a shift the server still accepts, and a failed settings
+  fetch left them gone for the life of the panel. Unknown now means unlocked.
 
 - **Withdraw outlived the lock, beside the hours it would have deleted.** The
   "You are assigned to this shift" card gated its Withdraw button on `isPast`

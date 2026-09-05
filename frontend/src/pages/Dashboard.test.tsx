@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import Dashboard from './Dashboard';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
-import { getTodayLocalDate, addCalendarDays } from '../utils/dateFormatting';
+import { getTodayLocalDate, addCalendarDays, toLocalISODate } from '../utils/dateFormatting';
 
 // Capture the pull-to-refresh handler the page registers, so a test can drive
 // the gesture without mounting the layout provider.
@@ -474,6 +474,54 @@ describe('Dashboard', () => {
         expect(within(card).getAllByText('6')).toHaveLength(2);
       });
       expect(mockGetAdminHoursSummary).toHaveBeenCalledTimes(1);
+    });
+
+    it('scopes the administrative summary to the member', async () => {
+      // The endpoint only falls back to the caller for someone *without*
+      // admin_hours.manage. A manage holder who omits userId gets the whole
+      // department's totals -- under a card headed "My Hours".
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'admin_hours.manage');
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 6 });
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(mockGetAdminHoursSummary).toHaveBeenCalled();
+      });
+      const args = mockGetAdminHoursSummary.mock.calls[0]?.[0] as {
+        userId?: string;
+        startDate: string;
+        endDate: string;
+      };
+      expect(args.userId).toBe('user-1');
+    });
+
+    it('sends the administrative month as UTC instants, not bare dates', async () => {
+      // A bare "YYYY-MM-DD" end date is parsed as midnight and filtered with
+      // `clock_in_at <= end`, so everything logged today falls outside the
+      // month -- and a bare start cuts the month at UTC midnight rather than
+      // the department's.
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 6 });
+
+      renderWithRouter(<Dashboard />);
+
+      await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(mockGetAdminHoursSummary).toHaveBeenCalled();
+      });
+      const args = mockGetAdminHoursSummary.mock.calls[0]?.[0] as { startDate: string; endDate: string };
+
+      // Instants, so the backend's fromisoformat gets a time of day at all.
+      expect(args.startDate).toMatch(/T\d{2}:\d{2}/);
+      expect(args.endDate).toMatch(/T\d{2}:\d{2}/);
+      // The end bound is still ahead of now, which is the whole point: an
+      // entry clocked in this morning is inside the month, not outside it.
+      expect(new Date(args.endDate).getTime()).toBeGreaterThan(Date.now());
+      // And the bounds land on the department's month, not UTC's.
+      const tz = 'America/New_York';
+      expect(toLocalISODate(args.startDate, tz)).toBe(`${getTodayLocalDate(tz).slice(0, 7)}-01`);
+      expect(toLocalISODate(args.endDate, tz)).toBe(getTodayLocalDate(tz));
     });
 
     it('shows a zero administrative month as 0, not Unavailable', async () => {
