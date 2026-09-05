@@ -1099,6 +1099,39 @@ _OP_TABLE_SECOND = re.compile(
 )
 
 
+#: ``op.add_column(table, ...)`` -- the argument is a name, not a literal.
+_OP_TABLE_FIRST_VAR = re.compile(
+    r"op\.(?:add_column|drop_column|alter_column|bulk_insert|create_table|"
+    r"rename_table|drop_table)\(\s*([A-Za-z_]\w*)\s*[,)]"
+)
+
+
+def _literal_bindings(text: str) -> dict[str, str]:
+    """Names bound to a plain string literal, module-level or inside ``upgrade()``.
+
+    A migration that routes the table through a variable -- ``table = "roles"``,
+    then ``op.add_column(table, ...)`` and ``f"... FROM `{table}`"`` -- would
+    otherwise contribute no table name at all, and sail through both checks
+    while querying a table the rename retired. That is the exact regression
+    these checks exist to prevent, so the binding is resolved rather than
+    skipped.
+
+    Only *literal* bindings resolve. A name computed at runtime (a helper that
+    inspects the database and returns one of two tables, say) is genuinely
+    dynamic and no static reading can settle it; those still contribute
+    nothing, which is a known limit rather than an oversight.
+    """
+    bindings = dict(_string_constants(text))
+    bindings.update(
+        re.findall(
+            r"^\s*([A-Za-z_]\w*)\s*=\s*[\"']([a-z0-9_]+)[\"']\s*$",
+            _upgrade_body(text),
+            re.MULTILINE,
+        )
+    )
+    return bindings
+
+
 def _tables_referenced(text: str) -> set[str]:
     """Every table name an ``upgrade()`` names, in ``op.*`` calls and in SQL.
 
@@ -1107,10 +1140,23 @@ def _tables_referenced(text: str) -> set[str]:
     different schema and never establishes what the upgrade path sees.
     """
     body = _upgrade_body(text)
+    bindings = _literal_bindings(text)
+
     found = set(_OP_TABLE_FIRST.findall(body)) | set(_OP_TABLE_SECOND.findall(body))
+    for name in _OP_TABLE_FIRST_VAR.findall(body):
+        if name in bindings:
+            found.add(bindings[name])
+
     for match in re.finditer(r'"""(.*?)"""|"([^"\n]*)"|\'([^\'\n]*)\'', body, re.S):
         literal = next((group for group in match.groups() if group), "")
-        found |= {name.lower() for name in _SQL_TABLE_REF.findall(literal)}
+        # Substitute f-string placeholders that name a literal binding, so
+        # f"SELECT id FROM `{table}`" is read as the table it interpolates.
+        resolved = re.sub(
+            r"\{(\w+)\}",
+            lambda hit: bindings.get(hit.group(1), hit.group(0)),
+            literal,
+        )
+        found |= {name.lower() for name in _SQL_TABLE_REF.findall(resolved)}
     return found
 
 
@@ -1196,9 +1242,19 @@ def _names_not_yet_valid(
 
 
 def _names_already_retired(sources: dict[str, str]) -> list[str]:
-    """Migrations naming a table an ancestor already renamed out of existence."""
+    """Migrations naming a table an ancestor already renamed out of existence.
+
+    A retired name that the models still declare is NOT an offender: the name
+    comes back at startup. ``20260312_0200`` renames ``meeting_action_items``
+    to ``minutes_action_items``, and ``app/models/meeting.py`` then declares a
+    separate ``meeting_action_items``, so both tables exist on a running
+    installation and a later migration naming the first is correct -- as
+    ``7bfe85f2e4e5`` is, guarding on the table's presence. Only a name nothing
+    brings back, as ``roles`` is once ``20260805_0008`` has run, is a defect.
+    """
     ancestors = _ancestor_sets(sources)
     retired = _tables_renamed_away(sources)
+    model_tables = set(Base.metadata.tables)
 
     offenders = []
     for name, text in sources.items():
@@ -1207,6 +1263,8 @@ def _names_already_retired(sources: dict[str, str]) -> list[str]:
             continue
         forebears = ancestors.get(revision, set())
         for table in sorted(_tables_referenced(text)):
+            if table in model_tables:
+                continue
             movers = retired.get(table, set()) & forebears
             if movers:
                 offenders.append(
@@ -1319,6 +1377,61 @@ class TestTheChainNameDetection:
         offenders = _names_already_retired(planted)
 
         assert any("planted_stale" in o and "roles" in o for o in offenders)
+
+    def test_a_table_routed_through_a_variable_is_still_seen(self):
+        """The hole a literal-only scan leaves.
+
+        A migration binding ``table = "roles"`` and using it in both the op
+        call and an f-string contributes no literal table name at all, so it
+        would sail through both checks while querying the table
+        20260805_0008 retired -- the exact regression they exist to prevent.
+        """
+        planted = self._sources_with(
+            "planted_var.py",
+            'revision = "planted_var"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    table = "roles"\n'
+            '    op.add_column(table, sa.Column("z", sa.JSON()))\n'
+            '    op.execute(sa.text(f"SELECT id FROM `{table}`"))\n',
+        )
+
+        offenders = _names_already_retired(planted)
+
+        assert any(
+            "planted_var" in o and "roles" in o for o in offenders
+        ), "A table routed through a variable evaded the retired-name check."
+
+    def test_a_module_level_table_constant_is_resolved(self):
+        """``_TABLE = "roles"`` is the house style for this, so it must resolve."""
+        planted = self._sources_with(
+            "planted_const.py",
+            'revision = "planted_const"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            '_TABLE = "roles"\n'
+            "def upgrade() -> None:\n"
+            '    op.drop_column(_TABLE, "z")\n',
+        )
+
+        assert any("planted_const" in o for o in _names_already_retired(planted))
+
+    def test_a_retired_name_the_models_bring_back_is_not_an_offender(self):
+        """The other direction, and a live case rather than a hypothetical.
+
+        20260312_0200 renames `meeting_action_items` away, but the models
+        declare a separate table under that name, so create_all restores it and
+        a later migration naming it is correct. Reporting it would send someone
+        to delete a guard that is doing real work.
+        """
+        planted = self._sources_with(
+            "planted_back.py",
+            'revision = "planted_back"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("SELECT id FROM meeting_action_items"))\n',
+        )
+
+        assert not [o for o in _names_already_retired(planted) if "planted_back" in o]
 
     def test_a_create_all_only_table_is_left_to_the_other_ratchets(self):
         """No migration creates `event_requests`, so this check must stay
