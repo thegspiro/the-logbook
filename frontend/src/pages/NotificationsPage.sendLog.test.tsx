@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -103,6 +103,7 @@ describe('NotificationsPage send log', () => {
     await waitFor(() => expect(notificationsService.getLogs).toHaveBeenCalled());
     expect(notificationsService.getLogs).toHaveBeenCalledWith({
       scope: NotificationLogScope.MINE,
+      skip: 0,
       limit: 50,
     });
     expect(await screen.findByText('Drill on Thursday')).toBeInTheDocument();
@@ -234,6 +235,7 @@ describe('NotificationsPage send log', () => {
     expect(notificationsService.getLogs).toHaveBeenLastCalledWith({
       scope: NotificationLogScope.MINE,
       channel: 'in_app',
+      skip: 0,
       limit: 50,
     });
   });
@@ -261,6 +263,95 @@ describe('NotificationsPage send log', () => {
 
     await screen.findByText('Hydrant testing');
     expect(screen.getAllByText('Drill on Thursday')).toHaveLength(1);
+  });
+
+  it('ignores a superseded channel fetch that resolves late', async () => {
+    // Each pill change starts a request; they can resolve in any order. An
+    // older one landing last put the previous channel's rows and total under
+    // the newly selected pill.
+    const user = userEvent.setup();
+    renderLogTab();
+    await screen.findByText('Drill on Thursday');
+
+    let releaseEmail!: (value: { logs: (typeof emailLog)[]; total: number; skip: number; limit: number }) => void;
+    vi.mocked(notificationsService.getLogs).mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseEmail = resolve;
+      })
+    );
+    await user.click(screen.getByRole('button', { name: 'Email' }));
+
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [{ ...emailLog, id: 'log-app', subject: 'Roster posted', channel: 'in_app' }],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+    await user.click(screen.getByRole('button', { name: 'In-App' }));
+    expect(await screen.findByText('Roster posted')).toBeInTheDocument();
+
+    // The Email request now finishes, after the In-App one it lost to. Flush
+    // it before asserting, or the assertion passes on the tick before it
+    // could have landed and proves nothing.
+    await act(async () => {
+      releaseEmail({
+        logs: [{ ...emailLog, id: 'log-mail', subject: 'Stale email row' }],
+        total: 9,
+        skip: 0,
+        limit: 50,
+      });
+    });
+
+    expect(screen.queryByText('Stale email row')).toBeNull();
+    expect(screen.getByText('Roster posted')).toBeInTheDocument();
+  });
+
+  it('advances paging by rows the server gave, not rows it kept', async () => {
+    // A page that re-serves an already-loaded row still consumed that offset.
+    // Deriving the next skip from the deduplicated length asked for the same
+    // row again and left Load more on screen forever.
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [emailLog],
+      total: 4,
+      skip: 0,
+      limit: 50,
+    });
+    renderLogTab();
+
+    const user = userEvent.setup();
+    const more = await screen.findByRole('button', { name: /load more/i });
+    // The second page re-serves the first row and adds two.
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [
+        emailLog,
+        { ...emailLog, id: 'log-4', subject: 'Ladder drill' },
+        { ...emailLog, id: 'log-5', subject: 'Pump test' },
+      ],
+      total: 4,
+      skip: 1,
+      limit: 50,
+    });
+    await user.click(more);
+
+    await screen.findByText('Pump test');
+    // Four rows consumed against a total of four: nothing left to fetch, even
+    // though the duplicate leaves only three on screen. Counting the retained
+    // three against the total kept the button up and re-requested an offset
+    // whose rows were already held.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /load more/i })).toBeNull());
+  });
+
+  it('does not leave the previous channel on screen when a filtered fetch fails', async () => {
+    const user = userEvent.setup();
+    renderLogTab();
+    await screen.findByText('Drill on Thursday');
+
+    vi.mocked(notificationsService.getLogs).mockRejectedValueOnce(new Error('channel fetch failed'));
+    await user.click(screen.getByRole('button', { name: 'In-App' }));
+
+    expect(await screen.findByText(/channel fetch failed/i)).toBeInTheDocument();
+    // The email row belonged to the previous selection, not this one.
+    expect(screen.queryByText('Drill on Thursday')).toBeNull();
   });
 
   it('does not offer Load more when the page is the whole history', async () => {
