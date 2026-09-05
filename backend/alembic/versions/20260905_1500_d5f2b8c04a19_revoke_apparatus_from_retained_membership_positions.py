@@ -37,22 +37,16 @@ deliberately gave one of these standings the fleet roster — an administrator
 re-adds it on the positions screen. A position the department created for
 itself is untouched.
 
-**No table guard, deliberately.** ``positions`` looks create_all-only, since
-searching the chain for a ``create_table`` on that name comes up empty — but
-pitfall #26 names this exact table as the trap in that reasoning:
-``20260805_0008`` renames ``roles``, which the initial schema creates outright,
-and is a required ancestor here.
-
-(Phrased that way on purpose: ``tests/test_migration_create_all_tables.py``
-recognizes a false create_all-only claim by its *shape* — a negation near
-"migration" near a creation verb — and cannot tell a claim being asserted from
-one being quoted in order to refute it. Stating the wrong belief in those words,
-even to correct it two clauses later, makes this file report itself.)
-Verified rather than reasoned: ``alembic upgrade head`` against a freshly
-created empty database leaves ``positions`` present with no ``create_all``
-involved. An absent table therefore means a broken schema, and a guard would
-turn that into a silent skip — Alembic would stamp this revision, and a revision
-runs once, so the grants would survive permanently once the table came back.
+**No table guard, deliberately.** ``positions`` is already there by the time
+this runs: ``20260805_0008`` renames the initial schema's ``roles`` into it, and
+that revision is an ancestor here. Pitfall #26 names this table as the standing
+trap — it gains its name from a rename rather than a ``create_table``, which has
+twice been read as evidence it appears only at first boot. Verified rather than
+reasoned: ``alembic upgrade head`` against a freshly created empty database
+leaves ``positions`` present, with ``create_all`` never invoked. An absent table
+therefore means a broken schema, and a guard would turn that into a silent skip
+— Alembic would stamp this revision, and a revision runs once, so the grants
+would survive permanently once the table came back.
 
 Revision ID: d5f2b8c04a19
 Revises: b6e4a0d17c93

@@ -157,6 +157,27 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     expect(slugs).not.toContain('engineer');
   });
 
+  it('credits the markers the previous build wrote for the same change', () => {
+    // #2248 reconciled emt/member/firefighter for apparatus but recorded them
+    // as bare slugs. Read literally, none satisfies a `@apparatus-view` marker,
+    // so a draft from that build would be reconciled a second time and lose any
+    // permissions or priority an administrator edited since — the exact harm
+    // the once-only design exists to prevent.
+    //
+    // A bare `member`/`firefighter` can only have come from that build. A bare
+    // `emt` is ambiguous: the build before it recorded `emt` alone for the
+    // heuristic-grants change, so it carries the apparatus work only alongside
+    // one of the other two.
+    expect(source).toMatch(/const satisfiedMarkers = \(recorded: readonly string\[\]\)/);
+    expect(source).toMatch(/satisfied\.add\(`\$\{slug\}@apparatus-view`\)/);
+    expect(source).toMatch(
+      /satisfied\.has\('emt'\) && \(satisfied\.has\('member'\) \|\| satisfied\.has\('firefighter'\)\)/
+    );
+    // The filter consults the translated set, not the raw recorded list.
+    expect(source).toMatch(/const done = satisfiedMarkers\(reconciledSeededSlugs\)/);
+    expect(source).toMatch(/!done\.has\(marker\)/);
+  });
+
   it('gives each grant change its own marker rather than reusing a slug', () => {
     // `reconciledSeededSlugs` records what a draft has been through. A draft
     // that reconciled under the EMT repair recorded the bare `emt`; listing
@@ -171,7 +192,7 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     expect(markers).toContain('emt@apparatus-view');
     expect(new Set(markers).size).toBe(markers.length);
     // The filter and the recorded value must both be the marker, not the slug.
-    expect(source).toMatch(/!reconciledSeededSlugs\.includes\(marker\)/);
+    expect(source).toMatch(/!done\.has\(marker\)/);
     expect(source).toMatch(/markSeededSlugsReconciled\(Object\.keys\(STALE_SEEDED_MARKERS\)\)/);
   });
 
@@ -181,7 +202,7 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     // `reconciledSeededSlugs` before deciding — by marker now, so a slug can
     // appear again for a later grant change without being filtered out as
     // already done.
-    expect(source).toMatch(/!reconciledSeededSlugs\.includes\(marker\)/);
+    expect(source).toMatch(/!done\.has\(marker\)/);
     expect(source).toMatch(/const stale = template && slugsToReconcile\.includes\(posId\)/);
   });
 
