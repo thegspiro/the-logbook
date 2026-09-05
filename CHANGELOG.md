@@ -83,10 +83,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Changed**
 
-- **With no programs, requirements or templates to show, a member now sees an
-  empty panel** rather than a card whose only content is a prompt to create the
-  thing they cannot create. A search that matched nothing still reports "No
-  programs found" to everyone, since that is feedback on the term they typed.
+- **The Requirements and Templates tabs are gone for members.** Both are
+  manager-only views, so the whole tab strip is hidden and a member sees the
+  Programs list on its own.
+
+- **With no programs to show, a member now sees an empty panel** rather than a
+  card whose only content is a prompt to create the thing they cannot create. A
+  search that matched nothing still reports "No programs found" to everyone,
+  since that is feedback on the term they typed.
 
 ### Long notification lists could skip a notification while you paged (2026-09-05)
 

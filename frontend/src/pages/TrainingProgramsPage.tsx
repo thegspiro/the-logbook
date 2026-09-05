@@ -44,6 +44,11 @@ const TrainingProgramsPage: React.FC = () => {
   const navigate = useNavigate();
   const canManage = useAuthStore((s) => s.checkPermission('training.manage'));
   const [activeTab, setActiveTab] = useState<TabView>('programs');
+  // Requirements and Templates are manager-only views, so their tabs are not
+  // rendered for a member. Deriving the shown tab rather than trusting the
+  // state keeps a member on Programs even if the permission is revoked while
+  // they sit on another tab — there would be no tab strip left to leave it.
+  const visibleTab: TabView = canManage ? activeTab : 'programs';
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
   const [registries, setRegistries] = useState<RegistryInfo[]>([]);
@@ -93,12 +98,12 @@ const TrainingProgramsPage: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      if (activeTab === 'programs' || activeTab === 'templates') {
+      if (visibleTab === 'programs' || visibleTab === 'templates') {
         const data = await trainingProgramService.getPrograms({
-          is_template: activeTab === 'templates',
+          is_template: visibleTab === 'templates',
         });
         setPrograms(data);
-        if (activeTab === 'templates') {
+        if (visibleTab === 'templates') {
           // Built-in starter templates for the gallery; failure is non-fatal.
           // The gallery's only action is creating a program, and the endpoint
           // behind it requires training.manage, so members never ask for it.
@@ -112,7 +117,7 @@ const TrainingProgramsPage: React.FC = () => {
             }
           }
         }
-      } else if (activeTab === 'requirements') {
+      } else if (visibleTab === 'requirements') {
         // The registries endpoint requires training.manage, so requesting it as
         // a member 403s and — inside this Promise.all — takes the requirements
         // list down with it. Categories only feed the manager-only edit form.
@@ -134,7 +139,7 @@ const TrainingProgramsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, canManage]);
+  }, [visibleTab, canManage]);
 
   useEffect(() => {
     void loadData();
@@ -193,6 +198,10 @@ const TrainingProgramsPage: React.FC = () => {
   // that is feedback on the term they typed, not an invitation.
   const showEmptyState = searchTerm !== '' || canManage;
 
+  // A tabpanel must be owned by a tab. With the strip hidden the panel is just
+  // the page body, so the role goes with the tabs rather than being orphaned.
+  const panelRole = canManage ? 'tabpanel' : undefined;
+
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -218,7 +227,7 @@ const TrainingProgramsPage: React.FC = () => {
           {/* Every action in this header creates a program or a requirement,
               and each one is training.manage-gated on the backend. Members get
               the read-only view rather than affordances that 403 on use. */}
-          {canManage && activeTab === 'programs' && (
+          {canManage && visibleTab === 'programs' && (
             <div className="flex flex-wrap items-center gap-2">
               <input
                 ref={importFileRef}
@@ -247,7 +256,7 @@ const TrainingProgramsPage: React.FC = () => {
             </div>
           )}
 
-          {canManage && activeTab === 'requirements' && (
+          {canManage && visibleTab === 'requirements' && (
             <button
               onClick={() => {
                 setEditingRequirement(null);
@@ -261,55 +270,58 @@ const TrainingProgramsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Tabs */}
-        <div
-          className="bg-theme-surface-secondary hscroll mb-6 flex space-x-1 rounded-lg p-1"
-          role="tablist"
-          aria-label="Training program views"
-        >
-          <button
-            onClick={() => setActiveTab('programs')}
-            role="tab"
-            aria-selected={activeTab === 'programs'}
-            aria-controls="tab-panel-programs"
-            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
-              activeTab === 'programs'
-                ? 'bg-red-800 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
-            }`}
+        {/* Tabs. Requirements and Templates are manager-only views, so a member
+            sees the Programs list on its own with no strip above it. */}
+        {canManage && (
+          <div
+            className="bg-theme-surface-secondary hscroll mb-6 flex space-x-1 rounded-lg p-1"
+            role="tablist"
+            aria-label="Training program views"
           >
-            <Target className="mr-2 inline h-4 w-4" aria-hidden="true" />
-            Programs
-          </button>
-          <button
-            onClick={() => setActiveTab('requirements')}
-            role="tab"
-            aria-selected={activeTab === 'requirements'}
-            aria-controls="tab-panel-requirements"
-            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
-              activeTab === 'requirements'
-                ? 'bg-red-800 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
-            }`}
-          >
-            <ListChecks className="mr-2 inline h-4 w-4" aria-hidden="true" />
-            Requirements
-          </button>
-          <button
-            onClick={() => setActiveTab('templates')}
-            role="tab"
-            aria-selected={activeTab === 'templates'}
-            aria-controls="tab-panel-templates"
-            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
-              activeTab === 'templates'
-                ? 'bg-red-800 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
-            }`}
-          >
-            <Award className="mr-2 inline h-4 w-4" aria-hidden="true" />
-            Templates
-          </button>
-        </div>
+            <button
+              onClick={() => setActiveTab('programs')}
+              role="tab"
+              aria-selected={visibleTab === 'programs'}
+              aria-controls="tab-panel-programs"
+              className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+                visibleTab === 'programs'
+                  ? 'bg-red-800 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+              }`}
+            >
+              <Target className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              Programs
+            </button>
+            <button
+              onClick={() => setActiveTab('requirements')}
+              role="tab"
+              aria-selected={visibleTab === 'requirements'}
+              aria-controls="tab-panel-requirements"
+              className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+                visibleTab === 'requirements'
+                  ? 'bg-red-800 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+              }`}
+            >
+              <ListChecks className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              Requirements
+            </button>
+            <button
+              onClick={() => setActiveTab('templates')}
+              role="tab"
+              aria-selected={visibleTab === 'templates'}
+              aria-controls="tab-panel-templates"
+              className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+                visibleTab === 'templates'
+                  ? 'bg-red-800 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+              }`}
+            >
+              <Award className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              Templates
+            </button>
+          </div>
+        )}
 
         {/* Search Bar */}
         <div className="mb-6">
@@ -319,7 +331,7 @@ const TrainingProgramsPage: React.FC = () => {
               aria-hidden="true"
             />
             <label htmlFor="programs-search" className="sr-only">
-              Search {activeTab}
+              Search {visibleTab}
             </label>
             <input
               autoCapitalize="none"
@@ -329,7 +341,7 @@ const TrainingProgramsPage: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={`Search ${activeTab}...`}
+              placeholder={`Search ${visibleTab}...`}
               className="form-input pr-4 pl-10"
             />
           </div>
@@ -342,13 +354,13 @@ const TrainingProgramsPage: React.FC = () => {
               className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-red-500"
               aria-hidden="true"
             ></div>
-            <p className="text-theme-text-muted mt-4">Loading {activeTab}...</p>
+            <p className="text-theme-text-muted mt-4">Loading {visibleTab}...</p>
           </div>
         ) : (
           <>
-            {activeTab === 'programs' || activeTab === 'templates' ? (
-              <div id="tab-panel-programs" role="tabpanel">
-                {canManage && activeTab === 'templates' && !searchTerm && sampleTemplates.length > 0 && (
+            {visibleTab === 'programs' || visibleTab === 'templates' ? (
+              <div id="tab-panel-programs" role={panelRole}>
+                {canManage && visibleTab === 'templates' && !searchTerm && sampleTemplates.length > 0 && (
                   <section className="mb-8" aria-label="Sample templates">
                     <div className="mb-1 flex items-center space-x-2">
                       <Sparkles className="h-5 w-5 text-red-700 dark:text-red-500" aria-hidden="true" />
@@ -410,9 +422,9 @@ const TrainingProgramsPage: React.FC = () => {
                             aria-hidden="true"
                           />
                           <p className="text-theme-text-muted">
-                            {searchTerm ? 'No programs found' : `No ${activeTab} yet`}
+                            {searchTerm ? 'No programs found' : `No ${visibleTab} yet`}
                           </p>
-                          {!searchTerm && activeTab === 'programs' && (
+                          {!searchTerm && visibleTab === 'programs' && (
                             <button
                               onClick={() => void navigate('/training/programs/new')}
                               className="btn-primary mt-4"
@@ -487,7 +499,7 @@ const TrainingProgramsPage: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div id="tab-panel-requirements" role="tabpanel">
+              <div id="tab-panel-requirements" role={panelRole}>
                 {/* Registry Import Section. Listing and importing a registry are
                     both training.manage-gated, so members never see the panel —
                     and loadData skips the listing call that would 403. */}

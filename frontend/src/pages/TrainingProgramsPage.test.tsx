@@ -377,54 +377,40 @@ describe('TrainingProgramsPage', () => {
       expect(screen.queryByRole('button', { name: /Create Your First Pipeline/i })).not.toBeInTheDocument();
     });
 
-    it('leaves the requirements tab blank and skips the manager-only registry fetch', async () => {
+    it('hides the Requirements and Templates tabs entirely', async () => {
       renderWithRouter(<TrainingProgramsPage />);
 
-      await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+      await screen.findByText('Probationary Firefighter');
+      // The whole strip goes, not just the manager-only entries — with one
+      // reachable view there is nothing left to switch between.
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      // An orphaned tabpanel has no tab to own it, so the role goes too.
+      expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
+    });
 
-      await waitFor(() => expect(mockGetRequirementsEnhanced).toHaveBeenCalled());
-      // getRegistries requires training.manage; requesting it as a member 403s
-      // and would take the requirements list down with it.
+    it('never requests the data behind the manager-only tabs', async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: false }));
+      // getRegistries and getSampleTemplates both require training.manage. The
+      // former's 403 used to reject the Requirements tab's whole Promise.all.
       expect(mockGetRegistries).not.toHaveBeenCalled();
+      expect(mockGetSampleTemplates).not.toHaveBeenCalled();
+      expect(mockGetRequirementsEnhanced).not.toHaveBeenCalled();
       expect(screen.queryByText('Import from Registry')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /New Requirement/i })).not.toBeInTheDocument();
-      expect(screen.queryByText('No requirements yet')).not.toBeInTheDocument();
-    });
-
-    it('lists requirements read-only, with no edit control', async () => {
-      mockGetRequirementsEnhanced.mockResolvedValue([
-        {
-          id: 'req-1',
-          name: 'FCVFD Hours',
-          requirement_type: 'shifts',
-          source: 'department',
-          required_shifts: 20,
-          frequency: 'one_time',
-          applies_to_all: true,
-          active: true,
-          due_date_type: 'calendar_period',
-          is_editable: true,
-        },
-      ]);
-      renderWithRouter(<TrainingProgramsPage />);
-
-      await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
-
-      expect(await screen.findByText('FCVFD Hours')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Edit FCVFD Hours/i })).not.toBeInTheDocument();
-    });
-
-    it('leaves the templates tab blank and skips the sample-template fetch', async () => {
-      mockGetPrograms.mockResolvedValue([]);
-      renderWithRouter(<TrainingProgramsPage />);
-
-      await userEvent.click(await screen.findByRole('tab', { name: /Templates/i }));
-
-      await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: true }));
-      expect(mockGetSampleTemplates).not.toHaveBeenCalled();
       expect(screen.queryByText('Start from a sample template')).not.toBeInTheDocument();
-      expect(screen.queryByText('No templates yet')).not.toBeInTheDocument();
     });
+  });
+
+  it('keeps all three tabs for a training manager', async () => {
+    mockHasPermission = true;
+    renderWithRouter(<TrainingProgramsPage />);
+
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.map((t) => t.textContent?.trim())).toEqual(['Programs', 'Requirements', 'Templates']);
+    expect(screen.getByRole('tabpanel')).toBeInTheDocument();
   });
 
   it('offers the first-pipeline prompt to a training manager with no programs', async () => {
