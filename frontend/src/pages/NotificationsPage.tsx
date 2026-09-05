@@ -111,6 +111,10 @@ function formatCategory(category: string): string {
 }
 
 const INBOX_PAGE_SIZE = 20;
+// The send log is one row per delivery, so a long-serving member's history
+// runs well past a single page. The backend's own default is 100; naming it
+// here keeps the Load more arithmetic honest about what was asked for.
+const LOG_PAGE_SIZE = 50;
 
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -144,6 +148,13 @@ const NotificationsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadingInbox, setLoadingInbox] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
+  const [loadingMoreLogs, setLoadingMoreLogs] = useState(false);
+  const [logsTotal, setLogsTotal] = useState(0);
+  // Kept apart from the page-wide `error`, which renders above every tab: the
+  // send log is prefetched on mount for a tab the member may never open, and
+  // its failure must not caption a working inbox with "Failed to load your
+  // send log".
+  const [logsError, setLogsError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showRead, setShowRead] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -224,11 +235,16 @@ const NotificationsPage: React.FC = () => {
   useEffect(() => {
     const fetchLogs = async () => {
       setLoadingLogs(true);
+      setLogsError(null);
       try {
-        const logsRes = await notificationsService.getLogs({ scope: NotificationLogScope.MINE });
+        const logsRes = await notificationsService.getLogs({
+          scope: NotificationLogScope.MINE,
+          limit: LOG_PAGE_SIZE,
+        });
         setLogs(logsRes.logs);
+        setLogsTotal(logsRes.total);
       } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Failed to load your send log'));
+        setLogsError(getErrorMessage(err, 'Failed to load your send log'));
       } finally {
         setLoadingLogs(false);
       }
@@ -358,7 +374,30 @@ const NotificationsPage: React.FC = () => {
       setMyNotifications([]);
       setInboxTotal(0);
     }
+    // The Send Log holds its own independently fetched copy of these rows.
+    // `/my/read-all` is in-app only, so email rows keep whatever they had —
+    // but leaving the in-app ones unread here left the Send Log offering
+    // "Mark all as read" for rows the database had already marked.
+    setLogs((prev) => prev.map((l) => (l.channel === 'in_app' ? { ...l, read: true } : l)));
     clearGlobalUnread();
+  };
+
+  const handleLoadMoreLogs = async () => {
+    setLoadingMoreLogs(true);
+    setLogsError(null);
+    try {
+      const data = await notificationsService.getLogs({
+        scope: NotificationLogScope.MINE,
+        skip: logs.length,
+        limit: LOG_PAGE_SIZE,
+      });
+      setLogs((prev) => [...prev, ...(data.logs || [])]);
+      setLogsTotal(data.total);
+    } catch (err: unknown) {
+      setLogsError(getErrorMessage(err, 'Failed to load more of your send log'));
+    } finally {
+      setLoadingMoreLogs(false);
+    }
   };
 
   const handleMarkAllRead = async () => {
@@ -814,7 +853,13 @@ const NotificationsPage: React.FC = () => {
           (() => {
             const filteredLogs = logChannelFilter === 'all' ? logs : logs.filter((l) => l.channel === logChannelFilter);
             return (
-              <>
+              <div role="tabpanel">
+                {logsError && (
+                  <div className="mb-4 flex items-start space-x-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
+                    <p className="flex-1 text-sm text-red-700 dark:text-red-300">{logsError}</p>
+                  </div>
+                )}
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div className="bg-theme-surface-secondary flex items-center space-x-1 rounded-lg p-1">
                     {(
@@ -934,7 +979,27 @@ const NotificationsPage: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </>
+                {!loadingLogs && logs.length < logsTotal && (
+                  <div className="pt-4 text-center">
+                    <button
+                      onClick={() => {
+                        void handleLoadMoreLogs();
+                      }}
+                      disabled={loadingMoreLogs}
+                      className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-50 max-md:min-h-[44px]"
+                    >
+                      {loadingMoreLogs ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        `Load more (${logsTotal - logs.length} remaining)`
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })()}
 

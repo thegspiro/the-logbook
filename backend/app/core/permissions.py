@@ -2222,16 +2222,20 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             LOCATIONS_VIEW.name,
             # notifications.view is deliberately absent. It gates the
             # department's notification *rules* — org-level configuration a
-            # member has no call to read — and the organization-wide scope
-            # of `GET /notifications/logs`, which returns every subject and
-            # body the department has sent anyone.
+            # member has no call to read.
             #
-            # Withholding it costs a member nothing they can act on: their
+            # It does NOT open the organization-wide send log: that is
+            # `GET /notifications/logs?scope=organization`, which
+            # `_resolve_log_scope` gates on `notifications.manage`, the same
+            # grant as the org-wide read-all write beside it.
+            #
+            # Withholding view costs a member nothing they can act on: their
             # inbox (`GET /notifications/my`) and their own send log
             # (`GET /notifications/logs`, whose default `scope=mine`
             # filters to the caller) are both gated on authentication
             # alone. Granting it to fix "my notifications do not load" is
-            # the wrong lever, and hands over the rules as well.
+            # the wrong lever — it hands over the rules and still does not
+            # reach the audit view.
         ],
     },
 }
