@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### My Hours: a career total, and figures under their own headings (2026-09-05)
+
+**Fixed**
+
+- **Every number in the monthly table sat about 170px right of the heading it
+  belonged to.** `frontend/src/styles/index.css` carries a global
+  `thead th { text-align: left }` written outside any cascade layer, and
+  unlayered CSS outranks every layer — so the `text-right` on each `<th>`,
+  which Tailwind emits inside `@layer utilities`, was discarded and the
+  headings stayed hard left over right-aligned figures. A `th-numeric` class in
+  the same unlayered tier now wins on specificity. Roughly 56 `<th>` elements
+  elsewhere in the app are overridden the same way and are deliberately left
+  alone: moving those base table rules into `@layer base` would shift every one
+  of them at once, which is its own reviewable change.
+- **The unlabelled bar column was also making the table wider than it needed
+  to be.** Its `w-1/3` claim inflated all four numeric columns under the
+  default auto layout, spreading four figures across the whole card. The table
+  is `table-fixed` with explicit column widths, and the bar takes what is left.
+
+**Changed**
+
+- **The three cards read this month, this year and all time**, each with
+  hours, shifts and calls, replacing last month / this month / year to date.
+  "Last month" answered a narrower question than the table beneath it already
+  answered month by month, while the one figure the table could never show —
+  what a member has done over their whole time with the department — was not
+  reported anywhere.
+- **The middle card follows the year picker.** Selecting an earlier year
+  retitles it to that year and "Full year", so it cannot claim "this year"
+  over a table showing a different one. The all-time card does not move.
+- **The bar column has a visible heading, "vs. busiest month."** It was an
+  `sr-only` heading over an `aria-hidden` bar, so on screen it read as
+  decoration with nothing saying what it measured. Each bar also carries the
+  hours it represents against the busiest month of the selected year.
+
+**Added**
+
+- **`GET /api/v1/scheduling/my-hours-history` returns `all_time`**, totalled
+  the same way the year is: over the already rounded monthly figures, never
+  over raw minutes, so the all-time card cannot read lower than the year total
+  printed beside it. Purely additive — `previous_month` and every other field
+  are unchanged.
+- Resolving it made the endpoint **cheaper, not dearer**: one unbounded
+  per-month aggregate now answers the selected year, the current and previous
+  month, the earliest year the picker offers and the career total, replacing
+  the year query plus a separate `MIN(shift_date)` scan (plus a third query
+  whenever the current or previous month fell outside the year being viewed).
+
 ### The notification Send Log is your own send log (2026-09-05)
 
 **Fixed**

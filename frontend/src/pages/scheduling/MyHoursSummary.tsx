@@ -12,10 +12,14 @@
  * close-out is surfaced as its own line rather than folded into the total,
  * because a member who watched their hours drop after a close-out corrected a
  * check-out time would have no way to tell what happened.
+ *
+ * The three cards read this month, the selected year, and all time. The middle
+ * one follows the year picker rather than pinning to the current year, so it
+ * can never state a figure the table beneath it contradicts.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CalendarClock, Flame, Loader2, TrendingUp } from 'lucide-react';
+import { AlertCircle, Flame, History, Loader2, TrendingUp } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { MemberHoursHistory } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
@@ -165,8 +169,13 @@ export const MyHoursSummary: React.FC = () => {
 
   if (!history) return null;
 
-  const { previous_month: previous, current_month: current, totals } = history;
+  const { current_month: current, totals, all_time: allTime } = history;
   const pendingHours = totals.pending_hours;
+
+  // The picker can sit on a past year, and "This year" would then be a lie
+  // about the figure beside it. Read off the payload rather than the browser
+  // clock: the department's timezone decides which year is current.
+  const isCurrentYear = history.year === current.year;
 
   return (
     <div className="space-y-4">
@@ -198,15 +207,6 @@ export const MyHoursSummary: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
-          label="Last month"
-          sublabel={`${monthLabel(previous.month)} ${previous.year}`}
-          hours={previous.hours}
-          shifts={previous.shifts}
-          calls={previous.calls}
-          showCalls={showCalls}
-          icon={<CalendarClock className="h-5 w-5" />}
-        />
-        <StatCard
           label="This month"
           sublabel={`${monthLabel(current.month)} ${current.year}`}
           hours={current.hours}
@@ -216,13 +216,22 @@ export const MyHoursSummary: React.FC = () => {
           icon={<Flame className="h-5 w-5" />}
         />
         <StatCard
-          label={`${history.year} total`}
-          sublabel="Year to date"
+          label={isCurrentYear ? 'This year' : String(history.year)}
+          sublabel={isCurrentYear ? 'Year to date' : 'Full year'}
           hours={totals.hours}
           shifts={totals.shifts}
           calls={totals.calls}
           showCalls={showCalls}
           icon={<TrendingUp className="h-5 w-5" />}
+        />
+        <StatCard
+          label="All time"
+          sublabel={history.earliest_year === null ? 'No shifts yet' : `Since ${history.earliest_year}`}
+          hours={allTime.hours}
+          shifts={allTime.shifts}
+          calls={allTime.calls}
+          showCalls={showCalls}
+          icon={<History className="h-5 w-5" />}
         />
       </div>
 
@@ -234,29 +243,57 @@ export const MyHoursSummary: React.FC = () => {
       )}
 
       <div className="card overflow-hidden p-0">
-        <table className="rwd-table w-full text-sm">
+        {/* `table-fixed` with explicit column widths, so the figures sit under
+            their own headers. Under the default auto layout the bar column's
+            width claim inflated every other column, spreading four numbers
+            across the full width of the card. Below 768px `rwd-table` reflows
+            the whole thing to stacked cards, where none of this applies.
+
+            The widths are PERCENTAGES, not pixel classes, because this table
+            is never as wide as the viewport: `AppLayout` reserves 256px for the
+            sidebar from 768px up — the same breakpoint at which this table
+            leaves its stacked mode — and the page adds another 48px of
+            padding, so a 768px viewport leaves the card 447px. Pixel widths
+            totalling 528px overflowed that, and the card is `overflow-hidden`,
+            so the tail was clipped rather than scrollable. Percentages cannot
+            exceed the table, whatever the sidebar takes. */}
+        <table className="rwd-table w-full table-fixed text-sm">
           <caption className="sr-only">Your shift hours by month for {history.year}</caption>
           <thead>
             <tr className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-secondary border-b text-left">
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="w-[26%] px-4 py-3 font-medium">
                 Month
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium">
+              {/* `th-numeric` is what actually right-aligns these: the global
+                  `thead th` rule in index.css is unlayered and beats a Tailwind
+                  `text-right`. `text-right` stays alongside it as the intent,
+                  and becomes the operative rule if that global rule is ever
+                  moved into a cascade layer. */}
+              <th scope="col" className="th-numeric w-[15%] px-4 py-3 text-right font-medium">
                 Shifts
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-medium">
+              <th scope="col" className="th-numeric w-[22%] px-4 py-3 text-right font-medium">
                 Hours
               </th>
               {showCalls && (
-                <th scope="col" className="px-4 py-3 text-right font-medium">
+                <th scope="col" className="th-numeric w-[15%] px-4 py-3 text-right font-medium">
                   Calls
                 </th>
               )}
               {/* No data-label on the matching cells, so the bar is dropped
                   from the stacked mobile view rather than reflowed into a row
-                  of its own. */}
-              <th scope="col" className="hidden w-1/3 px-4 py-3 font-medium md:table-cell">
-                <span className="sr-only">Relative hours</span>
+                  of its own. The header is visible rather than sr-only: an
+                  unlabelled bar reads as decoration, and nothing else on the
+                  row says what it is measured against.
+
+                  `table-col-tertiary` holds it back to 1024px rather than 768px.
+                  Between those two widths the sidebar leaves too little room for
+                  five columns, and a comparison a member can also read off the
+                  Hours column is the one to drop — keeping it there is what
+                  squeezed the Hours cell into wrapping and pulled its figure out
+                  from under its heading. */}
+              <th scope="col" className="table-col-tertiary px-4 py-3 font-medium">
+                vs. busiest month
               </th>
             </tr>
           </thead>
@@ -285,7 +322,13 @@ export const MyHoursSummary: React.FC = () => {
                     {formatNumber(m.calls)}
                   </td>
                 )}
-                <td className="hidden px-4 py-3 md:table-cell">
+                <td
+                  className="table-col-tertiary px-4 py-3"
+                  title={`${formatHours(m.hours)} of ${formatHours(peakHours)} hours in your busiest month of ${history.year}`}
+                >
+                  {/* aria-hidden: the same hours are announced from the Hours
+                      cell of this row, so labelling the bar would read the
+                      month out twice. */}
                   <div className="bg-theme-input-bg h-2 w-full rounded-full" aria-hidden="true">
                     <div
                       className="h-2 rounded-full bg-violet-600"
@@ -312,7 +355,7 @@ export const MyHoursSummary: React.FC = () => {
                   {formatNumber(totals.calls)}
                 </td>
               )}
-              <td className="hidden px-4 py-3 md:table-cell" />
+              <td className="table-col-tertiary px-4 py-3" />
             </tr>
           </tfoot>
         </table>
