@@ -304,9 +304,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The screen only has two checkboxes per module, so an EMT position created
   through it never received four grants the EMT rank carries: seeing the
   department's own information, its locations and its meetings, and asking to
-  swap a shift. Every EMT position in existence came from that screen, because
-  the registry had no EMT entry to create one from, so these are restored
-  wherever they are missing.
+  swap a shift. They are restored on a position still holding exactly what the
+  setup screen wrote — a department that has since edited its EMT position
+  keeps whatever it chose, including a grant it removed on purpose.
+
+- **Setting up a position now starts from the registry on either path.** The
+  setup screen's save had two routes: updating a position the system had
+  already created, which filled in from the permission registry, and creating
+  one it had not, which stored only what the screen's own checkboxes could say.
+  The second route is what gave EMT its wrong permissions, and it also loses
+  every grant no checkbox can express. Both routes now start from the registry
+  for a position the system knows.
 
 - **The restored grants are handled the other way round.**
   `storefront.order` and `inventory.check_submit` are only added back to a row

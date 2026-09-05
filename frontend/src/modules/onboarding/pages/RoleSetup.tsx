@@ -273,13 +273,22 @@ const PositionSetup: React.FC = () => {
     return initial;
   });
 
-  // Record the reconciliation once the initializer above has used it, so the
-  // next mount leaves these slugs alone and an administrator's edits survive.
+  // Record **every** stale slug once this screen has been reached, not only the
+  // ones the saved config happened to contain.
+  //
+  // Recording just the reconciled ones leaves a hole for a session started on
+  // this build: EMT is not among the preselected positions, so the first mount
+  // finds nothing to reconcile and records nothing. The administrator then
+  // selects EMT, customizes it, walks to the modules step and comes back — and
+  // the next mount, seeing EMT in the config but not in the record, treats
+  // those current-build edits as legacy state and replaces them.
+  //
+  // A slug selected after this point was built from the current template by
+  // definition, so there is nothing to reconcile in it, and recording the whole
+  // set here says exactly that.
   useEffect(() => {
-    if (slugsToReconcile.length > 0) {
-      markSeededSlugsReconciled(slugsToReconcile);
-    }
-  }, [slugsToReconcile, markSeededSlugsReconciled]);
+    markSeededSlugsReconciled([...STALE_SEEDED_SLUGS]);
+  }, [markSeededSlugsReconciled]);
 
   // Expanded categories
   const [expandedCategories, setExpandedCategories] = useState<string[]>([

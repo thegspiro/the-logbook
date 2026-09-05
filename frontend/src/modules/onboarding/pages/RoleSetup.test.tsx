@@ -149,11 +149,19 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
   it('does it once, not on every mount', () => {
     // Narrowing to one slug is not enough on its own: repeating it for that
     // slug discards the same edits, just only for EMT. The mount consults
-    // `reconciledSeededSlugs`, and records the outcome afterwards so the next
-    // mount leaves the slug alone.
+    // `reconciledSeededSlugs` before deciding.
     expect(source).toMatch(/!reconciledSeededSlugs\.includes\(posId\)/);
     expect(source).toMatch(/const stale = template && slugsToReconcile\.includes\(posId\)/);
-    expect(source).toMatch(/markSeededSlugsReconciled\(slugsToReconcile\)/);
+  });
+
+  it('records every stale slug, not only the ones it reconciled', () => {
+    // A session started on this build has no EMT in its config yet, so a mount
+    // that recorded only what it reconciled would record nothing — and the
+    // administrator selecting EMT, customizing it and stepping away would come
+    // back to find those current-build edits treated as legacy and reset.
+    // A slug selected after this screen is reached came from the current
+    // template by definition, so recording the whole set is what says so.
+    expect(source).toMatch(/markSeededSlugsReconciled\(\[\.\.\.STALE_SEEDED_SLUGS\]\)/);
   });
 
   it('latches the decision instead of recomputing it', () => {

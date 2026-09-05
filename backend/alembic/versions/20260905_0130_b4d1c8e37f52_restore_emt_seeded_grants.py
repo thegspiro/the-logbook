@@ -23,22 +23,32 @@ branch, where ``_merge_default_permissions`` keeps an untouched module's seeded
 grants. Only the create branch discards them, and ``emt`` is the only slug that
 took it.
 
-**Why this add is unconditional, when the rule for this work is that additions
-are gated.** A revocation of a disclosing grant runs unconditionally; an
-addition is gated on positive evidence the row is an unrepaired seed, because an
-unconditional add overrides a department that removed the grant on purpose. For
-``emt`` that evidence is categorical rather than heuristic: until the registry
-gained its entry no seeding path could produce an ``is_system`` EMT row at all,
-so every one of them came from the create branch. There is no curated seeded row
-here to protect.
+**Gated, because an addition always is.** CLAUDE.md pitfall #23: a revocation of
+a disclosing grant runs unconditionally, an addition needs positive evidence the
+row is an unrepaired seed. An earlier draft of this migration argued the
+evidence was categorical — no seeding path could produce an ``is_system`` EMT row
+before the registry entry, so every one came from the create branch — and that
+argument is wrong in the way this whole line of work has been about: knowing
+where a row *came from* says nothing about whether it has since been *edited*.
+``RoleService.update_role`` edits a system position's permissions in place and
+leaves the flag set, so a department may have removed one of these four on
+purpose.
 
-The residual cost is a department that deliberately removed, say,
-``organization.view`` from EMT getting it back. That is benign, visible on the
-positions screen and removable again in a moment — set against EMTs who cannot
-read their own department or request a swap.
+So the row must still look exactly like an untouched wizard row at this point in
+the chain: ``_UNEDITED_SHAPE`` is the editor's output for the EMT checkboxes,
+less everything ``f3b8d0c26a17`` and ``a2e9f6b04c71`` take off it. A row that
+differs by so much as one permission has been edited since, and is left alone.
 
-Appends only what a row is missing, so a row already holding all four is left
-byte-identical, and the order of what is already there is untouched.
+**What that costs, stated plainly.** A row written by an older build of the
+editor — whose module list differed — will not match, and keeps missing these
+four. That is the conservative direction for an addition and the one pitfall #23
+asks for: a missing benign grant discloses nothing and is visible to the member
+who tries to use it, whereas re-granting over an administrator's deliberate
+removal is silent. It is also why the revocations above are *not* gated this way:
+there, missing a row leaves a disclosure open.
+
+Appends only what a matching row is missing, after which it equals
+``DEFAULT_POSITIONS["emt"]``.
 
 Guarded on the table existing: ``positions`` is one of the tables no migration
 creates — it appears when ``main.py`` calls ``create_all()``, and CI runs
@@ -72,6 +82,28 @@ _RESTORE = (
     "scheduling.swap",
 )
 
+# What an untouched wizard EMT row holds by the time this runs: the editor's
+# output for the EMT checkboxes, less everything ``f3b8d0c26a17`` and
+# ``a2e9f6b04c71`` revoke from this slug. Only a row matching this exactly is
+# taken as unedited, and so as safe to add to. Frozen, and asserted against both
+# sources in the accompanying test.
+_UNEDITED_SHAPE = frozenset(
+    {
+        "apparatus.view",
+        "documents.view",
+        "elections.view",
+        "events.view",
+        "forms.view",
+        "inventory.view",
+        "members.view",
+        "minutes.view",
+        "scheduling.view",
+        "storefront.order",
+        "storefront.view",
+        "training.view",
+    }
+)
+
 
 def _load_permissions(raw):
     """Normalize JSON values returned by different database drivers."""
@@ -81,9 +113,16 @@ def _load_permissions(raw):
 
 
 def restore(permissions):
-    """Return the row with the missing grants appended, or None if complete."""
+    """Return the row with the missing grants appended, or None to leave it.
+
+    None for a row that is already complete, and for one that no longer looks
+    like the editor's untouched output — see the docstring on why an addition
+    has to be that careful when a revocation does not.
+    """
     original = list(permissions)
     held = set(original)
+    if held != _UNEDITED_SHAPE:
+        return None
     missing = [item for item in _RESTORE if item not in held]
     if not missing:
         return None
