@@ -19,14 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   therefore failed the comparison and was skipped, so their members never got
   **View store** or **Place orders**. Repaired for exactly those departments;
   one that has customized its Member position keeps what it chose.
+- **Some members could open the store but never check out.** A department that
+  turned off certain modules during first-time setup ended up with a Member
+  position holding **View store** but not **Place orders** — so the store
+  opened, the cart filled, and submitting failed. Those positions are repaired
+  too.
 - **Membership Coordinators were missing store access and training
   configuration.** Three migrations grant permissions by looking for the
   `membership_coordinator` position, but on upgraded departments that position
   was still named **Membership Committee Chair**, so all three passed it by.
   Renaming it (fixed separately) does not hand back what they skipped, so the
-  store grants and **Configure training** are granted now where absent. A
-  coordinator whose permissions already cover them through a module-wide grant
-  is left alone, as is any position a department created itself.
+  store grants and **Configure training** are granted now — but only to a
+  position holding _none_ of the three, which is what an untouched one looks
+  like. A coordinator holding any of them was already reached and has since
+  been edited, so whatever a department chose for it is left alone, as is any
+  position a department created itself.
 - **Both repairs bring a position to exactly what a new department is given
   today** — nothing beyond that, asserted by test rather than assumed.
 

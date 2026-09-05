@@ -146,41 +146,73 @@ def _rows(bind, slug: str):
     ).fetchall()
 
 
+#: The two shapes an unrepaired member row actually reaches head in, mapped to
+#: what each is still missing. Both were measured by running the chain, not
+#: reasoned about.
+#:
+#: The second is the one that is easy to miss. A department that unticked all
+#: four onboarding heuristic markers holds a wizard-written row that
+#: ``20260904_2050_f3b8d0c26a17`` documents as permanently unable to order:
+#: the ``storefront.order`` restoration in ``20260904_1640_d1c7f4a92e63`` is
+#: marker-gated, so a marker-less row never receives it, while the wizard did
+#: write ``storefront.view``. Requiring both grants to be absent would leave
+#: exactly those members able to browse, fill a cart and fail at checkout --
+#: the dead end ``20260826_0345`` calls worse than a missing button.
+_MEMBER_SHAPES = (
+    (_MEMBER_UNREPAIRED, _STOREFRONT),
+    (_MEMBER_UNREPAIRED | {"storefront.view"}, ("storefront.order",)),
+)
+
+
 def _repair_member_storefront(bind) -> int:
     """Add the storefront grants to member rows 20260825_1500 skipped.
 
     Whole-set match, as that migration and 20260826_0345 both use: only a row
-    still carrying exactly the unrepaired shape is ours. A department that has
-    since customized its member position owns that row and keeps it.
+    still carrying exactly one of the known unrepaired shapes is ours. A
+    department that has since customized its member position owns that row and
+    keeps it.
     """
     repaired = 0
     for row in _rows(bind, "member"):
         permissions = _load(row.permissions)
-        if set(permissions) != _MEMBER_UNREPAIRED:
-            continue
-        _store(bind, row.id, permissions + list(_STOREFRONT))
-        repaired += 1
+        stored = set(permissions)
+        for shape, missing in _MEMBER_SHAPES:
+            if stored == shape:
+                _store(bind, row.id, permissions + list(missing))
+                repaired += 1
+                break
     return repaired
 
 
 def _repair_coordinator(bind) -> int:
     """Add the grants the two slug-targeted migrations could not select.
 
-    Per-permission rather than whole-set, because these rows are frozen at
-    whatever registry state their department onboarded with -- see the module
-    docstring for why no single shape exists to match.
+    Gated on the row holding **none** of the three, which is positive evidence
+    that neither migration ever reached it rather than mere absence.
+
+    The two ran a day apart and in a known order: ``20260825_1400`` grants
+    ``training.configure`` to this slug *unconditionally*, and
+    ``20260826_0345`` grants both storefront permissions together. A row that
+    carried the ``membership_coordinator`` slug while they ran therefore holds
+    all three; a row still slugged ``membership_committee_chair`` holds none.
+    Confirmed against the frozen sets those two migrations were written
+    against: the chair-era registry entry contains neither the storefront
+    grants nor ``training.configure`` -- which is precisely why each migration
+    existed.
+
+    So a row holding *some* of the three was reached and has since been edited,
+    and an edit is a decision this migration does not overturn. That is the
+    ``c7a4e91d3b68`` pattern: gate on a state no build could have produced,
+    rather than on absence, which cannot tell "never received it" from "an
+    administrator removed it".
     """
+    grants = (*_STOREFRONT, _TRAINING)
     repaired = 0
     for row in _rows(bind, "membership_coordinator"):
         permissions = _load(row.permissions)
-        missing = [
-            grant
-            for grant in (*_STOREFRONT, _TRAINING)
-            if not _covers(permissions, grant)
-        ]
-        if not missing:
+        if any(_covers(permissions, grant) for grant in grants):
             continue
-        _store(bind, row.id, permissions + missing)
+        _store(bind, row.id, permissions + list(grants))
         repaired += 1
     return repaired
 

@@ -31,6 +31,20 @@ assert len(MATCHES) == 1, f"expected exactly one repair migration, found {MATCHE
 MIGRATION = MATCHES[0]
 
 
+def _load_revision(glob: str):
+    """Load a sibling revision so its own constants can be read.
+
+    Reading them rather than restating them is what keeps the derivation below
+    honest: if one of those migrations changes, this test moves with it.
+    """
+    matches = sorted(VERSIONS.glob(glob))
+    assert len(matches) == 1, f"expected one match for {glob}, got {matches}"
+    spec = importlib.util.spec_from_file_location(matches[0].stem, matches[0])
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _migration():
     spec = importlib.util.spec_from_file_location("_chair_slug_repair", MIGRATION)
     module = importlib.util.module_from_spec(spec)
@@ -140,6 +154,36 @@ class TestTheFrozenMemberShape:
         assert seeded - unrepaired == set(module._STOREFRONT)
         assert unrepaired | set(module._STOREFRONT) == seeded
 
+    def test_the_frozen_shape_is_what_the_chain_actually_produces(self):
+        """Derive the shape from the migrations that transform it, not from the
+        constant under test.
+
+        Comparing the constant only against today's registry is circular: a
+        wrong snapshot that happened to equal the defaults minus the storefront
+        grants would pass while every real affected row failed the gate. This
+        rebuilds it from six independent sources -- the frozen set
+        ``20260825_1500`` compares against, the grant ``20260801_0010`` failed
+        to add, the three later revocations, and the permission the previous
+        repair adds -- and matches it against the observed chain result.
+        """
+        m1500 = _load_revision("20260825_1500_*.py")
+        notifications = _load_revision("20260825_2015_a1f7c34e9b02_*.py")
+        facilities = _load_revision("20260826_1700_e4f5a6b7c8d9_*.py")
+        apparatus = _load_revision("20260905_1420_b6e4a0d17c93_*.py")
+        previous = _load_revision("20260905_1600_e8a1c04f6b27_*.py")
+
+        derived = set(m1500._PRIOR_DEFAULTS["member"])
+        # The grant 20260801_0010 was meant to add and never did -- the whole
+        # reason 20260825_1500's comparison failed on these rows.
+        derived -= {"equipment_check.submit"}
+        derived -= {notifications._PERMISSION}
+        derived -= {facilities._PERMISSION}
+        derived -= set(apparatus._REVOKE["member"])
+        # ...and what e8a1c04f6b27 has since added to exactly these rows.
+        derived |= {previous._PERMISSION}
+
+        assert derived == set(_migration()._MEMBER_UNREPAIRED)
+
     def test_it_does_not_grant_anything_the_registry_withholds(self):
         """A repair may restore what a new organization gets. It may not invent
         authority beyond that."""
@@ -163,6 +207,20 @@ class TestTheMemberStorefrontRepair:
         _run(engine)
 
         assert {"storefront.view", "storefront.order"} <= _perms(engine, positions)
+
+    def test_the_marker_less_wizard_shape_gets_the_order_grant(self, engine, positions):
+        """A department that unticked all four onboarding heuristic markers
+        holds a wizard-written row that 20260904_2050 documents as permanently
+        unable to order: the storefront.order restoration in 20260904_1640 is
+        marker-gated, while the wizard did write storefront.view. Requiring
+        both grants to be absent would leave exactly those members able to
+        browse, fill a cart and fail at checkout."""
+        shape = set(_migration()._MEMBER_UNREPAIRED) | {"storefront.view"}
+        _add_member(engine, positions, shape)
+
+        _run(engine)
+
+        assert _perms(engine, positions) == shape | {"storefront.order"}
 
     def test_a_row_that_already_has_them_is_untouched(self, engine, positions):
         healthy = set(_migration()._MEMBER_UNREPAIRED) | {
@@ -194,62 +252,59 @@ class TestTheMemberStorefrontRepair:
     def test_a_department_created_position_is_left_alone(self, engine, positions):
         _add_member(engine, positions, _migration()._MEMBER_UNREPAIRED, is_system=False)
 
+        _run(engine)
+
         assert "storefront.view" not in _perms(engine, positions)
 
 
 class TestTheCoordinatorRepair:
-    """Per-permission, because these rows have no single shape to match."""
+    """Gated on the row holding NONE of the three.
 
-    def test_a_row_frozen_before_both_migrations_gets_all_three(
-        self, engine, positions
-    ):
+    That is positive evidence rather than absence: 20260825_1400 grants
+    training.configure to this slug unconditionally and 20260826_0345 grants
+    both storefront permissions together, so a row those two reached holds all
+    three and a row still slugged membership_committee_chair holds none.
+    Holding *some* means it was reached and has since been edited.
+    """
+
+    def test_a_row_holding_none_of_the_three_gets_all_three(self, engine, positions):
         _add_coordinator(engine, positions, {"prospective_members.manage"})
 
         _run(engine)
 
-        assert {
+        assert _perms(engine, positions) == {
+            "prospective_members.manage",
             "storefront.view",
             "storefront.order",
             "training.configure",
-        } <= _perms(engine, positions)
+        }
 
-    def test_a_partially_granted_row_gets_only_what_it_lacks(self, engine, positions):
-        """Per-permission rather than all-or-nothing: 20260826_0345 grants view
-        AND order precisely because view alone lets a member browse, fill a
-        cart and then fail at submit."""
-        _add_coordinator(
-            engine, positions, {"prospective_members.manage", "storefront.view"}
-        )
+    @pytest.mark.parametrize(
+        "held",
+        ["storefront.view", "storefront.order", "training.configure"],
+    )
+    def test_a_row_holding_any_of_them_is_left_alone(self, engine, positions, held):
+        """The finding this gate answers: on a department that was never
+        affected, an administrator may have removed one of these deliberately.
+        Absence alone cannot tell that from "never received it", so a row
+        carrying any of the three is treated as reached-and-since-edited and
+        left as the department set it."""
+        stored = {"prospective_members.manage", held}
+        _add_coordinator(engine, positions, stored)
 
         _run(engine)
 
-        assert {"storefront.order", "training.configure"} <= _perms(engine, positions)
+        assert _perms(engine, positions) == stored
 
-    @pytest.mark.parametrize(
-        ("wildcard", "expected_added"),
-        [
-            ("storefront.*", {"training.configure"}),
-            ("training.*", {"storefront.view", "storefront.order"}),
-        ],
-    )
-    def test_a_module_wildcard_conveys_its_own_grants_only(
-        self, engine, positions, wildcard, expected_added
-    ):
-        """A module wildcard already conveys that module's grants, so re-adding
-        them would clutter the list -- but it says nothing about the other
-        module, which must still be repaired."""
+    @pytest.mark.parametrize("wildcard", ["*", "storefront.*", "training.*"])
+    def test_a_wildcard_holder_is_left_alone(self, engine, positions, wildcard):
+        """A wildcard already conveys at least one of the three, so the row was
+        reached and is the department's own."""
         _add_coordinator(engine, positions, {wildcard})
 
         _run(engine)
 
-        assert _perms(engine, positions) == {wildcard} | expected_added
-
-    def test_a_star_row_is_untouched(self, engine, positions):
-        _add_coordinator(engine, positions, {"*"})
-
-        _run(engine)
-
-        assert _perms(engine, positions) == {"*"}
+        assert _perms(engine, positions) == {wildcard}
 
     def test_a_department_created_position_is_left_alone(self, engine, positions):
         _add_coordinator(
