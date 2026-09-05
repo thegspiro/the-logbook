@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The Documents page invited members to upload files (2026-09-05)
+
+**Fixed**
+
+- **Both empty states told every member to upload.** "Start building your
+  document library by uploading SOPs, policies, and department files" and
+  "Upload documents to this folder to get started" rendered for everyone, while
+  the Upload buttons beside them were already gated on `documents.manage`. The
+  copy was an instruction with nothing behind it.
+
+- **The upload, new-folder and delete dialogs outlived the permission that
+  opened them.** Each rendered on its own open state, so losing
+  `documents.manage` with one open left its action on screen. All three are now
+  gated like the controls that open them.
+
+**Changed**
+
+- **With no folders and no documents, a member now sees a blank page** rather
+  than a card whose copy and action are both invitations to start uploading. An
+  empty folder they opened is still reported as empty — that is feedback on
+  their own navigation — with only the upload instruction withheld.
+
 ### Shift planning is one screen instead of three places (2026-09-05)
 
 **Added**
