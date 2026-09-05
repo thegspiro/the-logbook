@@ -86,6 +86,7 @@ from app.schemas.inventory import (
     EquipmentRequestFulfill,
     EquipmentRequestReview,
     ExpiringLotResponse,
+    FulfillmentOptionsResponse,
     ImpactPlanCreate,
     ImpactPlannerIssueRequest,
     ImpactPlannerIssueResponse,
@@ -3850,6 +3851,50 @@ async def list_equipment_requests(
         "skip": skip,
         "limit": limit,
     }
+
+
+@router.get(
+    "/requests/{request_id}/fulfillment-options",
+    response_model=FulfillmentOptionsResponse,
+)
+async def get_request_fulfillment_options(
+    request_id: UUID,
+    search: str | None = Query(
+        None, description="Filter by name, serial, tag, barcode"
+    ),
+    include_incompatible: bool = Query(
+        False,
+        description="Browse the whole gear catalog for a deliberate substitution",
+    ),
+    limit: int = Query(200, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    The rows this request may be fulfilled with, judged server-side.
+
+    Distinct from ``GET /items``: the picker needs each row's issuable count
+    and stock size decided by the same code that will accept or reject the
+    fulfilment, plus the three answers about the request itself — which row to
+    preselect, whether the requested size is on the shelf, and whether it can
+    be fulfilled at all. Deriving those in the browser needs a copy of the
+    size-alias table and the unissuable status/condition sets, and both copies
+    drifted from this service before the endpoint existed.
+
+    **Requires permission: inventory.manage**
+    """
+    result = await InventoryService(db).get_fulfillment_options(
+        request_id=request_id,
+        organization_id=current_user.organization_id,
+        search=search,
+        include_incompatible=include_incompatible,
+        limit=limit,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
+        )
+    return FulfillmentOptionsResponse(**result)
 
 
 @router.put("/requests/{request_id}/review")

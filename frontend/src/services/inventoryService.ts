@@ -82,6 +82,8 @@ import type {
   InventoryLotCreate,
   InventoryLotUpdate,
   ExpiringLot,
+  FulfillmentOption,
+  FulfillmentOptionsResponse,
   RequestableCatalogResponse,
 } from './eventServices';
 import { asArray } from '../utils/asArray';
@@ -701,6 +703,39 @@ export const inventoryService = {
       }
     );
     return response.data;
+  },
+
+  /**
+   * The rows this request may be fulfilled with, judged by the backend.
+   *
+   * Separate from `getItems` because the picker needs the same verdicts the
+   * fulfilment itself will apply — issuable count, stock size, whether the
+   * requested size is on hand — and a browser copy of those rules drifted from
+   * the service twice. It is also the only answer that holds on a catalog
+   * larger than one page: a client that fetched 500 of 900 rows cannot tell
+   * "nothing on hand" from "not on this page".
+   */
+  async getFulfillmentOptions(
+    requestId: string,
+    params?: {
+      search?: string | undefined;
+      include_incompatible?: boolean | undefined;
+      limit?: number | undefined;
+    }
+  ): Promise<FulfillmentOptionsResponse> {
+    const response = await api.get<FulfillmentOptionsResponse>(`/inventory/requests/${requestId}/fulfillment-options`, {
+      params,
+    });
+    return {
+      request_id: response.data?.request_id ?? requestId,
+      requested_size: response.data?.requested_size ?? null,
+      quantity: response.data?.quantity ?? 1,
+      suggested_item_id: response.data?.suggested_item_id ?? null,
+      requested_size_available: response.data?.requested_size_available ?? false,
+      can_fulfill_now: response.data?.can_fulfill_now ?? false,
+      truncated: response.data?.truncated ?? false,
+      options: asArray<FulfillmentOption>(response.data?.options),
+    };
   },
 
   async reviewEquipmentRequest(
