@@ -93,11 +93,19 @@ const generateDefaultPermissions = (
  * heuristic supplied its boxes — Reports among them — and `save_session_roles`
  * stored that as a permission-bearing `is_system` row.
  *
+ * `member`, `firefighter` and `emt` lost `apparatus` on 2026-09-05: the fleet
+ * record is a maintenance and compliance workspace, not a member amenity. A
+ * config persisted before that deploy still has the box ticked, and
+ * `handleContinue` submits whatever is here — so without this the wizard would
+ * re-grant `apparatus.view` on the first Continue, after the migration that
+ * revoked it had already run. `engineer` is absent on purpose: it is the
+ * driver/operator rank and keeps the grant.
+ *
  * Deliberately narrow. This reconciliation overwrites what was saved, and an
  * administrator's own edits to a built-in position are saved the same way, so
  * a slug belongs here only while its seeded grants have genuinely moved.
  */
-const STALE_SEEDED_SLUGS = new Set(['emt']);
+const STALE_SEEDED_SLUGS = new Set(['emt', 'member', 'firefighter']);
 
 const RETIRED_STANDING_SLUGS = new Set([
   'probationary_member',

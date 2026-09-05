@@ -102,12 +102,6 @@ const availableItem: InventoryItem = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-const firstButton = (name: string | RegExp): HTMLElement => {
-  const [btn] = screen.getAllByRole('button', { name });
-  if (!btn) throw new Error(`button not found: ${String(name)}`);
-  return btn;
-};
-
 describe('MyEquipmentPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -129,10 +123,14 @@ describe('MyEquipmentPage', () => {
 
   it('shows empty section messaging when nothing is assigned', async () => {
     renderWithRouter(<MyEquipmentPage />);
-    expect(await screen.findByText('No permanent assignments.')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing issued to you.')).toBeInTheDocument();
+    expect(screen.getByText('Issued to Me')).toBeInTheDocument();
     expect(screen.getByText('No active temporary loans.')).toBeInTheDocument();
     expect(screen.getByText('Active Temporary Loans')).toBeInTheDocument();
-    expect(screen.getByText('No issued items.')).toBeInTheDocument();
+    // Permanent assignments and pool issuances share one section; a member
+    // holds both open-endedly, so nothing on this page splits them any more.
+    expect(screen.queryByText('Permanent Assignments')).not.toBeInTheDocument();
+    expect(screen.queryByText('Issued Items')).not.toBeInTheDocument();
   });
 
   it('shows an error toast when inventory fails to load', async () => {
@@ -158,21 +156,59 @@ describe('MyEquipmentPage', () => {
     expect(mockCheckInItem).not.toHaveBeenCalled();
   });
 
-  it('submits a return request for an assignment', async () => {
+  it('lists assignments and issuances in one section, most recent first', async () => {
+    mockGetUserInventory.mockResolvedValue(fullInv);
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByText('Turnout Coat');
+
+    const gearNames = screen
+      .getAllByRole('link')
+      .filter((a) => a.getAttribute('href')?.startsWith('/inventory/items/'))
+      .map((a) => a.textContent);
+    // Work Gloves (issued 2026-02-05) precedes Turnout Coat (assigned
+    // 2026-01-01): the two record types interleave by date rather than
+    // sitting in separate blocks. The checkout trails both, in its own
+    // section, so its position here is incidental.
+    expect(gearNames).toEqual(['Work Gloves', 'Turnout Coat', 'Thermal Camera']);
+  });
+
+  it('submits a return request for an assignment row', async () => {
     mockGetUserInventory.mockResolvedValue(fullInv);
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByText('Turnout Coat');
 
-    // The assignment row has the first notification action; this does not
-    // claim the member has already handed the gear in.
-    await user.click(firstButton(/Notify quartermaster of return/));
+    // Target the row by name rather than by position: merging the two lists
+    // means an assignment is no longer reliably the first action on the page.
+    // Notifying does not claim the member has already handed the gear in.
+    await user.click(screen.getByRole('button', { name: 'Notify quartermaster of return: Turnout Coat' }));
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => expect(mockCreateReturnRequest).toHaveBeenCalledTimes(1));
     expect(mockCreateReturnRequest.mock.calls[0]?.[0]).toMatchObject({
       return_type: 'assignment',
       item_id: 'it-1',
+      assignment_id: 'as-1',
+    });
+  });
+
+  it('submits a return request for an issuance row in the same section', async () => {
+    mockGetUserInventory.mockResolvedValue(fullInv);
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByText('Work Gloves');
+
+    await user.click(screen.getByRole('button', { name: 'Notify quartermaster of return: Work Gloves' }));
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(mockCreateReturnRequest).toHaveBeenCalledTimes(1));
+    // The merged list must not flatten the two record types onto one endpoint
+    // shape: an issuance returns units against issuance_id, not assignment_id.
+    expect(mockCreateReturnRequest.mock.calls[0]?.[0]).toMatchObject({
+      return_type: 'issuance',
+      item_id: 'it-3',
+      issuance_id: 'is-1',
+      quantity_returning: 1,
     });
   });
 

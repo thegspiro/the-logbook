@@ -12,9 +12,11 @@ its constants, and the centrepiece is
 ``TestTheEndState::test_a_wizard_row_ends_up_matching_the_registry``: it
 reconstructs the row as it actually exists today — heuristic output with the
 earlier per-permission revocations already applied — and asserts that after this
-migration it equals ``DEFAULT_POSITIONS`` exactly. That is the property the
-whole repair chain exists to produce, and no reading of the constants
-establishes it.
+migration and the later links in ``_LATER_LINKS`` it equals
+``DEFAULT_POSITIONS`` exactly. That is the property the whole repair chain
+exists to produce, and no reading of the constants establishes it. The chain is
+what the assertion runs, so a later deliberate change to a seeded grant belongs
+in ``_LATER_LINKS`` rather than being read as a failure here.
 """
 
 import importlib.util
@@ -63,6 +65,22 @@ def _load(path, name):
 
 def _migration():
     return _load(_PATH, "_repair_wizard_grants")
+
+
+#: The links of the chain that still act on these rows after ``d1c7f4a92e63``.
+#:
+#: The end-state assertion below compares against the *current* registry, so it
+#: has to run every migration standing between this one and it — otherwise the
+#: next deliberate change to a seeded grant reads as this migration's failure.
+#: ``b6e4a0d17c93`` revoked ``apparatus.view`` from the rank-and-file slugs on
+#: 2026-09-05 and is the first such change since; ``f3b8d0c26a17`` is a no-op on
+#: a row this migration has already repaired and is left out for that reason.
+_LATER_LINKS = (
+    (
+        _VERSIONS / "20260905_1420_b6e4a0d17c93_revoke_baseline_apparatus_view.py",
+        "_revoke_baseline_apparatus_view",
+    ),
+)
 
 
 def _heuristic_output(slug):
@@ -161,7 +179,18 @@ class TestTheEndState:
 
     @pytest.mark.parametrize("slug", SLUGS)
     def test_a_wizard_row_ends_up_matching_the_registry(self, positions_table, slug):
-        result = _repair_row(positions_table, slug, _row_as_it_exists_today(slug))
+        with positions_table.begin() as conn:
+            _insert(conn, "row", slug, _row_as_it_exists_today(slug))
+
+        _run_upgrade(positions_table)
+        for path, name in _LATER_LINKS:
+            module = _load(path, name)
+            with positions_table.begin() as conn:
+                module.op = _Op(conn)
+                module.upgrade()
+
+        with positions_table.connect() as conn:
+            result = _stored(conn, "row")
 
         assert sorted(result) == sorted(DEFAULT_POSITIONS[slug]["permissions"])
 
