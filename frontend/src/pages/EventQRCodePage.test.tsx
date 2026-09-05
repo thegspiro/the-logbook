@@ -197,7 +197,7 @@ describe('EventQRCodePage', () => {
       });
     });
 
-    it('should show greyed-out QR code when check-in is invalid', async () => {
+    it('should withhold the QR code and show a placeholder when check-in is invalid', async () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
@@ -208,9 +208,12 @@ describe('EventQRCodePage', () => {
       renderWithRouter(<EventQRCodePage />);
 
       await waitFor(() => {
-        // The QR code is still rendered but with reduced opacity
-        expect(screen.getByTestId('qr-code')).toBeInTheDocument();
+        expect(screen.getByTestId('qr-code-placeholder')).toBeInTheDocument();
       });
+
+      // A greyed-out code is still scannable, so no code may be rendered at all
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+      expect(screen.getByText(/QR code hidden until check-in opens/)).toBeInTheDocument();
     });
 
     it('should not show print button when check-in is invalid', async () => {
@@ -296,6 +299,29 @@ describe('EventQRCodePage', () => {
       await act(() => vi.advanceTimersByTimeAsync(30000));
 
       expect(screen.getByText('Check-in Not Available')).toBeInTheDocument();
+    });
+
+    it('should reveal the QR code once the check-in window opens', async () => {
+      let callCount = 0;
+      vi.mocked(eventService.getQRCheckInData).mockImplementation(() => {
+        callCount++;
+        return Promise.resolve({
+          ...mockQRCheckInData,
+          is_valid: callCount > 1, // Window opens on the first refresh
+        });
+      });
+
+      renderWithRouter(<EventQRCodePage />);
+
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(screen.getByTestId('qr-code-placeholder')).toBeInTheDocument();
+      expect(screen.queryByTestId('qr-code')).not.toBeInTheDocument();
+
+      await act(() => vi.advanceTimersByTimeAsync(30000));
+
+      expect(screen.getByTestId('qr-code')).toBeInTheDocument();
+      expect(screen.queryByTestId('qr-code-placeholder')).not.toBeInTheDocument();
     });
 
     it('should keep displaying existing data when auto-refresh errors', async () => {
