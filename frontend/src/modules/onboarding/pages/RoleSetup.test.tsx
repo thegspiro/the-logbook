@@ -143,7 +143,22 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     // saved, and an administrator's own edits to a built-in position are saved
     // the same way — resetting all of them would discard the customization
     // they made before stepping away to the modules page.
-    expect(source).toMatch(/const stale = template && STALE_SEEDED_SLUGS\.has\(posId\)/);
     expect(source).toMatch(/const STALE_SEEDED_SLUGS = new Set\(\['emt'\]\)/);
+  });
+
+  it('does it once, not on every mount', () => {
+    // Narrowing to one slug is not enough on its own: repeating it for that
+    // slug discards the same edits, just only for EMT. The mount consults
+    // `reconciledSeededSlugs`, and records the outcome afterwards so the next
+    // mount leaves the slug alone.
+    expect(source).toMatch(/!reconciledSeededSlugs\.includes\(posId\)/);
+    expect(source).toMatch(/const stale = template && slugsToReconcile\.includes\(posId\)/);
+    expect(source).toMatch(/markSeededSlugsReconciled\(slugsToReconcile\)/);
+  });
+
+  it('latches the decision instead of recomputing it', () => {
+    // The effect adds to `reconciledSeededSlugs`; recomputing off that would
+    // decide mid-mount that a slug was already handled.
+    expect(source).toMatch(/slugsToReconcileRef\.current === null/);
   });
 });

@@ -300,6 +300,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list its rank already uses. Departments that never had an EMT position are
   unaffected until they add one.
 
+- **An existing EMT position regains what the setup screen could not say.**
+  The screen only has two checkboxes per module, so an EMT position created
+  through it never received four grants the EMT rank carries: seeing the
+  department's own information, its locations and its meetings, and asking to
+  swap a shift. Every EMT position in existence came from that screen, because
+  the registry had no EMT entry to create one from, so these are restored
+  wherever they are missing.
+
 - **The restored grants are handled the other way round.**
   `storefront.order` and `inventory.check_submit` are only added back to a row
   still recognisable as the old rule's output. Granting where it is not wanted
