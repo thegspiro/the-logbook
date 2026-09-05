@@ -805,8 +805,16 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     If there are no active members, returns 0.0.
     """
     # Get active members (exclude compliance-exempt members)
+    # positions is eager-loaded because _find_matching_profile reads it for
+    # every member below, and it is a lazy relationship: touching it unloaded
+    # on an AsyncSession raises MissingGreenlet. Only the *caller* arrives with
+    # positions warmed by the auth dependency, so an org that configures any
+    # compliance profile raised on the first member who was not the caller —
+    # which is to say, on every real request.
     members_result = await db.execute(
-        select(User).where(
+        select(User)
+        .options(selectinload(User.positions))
+        .where(
             User.organization_id == org_id,
             User.status == UserStatus.ACTIVE,
             User.compliance_exempt.is_(False),

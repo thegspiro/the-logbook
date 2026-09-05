@@ -276,3 +276,289 @@ class TestApplicableRequirementDenominator:
         assert member["standing"] == "non_compliant"
         assert member["completion_pct"] == 0.0
         assert member["requirements_met"] == 0
+
+
+async def _insert_compliance_config(
+    db_session: AsyncSession,
+    org_id: str,
+    *,
+    compliant_threshold: float = 100.0,
+    at_risk_threshold: float = 75.0,
+    threshold_type: str = "percentage",
+) -> str:
+    config_id = _uid()
+    await db_session.execute(
+        text(
+            "INSERT INTO compliance_configs "
+            "(id, organization_id, compliant_threshold, at_risk_threshold, "
+            "threshold_type, include_current_month, created_at, updated_at) "
+            "VALUES (:id, :org, :ct, :art, :tt, 1, :now, :now)"
+        ),
+        {
+            "id": config_id,
+            "org": org_id,
+            "ct": compliant_threshold,
+            "art": at_risk_threshold,
+            "tt": threshold_type,
+            "now": _NOW,
+        },
+    )
+    await db_session.flush()
+    return config_id
+
+
+async def _insert_profile(
+    db_session: AsyncSession,
+    config_id: str,
+    *,
+    name: str,
+    membership_types: list[str] | None = None,
+    required_requirement_ids: list[str] | None = None,
+    compliant_override: float | None = None,
+    at_risk_override: float | None = None,
+    priority: int = 10,
+) -> str:
+    profile_id = _uid()
+    await db_session.execute(
+        text(
+            "INSERT INTO compliance_profiles "
+            "(id, config_id, name, membership_types, role_ids, "
+            "required_requirement_ids, compliant_threshold_override, "
+            "at_risk_threshold_override, priority, is_active, "
+            "created_at, updated_at) "
+            "VALUES (:id, :cfg, :name, :mt, NULL, :rr, :co, :ao, :prio, 1, "
+            ":now, :now)"
+        ),
+        {
+            "id": profile_id,
+            "cfg": config_id,
+            "name": name,
+            "mt": json.dumps(membership_types) if membership_types else None,
+            "rr": (
+                json.dumps(required_requirement_ids)
+                if required_requirement_ids is not None
+                else None
+            ),
+            "co": compliant_override,
+            "ao": at_risk_override,
+            "prio": priority,
+            "now": _NOW,
+        },
+    )
+    await db_session.flush()
+    return profile_id
+
+
+class TestComplianceProfiles:
+    """The dashboard percentage honours profiles; the matrix links from it and
+    has to agree. A member reading "compliant" on one and "non-compliant" on
+    the other is a support call."""
+
+    async def test_profile_narrows_which_requirements_grade_a_member(
+        self, db_session: AsyncSession
+    ):
+        org_id = await _insert_org(db_session)
+        user_id = await _insert_member(db_session, org_id, last_name="Reyes")
+        graded = await _insert_hours_req(db_session, org_id, name="Company Hours")
+        # Deliberately out of reach, so grading against it would drag the
+        # member below compliant if the profile were ignored.
+        await _insert_hours_req(
+            db_session, org_id, name="Officer Hours", required_hours=100.0
+        )
+        await _insert_record(
+            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+        )
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        await _insert_profile(
+            db_session,
+            config_id,
+            name="Active members",
+            membership_types=["active"],
+            required_requirement_ids=[graded],
+        )
+
+        payload = await _call(db_session, org_id)
+
+        member = payload["members"][0]
+        # Only the profile's requirement grades them, so 30 hours is full marks
+        # rather than half.
+        assert member["requirements_total"] == 1
+        assert member["requirements_met"] == 1
+        assert member["completion_pct"] == 100.0
+        assert member["standing"] == "compliant"
+        assert [c["requirement_name"] for c in member["requirements"]] == [
+            "Company Hours"
+        ]
+
+    async def test_profile_threshold_override_changes_the_standing(
+        self, db_session: AsyncSession
+    ):
+        org_id = await _insert_org(db_session)
+        user_id = await _insert_member(db_session, org_id, last_name="Ito")
+        await _insert_hours_req(db_session, org_id, name="Company Hours")
+        await _insert_hours_req(
+            db_session, org_id, name="Officer Hours", required_hours=100.0
+        )
+        await _insert_record(
+            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+        )
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        # One of two met is 50% — non-compliant on the org default, compliant
+        # for a group whose profile says half is enough.
+        await _insert_profile(
+            db_session,
+            config_id,
+            name="Support",
+            membership_types=["active"],
+            compliant_override=50.0,
+            at_risk_override=25.0,
+        )
+
+        payload = await _call(db_session, org_id)
+
+        member = payload["members"][0]
+        assert member["completion_pct"] == 50.0
+        assert member["standing"] == "compliant"
+
+    async def test_empty_required_list_means_nothing_is_required(
+        self, db_session: AsyncSession
+    ):
+        """An explicitly empty list is "nothing required of this group", not
+        "unset" — the distinction CMP2-3 fixed in compute_org_compliance_pct."""
+        org_id = await _insert_org(db_session)
+        await _insert_member(db_session, org_id, last_name="Grady")
+        await _insert_hours_req(db_session, org_id, name="Company Hours")
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        await _insert_profile(
+            db_session,
+            config_id,
+            name="Life members",
+            membership_types=["active"],
+            required_requirement_ids=[],
+        )
+
+        payload = await _call(db_session, org_id)
+
+        member = payload["members"][0]
+        assert member["requirements"] == []
+        assert member["requirements_total"] == 0
+        assert member["standing"] == "compliant"
+
+    async def test_matrix_agrees_with_the_org_percentage(
+        self, db_session: AsyncSession
+    ):
+        """Cross-check against the function that feeds the dashboard."""
+        from app.services.training_compliance import compute_org_compliance_pct
+
+        org_id = await _insert_org(db_session)
+        user_id = await _insert_member(db_session, org_id, last_name="Novak")
+        graded = await _insert_hours_req(db_session, org_id, name="Company Hours")
+        await _insert_hours_req(
+            db_session, org_id, name="Officer Hours", required_hours=100.0
+        )
+        await _insert_record(
+            db_session, org_id, user_id, hours=30.0, completion_date=date.today()
+        )
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        await _insert_profile(
+            db_session,
+            config_id,
+            name="Active members",
+            membership_types=["active"],
+            required_requirement_ids=[graded],
+        )
+
+        payload = await _call(db_session, org_id)
+        org_pct = await compute_org_compliance_pct(db_session, org_id)
+
+        compliant = [m for m in payload["members"] if m["standing"] == "compliant"]
+        # One member, compliant on both readings.
+        assert len(compliant) == 1
+        assert org_pct == 100.0
+
+
+class TestConfigLoadedOnce:
+    async def test_config_is_not_loaded_twice_per_request(
+        self, db_session: AsyncSession, monkeypatch
+    ):
+        """get_org_include_current_month() issues the same query with the same
+        selectinload; calling both cost every configured org a duplicate
+        config+profile round trip on each visit."""
+        from app.api.v1.endpoints import training as training_ep
+
+        org_id = await _insert_org(db_session)
+        await _insert_member(db_session, org_id, last_name="Boyle")
+        await _insert_hours_req(db_session, org_id, name="Company Hours")
+        await _insert_compliance_config(db_session, org_id)
+
+        calls = 0
+        original = training_ep._load_compliance_config
+
+        async def counting(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return await original(*args, **kwargs)
+
+        monkeypatch.setattr(training_ep, "_load_compliance_config", counting)
+
+        await _call(db_session, org_id)
+
+        assert calls == 1
+
+
+class TestProfileMemberLoading:
+    async def test_org_percentage_survives_a_member_who_is_not_the_caller(
+        self, db_session: AsyncSession
+    ):
+        """Regression: `compute_org_compliance_pct` selected members with no
+        eager load, then `_find_matching_profile` read `member.positions` on
+        each one. That relationship is lazy, so touching it unloaded on an
+        AsyncSession raises MissingGreenlet — and only the *caller* arrives
+        with it warmed by the auth dependency. Any org that configured a
+        compliance profile therefore raised on the first member who was not
+        the caller, which is every real request.
+
+        Deliberately does not warm the relationship first; warming it is what
+        hid this.
+        """
+        from app.services.training_compliance import compute_org_compliance_pct
+
+        org_id = await _insert_org(db_session)
+        await _insert_member(db_session, org_id, last_name="Alvarez")
+        await _insert_member(db_session, org_id, last_name="Mbeki")
+        req_id = await _insert_hours_req(db_session, org_id, name="Company Hours")
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        await _insert_profile(
+            db_session,
+            config_id,
+            name="Active members",
+            membership_types=["active"],
+            required_requirement_ids=[req_id],
+        )
+
+        pct = await compute_org_compliance_pct(db_session, org_id)
+        assert pct == 0.0
+
+    async def test_matrix_survives_the_same(self, db_session: AsyncSession):
+        org_id = await _insert_org(db_session)
+        await _insert_member(db_session, org_id, last_name="Alvarez")
+        await _insert_member(db_session, org_id, last_name="Mbeki")
+        req_id = await _insert_hours_req(db_session, org_id, name="Company Hours")
+
+        config_id = await _insert_compliance_config(db_session, org_id)
+        await _insert_profile(
+            db_session,
+            config_id,
+            name="Active members",
+            membership_types=["active"],
+            required_requirement_ids=[req_id],
+        )
+
+        payload = await _call(db_session, org_id)
+        assert len(payload["members"]) == 2
+        assert all(m["standing"] == "non_compliant" for m in payload["members"])

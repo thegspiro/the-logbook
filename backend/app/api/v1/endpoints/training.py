@@ -78,6 +78,7 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.qualification_service import QualificationService
 from app.services.training_compliance import (
+    _find_matching_profile,
     _load_compliance_config,
     classify_standing,
     evaluate_member_requirement,
@@ -2741,9 +2742,15 @@ async def get_compliance_matrix(
     """
     org_id = current_user.organization_id
 
-    # Get all active members (exclude compliance-exempt members)
+    # Get all active members (exclude compliance-exempt members).
+    # positions is eager-loaded because _find_matching_profile reads it for
+    # every member below, and it is a lazy relationship: touching it unloaded
+    # on an AsyncSession raises MissingGreenlet. Only the *caller* arrives with
+    # positions warmed by the auth dependency, so relying on that would fail on
+    # the second member of any org that uses compliance profiles.
     members_result = await db.execute(
         select(User)
+        .options(selectinload(User.positions))
         .where(
             User.organization_id == org_id,
             User.status == UserStatus.ACTIVE,
@@ -2790,14 +2797,23 @@ async def get_compliance_matrix(
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
     today = date.today()
-    org_include_current = await get_org_include_current_month(db, str(org_id))
 
-    # Thresholds decide the standing label. Loaded once for the whole matrix
-    # rather than per member — _load_compliance_config issues a query.
+    # One config load for the whole matrix. get_org_include_current_month()
+    # would issue this same query — with the same selectinload of profiles —
+    # so calling both cost every configured org a duplicate config+profile
+    # round trip on each visit.
     config = await _load_compliance_config(db, str(org_id))
+    org_include_current = True if config is None else bool(config.include_current_month)
     compliant_threshold = config.compliant_threshold if config else 100.0
     at_risk_threshold = config.at_risk_threshold if config else 75.0
     threshold_type = (config.threshold_type if config else None) or "percentage"
+    # Higher priority first, matching compute_org_compliance_pct.
+    profiles = (
+        sorted(config.profiles, key=lambda p: p.priority, reverse=True)
+        if config and config.profiles
+        else []
+    )
+    reqs_by_id = {str(r.id): r for r in requirements}
 
     matrix = []
     # The evaluation cut-off can differ per requirement (each may override
@@ -2812,7 +2828,32 @@ async def get_compliance_matrix(
         req_statuses = []
         completed_count = 0
 
-        for req in requirements:
+        # A compliance profile narrows which requirements grade this member and
+        # can override the thresholds. compute_org_compliance_pct — which feeds
+        # the dashboard percentage this screen links from — already honours
+        # both, so skipping them here made the matrix label a member
+        # differently from the dashboard for any org using profiles.
+        member_requirements = requirements
+        member_compliant_threshold = compliant_threshold
+        member_at_risk_threshold = at_risk_threshold
+        if profiles:
+            profile = _find_matching_profile(member, profiles)
+            if profile:
+                # `is not None`, not truthy: an explicitly empty list means
+                # "nothing is required of this group" and must not fall back
+                # to grading against every org-wide requirement (CMP2-3).
+                if profile.required_requirement_ids is not None:
+                    member_requirements = [
+                        reqs_by_id[rid]
+                        for rid in profile.required_requirement_ids
+                        if rid in reqs_by_id
+                    ]
+                if profile.compliant_threshold_override is not None:
+                    member_compliant_threshold = profile.compliant_threshold_override
+                if profile.at_risk_threshold_override is not None:
+                    member_at_risk_threshold = profile.at_risk_threshold_override
+
+        for req in member_requirements:
             # Skip requirements not applicable to this member's membership type
             if req.required_membership_types:
                 if member_membership_type not in req.required_membership_types:
@@ -2857,8 +2898,8 @@ async def get_compliance_matrix(
         standing, pct = classify_standing(
             completed_count,
             applicable_total,
-            compliant_threshold,
-            at_risk_threshold,
+            member_compliant_threshold,
+            member_at_risk_threshold,
             threshold_type,
         )
         member_name = (

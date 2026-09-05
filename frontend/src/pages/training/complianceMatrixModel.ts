@@ -20,24 +20,13 @@ import type {
   ComplianceMatrixRequirement,
 } from '@/services/communicationsServices';
 import { COMPLIANCE_EXPIRING_SOON_DAYS } from '@/constants/config';
-import { calendarDaysFromToday, formatCalendarDate } from '@/utils/dateFormatting';
+import { CellTone, Standing } from '@/constants/enums';
+import { calendarDaysBetween, formatCalendarDate, getTodayLocalDate } from '@/utils/dateFormatting';
 
-/** How a single cell reads. Ordered worst-last for the legend. */
-export const CellTone = {
-  MET: 'met',
-  SHORT: 'short',
-  SOON: 'soon',
-  LAPSED: 'lapsed',
-  MISSING: 'missing',
-} as const;
-export type CellTone = (typeof CellTone)[keyof typeof CellTone];
-
-export const Standing = {
-  COMPLIANT: 'compliant',
-  AT_RISK: 'at_risk',
-  NON_COMPLIANT: 'non_compliant',
-} as const;
-export type Standing = (typeof Standing)[keyof typeof Standing];
+// CellTone and Standing live in constants/enums.ts with every other `as const`
+// enum in the app. Re-exported here so the matrix's consumers can keep taking
+// their whole vocabulary from one import.
+export { CellTone, Standing } from '@/constants/enums';
 
 export interface EvaluatedCell {
   cell: ComplianceMatrixCell;
@@ -68,7 +57,16 @@ export interface RequirementRollup {
   requirement: ComplianceMatrixRequirement;
   met: number;
   total: number;
-  pct: number;
+  /**
+   * Share of applicable members meeting it, or **null** when nobody is
+   * graded against it at all.
+   *
+   * An empty denominator is not success. A probationary-only requirement in a
+   * department with no probationary members would otherwise read "100% met"
+   * in green, and its detail pane would claim every member meets it, when in
+   * fact nobody has been evaluated.
+   */
+  pct: number | null;
   /** Members whose cell for this requirement is not met. */
   behind: EvaluatedMember[];
   waived: number;
@@ -100,20 +98,36 @@ const unitLabel = (unit: string | null | undefined, count: number): string => {
 };
 
 /**
- * Days until a cell's expiry, or null when it has no expiry date.
+ * The date every cell was judged against.
  *
- * Negative means it has already lapsed. Expiry arrives as a bare YYYY-MM-DD —
- * a calendar date, never shifted into another day by the viewer's timezone.
+ * Not the viewer's today. When an organization or a requirement excludes the
+ * in-progress month, the backend evaluates through the previous month-end and
+ * reports that as `as_of`. Measuring expiry from wall-clock today instead
+ * turns a certificate the backend accepted — one that lapsed *after* the
+ * cutoff — into a lapsed cell, which puts an open item on a member the same
+ * response calls compliant. Every date comparison on this screen uses this
+ * basis so the frontend and the backend are reading the same day.
  */
-export const daysUntilExpiry = (cell: ComplianceMatrixCell, timezone?: string): number | null =>
-  calendarDaysFromToday(cell.expiry_date, timezone);
+export const evaluationBasis = (matrix: Pick<ComplianceMatrix, 'as_of'>, timezone?: string): string =>
+  matrix.as_of || getTodayLocalDate(timezone);
 
-export const toneOf = (cell: ComplianceMatrixCell, timezone?: string): CellTone => {
+/**
+ * Days from the evaluation cutoff to a cell's expiry, or null when it has no
+ * expiry date. Negative means it had already lapsed by then.
+ *
+ * Expiry arrives as a bare YYYY-MM-DD — a calendar date, never shifted into
+ * another day by the viewer's timezone.
+ */
+export const daysUntilExpiry = (cell: ComplianceMatrixCell, asOf: string): number | null =>
+  calendarDaysBetween(cell.expiry_date, asOf);
+
+export const toneOf = (cell: ComplianceMatrixCell, asOf: string): CellTone => {
   if (cell.status === 'expired') return CellTone.LAPSED;
   if (MET_STATUSES.has(cell.status)) {
-    const days = daysUntilExpiry(cell, timezone);
+    const days = daysUntilExpiry(cell, asOf);
     if (days !== null && days <= COMPLIANCE_EXPIRING_SOON_DAYS) {
-      // Already past its date but still reported met — trust the date.
+      // Already past its date at the cutoff but still reported met — trust
+      // the date.
       return days < 0 ? CellTone.LAPSED : CellTone.SOON;
     }
     return CellTone.MET;
@@ -133,13 +147,13 @@ const percentOf = (cell: ComplianceMatrixCell, tone: CellTone): number => {
   return tone === CellTone.MET || tone === CellTone.SOON ? 100 : 0;
 };
 
-const progressLabelOf = (cell: ComplianceMatrixCell, tone: CellTone, timezone?: string): string => {
+const progressLabelOf = (cell: ComplianceMatrixCell, tone: CellTone, asOf: string): string => {
   const required = cell.progress_required ?? 0;
   if (required > 0) {
     const current = cell.progress_current ?? 0;
     return `${num(current)} of ${num(required)} ${unitLabel(cell.progress_unit, required)}`;
   }
-  const days = daysUntilExpiry(cell, timezone);
+  const days = daysUntilExpiry(cell, asOf);
   if (tone === CellTone.LAPSED) {
     return days === null ? 'Lapsed' : `Lapsed ${num(Math.abs(days))} days ago`;
   }
@@ -192,15 +206,15 @@ const waiverNoteOf = (cell: ComplianceMatrixCell): string | null => {
 export const evaluateCell = (
   cell: ComplianceMatrixCell,
   requirement: ComplianceMatrixRequirement | undefined,
-  timezone?: string
+  asOf: string
 ): EvaluatedCell => {
-  const tone = toneOf(cell, timezone);
+  const tone = toneOf(cell, asOf);
   return {
     cell,
     requirement,
     tone,
     pct: percentOf(cell, tone),
-    progressLabel: progressLabelOf(cell, tone, timezone),
+    progressLabel: progressLabelOf(cell, tone, asOf),
     dateLabel: dateLabelOf(cell, tone),
     waiverNote: waiverNoteOf(cell),
   };
@@ -217,10 +231,10 @@ const standingOf = (member: ComplianceMatrixMember, met: number, total: number):
 export const evaluateMember = (
   member: ComplianceMatrixMember,
   requirementsById: Map<string, ComplianceMatrixRequirement>,
-  timezone?: string
+  asOf: string
 ): EvaluatedMember => {
   const cells = (member.requirements ?? []).map((cell) =>
-    evaluateCell(cell, requirementsById.get(cell.requirement_id), timezone)
+    evaluateCell(cell, requirementsById.get(cell.requirement_id), asOf)
   );
   const met = cells.filter((c) => isMetTone(c.tone)).length;
   const total = cells.length;
@@ -237,7 +251,8 @@ export const evaluateMember = (
 
 export const evaluateMatrix = (matrix: ComplianceMatrix, timezone?: string): EvaluatedMember[] => {
   const byId = new Map((matrix.requirements ?? []).map((r) => [r.id, r]));
-  return (matrix.members ?? []).map((m) => evaluateMember(m, byId, timezone));
+  const asOf = evaluationBasis(matrix, timezone);
+  return (matrix.members ?? []).map((m) => evaluateMember(m, byId, asOf));
 };
 
 /**
@@ -268,11 +283,30 @@ export const rollUpRequirements = (
       requirement,
       met,
       total,
-      pct: total === 0 ? 100 : Math.round((met / total) * 100),
+      pct: total === 0 ? null : Math.round((met / total) * 100),
       behind: applicable.filter((e) => !isMetTone(e.cell.tone)).map((e) => e.member),
       waived: applicable.filter((e) => (e.cell.cell.waived_months ?? 0) > 0).length,
     };
   });
+
+/**
+ * How a requirement reads on the by-requirement axis.
+ *
+ * "At risk whenever at least one applicable member has not met it" is the
+ * dashboard's own predicate: `requirements_at_risk` in the training
+ * dashboard-summary endpoint lists a requirement whenever its unmet count is
+ * above zero. The matrix briefly applied its own 85% cutoff instead, so a
+ * requirement met by 9 of 10 members appeared in the dashboard's at-risk list
+ * and green here — concealing the tenth member from a coordinator who arrived
+ * from that very list. One definition, not two.
+ *
+ * A requirement nobody is graded against is not compliant either; there is
+ * simply nothing to report, which the rail says in its own group.
+ */
+export const requirementStanding = (rollup: RequirementRollup): Standing => {
+  if (rollup.total === 0) return Standing.AT_RISK;
+  return rollup.behind.length === 0 ? Standing.COMPLIANT : Standing.AT_RISK;
+};
 
 export const cellFor = (member: EvaluatedMember, requirementId: string): EvaluatedCell | undefined =>
   member.cells.find((c) => c.cell.requirement_id === requirementId);

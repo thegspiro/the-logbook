@@ -304,6 +304,24 @@ describe('ComplianceMatrixTab', () => {
       expect(screen.getByText('Members behind')).toBeInTheDocument();
     });
 
+    it('flags a requirement one member is behind on, matching the dashboard', async () => {
+      // The dashboard's requirements_at_risk lists a requirement whenever any
+      // applicable member has not met it. This screen used its own 85% cutoff,
+      // so 2-of-3 met (67%) would have been "Below target" but 9-of-10 (90%)
+      // green — concealing the tenth member from a coordinator who arrived
+      // from the dashboard's at-risk list.
+      const user = userEvent.setup();
+      renderWithRouter(<ComplianceMatrixTab />);
+      await screen.findByRole('heading', { name: 'Doherty, Sean' });
+
+      await user.click(screen.getByRole('tab', { name: 'By requirement' }));
+
+      const rail = within(await screen.findByRole('navigation', { name: 'Compliance queue' }));
+      expect(rail.getByText('Behind')).toBeInTheDocument();
+      // SCBA Fit Test: met by 2 of 3, so it is behind, not "holding".
+      expect(rail.getByRole('button', { name: /SCBA Fit Test/ })).toBeInTheDocument();
+    });
+
     it('offers a record link for each member behind', async () => {
       const user = userEvent.setup();
       renderWithRouter(<ComplianceMatrixTab />);

@@ -40,6 +40,7 @@ import {
   evaluateMatrix,
   rankMembers,
   requirementMeta,
+  requirementStanding,
   rollUpRequirements,
 } from './training/complianceMatrixModel';
 import type { EvaluatedCell, EvaluatedMember, RequirementRollup } from './training/complianceMatrixModel';
@@ -129,9 +130,6 @@ const STANDING_LABELS: Record<Standing, string> = {
   [Standing.AT_RISK]: 'At risk',
   [Standing.COMPLIANT]: 'Compliant',
 };
-
-/** Below this share of members met, a requirement is the department's problem. */
-const REQUIREMENT_HOLDING_PCT = 85;
 
 const Pips: React.FC<{ tones: CellTone[] }> = ({ tones }) => (
   <div className="flex gap-0.5" aria-hidden="true">
@@ -238,27 +236,40 @@ const ComplianceMatrixTab: React.FC = () => {
     const ordered =
       sort === 'az'
         ? [...rolled].sort((a, b) => a.requirement.name.localeCompare(b.requirement.name))
-        : [...rolled].sort((a, b) => a.pct - b.pct || a.requirement.name.localeCompare(b.requirement.name));
+        : [...rolled].sort(
+            (a, b) => (a.pct ?? 101) - (b.pct ?? 101) || a.requirement.name.localeCompare(b.requirement.name)
+          );
     const toItem = (r: RequirementRollup): QueueItem => ({
       id: r.requirement.id,
       title: r.requirement.name,
-      sub: `${r.pct}% of ${r.total} member${r.total === 1 ? '' : 's'} met`,
-      badge: `${r.behind.length} behind`,
-      pips: Array.from({ length: 6 }, (_, i) => (i < Math.round((r.pct / 100) * 6) ? CellTone.MET : CellTone.LAPSED)),
-      standing: r.pct < REQUIREMENT_HOLDING_PCT ? Standing.NON_COMPLIANT : Standing.COMPLIANT,
+      sub:
+        r.pct === null
+          ? 'No members are graded against this'
+          : `${r.pct}% of ${r.total} member${r.total === 1 ? '' : 's'} met`,
+      badge: r.total === 0 ? 'n/a' : `${r.behind.length} behind`,
+      pips: Array.from({ length: 6 }, (_, i) =>
+        i < Math.round(((r.pct ?? 0) / 100) * 6) ? CellTone.MET : CellTone.LAPSED
+      ),
+      standing: requirementStanding(r),
     });
     return [
       {
-        key: 'below',
-        label: 'Below target',
-        standing: Standing.NON_COMPLIANT,
-        items: ordered.filter((r) => r.pct < REQUIREMENT_HOLDING_PCT).map(toItem),
+        key: 'behind',
+        label: 'Behind',
+        standing: Standing.AT_RISK,
+        items: ordered.filter((r) => r.total > 0 && r.behind.length > 0).map(toItem),
       },
       {
-        key: 'holding',
-        label: 'Holding',
+        key: 'met',
+        label: 'Fully met',
         standing: Standing.COMPLIANT,
-        items: ordered.filter((r) => r.pct >= REQUIREMENT_HOLDING_PCT).map(toItem),
+        items: ordered.filter((r) => r.total > 0 && r.behind.length === 0).map(toItem),
+      },
+      {
+        key: 'na',
+        label: 'No applicable members',
+        standing: Standing.AT_RISK,
+        items: ordered.filter((r) => r.total === 0).map(toItem),
       },
     ].filter((g) => g.items.length > 0);
   }, [axis, evaluated, onlyBehind, query, rollups, sort]);
@@ -360,11 +371,9 @@ const ComplianceMatrixTab: React.FC = () => {
 
   const detailStandingKey: Standing = activeMember
     ? activeMember.standing
-    : (activeRollup?.pct ?? 0) >= 100
-      ? Standing.COMPLIANT
-      : (activeRollup?.pct ?? 0) >= REQUIREMENT_HOLDING_PCT
-        ? Standing.AT_RISK
-        : Standing.NON_COMPLIANT;
+    : activeRollup
+      ? requirementStanding(activeRollup)
+      : Standing.COMPLIANT;
 
   const stepNoun = axis === 'members' ? 'Member' : 'Requirement';
 
@@ -622,7 +631,11 @@ const ComplianceMatrixTab: React.FC = () => {
                           className={`h-1.5 w-1.5 rounded-full ${STANDING_CLASSES[detailStandingKey].dot}`}
                           aria-hidden="true"
                         />
-                        {activeMember ? STANDING_LABELS[activeMember.standing] : `${activeRollup?.pct ?? 0}% met`}
+                        {activeMember
+                          ? STANDING_LABELS[activeMember.standing]
+                          : activeRollup?.pct === null || activeRollup === undefined
+                            ? 'Not applicable'
+                            : `${activeRollup.pct}% met`}
                       </span>
                     </div>
                     <p className="text-theme-text-muted mt-1 text-sm">
@@ -632,9 +645,11 @@ const ComplianceMatrixTab: React.FC = () => {
                               ? `${activeMember.open} open item${activeMember.open === 1 ? '' : 's'}`
                               : 'nothing outstanding'
                           }`
-                        : `${activeRollup?.met ?? 0} of ${activeRollup?.total ?? 0} members met · ${
-                            activeRollup?.behind.length ?? 0
-                          } behind${activeRollup?.waived ? ` · ${activeRollup.waived} on a waiver` : ''}`}
+                        : activeRollup && activeRollup.total === 0
+                          ? 'No tracked member is graded against this requirement'
+                          : `${activeRollup?.met ?? 0} of ${activeRollup?.total ?? 0} members met · ${
+                              activeRollup?.behind.length ?? 0
+                            } behind${activeRollup?.waived ? ` · ${activeRollup.waived} on a waiver` : ''}`}
                     </p>
                   </div>
                   {activeMember && (
@@ -678,7 +693,9 @@ const ComplianceMatrixTab: React.FC = () => {
                 <div className="border-theme-surface-border overflow-hidden rounded-lg border">
                   {detailRows.length === 0 ? (
                     <p className="text-theme-text-muted p-5 text-center text-sm">
-                      Every member meets this requirement.
+                      {activeRollup && activeRollup.total === 0
+                        ? 'Nobody is graded against this requirement, so there is nothing to report.'
+                        : 'Every member meets this requirement.'}
                     </p>
                   ) : (
                     detailRows.map((row, index) => (
