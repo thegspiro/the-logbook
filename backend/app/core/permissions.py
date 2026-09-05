@@ -1488,6 +1488,27 @@ DEFAULT_POSITIONS: dict[str, dict] = {
         "priority": 15,
         "permissions": OPERATIONAL_RANKS["firefighter"]["default_permissions"],
     },
+    # Mirrors the EMT rank for the same reason Firefighter and Engineer do, and
+    # its absence was not harmless. The onboarding wizard offers ``emt`` to
+    # every agency type (``DISCIPLINE_POSITION_IDS``), so a department that
+    # ticked it reached ``save_session_roles`` with no seeded row to update —
+    # the create branch, which stores the position editor's checkbox expansion
+    # verbatim as an ``is_system`` row. Those checkboxes came from a role-type
+    # heuristic rather than from here, so every EMT position was created
+    # holding grants the registry never intended, ``reports.view`` among them.
+    # Migration ``f3b8d0c26a17`` cleans the rows already written; this entry is
+    # what stops the next onboarding writing another.
+    #
+    # Priority sits below Firefighter, matching the rank registry's ordering of
+    # the two, and above the baseline Member position.
+    "emt": {
+        "name": "EMT",
+        "slug": "emt",
+        "description": "Emergency medical technician with standard operational access",
+        "is_system": True,
+        "priority": 12,
+        "permissions": OPERATIONAL_RANKS["emt"]["default_permissions"],
+    },
     # ------------------------------------------------------------------
     # Corporate / organisational positions
     # ------------------------------------------------------------------
@@ -2199,13 +2220,18 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             APPARATUS_VIEW.name,
             LOCATIONS_VIEW.name,
-            # notifications.view is deliberately absent. A member's own
-            # inbox (`GET /notifications/my`) is gated on authentication
-            # alone, so withholding this costs them nothing they can act
-            # on — while holding it opens `GET /notifications/logs`, which
-            # is scoped to the organization and not to the recipient: every
-            # subject and body the department has sent anyone, readable by
-            # anyone.
+            # notifications.view is deliberately absent. It gates the
+            # department's notification *rules* — org-level configuration a
+            # member has no call to read — and the organization-wide scope
+            # of `GET /notifications/logs`, which returns every subject and
+            # body the department has sent anyone.
+            #
+            # Withholding it costs a member nothing they can act on: their
+            # inbox (`GET /notifications/my`) and their own send log
+            # (`GET /notifications/logs`, whose default `scope=mine`
+            # filters to the caller) are both gated on authentication
+            # alone. Granting it to fix "my notifications do not load" is
+            # the wrong lever, and hands over the rules as well.
         ],
     },
 }

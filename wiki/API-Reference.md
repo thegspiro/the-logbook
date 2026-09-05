@@ -131,7 +131,8 @@ GET    /api/v1/notifications/rules/{id}                  # Get rule
 PATCH  /api/v1/notifications/rules/{id}                  # Update rule
 DELETE /api/v1/notifications/rules/{id}                  # Delete rule
 POST   /api/v1/notifications/rules/{id}/toggle           # Toggle rule enabled/disabled
-GET    /api/v1/notifications/logs                        # List notification logs
+GET    /api/v1/notifications/logs                        # Send log; ?scope=mine (default) or organization
+POST   /api/v1/notifications/logs/read-all               # Mark send log read; same ?scope
 POST   /api/v1/notifications/logs/{id}/read              # Mark log as read
 GET    /api/v1/notifications/my                          # User's in-app notifications
 GET    /api/v1/notifications/my/unread-count             # User's unread count

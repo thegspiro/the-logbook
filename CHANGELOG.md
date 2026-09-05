@@ -55,6 +55,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the year query plus a separate `MIN(shift_date)` scan (plus a third query
   whenever the current or previous month fell outside the year being viewed).
 
+### The notification Send Log is your own send log (2026-09-05)
+
+**Fixed**
+
+- **The Send Log listed every notification the department had sent anyone.**
+  `GET /notifications/logs` filtered on the organization and nothing else, so
+  the tab showed the subject, body and recipient address of every colleague's
+  notifications to anyone who could open it — a grant that was seeded to the
+  whole department until it was revoked in August. The endpoint now defaults
+  to the caller's own deliveries, and the tab asks for nothing else.
+
+**Changed**
+
+- **The Send Log is offered to every member.** What it shows is now their own
+  delivery history — email as well as in-app, with delivered/failed status —
+  which is their own data on the same footing as their inbox, so it no longer
+  sits behind `notifications.view`.
+
+- **The organization-wide view survives for auditing deliverability**, as an
+  explicit `scope=organization` request on `GET /notifications/logs` and
+  `POST /notifications/logs/read-all`. It requires `notifications.manage`,
+  matching the org-wide "mark all read" it sits beside rather than the
+  read-only permission that let the leak happen. **API note:** `read-all`
+  previously always swept the whole organization and now defaults to the
+  caller; pass `scope=organization` for the old behaviour.
+
+- **"Mark all as read" clears exactly the rows the tab showed**, across both
+  channels, and reconciles the inbox tab and the unread badge with it — the
+  same notification no longer reads as read on one tab and unread on the next.
+
 ### The event check-in QR code was scannable before its window opened (2026-09-05)
 
 **Fixed**
@@ -260,6 +290,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   department that deliberately gave its members Reports will need to grant it
   again on the positions screen; a position the department created itself is
   not touched at all.
+
+- **New departments no longer create the grant in the first place.** The
+  setup wizard offers an EMT position to every agency type, but the permission
+  registry had no EMT entry, so ticking it built the position from the setup
+  screen's own guesses instead of from the registry — the same guesses that
+  caused all of the above, on a position created fresh today. EMT is now
+  registered alongside Firefighter and Engineer and is set up from the same
+  list its rank already uses. Departments that never had an EMT position are
+  unaffected until they add one.
 
 - **The restored grants are handled the other way round.**
   `storefront.order` and `inventory.check_submit` are only added back to a row

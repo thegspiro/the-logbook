@@ -83,6 +83,22 @@ const generateDefaultPermissions = (
  * position picks to localStorage: without this, resuming a session started
  * before the change re-creates exactly what the migration just retired.
  */
+/**
+ * Positions whose seeded grants changed after a session could already have
+ * persisted them, so a restored config must take the template's answer rather
+ * than its own.
+ *
+ * `emt` had no DEFAULT_POSITIONS entry until 2026-09-05: the wizard offered it
+ * to every agency type with nothing seeded behind the slug, so the role-type
+ * heuristic supplied its boxes — Reports among them — and `save_session_roles`
+ * stored that as a permission-bearing `is_system` row.
+ *
+ * Deliberately narrow. This reconciliation overwrites what was saved, and an
+ * administrator's own edits to a built-in position are saved the same way, so
+ * a slug belongs here only while its seeded grants have genuinely moved.
+ */
+const STALE_SEEDED_SLUGS = new Set(['emt']);
+
 const RETIRED_STANDING_SLUGS = new Set([
   'probationary_member',
   'junior_member',
@@ -191,9 +207,28 @@ const PositionSetup: React.FC = () => {
         //    service resuming an older session still has `firefighter` ticked.
         const template = templatesById.get(posId);
         if (!template && isAgencyFilteredOut(posId, organizationType)) continue;
+        // 3. A slug whose seeded grants changed under a saved config. Same
+        //    mechanism again — handleContinue submits whatever is here — but
+        //    the entry is reconciled rather than dropped, because the position
+        //    is still offered. A config read from localStorage can predate the
+        //    grants this build presents, and an EMT saved on an earlier build
+        //    carries the ticks a role-type heuristic chose, `reports` among
+        //    them, which would be written after every migration had run.
+        //    Priority comes along for the same reason: save_session_roles
+        //    writes the submitted value over the seeded one, so a stale 10
+        //    would put EMT back on the baseline Member position's rung.
+        //
+        //    Named slugs, not every seeded position. Replacing the saved map
+        //    wholesale would also discard the edits an administrator made on
+        //    this screen earlier in the same session — they customize a
+        //    built-in position, walk to the modules step, come back, and find
+        //    the boxes reset. Only a slug whose seeded grants actually moved
+        //    needs this, and a later change adds its own.
+        const stale = template && STALE_SEEDED_SLUGS.has(posId);
         restored[posId] = {
           ...saved,
           ...(template ? { name: template.name } : {}),
+          ...(stale ? { permissions: template.permissions, priority: template.priority } : {}),
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
         };
       }
