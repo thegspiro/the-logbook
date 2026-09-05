@@ -24,13 +24,21 @@ memory before slicing in Python instead of pushing `LIMIT`/`OFFSET` into
 SQL) fixed; a Codex review round raised 3 more findings against that same
 fix (missing id tie-breaker on the modified `ORDER BY`s, and two
 list-endpoints still eager-loading full child collections before applying
-the page limit), all independently verified real and fixed. GF-7/8/9/27a/33
-re-confirmed open as unchanged product/design decisions. This watchdog
-check (2026-09-05, ~16:50 UTC) found the row still pointing at #2247 after
-it had already merged: CI is green on all 17 checks at head `5ab2ad4`, all
-3 review threads are resolved, and `git merge-tree` against current `main`
-found zero conflict markers — GitHub's `mergeable_state` just hadn't been
-recomputed yet. Nothing to push; awaiting owner merge. Full write-up is
+the page limit), all independently verified real and fixed. All 4 review
+threads are now resolved. GF-7/8/9/27a/33 re-confirmed open as unchanged
+product/design decisions. This watchdog check (2026-09-05, ~22:40 UTC)
+found a real merge conflict this time — `main` had advanced past the last
+check (a Documents-page changelog entry landed alongside this PR's own
+GF-35 entry, both under `## [Unreleased]`) — so `git merge origin/main`
+into the branch actually failed, unlike the prior watchdog pass where
+`mergeable_state` was merely stale. Resolved by keeping both changelog
+entries (this PR's above the incoming one, no functional overlap
+elsewhere — `git diff --stat` confirmed no other file conflicted), reran
+`flake8`/`black`/`isort` and `scripts/validate_migrations.py --strict`
+clean, and pushed the merge commit at `72c4cfc`. CI re-triggered on the
+new head and is running; all 4 review threads were already resolved before
+this push. Nothing else outstanding; awaiting this CI run and then owner
+merge. Full write-up is
 [PR #2251](https://github.com/thegspiro/the-logbook/pull/2251)'s own
 `docs/security-review/GF-22-grants-fundraising.md` → Pass 3 section — not
 yet on `main`, since that content lives only on the PR's branch until it
