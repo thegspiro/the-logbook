@@ -149,6 +149,17 @@ def _rename_coordinator(bind) -> int:
     raise and take the whole upgrade down. Scoped to ``is_system``: every row
     that ever carried the old slug was seeded, and a position a department
     built for itself is theirs.
+
+    **Skipping a collision leaves that seeded row under the retired slug**, and
+    it therefore stays invisible to later slug-targeted work -- the same class
+    of gap this revision's module docstring reports for ``20260825_1400`` and
+    friends. That is deliberate. The alternative is reconciling two positions,
+    which means choosing whose permissions survive and moving member
+    assignments between them; that is an administrator's decision about who
+    holds what, not something a migration should do silently and
+    irreversibly to a department that built its own position. A department in
+    this state has both rows visible on the positions screen and can merge them
+    deliberately.
     """
     taken = {
         row.organization_id

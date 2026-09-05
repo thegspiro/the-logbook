@@ -1081,8 +1081,14 @@ class TestTheClaimDetection:
 # under this name, what is this migration doing naming it? Either it means a
 # different table (the bug), or it is dead code.
 
+#: Clauses that introduce a table name in raw SQL. DDL forms matter as much as
+#: DML here: 22 migration files issue raw ``ALTER TABLE`` through
+#: ``op.execute(sa.text(...))``, so recognizing only FROM/JOIN/UPDATE/INTO left
+#: the commonest way this codebase names a table invisible to both checks.
 _SQL_TABLE_REF = re.compile(
-    r"\b(?:FROM|JOIN|UPDATE|INTO)\s+`?([a-z_][a-z0-9_]*)`?", re.IGNORECASE
+    r"\b(?:FROM|JOIN|UPDATE|INTO|ALTER\s+TABLE|TRUNCATE(?:\s+TABLE)?)"
+    r"\s+`?([a-z_][a-z0-9_]*)`?",
+    re.IGNORECASE,
 )
 #: Alembic operations whose FIRST string argument is the table.
 _OP_TABLE_FIRST = re.compile(
@@ -1414,6 +1420,26 @@ class TestTheChainNameDetection:
         )
 
         assert any("planted_const" in o for o in _names_already_retired(planted))
+
+    def test_a_raw_alter_table_is_seen(self):
+        """22 migration files issue raw ``ALTER TABLE`` through op.execute.
+
+        Recognizing only FROM/JOIN/UPDATE/INTO left the commonest way this
+        codebase names a table invisible, so a post-rename
+        ``ALTER TABLE roles ...`` passed both checks while addressing a table
+        that no longer exists.
+        """
+        planted = self._sources_with(
+            "planted_ddl.py",
+            'revision = "planted_ddl"\n'
+            'down_revision = "b6e4a0d17c93"\n'
+            "def upgrade() -> None:\n"
+            '    op.execute(sa.text("ALTER TABLE roles ADD COLUMN z JSON NULL"))\n',
+        )
+
+        offenders = _names_already_retired(planted)
+
+        assert any("planted_ddl" in o and "roles" in o for o in offenders)
 
     def test_a_retired_name_the_models_bring_back_is_not_an_offender(self):
         """The other direction, and a live case rather than a hypothetical.
