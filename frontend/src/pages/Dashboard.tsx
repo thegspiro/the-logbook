@@ -248,9 +248,11 @@ const Dashboard: React.FC = () => {
   // available through the data-source permissions declared in its registry.
   // Everyone — including those leaders — still lands on the personal view.
   //
-  // Every gate here is a *manage* grant on purpose. `inventory.view`,
-  // `apparatus.view`, `facilities.view` and `scheduling.view` are all baseline
-  // member grants (see DEFAULT_POSITIONS["member"]), so gating on them showed
+  // Every gate here is a *manage* grant on purpose. `inventory.view` and
+  // `scheduling.view` are baseline member grants (see
+  // DEFAULT_POSITIONS["member"]); `facilities.view` and `apparatus.view` were
+  // until they were revoked in 2026-08 and 2026-09, and a department can grant
+  // any of the four back on the positions screen. Gating on a view grant showed
   // the My Department tab — department-wide staffing, fleet and facility
   // reporting — to every firefighter in the department. These mirror the
   // permissions the backend actually enforces on the widget endpoints, so the

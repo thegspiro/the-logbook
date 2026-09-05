@@ -1048,8 +1048,14 @@ _LINE_MEMBER_PERMISSIONS = [
     FORMS_VIEW.name,
     MINUTES_VIEW.name,
     DOCUMENTS_VIEW.name,
-    APPARATUS_VIEW.name,
     LOCATIONS_VIEW.name,
+    # No apparatus.view — the fleet record is a maintenance and compliance
+    # workspace (inspection expirations, out-of-service status, deficiency
+    # flags, driver qualifications), not a member amenity. Engineer keeps it
+    # because that rank is the driver/operator and holds
+    # apparatus.maintenance beside it; the crew work a member actually does
+    # on a rig lives under /inventory/checklists/* on the inventory.check_*
+    # grants and needs none of this.
     # No notifications.view — see the `member` position in
     # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
 ]
@@ -2197,8 +2203,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FORMS_VIEW.name,
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
-            APPARATUS_VIEW.name,
             LOCATIONS_VIEW.name,
+            # apparatus.view is deliberately absent — see
+            # _LINE_MEMBER_PERMISSIONS. The fleet pages are a maintenance
+            # and compliance workspace; the crew work a member does on a rig
+            # runs on the inventory.check_* grants above.
             # notifications.view is deliberately absent. A member's own
             # inbox (`GET /notifications/my`) is gated on authentication
             # alone, so withholding this costs them nothing they can act

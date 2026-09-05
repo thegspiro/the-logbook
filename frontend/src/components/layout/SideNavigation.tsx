@@ -53,6 +53,7 @@ import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idC
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
+import { APPARATUS_ENTRY_PERMISSIONS } from '../../modules/apparatus/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
@@ -321,9 +322,24 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               },
             ]
           : []),
-        // Full apparatus module or lightweight version
+        // Full apparatus module or lightweight version. Only the module-on row
+        // is gated: its pages are the fleet maintenance record and regular
+        // members no longer hold `apparatus.view`, and ProtectedRoute answers a
+        // permission failure with a full-page Access Denied rather than a
+        // redirect — so an ungated row here is a link to a dead end for most of
+        // the department. `/apparatus-basic` stays open to everyone: it is not
+        // the apparatus module, it has no route gate, and it reads the
+        // auth-only scheduling endpoints that departments without the module
+        // still need for shift staffing.
         ...(isModuleOn('apparatus')
-          ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]
+          ? [
+              {
+                label: 'Apparatus',
+                path: '/apparatus',
+                icon: Truck,
+                anyPermission: [...APPARATUS_ENTRY_PERMISSIONS],
+              },
+            ]
           : [{ label: 'Apparatus', path: '/apparatus-basic', icon: Truck }]),
         ...(isModuleOn('facilities')
           ? [

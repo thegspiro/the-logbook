@@ -134,6 +134,41 @@ def test_facilities_view_is_not_a_baseline_grant():
         )
 
 
+def test_apparatus_view_is_not_a_baseline_grant():
+    """The fleet record is a maintenance and compliance workspace.
+
+    Inspection expirations, out-of-service status, deficiency flags and driver
+    qualifications are what the apparatus pages show, and ``apparatus.view`` is
+    one alternative on the OR-gate of some thirty endpoints behind them. The
+    crew work a member actually does on a rig — reporting a used item, running
+    a check — lives under ``/inventory/checklists/*`` on the
+    ``inventory.check_*`` grants and needs none of it.
+    """
+    for label, registry, slug, field in BASELINE_SOURCES:
+        assert "apparatus.view" not in registry[slug][field], (
+            f"the seeded {label} carries apparatus.view, which opens the fleet "
+            "maintenance and driver-qualification record to regular members"
+        )
+
+
+def test_the_operational_grant_holders_keep_apparatus_view():
+    """The revocation above is a narrowing, not a removal.
+
+    Engineer is the driver/operator rank and holds ``apparatus.maintenance``
+    beside this — two merged migrations (``d1c7f4a92e63``, ``f3b8d0c26a17``)
+    narrow a stored ``apparatus.*`` on an engineer row *to* exactly those two,
+    so gutting the grant registry-wide would leave them writing something the
+    registry no longer intends.
+    """
+    for registry, slug, field in (
+        (OPERATIONAL_RANKS, "engineer", "default_permissions"),
+        (DEFAULT_POSITIONS, "engineer", "permissions"),
+        (OPERATIONAL_RANKS, "captain", "default_permissions"),
+        (DEFAULT_POSITIONS, "apparatus_officer", "permissions"),
+    ):
+        assert "apparatus.view" in registry[slug][field], slug
+
+
 def test_baseline_excludes_the_reporting_and_audit_grants():
     """Department-wide reporting stays with the officers who answer for it.
 
