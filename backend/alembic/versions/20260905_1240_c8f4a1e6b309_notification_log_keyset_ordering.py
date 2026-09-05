@@ -19,13 +19,18 @@ existing ``idx_notif_logs_org_sent`` still serves the organization-wide scope.
 Reversible: the downgrade drops the index and restores nullability. It does not
 put the NULLs back — they were unreachable rows, and there is nothing to
 identify which had been NULL.
+
+Sequenced after ``c7a4e91d3b68`` only to keep the chain linear: both were
+written against ``b4d1c8e37f52`` and forked it. Nothing here depends on that
+migration — it repairs seeded permission rows — so the order between them is
+arbitrary.
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "c8f4a1e6b309"
-down_revision = "b4d1c8e37f52"
+down_revision = "c7a4e91d3b68"
 branch_labels = None
 depends_on = None
 

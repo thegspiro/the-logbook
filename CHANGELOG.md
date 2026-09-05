@@ -38,6 +38,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now `NOT NULL` (it always had a default, and a NULL would have been
   unreachable by any cursor), with a new index behind the paged query.
 
+### `text-right` on a table header did nothing, everywhere (2026-09-05)
+
+**Fixed**
+
+- **108 table headers ignored the alignment they were written with.**
+  `styles/index.css` declared `thead th { text-align: left }` outside any
+  cascade layer, and unlayered CSS outranks every layer — so the `text-right`
+  Tailwind emits into `@layer utilities` was discarded on every one of them. The
+  heading sat hard left while the figures under it sat at the far right of the
+  column, which on a wide table leaves a number a hundred-odd pixels from its own
+  label. It was 71 `text-right` and 37 `text-center` headers across 37 files,
+  every one written by somebody who meant it, and nothing failed: the markup was
+  correct and only the cascade disagreed. Worst affected were the scheduling
+  reports (19), the compliance officer dashboard (13), and the finance, grants
+  and inventory tables.
+- **Only `text-align` moved**, into `@layer base`, where it is still the default
+  for a header that asks for nothing and now yields to one that asks for
+  something. The other five declarations in that rule — colour, size, weight,
+  tracking, casing — stay unlayered on purpose: moving them too would unlock
+  those on every `<th>` in the app, which is a much larger change than this bug.
+  Verified by measurement rather than by reading the diff: across header shapes
+  carrying colour, size and weight utilities, `text-align` changes and
+  `color` / `font-size` / `font-weight` / `text-transform` / `letter-spacing` are
+  byte-identical before and after.
+- Every one of the 37 files was checked for a header that would now disagree with
+  its own column. Four looked like candidates and none were: all are Actions or
+  matrix columns whose cells already align by `flex justify-end` / `justify-center`
+  rather than by `text-align`, so the header now sits over its content instead of
+  away from it.
+- The `th-numeric` escape hatch added for the My Hours table is **removed** —
+  `text-right` works now, and two mechanisms for one job is how the next table
+  ends up half-fixed. `styles/tableHeaderAlignment.test.ts` pins both halves of
+  the split, since jsdom compiles no Tailwind and applies no cascade, so no
+  render can catch this.
+
 ### Admin Hours: compliance threshold and duration fixes (2026-09-05)
 
 **Fixed**
@@ -381,9 +416,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The screen only has two checkboxes per module, so an EMT position created
   through it never received four grants the EMT rank carries: seeing the
   department's own information, its locations and its meetings, and asking to
-  swap a shift. They are restored on a position still holding exactly what the
-  setup screen wrote — a department that has since edited its EMT position
-  keeps whatever it chose, including a grant it removed on purpose.
+  swap a shift. They are restored on a position holding none of the four, which
+  is the mark of one the screen built — no checkbox in any version of the screen
+  can produce them. A department that took some of the four off keeps that
+  choice: none are put back.
+
+  The first attempt recognized the position by its whole permission list
+  instead, and repaired only one written by the current build — every older one
+  was skipped without a word. That attempt had already shipped, so widening it
+  is a second, follow-up step rather than a correction to the first: an
+  installation that has run the earlier one would never see an edit to it.
+  Departments that never had an EMT position are unaffected throughout.
 
 - **Setting up a position now starts from the registry on either path.** The
   setup screen's save had two routes: updating a position the system had
