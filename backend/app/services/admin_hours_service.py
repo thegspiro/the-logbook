@@ -530,9 +530,18 @@ class AdminHoursService:
         if duration_minutes > MAX_MANUAL_ENTRY_MINUTES:
             raise ValueError("A single entry cannot exceed 24 hours")
 
+        # Lock the member's own User row (Pitfall #27) before the overlap
+        # check: this is a read-then-write race without it — two simultaneous
+        # manual-entry submissions for the same member could otherwise both
+        # see zero overlap and both insert, producing two overlapping PENDING
+        # entries. Same "lock the guaranteed parent row" pattern as clock_in.
+        await self.db.execute(
+            select(User.id).where(User.id == user_id).with_for_update()
+        )
+
         # Check for overlapping entries
         overlap = await self._check_overlap(
-            user_id, organization_id, clock_in_at, clock_out_at
+            user_id, organization_id, clock_in_at, clock_out_at, for_update=True
         )
         if overlap:
             raise ValueError(
@@ -744,12 +753,39 @@ class AdminHoursService:
         Only pending entries can be edited. Duration is recalculated
         from the (possibly updated) clock-in and clock-out times.
         """
+        # Find the owning member before taking any lock. The User row is this
+        # invariant's shared parent (Pitfall #27) and must be locked *before*
+        # the entry row below, in the same order `create_manual_entry` uses —
+        # otherwise a create and an edit for the same member could lock the
+        # two rows in opposite orders and deadlock.
+        owner_result = await self.db.execute(
+            select(AdminHoursEntry.user_id).where(
+                AdminHoursEntry.id == entry_id,
+                AdminHoursEntry.organization_id == organization_id,
+            )
+        )
+        owner_id = owner_result.scalar_one_or_none()
+        if not owner_id:
+            raise ValueError("Pending entry not found")
+
+        await self.db.execute(
+            select(User.id).where(User.id == owner_id).with_for_update()
+        )
+
+        # Re-fetch (and lock) the entry itself, re-validating PENDING against
+        # the committed row. Without `with_for_update()` here, a concurrent
+        # approve/reject or bulk-approve on this same entry could read PENDING
+        # at the same moment this method does, and both operations' updates
+        # would then combine into an approved entry whose hours the approver
+        # never actually reviewed.
         result = await self.db.execute(
-            select(AdminHoursEntry).where(
+            select(AdminHoursEntry)
+            .where(
                 AdminHoursEntry.id == entry_id,
                 AdminHoursEntry.organization_id == organization_id,
                 AdminHoursEntry.status == AdminHoursEntryStatus.PENDING,
             )
+            .with_for_update()
         )
         entry = result.scalar_one_or_none()
         if not entry:
@@ -801,6 +837,7 @@ class AdminHoursService:
                 start,
                 end,
                 exclude_entry_id=entry_id,
+                for_update=True,
             )
             if overlap:
                 raise ValueError(
@@ -832,12 +869,19 @@ class AdminHoursService:
         rejection_reason: Optional[str] = None,
     ) -> AdminHoursEntry:
         """Approve or reject a pending admin hours entry."""
+        # Locking read (Pitfall #27): without it, this and a concurrent
+        # `edit_pending_entry`/another approval on the same entry could both
+        # read PENDING before either writes, and the two updates would
+        # combine into an approved entry containing hours (or a category)
+        # nobody actually reviewed together.
         result = await self.db.execute(
-            select(AdminHoursEntry).where(
+            select(AdminHoursEntry)
+            .where(
                 AdminHoursEntry.id == entry_id,
                 AdminHoursEntry.organization_id == organization_id,
                 AdminHoursEntry.status == AdminHoursEntryStatus.PENDING,
             )
+            .with_for_update()
         )
         entry = result.scalar_one_or_none()
         if not entry:
@@ -998,13 +1042,24 @@ class AdminHoursService:
         approved_count = 0
         skipped_self = 0
 
-        for entry_id in entry_ids:
+        # Sorted, not client-supplied order: two concurrent bulk-approve
+        # calls over overlapping id sets, each locking rows in the order the
+        # caller happened to list them, could lock in opposite sequences and
+        # deadlock — the same lock-order-inversion shape AH-11 hit on
+        # event-hour-mapping percentage locking. A fixed ascending order means
+        # every caller acquires the same rows in the same sequence.
+        for entry_id in sorted(entry_ids):
+            # Locking read (Pitfall #27): without it, this can race a single
+            # approve/reject or an edit on the same entry the same way
+            # `approve_or_reject` does.
             result = await self.db.execute(
-                select(AdminHoursEntry).where(
+                select(AdminHoursEntry)
+                .where(
                     AdminHoursEntry.id == entry_id,
                     AdminHoursEntry.organization_id == organization_id,
                     AdminHoursEntry.status == AdminHoursEntryStatus.PENDING,
                 )
+                .with_for_update()
             )
             entry = result.scalar_one_or_none()
             if not entry:
@@ -1233,8 +1288,20 @@ class AdminHoursService:
         clock_in_at: datetime,
         clock_out_at: datetime,
         exclude_entry_id: Optional[str] = None,
+        for_update: bool = False,
     ) -> bool:
-        """Check if a time range overlaps with existing non-rejected entries."""
+        """Check if a time range overlaps with existing non-rejected entries.
+
+        `for_update` (Pitfall #27) makes this a locking read. The caller must
+        already hold a `with_for_update()` lock on this user's own `User` row
+        before passing `for_update=True` — that row is this invariant's
+        shared parent, guaranteed to exist and to be the same one row for
+        every concurrent create/edit against this member's entries. Without
+        both halves (the parent lock *and* this read locking), two
+        simultaneous manual-entry submissions (or an edit racing a create)
+        for the same member could each see zero overlap from the same stale
+        snapshot and both insert/save an overlapping entry.
+        """
         query = select(func.count(AdminHoursEntry.id)).where(
             AdminHoursEntry.user_id == user_id,
             AdminHoursEntry.organization_id == organization_id,
@@ -1246,6 +1313,8 @@ class AdminHoursService:
         )
         if exclude_entry_id:
             query = query.where(AdminHoursEntry.id != exclude_entry_id)
+        if for_update:
+            query = query.with_for_update()
         result = await self.db.execute(query)
         return (result.scalar() or 0) > 0
 
@@ -1808,19 +1877,28 @@ class AdminHoursService:
 
             # Determine period based on frequency
             if frequency == "quarterly":
-                # Current quarter
+                # A quarterly requirement only has a meaningful "current
+                # quarter" — there is no client-supplied quarter number, so a
+                # request for a year other than the current one has no
+                # quarter to grade against. Building the bounds from
+                # `date.today().year` unconditionally (as this once did) does
+                # not just fail to answer that request: it silently answers
+                # a *different* one, mixing the live quarter into a response
+                # whose annual requirements are correctly graded against the
+                # requested `year` (e.g. `?year=2024` while the real date is
+                # in 2026). Skip the requirement instead of misreporting it.
                 from datetime import date
 
                 today = date.today()
+                if year != today.year:
+                    continue
                 q_start_month = ((today.month - 1) // 3) * 3 + 1
-                period_start = datetime(
-                    today.year, q_start_month, 1, tzinfo=timezone.utc
-                )
+                period_start = datetime(year, q_start_month, 1, tzinfo=timezone.utc)
                 if q_start_month + 3 > 12:
-                    period_end = datetime(today.year + 1, 1, 1, tzinfo=timezone.utc)
+                    period_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
                 else:
                     period_end = datetime(
-                        today.year, q_start_month + 3, 1, tzinfo=timezone.utc
+                        year, q_start_month + 3, 1, tzinfo=timezone.utc
                     )
             else:
                 period_start = year_start
@@ -1859,9 +1937,19 @@ class AdminHoursService:
             status = "compliant"
             if raw_hours < required_hours:
                 pct = (raw_hours / required_hours * 100) if required_hours else 0
-                if pct < (
-                    best_profile.at_risk_threshold_override or config.at_risk_threshold
-                ):
+                # `or` treats a deliberate override of 0 the same as "no
+                # override" and silently falls through to the org default —
+                # the schema explicitly allows 0 (see
+                # `training_compliance.py`'s identical field, which already
+                # gets this right). A department that wants every shortfall
+                # under this profile graded non-compliant with no at-risk
+                # buffer could set the override to 0 and have it discarded.
+                at_risk_threshold = (
+                    best_profile.at_risk_threshold_override
+                    if best_profile.at_risk_threshold_override is not None
+                    else config.at_risk_threshold
+                )
+                if pct < at_risk_threshold:
                     status = "non_compliant"
                 else:
                     status = "at_risk"

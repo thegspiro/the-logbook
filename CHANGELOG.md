@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Admin Hours: compliance threshold and duration fixes (2026-09-05)
+
+**Fixed**
+
+- **A profile's at-risk-threshold override of `0` was silently discarded.**
+  Compliance grading fell back to the organization's default threshold
+  instead — a profile configured to grade any shortfall `non_compliant`
+  with no at-risk buffer had that choice ignored.
+- **A DST fall-back could silently shorten a logged shift by up to an
+  hour.** Picking a quick-duration preset (or letting the end time follow a
+  moved start) across the one hour per year that repeats when clocks fall
+  back could submit a shorter entry than the one selected and previewed —
+  e.g. a 2-hour entry recorded as 1 hour.
+- Admin Hours compliance for a quarterly requirement ignored a requested
+  historical year and graded the live quarter instead; it is now skipped
+  for any year other than the current one rather than silently mis-dated.
+
 ### My Hours: a career total, and figures under their own headings (2026-09-05)
 
 **Fixed**

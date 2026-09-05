@@ -18,8 +18,13 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 21 (Admin hours), pass 3** — branch
 `claude/security-review-admin-hours-pass3`,
-[PR #2247](https://github.com/thegspiro/the-logbook/pull/2247) (0 fixes, 0
-new flagged; see `docs/security-review/AH-21-admin-hours.md` → Pass 3).
+[PR #2247](https://github.com/thegspiro/the-logbook/pull/2247). Originally
+opened claiming 0 fixes/0 flagged; a Codex review round on the PR disputed
+that on all 6 points raised, all 6 verified real and fixed (unlocked
+overlap/entry-mutation races, a falsy-zero threshold-override bug, a
+quarterly-compliance year bug, and a DST fold duration bug in the pass's own
+new `entryTimes.ts`) — see `docs/security-review/AH-21-admin-hours.md` →
+Pass 3's correction notice.
 
 ---
 

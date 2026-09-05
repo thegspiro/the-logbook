@@ -8,7 +8,7 @@ busy-elsewhere), clock_out duration + status stamping, and create_manual_entry
 validation (ordering, no future, minimum duration, overlap). DB mocked.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -156,7 +156,10 @@ class TestClockOut:
 
 class TestCreateManualEntry:
     def _svc(self, category, overlap=None):
-        svc = AdminHoursService(_db([_one(category)]))
+        # category fetch, then the User-row lock (Pitfall #27; result
+        # discarded) — `_check_overlap` itself is mocked below, so it issues
+        # no `db.execute` of its own.
+        svc = AdminHoursService(_db([_one(category), MagicMock()]))
         svc._check_overlap = AsyncMock(return_value=overlap)
         return svc
 
@@ -270,12 +273,20 @@ class TestEditPendingEntry:
             status=AdminHoursEntryStatus.PENDING,
         )
 
+    @staticmethod
+    def _lock_prelude(entry):
+        """The owner lookup + User-row lock (Pitfall #27) every
+        `edit_pending_entry` call now issues before the (locked) entry
+        fetch — see `TestEditPendingEntryLocking` for the dedicated
+        assertions on this sequence itself."""
+        return [_one(entry.user_id), MagicMock()]
+
     async def test_naive_edit_time_rejected_with_clear_error(self):
         # An admin edit sends only the changed field; a naive edited value is
         # ambiguous and would be compared against the aware stored counterpart
         # (TypeError -> 500 before, silently shifted hours if assumed UTC).
         entry = self._pending_entry()
-        db = _db([_one(entry)])
+        db = _db([*self._lock_prelude(entry), _one(entry)])
         naive_out = entry.clock_in_at.replace(tzinfo=None) + timedelta(hours=1)
         with pytest.raises(ValueError, match="timezone offset"):
             await AdminHoursService(db).edit_pending_entry(
@@ -287,8 +298,14 @@ class TestEditPendingEntry:
 
     async def test_aware_edit_time_recomputes_duration(self):
         entry = self._pending_entry()
-        # entry fetch, then the overlap check (no overlap).
-        db = _db([_one(entry), MagicMock(scalar=MagicMock(return_value=0))])
+        # lock prelude, entry fetch, then the overlap check (no overlap).
+        db = _db(
+            [
+                *self._lock_prelude(entry),
+                _one(entry),
+                MagicMock(scalar=MagicMock(return_value=0)),
+            ]
+        )
         new_out = entry.clock_in_at + timedelta(hours=1)
         out = await AdminHoursService(db).edit_pending_entry(
             entry_id="entry-1",
@@ -301,7 +318,7 @@ class TestEditPendingEntry:
 
     async def test_out_of_order_edit_rejected(self):
         entry = self._pending_entry()
-        db = _db([_one(entry)])
+        db = _db([*self._lock_prelude(entry), _one(entry)])
         with pytest.raises(ValueError, match="must be after"):
             await AdminHoursService(db).edit_pending_entry(
                 entry_id="entry-1",
@@ -389,7 +406,11 @@ class TestBulkApproveSeparationOfDuties:
         approver = "officer-1"
         own = self._pending("e-own", approver)
         other = self._pending("e-other", "member-2")
-        db = _db([_one(own), _one(other)])
+        # bulk_approve processes ids in sorted order (Pitfall #27 lock-order
+        # consistency, see TestBulkApproveLocking), not the client-supplied
+        # order — "e-other" sorts before "e-own" — so the mocked results are
+        # supplied in that same order.
+        db = _db([_one(other), _one(own)])
 
         count = await AdminHoursService(db).bulk_approve(
             entry_ids=["e-own", "e-other"],
@@ -537,7 +558,7 @@ class TestEditPendingEntryParityGuards:
         # clock_in_at far enough in the past that a >24h span still lands
         # before "now" — otherwise the future-check fires first.
         entry.clock_in_at = datetime.now(timezone.utc) - timedelta(hours=30)
-        db = _db([_one(entry)])
+        db = _db([_one(entry.user_id), MagicMock(), _one(entry)])
         new_out = entry.clock_in_at + timedelta(hours=25)
         with pytest.raises(ValueError, match="cannot exceed 24 hours"):
             await AdminHoursService(db).edit_pending_entry(
@@ -549,7 +570,14 @@ class TestEditPendingEntryParityGuards:
 
     async def test_edit_creating_an_overlap_is_rejected(self):
         entry = self._pending_entry()
-        db = _db([_one(entry), MagicMock(scalar=MagicMock(return_value=1))])
+        db = _db(
+            [
+                _one(entry.user_id),
+                MagicMock(),
+                _one(entry),
+                MagicMock(scalar=MagicMock(return_value=1)),
+            ]
+        )
         new_out = entry.clock_in_at + timedelta(hours=1)
         with pytest.raises(ValueError, match="overlaps"):
             await AdminHoursService(db).edit_pending_entry(
@@ -561,7 +589,7 @@ class TestEditPendingEntryParityGuards:
 
     async def test_edit_into_the_future_is_rejected(self):
         entry = self._pending_entry()
-        db = _db([_one(entry)])
+        db = _db([_one(entry.user_id), MagicMock(), _one(entry)])
         future = datetime.now(timezone.utc) + timedelta(hours=1)
         with pytest.raises(ValueError, match="future"):
             await AdminHoursService(db).edit_pending_entry(
@@ -579,8 +607,12 @@ class TestEditPendingEntryParityGuards:
         async def execute(stmt, *_a, **_kw):
             captured.append(stmt)
             if len(captured) == 1:
-                return _one(entry)
-            return MagicMock(scalar=MagicMock(return_value=0))
+                return _one(entry.user_id)  # owner lookup
+            if len(captured) == 2:
+                return MagicMock()  # User-row lock; result discarded
+            if len(captured) == 3:
+                return _one(entry)  # locked entry re-fetch
+            return MagicMock(scalar=MagicMock(return_value=0))  # overlap check
 
         db = MagicMock()
         db.execute = execute
@@ -598,6 +630,197 @@ class TestEditPendingEntryParityGuards:
         assert "entry-1" in str(
             captured[-1].compile(compile_kwargs={"literal_binds": True})
         )
+
+
+class TestCreateManualEntryLocking:
+    """Codex finding (pass-3 review): the overlap check in create_manual_entry
+    was a read-then-write race with no lock (Pitfall #27) — two simultaneous
+    manual-entry submissions for the same member could each see zero overlap
+    from `_check_overlap` and both insert an overlapping PENDING entry."""
+
+    async def test_locks_the_user_row_before_the_locking_overlap_check(self):
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(_category(require_approval=False))
+            if len(captured) == 2:
+                return MagicMock()  # the User row lock; result discarded
+            return MagicMock(scalar=MagicMock(return_value=0))  # overlap check
+
+        db = MagicMock()
+        db.execute = execute
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        now = datetime.now(timezone.utc)
+        await AdminHoursService(db).create_manual_entry(
+            "org-1",
+            "u1",
+            "cat-1",
+            now - timedelta(hours=2),
+            now - timedelta(hours=1),
+        )
+
+        assert len(captured) == 3
+        assert "FOR UPDATE" in str(captured[1])
+        assert "users" in str(captured[1]).lower()
+        assert "FOR UPDATE" in str(captured[2])
+        assert "admin_hours_entries" in str(captured[2]).lower()
+
+
+class TestEditPendingEntryLocking:
+    """Codex finding (pass-3 review): edit_pending_entry read a PENDING entry
+    with no lock before mutating it. If one officer edits an entry's duration
+    while another approves it, both could pass the pending-state check and
+    their updates could combine into an approved entry containing hours the
+    approver never reviewed. This locks the member's User row (Pitfall #27,
+    same order as create_manual_entry to avoid a lock-order-inversion
+    deadlock) ahead of a locked re-fetch of the entry itself."""
+
+    async def test_locks_the_user_row_then_the_entry_before_mutating(self):
+        entry = TestEditPendingEntry._pending_entry()
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(entry.user_id)  # owner lookup (unlocked)
+            if len(captured) == 2:
+                return MagicMock()  # User-row lock; result discarded
+            if len(captured) == 3:
+                return _one(entry)  # locked entry re-fetch
+            return MagicMock(scalar=MagicMock(return_value=0))  # overlap check
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        new_out = entry.clock_in_at + timedelta(hours=1)
+        await AdminHoursService(db).edit_pending_entry(
+            entry_id="entry-1",
+            organization_id="org-1",
+            admin_id="admin-1",
+            clock_out_at=new_out,
+        )
+
+        assert len(captured) == 4
+        assert "FOR UPDATE" not in str(captured[0])
+        assert "FOR UPDATE" in str(captured[1])
+        assert "users" in str(captured[1]).lower()
+        assert "FOR UPDATE" in str(captured[2])
+        assert "admin_hours_entries" in str(captured[2]).lower()
+        assert "FOR UPDATE" in str(captured[3])
+
+    async def test_missing_entry_raises_before_taking_any_lock(self):
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            return _one(None)
+
+        db = MagicMock()
+        db.execute = execute
+
+        with pytest.raises(ValueError, match="not found"):
+            await AdminHoursService(db).edit_pending_entry(
+                entry_id="missing",
+                organization_id="org-1",
+                admin_id="admin-1",
+                clock_out_at=datetime.now(timezone.utc),
+            )
+        assert len(captured) == 1
+
+
+class TestApproveOrRejectLocking:
+    """Codex finding (pass-3 review): approve_or_reject read a PENDING entry
+    with no lock. Locking it here forces a concurrent edit or a second
+    approval on the same row to re-evaluate the committed status instead of
+    combining updates with this one."""
+
+    async def test_entry_fetch_is_a_locking_read(self):
+        entry = SimpleNamespace(
+            id="entry-1",
+            organization_id="org-1",
+            user_id="u1",
+            status=AdminHoursEntryStatus.PENDING,
+            approved_by=None,
+            approved_at=None,
+        )
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            return _one(entry)
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        await AdminHoursService(db).approve_or_reject(
+            entry_id="entry-1",
+            organization_id="org-1",
+            approver_id="officer-1",
+            action="approve",
+        )
+
+        assert "FOR UPDATE" in str(captured[0])
+
+
+class TestBulkApproveLocking:
+    """Codex finding (pass-3 review): bulk_approve's per-entry fetch needs
+    the same lock as approve_or_reject's. Separately, ids must be processed
+    in a fixed order — two concurrent bulk-approve calls over overlapping id
+    sets that each locked rows in client-supplied order could lock in
+    opposite sequences and deadlock, the same lock-order-inversion shape
+    AH-11 hit on event-hour-mapping percentage locking."""
+
+    async def test_entry_fetches_are_locking_reads(self):
+        entry = TestBulkApproveSeparationOfDuties._pending("e-1", "member-2")
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            return _one(entry)
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+
+        await AdminHoursService(db).bulk_approve(
+            entry_ids=["e-1"], organization_id="org-1", approver_id="officer-1"
+        )
+
+        assert "FOR UPDATE" in str(captured[0])
+
+    async def test_processes_ids_in_sorted_order_not_client_order(self):
+        entries = {
+            "e-b": TestBulkApproveSeparationOfDuties._pending("e-b", "member-2"),
+            "e-a": TestBulkApproveSeparationOfDuties._pending("e-a", "member-3"),
+        }
+        seen_ids = []
+
+        async def execute(stmt, *_a, **_kw):
+            compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+            for entry_id, entry in entries.items():
+                if entry_id in compiled:
+                    seen_ids.append(entry_id)
+                    return _one(entry)
+            raise AssertionError("unexpected query")
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock()
+
+        await AdminHoursService(db).bulk_approve(
+            entry_ids=["e-b", "e-a"], organization_id="org-1", approver_id="officer-1"
+        )
+
+        assert seen_ids == ["e-a", "e-b"]
 
 
 class TestEventHourMappingPercentageLocking:
@@ -730,6 +953,115 @@ class TestUserHoursComplianceOrgScoped:
 
         assert out == []
         assert "organization_id" in str(captured[0].whereclause)
+
+
+def _compliance_category():
+    return SimpleNamespace(
+        id="cat-1", organization_id="org-1", name="Drill", color="#000"
+    )
+
+
+def _compliance_user():
+    return SimpleNamespace(
+        id="user-1", organization_id="org-1", membership_type="active", positions=[]
+    )
+
+
+def _compliance_profile(frequency, override):
+    return SimpleNamespace(
+        is_active=True,
+        admin_hours_requirements=[
+            {"category_id": "cat-1", "required_hours": 10, "frequency": frequency}
+        ],
+        membership_types=[],
+        role_ids=[],
+        priority=1,
+        at_risk_threshold_override=override,
+    )
+
+
+def _config_result(config):
+    r = MagicMock()
+    r.scalars.return_value.first.return_value = config
+    return r
+
+
+async def _run_compliance(year, frequency="annual", override=None, logged_minutes=0):
+    config = SimpleNamespace(
+        organization_id="org-1",
+        at_risk_threshold=75,
+        profiles=[_compliance_profile(frequency, override)],
+    )
+    category = _compliance_category()
+    user = _compliance_user()
+    calls = []
+
+    async def execute(stmt, *_a, **_kw):
+        calls.append(stmt)
+        if len(calls) == 1:
+            return _one(user)
+        if len(calls) == 2:
+            return _config_result(config)
+        if len(calls) == 3:
+            return _one(category)
+        return MagicMock(scalar=MagicMock(return_value=logged_minutes))
+
+    db = MagicMock()
+    db.execute = execute
+
+    return await AdminHoursService(db).get_user_hours_compliance(
+        organization_id="org-1", user_id="user-1", year=year
+    )
+
+
+class TestAtRiskThresholdOverrideZero:
+    """Codex finding (pass-3 review): `best_profile.at_risk_threshold_override
+    or config.at_risk_threshold` treats a deliberate override of 0 — a value
+    the schema explicitly permits — the same as "no override" and silently
+    falls back to the org default, because `0` is falsy. A profile that wants
+    every shortfall graded non_compliant with no at-risk buffer had that
+    choice discarded."""
+
+    async def test_zero_override_is_honored_not_discarded(self):
+        # 50% progress (5 of 10 hours). An override of 0 means "no at-risk
+        # buffer" — pct(50) is not below a threshold of 0, so the correct
+        # reading is at_risk, not non_compliant.
+        results = await _run_compliance(year=2026, override=0, logged_minutes=5 * 60)
+        assert len(results) == 1
+        assert results[0]["status"] == "at_risk"
+
+    async def test_none_override_still_falls_back_to_the_org_default(self):
+        # No override at all: the org default of 75 must still apply.
+        results = await _run_compliance(year=2026, override=None, logged_minutes=5 * 60)
+        assert len(results) == 1
+        assert results[0]["status"] == "non_compliant"
+
+
+class TestQuarterlyComplianceRequestedYear:
+    """Codex finding (pass-3 review): a quarterly requirement discarded the
+    endpoint's `year` argument and built its bounds from
+    `date.today().year`, so `?year=2024` silently graded the live quarter of
+    today's real year while annual requirements in the same response were
+    correctly graded against 2024."""
+
+    async def test_quarterly_requirement_for_a_past_year_is_skipped_not_misdated(self):
+        past_year = date.today().year - 1
+        results = await _run_compliance(year=past_year, frequency="quarterly")
+        # No item at all, rather than one silently labeled with the wrong
+        # year's data — the bug this guards against.
+        assert results == []
+
+    async def test_quarterly_requirement_for_the_current_year_is_graded_as_before(self):
+        current_year = date.today().year
+        results = await _run_compliance(year=current_year, frequency="quarterly")
+        assert len(results) == 1
+        assert results[0]["period_start"].startswith(str(current_year))
+
+    async def test_annual_requirement_still_honors_the_requested_year(self):
+        past_year = date.today().year - 1
+        results = await _run_compliance(year=past_year, frequency="annual")
+        assert len(results) == 1
+        assert results[0]["period_start"].startswith(str(past_year))
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -17,7 +17,35 @@ via three new UI-only files — see below) plus the same 6 outside consumers pas
 migration file added since pass 2's merge for an `admin_hours`/`AdminHours`
 reference, not by filename.
 
-### Scope
+> **Correction (Codex review round on this open PR):** the paragraph
+> below this notice, and the "0 fixes, 0 flagged" conclusion this section
+> originally reached, were wrong on two independent counts, both raised by
+> Codex review comments and verified against the actual repository rather
+> than taken on the bot's word:
+>
+> 1. **The stated reason for skipping the pass-2 diff was false.**
+>    `git merge-base --is-ancestor 991c04d2 <this-PR's-first-commit>` succeeds
+>    — `991c04d2` (the pass-2 merge commit) is a genuine, two-parent merge
+>    commit and a first-parent ancestor of this PR. There was no shallow-clone
+>    or squash problem; the diff that was skipped was available the whole
+>    time. Re-run below.
+> 2. **Three real bugs were living in the exact code this pass reviewed and
+>    called clean**: a lost-duration DST fall-back fold bug in the new
+>    `entryTimes.ts` helper, a falsy-zero bug in the at-risk-threshold
+>    override, and a quarterly-compliance calculation that ignored the
+>    endpoint's own `year` argument. A fourth and fifth issue — the manual-entry/
+>    edit-entry overlap check and the entry-mutation paths all being unlocked
+>    read-then-write races — were also real, on code this pass explicitly
+>    re-verified (AH-12) without checking for the concurrency half of that
+>    invariant. See "Codex review round" below for all six, with fixes.
+>
+> The original text of this section (methodology paragraph and the "no new
+> findings" close) is kept below, struck through in spirit but left readable,
+> immediately followed by the corrected diff and findings — deleting a wrong
+> security conclusion outright is worse than showing what was wrong and what
+> replaced it.
+
+### Scope (as originally written — see correction above)
 
 Read the current `admin_hours.py`, `admin_hours_service.py`, and
 `admin_hours.py` (model) directly rather than diffing pass 2's merge commit —
@@ -196,27 +224,163 @@ Re-read both items against the current code:
   remain mirrored in `docs/KNOWN_LIMITATIONS.md` (added pass 2), re-read there
   too — still accurate.
 
-**No new findings, no code changes this pass.**
+**No new findings, no code changes this pass.** (Wrong — see the correction
+notice at the top of this pass, and the section immediately below.)
 
-## Completion gate (pass 3)
+### Codex review round — the actual pass-2..pass-3 diff, and 6 findings
 
-| Check                                                                                                                                     | Result                                   |
-| ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                                                             | clean (0 violations)                     |
-| `black --check app/ tests/ alembic/`                                                                                                      | clean (1477 files unchanged)             |
-| `isort --check-only app/ tests/ alembic/`                                                                                                 | clean (isort 9.0.1, CI's pinned version) |
-| `python3 scripts/validate_migrations.py --strict`                                                                                         | PASSED — 422 revisions, single head      |
-| backend tests, scope (`-k "admin_hours"`)                                                                                                 | 72 passed, 1 pre-existing skip           |
-| backend tests, full suite                                                                                                                 | 10876 passed, 21 pre-existing skips      |
-| `npx tsc --noEmit` (frontend)                                                                                                             | 0 errors                                 |
-| `npx eslint .` (frontend)                                                                                                                 | 0 errors, 0 warnings                     |
-| `npx vitest run` (admin-hours module, 7 files)                                                                                            | 88 passed                                |
-| `npx vitest run` (adjacent consumers: Dashboard, MemberProfilePage, member-profile, ComplianceRequirementsConfigPage, CheckInStationPage) | 151 passed                               |
+**Methodology fix, done properly this time.** `git merge-base --is-ancestor
+991c04d2 a3504199` (this PR's first commit) exits 0. Restricting the diff to
+admin-hours-relevant paths (the module itself plus the outside consumers this
+doc already tracks) rather than the whole-repo diff (397 files, unrelated
+scheduling/services/auth work merged into `main` in between) gives the actual
+scope pass 3 should have reviewed:
 
-No backend or frontend files were modified this pass — every change since
-pass 2 (the `eb9c2f957` correctness fix, and PRs #2233/#2236 on `Dashboard.tsx`)
-was independently verified to be already correct, not requiring a further fix
-from this rotation.
+```
+git diff --stat 991c04d2..a3504199 -- \
+  frontend/src/modules/admin-hours \
+  frontend/src/pages/MemberProfilePage.tsx \
+  frontend/src/pages/ComplianceRequirementsConfigPage.tsx \
+  frontend/src/pages/Dashboard.tsx \
+  frontend/src/components/member-profile \
+  frontend/src/pages/events-settings
+```
+
+15 files, +2174/-656: `PendingReviewTab.tsx`, `QuickDurationButtons.tsx`,
+`AdminHoursPage.test.tsx`, `AdminHoursPage.tsx`, `entryTimes.test.ts`,
+`entryTimes.ts`, `ComplianceRequirementsConfigPage.tsx`, `Dashboard.tsx`,
+`MemberProfilePage.tsx`, `events-settings/AttendanceSection.tsx` and
+`events-settings/index.ts`, plus three unrelated `member-profile/*` files
+(`ContactInfoSection.tsx`, `EmergencyContactsSection.tsx`,
+`VisibilityControl.tsx`/`.test.tsx` — a contact-info visibility feature, no
+admin-hours import). Disposition of each in-scope file:
+
+- **`entryTimes.ts` / `AdminHoursPage.tsx` / `PendingReviewTab.tsx`** — the
+  DST fold bug, finding 6 below. Fixed.
+- **`ComplianceRequirementsConfigPage.tsx`** — a label/`aria-describedby`
+  accessibility pass plus a Pitfall-#19-style notice that
+  `grace_period_days` is stored but not read by any compliance calculation
+  (pre-existing, unrelated to this rotation's scope — not an admin-hours
+  finding). No admin-hours logic changed.
+- **`Dashboard.tsx`** — already reviewed correctly by the original text of
+  this pass (PRs #2233/#2236, quoted above); re-confirmed against this diff
+  directly, no further finding.
+- **`MemberProfilePage.tsx`** — layout-only reorganization of where the
+  admin-hours summary tile renders plus an "only show if there's content"
+  guard; the actual fetch (`fetchAdminHours`, gated on
+  `isSelf || checkPermission('admin_hours.manage')`, both client-side
+  convenience and independently enforced server-side per AH-7/self-scoping)
+  is unchanged. No finding.
+- **`events-settings/AttendanceSection.tsx`, `events-settings/index.ts`** —
+  new UI section, does not import the admin-hours module (grepped: no
+  `adminHours`/`admin-hours`/`AdminHours` reference) — out of this feature's
+  scope, not reviewed further here.
+
+One documentation-accuracy note this re-run surfaced on its own: the original
+text above claims `utils/reportingRange.ts` is "a new file this pass."
+`git show 991c04d2:frontend/src/modules/admin-hours/utils/reportingRange.ts`
+succeeds — the file already existed at the pass-2 merge commit. It was
+introduced by `5ec8a35d9` ("Rework the personal Admin Hours view around what
+a member needs"), before pass 3 began, and the diff above confirms it did
+not change again between 991c04d2 and this PR. The file's own review (the
+UTC-day-bounds description above) is accurate; only its "new this pass"
+provenance claim was wrong.
+
+**Six Codex findings on this PR, all verified against the code directly
+(not taken on the bot's word) and all real:**
+
+1. **Methodology** — covered above.
+2. **HIGH — unlocked overlap checks on manual hour entries (Pitfall #27).**
+   `create_manual_entry` and `edit_pending_entry` both ran `_check_overlap`
+   (a plain, unlocked `SELECT COUNT(*)`) and then inserted/saved — a classic
+   read-then-write race. Two simultaneous manual-entry submissions for the
+   same member (or an edit racing a create) could each see zero overlap and
+   both persist overlapping entries. **Fixed:** both methods now lock the
+   member's own `User` row (`with_for_update()`, the same "lock the
+   guaranteed parent row" pattern AH-10 established for `clock_in`) before a
+   `_check_overlap(..., for_update=True)` locking read.
+   `edit_pending_entry` locks the `User` row _before_ re-fetching the entry
+   itself (see finding 4), in the same order `create_manual_entry` uses, so
+   the two methods can't lock the two rows in opposite sequences and
+   deadlock against each other.
+3. **MEDIUM — zero at-risk-threshold override discarded.**
+   `get_user_hours_compliance` computed the effective threshold as
+   `best_profile.at_risk_threshold_override or config.at_risk_threshold` —
+   `or` treats a deliberate override of `0` (a value the schema explicitly
+   permits, and which `training_compliance.py`'s identical field already
+   handles correctly) the same as "no override," silently substituting the
+   org default. A profile configured to grade any shortfall `non_compliant`
+   with no at-risk buffer had that choice discarded. **Fixed:** an explicit
+   `is not None` check.
+4. **MEDIUM — missing row locks on entry mutation paths (Pitfall #27).**
+   `edit_pending_entry`, `approve_or_reject`, and `bulk_approve` all read a
+   `PENDING` entry with a plain `SELECT` before mutating it. One officer
+   editing an entry's duration while another approves it could both pass the
+   pending-state check, and the two updates could combine into an approved
+   entry containing hours the approver never reviewed. **Fixed:** all three
+   now fetch with `.with_for_update()`. `bulk_approve` additionally processes
+   `entry_ids` in sorted (not client-supplied) order — two concurrent
+   bulk-approve calls over overlapping id sets, each locking rows in
+   whatever order the caller happened to list them, could otherwise lock in
+   opposite sequences and deadlock, the same lock-order-inversion shape
+   AH-11 hit and fixed on event-hour-mapping percentage locking.
+5. **MEDIUM — quarterly compliance ignored the requested year.** For a
+   quarterly requirement, `get_user_hours_compliance` built both period
+   bounds from `date.today().year` regardless of the endpoint's own `year`
+   argument, so `GET /compliance/{user_id}?year=2024` silently graded the
+   _live_ 2026 quarter under a response whose annual requirements were
+   correctly graded against 2024. **Fixed:** a quarterly requirement now
+   grades only when `year == date.today().year` (there is no client-supplied
+   quarter number, so a different year has no "current quarter" to answer
+   against) and is skipped — not silently mis-dated — otherwise.
+6. **MEDIUM — DST fold bug in `entryTimes.ts`'s duration presets.**
+   `addHours`/`syncEndToStart` compute a target instant correctly in real
+   UTC math, but return only a local wall-clock string. During a DST
+   fall-back, that string can denote either of the hour's two real
+   occurrences — `localToUTC` always resolves it back to the earlier one —
+   so a caller that re-parses the string a second time at submit can
+   silently lose up to an hour off the selected duration. Concretely:
+   `addHours('2026-11-01T00:30', 2, 'America/New_York')` returns
+   `'2026-11-01T01:30'` (correct as _displayed_), but re-parsing that string
+   at submit yields only a 1-hour entry instead of 2. **Fixed:** new
+   `addHoursExact`/`syncEndToStartExact` return the display string paired
+   with the exact UTC instant that produced it (`DerivedEndTime`); a new
+   `resolveEndUtc(local, pinned, timezone)` uses that instant when the field
+   still matches what was derived (and transparently falls back to ordinary
+   parsing the moment the member retypes the field by hand, or the start
+   date shifts the end by a calendar-day count rather than a fixed
+   duration). `AdminHoursPage.tsx` and `PendingReviewTab.tsx` both carry the
+   pin alongside their existing `clock_out_at` state and resolve through it
+   at submit. Regression tests in `entryTimes.test.ts` reproduce the exact
+   1-hour-short bug against the un-pinned path and assert the pinned path
+   preserves the full 2 hours across the fold.
+
+None of these were "flagged, not fixed" — all six are fixed in this PR, with
+guard tests (`tests/test_admin_hours_service.py`'s new
+`TestCreateManualEntryLocking`, `TestEditPendingEntryLocking`,
+`TestApproveOrRejectLocking`, `TestBulkApproveLocking`,
+`TestAtRiskThresholdOverrideZero`, `TestQuarterlyComplianceRequestedYear`;
+`entryTimes.test.ts`'s new `DST fall-back fold` block).
+
+## Completion gate (pass 3, corrected)
+
+| Check                                                   | Result                                   |
+| ------------------------------------------------------- | ---------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | clean (0 violations)                     |
+| `black --check app/ tests/ alembic/`                    | clean                                    |
+| `isort --check-only app/ tests/ alembic/`               | clean (isort 9.0.1, CI's pinned version) |
+| `python3 scripts/validate_migrations.py --strict`       | PASSED — 422 revisions, single head      |
+| backend tests, scope (`-k "admin_hours or compliance"`) | 387 passed, 1 pre-existing skip          |
+| backend tests, full suite                               | 10887 passed, 21 pre-existing skips      |
+| `npx tsc --noEmit` (frontend)                           | 0 errors                                 |
+| `npx eslint .` (frontend)                               | 0 errors, 0 warnings                     |
+| `npx vitest run` — `entryTimes.test.ts`                 | 22 passed (11 new)                       |
+
+6 backend/frontend fixes landed this pass (findings 2-6 above are 5 distinct
+code changes; finding 1 is the methodology correction that surfaced them),
+plus this doc's own correction. The original "no code changes this pass" and
+"no new findings" lines above are wrong and are kept only for the record —
+see the correction notice at the top of this pass.
 
 ---
 

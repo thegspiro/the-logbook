@@ -32,7 +32,7 @@ import { NfcTapButton } from '../../../components/nfc/NfcTapButton';
 import { formatDuration } from '../utils/formatDuration';
 import { QUARTER_HOUR, formatHours, formatHoursExact, roundHoursToQuarter } from '../../../utils/hoursFormatting';
 import { endOfReportingDayUTC, startOfReportingDayUTC } from '../utils/reportingRange';
-import { addHours, syncEndToStart } from '../utils/entryTimes';
+import { addHoursExact, syncEndToStartExact, resolveEndUtc, type DerivedEndTime } from '../utils/entryTimes';
 import QuickDurationButtons from '../components/QuickDurationButtons';
 
 const PAGE_SIZE = 20;
@@ -116,6 +116,12 @@ const AdminHoursPage: React.FC = () => {
     clock_out_at: '',
     description: '',
   });
+  // The exact UTC instant behind `manualData.clock_out_at`, when it was
+  // derived by a duration preset or a start-date shift rather than typed
+  // directly. Kept so the real elapsed duration a member picked survives a
+  // DST fall-back fold instead of being re-derived (and silently shortened)
+  // from the ambiguous wall-clock string alone — see `resolveEndUtc`.
+  const [manualEndPin, setManualEndPin] = useState<DerivedEndTime | null>(null);
 
   // Filters
   // The month people are currently reporting against is what they open this
@@ -235,15 +241,21 @@ const AdminHoursPage: React.FC = () => {
   };
 
   const handleManualStartChange = (value: string) => {
-    setManualData({
-      ...manualData,
-      clock_in_at: value,
-      clock_out_at: syncEndToStart(manualData.clock_in_at, value, manualData.clock_out_at ?? '', tz),
-    });
+    const { local, pin } = syncEndToStartExact(
+      manualData.clock_in_at,
+      value,
+      manualData.clock_out_at ?? '',
+      manualEndPin,
+      tz
+    );
+    setManualData({ ...manualData, clock_in_at: value, clock_out_at: local });
+    setManualEndPin(pin);
   };
 
   const handleManualDuration = (hours: number) => {
-    setManualData({ ...manualData, clock_out_at: addHours(manualData.clock_in_at, hours, tz) });
+    const derived = addHoursExact(manualData.clock_in_at, hours, tz);
+    setManualData({ ...manualData, clock_out_at: derived?.local ?? '' });
+    setManualEndPin(derived);
   };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
@@ -258,12 +270,13 @@ const AdminHoursPage: React.FC = () => {
       await adminHoursEntryService.createManual({
         ...manualData,
         clock_in_at: localToUTC(manualData.clock_in_at, tz),
-        clock_out_at: localToUTC(manualData.clock_out_at, tz),
+        clock_out_at: resolveEndUtc(manualData.clock_out_at, manualEndPin, tz),
         description: manualData.description?.trim() || undefined,
       });
       toast.success('Hours submitted');
       setShowManualForm(false);
       setManualData({ category_id: '', clock_in_at: '', clock_out_at: '', description: '' });
+      setManualEndPin(null);
       void fetchMyEntries(entryQuery);
       if (currentUserId) {
         void fetchMySummary({ userId: currentUserId, ...dateBounds });
@@ -294,26 +307,26 @@ const AdminHoursPage: React.FC = () => {
   const manualDurationMinutes = useMemo(() => {
     if (!manualData.clock_in_at || !manualData.clock_out_at) return null;
     const start = new Date(localToUTC(manualData.clock_in_at, tz)).getTime();
-    const end = new Date(localToUTC(manualData.clock_out_at, tz)).getTime();
+    const end = new Date(resolveEndUtc(manualData.clock_out_at, manualEndPin, tz)).getTime();
     if (isNaN(start) || isNaN(end) || end <= start) return null;
     return Math.floor((end - start) / 60000);
-  }, [manualData.clock_in_at, manualData.clock_out_at, tz]);
+  }, [manualData.clock_in_at, manualData.clock_out_at, manualEndPin, tz]);
 
   // Its own flag rather than a branch inside the duration preview: that memo is
   // null for exactly the case this warns about, so the message never rendered.
   const manualEndBeforeStart = useMemo(() => {
     if (!manualData.clock_in_at || !manualData.clock_out_at) return false;
     const start = new Date(localToUTC(manualData.clock_in_at, tz)).getTime();
-    const end = new Date(localToUTC(manualData.clock_out_at, tz)).getTime();
+    const end = new Date(resolveEndUtc(manualData.clock_out_at, manualEndPin, tz)).getTime();
     return !isNaN(start) && !isNaN(end) && end <= start;
-  }, [manualData.clock_in_at, manualData.clock_out_at, tz]);
+  }, [manualData.clock_in_at, manualData.clock_out_at, manualEndPin, tz]);
 
   const manualFormValid = useMemo(() => {
     if (!manualData.category_id || !manualData.clock_in_at || !manualData.clock_out_at) return false;
     const start = new Date(localToUTC(manualData.clock_in_at, tz)).getTime();
-    const end = new Date(localToUTC(manualData.clock_out_at, tz)).getTime();
+    const end = new Date(resolveEndUtc(manualData.clock_out_at, manualEndPin, tz)).getTime();
     return !isNaN(start) && !isNaN(end) && end > start;
-  }, [manualData, tz]);
+  }, [manualData, manualEndPin, tz]);
 
   // Stale session warning
   const isSessionNearLimit = useMemo(() => {
@@ -692,7 +705,10 @@ const AdminHoursPage: React.FC = () => {
                 <DateTimeQuarterHour
                   id="manual-clock-out"
                   value={manualData.clock_out_at}
-                  onChange={(val) => setManualData({ ...manualData, clock_out_at: val })}
+                  onChange={(val) => {
+                    setManualData({ ...manualData, clock_out_at: val });
+                    setManualEndPin(null);
+                  }}
                   required
                   className="form-input"
                   timezone={tz}
