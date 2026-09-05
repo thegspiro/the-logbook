@@ -16,12 +16,18 @@ import { Link } from 'react-router';
 import { Settings2 } from 'lucide-react';
 import { schedulingService } from '../../../../modules/scheduling/services/api';
 import type { SchedulingFeatureSettings } from '../../../../modules/scheduling/services/api';
+import { useAuthStore } from '../../../../stores/authStore';
+import { useEnabledModules } from '../../../../hooks/useEnabledModules';
 
 interface Row {
   label: string;
   value: string;
-  /** Where this value is actually edited. */
-  href: string;
+  /**
+   * Where this value is actually edited, or null when this viewer cannot open
+   * that screen. A link to a page that answers Access Denied is worse than
+   * plain text, because the app itself offered it.
+   */
+  href: string | null;
   /** Why it matters to somebody closing a shift out. */
   hint?: string;
 }
@@ -29,8 +35,41 @@ interface Row {
 const GENERAL = '/scheduling/admin/settings/general';
 const SHIFT_REPORTS = '/scheduling/admin/settings/shift-reports';
 
+/**
+ * The open-ended cushion is not a scheduling setting.
+ *
+ * It is derived from Inventory's checklist timing — `checkin_closes_hours_after`
+ * — floored at the built-in twelve hours and capped at seventy-two, so the
+ * roster lock and check-in cannot make two different statements about one
+ * shift. Scheduling settings expose no control for it, so pointing this row at
+ * General would send an officer to a screen where the number they are looking
+ * at does not appear. It belongs to Checklist Timing, behind Inventory's own
+ * module gate and its settings grants.
+ */
+const CHECKLIST_TIMING = '/inventory/admin/checklists/settings';
+const CHECKLIST_TIMING_PERMISSIONS = ['settings.manage', 'organization.update_settings'];
+
+/** How the department records call volume, in the officer's words. */
+const callVolumeLabel = (mode: string | undefined): string => {
+  // Three modes, not two. Folding `off` into the `detailed` branch read as
+  // "Individual call records" for a department that has said it does not want
+  // to be asked at all — the opposite of what it configured.
+  if (mode === 'count_only') return 'A count at close-out';
+  if (mode === 'off') return 'Not recorded';
+  // A missing setting means today's behaviour, never 'off' (pitfall #19).
+  return 'Individual call records';
+};
+
+const callVolumeHint = (mode: string | undefined): string => {
+  if (mode === 'count_only') return 'Close-out asks for the count and credits it to the crew';
+  if (mode === 'off') return 'Close-out does not ask about calls';
+  return 'Close-out does not ask for a count; calls are logged per incident';
+};
+
 const CloseoutSettingsSummary: React.FC = () => {
   const [feature, setFeature] = useState<SchedulingFeatureSettings | null>(null);
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const { isModuleOn } = useEnabledModules();
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +87,9 @@ const CloseoutSettingsSummary: React.FC = () => {
     };
   }, []);
 
-  const countOnly = feature?.call_tracking?.mode === 'count_only';
+  const mode = feature?.call_tracking?.mode;
+  const canOpenChecklistTiming =
+    isModuleOn('inventory') && CHECKLIST_TIMING_PERMISSIONS.some((permission) => checkPermission(permission));
 
   const rows: Row[] = [
     {
@@ -59,17 +100,15 @@ const CloseoutSettingsSummary: React.FC = () => {
     },
     {
       label: 'Call volume',
-      value: feature ? (countOnly ? 'A count at close-out' : 'Individual call records') : '—',
+      value: feature ? callVolumeLabel(mode) : '—',
       href: GENERAL,
-      hint: countOnly
-        ? 'Close-out asks for the count and credits it to the crew'
-        : 'Close-out does not ask for a count',
+      hint: callVolumeHint(mode),
     },
     {
       label: 'Open-ended shift cushion',
       value: feature?.open_ended_shift_cushion_hours ? `${feature.open_ended_shift_cushion_hours} hours` : '—',
-      href: GENERAL,
-      hint: 'How long past its start a shift with no recorded end still counts as running',
+      href: canOpenChecklistTiming ? CHECKLIST_TIMING : null,
+      hint: 'Derived from Inventory · Checklist Timing — how long past its start a shift with no recorded end still counts as running',
     },
     {
       label: 'Call types',
@@ -102,9 +141,13 @@ const CloseoutSettingsSummary: React.FC = () => {
               {row.hint && <span className="text-theme-text-muted block text-[11px] opacity-80">{row.hint}</span>}
             </dt>
             <dd className="text-theme-text-primary shrink-0 text-xs font-medium">
-              <Link to={row.href} className="hover:underline">
-                {row.value}
-              </Link>
+              {row.href ? (
+                <Link to={row.href} className="hover:underline">
+                  {row.value}
+                </Link>
+              ) : (
+                row.value
+              )}
             </dd>
           </div>
         ))}

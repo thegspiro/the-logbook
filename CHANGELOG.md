@@ -53,6 +53,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and manual hours — so the row opens the shift instead. Re-rendering that
   checklist here would be a second copy of a flow that decides what goes on a
   member's record.
+- **A failed equipment-checklist lookup is not "nothing outstanding".** That
+  endpoint requires an Inventory grant `scheduling.manage` does not imply, so it
+  refuses an ordinary scheduling officer — and reading the refusal as an empty
+  list would open the close-out wizard with its override control hidden while
+  the server declined every attempt to finish, with nothing on screen saying
+  why. The row reports the failure and offers a retry.
+- **The queue reads the whole range before it says the range is clear.** The
+  shifts endpoint pages and orders by date ascending, and close-out state is
+  filtered client-side afterwards, so one page of a busy range could be entirely
+  closed-out shifts while the unclosed ones sat on a later page — under a
+  heading announcing that every shift in the range was closed out. A range wider
+  than the queue reads now says so rather than being quietly truncated.
+- **A superseded date range no longer wins.** Changing From and then To left two
+  requests in flight, and the older one could land last: the date controls
+  described one range while the queue described another.
+- **A failed settings load is reported, not spun on.** The scheduling store
+  deliberately leaves the settings unloaded on failure so the next mount retries
+  rather than caching a permissive window — which meant this page could not tell
+  a request in flight from one that failed, and showed a spinner that never
+  stopped. Those settings carry the cushion the queue is judged against, so the
+  page says what is missing and offers the retry.
+- **The default range is the department's calendar day**, not the browser's. A
+  UTC browser viewing an America/Los_Angeles department in its evening opened
+  the range on a day the department had not reached, and the opposite offset
+  dropped the department's own current day out of it.
+- **A department that records no calls is described as such.** `call_tracking`
+  has three modes and the summary handled two, so `off` — an explicit decision
+  not to be asked — was reported as "Individual call records".
+- **The cushion row links to the screen that owns it.** It is derived from
+  Inventory's Checklist Timing, and Scheduling settings expose no control for
+  it, so the old link landed on a page where the number shown does not appear.
+  It is a link only for a viewer who can open that screen, and plain text
+  otherwise.
 - **The page is department-wide and requires `scheduling.manage`**, like every
   page in Scheduling Administration. **A shift officer loses nothing:** the shift
   panel grants the named officer authority over their own shift's crew,

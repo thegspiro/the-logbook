@@ -687,6 +687,22 @@ close-out opened on the row and the settings that govern it shown beneath.
 > manual hours — so the row opens the shift instead of re-rendering a flow that
 > decides what goes on a member's record.
 
+> **The open-ended cushion is Inventory's setting, and the row says so.** It is
+> derived from `checkin_closes_hours_after` under Checklist Timing, floored at
+> twelve hours and capped at seventy-two, so the roster lock and check-in cannot
+> make two statements about one shift. Scheduling settings expose no control for
+> it, so that row links to `/inventory/admin/checklists/settings` — and only for
+> a viewer holding one of its grants with the Inventory module on. Everyone else
+> sees the value as plain text, because a link the app itself offers onto Access
+> Denied is worse than no link.
+
+> **A failed checklist lookup is not "no checks outstanding".** The endpoint
+> wants `inventory.check_view` or `inventory.check_submit`, neither implied by
+> `scheduling.manage`, so it refuses an ordinary scheduling officer. Reading
+> that refusal as an empty list opens the wizard with its override control
+> hidden, and the server then declines every finalize with nothing on screen to
+> explain it. The row says what happened and offers the retry instead.
+
 > **The page is department-wide; a shift officer's own route is unchanged.**
 > `ShiftDetailPanel` grants the named officer authority over their shift's crew,
 > attendance, calls and close-out without a department-wide grant, mirroring the

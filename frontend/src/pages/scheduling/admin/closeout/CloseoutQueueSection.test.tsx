@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../../test/utils';
 
@@ -27,6 +27,11 @@ vi.mock('../../../../modules/inventory/services/equipmentCheckApi', () => ({
   equipmentCheckService: {
     getShiftChecklists: (...args: unknown[]) => mockGetShiftChecklists(...args) as unknown,
   },
+}));
+
+let departmentTimezone = 'UTC';
+vi.mock('../../../../hooks/useTimezone', () => ({
+  useTimezone: () => departmentTimezone,
 }));
 
 const mockNavigate = vi.fn();
@@ -50,7 +55,7 @@ const storeState = {
   callTrackingMode: 'count_only',
   requireEndOfShiftChecks: true,
   settingsLoaded: true,
-  loadSettings: vi.fn(),
+  loadSettings: vi.fn(() => Promise.resolve()),
   signupClosesMinutesBefore: 0,
   lateSignupGraceMinutes: 60,
   openEndedCushionHours: 12,
@@ -82,6 +87,109 @@ const unclosedShift = {
 };
 
 describe('CloseoutQueueSection', () => {
+  // The browser's calendar day and the department's are not the same day around
+  // midnight. Deriving the default range from the browser's put a UTC viewer of
+  // an America/Los_Angeles department on tomorrow, and the opposite offset drops
+  // the department's own current day out of the range entirely.
+  it('opens on the department\u2019s calendar day, not the browser\u2019s', async () => {
+    // 04:00 UTC on the 6th is 21:00 on the 5th in Los Angeles: the browser has
+    // rolled over to a day the department has not reached.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-09-06T04:00:00Z'));
+    departmentTimezone = 'America/Los_Angeles';
+    renderWithRouter(<CloseoutQueueSection />);
+
+    await waitFor(() => expect(mockGetShifts).toHaveBeenCalled());
+    expect(mockGetShifts).toHaveBeenCalledWith(
+      expect.objectContaining({ start_date: '2026-08-06', end_date: '2026-09-05' })
+    );
+    vi.useRealTimers();
+  });
+
+  // The endpoint orders by date ascending and finalization is filtered here
+  // afterwards, so a busy range's first page can be entirely closed-out shifts
+  // while the unclosed ones sit on a later one. Reading one page and then
+  // announcing "every shift in this range is closed out" states the opposite of
+  // the truth with total confidence.
+  it('reads every page before it claims the range is clear', async () => {
+    const page = (ids: string[], total: number) => ({
+      shifts: ids.map((id) => ({ ...unclosedShift, id, is_finalized: id !== 'unclosed' })),
+      total,
+      skip: 0,
+      limit: 200,
+    });
+    const first = Array.from({ length: 200 }, (unused, index) => `closed-${index}`);
+    mockGetShifts.mockReset();
+    mockGetShifts.mockResolvedValueOnce(page(first, 201)).mockResolvedValueOnce(page(['unclosed'], 201));
+
+    renderWithRouter(<CloseoutQueueSection />);
+
+    expect(await screen.findByText(/1 shift waiting to be closed out/)).toBeInTheDocument();
+    expect(mockGetShifts).toHaveBeenCalledTimes(2);
+    expect(mockGetShifts).toHaveBeenLastCalledWith(expect.objectContaining({ skip: 200 }));
+    expect(screen.queryByText(/Every shift in this range is closed out/)).not.toBeInTheDocument();
+  });
+
+  // Two ranges in flight and the slower, older one lands last: the date
+  // controls then describe one range while the queue describes another, and
+  // nothing on screen says so.
+  it('ignores a response that a newer range has already superseded', async () => {
+    let releaseFirst: (value: unknown) => void = () => {};
+    mockGetShifts.mockReset();
+    mockGetShifts
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseFirst = resolve;
+        })
+      )
+      .mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 200 });
+
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await user.clear(screen.getByLabelText('To'));
+    await user.type(screen.getByLabelText('To'), '2026-09-01');
+
+    // The first range finally answers, with a shift the newer range excludes.
+    releaseFirst({ shifts: [unclosedShift], total: 1, skip: 0, limit: 200 });
+
+    expect(await screen.findByText(/Every shift in this range is closed out/)).toBeInTheDocument();
+    expect(screen.queryByText(/Engine 1/)).not.toBeInTheDocument();
+  });
+
+  // The checklist endpoint wants an Inventory grant that scheduling.manage does
+  // not imply, so this 403s for an ordinary scheduling officer. Reading that as
+  // "nothing outstanding" opens the wizard with its override hidden and leaves
+  // the finalize call refusing with nothing on screen to explain why.
+  it('refuses to open the wizard on a failed checklist lookup, and offers a retry', async () => {
+    mockGetShiftChecklists.mockRejectedValueOnce(new Error('403'));
+    const user = userEvent.setup();
+    renderWithRouter(<CloseoutQueueSection />);
+    await screen.findByText(/Engine 1/);
+
+    await user.click(screen.getByRole('button', { name: /Close out/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/equipment checks could not be read/);
+    expect(screen.queryByTestId('closeout-wizard')).not.toBeInTheDocument();
+
+    mockGetShiftChecklists.mockResolvedValue([]);
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByTestId('closeout-wizard')).toBeInTheDocument();
+  });
+
+  // The store leaves settingsLoaded false on a failed load rather than caching
+  // a permissive fallback, so "not loaded" cannot be read as "still loading" —
+  // it spins for ever and suppresses the shifts that did arrive.
+  it('says the settings did not load rather than spinning for ever', async () => {
+    storeState.settingsLoaded = false;
+    renderWithRouter(<CloseoutQueueSection />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/scheduling settings did not load/);
+    // Not still "Checking…": the page has stopped claiming the answer is on
+    // its way, which is what the endless spinner did.
+    expect(screen.queryByText('Checking…')).not.toBeInTheDocument();
+  });
+
   beforeEach(() => {
     // Reset each mock before installing its default rather than relying on
     // clearAllMocks, which keeps implementations (CLAUDE.md pitfall #28).
@@ -90,6 +198,9 @@ describe('CloseoutQueueSection', () => {
     mockNavigate.mockReset();
     storeState.callTrackingMode = 'count_only';
     storeState.requireEndOfShiftChecks = true;
+    storeState.settingsLoaded = true;
+    storeState.loadSettings = vi.fn(() => Promise.resolve());
+    departmentTimezone = 'UTC';
     mockGetShifts.mockResolvedValue({ shifts: [unclosedShift], total: 1, skip: 0, limit: 200 });
     mockGetShiftChecklists.mockResolvedValue([]);
   });

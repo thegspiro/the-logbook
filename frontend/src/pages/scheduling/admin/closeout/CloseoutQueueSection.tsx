@@ -19,7 +19,7 @@
  * decides what goes on a member's record, so the row opens the shift instead.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Clock, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { schedulingService } from '../../../../modules/scheduling/services/api';
@@ -33,7 +33,7 @@ import {
 } from '../../../../modules/scheduling/utils/closeoutQueue';
 import { equipmentCheckService } from '../../../../modules/inventory/services/equipmentCheckApi';
 import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../../../modules/inventory/types/equipmentCheck';
-import { formatCalendarDate, formatTime } from '../../../../utils/dateFormatting';
+import { addCalendarDays, formatCalendarDate, formatTime, getTodayLocalDate } from '../../../../utils/dateFormatting';
 import { useTimezone } from '../../../../hooks/useTimezone';
 import { EmptyState } from '../../../../components/ux/EmptyState';
 import { ShiftCloseoutWizard } from '../../ShiftCloseoutWizard';
@@ -41,19 +41,17 @@ import { ShiftCloseoutWizard } from '../../ShiftCloseoutWizard';
 /** How far back the queue looks by default. A month of backlog is a real one. */
 const DEFAULT_LOOKBACK_DAYS = 30;
 
-/** Shifts fetched per request. The endpoint pages; a backlog is not a year. */
-const FETCH_LIMIT = 200;
+/** Shifts per request. The endpoint's own ceiling is 1000; this pages under it. */
+const PAGE_SIZE = 200;
 
-const isoDay = (date: Date): string => {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-};
-
-const minusDays = (date: Date, days: number): Date => {
-  const next = new Date(date);
-  next.setDate(next.getDate() - days);
-  return next;
-};
+/**
+ * Pages this will fetch before it stops and says the range is too wide.
+ *
+ * A bound rather than an unbounded loop: the range is an officer's to choose,
+ * and "every shift since the department started" is a request nobody meant to
+ * make. Two thousand shifts is several years of backlog.
+ */
+const MAX_PAGES = 10;
 
 const unitLabel = (shift: ShiftRecord): string =>
   shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus';
@@ -67,33 +65,82 @@ const CloseoutQueueSection: React.FC = () => {
   const loadSettings = useSchedulingStore((s) => s.loadSettings);
   const navigate = useNavigate();
 
-  const [from, setFrom] = useState(() => isoDay(minusDays(new Date(), DEFAULT_LOOKBACK_DAYS)));
-  const [to, setTo] = useState(() => isoDay(new Date()));
+  // The department's calendar day, not the browser's. A UTC browser looking at
+  // an America/Los_Angeles department late in its evening would otherwise open
+  // the range on tomorrow, and the opposite offset drops the department's own
+  // current day out of the default range entirely.
+  const [from, setFrom] = useState(() => addCalendarDays(getTodayLocalDate(timezone), -DEFAULT_LOOKBACK_DAYS));
+  const [to, setTo] = useState(() => getTodayLocalDate(timezone));
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [truncated, setTruncated] = useState(false);
+  const [settingsTried, setSettingsTried] = useState(false);
   const [openRow, setOpenRow] = useState<string | null>(null);
   const [preparing, setPreparing] = useState<string | null>(null);
+  const [checksFailed, setChecksFailed] = useState<string | null>(null);
   const [checks, setChecks] = useState<Record<string, ShiftCheckSummary[]>>({});
 
-  useEffect(() => {
-    void loadSettings();
+  // The store deliberately leaves `settingsLoaded` false on a failed load, so
+  // that the next mount retries rather than caching a permissive window for the
+  // session — which means "not loaded" alone cannot tell a request still in
+  // flight from one that failed. Waiting on the promise separates them; without
+  // it a transient settings failure spins this page for ever.
+  const loadDepartmentSettings = useCallback(() => {
+    setSettingsTried(false);
+    void loadSettings().finally(() => setSettingsTried(true));
   }, [loadSettings]);
 
+  useEffect(() => {
+    loadDepartmentSettings();
+  }, [loadDepartmentSettings]);
+
+  const settingsFailed = settingsTried && !settingsLoaded;
+
+  // Changing From and then To fires two requests, and the first can land last.
+  // Without this the date controls describe one range while the queue below
+  // them describes another, and nothing on screen says so.
+  const requestId = useRef(0);
+
   const load = useCallback(async () => {
+    const mine = ++requestId.current;
     setLoading(true);
     setFailed(false);
+    setTruncated(false);
     setOpenRow(null);
     try {
-      const result = await schedulingService.getShifts({ start_date: from, end_date: to, limit: FETCH_LIMIT });
-      setShifts(result.shifts);
+      // Paged rather than capped at one request. The endpoint orders by date
+      // ascending and finalization is filtered here afterwards, so the first
+      // page of a busy range can be entirely closed-out shifts while the
+      // unclosed ones sit on page three — and the screen would then announce
+      // that every shift in the range is closed out. An answer that confident
+      // has to be built from the whole range.
+      const collected: ShiftRecord[] = [];
+      let page = 0;
+      let more = true;
+      while (more && page < MAX_PAGES) {
+        const result = await schedulingService.getShifts({
+          start_date: from,
+          end_date: to,
+          skip: page * PAGE_SIZE,
+          limit: PAGE_SIZE,
+        });
+        if (mine !== requestId.current) return;
+        collected.push(...result.shifts);
+        page += 1;
+        more = result.shifts.length === PAGE_SIZE && collected.length < result.total;
+      }
+      if (mine !== requestId.current) return;
+      setShifts(collected);
+      setTruncated(more);
     } catch {
       // Said rather than swallowed: an empty queue and a failed load look
       // identical, and one of them tells an officer there is no work waiting.
+      if (mine !== requestId.current) return;
       setFailed(true);
       setShifts([]);
     } finally {
-      setLoading(false);
+      if (mine === requestId.current) setLoading(false);
     }
   }, [from, to]);
 
@@ -119,10 +166,26 @@ const CloseoutQueueSection: React.FC = () => {
     // department that blocks on those checks is a window where the screen says
     // the close-out is clear to run and the server would refuse it. The server
     // is the gate either way; this is about not telling the officer otherwise.
+    //
+    // And a failure is a failure, never an empty list. The checklist endpoint
+    // wants `inventory.check_view` or `inventory.check_submit`, neither of
+    // which `scheduling.manage` implies — so this request 403s for a perfectly
+    // ordinary scheduling officer. Reading that as "no checks outstanding"
+    // opens the wizard with its override control hidden, and if the department
+    // blocks close-out on those checks the finalize call then refuses every
+    // attempt with nothing on screen explaining why. A refusal with no route
+    // forward is where a safety control turns into a workaround.
     if (!checks[entry.shift.id]) {
       setPreparing(entry.shift.id);
-      const summaries = await equipmentCheckService.getShiftChecklists(entry.shift.id).catch(() => []);
-      setChecks((current) => ({ ...current, [entry.shift.id]: summaries }));
+      setChecksFailed(null);
+      try {
+        const summaries = await equipmentCheckService.getShiftChecklists(entry.shift.id);
+        setChecks((current) => ({ ...current, [entry.shift.id]: summaries }));
+      } catch {
+        setChecksFailed(entry.shift.id);
+        setPreparing(null);
+        return;
+      }
       setPreparing(null);
     }
     setOpenRow(entry.shift.id);
@@ -158,9 +221,9 @@ const CloseoutQueueSection: React.FC = () => {
           Refresh
         </button>
         <p className="text-theme-text-muted min-w-0 flex-1 text-right text-sm" role="status" aria-live="polite">
-          {loading || !settingsLoaded
+          {loading || (!settingsLoaded && !settingsFailed)
             ? 'Checking…'
-            : failed
+            : failed || settingsFailed
               ? ''
               : `${queue.length} shift${queue.length === 1 ? '' : 's'} waiting to be closed out`}
         </p>
@@ -175,13 +238,40 @@ const CloseoutQueueSection: React.FC = () => {
         </div>
       )}
 
-      {(loading || !settingsLoaded) && (
+      {/* The cushion that decides when an open-ended shift is over comes from
+          these settings, so without them the queue cannot be judged at all —
+          and the store leaves them unloaded on failure rather than caching a
+          fallback. Say so and offer the retry; a spinner that never stops is
+          the same page with no explanation. */}
+      {settingsFailed && (
+        <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
+          <span className="flex-1">
+            The department&rsquo;s scheduling settings did not load, so a shift with no recorded end cannot be judged
+            against its cushion. Nothing is listed below.
+          </span>
+          <button type="button" className="font-semibold underline" onClick={loadDepartmentSettings}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Better a stated bound than a silent one: at this point the list below
+          is the oldest part of the range, which is the right part to work
+          first, but "every shift is closed out" would not be true of the rest. */}
+      {truncated && (
+        <div className="alert-warning text-sm" role="alert">
+          This range holds more shifts than one screen reads. The oldest {MAX_PAGES * PAGE_SIZE} are listed; narrow the
+          range to see the rest.
+        </div>
+      )}
+
+      {(loading || (!settingsLoaded && !settingsFailed)) && (
         <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       )}
 
-      {!loading && settingsLoaded && !failed && queue.length === 0 && (
+      {!loading && settingsLoaded && !failed && !truncated && queue.length === 0 && (
         <EmptyState
           icon={CheckCircle2}
           title="Every shift in this range is closed out"
@@ -227,6 +317,24 @@ const CloseoutQueueSection: React.FC = () => {
                   {pending} end-of-shift equipment check{pending === 1 ? '' : 's'} still outstanding
                   {requireEndOfShiftChecks ? ' — these block close-out for your department' : ''}
                 </p>
+              )}
+
+              {/* Named as a permission problem, because that is what it
+                  usually is: the checklist endpoint wants an Inventory grant
+                  that `scheduling.manage` does not imply. The wizard stays
+                  shut — opening it on an empty list would hide the override
+                  the officer needs and leave the finalize call refusing with
+                  nothing on screen to explain it. */}
+              {checksFailed === shift.id && (
+                <div className="alert-warning flex items-center gap-2 text-sm" role="alert">
+                  <span className="flex-1">
+                    This shift&rsquo;s equipment checks could not be read, so close-out is not offered here. It needs an
+                    Inventory checklist permission your account may not hold.
+                  </span>
+                  <button type="button" className="font-semibold underline" onClick={() => void openCloseout(entry)}>
+                    Retry
+                  </button>
+                </div>
               )}
 
               {!isOpen && (

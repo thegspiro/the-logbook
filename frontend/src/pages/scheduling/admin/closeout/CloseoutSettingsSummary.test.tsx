@@ -19,10 +19,23 @@ vi.mock('../../../../modules/scheduling/services/api', () => ({
   },
 }));
 
+let granted: string[] = [];
+vi.mock('../../../../stores/authStore', () => ({
+  useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
+    selector({ checkPermission: (permission: string) => granted.includes(permission) }),
+}));
+
+let modulesOn: string[] = [];
+vi.mock('../../../../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({ isModuleOn: (key: string) => modulesOn.includes(key), isLoading: false }),
+}));
+
 import CloseoutSettingsSummary from './CloseoutSettingsSummary';
 
 describe('CloseoutSettingsSummary', () => {
   beforeEach(() => {
+    granted = ['scheduling.manage', 'settings.manage'];
+    modulesOn = ['scheduling', 'inventory'];
     mockGetFeatureSettings.mockReset();
     mockGetFeatureSettings.mockResolvedValue({
       require_end_of_shift_checks: true,
@@ -53,6 +66,49 @@ describe('CloseoutSettingsSummary', () => {
       'href',
       '/scheduling/admin/settings/shift-reports'
     );
+  });
+
+  // Three modes, not two. `off` means the department has said it does not want
+  // to be asked about calls at all; reporting "Individual call records" for it
+  // states the opposite of what was configured.
+  it('names all three call-tracking modes, not two', async () => {
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: false,
+      call_tracking: { mode: 'off', call_types: [] },
+    });
+    const { unmount } = renderWithRouter(<CloseoutSettingsSummary />);
+    expect(await screen.findByText('Not recorded')).toBeInTheDocument();
+    unmount();
+
+    mockGetFeatureSettings.mockResolvedValue({
+      require_end_of_shift_checks: false,
+      call_tracking: { mode: 'detailed', call_types: [] },
+    });
+    renderWithRouter(<CloseoutSettingsSummary />);
+    expect(await screen.findByText('Individual call records')).toBeInTheDocument();
+  });
+
+  // The cushion is derived from Inventory's checklist timing, not from any
+  // scheduling setting: Scheduling General exposes no control for it, so a link
+  // there lands on a screen where the number shown does not appear.
+  it('points the cushion at the screen that actually owns it', async () => {
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByRole('link', { name: '12 hours' })).toHaveAttribute(
+      'href',
+      '/inventory/admin/checklists/settings'
+    );
+  });
+
+  // That screen is behind Inventory's module gate and its settings grants,
+  // neither implied by scheduling.manage. Offering the link anyway is the app
+  // handing an officer a door onto Access Denied.
+  it('shows the cushion as plain text for a viewer who cannot open its screen', async () => {
+    granted = ['scheduling.manage'];
+    renderWithRouter(<CloseoutSettingsSummary />);
+
+    expect(await screen.findByText('12 hours')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '12 hours' })).not.toBeInTheDocument();
   });
 
   // A dash reads as "not loaded"; a fabricated default reads as a value
