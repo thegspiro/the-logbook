@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduling administration moved into the Administration section (2026-09-05)
+
+**Changed**
+
+- **Everything an officer administers about the schedule is now at
+  `/scheduling/admin`**, in the **Administration** section of the navigation
+  beside Training Admin and Inventory Admin. It was reachable only from a strip
+  of "Officer tools" on the member-facing `/scheduling` page — so an
+  administrator opened the schedule to find the settings, and the Administration
+  section, where the rest of the product puts this, had no scheduling entry at
+  all. The strip is gone.
+- **Each settings section is its own route**, so it can be linked to,
+  bookmarked, refreshed into and reached with the back button. It was a `?tab=`
+  that only client-side state read.
+- **The hub is a card grid on the shared administration frame**, with headline
+  metrics and a Needs attention queue like the other four: shifts still to close
+  out, short-staffed shifts, hours this month, shifts ahead, requests waiting.
+  Short-staffing counts only shifts that state a `min_staffing` — a shift naming
+  neither positions nor a minimum has never said how big its crew is, and the
+  board treats that as "crew size not set" rather than as a staffing level, so
+  inventing a number here would report an emergency nobody declared.
+
+**Breaking**
+
+- **Six URLs no longer resolve, and there is no redirect:**
+
+  | Was                          | Now                                                              |
+  | ---------------------------- | ---------------------------------------------------------------- |
+  | `/scheduling/settings`       | `/scheduling/admin/settings/general` (and five sibling sections) |
+  | `/scheduling/templates`      | `/scheduling/admin/templates`                                    |
+  | `/scheduling/patterns`       | `/scheduling/admin/patterns`                                     |
+  | `/scheduling/reports`        | `/scheduling/admin/reports`                                      |
+  | `/scheduling/platoons`       | `/scheduling/admin/platoons`                                     |
+  | `/scheduling/qualifications` | `/scheduling/admin/positions`                                    |
+
+  Every link inside the app was moved with them. A bookmark to one of the old
+  URLs will not.
+
+- **The Administration section now opens for two more grants.**
+  `scheduling.manage` and `training.view_all` were added to
+  `ADMIN_NAVIGATION_PERMISSIONS`. Without the first, a scheduling officer
+  holding nothing else administrative never saw the section open, so the new row
+  inside it would never have been built; without the second, neither would a
+  training officer, whose only page in here is the position roster. This widens
+  who sees the section open — not what anyone can do inside it, which is still
+  decided card by card and route by route.
+
+**Removed**
+
+- **The Equipment settings section.** Nothing on it was ever edited there —
+  checklists belong to Inventory, and so do the settings that govern them — so
+  what was left was two links sitting behind a settings tab, which is not where
+  anyone looks for a link. They are cards on the hub now, each gated on the
+  Inventory grant its own destination requires.
+
+**Fixed**
+
+- **Four "Manage templates" links in Inventory opened the wrong page for the
+  wrong people.** On the fleet board and My Checklists they pointed at the
+  Scheduling settings signpost rather than at the checklist console they name,
+  and were offered on `scheduling.manage || inventory.check_manage` while their
+  destination required `scheduling.manage` — so a checklist officer holding only
+  the check grant was shown four links that refused them. They now open
+  `/inventory/admin/checklists` and are gated on `inventory.check_manage`, the
+  grant that page actually requires.
+- **The top navigation's Admin dropdown drops itself when every row inside it is
+  gated away**, so widening the section without adding a row would have given a
+  scheduling officer an Administration section containing nothing. The row was
+  added to both navigation surfaces, and
+  `administrationDiscovery.test.tsx` now renders the section for a
+  scheduling-officer persona and a training-officer persona — the test exists
+  because a gate is only reachable if every gate above it also opens.
+
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
 **Fixed**

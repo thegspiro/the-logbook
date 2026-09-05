@@ -61,9 +61,18 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.models.training import (
+    AssignmentStatus,
     EnrollmentStatus,
     ProgramEnrollment,
+    Shift,
+    ShiftAssignment,
+    ShiftAttendance,
+    ShiftStatus,
+    ShiftSwapRequest,
+    ShiftTimeOff,
     SubmissionStatus,
+    SwapRequestStatus,
+    TimeOffStatus,
     TrainingProgram,
     TrainingRecord,
     TrainingStatus,
@@ -1264,6 +1273,275 @@ async def _events_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     return items
 
 
+# ── Scheduling ──────────────────────────────────────────────────────────────
+
+#: How far ahead the staffing metrics look.
+SCHEDULING_STAFFING_HORIZON_DAYS = 7
+
+#: A shift starting inside this window is close enough that being short-staffed
+#: is a problem to solve today rather than one to watch.
+SCHEDULING_URGENT_HOURS = 48
+
+#: Assignment states that hold a seat. DECLINED, CANCELLED and NO_SHOW do not —
+#: counting them would report a shift as staffed by the people who told us they
+#: are not coming.
+_SEATED_STATUSES = (
+    AssignmentStatus.ASSIGNED,
+    AssignmentStatus.CONFIRMED,
+    AssignmentStatus.PENDING,
+)
+
+#: When a shift stopped being one somebody could still be on.
+#:
+#: ``end_time`` is genuinely optional — an open-ended shift records only when it
+#: began — so a bare ``Shift.end_time < now`` silently skips exactly the shifts
+#: nobody ever closed. Falling back to ``start_time`` counts an open-ended shift
+#: from the moment it started, which is early rather than wrong: it is already
+#: a shift with no recorded end.
+_shift_ended_at = func.coalesce(Shift.end_time, Shift.start_time)
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Attach UTC to a timestamp MySQL handed back without one.
+
+    The columns declare ``DateTime(timezone=True)``, but MySQL has no
+    ``timestamptz`` and the driver returns a naive ``datetime``. Subtracting
+    that from an aware ``now`` raises, which on this page is a 500 for any
+    department that happens to have a row in the window — so the naive value is
+    read as UTC, which is what was written.
+    """
+    if value is None or value.tzinfo is not None:
+        return value
+    return value.replace(tzinfo=timezone.utc)
+
+
+def _seated_headcount():
+    """Seats held on the correlated ``Shift`` row."""
+    return (
+        select(func.count(ShiftAssignment.id))
+        .where(
+            ShiftAssignment.shift_id == Shift.id,
+            ShiftAssignment.assignment_status.in_(_SEATED_STATUSES),
+        )
+        .correlate(Shift)
+        .scalar_subquery()
+    )
+
+
+def _understaffed_criteria(organization_id: str, start: datetime, end: datetime):
+    """Shifts between ``start`` and ``end`` carrying fewer people than they ask for.
+
+    Only shifts that state a ``min_staffing`` are counted. A shift naming neither
+    positions nor a minimum has never said how big its crew is, and the front end
+    treats that as "crew size not set" rather than as a staffing level — inventing
+    a number here would report an emergency the department never declared.
+    """
+    return (
+        Shift.organization_id == organization_id,
+        Shift.status != ShiftStatus.CANCELLED,
+        Shift.start_time >= start,
+        Shift.start_time < end,
+        Shift.min_staffing.isnot(None),
+        Shift.min_staffing > 0,
+        _seated_headcount() < Shift.min_staffing,
+    )
+
+
+async def _scheduling_closeout_backlog(ctx: MetricContext) -> tuple[int, Optional[int]]:
+    """Shifts that have ended and were never closed out, and the oldest one's age."""
+    now = datetime.now(timezone.utc)
+    count, oldest = await _count_and_oldest(
+        ctx.db,
+        Shift,
+        Shift.organization_id == ctx.organization_id,
+        Shift.status != ShiftStatus.CANCELLED,
+        Shift.is_finalized.is_(False),
+        _shift_ended_at < now,
+        date_column=_shift_ended_at,
+    )
+    return count, _age_days(oldest, ctx.today)
+
+
+async def _scheduling_needs_closeout(ctx: MetricContext) -> tuple[str, str]:
+    count, age = await _scheduling_closeout_backlog(ctx)
+    if not count:
+        return _fmt_int(0), "every shift closed out"
+    return _fmt_int(count), _waiting_phrase(age) or "all ended today"
+
+
+async def _scheduling_understaffed(ctx: MetricContext) -> tuple[str, str]:
+    now = datetime.now(timezone.utc)
+    horizon = now + timedelta(days=SCHEDULING_STAFFING_HORIZON_DAYS)
+    count = await _scalar(
+        ctx.db,
+        select(func.count(Shift.id)).where(
+            *_understaffed_criteria(ctx.organization_id, now, horizon)
+        ),
+    )
+    return _fmt_int(count), f"in the next {SCHEDULING_STAFFING_HORIZON_DAYS} days"
+
+
+async def _scheduling_hours_this_month(ctx: MetricContext) -> tuple[str, str]:
+    month_start = ctx.today.replace(day=1)
+    minutes = (
+        await ctx.db.execute(
+            select(func.sum(ShiftAttendance.duration_minutes))
+            .select_from(ShiftAttendance)
+            .join(Shift, Shift.id == ShiftAttendance.shift_id)
+            .where(
+                Shift.organization_id == ctx.organization_id,
+                Shift.shift_date >= month_start,
+            )
+        )
+    ).scalar()
+    hours = float(minutes or 0) / 60.0
+    return _fmt_hours(hours), f"since {month_start.strftime('%B')} 1"
+
+
+async def _scheduling_shifts_ahead(ctx: MetricContext) -> tuple[str, str]:
+    horizon = ctx.today + timedelta(days=SCHEDULING_STAFFING_HORIZON_DAYS)
+    total = await _scalar(
+        ctx.db,
+        select(func.count(Shift.id)).where(
+            Shift.organization_id == ctx.organization_id,
+            Shift.status != ShiftStatus.CANCELLED,
+            Shift.shift_date >= ctx.today,
+            Shift.shift_date < horizon,
+        ),
+    )
+    with_officer = await _scalar(
+        ctx.db,
+        select(func.count(Shift.id)).where(
+            Shift.organization_id == ctx.organization_id,
+            Shift.status != ShiftStatus.CANCELLED,
+            Shift.shift_date >= ctx.today,
+            Shift.shift_date < horizon,
+            Shift.shift_officer_id.isnot(None),
+        ),
+    )
+    return _fmt_int(total), f"{_fmt_int(with_officer)} with an officer named"
+
+
+async def _scheduling_pending_requests(ctx: MetricContext) -> tuple[str, str]:
+    swaps, oldest_swap = await _count_and_oldest(
+        ctx.db,
+        ShiftSwapRequest,
+        ShiftSwapRequest.organization_id == ctx.organization_id,
+        ShiftSwapRequest.status == SwapRequestStatus.PENDING,
+        date_column=ShiftSwapRequest.created_at,
+    )
+    time_off, oldest_time_off = await _count_and_oldest(
+        ctx.db,
+        ShiftTimeOff,
+        ShiftTimeOff.organization_id == ctx.organization_id,
+        ShiftTimeOff.status == TimeOffStatus.PENDING,
+        date_column=ShiftTimeOff.created_at,
+    )
+    ages = [
+        age
+        for age in (
+            _age_days(oldest_swap, ctx.today),
+            _age_days(oldest_time_off, ctx.today),
+        )
+        if age is not None
+    ]
+    total = swaps + time_off
+    if not total:
+        return _fmt_int(0), "nothing waiting on a decision"
+    return _fmt_int(total), _waiting_phrase(max(ages)) or "all opened today"
+
+
+async def _scheduling_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
+    items: list[AdminAttentionItem] = []
+    now = datetime.now(timezone.utc)
+
+    urgent = now + timedelta(hours=SCHEDULING_URGENT_HOURS)
+    short_count, soonest = await _count_and_oldest(
+        ctx.db,
+        Shift,
+        *_understaffed_criteria(ctx.organization_id, now, urgent),
+        date_column=Shift.start_time,
+    )
+    if short_count:
+        soonest_utc = _as_utc(soonest) if isinstance(soonest, datetime) else None
+        hours_out = (
+            max(0, int((soonest_utc - now).total_seconds() // 3600))
+            if soonest_utc is not None
+            else None
+        )
+        items.append(
+            AdminAttentionItem(
+                key="scheduling_understaffed",
+                title=(
+                    f"{short_count} {_plural(short_count, 'shift')} short of "
+                    f"minimum staffing"
+                ),
+                detail=(
+                    f"soonest starts in {hours_out} {_plural(hours_out, 'hour')}"
+                    if hours_out is not None
+                    else ""
+                ),
+                action_label="Open the shift board",
+                href="/scheduling",
+                severity="critical",
+                count=short_count,
+                oldest_age_days=None,
+            )
+        )
+
+    swap_count, oldest_swap = await _count_and_oldest(
+        ctx.db,
+        ShiftSwapRequest,
+        ShiftSwapRequest.organization_id == ctx.organization_id,
+        ShiftSwapRequest.status == SwapRequestStatus.PENDING,
+        date_column=ShiftSwapRequest.created_at,
+    )
+    if swap_count:
+        age = _age_days(oldest_swap, ctx.today)
+        items.append(
+            AdminAttentionItem(
+                key="scheduling_pending_swaps",
+                title=(
+                    f"{swap_count} shift swap {_plural(swap_count, 'request')} "
+                    f"awaiting review"
+                ),
+                detail=_waiting_phrase(age),
+                action_label="Review requests",
+                href="/scheduling?tab=requests",
+                severity="warning",
+                count=swap_count,
+                oldest_age_days=age,
+            )
+        )
+
+    time_off_count, oldest_time_off = await _count_and_oldest(
+        ctx.db,
+        ShiftTimeOff,
+        ShiftTimeOff.organization_id == ctx.organization_id,
+        ShiftTimeOff.status == TimeOffStatus.PENDING,
+        date_column=ShiftTimeOff.created_at,
+    )
+    if time_off_count:
+        age = _age_days(oldest_time_off, ctx.today)
+        items.append(
+            AdminAttentionItem(
+                key="scheduling_pending_time_off",
+                title=(
+                    f"{time_off_count} time-off "
+                    f"{_plural(time_off_count, 'request')} awaiting review"
+                ),
+                detail=_waiting_phrase(age),
+                action_label="Review requests",
+                href="/scheduling?tab=requests",
+                severity="warning",
+                count=time_off_count,
+                oldest_age_days=age,
+            )
+        )
+
+    return items
+
+
 # ── Department store ────────────────────────────────────────────────────────
 #
 # The store sells the uniforms the inventory module tracks, and its admin page
@@ -1747,6 +2025,52 @@ MODULE_REGISTRY: dict[str, ModuleSpec] = {
                 label="Public requests",
                 description="Community event requests not yet completed or declined",
                 resolve=_events_open_requests,
+            ),
+        ),
+    ),
+    "scheduling": ModuleSpec(
+        key="scheduling",
+        permission="scheduling.manage",
+        requires_module="scheduling",
+        default_metrics=(
+            "shifts_needing_closeout",
+            "understaffed_shifts",
+            "hours_this_month",
+        ),
+        attention=_scheduling_attention,
+        metrics=(
+            MetricSpec(
+                key="shifts_needing_closeout",
+                label="To close out",
+                description="Shifts that have ended without being finalized",
+                resolve=_scheduling_needs_closeout,
+            ),
+            MetricSpec(
+                key="understaffed_shifts",
+                label="Short-staffed",
+                description=(
+                    "Upcoming shifts carrying fewer people than their minimum "
+                    "staffing asks for"
+                ),
+                resolve=_scheduling_understaffed,
+            ),
+            MetricSpec(
+                key="hours_this_month",
+                label="Hours this month",
+                description="Recorded attendance hours since the month began",
+                resolve=_scheduling_hours_this_month,
+            ),
+            MetricSpec(
+                key="shifts_ahead",
+                label="Shifts ahead",
+                description="Shifts on the calendar over the coming week",
+                resolve=_scheduling_shifts_ahead,
+            ),
+            MetricSpec(
+                key="pending_scheduling_requests",
+                label="Requests waiting",
+                description="Swap and time-off requests awaiting a decision",
+                resolve=_scheduling_pending_requests,
             ),
         ),
     ),

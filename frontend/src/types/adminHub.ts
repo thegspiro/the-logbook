@@ -13,6 +13,7 @@ export const AdminHubModule = {
   TRAINING: 'training',
   INVENTORY: 'inventory',
   EVENTS: 'events',
+  SCHEDULING: 'scheduling',
   STOREFRONT: 'storefront',
 } as const;
 export type AdminHubModule = (typeof AdminHubModule)[keyof typeof AdminHubModule];

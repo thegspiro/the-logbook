@@ -83,7 +83,11 @@ const SchedulingPlatoonsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingHeader backTo="/scheduling" description="Platoons · Assign and manage department rosters" />
+        <SchedulingHeader
+          backTo="/scheduling/admin"
+          backLabel="Back to scheduling administration"
+          description="Platoons · Assign and manage department rosters"
+        />
 
         {loading ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
@@ -98,7 +102,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
                   Platoon scheduling is turned off for your department. You can still assign members here, but platoon
                   features won't appear until you enable it in{' '}
                   <button
-                    onClick={() => void navigate('/scheduling/settings?tab=platoons')}
+                    onClick={() => void navigate('/scheduling/admin/settings/platoons')}
                     className="font-medium underline"
                   >
                     Scheduling Settings

@@ -96,3 +96,60 @@ describe('the checklist officer can find the console they administer', () => {
     expect(screen.queryByRole('button', { name: /Inventory Admin/ })).not.toBeInTheDocument();
   });
 });
+
+describe('the scheduling officer can find the schedule they administer', () => {
+  beforeEach(() => {
+    mockCheckPermission.mockReset();
+    // A scheduling officer holding nothing else administrative. Before
+    // Scheduling Administration existed, `scheduling.manage` was absent from
+    // ADMIN_NAVIGATION_PERMISSIONS, so this viewer never saw the section open
+    // at all — the same shape of failure the checklist officer hit above.
+    mockCheckPermission.mockImplementation((permission: string) => permission === 'scheduling.manage');
+  });
+
+  it('offers Scheduling Admin in the side navigation', () => {
+    renderWithRouter(<SideNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
+
+    expect(screen.getByText('Administration')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Scheduling Admin/ })).toBeInTheDocument();
+  });
+
+  it('offers Scheduling Admin in the top navigation', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TopNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
+    act(() => {
+      window.dispatchEvent(new CustomEvent(OPEN_MOBILE_NAV_EVENT));
+    });
+
+    const trigger = screen.getAllByRole('button', { name: 'Admin' })[0];
+    expect(trigger, 'no Admin group for the scheduling officer').toBeDefined();
+    await user.click(trigger as HTMLElement);
+
+    expect(screen.getByRole('link', { name: /Scheduling Admin/ })).toHaveAttribute('href', '/scheduling/admin');
+  });
+});
+
+describe('the training officer reaches the section holding the roster they read', () => {
+  beforeEach(() => {
+    mockCheckPermission.mockReset();
+    // `training.view_all` opens the position roster and nothing else here. It
+    // is in ADMIN_NAVIGATION_PERMISSIONS for that page alone — without it the
+    // section stays shut and the one card they can use is never built.
+    mockCheckPermission.mockImplementation((permission: string) => permission === 'training.view_all');
+  });
+
+  it('opens the Administration section', () => {
+    renderWithRouter(<SideNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
+
+    expect(screen.getByText('Administration')).toBeInTheDocument();
+  });
+
+  // The row promises the whole of Scheduling Administration, and this viewer
+  // can open exactly one card inside it. They reach the roster from Training,
+  // or from the hub itself; a row that over-promises is a worse offer than none.
+  it('is not offered the Scheduling Admin row', () => {
+    renderWithRouter(<SideNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /Scheduling Admin/ })).not.toBeInTheDocument();
+  });
+});

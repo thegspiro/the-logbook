@@ -90,29 +90,32 @@ describe('SchedulingPage', () => {
       });
     });
 
-    it('should render admin links when user has scheduling.manage permission', async () => {
-      mockCheckPermission.mockImplementation((perm: string) => {
-        return perm === 'scheduling.manage';
-      });
+    /**
+     * Administration is reached from the Administration section of the nav, at
+     * /scheduling/admin, like Training Admin and Inventory Admin. It used to be
+     * a strip of "Officer tools" here, which meant an administrator opened the
+     * member-facing schedule to find the settings and the Administration
+     * section had no scheduling entry at all.
+     *
+     * Asserted for a manager rather than only for a member: the strip was gated
+     * on scheduling.manage, so a test that only checked a member would have
+     * passed with it still on screen.
+     */
+    it('offers no administration strip, even to a scheduling manager', async () => {
+      mockCheckPermission.mockImplementation((perm: string) => perm === 'scheduling.manage');
 
       renderWithRouter(<SchedulingPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Officer tools')).toBeInTheDocument();
-        expect(screen.getByText('Templates')).toBeInTheDocument();
-        expect(screen.getByText('Patterns')).toBeInTheDocument();
-        expect(screen.getByText('Reports')).toBeInTheDocument();
-        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expectTabVisible('Schedule');
       });
 
-      // Admin links should be actual links, not tabs
-      const links = screen.getAllByRole('link');
-      const adminLinks = links.filter((link) => link.getAttribute('href')?.startsWith('/scheduling/'));
-      const hrefs = adminLinks.map((link) => link.getAttribute('href'));
-      expect(hrefs).toContain('/scheduling/templates');
-      expect(hrefs).toContain('/scheduling/patterns');
-      expect(hrefs).toContain('/scheduling/reports');
-      expect(hrefs).toContain('/scheduling/settings');
+      expect(screen.queryByText('Officer tools')).not.toBeInTheDocument();
+      // queryAll, not getAll: with the strip gone the page may render no links at
+      // all, and getAllByRole throws on an empty result — which would pass this
+      // test for the wrong reason on one render and fail it on another.
+      const hrefs = screen.queryAllByRole('link').map((link) => link.getAttribute('href'));
+      expect(hrefs.filter((href) => href?.startsWith('/scheduling/admin'))).toEqual([]);
     });
 
     it('should not render admin links for non-admin users', async () => {
@@ -125,7 +128,6 @@ describe('SchedulingPage', () => {
       });
 
       expect(screen.queryByText('Officer tools')).not.toBeInTheDocument();
-      expect(screen.queryByText('Templates')).not.toBeInTheDocument();
       expect(screen.queryByText('Patterns')).not.toBeInTheDocument();
     });
   });

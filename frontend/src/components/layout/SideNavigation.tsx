@@ -18,6 +18,7 @@ import {
   GraduationCap,
   Package,
   Clock,
+  CalendarClock,
   Truck,
   Vote,
   ClipboardList,
@@ -505,6 +506,22 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                   path: '/training/admin',
                   icon: GraduationCap,
                   permission: 'training.manage',
+                } as NavItem,
+              ]
+            : []),
+          ...(isModuleOn('scheduling')
+            ? [
+                {
+                  label: 'Scheduling Admin',
+                  path: '/scheduling/admin',
+                  icon: CalendarClock,
+                  // The hub's route also admits training officers, for the
+                  // position roster inside it. The nav row stays on the
+                  // scheduling grant: a training officer reaches that roster
+                  // from Training, and a row promising "Scheduling Admin" to
+                  // someone who can open one card in it is a worse offer than
+                  // no row.
+                  permission: 'scheduling.manage',
                 } as NavItem,
               ]
             : []),
