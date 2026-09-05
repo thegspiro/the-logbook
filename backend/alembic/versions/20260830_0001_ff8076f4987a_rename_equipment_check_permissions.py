@@ -61,8 +61,8 @@ def _rewrite(mapping: dict, wildcard: str | None, wildcard_to: tuple) -> None:
     # Defensive only. ``positions`` IS created by the migration chain — the
     # initial schema builds ``roles``, and 20260805_0008 renames it, which
     # makes that rename a required ancestor of this revision. An earlier
-    # version of this comment claimed the opposite ("model-only table,
-    # materialized by startup create_all"), which is the exact false positive
+    # version of this comment claimed the opposite — that startup create_all
+    # materializes it — which is the exact false positive
     # CLAUDE.md pitfall #26 records being reverted on 2026-08-31 after an
     # empirical `alembic upgrade head` against an empty database showed the
     # table already present. Verified again here the same way.
