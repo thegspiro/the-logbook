@@ -2309,7 +2309,9 @@ not resurrect the ladder — the same trade-off `OperationalRankService` makes.
 GET /api/v1/scheduling/eligibility/roster?position=driver
 ```
 
-Requires `scheduling.view` or `scheduling.manage`. Returns every active member
+Requires `scheduling.manage` _(narrowed 2026-09-05; it accepted `training.view_all`
+and `training.manage` while the page did, and the documentation here said
+`scheduling.view`, which it never accepted)_. Returns every active member
 eligible for the position with the _sources_ of that eligibility (rank,
 completed training, or the org's open-position list), their highest current EVOC
 level, and the apparatus they hold an operator record on. Surfaced at

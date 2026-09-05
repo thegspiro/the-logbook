@@ -25,6 +25,13 @@ which merged before a review of it came back.
   match. A hub gate wider than every card behind it only opens an empty page.
   `training.view_all` leaves `ADMIN_NAVIGATION_PERMISSIONS` with it.
 
+  **`GET /scheduling/eligibility/roster` is narrowed to match.** It accepted the
+  training grants too, so narrowing only the page would have revoked nothing: a
+  client gate is not a gate, and a training officer refused by the screen could
+  still pull the whole roster — member eligibility and EVOC standing — straight
+  from the API. The endpoint's documented permission was also wrong, claiming
+  `scheduling.view`, which it never accepted.
+
 **Fixed**
 
 - **A shift with a pending assignment was counted as staffed.** The Short-staffed
@@ -99,6 +106,7 @@ which merged before a review of it came back.
   every module in `MODULE_REGISTRY` does this; scheduling did not introduce it,
   and correcting only scheduling would make it the one module that disagrees with
   the rest. Worth its own change.
+
 ### The Events page invited members to create an event (2026-09-05)
 
 **Fixed**
@@ -156,7 +164,6 @@ which merged before a review of it came back.
   browser after the fact. The old form listed restricted items and let the
   member submit a request the API then refused, and the item's existence was
   disclosed to everyone regardless.
-
 
 ### Scheduling administration moved into the Administration section (2026-09-05)
 

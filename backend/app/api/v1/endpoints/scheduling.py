@@ -3396,9 +3396,13 @@ async def get_position_roster(
         max_length=50,
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("scheduling.manage", "training.view_all", "training.manage")
-    ),
+    # `scheduling.manage` alone. This accepted the training grants too, because
+    # the roster reads as a training-compliance view — but the page moved into
+    # Scheduling Administration and narrowed to the one grant, and a client gate
+    # is not a gate: leaving this wider let a training officer keep pulling the
+    # whole roster, member eligibility and EVOC standing included, straight from
+    # the API. The revocation has to be enforced where the data is.
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """
     List every active member eligible for a shift position, and why.
@@ -3408,7 +3412,7 @@ async def get_position_roster(
     completed training, or the org's open-position list), their current EVOC
     level, and the apparatus they hold an operator record on.
 
-    **Permissions required:** scheduling.manage, training.view_all, or training.manage
+    **Permissions required:** scheduling.manage
     """
     service = ShiftEligibilityService(db)
     roster = await service.get_position_roster(
