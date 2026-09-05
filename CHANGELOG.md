@@ -309,10 +309,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can produce them. A department that took some of the four off keeps that
   choice: none are put back.
 
-  An earlier draft recognized the position by its whole permission list instead,
-  and would have repaired only one written by the current build — every older
-  one was skipped without a word. Departments that never had an EMT position are
-  unaffected either way.
+  The first attempt recognized the position by its whole permission list
+  instead, and repaired only one written by the current build — every older one
+  was skipped without a word. That attempt had already shipped, so widening it
+  is a second, follow-up step rather than a correction to the first: an
+  installation that has run the earlier one would never see an edit to it.
+  Departments that never had an EMT position are unaffected throughout.
 
 - **Setting up a position now starts from the registry on either path.** The
   setup screen's save had two routes: updating a position the system had

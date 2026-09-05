@@ -1154,12 +1154,23 @@ Do not try to recognize an unedited row by matching its whole permission list:
 rows moved them out of the match. A snapshot of a whole row is pinned to the
 build that produced it, so it also misses every row written by any _other_
 build — silently, while reading as though it covered them. `b4d1c8e37f52` was
-written that way and rewritten: gate instead on a signal no build could have
-produced, which for an addition is usually the **absence of the very grants
-being added** when nothing in the editor can emit them. That answer cannot
-drift, because adding a module to the registry cannot move a row across it.
-Say in the migration's docstring which direction you chose and what it costs
-when it is wrong.
+written that way and had to be superseded by `c7a4e91d3b68`: gate instead on a
+signal no build could have produced, which for an addition is usually the
+**absence of the very grants being added** when nothing in the editor can emit
+them. That answer cannot drift, because adding a module to the registry cannot
+move a row across it. Say in the migration's docstring which direction you chose
+and what it costs when it is wrong.
+
+**Superseded, not edited — and the distinction is the whole repair.** The first
+attempt at that fix rewrote `b4d1c8e37f52` in place, which changes nothing where
+it matters: Alembic records a revision as applied by id, so an installation that
+already ran the narrow version never executes the widened body, and the rows it
+skipped are exactly the ones the widening exists to reach. A published revision
+is frozen (pitfall #20) and the delta belongs in a child revision — the shape
+`f3b8d0c26a17` states plainly: "A new revision is also the only thing that
+reaches an installation which already stamped either version." Being sure
+nothing has upgraded yet is not a substitute; that is another unverifiable
+premise, which is the failure this rule already exists to stop.
 
 ### 24. Do Not Reuse a Branch Name After Its Pull Request Merges _(2026-08-24)_
 
