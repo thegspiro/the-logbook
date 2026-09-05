@@ -20,7 +20,7 @@ from app.models.notification import (
     NotificationLog,
     NotificationRule,
 )
-from app.utils.cursor_pagination import keyset_before, next_cursor_for
+from app.utils.cursor_pagination import keyset_before, trim_to_page
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -238,20 +238,26 @@ class NotificationsService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        if cursor:
+        # `is not None`, not truthiness: `?cursor=` arrives as an empty string,
+        # which the codec classifies as invalid. Falling through to the offset
+        # branch would answer 200 with the first page to a caller that believed
+        # it was continuing, quietly duplicating rows.
+        if cursor is not None:
             query = query.where(
                 keyset_before(NotificationLog.sent_at, NotificationLog.id, cursor)
             )
         else:
             query = query.offset(skip)
 
+        # One row beyond the page: its presence is what proves another page
+        # exists. A page that is merely full proves nothing.
         query = query.order_by(
             NotificationLog.sent_at.desc(), NotificationLog.id.desc()
-        ).limit(limit)
+        ).limit(limit + 1)
         result = await self.db.execute(query)
-        logs = list(result.scalars().all())
+        logs, next_cursor = trim_to_page(list(result.scalars().all()), limit)
 
-        return logs, total, next_cursor_for(logs, limit)
+        return logs, total, next_cursor
 
     async def get_user_notifications(
         self,
@@ -296,20 +302,26 @@ class NotificationsService:
         total_result = await self.db.execute(count_query)
         total = total_result.scalar()
 
-        if cursor:
+        # `is not None`, not truthiness: `?cursor=` arrives as an empty string,
+        # which the codec classifies as invalid. Falling through to the offset
+        # branch would answer 200 with the first page to a caller that believed
+        # it was continuing, quietly duplicating rows.
+        if cursor is not None:
             query = query.where(
                 keyset_before(NotificationLog.sent_at, NotificationLog.id, cursor)
             )
         else:
             query = query.offset(skip)
 
+        # One row beyond the page: its presence is what proves another page
+        # exists. A page that is merely full proves nothing.
         query = query.order_by(
             NotificationLog.sent_at.desc(), NotificationLog.id.desc()
-        ).limit(limit)
+        ).limit(limit + 1)
         result = await self.db.execute(query)
-        logs = list(result.scalars().all())
+        logs, next_cursor = trim_to_page(list(result.scalars().all()), limit)
 
-        return logs, total, next_cursor_for(logs, limit)
+        return logs, total, next_cursor
 
     async def get_user_unread_count(
         self,

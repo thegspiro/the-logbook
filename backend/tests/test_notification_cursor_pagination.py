@@ -220,7 +220,66 @@ class TestNextCursorContract:
 
         assert cursor is None
 
-    async def test_a_full_page_offers_the_next_one(self, db_session):
+    async def test_a_full_page_with_rows_behind_it_offers_the_next_one(
+        self, db_session
+    ):
+        # Three rows behind a page of two. This asserted merely that a *full*
+        # page offers a cursor, which is the behaviour the over-fetch
+        # deliberately stopped: fullness alone advertised a page that need not
+        # exist.
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        for n in range(3):
+            await _log(
+                db_session,
+                org,
+                user,
+                subject=f"row-{n}",
+                sent_at=BASE - timedelta(minutes=n),
+            )
+
+        service = NotificationsService(db_session)
+        page, _total, cursor = await service.get_logs(
+            org.id, recipient_id=user.id, limit=2
+        )
+
+        assert len(page) == 2
+        assert cursor is not None
+
+    async def test_an_exactly_full_final_page_does_not_advertise_another(
+        self, db_session
+    ):
+        # Fullness is not evidence. With the row count an exact multiple of the
+        # page size, issuing a cursor on a full page showed the member a
+        # "Load more (0 remaining)" button and cost them a request to find the
+        # end. The over-fetch of one row is what makes the claim true.
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        for n in range(4):
+            await _log(
+                db_session,
+                org,
+                user,
+                subject=f"row-{n}",
+                sent_at=BASE - timedelta(minutes=n),
+            )
+
+        service = NotificationsService(db_session)
+        first, _total, cursor = await service.get_logs(
+            org.id, recipient_id=user.id, limit=2
+        )
+        assert cursor is not None
+        second, _total, next_cursor = await service.get_logs(
+            org.id, recipient_id=user.id, limit=2, cursor=cursor
+        )
+
+        assert [e.subject for e in second] == ["row-2", "row-3"]
+        assert next_cursor is None, "a full last page advertised a page after it"
+        assert len(first) == 2, "the over-fetched row must not reach the caller"
+
+    async def test_the_inbox_full_final_page_does_not_advertise_another(
+        self, db_session
+    ):
         org = await _make_org(db_session)
         user = await _make_user(db_session, org)
         for n in range(2):
@@ -233,11 +292,12 @@ class TestNextCursorContract:
             )
 
         service = NotificationsService(db_session)
-        _page, _total, cursor = await service.get_logs(
-            org.id, recipient_id=user.id, limit=2
+        page, _total, cursor = await service.get_user_notifications(
+            organization_id=org.id, user_id=user.id, limit=2
         )
 
-        assert cursor is not None
+        assert len(page) == 2
+        assert cursor is None
 
     async def test_the_total_describes_the_list_not_the_tail(self, db_session):
         # Counted before the keyset predicate narrows the query, so the
@@ -262,6 +322,39 @@ class TestNextCursorContract:
         )
 
         assert total == 5
+
+
+class TestEmptyCursorIsRejected:
+    """``?cursor=`` is a caller continuing, not a caller starting over."""
+
+    async def test_an_empty_cursor_raises_rather_than_restarting(self, db_session):
+        # Truthiness would send this down the offset branch and answer 200 with
+        # the first page — rows the caller already holds, handed back as though
+        # they were the next ones.
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        await _log(db_session, org, user, subject="row", sent_at=BASE)
+
+        service = NotificationsService(db_session)
+        with pytest.raises(InvalidCursor):
+            await service.get_logs(org.id, recipient_id=user.id, cursor="")
+
+    async def test_the_endpoint_turns_an_empty_cursor_into_a_400(self, db_session):
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        caller = _Caller(user.id, org.id)
+
+        with pytest.raises(HTTPException) as excinfo:
+            await list_logs(
+                channel=None,
+                scope=NotificationLogScope.MINE,
+                cursor="",
+                pagination=_Pagination(),
+                db=db_session,
+                current_user=caller,
+            )
+
+        assert excinfo.value.status_code == 400
 
 
 class TestCursorRespectsFilters:

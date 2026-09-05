@@ -250,6 +250,18 @@ class NotificationLog(Base):
     __table_args__ = (
         Index("idx_notif_logs_recipient", "recipient_id"),
         Index("idx_notif_logs_org_sent", "organization_id", "sent_at"),
+        # Covers the caller-scoped keyset query both notification lists now
+        # issue on every request. Declared here as well as in migration
+        # c8f4a1e6b309 because a fresh install builds its tables from this
+        # metadata and stamps Alembic at head without running the migration —
+        # a migration-only index would never exist on a new deployment.
+        Index(
+            "idx_notif_logs_recipient_sent",
+            "organization_id",
+            "recipient_id",
+            "sent_at",
+            "id",
+        ),
         UniqueConstraint(
             "department_message_id",
             "recipient_id",

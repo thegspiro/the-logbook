@@ -112,17 +112,22 @@ def keyset_before(timestamp_column: Any, id_column: Any, cursor: str) -> Any:
     )
 
 
-def next_cursor_for(rows: list, limit: int) -> Optional[str]:
-    """The cursor to request the page after ``rows``, or ``None`` at the end.
+def trim_to_page(rows: list, limit: int) -> Tuple[list, Optional[str]]:
+    """Split an over-fetch of ``limit + 1`` rows into the page and its cursor.
 
-    A short page means the end of the list, so no cursor is issued: a client
-    driving its "load more" control off this value stops for the right reason
-    rather than by comparing counts, which a concurrent insert can disagree
-    with.
+    Callers ask the database for one row more than they intend to return. That
+    extra row is the evidence another page exists, and it is the only honest
+    way to know: a page that merely happens to be full proves nothing, so
+    issuing a cursor on fullness alone advertises a next page that may not
+    exist. With a list whose length is an exact multiple of the page size, that
+    showed the member a "Load more (0 remaining)" button and made them spend a
+    request to discover the end.
+
+    Returns the page trimmed to ``limit`` and the cursor for the page after it,
+    or ``None`` when this is the last one.
     """
-    if not rows or len(rows) < limit:
-        return None
-    last = rows[-1]
-    if last.sent_at is None:
-        return None
-    return encode_cursor(last.sent_at, last.id)
+    if len(rows) <= limit:
+        return rows, None
+    page = rows[:limit]
+    last = page[-1]
+    return page, encode_cursor(last.sent_at, last.id)

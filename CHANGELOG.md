@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arriving, which is when the count is least trustworthy.
 
 - **API:** `GET /notifications/logs` and `GET /notifications/my` accept a
-  `cursor` and return `nextCursor`. `skip` continues to work for existing
+  `cursor` and return `next_cursor`. `skip` continues to work for existing
   callers; a cursor supersedes it. **Schema:** `notification_logs.sent_at` is
   now `NOT NULL` (it always had a default, and a NULL would have been
   unreachable by any cursor), with a new index behind the paged query.

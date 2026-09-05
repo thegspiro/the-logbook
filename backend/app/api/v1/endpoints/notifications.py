@@ -206,8 +206,8 @@ async def list_logs(
     cursor: str | None = Query(
         None,
         description=(
-            "Opaque cursor from a previous response's nextCursor. Supersedes "
-            "skip; pass back exactly what was returned. Absent nextCursor "
+            "Opaque cursor from a previous response's next_cursor. Supersedes "
+            "skip; pass back exactly what was returned. Absent next_cursor "
             "means the end of the list."
         ),
     ),
@@ -308,8 +308,8 @@ async def get_my_notifications(
     cursor: str | None = Query(
         None,
         description=(
-            "Opaque cursor from a previous response's nextCursor. Supersedes "
-            "skip; pass back exactly what was returned. Absent nextCursor "
+            "Opaque cursor from a previous response's next_cursor. Supersedes "
+            "skip; pass back exactly what was returned. Absent next_cursor "
             "means the end of the list."
         ),
     ),
