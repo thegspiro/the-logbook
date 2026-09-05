@@ -24,6 +24,7 @@ const initialState = {
   backupPhone: '',
   secondaryAdminEmail: '',
   positionsConfig: null,
+  reconciledSeededSlugs: [],
   selectedModules: [],
   moduleStatuses: {},
   modulePermissionConfigs: {},

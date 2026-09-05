@@ -61,11 +61,15 @@ def _editor_output():
     return set(expand_module_checkboxes(submitted))
 
 
-def _migration():
-    spec = importlib.util.spec_from_file_location("_restore_emt", _PATH)
+def _load(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _migration():
+    return _load(_PATH, "_restore_emt")
 
 
 class _Op:
@@ -135,6 +139,52 @@ def _restore_row(engine, slug, permissions, is_system=True):
     return json.loads(raw)
 
 
+class TestTheUneditedShape:
+    """The gate: only a row that still looks like the editor's output is added to.
+
+    An addition needs positive evidence the row is an unrepaired seed
+    (CLAUDE.md pitfall #23). Knowing a row *came from* the create branch is not
+    that evidence — ``RoleService.update_role`` edits a system position in place
+    — so the row must still match what an untouched one holds at this point in
+    the chain.
+    """
+
+    def test_it_is_the_editor_output_less_what_the_revocations_take(self):
+        prior = _load(
+            _VERSIONS
+            / "20260904_2050_f3b8d0c26a17_revoke_wizard_over_grants_unconditionally.py",
+            "_f3b8",
+        )
+        window = _load(
+            _VERSIONS
+            / "20260905_0110_a2e9f6b04c71_revoke_emt_heuristic_over_grants.py",
+            "_a2e9",
+        )
+        revoked = set(prior._REVOKE["emt"]) | set(window._REVOKE)
+
+        assert _migration()._UNEDITED_SHAPE == _editor_output() - revoked
+
+    def test_the_shape_plus_the_restored_set_is_the_registry(self):
+        module = _migration()
+
+        assert set(module._UNEDITED_SHAPE) | set(module._RESTORE) == set(
+            DEFAULT_POSITIONS["emt"]["permissions"]
+        )
+
+    @pytest.mark.parametrize("edit", ["added", "removed"])
+    def test_an_edited_row_is_left_alone(self, positions_table, edit):
+        """A department may have removed one of these four on purpose, and the
+        row cannot say which. Missing a benign grant discloses nothing; putting
+        one back over a deliberate removal is silent."""
+        stored = sorted(_migration()._UNEDITED_SHAPE)
+        if edit == "added":
+            stored = stored + ["compliance.view"]
+        else:
+            stored = stored[:-1]
+
+        assert _restore_row(positions_table, "emt", stored) == stored
+
+
 class TestTheRestoredSet:
     def test_it_is_exactly_what_the_editor_could_not_express(self):
         """Derived here, frozen there — a drift in either is a failure.
@@ -169,7 +219,7 @@ class TestARowFromTheCreateBranch:
         assert sorted(result) == sorted(DEFAULT_POSITIONS["emt"]["permissions"])
 
     def test_what_was_already_there_keeps_its_order(self, positions_table):
-        wizard = ["members.view", "training.view", "events.view"]
+        wizard = sorted(_editor_output())
 
         result = _restore_row(positions_table, "emt", wizard)
 
@@ -180,13 +230,10 @@ class TestARowFromTheCreateBranch:
 
         assert _restore_row(positions_table, "emt", seeded) == seeded
 
-    def test_only_the_missing_ones_are_added(self, positions_table):
-        stored = ["members.view", "organization.view"]
+    def test_each_grant_appears_once(self, positions_table):
+        result = _restore_row(positions_table, "emt", sorted(_editor_output()))
 
-        result = _restore_row(positions_table, "emt", stored)
-
-        assert result.count("organization.view") == 1
-        assert set(result) == set(stored) | set(_migration()._RESTORE)
+        assert len(result) == len(set(result))
 
     def test_it_is_idempotent(self, positions_table):
         with positions_table.begin() as conn:
@@ -195,7 +242,7 @@ class TestARowFromTheCreateBranch:
                     "INSERT INTO positions (id, slug, is_system, permissions) "
                     "VALUES ('row', 'emt', 1, :p)"
                 ),
-                {"p": json.dumps(["members.view"])},
+                {"p": json.dumps(sorted(_editor_output()))},
             )
         _run_upgrade(positions_table)
         with positions_table.connect() as conn:
@@ -214,7 +261,7 @@ class TestARowFromTheCreateBranch:
 
 class TestWhatItMustNotTouch:
     def test_a_department_created_position_is_left_alone(self, positions_table):
-        stored = ["members.view"]
+        stored = sorted(_editor_output())
 
         assert _restore_row(positions_table, "emt", stored, is_system=False) == stored
 
@@ -222,7 +269,7 @@ class TestWhatItMustNotTouch:
     def test_other_slugs_are_left_alone(self, positions_table, slug):
         """They were seeded throughout, so their saves went through the update
         branch and ``_merge_default_permissions`` kept these grants."""
-        stored = ["members.view"]
+        stored = sorted(_editor_output())
 
         assert _restore_row(positions_table, slug, stored) == stored
 
