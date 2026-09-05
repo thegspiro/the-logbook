@@ -251,6 +251,106 @@ describe('EquipmentRequestsPage', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith('Request fulfilled');
   });
 
+  it('preselects the stocked variant matching the size the member asked for', async () => {
+    const user = userEvent.setup();
+    // No item_id: the member asked for a size the catalog had nothing in when
+    // the request was filed, so the picker has to find the variant itself.
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ status: 'approved', category_id: 'cat-1', requested_size: 'l' })],
+    });
+    mockGetItems.mockResolvedValue({
+      items: [
+        {
+          id: 'polo-m',
+          name: 'Polo',
+          category_id: 'cat-1',
+          tracking_type: 'pool',
+          quantity: 6,
+          status: 'available',
+          condition: 'good',
+          standard_size: 'm',
+        },
+        {
+          id: 'polo-l',
+          name: 'Polo',
+          category_id: 'cat-1',
+          tracking_type: 'pool',
+          quantity: 6,
+          status: 'available',
+          condition: 'good',
+          standard_size: 'l',
+        },
+      ],
+      total: 2,
+    });
+    mockFulfillEquipmentRequest.mockResolvedValue({ id: 'req-1', status: 'fulfilled', message: 'ok' });
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Radio XTS 5000')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('polo-l');
+  });
+
+  it('says so when nothing on hand is the requested size', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ status: 'approved', category_id: 'cat-1', requested_size: 'xxl' })],
+    });
+    mockGetItems.mockResolvedValue({
+      items: [
+        {
+          id: 'polo-m',
+          name: 'Polo',
+          category_id: 'cat-1',
+          tracking_type: 'pool',
+          quantity: 6,
+          status: 'available',
+          condition: 'good',
+          standard_size: 'm',
+        },
+      ],
+      total: 1,
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Radio XTS 5000')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    // Every option is a different size, so issuing one silently changes what
+    // the member receives unless the screen says otherwise.
+    expect(await screen.findByText(/Nothing on hand is size/)).toBeInTheDocument();
+  });
+
+  it('does not count quarantined stock as available to fulfil', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ status: 'pending', category_id: 'cat-1' })],
+    });
+    mockGetItems.mockResolvedValue({
+      items: [
+        {
+          id: 'gloves',
+          name: 'Gloves',
+          category_id: 'cat-1',
+          tracking_type: 'pool',
+          quantity: 12,
+          status: 'in_maintenance',
+          condition: 'good',
+        },
+      ],
+      total: 1,
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Radio XTS 5000')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Review'));
+
+    // Twelve on the shelf, none issuable: offering "Approve & fulfill now"
+    // here promises a fulfilment `issue_from_pool` refuses.
+    expect(await screen.findByRole('button', { name: /Approve & fulfill now/ })).toBeDisabled();
+  });
+
   it('displays fulfillment details for fulfilled requests', async () => {
     mockGetEquipmentRequests.mockResolvedValue({
       requests: [

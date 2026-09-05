@@ -22,7 +22,7 @@ import { FloatingActionButton } from '../../../components/ux/FloatingActionButto
 import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem, InventoryItem } from '../types';
 import { REQUEST_STATUS_BADGES, sizeLabel } from '../types';
-import { onHandQuantity } from '../utils/onHand';
+import { issuableQuantity } from '../utils/issuable';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
@@ -178,6 +178,13 @@ const EquipmentRequestsPage: React.FC = () => {
     }
   };
 
+  /** Does this catalog row carry the size the member asked for? */
+  const matchesRequestedSize = (req: EquipmentRequestItem | null, item: InventoryItem): boolean => {
+    const wanted = req?.requested_size?.trim().toLowerCase();
+    if (!wanted) return false;
+    return (item.standard_size ?? item.size ?? '').trim().toLowerCase() === wanted;
+  };
+
   const openFulfill = (req: EquipmentRequestItem) => {
     setFulfillItemId(req.item_id ?? '');
     setFulfillQuantity(String(req.quantity || 1));
@@ -187,12 +194,34 @@ const EquipmentRequestsPage: React.FC = () => {
     setSubstitutionOverride(false);
     setSubstitutionReason('');
     setFulfillModal({ open: true, request: req });
-    if (items.length === 0) {
-      void inventoryService
-        .getItems({ active_only: true, limit: 500 })
-        .then((res) => setItems(res.items))
-        .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')));
+
+    /* A request filed against a size the catalog did not stock carries no
+       item_id, so the picker would open on "Select an item…" and leave the
+       quartermaster to find the right variant by eye among every compatible
+       row. The size is on the request, so use it — but only once, as the modal
+       opens: re-applying it later would fight a quartermaster who deliberately
+       chose a different size. */
+    const preselectRequestedSize = (available: InventoryItem[]) => {
+      if (req.item_id || !req.requested_size) return;
+      const match = available.find(
+        (item) => isCompatible(req, item) && matchesRequestedSize(req, item) && availableQuantity(item) > 0
+      );
+      if (match) setFulfillItemId(match.id);
+    };
+
+    if (items.length > 0) {
+      preselectRequestedSize(items);
+      return;
     }
+    // Applied inside the load rather than after it: `items` is still empty at
+    // this point, so matching against it here would always find nothing.
+    void inventoryService
+      .getItems({ active_only: true, limit: 500 })
+      .then((res) => {
+        setItems(res.items);
+        preselectRequestedSize(res.items);
+      })
+      .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')));
   };
 
   const loadItems = () => {
@@ -212,8 +241,9 @@ const EquipmentRequestsPage: React.FC = () => {
           : true
       : false;
 
-  const availableQuantity = (item: InventoryItem) =>
-    item.tracking_type === 'pool' ? onHandQuantity(item) : item.status === 'available' ? 1 : 0;
+  // Not `onHandQuantity`: a unit can be on the shelf and still be one the
+  // issuance path refuses, and this figure gates "Approve & fulfill now".
+  const availableQuantity = (item: InventoryItem) => issuableQuantity(item);
 
   const handleApproveAndFulfill = async () => {
     if (!reviewModal.request) return;
@@ -619,6 +649,25 @@ const EquipmentRequestsPage: React.FC = () => {
                 </p>
               </div>
 
+              {fulfillModal.request.requested_size &&
+                !items.some(
+                  (it) =>
+                    isCompatible(fulfillModal.request, it) &&
+                    matchesRequestedSize(fulfillModal.request, it) &&
+                    availableQuantity(it) > 0
+                ) && (
+                  /* The member asked for a size the shelf cannot answer. Said
+                     plainly here because every option below is a different
+                     size, and issuing one silently changes what they receive —
+                     which is the whole reason the size is recorded separately
+                     from the item. */
+                  <div className="alert-warning text-sm">
+                    Nothing on hand is size <strong>{sizeLabel(fulfillModal.request.requested_size)}</strong>.
+                    Fulfilling from the list below issues a different size — order the requested size instead if the
+                    member needs the fit.
+                  </div>
+                )}
+
               <div>
                 <label htmlFor="fulfill-item" className="text-theme-text-primary mb-1 block text-sm font-medium">
                   Item to fulfill with
@@ -634,10 +683,14 @@ const EquipmentRequestsPage: React.FC = () => {
                     .filter((it) => substitutionOverride || isCompatible(fulfillModal.request, it))
                     .map((it) => {
                       const tag = it.serial_number || it.asset_tag || it.barcode;
+                      const size = it.standard_size ?? it.size;
+                      const wanted = matchesRequestedSize(fulfillModal.request, it);
                       return (
                         <option key={it.id} value={it.id}>
                           {it.name}
                           {tag ? ` — ${tag}` : ''}
+                          {size ? ` — size ${sizeLabel(size)}` : ''}
+                          {wanted ? ' — requested size' : ''}
                           {` — ${it.status}; ${availableQuantity(it)} available`}
                         </option>
                       );
