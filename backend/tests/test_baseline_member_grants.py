@@ -35,11 +35,16 @@ from app.core.permissions import DEFAULT_POSITIONS, OPERATIONAL_RANKS
 #: than repeating it — same standing, different discipline. It is named here
 #: anyway: a future edit could split the two, and a source that stops aliasing
 #: must not thereby stop being checked.
+#:
+#: The EMT *position* is the fifth, registered 2026-09-05. It aliases the rank,
+#: which aliases Firefighter's list — two hops — and is listed for the same
+#: reason as the rank: an alias that stops aliasing must not stop being checked.
 BASELINE_SOURCES = (
     ("member position", DEFAULT_POSITIONS, "member", "permissions"),
     ("firefighter position", DEFAULT_POSITIONS, "firefighter", "permissions"),
     ("firefighter rank", OPERATIONAL_RANKS, "firefighter", "default_permissions"),
     ("emt rank", OPERATIONAL_RANKS, "emt", "default_permissions"),
+    ("emt position", DEFAULT_POSITIONS, "emt", "permissions"),
 )
 
 
@@ -136,6 +141,41 @@ def test_facilities_view_is_not_a_baseline_grant():
             f"the seeded {label} carries facilities.view, which opens the "
             "leadership facilities workspace to regular members"
         )
+
+
+def test_apparatus_view_is_not_a_baseline_grant():
+    """The fleet record is a maintenance and compliance workspace.
+
+    Inspection expirations, out-of-service status, deficiency flags and driver
+    qualifications are what the apparatus pages show, and ``apparatus.view`` is
+    one alternative on the OR-gate of some thirty endpoints behind them. The
+    crew work a member actually does on a rig — reporting a used item, running
+    a check — lives under ``/inventory/checklists/*`` on the
+    ``inventory.check_*`` grants and needs none of it.
+    """
+    for label, registry, slug, field in BASELINE_SOURCES:
+        assert "apparatus.view" not in registry[slug][field], (
+            f"the seeded {label} carries apparatus.view, which opens the fleet "
+            "maintenance and driver-qualification record to regular members"
+        )
+
+
+def test_the_operational_grant_holders_keep_apparatus_view():
+    """The revocation above is a narrowing, not a removal.
+
+    Engineer is the driver/operator rank and holds ``apparatus.maintenance``
+    beside this — two merged migrations (``d1c7f4a92e63``, ``f3b8d0c26a17``)
+    narrow a stored ``apparatus.*`` on an engineer row *to* exactly those two,
+    so gutting the grant registry-wide would leave them writing something the
+    registry no longer intends.
+    """
+    for registry, slug, field in (
+        (OPERATIONAL_RANKS, "engineer", "default_permissions"),
+        (DEFAULT_POSITIONS, "engineer", "permissions"),
+        (OPERATIONAL_RANKS, "captain", "default_permissions"),
+        (DEFAULT_POSITIONS, "apparatus_officer", "permissions"),
+    ):
+        assert "apparatus.view" in registry[slug][field], slug
 
 
 def test_baseline_excludes_the_reporting_and_audit_grants():
