@@ -72,11 +72,15 @@ def _load_permissions(raw):
 
 def _apply(add: bool) -> None:
     bind = op.get_bind()
-    # `positions` is one of the tables no migration creates — it is built by
-    # create_all() on first boot (Pitfall #26). On a database that has not
-    # started the app yet there is nothing to rewrite, and the rows
-    # create_all() writes later come from the registry, which already carries
-    # the grant.
+    # Defensive only. ``positions`` IS created by the migration chain — the
+    # initial schema builds ``roles`` and 20260805_0008 renames it, which makes
+    # that a required ancestor of this revision, so the table is present by the
+    # time this runs. Claiming otherwise is the false positive CLAUDE.md
+    # pitfall #26 records being reverted after an empirical ``alembic upgrade
+    # head`` against an empty database. The guard is kept because it costs one
+    # reflection and cannot be wrong, but it is not load-bearing, and it is not
+    # the pattern to copy for a genuinely create_all-only table — for those the
+    # guard is required.
     if "positions" not in sa.inspect(bind).get_table_names():
         return
 

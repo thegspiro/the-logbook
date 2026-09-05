@@ -287,6 +287,13 @@ class CallTypeOption(BaseModel):
 
     slug: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9_]+$")
     label: str = Field(..., min_length=1, max_length=100)
+    # Retirement, not deletion. An inactive type is no longer offered at
+    # close-out but stays configured, so the calls already filed under it keep
+    # resolving to a label instead of reading as an orphaned slug in last
+    # year's reports. Defaults True: entries stored before this field existed
+    # are active, and an absent setting must mean current behaviour
+    # (pitfall #19).
+    active: bool = True
 
 
 class CallTrackingSettings(BaseModel):
@@ -298,7 +305,10 @@ class CallTrackingSettings(BaseModel):
     """
 
     mode: str = Field(default=CallTrackingMode.DETAILED)
-    call_types: List[CallTypeOption] = Field(default_factory=list)
+    # Bounded because this lands in an unvalidated JSON column that every
+    # close-out and settings read deserializes. No department needs a hundred
+    # of them, and the editor cannot produce one.
+    call_types: List[CallTypeOption] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def _validate(self) -> "CallTrackingSettings":
@@ -1364,6 +1374,11 @@ class SchedulingFeatureSettings(BaseModel):
     enforce_evoc: bool = True
     # Call-volume tracking mode and the department's own call-type list.
     call_tracking: Optional[CallTrackingSettings] = None
+    # Calls on record per type slug, all dates. Server-computed and ignored on
+    # write — the settings screen needs it to tell an unused type (safe to
+    # delete outright) from one carrying a decade of history (retire it
+    # instead), and asking the client to supply that would let it decide.
+    call_type_usage: dict[str, int] = Field(default_factory=dict)
 
 
 # ============================================

@@ -107,6 +107,7 @@ from app.schemas.scheduling import (
     TimeOffStatus,
     TradeCandidateResponse,
 )
+from app.services.call_tracking_service import CallTrackingService
 from app.services.event_request_service import (
     OUTREACH_SEAT_POSITION,
     outreach_role_label,
@@ -3507,6 +3508,9 @@ async def get_scheduling_feature_settings(
         open_ended_shift_cushion_hours=open_ended_cushion_hours(org.settings or {}),
         enforce_evoc=service.get_evoc_enforcement(org),
         call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
+        call_type_usage=await CallTrackingService(db).type_usage_counts(
+            current_user.organization_id
+        ),
     )
 
 
@@ -3613,6 +3617,9 @@ async def update_scheduling_feature_settings(
         enforce_evoc=bool(result.get("enforce_evoc", True)),
         call_tracking=CallTrackingSettings(
             **service.get_call_tracking_settings(saved_org)
+        ),
+        call_type_usage=await CallTrackingService(db).type_usage_counts(
+            current_user.organization_id
         ),
     )
 

@@ -199,6 +199,12 @@ export interface SchedulingFeatureSettings {
    * behaviour every existing organisation already has.
    */
   call_tracking?: { mode: string; call_types: CallTypeOption[] } | null;
+  /**
+   * Calls on record per type slug, all dates. Server-computed: it says which
+   * types can be deleted outright and which carry history and must be retired
+   * instead. Ignored if sent on a write.
+   */
+  call_type_usage?: Record<string, number>;
 }
 
 export interface PlatoonMember {

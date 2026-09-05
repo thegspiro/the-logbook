@@ -101,11 +101,28 @@ const generateDefaultPermissions = (
  * revoked it had already run. `engineer` is absent on purpose: it is the
  * driver/operator rank and keeps the grant.
  *
+ * **Keyed by marker, not by slug.** `reconciledSeededSlugs` records what a
+ * draft has already been through, and a draft that visited Role Setup under
+ * the EMT repair above recorded the bare `emt`. Listing `emt` again for a
+ * *different* grant change would be filtered out as already done, so that
+ * draft would keep the apparatus box ticked and write `apparatus.view` back.
+ * One marker per (slug, change) fixes that. The bare `emt` marker is kept
+ * verbatim for the change that introduced it, so a draft that already
+ * reconciled it is not reset a second time and lose an administrator's edits.
+ *
  * Deliberately narrow. This reconciliation overwrites what was saved, and an
  * administrator's own edits to a built-in position are saved the same way, so
  * a slug belongs here only while its seeded grants have genuinely moved.
  */
-const STALE_SEEDED_SLUGS = new Set(['emt', 'member', 'firefighter']);
+const STALE_SEEDED_MARKERS: Readonly<Record<string, string>> = {
+  // EMT's heuristic-written grants. Recorded as the bare slug before markers
+  // carried the change they stand for; left as-is so it stays satisfied.
+  emt: 'emt',
+  // apparatus.view left the rank-and-file set.
+  'emt@apparatus-view': 'emt',
+  'member@apparatus-view': 'member',
+  'firefighter@apparatus-view': 'firefighter',
+};
 
 const RETIRED_STANDING_SLUGS = new Set([
   'probationary_member',
@@ -172,9 +189,14 @@ const PositionSetup: React.FC = () => {
   // the answer it started with.
   const slugsToReconcileRef = useRef<string[] | null>(null);
   if (slugsToReconcileRef.current === null) {
-    slugsToReconcileRef.current = Object.keys(savedPositionsConfig ?? {}).filter(
-      (posId) => STALE_SEEDED_SLUGS.has(posId) && !reconciledSeededSlugs.includes(posId)
-    );
+    const saved = savedPositionsConfig ?? {};
+    slugsToReconcileRef.current = [
+      ...new Set(
+        Object.entries(STALE_SEEDED_MARKERS)
+          .filter(([marker, slug]) => slug in saved && !reconciledSeededSlugs.includes(marker))
+          .map(([, slug]) => slug)
+      ),
+    ];
   }
   const slugsToReconcile = slugsToReconcileRef.current;
 
@@ -295,7 +317,7 @@ const PositionSetup: React.FC = () => {
   // definition, so there is nothing to reconcile in it, and recording the whole
   // set here says exactly that.
   useEffect(() => {
-    markSeededSlugsReconciled([...STALE_SEEDED_SLUGS]);
+    markSeededSlugsReconciled(Object.keys(STALE_SEEDED_MARKERS));
   }, [markSeededSlugsReconciled]);
 
   // Expanded categories

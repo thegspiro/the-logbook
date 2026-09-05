@@ -22,15 +22,21 @@ matches nothing once the offending rows are gone, so re-running this upgrade
 after a clean database (or a second `alembic upgrade head`) is a no-op rather
 than an error.
 
-Guarded on both tables existing: ``skill_tests`` and ``skill_test_viewers``
-are model-only tables — no migration in this chain ``create_table``s either
-one (grep ``create_table.*skill_test`` across ``alembic/versions/`` turns up
-nothing, and neither name appears as an ``op.rename_table`` destination) — they
-come into being when ``main.py``'s ``_fast_path_init()`` calls ``create_all()``
-after migrations run on a fresh install. CI's integration/contract jobs run
-``alembic upgrade head`` against an *empty* database before anything calls
-``create_all``, so reflecting either table unguarded would fail the whole
-upgrade rather than just this step (CLAUDE.md pitfall #26).
+Guarded on both tables existing, and the two halves are not the same kind of
+check.
+
+``skill_tests`` is genuinely create_all-only: no migration creates it under any
+name, so on a fresh migration-only database it is absent when this runs and
+**that half of the guard is load-bearing** (CLAUDE.md pitfall #26). Removing it
+would let the DELETE below fail the whole upgrade before startup
+``create_all()`` ever gets to build the table.
+
+``skill_test_viewers`` is not: 20260807_0009 creates it outright and is a
+required ancestor of this revision, so it is present by the time this runs. An
+earlier version of this paragraph claimed both tables were create_all-only,
+which is the false positive pitfall #26 records being reverted. Its half of the
+guard is kept for symmetry and costs one reflection, but it is not what makes
+the check necessary.
 
 **This migration is not reversible.** The rows it removes should never have
 been creatable in the first place (that is what SKT3-1 enforces going

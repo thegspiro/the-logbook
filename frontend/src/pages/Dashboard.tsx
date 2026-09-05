@@ -349,7 +349,7 @@ const Dashboard: React.FC = () => {
   const [trainingError, setTrainingError] = useState(false);
 
   // Inventory
-  const [myEquipment, setMyEquipment] = useState({ assigned: 0, checkedOut: 0, overdue: 0 });
+  const [myEquipment, setMyEquipment] = useState({ issued: 0, checkedOut: 0, overdue: 0 });
   const [loadingMyEquipment, setLoadingMyEquipment] = useState(true);
   const [equipmentError, setEquipmentError] = useState(false);
 
@@ -528,12 +528,15 @@ const Dashboard: React.FC = () => {
     try {
       const data = await inventoryService.getUserInventory(currentUser.id);
       setMyEquipment({
-        assigned:
-          // Each permanent assignment is one physical unit — count rows, not
-          // the response's quantity field, which historically carried the
-          // catalog's on-hand stock and inflated this figure.
-          data.permanent_assignments.length +
-          data.issued_items.reduce((total, item) => total + item.quantity_issued, 0),
+        // One gear entry, one to the tally — matching the "Issued to Me" list
+        // on /inventory/my-equipment, whose tile and section header both count
+        // rows. Summing `quantity_issued` here instead reported 7 against the
+        // page's 4 for the same locker, under the same label. The units are
+        // not lost: each row carries its own "Qty: 3".
+        // Assignment rows are counted rather than summed for a second reason —
+        // the response's `quantity` field historically carried the catalog's
+        // on-hand stock, so one coat off a shelf of 50 displayed as 50.
+        issued: data.permanent_assignments.length + data.issued_items.length,
         checkedOut: data.active_checkouts.length,
         overdue: data.active_checkouts.filter((item) => item.is_overdue).length,
       });
@@ -2275,7 +2278,7 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* Issued gear — compact in the rail; the full picture is in Organization */}
-              {!loadingMyEquipment && (equipmentError || myEquipment.assigned > 0 || myEquipment.checkedOut > 0) && (
+              {!loadingMyEquipment && (equipmentError || myEquipment.issued > 0 || myEquipment.checkedOut > 0) && (
                 <section className="card p-4" aria-labelledby="my-equipment-heading">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 id="my-equipment-heading" className="text-theme-text-primary text-[15px] font-bold">
@@ -2300,11 +2303,11 @@ const Dashboard: React.FC = () => {
                   {!equipmentError && (
                     <dl className="flex flex-col gap-1.5 text-[13px]">
                       <div className="flex items-center justify-between gap-2">
-                        <dt className="text-theme-text-secondary">Assigned items</dt>
-                        <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.assigned}</dd>
+                        <dt className="text-theme-text-secondary">Issued to me</dt>
+                        <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.issued}</dd>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <dt className="text-theme-text-secondary">Checked out</dt>
+                        <dt className="text-theme-text-secondary">Temporary loans</dt>
                         <dd className="text-theme-text-primary font-bold tabular-nums">{myEquipment.checkedOut}</dd>
                       </div>
                       {myEquipment.overdue > 0 && (

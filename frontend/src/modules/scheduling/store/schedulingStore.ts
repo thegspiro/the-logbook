@@ -46,6 +46,13 @@ interface SchedulingState {
   /** 'detailed' | 'count_only' | 'off'. Defaults to 'detailed'. */
   callTrackingMode: string;
   /**
+   * Call-type slug to display label, retired types included. A slug is the
+   * value stored on every call ever filed under it, so anything rendering one
+   * — a shift report, a print-out — resolves it through here rather than
+   * showing the storage key.
+   */
+  callTypeLabels: Record<string, string>;
+  /**
    * The department's signup window — how long before a shift starts members
    * stop being able to claim a seat, and how long past the start an officer
    * may still seat somebody. Held here so every screen that gates a claim
@@ -95,6 +102,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   platoonsEnabled: false,
   requireEndOfShiftChecks: false,
   callTrackingMode: 'detailed',
+  callTypeLabels: {},
   signupClosesMinutesBefore: DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
   lateSignupGraceMinutes: DEFAULT_SIGNUP_WINDOW.graceMinutes,
   openEndedCushionHours: DEFAULT_SIGNUP_WINDOW.openEndedCushionHours,
@@ -121,6 +129,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
           requireEndOfShiftChecks: settings.require_end_of_shift_checks,
           // A missing setting means today's behaviour, never 'off'.
           callTrackingMode: settings.call_tracking?.mode || 'detailed',
+          callTypeLabels: Object.fromEntries((settings.call_tracking?.call_types ?? []).map((t) => [t.slug, t.label])),
           // `??`, not `||`: 0 is a meaningful value here — it is what "closes
           // exactly at the start" means — and `||` would silently replace it
           // with the default.
