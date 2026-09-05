@@ -28,6 +28,7 @@ import type { InventoryLotCreate } from '../../../services/eventServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { Breadcrumbs } from '../../../components/ux';
 
 const WINDOW_OPTIONS = [30, 60, 90];
 
@@ -136,6 +137,11 @@ const SupplyExpiringPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+      {/* No back link of its own, and reachable by a scheduling officer holding
+          no inventory grant beyond this route's — so the trail drops the
+          Inventory crumbs it cannot open and keeps the rest. */}
+      <Breadcrumbs className="mb-0" />
+
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-theme-text-primary text-2xl font-bold">Expiring on Apparatus</h1>

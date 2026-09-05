@@ -3,11 +3,21 @@
  *
  * Provides hierarchical navigation context for deeply nested pages.
  * Auto-generates breadcrumbs from the current URL path with custom overrides.
+ *
+ * A generated crumb is a LINK only when `breadcrumbRoutes.ts` says the path is
+ * a real route and the viewer's permissions open it; otherwise it renders as
+ * plain text. See that file for why both halves are necessary — in short, an
+ * accumulated URL prefix is frequently neither. Explicit `items` skip that
+ * check: a caller passing items has resolved its own trail, as
+ * `TrainingProgramsPage` does when it drops the Admin crumb for a member who
+ * cannot open the hub.
  */
 
 import React from 'react';
 import { Link, useLocation } from 'react-router';
 import { ChevronRight, Home } from 'lucide-react';
+import { useAuthStore } from '../../stores/authStore';
+import { BREADCRUMB_ROUTES, canLinkCrumb } from './breadcrumbRoutes';
 
 export interface BreadcrumbItem {
   label: string;
@@ -17,7 +27,12 @@ export interface BreadcrumbItem {
 }
 
 interface BreadcrumbsProps {
-  items?: BreadcrumbItem[];
+  /**
+   * `| undefined` on purpose: under `exactOptionalPropertyTypes` a caller
+   * holding an optional trail — `AdminHubFrame`, which generates one when it
+   * has none — cannot forward it to a bare `items?:` without a cast.
+   */
+  items?: BreadcrumbItem[] | undefined;
   className?: string;
 }
 
@@ -133,13 +148,18 @@ const PATH_LABELS: Record<string, string> = {
   'id-card': 'ID Card',
 };
 
-function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
+const titleCase = (segment: string): string =>
+  segment
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+function generateBreadcrumbs(pathname: string, checkPermission: (permission: string) => boolean): BreadcrumbItem[] {
   const segments = pathname.split('/').filter(Boolean);
   const crumbs: BreadcrumbItem[] = [];
 
   let currentPath = '';
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i];
+  for (const segment of segments) {
     currentPath += '/' + segment;
 
     // Skip UUID-like segments for display but keep them in the path
@@ -150,26 +170,29 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
       continue;
     }
 
-    const label =
-      PATH_LABELS[segment] ||
-      segment
-        .split('-')
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
-    const isLast = i === segments.length - 1;
+    const route = BREADCRUMB_ROUTES[currentPath];
 
     crumbs.push({
-      label,
-      path: isLast ? undefined : currentPath,
+      label: route?.label ?? PATH_LABELS[segment] ?? titleCase(segment),
+      path: canLinkCrumb(currentPath, checkPermission) ? currentPath : undefined,
     });
   }
+
+  // The trail ends at the page you are on, whatever the URL ends with. Deriving
+  // this from `i === segments.length - 1` inside the loop was wrong whenever the
+  // final segment was an id: the id is skipped, so no crumb was ever marked
+  // current and the crumb before it kept a link — `/members/admin/edit/:userId`
+  // ended in a link to `/members/admin/edit`, which is not a route.
+  const last = crumbs[crumbs.length - 1];
+  if (last) last.path = undefined;
 
   return crumbs;
 }
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' }) => {
   const location = useLocation();
-  const crumbs = items || generateBreadcrumbs(location.pathname);
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const crumbs = items || generateBreadcrumbs(location.pathname, checkPermission);
 
   if (crumbs.length === 0) return null;
   // A single AUTO-generated crumb is suppressed: on a top-level route like
@@ -209,6 +232,19 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
               >
                 {crumb.label}
               </button>
+            ) : index === crumbs.length - 1 ? (
+              // The page you are on, identified by POSITION rather than by
+              // having no link. A middle crumb can also lack one — its path is
+              // not a route, or not one this viewer may open — and treating
+              // "no link" as "you are here" announced two ends to the trail.
+              //
+              // Ordered after onClick so a handler a caller attached still
+              // fires, whichever crumb carries it. Documents builds its folder
+              // trail that way and gives the open folder no handler, so in
+              // practice the current crumb reaches this branch.
+              <span className="text-theme-text-primary font-semibold" aria-current="page">
+                {crumb.label}
+              </span>
             ) : crumb.path ? (
               <Link
                 to={crumb.path}
@@ -217,7 +253,7 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
                 {crumb.label}
               </Link>
             ) : (
-              <span className="text-theme-text-primary font-semibold" aria-current="page">
+              <span className="text-theme-text-muted inline-flex items-center justify-center max-md:min-h-[44px]">
                 {crumb.label}
               </span>
             )}

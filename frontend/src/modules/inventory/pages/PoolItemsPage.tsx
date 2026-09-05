@@ -30,6 +30,7 @@ import { EmptyState } from '../../../components/ux/EmptyState';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
+import { Breadcrumbs } from '../../../components/ux';
 
 interface SummaryCardProps {
   label: string;
@@ -450,6 +451,8 @@ const PoolItemsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <Breadcrumbs />
+
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"

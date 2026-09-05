@@ -69,6 +69,7 @@ import {
 import { onHandQuantity } from '../utils/onHand';
 import { asArray } from '../../../utils/asArray';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { Breadcrumbs } from '../../../components/ux';
 
 const PAGE_SIZE = 50;
 const SORT_COLS = [
@@ -695,6 +696,8 @@ const InventoryItemsPage: React.FC = () => {
   /* ================================================================ */
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <Breadcrumbs />
+
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm max-md:min-h-[44px]"

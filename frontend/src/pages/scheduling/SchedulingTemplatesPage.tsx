@@ -17,9 +17,10 @@ const SchedulingTemplatesPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <SchedulingHeader
+          title="Shift Templates"
           backTo="/scheduling/admin"
           backLabel="Back to scheduling administration"
-          description="Templates · Define reusable shift staffing and times"
+          description="Define reusable shift staffing and times"
         />
         <Suspense
           fallback={

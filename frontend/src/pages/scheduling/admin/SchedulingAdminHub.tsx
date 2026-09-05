@@ -150,7 +150,11 @@ const SchedulingAdminHub: React.FC = () => {
             />
           )}
 
-          <div className="space-y-8">
+          {/* A landmark, because that is what the grid is: every card is a link
+              to another screen, and the page's other links — the trail above it
+              — are a different journey. Named so a screen reader user can jump
+              to the tools rather than tabbing the trail first. */}
+          <nav className="space-y-8" aria-label="Scheduling administration tools">
             {sections.map(({ section, cards }) => (
               <Section key={section} title={section}>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -160,7 +164,7 @@ const SchedulingAdminHub: React.FC = () => {
                 </div>
               </Section>
             ))}
-          </div>
+          </nav>
         </div>
       )}
     </AdminHubFrame>

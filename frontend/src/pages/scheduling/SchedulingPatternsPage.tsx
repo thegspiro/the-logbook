@@ -17,9 +17,10 @@ const SchedulingPatternsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <SchedulingHeader
+          title="Shift Patterns"
           backTo="/scheduling/admin"
           backLabel="Back to scheduling administration"
-          description="Patterns · Create recurring shifts in bulk"
+          description="Create recurring shifts in bulk"
         />
         <Suspense
           fallback={
