@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unlabelled back arrow whose destination was only in its `aria-label`, and each
   one was headed "Shift Scheduling" with its real name demoted to a prefix on
   the description. Templates, Patterns, Reports, Platoons, Who Can Fill What and
-  the six Settings sections now name themselves and show the path back up.
+  the six Settings sections now name themselves and show the path back up. On a
+  hub the trail stops at the parent rather than repeating the page's own
+  heading, which the header already states twice.
 
 **Fixed**
 
