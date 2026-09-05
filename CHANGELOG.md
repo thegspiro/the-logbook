@@ -92,8 +92,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The same overwrite left other discrepancies, now settled.**
   `integrations.view`, `medical_supplies.view`, `mobile.view` and
-  `prospective_members.view` are revoked from Member, Firefighter and
-  Engineer. Engineer additionally loses `positions.view`, `reports.view` and
+  `prospective_members.view` are revoked from Member, Firefighter, Engineer and
+  EMT — including the `.manage` and module-wildcard forms, which the setup
+  screen stored instead whenever Manage was ticked and which grant the same
+  access by another name. Engineer additionally loses `positions.view`, `reports.view` and
   `settings.view`, and its `apparatus.*` wildcard — which carried apparatus
   management and driver-exception approval — is narrowed to the
   `apparatus.view` and `apparatus.maintenance` the registry actually seeds for
@@ -109,14 +111,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   survived. The new migrations remove and restore one permission at a time,
   which does not depend on the rest of the row.
 
-- **A department's own decisions are preserved.** A built-in position stays
-  marked as built-in even after an administrator edits its permissions on the
-  positions screen, so "built-in" alone could not tell a default from a
-  choice. Each change is therefore applied only to a row still carrying the
-  old rule's fingerprint — four grants the registry gives none of these
-  positions and nothing else grants. A department that deliberately gave its
-  members Reports keeps it, and a position the department created itself is
+- **A deliberate grant is removed too, and has to be re-added.** A built-in
+  position stays marked as built-in even after an administrator edits its
+  permissions on the positions screen, so nothing in the stored row separates
+  a grant the old rule wrote from one somebody chose. An attempt to tell them
+  apart — by looking for other grants the rule left behind — turned out to
+  miss any department that had switched those modules off during setup, which
+  left the original problem in place for exactly the smaller departments least
+  likely to notice. Because this grant exposes every member's aggregated
+  hours, training and roster data, it is now removed wherever it is found. A
+  department that deliberately gave its members Reports will need to grant it
+  again on the positions screen; a position the department created itself is
   not touched at all.
+
+- **The restored grants are handled the other way round.**
+  `storefront.order` and `inventory.check_submit` are only added back to a row
+  still recognisable as the old rule's output. Granting where it is not wanted
+  would override a department that removed them on purpose, and neither
+  discloses anything, so that direction errs toward leaving the row alone.
 
 ### The org chart's link line is for the people who maintain it (2026-09-04)
 
