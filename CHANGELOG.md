@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
+
+**Fixed**
+
+- **7 on the rail, 4 on the page, for one locker.** The dashboard's gear widget
+  counted a pool issuance once per _unit_ while `/inventory/my-equipment`
+  counted it once per _row_, so a member holding two assignments plus three
+  pairs of gloves and two shirts saw two different totals for the same gear.
+  The widget now counts entries, matching the page's tile and the `(N)` on its
+  section header — three figures that finally agree. The units are still on the
+  row itself as `Qty: 3`.
+- **The widget's labels now match the page**: "Assigned items" → **Issued to
+  me**, "Checked out" → **Temporary loans**. The widget already merged
+  assignments and issuances into one figure; only its wording still described
+  the split the page dropped. "Overdue" is unchanged.
+
 ### Migration comments claimed a table was built at startup when a migration builds it (2026-09-05)
 
 **Fixed**
