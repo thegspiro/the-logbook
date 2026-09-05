@@ -1825,7 +1825,18 @@ class TestEffectiveCallTypeSlugs:
 
     def test_includes_the_reserved_slug_the_reader_drops(self):
         svc, org = self._svc([{"slug": UNCLASSIFIED_CALL_TYPE, "label": "x"}])
-        assert svc.effective_call_type_slugs(org) == {UNCLASSIFIED_CALL_TYPE}
+        assert UNCLASSIFIED_CALL_TYPE in svc.effective_call_type_slugs(org)
+
+    def test_a_list_the_reader_rejects_entirely_still_yields_the_defaults(self):
+        """Nonempty but all-invalid — an uppercase or over-long legacy slug.
+        The reader falls back to the defaults, so the defaults are what is in
+        force, and a save omitting one of them is a deletion. Returning only
+        the stored set here let that save through."""
+        svc, org = self._svc(
+            [{"slug": "EMS", "label": "Upper"}, {"slug": "x" * 60, "label": "Long"}]
+        )
+        effective = svc.effective_call_type_slugs(org)
+        assert {t["slug"] for t in DEFAULT_CALL_TYPES} <= effective
 
     def test_falls_back_to_the_defaults_in_force(self):
         """An org that never materialized a list is not running without call

@@ -993,6 +993,13 @@ class ShiftEligibilityService:
           made the guard skip its check entirely and the editor offer to
           delete a default type with a decade of calls behind it, which is
           the normal state of every existing installation.
+
+        So this is the union of the two: the stored slugs, and whatever the
+        reader resolved. Taking the stored set alone was wrong for the same
+        reason again one level down — a list whose every entry the reader
+        rejects (an uppercase or over-long legacy slug) is nonempty here but
+        falls back to the defaults there, so the defaults are what is in
+        force and a save omitting one of them is a deletion.
         """
         sched = self._get_scheduling_settings(org)
         raw = sched.get("call_tracking")
@@ -1006,7 +1013,10 @@ class ShiftEligibilityService:
             if isinstance(types, list)
             else set()
         )
-        return stored or {t["slug"] for t in DEFAULT_CALL_TYPES}
+        resolved = {
+            t["slug"] for t in self.get_call_tracking_settings(org)["call_types"]
+        }
+        return stored | resolved
 
     def get_call_tracking_settings(self, org: Organization) -> Dict[str, Any]:
         """Return the org's call-volume tracking config.
