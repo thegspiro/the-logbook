@@ -455,13 +455,13 @@ describe('EquipmentRequestsPage', () => {
     await user.click(screen.getByText('Fulfill'));
 
     expect(
-      await screen.findByRole('option', { name: 'Polo — POLO-4417 — size L — requested size — available; 6 available' })
+      await screen.findByRole('option', { name: 'Polo — POLO-4417 — size L — requested size — available — 6 issuable' })
     ).toBeInTheDocument();
     // Marked, because under the override the list carries rows the request
     // does not cover and nothing else on screen distinguishes them.
     expect(
       screen.getByRole('option', {
-        name: 'Station Boot — size L — requested size — substitution — available; 2 available',
+        name: 'Station Boot — size L — requested size — substitution — available — 2 issuable',
       })
     ).toBeInTheDocument();
   });
