@@ -148,6 +148,9 @@ const NotificationsPage: React.FC = () => {
   // put the previous channel's rows under the new pill, or pre-write read
   // state back over rows the server had already marked.
   const logsRequestRef = useRef(0);
+  // The channel a fetch should ask for, resolved when the request is made
+  // rather than when its caller was rendered.
+  const logChannelFilterRef = useRef<'all' | 'email' | 'in_app'>('all');
 
   // UI states
   const [loading, setLoading] = useState(true);
@@ -249,54 +252,61 @@ const NotificationsPage: React.FC = () => {
   // "No email notifications sent to you" whenever the newest page held none,
   // however many older ones the member had, and left `logsTotal` counting a
   // different set than the list it sat above.
-  const loadLogPage = useCallback(
-    async ({ append, skip }: { append: boolean; skip: number }) => {
-      const requestId = ++logsRequestRef.current;
-      if (append) setLoadingMoreLogs(true);
-      else setLoadingLogs(true);
-      setLogsError(null);
-      try {
-        const data = await notificationsService.getLogs({
-          scope: NotificationLogScope.MINE,
-          ...(logChannelFilter === 'all' ? {} : { channel: logChannelFilter }),
-          skip,
-          limit: LOG_PAGE_SIZE,
-        });
-        if (requestId !== logsRequestRef.current) return;
-        const page = data.logs || [];
-        setLogs((prev) => {
-          if (!append) return page;
-          const seen = new Set(prev.map((entry) => entry.id));
-          return [...prev, ...page.filter((entry) => !seen.has(entry.id))];
-        });
-        setLogsOffset((prev) => (append ? prev + page.length : page.length));
-        setLogsTotal(data.total);
-      } catch (err: unknown) {
-        if (requestId !== logsRequestRef.current) return;
-        setLogsError(
-          getErrorMessage(err, append ? 'Failed to load more of your send log' : 'Failed to load your send log')
-        );
-        // A failed fetch for a newly selected channel must not leave the
-        // previous channel's rows sitting under the new pill, nor its length
-        // feeding that channel's pagination.
-        if (!append) {
-          setLogs([]);
-          setLogsOffset(0);
-          setLogsTotal(0);
-        }
-      } finally {
-        if (requestId === logsRequestRef.current) {
-          if (append) setLoadingMoreLogs(false);
-          else setLoadingLogs(false);
-        }
+  const loadLogPage = useCallback(async ({ append, skip }: { append: boolean; skip: number }) => {
+    // Read from the ref, not a closure. A write handler awaits its POST and
+    // only then reloads; closing over the filter meant a channel changed
+    // during that POST reloaded the *previous* channel — and, since the
+    // reload is newer, that stale answer won.
+    const channel = logChannelFilterRef.current;
+    const requestId = ++logsRequestRef.current;
+    if (append) setLoadingMoreLogs(true);
+    else setLoadingLogs(true);
+    setLogsError(null);
+    try {
+      const data = await notificationsService.getLogs({
+        scope: NotificationLogScope.MINE,
+        ...(channel === 'all' ? {} : { channel }),
+        skip,
+        limit: LOG_PAGE_SIZE,
+      });
+      if (requestId !== logsRequestRef.current) return;
+      const page = data.logs || [];
+      setLogs((prev) => {
+        if (!append) return page;
+        const seen = new Set(prev.map((entry) => entry.id));
+        return [...prev, ...page.filter((entry) => !seen.has(entry.id))];
+      });
+      setLogsOffset((prev) => (append ? prev + page.length : page.length));
+      setLogsTotal(data.total);
+    } catch (err: unknown) {
+      if (requestId !== logsRequestRef.current) return;
+      setLogsError(
+        getErrorMessage(err, append ? 'Failed to load more of your send log' : 'Failed to load your send log')
+      );
+      // A failed fetch for a newly selected channel must not leave the
+      // previous channel's rows sitting under the new pill, nor its length
+      // feeding that channel's pagination.
+      if (!append) {
+        setLogs([]);
+        setLogsOffset(0);
+        setLogsTotal(0);
       }
-    },
-    [logChannelFilter]
-  );
+    } finally {
+      // The newest request clears *both* flags, not just the one it set. A
+      // superseded request must not clear anything (its winner is still
+      // running), which left a Load more that lost to a channel change
+      // stuck behind a spinner it could no longer switch off.
+      if (requestId === logsRequestRef.current) {
+        setLoadingLogs(false);
+        setLoadingMoreLogs(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
+    logChannelFilterRef.current = logChannelFilter;
     void loadLogPage({ append: false, skip: 0 });
-  }, [loadLogPage]);
+  }, [logChannelFilter, loadLogPage]);
 
   // Fetch admin data on mount (only if user has permission)
   useEffect(() => {

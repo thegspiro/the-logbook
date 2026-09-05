@@ -354,6 +354,89 @@ describe('NotificationsPage send log', () => {
     expect(screen.queryByText('Drill on Thursday')).toBeNull();
   });
 
+  it('does not strand the Load more spinner when a channel change supersedes it', async () => {
+    // The superseded request used to be the only one that would have cleared
+    // its own loading flag, and the generation check stopped it — so the new
+    // channel's Load more came up permanently disabled behind a spinner.
+    const user = userEvent.setup();
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [emailLog],
+      total: 5,
+      skip: 0,
+      limit: 50,
+    });
+    renderLogTab();
+
+    let releaseStalePage!: (value: { logs: (typeof emailLog)[]; total: number; skip: number; limit: number }) => void;
+    vi.mocked(notificationsService.getLogs).mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseStalePage = resolve;
+      })
+    );
+    await user.click(await screen.findByRole('button', { name: /load more/i }));
+
+    // Change channel while that page is still in flight.
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [{ ...emailLog, id: 'log-app', subject: 'Roster posted', channel: 'in_app' }],
+      total: 5,
+      skip: 0,
+      limit: 50,
+    });
+    await user.click(screen.getByRole('button', { name: 'In-App' }));
+    await screen.findByText('Roster posted');
+
+    await act(async () => {
+      releaseStalePage({ logs: [], total: 5, skip: 1, limit: 50 });
+    });
+
+    const more = await screen.findByRole('button', { name: /load more/i });
+    expect(more).toBeEnabled();
+  });
+
+  it('reloads the channel selected now, not the one selected when the write began', async () => {
+    // The reload after a write used to run on the closure from the render
+    // that started it, so a channel changed during the POST was replaced by
+    // the previous channel's rows — and the reload, being newer, won.
+    const user = userEvent.setup();
+    renderLogTab();
+    await screen.findByText('Drill on Thursday');
+
+    let releaseWrite!: (value: { marked_read: number }) => void;
+    vi.mocked(notificationsService.markAllLogsRead).mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseWrite = resolve;
+      })
+    );
+    await user.click(screen.getByRole('button', { name: /mark all as read/i }));
+
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [{ ...emailLog, id: 'log-app', subject: 'Roster posted', channel: 'in_app' }],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+    await user.click(screen.getByRole('button', { name: 'In-App' }));
+    await screen.findByText('Roster posted');
+
+    // The write finishes now; its reload must ask for In-App, not Email.
+    vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
+      logs: [{ ...emailLog, id: 'log-app', subject: 'Roster posted', channel: 'in_app', read: true }],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
+    await act(async () => {
+      releaseWrite({ marked_read: 1 });
+    });
+
+    expect(notificationsService.getLogs).toHaveBeenLastCalledWith({
+      scope: NotificationLogScope.MINE,
+      channel: 'in_app',
+      skip: 0,
+      limit: 50,
+    });
+  });
+
   it('does not offer Load more when the page is the whole history', async () => {
     renderLogTab();
 
