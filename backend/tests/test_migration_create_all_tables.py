@@ -1084,10 +1084,18 @@ class TestTheClaimDetection:
 _SQL_TABLE_REF = re.compile(
     r"\b(?:FROM|JOIN|UPDATE|INTO)\s+`?([a-z_][a-z0-9_]*)`?", re.IGNORECASE
 )
-_OP_TABLE_REF = re.compile(
-    r"op\.(?:add_column|drop_column|alter_column|create_index|drop_index|"
-    r"create_foreign_key|drop_constraint|bulk_insert|create_table|"
+#: Alembic operations whose FIRST string argument is the table.
+_OP_TABLE_FIRST = re.compile(
+    r"op\.(?:add_column|drop_column|alter_column|bulk_insert|create_table|"
     r"rename_table|drop_table)\(\s*[\"']([a-z0-9_]+)[\"']"
+)
+#: Operations whose first argument NAMES THE CONSTRAINT OR INDEX, not the
+#: table -- the table is the second. Reading the first argument here records
+#: `ix_roles_slug` as the table and lets a genuine post-rename
+#: `op.create_index("ix_roles_slug", "roles", ...)` pass unnoticed.
+_OP_TABLE_SECOND = re.compile(
+    r"op\.(?:create_index|drop_index|create_foreign_key|drop_constraint)\("
+    r"\s*[\"'][a-z0-9_]+[\"']\s*,\s*[\"']([a-z0-9_]+)[\"']"
 )
 
 
@@ -1099,7 +1107,7 @@ def _tables_referenced(text: str) -> set[str]:
     different schema and never establishes what the upgrade path sees.
     """
     body = _upgrade_body(text)
-    found = set(_OP_TABLE_REF.findall(body))
+    found = set(_OP_TABLE_FIRST.findall(body)) | set(_OP_TABLE_SECOND.findall(body))
     for match in re.finditer(r'"""(.*?)"""|"([^"\n]*)"|\'([^\'\n]*)\'', body, re.S):
         literal = next((group for group in match.groups() if group), "")
         found |= {name.lower() for name in _SQL_TABLE_REF.findall(literal)}
@@ -1120,7 +1128,36 @@ def _tables_renamed_away(sources: dict[str, str]) -> dict[str, set[str]]:
     return retired
 
 
-def _names_not_yet_valid(sources: dict[str, str]) -> list[str]:
+#: The four revisions that shipped naming `positions` before 20260805_0008
+#: renamed `roles` into it. Their guards therefore always fire and their bodies
+#: are inert on every upgrade path. They are NOT fixed in place: an
+#: already-deployed migration is not edited to change its behaviour (AGENTS.md),
+#: and a database already past them would never execute a rewritten body anyway
+#: (CLAUDE.md pitfall #23) -- so `e8a1c04f6b27` carries the repair instead.
+#:
+#: This is a closed baseline of four historical facts, in the manner of the
+#: coverage floors: it can only ever shrink. It is not an allowlist to append
+#: to. A NEW migration naming a table its ancestors do not create is a defect
+#: and fails below -- which is the whole point, since nothing caught these four
+#: for months.
+_INERT_BY_HISTORY = frozenset(
+    {
+        "20260528_0001_rename_membership_committee_chair_to_coordinator.py",
+        "20260610_0002_add_position_settings.py",
+        "20260720_0002_backfill_department_message_role_ids.py",
+        "20260801_0010_grant_equipment_check_submit_to_members.py",
+    }
+)
+
+
+def _names_not_yet_valid_unfiltered(sources: dict[str, str]) -> list[str]:
+    """``_names_not_yet_valid`` without the historical baseline applied."""
+    return _names_not_yet_valid(sources, apply_baseline=False)
+
+
+def _names_not_yet_valid(
+    sources: dict[str, str], apply_baseline: bool = True
+) -> list[str]:
     """Migrations naming a table whose only creators are NOT their ancestors."""
     ancestors = _ancestor_sets(sources)
 
@@ -1140,6 +1177,8 @@ def _names_not_yet_valid(sources: dict[str, str]) -> list[str]:
         if revision is None:
             continue
         # A revision may of course create the table itself.
+        if apply_baseline and name.rsplit("/", 1)[-1] in _INERT_BY_HISTORY:
+            continue
         forebears = ancestors.get(revision, set()) | {revision}
         for table in sorted(_tables_referenced(text)):
             built_by = creators.get(table)
@@ -1195,6 +1234,34 @@ def test_no_migration_references_a_table_name_a_rename_retired():
     read as working code. Measured clean on the current corpus before adopting.
     """
     assert _names_already_retired(_migration_sources()) == []
+
+
+def test_the_inert_baseline_names_only_revisions_that_are_really_inert():
+    """Guard the baseline itself, so it cannot quietly become an allowlist.
+
+    Every entry must (a) exist, and (b) still be an offender were it not
+    exempt -- otherwise it has been fixed or removed and the entry should go.
+    A baseline that outlives its reason is how a ratchet stops ratcheting.
+    """
+    sources = _migration_sources()
+    basenames = {name.rsplit("/", 1)[-1] for name in sources}
+    assert _INERT_BY_HISTORY <= basenames, "baseline names a migration that is gone"
+
+    without_baseline = {
+        name: text
+        for name, text in sources.items()
+        if name.rsplit("/", 1)[-1] in _INERT_BY_HISTORY
+    }
+    # Scored against the full corpus for ancestry, but only these reported.
+    reported = {
+        offender.split(" ", 1)[0].rsplit("/", 1)[-1]
+        for offender in _names_not_yet_valid_unfiltered(sources)
+    }
+    assert _INERT_BY_HISTORY <= reported, (
+        "a baseline entry is no longer an offender -- remove it: "
+        f"{sorted(_INERT_BY_HISTORY - reported)}"
+    )
+    assert without_baseline, "baseline resolved to no sources"
 
 
 class TestTheChainNameDetection:

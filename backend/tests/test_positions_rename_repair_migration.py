@@ -1,13 +1,16 @@
-"""Contract tests for the repair of the four pre-rename ``positions`` no-ops.
+"""Contract tests for the repair of the pre-rename `positions` no-ops.
 
-The four migrations corrected alongside this one only help a database that has
-not yet stamped them. Alembic records a revision as applied by id, so an
-installation already past ``20260801_0010`` never executes the corrected body --
-and those installations are precisely the ones carrying the un-transformed rows
-(CLAUDE.md pitfall #23). This revision is the half that reaches them, so what
-matters here is that it is safe to run against a database in *any* state: one
-that missed all three transformations, one that already has them, and one where
-a department has since edited the rows.
+``20260528_0001``, ``20260720_0002`` and ``20260801_0010`` each named
+``positions`` while the table was still called ``roles``, so their guards
+always fired and they did nothing. Their bodies stay exactly as they ran --
+an already-deployed migration is not edited to change its behaviour
+(AGENTS.md), and a database already past them would never execute a rewritten
+body anyway (CLAUDE.md pitfall #23). ``e8a1c04f6b27`` is the repair, so it is
+the thing that has to be right.
+
+What matters is that it is safe against a database in *any* state: one that
+missed all three transformations, one that already has them, and one where a
+department has since edited the rows.
 """
 
 import importlib.util
@@ -95,6 +98,10 @@ def _perms(row):
     return json.loads(row.permissions)
 
 
+def _targets(engine, messages, message_id="m1"):
+    return json.loads(_rows(engine, messages)[message_id].target_roles)
+
+
 class TestTheCoordinatorRename:
     def test_it_renames_a_seeded_row(self, engine, tables):
         positions, _ = tables
@@ -144,10 +151,46 @@ class TestTheCoordinatorRename:
 
         assert _rows(engine, positions)["old"].slug == "membership_committee_chair"
 
+    def test_another_orgs_row_is_still_renamed(self, engine, tables):
+        positions, _ = tables
+        _insert(
+            engine,
+            positions,
+            id="blocked",
+            organization_id="org1",
+            name="Chair",
+            slug="membership_committee_chair",
+            permissions="[]",
+            is_system=True,
+        )
+        _insert(
+            engine,
+            positions,
+            id="taken",
+            organization_id="org1",
+            name="Coord",
+            slug="membership_coordinator",
+            permissions="[]",
+            is_system=True,
+        )
+        _insert(
+            engine,
+            positions,
+            id="free",
+            organization_id="org2",
+            name="Chair",
+            slug="membership_committee_chair",
+            permissions="[]",
+            is_system=True,
+        )
+
+        _run(engine)
+
+        rows = _rows(engine, positions)
+        assert rows["blocked"].slug == "membership_committee_chair"
+        assert rows["free"].slug == "membership_coordinator"
+
     def test_a_department_created_row_is_left_alone(self, engine, tables):
-        """A position a department built for itself is theirs, so the rename
-        scopes to is_system -- every row that ever carried the old slug was
-        seeded."""
         positions, _ = tables
         _insert(
             engine,
@@ -175,7 +218,7 @@ class TestTheTargetRolesBackfill:
             organization_id="org1",
             name="Member",
             slug="member",
-            permissions=json.dumps(["inventory.check_submit"]),
+            permissions="[]",
             is_system=True,
         )
         _insert(
@@ -189,10 +232,115 @@ class TestTheTargetRolesBackfill:
 
         _run(engine)
 
-        assert json.loads(_rows(engine, messages)["m1"].target_roles) == ["r-member"]
+        assert _targets(engine, messages) == ["r-member"]
+
+    def test_a_message_targeting_the_former_coordinator_name_still_resolves(
+        self, engine, tables
+    ):
+        """The ordering the migration depends on.
+
+        An affected organization is exactly the one whose position is still
+        named "Membership Committee Chair" AND whose messages target that
+        string. Renaming before building the name map would leave the map
+        holding only "Membership Coordinator", so this message would resolve
+        to nothing and stay undeliverable -- the very failure the backfill
+        exists to end.
+        """
+        positions, messages = tables
+        _insert(
+            engine,
+            positions,
+            id="r-chair",
+            organization_id="org1",
+            name="Membership Committee Chair",
+            slug="membership_committee_chair",
+            permissions="[]",
+            is_system=True,
+        )
+        _insert(
+            engine,
+            messages,
+            id="m1",
+            organization_id="org1",
+            target_type="roles",
+            target_roles=json.dumps(["Membership Committee Chair"]),
+        )
+
+        _run(engine)
+
+        assert _targets(engine, messages) == ["r-chair"]
+        assert _rows(engine, positions)["r-chair"].slug == "membership_coordinator"
+
+    def test_an_ambiguous_name_is_left_unconverted(self, engine, tables):
+        """Two positions may share a display name -- create_role suffixes only
+        the duplicate slug. The name fallback reaches holders of both, so
+        collapsing to one id would silently drop the other's members."""
+        positions, messages = tables
+        for pid, slug in (("p1", "safety_officer"), ("p2", "safety_officer_2")):
+            _insert(
+                engine,
+                positions,
+                id=pid,
+                organization_id="org1",
+                name="Safety Officer",
+                slug=slug,
+                permissions="[]",
+                is_system=False,
+            )
+        _insert(
+            engine,
+            messages,
+            id="m1",
+            organization_id="org1",
+            target_type="roles",
+            target_roles=json.dumps(["Safety Officer"]),
+        )
+
+        _run(engine)
+
+        assert _targets(engine, messages) == ["Safety Officer"]
+
+    def test_an_unresolvable_name_is_left_alone(self, engine, tables):
+        positions, messages = tables
+        _insert(
+            engine,
+            messages,
+            id="m1",
+            organization_id="org1",
+            target_type="roles",
+            target_roles=json.dumps(["Gone"]),
+        )
+
+        _run(engine)
+
+        assert _targets(engine, messages) == ["Gone"]
+
+    def test_a_name_from_another_org_does_not_resolve(self, engine, tables):
+        positions, messages = tables
+        _insert(
+            engine,
+            positions,
+            id="r-other",
+            organization_id="org2",
+            name="Member",
+            slug="member",
+            permissions="[]",
+            is_system=True,
+        )
+        _insert(
+            engine,
+            messages,
+            id="m1",
+            organization_id="org1",
+            target_type="roles",
+            target_roles=json.dumps(["Member"]),
+        )
+
+        _run(engine)
+
+        assert _targets(engine, messages) == ["Member"]
 
     def test_an_already_converted_message_is_untouched(self, engine, tables):
-        """The property that makes re-running safe: an id never matches a name."""
         positions, messages = tables
         _insert(
             engine,
@@ -201,7 +349,7 @@ class TestTheTargetRolesBackfill:
             organization_id="org1",
             name="Member",
             slug="member",
-            permissions=json.dumps(["inventory.check_submit"]),
+            permissions="[]",
             is_system=True,
         )
         _insert(
@@ -215,13 +363,13 @@ class TestTheTargetRolesBackfill:
 
         _run(engine)
 
-        assert json.loads(_rows(engine, messages)["m1"].target_roles) == ["r-member"]
+        assert _targets(engine, messages) == ["r-member"]
 
 
 class TestTheMemberGrant:
     def test_it_grants_the_renamed_permission(self, engine, tables):
         """20260830_0001 moved equipment_check.* to inventory.check_*. Granting
-        the retired spelling here would add a string nothing resolves."""
+        the retired spelling would add a string nothing resolves."""
         positions, _ = tables
         _insert(
             engine,
@@ -242,8 +390,6 @@ class TestTheMemberGrant:
 
     @pytest.mark.parametrize("wildcard", ["*", "inventory.*", "equipment_check.*"])
     def test_a_covered_row_is_left_alone(self, engine, tables, wildcard):
-        """The equipment_check spelling is covered too: it can still arrive on
-        a database restored from a backup older than the rename."""
         positions, _ = tables
         _insert(
             engine,
@@ -280,15 +426,13 @@ class TestTheMemberGrant:
 
 class TestRunningItTwice:
     def test_a_second_application_changes_nothing(self, engine, tables):
-        """A repair revision has to tolerate a database that already has some
-        of its work -- a department built by create_all has all three."""
         positions, messages = tables
         _insert(
             engine,
             positions,
             id="r-chair",
             organization_id="org1",
-            name="Chair",
+            name="Membership Committee Chair",
             slug="membership_committee_chair",
             permissions="[]",
             is_system=True,
@@ -317,23 +461,30 @@ class TestRunningItTwice:
         _run(engine)
         second = (_rows(engine, positions), _rows(engine, messages))
 
-        assert [dict(r._mapping) for r in first[0].values()] == [
-            dict(r._mapping) for r in second[0].values()
-        ]
-        assert [dict(r._mapping) for r in first[1].values()] == [
-            dict(r._mapping) for r in second[1].values()
-        ]
+        for before, after in zip(first, second):
+            assert [dict(r._mapping) for r in before.values()] == [
+                dict(r._mapping) for r in after.values()
+            ]
 
 
 class TestTheDowngrade:
-    def test_it_reverses_the_rename_and_the_grant(self, engine, tables):
-        positions, _ = tables
+    """Documented as irreversible, and that is a correctness property.
+
+    A department built by create_all has always held the grant and the
+    coordinator slug, and its messages have always been id-targeted, so the
+    upgrade is a no-op there. An unconditional reverse would strip a grant this
+    migration never gave and rename a slug it never renamed -- data loss on
+    exactly the departments that were never broken.
+    """
+
+    def test_it_leaves_a_healthy_department_untouched(self, engine, tables):
+        positions, messages = tables
         _insert(
             engine,
             positions,
-            id="r-chair",
+            id="r-coord",
             organization_id="org1",
-            name="Coord",
+            name="Membership Coordinator",
             slug="membership_coordinator",
             permissions="[]",
             is_system=True,
@@ -348,28 +499,6 @@ class TestTheDowngrade:
             permissions=json.dumps(["members.view", "inventory.check_submit"]),
             is_system=True,
         )
-
-        _run(engine, "downgrade")
-
-        rows = _rows(engine, positions)
-        assert rows["r-chair"].slug == "membership_committee_chair"
-        assert "inventory.check_submit" not in _perms(rows["r-member"])
-
-    def test_it_leaves_target_roles_converted(self, engine, tables):
-        """Reversing by name would turn a message legitimately targeted by id --
-        every message written since 20260720_0002 -- back into a name match it
-        never used, losing information the downgrade cannot restore."""
-        positions, messages = tables
-        _insert(
-            engine,
-            positions,
-            id="r-member",
-            organization_id="org1",
-            name="Member",
-            slug="member",
-            permissions="[]",
-            is_system=True,
-        )
         _insert(
             engine,
             messages,
@@ -378,7 +507,29 @@ class TestTheDowngrade:
             target_type="roles",
             target_roles=json.dumps(["r-member"]),
         )
+        before = (_rows(engine, positions), _rows(engine, messages))
 
         _run(engine, "downgrade")
 
-        assert json.loads(_rows(engine, messages)["m1"].target_roles) == ["r-member"]
+        after = (_rows(engine, positions), _rows(engine, messages))
+        for was, now in zip(before, after):
+            assert [dict(r._mapping) for r in was.values()] == [
+                dict(r._mapping) for r in now.values()
+            ]
+
+    def test_it_does_not_revoke_the_grant(self, engine, tables):
+        positions, _ = tables
+        _insert(
+            engine,
+            positions,
+            id="r1",
+            organization_id="org1",
+            name="Member",
+            slug="member",
+            permissions=json.dumps(["inventory.check_submit"]),
+            is_system=True,
+        )
+
+        _run(engine, "downgrade")
+
+        assert "inventory.check_submit" in _perms(_rows(engine, positions)["r1"])

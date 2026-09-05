@@ -29,79 +29,60 @@ branch_labels = None
 depends_on = None
 
 _PERMISSION = "equipment_check.submit"
-# A wildcard grant already covers submit; don't clutter the list.
-_COVERING = ("*", "equipment_check.*")
-
-
-def _positions_table(bind) -> str | None:
-    """The table holding position rows at this point in the chain.
-
-    This revision is an ancestor of ``20260805_0008``, which renames ``roles``
-    to ``positions``. Until that revision runs the rows live in ``roles``. The
-    models were renamed long before the database was, which is why this
-    migration was originally written against ``positions`` and then silently
-    no-opped on every upgrade path it was supposed to repair.
-
-    A database that has also been started against current code carries an empty
-    ``positions`` beside a populated ``roles`` -- the shape ``20260805_0008``
-    calls "shape 2" -- so ``roles`` is preferred whenever it is present.
-    """
-    tables = set(sa.inspect(bind).get_table_names())
-    if "roles" in tables:
-        return "roles"
-    if "positions" in tables:
-        return "positions"
-    return None
-
-
-def _member_rows(bind, table: str):
-    return bind.execute(
-        sa.text(
-            f"SELECT id, permissions FROM `{table}` "  # noqa: S608
-            "WHERE slug = 'member' AND is_system = 1"
-        )
-    ).fetchall()
-
-
-def _permissions(row) -> list:
-    perms = row.permissions
-    if isinstance(perms, str):
-        perms = json.loads(perms or "[]")
-    return list(perms or [])
-
-
-def _store(bind, table: str, row_id: str, perms: list) -> None:
-    bind.execute(
-        sa.text(
-            f"UPDATE `{table}` SET permissions = :perms WHERE id = :id"  # noqa: S608
-        ),
-        {"perms": json.dumps(perms), "id": row_id},
-    )
 
 
 def upgrade() -> None:
     bind = op.get_bind()
-    table = _positions_table(bind)
-    if table is None:
+    # This runs BEFORE 20260805_0008 renames `roles` to `positions`, so the
+    # table this names does not exist yet and the guard below always fires:
+    # on every upgrade path this revision is inert. The models were renamed
+    # long before the database was, which is why it was written against the
+    # model name. The body stays as it ran (AGENTS.md: an already-deployed
+    # migration is not edited to change its behaviour); the repair it was
+    # meant to perform is carried by e8a1c04f6b27, which runs at head where
+    # the table really is called `positions`.
+    if "positions" not in sa.inspect(bind).get_table_names():
         return
-
-    for row in _member_rows(bind, table):
-        perms = _permissions(row)
-        if _PERMISSION in perms or any(w in perms for w in _COVERING):
+    rows = bind.execute(
+        sa.text(
+            "SELECT id, permissions FROM positions "
+            "WHERE slug = 'member' AND is_system = 1"
+        )
+    ).fetchall()
+    for row in rows:
+        perms = row.permissions
+        if isinstance(perms, str):
+            perms = json.loads(perms or "[]")
+        perms = list(perms or [])
+        # A wildcard grant already covers submit; don't clutter the list.
+        if _PERMISSION in perms or "*" in perms or "equipment_check.*" in perms:
             continue
         perms.append(_PERMISSION)
-        _store(bind, table, row.id, perms)
+        bind.execute(
+            sa.text("UPDATE positions SET permissions = :perms WHERE id = :id"),
+            {"perms": json.dumps(perms), "id": row.id},
+        )
 
 
 def downgrade() -> None:
     bind = op.get_bind()
-    table = _positions_table(bind)
-    if table is None:
+    if "positions" not in sa.inspect(bind).get_table_names():
         return
-
-    for row in _member_rows(bind, table):
-        perms = _permissions(row)
+    rows = bind.execute(
+        sa.text(
+            "SELECT id, permissions FROM positions "
+            "WHERE slug = 'member' AND is_system = 1"
+        )
+    ).fetchall()
+    for row in rows:
+        perms = row.permissions
+        if isinstance(perms, str):
+            perms = json.loads(perms or "[]")
+        perms = list(perms or [])
         if _PERMISSION not in perms:
             continue
         perms.remove(_PERMISSION)
-        _store(bind, table, row.id, perms)
+        bind.execute(
+            sa.text("UPDATE positions SET permissions = :perms WHERE id = :id"),
+            {"perms": json.dumps(perms), "id": row.id},
+        )
