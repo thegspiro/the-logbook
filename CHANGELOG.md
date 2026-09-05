@@ -19,6 +19,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `is_valid`, and a same-size placeholder holds the space so the layout does
   not shift when the real code takes over on the next 30-second refresh.
 
+### A shift that ran weeks ago still offered its live controls (2026-09-04)
+
+**Fixed**
+
+- **"Reopen for 15 min" was offered on a shift three weeks gone, and it
+  worked.** The shift detail panel showed the late-signup escape hatch to
+  anyone who can seat crew on any past, unfinalized shift, under copy that
+  reads "Reopen it if you are a body short and somebody can still get here" —
+  a sentence about a shift under way. `open_late_signup` had no upper bound on
+  the shift's age either, so taking it was not cosmetic: `create_assignment`
+  passes `window_checked=True` for a non-manager, which deliberately
+  suppresses the day-granular `reject_past` fallback so a reopened overnight
+  shift admits people. The reopened window was therefore the only rule left,
+  and a member could sign themselves onto a shift they had never worked and
+  draw hours for it. A reopening is now refused once the shift's end plus the
+  department's `late_signup_grace_minutes` has passed, and the banner is
+  withdrawn at the same moment.
+
+- **Confirm, decline and remove outlived the shift they belonged to.**
+  `AssignmentActions` decided what to render from the assignment's status and
+  the viewer's permissions alone, with no notion of time, so a member looking
+  at a shift they had worked a fortnight earlier — twelve hours already
+  recorded against it — was still offered a button to decline the assignment
+  those hours hang off, and an officer was still offered Remove beside every
+  name. All three are withdrawn once the roster locks.
+
+- **Withdraw outlived the lock, beside the hours it would have deleted.** The
+  "You are assigned to this shift" card gated its Withdraw button on `isPast`
+  alone, which is day-granular, so on a shift that ended at seven it stayed
+  offered until midnight — directly beneath the line reporting the twelve
+  hours recorded against that assignment.
+
+- **The reopen banner came back for the one viewer it is not for.** A
+  scheduling admin is exempt from the roster lock and from the signup window,
+  so neither of the banner's own conditions could withhold it, and
+  `memberSignupClosed` rendered it on every old unfinalized shift — offering
+  an admin a reopening they never needed and the newly bounded endpoint now
+  refuses. The exemption is its own gate, as the endpoint's contract already
+  said.
+
+- **A reopening cannot carry a shift past that deadline either.** The bound
+  above refuses a late reopening, but `minutes` accepts up to 720 and
+  `_signup_window_error` treats the later override as authoritative, so a
+  reopening made a second inside the cutoff would have carried an ended shift
+  twelve hours beyond it — leaving the bound as something anyone could step
+  around by being early rather than late. `late_signup_until` is now clamped
+  to the deadline as well as gated by it.
+
+- **An open-ended shift is never locked.** `end_time` is nullable on the
+  model and defaults to `None` on `ShiftCreate`, so a shift without one is
+  open-ended rather than malformed. Standing its start in for the missing end
+  would have locked its roster, and refused its officer's escape hatch, one
+  grace period after it began with the crew still working — a false lock on a
+  live shift, which is worse than no lock on one nothing can bound.
+
+- **The lock is the shift's end, not its date.** A new `rosterLocked` rule
+  counts from `end_time` plus the same grace period the officer's own signup
+  deadline uses, so the two move together when a department changes the
+  setting, and an overnight crew keeps every control through the night — the
+  day-granular `isPast` is true from midnight and would have taken them away
+  mid-shift, which is the same trap `isShiftOpen` is only a fallback for. A
+  scheduling administrator is never locked out: correcting a past roster is
+  the records path, and that is where a change to a shift this old belongs.
+  The lock also covers the seat dropdown beside each name, which is
+  day-granular on its own and would otherwise have stayed live for the rest of
+  the evening on a shift that ended at seven.
+
 ### A regular member could open Administration → Reports (2026-09-04)
 
 **Fixed**
@@ -37,8 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The same overwrite left other discrepancies, now settled.**
   `integrations.view`, `medical_supplies.view`, `mobile.view` and
-  `prospective_members.view` are revoked from Member, Firefighter and
-  Engineer. Engineer additionally loses `positions.view`, `reports.view` and
+  `prospective_members.view` are revoked from Member, Firefighter, Engineer and
+  EMT — including the `.manage` and module-wildcard forms, which the setup
+  screen stored instead whenever Manage was ticked and which grant the same
+  access by another name. Engineer additionally loses `positions.view`, `reports.view` and
   `settings.view`, and its `apparatus.*` wildcard — which carried apparatus
   management and driver-exception approval — is narrowed to the
   `apparatus.view` and `apparatus.maintenance` the registry actually seeds for
@@ -54,14 +123,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   survived. The new migrations remove and restore one permission at a time,
   which does not depend on the rest of the row.
 
-- **A department's own decisions are preserved.** A built-in position stays
-  marked as built-in even after an administrator edits its permissions on the
-  positions screen, so "built-in" alone could not tell a default from a
-  choice. Each change is therefore applied only to a row still carrying the
-  old rule's fingerprint — four grants the registry gives none of these
-  positions and nothing else grants. A department that deliberately gave its
-  members Reports keeps it, and a position the department created itself is
+- **A deliberate grant is removed too, and has to be re-added.** A built-in
+  position stays marked as built-in even after an administrator edits its
+  permissions on the positions screen, so nothing in the stored row separates
+  a grant the old rule wrote from one somebody chose. An attempt to tell them
+  apart — by looking for other grants the rule left behind — turned out to
+  miss any department that had switched those modules off during setup, which
+  left the original problem in place for exactly the smaller departments least
+  likely to notice. Because this grant exposes every member's aggregated
+  hours, training and roster data, it is now removed wherever it is found. A
+  department that deliberately gave its members Reports will need to grant it
+  again on the positions screen; a position the department created itself is
   not touched at all.
+
+- **The restored grants are handled the other way round.**
+  `storefront.order` and `inventory.check_submit` are only added back to a row
+  still recognisable as the old rule's output. Granting where it is not wanted
+  would override a department that removed them on purpose, and neither
+  discloses anything, so that direction errs toward leaving the row alone.
 
 ### The org chart's link line is for the people who maintain it (2026-09-04)
 

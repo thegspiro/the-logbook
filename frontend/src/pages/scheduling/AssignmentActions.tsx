@@ -14,6 +14,15 @@ interface AssignmentActionsProps {
   effectiveStatus: string;
   isCurrentUser: boolean;
   canAssign: boolean;
+  /**
+   * The shift is far enough past that its roster is a record, not a plan.
+   * Every action here is suppressed and only the status chip remains: there is
+   * nothing to confirm about a shift already worked, and declining one whose
+   * hours are already recorded is not a decision anybody is still making.
+   * `rosterLocked` in `shiftBoard.ts` decides it, and exempts the scheduling
+   * admin whose job is correcting past rosters.
+   */
+  locked?: boolean;
   onConfirm: (id: string) => void;
   onDecline: (id: string) => void;
   onRemove: (id: string) => void;
@@ -27,6 +36,7 @@ export const AssignmentActions: React.FC<AssignmentActionsProps> = ({
   effectiveStatus,
   isCurrentUser,
   canAssign,
+  locked = false,
   onConfirm,
   onDecline,
   onRemove,
@@ -40,13 +50,19 @@ export const AssignmentActions: React.FC<AssignmentActionsProps> = ({
   const statusColor = ASSIGNMENT_STATUS_COLORS[effectiveStatus] || ASSIGNMENT_STATUS_COLORS.assigned;
   const isAssigned = effectiveStatus === AssignmentStatus.ASSIGNED;
 
+  const statusChip = (
+    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize sm:px-2 sm:text-xs ${statusColor}`}>
+      {effectiveStatus}
+    </span>
+  );
+
+  // The chip stays. What the roster said is still the answer to "who was on
+  // this shift"; it is only the buttons that have stopped meaning anything.
+  if (locked) return statusChip;
+
   return (
     <>
-      <span
-        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize sm:px-2 sm:text-xs ${statusColor}`}
-      >
-        {effectiveStatus}
-      </span>
+      {statusChip}
       {isCurrentUser && isAssigned && !confirmingDecline && (
         <>
           <button
