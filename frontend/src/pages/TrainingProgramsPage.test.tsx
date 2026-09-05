@@ -155,6 +155,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('shows the sample-template gallery on the Templates tab', async () => {
+    mockHasPermission = true;
     mockGetPrograms.mockResolvedValue([]);
     renderWithRouter(<TrainingProgramsPage />);
 
@@ -167,6 +168,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('instantiates a sample template and navigates to the new program', async () => {
+    mockHasPermission = true;
     mockGetPrograms.mockResolvedValue([]);
     renderWithRouter(<TrainingProgramsPage />);
 
@@ -180,6 +182,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('opens a picker and imports only the selected requirements', async () => {
+    mockHasPermission = true;
     mockGetRegistries.mockResolvedValue([{ key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 3 }]);
     mockPreviewRegistry.mockResolvedValue([
       {
@@ -231,6 +234,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('edits a department requirement from the Requirements tab', async () => {
+    mockHasPermission = true;
     mockGetRequirementsEnhanced.mockResolvedValue([
       {
         id: 'req-1',
@@ -280,6 +284,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('offers no edit control for a locked registry requirement', async () => {
+    mockHasPermission = true;
     mockGetRequirementsEnhanced.mockResolvedValue([
       {
         id: 'req-2',
@@ -305,6 +310,7 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('surfaces the error when a registry import reports one', async () => {
+    mockHasPermission = true;
     mockGetRegistries.mockResolvedValue([
       { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 5 },
     ]);
@@ -332,5 +338,102 @@ describe('TrainingProgramsPage', () => {
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Registry file not found/i)));
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  describe('without training.manage', () => {
+    // The outer beforeEach already resets every mock's implementation and
+    // clears the permission flag; this block only narrows what each case needs.
+    beforeEach(() => {
+      mockHasPermission = false;
+    });
+
+    it('offers no way to create or import a pipeline', async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+
+      // The list itself is readable — it is only the management affordances
+      // that are withheld.
+      expect(await screen.findByText('Probationary Firefighter')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /New Pipeline/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Import$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Export Probationary Firefighter/i })).not.toBeInTheDocument();
+    });
+
+    it('leaves the programs tab blank when there are no programs', async () => {
+      mockGetPrograms.mockResolvedValue([]);
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: false }));
+      expect(screen.queryByText('No programs yet')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Create Your First Pipeline/i })).not.toBeInTheDocument();
+    });
+
+    it('still reports a search that matched nothing', async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await screen.findByText('Probationary Firefighter');
+      await userEvent.type(screen.getByLabelText(/Search programs/i), 'ladder');
+
+      expect(await screen.findByText('No programs found')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Create Your First Pipeline/i })).not.toBeInTheDocument();
+    });
+
+    it('leaves the requirements tab blank and skips the manager-only registry fetch', async () => {
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+
+      await waitFor(() => expect(mockGetRequirementsEnhanced).toHaveBeenCalled());
+      // getRegistries requires training.manage; requesting it as a member 403s
+      // and would take the requirements list down with it.
+      expect(mockGetRegistries).not.toHaveBeenCalled();
+      expect(screen.queryByText('Import from Registry')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /New Requirement/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('No requirements yet')).not.toBeInTheDocument();
+    });
+
+    it('lists requirements read-only, with no edit control', async () => {
+      mockGetRequirementsEnhanced.mockResolvedValue([
+        {
+          id: 'req-1',
+          name: 'FCVFD Hours',
+          requirement_type: 'shifts',
+          source: 'department',
+          required_shifts: 20,
+          frequency: 'one_time',
+          applies_to_all: true,
+          active: true,
+          due_date_type: 'calendar_period',
+          is_editable: true,
+        },
+      ]);
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+
+      expect(await screen.findByText('FCVFD Hours')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Edit FCVFD Hours/i })).not.toBeInTheDocument();
+    });
+
+    it('leaves the templates tab blank and skips the sample-template fetch', async () => {
+      mockGetPrograms.mockResolvedValue([]);
+      renderWithRouter(<TrainingProgramsPage />);
+
+      await userEvent.click(await screen.findByRole('tab', { name: /Templates/i }));
+
+      await waitFor(() => expect(mockGetPrograms).toHaveBeenCalledWith({ is_template: true }));
+      expect(mockGetSampleTemplates).not.toHaveBeenCalled();
+      expect(screen.queryByText('Start from a sample template')).not.toBeInTheDocument();
+      expect(screen.queryByText('No templates yet')).not.toBeInTheDocument();
+    });
+  });
+
+  it('offers the first-pipeline prompt to a training manager with no programs', async () => {
+    mockHasPermission = true;
+    mockGetPrograms.mockResolvedValue([]);
+    renderWithRouter(<TrainingProgramsPage />);
+
+    expect(await screen.findByText('No programs yet')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Create Your First Pipeline/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/training/programs/new');
   });
 });
