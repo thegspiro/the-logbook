@@ -1,7 +1,7 @@
 /**
  * Shift Detail Panel
  *
- * Slide-out panel showing full details of a shift: crew roster,
+ * Centred modal showing full details of a shift: crew roster,
  * open positions, attendance, and notes.
  *
  * When a shift is assigned to an apparatus with defined positions,
@@ -14,7 +14,9 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
-import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { DialogPortal } from '../../components/DialogPortal';
+import { DialogPanel } from '../../components/ux/DialogPanel';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 import {
   effectiveLateSignupUntil,
@@ -102,9 +104,16 @@ interface ShiftDetailPanelProps {
 const LATE_SIGNUP_MINUTES = [15, 30, 60] as const;
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initialShift, onClose, onRefresh }) => {
-  // Mounted only while open. Takes the mobile bottom bar off the drawer, whose
-  // full-height panel otherwise runs behind it.
-  useOverlaySurface();
+  /**
+   * Which side of the header layout we are on — see the close button below.
+   *
+   * A media query rather than a Tailwind variant because this decides *where in
+   * the DOM* the close button goes, and DOM order is focus order. `hidden`
+   * variants cannot do it: rendering the button twice puts two "Close panel"
+   * controls in the accessibility tree, which is the trade `useMediaQuery`
+   * exists to avoid.
+   */
+  const isWideHeader = useMediaQuery('(min-width: 640px)');
 
   const navigate = useNavigate();
   const { user, checkPermission } = useAuthStore();
@@ -229,9 +238,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const [showBulkAssign, setShowBulkAssign] = useState(false);
 
   /**
-   * The assign form renders at the foot of a drawer that is usually taller than
-   * the window, so pressing Assign appeared to do nothing at all: the form was
-   * there, several screens down, with nothing to say so. Bring it into view.
+   * The assign form renders at the foot of a dialog that is usually taller than
+   * its own height cap, so pressing Assign appeared to do nothing at all: the
+   * form was there, several screens down inside the panel's scroll container,
+   * with nothing to say so. Bring it into view.
    */
   const assignFormRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -436,6 +446,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   // A driver refused for want of an EVOC certification is a dead end unless we
   // say who can authorize the exception. Keyed off the support code, not the
   // message text, which would break the moment the wording changed.
+  /** Whether PrintDocumentButton's dialog is up; see the container's `inert`. */
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+
   const [driverBlock, setDriverBlock] = useState<{
     userId: string;
     userName: string;
@@ -502,7 +515,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       // Re-fetch through the panel's own loader, not just `onRefresh`: that
       // callback bumps the *board's* refresh key, while this panel renders its
       // own `shift` state. Without this the toast said signup was reopened and
-      // the banner carried on saying it was closed until the drawer was
+      // the banner carried on saying it was closed until the dialog was
       // reopened. `getShift` also recomputes the actor-relative
       // `signup_closed_reason`, so the panel reads the server's answer rather
       // than trusting the mutation response (pitfall #11).
@@ -853,16 +866,53 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
   const overrideBlocked =
     requireEndOfShiftChecks && hasIncompleteEquipmentChecks && (!overrideChecks || overrideReason.trim().length === 0);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (editingNotesId) setEditingNotesId(null);
-        else onClose();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, editingNotesId]);
+  /**
+   * What Escape means here, handed to `useDialog` via DialogPanel rather than
+   * to a listener of our own.
+   *
+   * An inline notes editor is cancelled first, so a half-typed note does not
+   * take the whole dialog down with it. Routing through the shared stack is
+   * also what stops Escape inside a nested dialog (DriverBlockedDialog) from
+   * dismissing this panel underneath it — the previous `document` listener had
+   * no way to know another dialog was on top.
+   */
+  const handleDialogEscape = useCallback(() => {
+    if (editingNotesId) setEditingNotesId(null);
+    else onClose();
+  }, [editingNotesId, onClose]);
+
+  /**
+   * Close only on a press that both began and ended on the backdrop.
+   *
+   * A click resolves to the common ancestor of its mousedown and mouseup, so
+   * either half of a drag between the panel and the backdrop arrives here with
+   * `target === currentTarget` — indistinguishable, on the click alone, from a
+   * deliberate backdrop click. Both directions happen: selecting a member's
+   * notes to copy and releasing past the panel edge, and pressing just outside
+   * the panel then dragging in. Closing on either discards a half-typed
+   * cancellation reason or a screen of close-out hours with no undo.
+   *
+   * So the gesture has to start and finish on the backdrop. mouseup runs before
+   * click, which is what lets the release invalidate a press that qualified.
+   */
+  const backdropPressRef = useRef(false);
+
+  const handleBackdropMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    backdropPressRef.current = event.target === event.currentTarget;
+  }, []);
+
+  const handleBackdropMouseUp = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) backdropPressRef.current = false;
+  }, []);
+
+  const handleBackdropClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const fromBackdrop = backdropPressRef.current;
+      backdropPressRef.current = false;
+      if (fromBackdrop && event.target === event.currentTarget) onClose();
+    },
+    [onClose]
+  );
 
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
@@ -1120,1193 +1170,1283 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     );
   };
 
+  /**
+   * Bound once and rendered in one of two places, never both: a second copy
+   * would put a second "Close panel" control in the accessibility tree.
+   */
+  const closeButton = (
+    <button
+      onClick={onClose}
+      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg p-2 transition-colors"
+      aria-label="Close panel"
+    >
+      <X className="h-5 w-5" />
+    </button>
+  );
+
   return (
     <>
-      {/* Backdrop */}
-      <div className="modal-overlay z-40" onClick={onClose} aria-hidden="true" />
+      {/* Portalled to the body: a `fixed` shell is only positioned against the
+          viewport while no ancestor establishes a containing block, and the
+          app's `card` utility carries backdrop-blur, which does. */}
+      <DialogPortal>
+        {/* `inert` while a dialog this panel opened sits on top of it.
 
-      {/* Panel — uses drawer-panel CSS class for mobile-responsive width */}
-      <div className="drawer-panel overflow-y-auto overscroll-contain">
-        {/* Header */}
-        <div className="modal-header-sticky p-4 sm:p-6">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0 pr-2">
-              <h2 className="text-theme-text-primary text-lg font-bold sm:text-xl">Shift Details</h2>
-              <p className="text-theme-text-secondary mt-1 truncate text-xs sm:text-sm">
-                {formatDateCustom(shiftDate, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }, tz)}
-              </p>
-              {platoonsEnabled && shift.platoon && (
-                <span className="mt-1.5 inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
-                  Platoon {shift.platoon}
-                </span>
-              )}
-            </div>
-            {/* Four bare glyphs, two of them destructive, on a panel that is
-                mostly used on a phone — where there is no hover to reveal a
-                title. Each action that changes the shift says what it does; the
-                close ✕ is the one glyph that needs no gloss. */}
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-              {canManage && !isPast && !shift.is_finalized && !isCancelled && (
-                <>
-                  <button
-                    onClick={() => {
-                      setEditForm({
-                        shift_date: shift.shift_date,
-                        start_time: toTimeValue(shift.start_time),
-                        end_time: toTimeValue(shift.end_time),
-                        apparatus_id: shift.apparatus_id || '',
-                        color: shift.color || '',
-                        notes: shift.notes || '',
-                        shift_officer_id: shift.shift_officer_id || '',
-                        positions: shift.positions ?? [],
-                        min_staffing: shift.min_staffing != null ? String(shift.min_staffing) : '',
-                      });
-                      setIsEditing(!isEditing);
-                    }}
-                    className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-500"
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden="true" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-red-500/10 hover:text-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    Delete
-                  </button>
-                </>
-              )}
-              {/* Outside the manage block on purpose: the endpoint authorizes
+            Both of them — the driver-qualification dialog and the
+            receipt-printer dialog behind "Print roster" — render through
+            <Modal>, which portals to the body, so each is a DOM *sibling* of
+            this container rather than a descendant. Two sibling surfaces both
+            asserting aria-modal each claim everything outside themselves is
+            inert, and assistive technology is left to guess which is live.
+
+            Named flags rather than the depth of the shared dialog stack: depth
+            cannot tell a dialog stacked above this one from a dialog that was
+            already open beneath it when this panel mounted. That happens here —
+            SchedulingPage's Create Shift dialog registers on the same page, and
+            a `?shift=` deep link can resolve while it is open — and keying on
+            depth made the panel on top inert, so it painted but took no input.
+
+            `inert` drops this subtree from the accessibility tree and from
+            focus; the outer focus trap goes quiet on its own, since nothing it
+            can reach stays focusable. */}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="shift-detail-title"
+          inert={driverBlock !== null || printDialogOpen}
+          onMouseDown={handleBackdropMouseDown}
+          onMouseUp={handleBackdropMouseUp}
+          onClick={handleBackdropClick}
+        >
+          {/* Scrim as an empty sibling of the panel, so it carries no z-index
+              of its own (see the modal-overlay utility) and no pointer events —
+              closing on a backdrop click is the container's job. */}
+          <div className="modal-overlay pointer-events-none" aria-hidden="true" />
+
+          {/* DialogPanel supplies `modal-panel` plus the shared focus trap,
+              body scroll lock, stack-aware Escape and overlay registration.
+              modal-panel-scroll is the height cap this panel scrolls within —
+              without it a taller-than-viewport panel centred by `items-center`
+              puts its title above the screen with nothing to scroll. */}
+          <DialogPanel
+            onClose={handleDialogEscape}
+            className="modal-panel-scroll relative z-10 w-full max-w-[calc(100vw-2rem)] overscroll-contain sm:max-w-4xl"
+          >
+            {/* Header */}
+            <div className="modal-header-sticky p-4 sm:p-6">
+              <div className="flex flex-wrap items-start gap-x-2 gap-y-3 sm:items-center">
+                <div className="min-w-0 flex-1">
+                  <h2 id="shift-detail-title" className="text-theme-text-primary text-lg font-bold sm:text-xl">
+                    Shift Details
+                  </h2>
+                  <p className="text-theme-text-secondary mt-1 truncate text-xs sm:text-sm">
+                    {formatDateCustom(
+                      shiftDate,
+                      { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
+                      tz
+                    )}
+                  </p>
+                  {platoonsEnabled && shift.platoon && (
+                    <span className="mt-1.5 inline-block rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
+                      Platoon {shift.platoon}
+                    </span>
+                  )}
+                </div>
+                {/* Close sits on the title's line at every width; the other
+                    actions drop to a row of their own below 640px.
+
+                    The dialog is inset 1rem, so a 390px phone leaves 343px of
+                    header — and on a future shift a manager sees four labelled
+                    actions here (Close out shift needs `isPast`, so it never
+                    joins Edit/Delete/Cancel). Sharing one line with them
+                    squeezed the title until "Shift Details" wrapped mid-phrase.
+                    Giving the actions their own row costs ~40px of sticky
+                    header and keeps every label readable, which the
+                    `action-bar` utility's sr-only trick would not: two of these
+                    actions are destructive, and a phone has no hover to recover
+                    a title attribute from a bare glyph.
+
+                    The close button is placed by `isWideHeader` rather than by
+                    CSS `order`, because reordering moves the button visually
+                    and leaves it where it was in the tab sequence. Below 640px
+                    it reads above the action row and must be focused before it;
+                    above, it reads after and must be focused last. */}
+                {!isWideHeader && closeButton}
+                <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto sm:justify-end">
+                  {canManage && !isPast && !shift.is_finalized && !isCancelled && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setEditForm({
+                            shift_date: shift.shift_date,
+                            start_time: toTimeValue(shift.start_time),
+                            end_time: toTimeValue(shift.end_time),
+                            apparatus_id: shift.apparatus_id || '',
+                            color: shift.color || '',
+                            notes: shift.notes || '',
+                            shift_officer_id: shift.shift_officer_id || '',
+                            positions: shift.positions ?? [],
+                            min_staffing: shift.min_staffing != null ? String(shift.min_staffing) : '',
+                          });
+                          setIsEditing(!isEditing);
+                        }}
+                        className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-500"
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        Delete
+                      </button>
+                    </>
+                  )}
+                  {/* Outside the manage block on purpose: the endpoint authorizes
                   scheduling.view as well as scheduling.manage, so gating the
                   control on manage would deny it to the crew the roster is
                   for — including the shift officer without a department-wide
                   grant. Not tied to the shift's lifecycle either: a finished
                   shift's roster is still worth printing for the record. The
                   button hides itself when no receipt printer is registered. */}
-              <PrintDocumentButton document={StationDocument.SHIFT_ROSTER} recordId={shift.id} label="Print roster" />
-              {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
-                <button
-                  onClick={() => setShowCancelConfirm(true)}
-                  className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-amber-500/10 hover:text-amber-500"
-                >
-                  <XCircle className="h-4 w-4" aria-hidden="true" />
-                  Cancel shift
-                </button>
-              )}
-              {/* Hidden while the checklist is open: this button and the one at
+                  <PrintDocumentButton
+                    document={StationDocument.SHIFT_ROSTER}
+                    recordId={shift.id}
+                    label="Print roster"
+                    onOpenChange={setPrintDialogOpen}
+                  />
+                  {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
+                    <button
+                      onClick={() => setShowCancelConfirm(true)}
+                      className="text-theme-text-muted mobile-touch-target gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors hover:bg-amber-500/10 hover:text-amber-500"
+                    >
+                      <XCircle className="h-4 w-4" aria-hidden="true" />
+                      Cancel shift
+                    </button>
+                  )}
+                  {/* Hidden while the checklist is open: this button and the one at
                   the foot of that panel both finalise the shift, and showing
                   both at once read as two different commitments. */}
-              {canManageShift && isPast && !shift.is_finalized && !isCancelled && !showFinalizeChecklist && (
-                <button
-                  onClick={() => setShowFinalizeChecklist(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
-                  aria-label="Close out shift"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Close out shift
-                </button>
-              )}
-              <button
-                onClick={onClose}
-                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors"
-                aria-label="Close panel"
-              >
-                <X className="h-5 w-5" />
-              </button>
+                  {canManageShift && isPast && !shift.is_finalized && !isCancelled && !showFinalizeChecklist && (
+                    <button
+                      onClick={() => setShowFinalizeChecklist(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
+                      aria-label="Close out shift"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Close out shift
+                    </button>
+                  )}
+                </div>
+                {isWideHeader && closeButton}
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="space-y-5 p-4 sm:space-y-6 sm:p-6">
-          {/* Handoff from the previous crew on this apparatus */}
-          {/* The date arrived raw ("2026-08-01") two lines under "Wednesday,
+            <div className="space-y-5 p-4 sm:space-y-6 sm:p-6">
+              {/* Handoff from the previous crew on this apparatus */}
+              {/* The date arrived raw ("2026-08-01") two lines under "Wednesday,
               August 12, 2026", eleven days stale, with nothing marking it as
               old — so a note left by a crew a week and a half ago read as
               yesterday's. Written out, and told how long ago it was.
               Measured against the shift on screen rather than against today:
               the endpoint returns the last shift before *this* one, so an
               archived shift would otherwise call its own handoff months old. */}
-          {handoff?.pass_down_notes &&
-            (() => {
-              const age = calendarDaysBetween(handoff.shift_date, shift.shift_date);
-              const ageWords = age === null || age >= 0 ? null : age === -1 ? 'yesterday' : `${Math.abs(age)} days ago`;
-              return (
-                <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
-                  <p className="mb-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
-                    Handoff from the previous shift
-                    {handoff.shift_date
-                      ? ` — ${formatCalendarDate(handoff.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}`
-                      : ''}
-                    {ageWords ? ` (${ageWords})` : ''}
-                  </p>
-                  {age !== null && age <= -3 && (
-                    <p className="mb-1 text-[11px] text-sky-700/80 dark:text-sky-300/80">
-                      This is the most recent pass-down on this apparatus, not a note from the last crew on duty.
-                    </p>
-                  )}
-                  <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{handoff.pass_down_notes}</p>
-                </div>
-              );
-            })()}
+              {handoff?.pass_down_notes &&
+                (() => {
+                  const age = calendarDaysBetween(handoff.shift_date, shift.shift_date);
+                  const ageWords =
+                    age === null || age >= 0 ? null : age === -1 ? 'yesterday' : `${Math.abs(age)} days ago`;
+                  return (
+                    <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2">
+                      <p className="mb-0.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                        Handoff from the previous shift
+                        {handoff.shift_date
+                          ? ` — ${formatCalendarDate(handoff.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })}`
+                          : ''}
+                        {ageWords ? ` (${ageWords})` : ''}
+                      </p>
+                      {age !== null && age <= -3 && (
+                        <p className="mb-1 text-[11px] text-sky-700/80 dark:text-sky-300/80">
+                          This is the most recent pass-down on this apparatus, not a note from the last crew on duty.
+                        </p>
+                      )}
+                      <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{handoff.pass_down_notes}</p>
+                    </div>
+                  );
+                })()}
 
-          {/* Readiness — present vs assigned, staffing, outstanding start checks */}
-          {!shift.is_finalized &&
-            !isCancelled &&
-            !(!isPast && shift.shift_date > getTodayLocalDate(tz)) &&
-            activeAssignments.length > 0 &&
-            (() => {
-              const checkedInIds = new Set(allAttendance.filter((a) => a.checked_in_at).map((a) => a.user_id));
-              const presentCount = activeAssignments.filter((a) => checkedInIds.has(a.user_id)).length;
-              const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
-              const understaffed = target > 0 && activeAssignments.length < target;
-              const outstandingStartChecks = equipmentCheckSummaries.filter(
-                (c) => c.checkTiming === 'start_of_shift' && !isShiftCheckCompleted(c)
-              ).length;
-              return (
-                <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-xs">
-                  <span className="text-theme-text-secondary font-semibold">Readiness</span>
-                  {/* Two counts with different denominators — "0/2 present" beside
+              {/* Readiness — present vs assigned, staffing, outstanding start checks */}
+              {!shift.is_finalized &&
+                !isCancelled &&
+                !(!isPast && shift.shift_date > getTodayLocalDate(tz)) &&
+                activeAssignments.length > 0 &&
+                (() => {
+                  const checkedInIds = new Set(allAttendance.filter((a) => a.checked_in_at).map((a) => a.user_id));
+                  const presentCount = activeAssignments.filter((a) => checkedInIds.has(a.user_id)).length;
+                  const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
+                  const understaffed = target > 0 && activeAssignments.length < target;
+                  const outstandingStartChecks = equipmentCheckSummaries.filter(
+                    (c) => c.checkTiming === 'start_of_shift' && !isShiftCheckCompleted(c)
+                  ).length;
+                  return (
+                    <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-xs">
+                      <span className="text-theme-text-secondary font-semibold">Readiness</span>
+                      {/* Two counts with different denominators — "0/2 present" beside
                       "2/3 staffed" — read as though the screen contradicted
                       itself. Each names its own subject now, in the wording the
                       close-out checklist already uses. */}
-                  {(hasStarted || presentCount > 0) && (
-                    <span className="text-theme-text-primary">
-                      {presentCount} of {activeAssignments.length} crew checked in
-                    </span>
-                  )}
-                  {target > 0 && (
-                    <span
-                      className={
-                        understaffed ? 'font-medium text-amber-600 dark:text-amber-400' : 'text-theme-text-muted'
-                      }
-                    >
-                      {activeAssignments.length} of {target} positions filled
-                      {understaffed ? ' — running short' : ''}
-                    </span>
-                  )}
-                  {outstandingStartChecks > 0 && (
-                    <span className="text-amber-600 dark:text-amber-400">
-                      {outstandingStartChecks} start-of-shift check{outstandingStartChecks > 1 ? 's' : ''} pending
-                    </span>
-                  )}
-                </div>
-              );
-            })()}
-
-          {/* Delete Confirmation */}
-          {showDeleteConfirm && (
-            <div className="space-y-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
-              <p className="text-sm text-red-700 dark:text-red-300">
-                Are you sure you want to delete this shift? This will remove all assignments and cannot be undone.
-              </p>
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    void handleDelete();
-                  }}
-                  disabled={pending.deleting}
-                  className="btn-primary flex items-center gap-1 px-3 py-1.5 text-sm"
-                >
-                  {pending.deleting && <Loader2 className="h-3 w-3 animate-spin" />}
-                  Delete Shift
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Cancel Confirmation */}
-          {showCancelConfirm && (
-            <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4">
-              <p className="text-sm text-amber-700 dark:text-amber-300">
-                Cancel this shift? The record is kept, all assignments are marked cancelled, and the assigned crew is
-                notified.
-              </p>
-              <div>
-                <label htmlFor="cancel-reason" className="text-theme-text-secondary mb-1 block text-xs font-medium">
-                  Reason (optional)
-                </label>
-                <input
-                  id="cancel-reason"
-                  type="text"
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="e.g. station closed for weather"
-                  className={inputCls}
-                />
-              </div>
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={() => {
-                    setShowCancelConfirm(false);
-                    setCancelReason('');
-                  }}
-                  className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
-                >
-                  Keep Shift
-                </button>
-                <button
-                  onClick={() => {
-                    void handleCancel();
-                  }}
-                  disabled={pending.deleting}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {pending.deleting && <Loader2 className="h-3 w-3 animate-spin" />}
-                  Cancel Shift
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Cancelled banner */}
-          {isCancelled && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
-              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-              <div className="text-sm">
-                <span className="font-medium text-amber-700 dark:text-amber-300">This shift is cancelled.</span>
-                {shift.cancellation_reason && (
-                  <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{shift.cancellation_reason}</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Close-out. A department that records call counts rather than
-              incidents gets the three-step wizard, which saves each step as it
-              goes; everyone else keeps the single checklist below unchanged. */}
-          {showFinalizeChecklist && callTrackingMode === 'count_only' && (
-            <ShiftCloseoutWizard
-              shiftId={shift.id}
-              unitLabel={shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus'}
-              tz={tz}
-              outstandingChecks={endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length}
-              requireChecks={requireEndOfShiftChecks}
-              onCancel={() => setShowFinalizeChecklist(false)}
-              onFinalized={() => {
-                setShowFinalizeChecklist(false);
-                // Mirrors handleFinalize: refresh the panel's own copy of the
-                // shift and let the parent list re-read it too.
-                void schedulingService.getShift(shift.id).then(setShift);
-                onRefresh?.();
-              }}
-            />
-          )}
-
-          {/* Finalize Checklist */}
-          {showFinalizeChecklist && callTrackingMode !== 'count_only' && (
-            <div className="space-y-3 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
-              <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
-                <CheckCircle2 className="h-4 w-4 text-green-600" /> Before you close this shift
-              </h4>
-
-              {/* Green and amber were equally passable, so an officer had no way
-                  to tell a row that stops the close-out from one that is merely
-                  recorded against the shift — which trains people to ignore
-                  both. Two headed groups instead, and the pending-checks row
-                  only claims to block when enforcement is actually on. */}
-              {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
-                <div className="space-y-2 text-sm">
-                  <p className="text-[11px] font-semibold tracking-wide text-red-700 uppercase dark:text-red-400">
-                    Must be resolved first
-                  </p>
-                  <div className="flex items-start gap-2 rounded-md border border-red-500/20 bg-red-500/10 p-2">
-                    <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
-                    <div>
-                      <span className="font-medium text-red-700 dark:text-red-400">
-                        Must fix before close-out: end-of-shift equipment checks incomplete
-                      </span>
-                      <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
-                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
-                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
-                        pending. Complete them, or override below with a reason that goes on the record.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2 text-sm">
-                <p className="text-theme-text-muted text-[11px] font-semibold tracking-wide uppercase">
-                  Noted on the record
-                </p>
-                {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks ? (
-                  <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
-                    <div>
-                      <span className="font-medium text-amber-700 dark:text-amber-400">
-                        End-of-shift equipment checks incomplete
-                      </span>
-                      <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
-                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
-                        {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
-                        pending. The shift will close with them outstanding.
-                      </p>
-                    </div>
-                  </div>
-                ) : endOfShiftChecks.length > 0 && !hasIncompleteEquipmentChecks ? (
-                  <div className="flex items-center gap-2 rounded-md border border-green-500/20 bg-green-500/10 p-2">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-                    <span className="text-green-700 dark:text-green-400">
-                      {completedEquipmentChecks.length} equipment check
-                      {completedEquipmentChecks.length === 1 ? '' : 's'} completed
-                    </span>
-                  </div>
-                ) : null}
-
-                {/* Attendance check-in/out summary */}
-                {(() => {
-                  const checkedIn = allAttendance.filter((a) => a.checked_in_at);
-                  const checkedOut = allAttendance.filter((a) => a.checked_out_at);
-                  const totalAssigned = activeAssignments.length;
-                  const allOut = checkedOut.length >= totalAssigned && totalAssigned > 0;
-                  return (
-                    <div
-                      className={`flex items-start gap-2 rounded-md border p-2 ${
-                        allOut
-                          ? 'border-green-500/20 bg-green-500/10'
-                          : checkedIn.length > 0
-                            ? 'border-amber-500/20 bg-amber-500/10'
-                            : 'bg-theme-surface border-theme-surface-border'
-                      }`}
-                    >
-                      <Users
-                        className={`mt-0.5 h-4 w-4 shrink-0 ${allOut ? 'text-green-600' : checkedIn.length > 0 ? 'text-amber-600' : 'text-theme-text-muted'}`}
-                      />
-                      <div>
-                        {/* "N of M" only reads as sense while N <= M. Somebody
-                            can check in to a shift they were never assigned to —
-                            covering at short notice, which is normal — and the
-                            officer then read "4 of 3 checked in". */}
-                        <span className="text-theme-text-secondary text-sm">
-                          {checkedIn.length > totalAssigned
-                            ? `${checkedIn.length} checked in (${totalAssigned} assigned)`
-                            : `${checkedIn.length} of ${totalAssigned} checked in`}
-                          {checkedOut.length > 0 && `, ${checkedOut.length} checked out`}
+                      {(hasStarted || presentCount > 0) && (
+                        <span className="text-theme-text-primary">
+                          {presentCount} of {activeAssignments.length} crew checked in
                         </span>
-                        {checkedIn.length < totalAssigned && totalAssigned > 0 && (
-                          <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
-                            {totalAssigned - checkedIn.length} member
-                            {totalAssigned - checkedIn.length !== 1 ? 's' : ''} never checked in
-                          </p>
-                        )}
-                        {checkedIn.length > checkedOut.length && (
-                          <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
-                            {checkedIn.length - checkedOut.length} member
-                            {checkedIn.length - checkedOut.length !== 1 ? 's' : ''} still on shift &mdash; will be
-                            checked out automatically at the shift end time
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Manual hours for unattended members */}
-                {(() => {
-                  const attendedIds = new Set(allAttendance.map((a) => a.user_id));
-                  const unattended = activeAssignments.filter((a) => !attendedIds.has(a.user_id));
-                  if (unattended.length === 0) return null;
-                  return (
-                    <div className="space-y-2 rounded-md border border-amber-500/20 bg-amber-500/5 p-2">
-                      <p className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
-                        <Clock className="h-3.5 w-3.5 shrink-0" />
-                        Add hours for members who didn&apos;t check in
-                      </p>
-                      <div className="space-y-1.5">
-                        {unattended.map((a) => (
-                          <div key={a.user_id} className="flex items-center gap-2">
-                            <span className="text-theme-text-secondary flex-1 truncate text-sm">
-                              {a.user_name || 'Unknown'}
-                            </span>
-                            <input
-                              type="number"
-                              min="0"
-                              max="48"
-                              step="0.5"
-                              placeholder="hrs"
-                              value={manualHours[a.user_id] ?? ''}
-                              onChange={(e) =>
-                                setManualHours((prev) => ({
-                                  ...prev,
-                                  [a.user_id]: e.target.value,
-                                }))
-                              }
-                              className="form-input w-20 px-2 py-1 text-right text-sm"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Call count */}
-                {shift.call_count !== undefined && shift.call_count !== null && (
-                  <div className="card flex items-center gap-2 p-2">
-                    <FileText className="text-theme-text-muted h-4 w-4 shrink-0" />
-                    <span className="text-theme-text-secondary">
-                      {shift.call_count} call{shift.call_count !== 1 ? 's' : ''} recorded
-                    </span>
-                  </div>
-                )}
-
-                {/* Staffing advisory — noted so an understaffed shift is on the record */}
-                {(() => {
-                  const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
-                  if (!(target > 0 && activeAssignments.length < target)) return null;
-                  return (
-                    <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                      <span className="text-amber-700 dark:text-amber-400">
-                        Recorded warning (does not block close-out): ran understaffed — {activeAssignments.length} of{' '}
-                        {target} positions filled.
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Pass-down handoff for the next crew */}
-              <div>
-                <label htmlFor="pass-down" className="text-theme-text-secondary mb-1 block text-xs font-medium">
-                  Pass-down to next crew (optional)
-                </label>
-                <textarea
-                  id="pass-down"
-                  rows={2}
-                  value={passDownNotes}
-                  onChange={(e) => setPassDownNotes(e.target.value)}
-                  placeholder="Apparatus issues, ongoing incidents, staffing notes…"
-                  className={inputCls}
-                />
-              </div>
-
-              {/* Enforcement ON: block, or override with a logged reason. */}
-              {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
-                <div className="space-y-2 rounded-md border border-red-500/20 bg-red-500/5 p-2">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-red-700 dark:text-red-300">
-                    <input
-                      type="checkbox"
-                      checked={overrideChecks}
-                      onChange={(e) => setOverrideChecks(e.target.checked)}
-                      className="border-theme-surface-border rounded"
-                    />
-                    Finalize anyway, with equipment checks outstanding
-                  </label>
-                  {overrideChecks && (
-                    <>
-                      <input
-                        type="text"
-                        value={overrideReason}
-                        onChange={(e) => setOverrideReason(e.target.value)}
-                        placeholder="Why are the checks outstanding?"
-                        aria-label="Reason for closing out with checks outstanding"
-                        className={inputCls}
-                      />
-                      {overrideReason.trim().length === 0 && (
-                        <p className="text-xs text-red-600 dark:text-red-300">
-                          A reason is required — it goes on the shift&apos;s record.
-                        </p>
                       )}
-                    </>
-                  )}
-                  {!overrideChecks && (
-                    <p className="text-xs text-red-600 dark:text-red-300">
-                      Complete the outstanding checks, or check the box above to override.
-                    </p>
-                  )}
-                </div>
-              )}
+                      {target > 0 && (
+                        <span
+                          className={
+                            understaffed ? 'font-medium text-amber-600 dark:text-amber-400' : 'text-theme-text-muted'
+                          }
+                        >
+                          {activeAssignments.length} of {target} positions filled
+                          {understaffed ? ' — running short' : ''}
+                        </span>
+                      )}
+                      {outstandingStartChecks > 0 && (
+                        <span className="text-amber-600 dark:text-amber-400">
+                          {outstandingStartChecks} start-of-shift check{outstandingStartChecks > 1 ? 's' : ''} pending
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
 
-              {/* Enforcement OFF (default): allow, but surface the feature. */}
-              {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks && (
-                <div className="space-y-1 rounded-md border border-sky-500/20 bg-sky-500/5 p-2">
-                  <p className="flex items-center gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    Some end-of-shift equipment checks aren&apos;t complete.
+              {/* Delete Confirmation */}
+              {showDeleteConfirm && (
+                <div className="space-y-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    Are you sure you want to delete this shift? This will remove all assignments and cannot be undone.
                   </p>
-                  <p className="text-theme-text-muted text-xs">
-                    You can still finalize. Departments can{' '}
-                    <strong>require end-of-shift checks before finalizing</strong> so every apparatus is verified ready
-                    and accountability is documented
-                    {canManage
-                      ? ' — turn it on in Scheduling Settings → Close-out rules.'
-                      : '. Ask an admin to enable it in Scheduling Settings.'}
-                  </p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button
-                  onClick={() => setShowFinalizeChecklist(false)}
-                  className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    void handleFinalize();
-                  }}
-                  disabled={pending.finalizing || overrideBlocked}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-                >
-                  {pending.finalizing ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  )}
-                  Close out shift
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Finalized badge */}
-          {shift.is_finalized && (
-            <div className="space-y-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-                <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                  Shift finalized
-                  {shift.finalized_at
-                    ? ` on ${formatDateCustom(new Date(shift.finalized_at), { month: 'short', day: 'numeric', year: 'numeric' }, tz)}`
-                    : ''}
-                </span>
-                {canManageShift && !showReopenConfirm && (
-                  <button
-                    onClick={() => setShowReopenConfirm(true)}
-                    className="text-theme-text-muted hover:text-theme-text-primary ml-auto text-xs underline"
-                  >
-                    Reopen
-                  </button>
-                )}
-              </div>
-              {showReopenConfirm && (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={reopenReason}
-                    onChange={(e) => setReopenReason(e.target.value)}
-                    placeholder="Reason for reopening (logged)"
-                    className={inputCls}
-                  />
                   <div className="flex items-center justify-end gap-2">
                     <button
-                      onClick={() => {
-                        setShowReopenConfirm(false);
-                        setReopenReason('');
-                      }}
+                      onClick={() => setShowDeleteConfirm(false)}
                       className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => {
-                        void handleReopen();
+                        void handleDelete();
                       }}
-                      disabled={pending.finalizing}
-                      className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                      disabled={pending.deleting}
+                      className="btn-primary flex items-center gap-1 px-3 py-1.5 text-sm"
                     >
-                      Reopen shift
+                      {pending.deleting && <Loader2 className="h-3 w-3 animate-spin" />}
+                      Delete Shift
                     </button>
                   </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Edit Form */}
-          {isEditing && (
-            <div className="space-y-3 rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
-              <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
-                <Pencil className="h-3.5 w-3.5" /> Edit Shift
-              </h4>
-              <div>
-                <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Shift Date</label>
-                <input
-                  type="date"
-                  value={editForm.shift_date}
-                  onChange={(e) => setEditForm((p) => ({ ...p, shift_date: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Start Time</label>
-                  <TimeQuarterHour
-                    value={editForm.start_time}
-                    onChange={(e) => setEditForm((p) => ({ ...p, start_time: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">End Time</label>
-                  <TimeQuarterHour
-                    value={editForm.end_time}
-                    onChange={(e) => setEditForm((p) => ({ ...p, end_time: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-              {apparatusList.length > 0 && (
-                <div>
-                  <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
-                    <span className="flex items-center gap-1">
-                      <Truck className="h-3 w-3" /> Apparatus
-                    </span>
-                  </label>
-                  <select
-                    value={editForm.apparatus_id}
-                    onChange={(e) => setEditForm((p) => ({ ...p, apparatus_id: e.target.value }))}
-                    className={inputCls}
-                  >
-                    <option value="">No specific apparatus</option>
-                    {apparatusList.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.unit_number} — {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label htmlFor="edit-min-staffing" className="text-theme-text-secondary mb-1 block text-xs font-medium">
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3 w-3" /> Minimum staffing
-                  </span>
-                </label>
-                <input
-                  id="edit-min-staffing"
-                  type="number"
-                  min="0"
-                  max="99"
-                  value={editForm.min_staffing}
-                  onChange={(e) => setEditForm((p) => ({ ...p, min_staffing: e.target.value }))}
-                  placeholder="Target crew size"
-                  className={inputCls}
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Overrides the template/apparatus target for this shift.
-                </p>
-              </div>
-              <div>
-                <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
-                  <span className="flex items-center gap-1">
-                    <Palette className="h-3 w-3" /> Color
-                  </span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={editForm.color || '#8b5cf6'}
-                    onChange={(e) => setEditForm((p) => ({ ...p, color: e.target.value }))}
-                    className="border-theme-input-border h-8 w-8 cursor-pointer rounded-sm border bg-transparent p-0"
-                  />
-                  <span className="text-theme-text-muted text-xs">{editForm.color || 'Default'}</span>
-                  {editForm.color && (
-                    <button
-                      type="button"
-                      onClick={() => setEditForm((p) => ({ ...p, color: '' }))}
-                      className="text-theme-text-muted hover:text-theme-text-primary text-xs"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Notes</label>
-                <textarea
-                  value={editForm.notes}
-                  onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))}
-                  rows={2}
-                  placeholder="Shift notes"
-                  className={inputCls + ' resize-none'}
-                />
-              </div>
-              <div>
-                <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Shift Officer</label>
-                <select
-                  value={editForm.shift_officer_id}
-                  onChange={(e) => setEditForm((p) => ({ ...p, shift_officer_id: e.target.value }))}
-                  className={inputCls}
-                >
-                  <option value="">No shift officer</option>
-                  {memberOptions.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-                {memberOptions.length === 0 && pending.loadingMembers && (
-                  <p className="text-theme-text-muted mt-1 text-xs">Loading members...</p>
-                )}
-              </div>
-              <PositionListEditor
-                structured
-                positions={editForm.positions}
-                onChangeStructured={(positions) => setEditForm((p) => ({ ...p, positions }))}
-                availablePositions={BUILTIN_POSITIONS}
-                label="Positions"
-                addButtonLabel="Add position"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    void handleSaveEdit();
-                  }}
-                  disabled={pending.saving}
-                  className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
-                >
-                  {pending.saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                  Save
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Time & Info */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-            <div className="bg-theme-surface-hover/50 flex items-center gap-3 rounded-lg p-3">
-              <Clock className="h-5 w-5 text-violet-500" />
-              <div>
-                <p className="text-theme-text-muted text-xs">Time</p>
-                <p className="text-theme-text-primary text-sm font-medium">
-                  {formatTime(shift.start_time, tz)}
-                  {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
-                </p>
-              </div>
-            </div>
-            {(() => {
-              const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
-              const filled = activeAssignments.length;
-              const isFull = target > 0 && filled >= target;
-              const isShort = target > 0 && filled < target;
-              return (
-                <div
-                  className={`flex items-center gap-3 rounded-lg p-3 ${
-                    isFull ? 'bg-green-500/10' : isShort ? 'bg-amber-500/10' : 'bg-theme-surface-hover/50'
-                  }`}
-                >
-                  {isFull ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  ) : isShort ? (
-                    <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  ) : (
-                    <Users className="h-5 w-5 text-blue-500" />
-                  )}
-                  <div>
-                    <p className="text-theme-text-muted text-xs">Crew</p>
-                    <p className="text-theme-text-primary text-sm font-medium">
-                      {filled} assigned
-                      {target > 0 && <span className="text-theme-text-muted"> / {target} positions</span>}
-                    </p>
-                  </div>
-                </div>
-              );
-            })()}
-            {(shift.apparatus_name || shift.apparatus_unit_number) && (
-              <div className="bg-theme-surface-hover/50 flex items-center gap-3 rounded-lg p-3">
-                <Truck className="h-5 w-5 text-red-500" />
-                <div>
-                  <p className="text-theme-text-muted text-xs">Apparatus</p>
-                  <p className="text-theme-text-primary text-sm font-medium">
-                    {shift.apparatus_unit_number}
-                    {shift.apparatus_name ? ` — ${shift.apparatus_name}` : ''}
+              {/* Cancel Confirmation */}
+              {showCancelConfirm && (
+                <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4">
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    Cancel this shift? The record is kept, all assignments are marked cancelled, and the assigned crew
+                    is notified.
                   </p>
-                </div>
-              </div>
-            )}
-            {shift.shift_officer_name && (
-              <div className="bg-theme-surface-hover/50 flex items-center gap-3 rounded-lg p-3">
-                <MapPin className="h-5 w-5 text-green-500" />
-                <div>
-                  <p className="text-theme-text-muted text-xs">Shift Officer</p>
-                  <p className="text-theme-text-primary text-sm font-medium">{shift.shift_officer_name}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {shift.notes && !isEditing && (
-            <div className="bg-theme-surface-hover/50 rounded-lg p-3">
-              <p className="text-theme-text-muted mb-1 text-xs">Notes</p>
-              <p className="text-theme-text-primary text-sm">{shift.notes}</p>
-            </div>
-          )}
-
-          {/* Crew Board (when apparatus has positions) */}
-          {hasApparatusPositions && !loading && (
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
-                  <Truck className="h-4 w-4" /> Crew Board — {shift.apparatus_unit_number}
-                </h3>
-                {openPositions.length > 0 && (
-                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                    {openPositions.length} open
-                  </span>
-                )}
-              </div>
-              {/* "Positions from B-5 + shift customizations" described how the
-                  list was computed, which is not a fact the crew needs. Name the
-                  rig, and say plainly when this shift departs from it. */}
-              {shift.apparatus_id && (
-                <p className="text-theme-text-muted mb-2 text-[10px]">
-                  Crew positions for {shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
-                  {shift.positions && shift.positions.length > 0 ? ', adjusted for this shift' : ''}
-                </p>
-              )}
-              <div className="space-y-2">
-                {crewBoard?.map(({ position, required, assignment }, i) => (
-                  <CrewBoardSlot
-                    key={i}
-                    position={position}
-                    required={required}
-                    assignment={assignment}
-                    currentUserId={user?.id}
-                    canAssign={canAssign}
-                    isPast={isPast}
-                    rosterLocked={isRosterLocked}
-                    isUserAssigned={isUserAssigned}
-                    canSignUp={canSignUpFor(position)}
-                    positionOptions={positionOptions}
-                    attendanceRecord={assignment ? attendanceByUser.get(assignment.user_id) : undefined}
-                    tz={tz}
-                    pendingStates={{
-                      confirming: pending.confirming,
-                      declining: pending.declining,
-                      removing: pending.removing,
-                      updatingPosition: pending.updatingPosition,
-                      signingUp: pending.signingUp,
-                    }}
-                    onConfirm={(id) => {
-                      void handleConfirm(id);
-                    }}
-                    onDecline={(id) => {
-                      void handleDecline(id);
-                    }}
-                    onRemove={(id) => {
-                      void handleRemove(id);
-                    }}
-                    onPositionChange={(id, newPos, curPos) => {
-                      void handlePositionChange(id, newPos, curPos);
-                    }}
-                    onAssignToPosition={openAssignFormForPosition}
-                    onSignup={(pos) => {
-                      void handleSignup(pos);
-                    }}
-                  />
-                ))}
-              </div>
-
-              {showNoClaimableSeatNote && (
-                <p className="text-theme-text-muted mt-2 text-xs">
-                  None of the open seats on this shift match your rank, the positions you hold, or your completed
-                  training, so there is nothing here for you to claim. A scheduling admin can review your rank and
-                  positions, or the positions on this shift.
-                </p>
-              )}
-
-              {/* Extra assignments (not matching apparatus positions) */}
-              {extraAssignments.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-theme-text-secondary mb-2 text-sm font-medium">Additional Crew</h4>
-                  <div className="space-y-2">{extraAssignments.map(renderAssignmentRow)}</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Standard Crew Roster (no apparatus positions) */}
-          {!hasApparatusPositions && (
-            <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
-                  <Users className="h-4 w-4" /> Crew Roster
-                </h3>
-                {canAssignNow && !isPast && (
-                  <button
-                    onClick={() => setShowAssignForm(!showAssignForm)}
-                    className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
-                  >
-                    <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Assign someone
-                  </button>
-                )}
-              </div>
-
-              {loading ? (
-                <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
-                  <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
-                </div>
-              ) : activeAssignments.length === 0 ? (
-                <div className="border-theme-surface-border rounded-lg border border-dashed py-6 text-center">
-                  <Users className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
-                  <p className="text-theme-text-muted text-sm">No crew assigned yet</p>
-                  <p className="text-theme-text-muted mt-1 text-xs">
-                    {canAssign
-                      ? 'Use "Assign someone" above to add another member, or sign yourself up below.'
-                      : 'Sign yourself up below to join this shift.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">{activeAssignments.map(renderAssignmentRow)}</div>
-              )}
-            </div>
-          )}
-
-          {/* Admin Assign Form — with member search dropdown */}
-          {canAssignNow && (showAssignForm || showBulkAssign || (hasApparatusPositions && !isPast)) && (
-            <>
-              {!showAssignForm && !showBulkAssign && hasApparatusPositions && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowAssignForm(true)}
-                    className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
-                  >
-                    <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Assign someone
-                  </button>
-                  {openPositions.length > 1 && (
-                    <button
-                      onClick={openBulkAssign}
-                      className="flex items-center gap-1 rounded-lg border border-violet-500/20 px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
-                    >
-                      <Users className="h-3.5 w-3.5" /> Fill All Open ({openPositions.length})
-                    </button>
-                  )}
-                </div>
-              )}
-              {showAssignForm && (
-                <div
-                  ref={assignFormRef}
-                  className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4"
-                >
-                  <h4 className="text-theme-text-primary text-sm font-medium">Assign someone to this shift</h4>
-                  {/* Step 1: Position selection */}
                   <div>
-                    <label
-                      htmlFor="assign-position"
-                      className="text-theme-text-secondary mb-1 block text-xs font-medium"
-                    >
-                      Position
-                    </label>
-                    <select
-                      id="assign-position"
-                      value={assignForm.position}
-                      onChange={(e) => setAssignForm((p) => ({ ...p, position: e.target.value }))}
-                      className={inputCls}
-                    >
-                      {positionOptions.map(([val, label]) => {
-                        const isOpen = openPositions.includes(val);
-                        return (
-                          <option key={val} value={val}>
-                            {label}
-                            {isOpen ? ' (open)' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                  {/* Step 2: Member search + select */}
-                  <div>
-                    <label
-                      htmlFor="assign-member-search"
-                      className="text-theme-text-secondary mb-1 block text-xs font-medium"
-                    >
-                      Member
+                    <label htmlFor="cancel-reason" className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                      Reason (optional)
                     </label>
                     <input
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      id="assign-member-search"
+                      id="cancel-reason"
                       type="text"
-                      aria-label="Search members"
-                      placeholder="Search members..."
-                      value={memberSearch}
-                      onChange={(e) => setMemberSearch(e.target.value)}
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      placeholder="e.g. station closed for weather"
                       className={inputCls}
                     />
-                    {pending.loadingMembers ? (
-                      <div
-                        className="text-theme-text-muted mt-2 flex items-center gap-2 text-xs"
-                        role="status"
-                        aria-live="polite"
-                      >
-                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> Loading members...
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setShowCancelConfirm(false);
+                        setCancelReason('');
+                      }}
+                      className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
+                    >
+                      Keep Shift
+                    </button>
+                    <button
+                      onClick={() => {
+                        void handleCancel();
+                      }}
+                      disabled={pending.deleting}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {pending.deleting && <Loader2 className="h-3 w-3 animate-spin" />}
+                      Cancel Shift
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Cancelled banner */}
+              {isCancelled && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div className="text-sm">
+                    <span className="font-medium text-amber-700 dark:text-amber-300">This shift is cancelled.</span>
+                    {shift.cancellation_reason && (
+                      <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{shift.cancellation_reason}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Close-out. A department that records call counts rather than
+              incidents gets the three-step wizard, which saves each step as it
+              goes; everyone else keeps the single checklist below unchanged. */}
+              {showFinalizeChecklist && callTrackingMode === 'count_only' && (
+                <ShiftCloseoutWizard
+                  shiftId={shift.id}
+                  unitLabel={shift.apparatus_unit_number || shift.apparatus_name || 'this apparatus'}
+                  tz={tz}
+                  outstandingChecks={endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length}
+                  requireChecks={requireEndOfShiftChecks}
+                  onCancel={() => setShowFinalizeChecklist(false)}
+                  onFinalized={() => {
+                    setShowFinalizeChecklist(false);
+                    // Mirrors handleFinalize: refresh the panel's own copy of the
+                    // shift and let the parent list re-read it too.
+                    void schedulingService.getShift(shift.id).then(setShift);
+                    onRefresh?.();
+                  }}
+                />
+              )}
+
+              {/* Finalize Checklist */}
+              {showFinalizeChecklist && callTrackingMode !== 'count_only' && (
+                <div className="space-y-3 rounded-lg border border-green-500/20 bg-green-500/5 p-4">
+                  <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" /> Before you close this shift
+                  </h4>
+
+                  {/* Green and amber were equally passable, so an officer had no way
+                  to tell a row that stops the close-out from one that is merely
+                  recorded against the shift — which trains people to ignore
+                  both. Two headed groups instead, and the pending-checks row
+                  only claims to block when enforcement is actually on. */}
+                  {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
+                    <div className="space-y-2 text-sm">
+                      <p className="text-[11px] font-semibold tracking-wide text-red-700 uppercase dark:text-red-400">
+                        Must be resolved first
+                      </p>
+                      <div className="flex items-start gap-2 rounded-md border border-red-500/20 bg-red-500/10 p-2">
+                        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
+                        <div>
+                          <span className="font-medium text-red-700 dark:text-red-400">
+                            Must fix before close-out: end-of-shift equipment checks incomplete
+                          </span>
+                          <p className="mt-0.5 text-xs text-red-600 dark:text-red-300">
+                            {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
+                            {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
+                            pending. Complete them, or override below with a reason that goes on the record.
+                          </p>
+                        </div>
                       </div>
-                    ) : (
-                      <select
-                        aria-label="Select a member"
-                        value={assignForm.user_id}
-                        onChange={(e) => setAssignForm((p) => ({ ...p, user_id: e.target.value }))}
-                        className={inputCls + ' mt-2'}
-                        size={Math.min(filteredMembers.length + 1, 6)}
+                    </div>
+                  )}
+
+                  <div className="space-y-2 text-sm">
+                    <p className="text-theme-text-muted text-[11px] font-semibold tracking-wide uppercase">
+                      Noted on the record
+                    </p>
+                    {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks ? (
+                      <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+                        <div>
+                          <span className="font-medium text-amber-700 dark:text-amber-400">
+                            End-of-shift equipment checks incomplete
+                          </span>
+                          <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-300">
+                            {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length} end-of-shift checklist
+                            {endOfShiftChecks.filter((c) => !isShiftCheckCompleted(c)).length !== 1 ? 's' : ''} still
+                            pending. The shift will close with them outstanding.
+                          </p>
+                        </div>
+                      </div>
+                    ) : endOfShiftChecks.length > 0 && !hasIncompleteEquipmentChecks ? (
+                      <div className="flex items-center gap-2 rounded-md border border-green-500/20 bg-green-500/10 p-2">
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                        <span className="text-green-700 dark:text-green-400">
+                          {completedEquipmentChecks.length} equipment check
+                          {completedEquipmentChecks.length === 1 ? '' : 's'} completed
+                        </span>
+                      </div>
+                    ) : null}
+
+                    {/* Attendance check-in/out summary */}
+                    {(() => {
+                      const checkedIn = allAttendance.filter((a) => a.checked_in_at);
+                      const checkedOut = allAttendance.filter((a) => a.checked_out_at);
+                      const totalAssigned = activeAssignments.length;
+                      const allOut = checkedOut.length >= totalAssigned && totalAssigned > 0;
+                      return (
+                        <div
+                          className={`flex items-start gap-2 rounded-md border p-2 ${
+                            allOut
+                              ? 'border-green-500/20 bg-green-500/10'
+                              : checkedIn.length > 0
+                                ? 'border-amber-500/20 bg-amber-500/10'
+                                : 'bg-theme-surface border-theme-surface-border'
+                          }`}
+                        >
+                          <Users
+                            className={`mt-0.5 h-4 w-4 shrink-0 ${allOut ? 'text-green-600' : checkedIn.length > 0 ? 'text-amber-600' : 'text-theme-text-muted'}`}
+                          />
+                          <div>
+                            {/* "N of M" only reads as sense while N <= M. Somebody
+                            can check in to a shift they were never assigned to —
+                            covering at short notice, which is normal — and the
+                            officer then read "4 of 3 checked in". */}
+                            <span className="text-theme-text-secondary text-sm">
+                              {checkedIn.length > totalAssigned
+                                ? `${checkedIn.length} checked in (${totalAssigned} assigned)`
+                                : `${checkedIn.length} of ${totalAssigned} checked in`}
+                              {checkedOut.length > 0 && `, ${checkedOut.length} checked out`}
+                            </span>
+                            {checkedIn.length < totalAssigned && totalAssigned > 0 && (
+                              <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                                {totalAssigned - checkedIn.length} member
+                                {totalAssigned - checkedIn.length !== 1 ? 's' : ''} never checked in
+                              </p>
+                            )}
+                            {checkedIn.length > checkedOut.length && (
+                              <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                                {checkedIn.length - checkedOut.length} member
+                                {checkedIn.length - checkedOut.length !== 1 ? 's' : ''} still on shift &mdash; will be
+                                checked out automatically at the shift end time
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Manual hours for unattended members */}
+                    {(() => {
+                      const attendedIds = new Set(allAttendance.map((a) => a.user_id));
+                      const unattended = activeAssignments.filter((a) => !attendedIds.has(a.user_id));
+                      if (unattended.length === 0) return null;
+                      return (
+                        <div className="space-y-2 rounded-md border border-amber-500/20 bg-amber-500/5 p-2">
+                          <p className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                            <Clock className="h-3.5 w-3.5 shrink-0" />
+                            Add hours for members who didn&apos;t check in
+                          </p>
+                          <div className="space-y-1.5">
+                            {unattended.map((a) => (
+                              <div key={a.user_id} className="flex items-center gap-2">
+                                <span className="text-theme-text-secondary flex-1 truncate text-sm">
+                                  {a.user_name || 'Unknown'}
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="48"
+                                  step="0.5"
+                                  placeholder="hrs"
+                                  value={manualHours[a.user_id] ?? ''}
+                                  onChange={(e) =>
+                                    setManualHours((prev) => ({
+                                      ...prev,
+                                      [a.user_id]: e.target.value,
+                                    }))
+                                  }
+                                  className="form-input w-20 px-2 py-1 text-right text-sm"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Call count */}
+                    {shift.call_count !== undefined && shift.call_count !== null && (
+                      <div className="card flex items-center gap-2 p-2">
+                        <FileText className="text-theme-text-muted h-4 w-4 shrink-0" />
+                        <span className="text-theme-text-secondary">
+                          {shift.call_count} call{shift.call_count !== 1 ? 's' : ''} recorded
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Staffing advisory — noted so an understaffed shift is on the record */}
+                    {(() => {
+                      const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
+                      if (!(target > 0 && activeAssignments.length < target)) return null;
+                      return (
+                        <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 p-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                          <span className="text-amber-700 dark:text-amber-400">
+                            Recorded warning (does not block close-out): ran understaffed — {activeAssignments.length}{' '}
+                            of {target} positions filled.
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Pass-down handoff for the next crew */}
+                  <div>
+                    <label htmlFor="pass-down" className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                      Pass-down to next crew (optional)
+                    </label>
+                    <textarea
+                      id="pass-down"
+                      rows={2}
+                      value={passDownNotes}
+                      onChange={(e) => setPassDownNotes(e.target.value)}
+                      placeholder="Apparatus issues, ongoing incidents, staffing notes…"
+                      className={inputCls}
+                    />
+                  </div>
+
+                  {/* Enforcement ON: block, or override with a logged reason. */}
+                  {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
+                    <div className="space-y-2 rounded-md border border-red-500/20 bg-red-500/5 p-2">
+                      <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-red-700 dark:text-red-300">
+                        <input
+                          type="checkbox"
+                          checked={overrideChecks}
+                          onChange={(e) => setOverrideChecks(e.target.checked)}
+                          className="border-theme-surface-border rounded"
+                        />
+                        Finalize anyway, with equipment checks outstanding
+                      </label>
+                      {overrideChecks && (
+                        <>
+                          <input
+                            type="text"
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            placeholder="Why are the checks outstanding?"
+                            aria-label="Reason for closing out with checks outstanding"
+                            className={inputCls}
+                          />
+                          {overrideReason.trim().length === 0 && (
+                            <p className="text-xs text-red-600 dark:text-red-300">
+                              A reason is required — it goes on the shift&apos;s record.
+                            </p>
+                          )}
+                        </>
+                      )}
+                      {!overrideChecks && (
+                        <p className="text-xs text-red-600 dark:text-red-300">
+                          Complete the outstanding checks, or check the box above to override.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Enforcement OFF (default): allow, but surface the feature. */}
+                  {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks && (
+                    <div className="space-y-1 rounded-md border border-sky-500/20 bg-sky-500/5 p-2">
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-sky-700 dark:text-sky-300">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        Some end-of-shift equipment checks aren&apos;t complete.
+                      </p>
+                      <p className="text-theme-text-muted text-xs">
+                        You can still finalize. Departments can{' '}
+                        <strong>require end-of-shift checks before finalizing</strong> so every apparatus is verified
+                        ready and accountability is documented
+                        {canManage
+                          ? ' — turn it on in Scheduling Settings → Close-out rules.'
+                          : '. Ask an admin to enable it in Scheduling Settings.'}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => setShowFinalizeChecklist(false)}
+                      className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        void handleFinalize();
+                      }}
+                      disabled={pending.finalizing || overrideBlocked}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {pending.finalizing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                      Close out shift
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Finalized badge */}
+              {shift.is_finalized && (
+                <div className="space-y-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                    <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                      Shift finalized
+                      {shift.finalized_at
+                        ? ` on ${formatDateCustom(new Date(shift.finalized_at), { month: 'short', day: 'numeric', year: 'numeric' }, tz)}`
+                        : ''}
+                    </span>
+                    {canManageShift && !showReopenConfirm && (
+                      <button
+                        onClick={() => setShowReopenConfirm(true)}
+                        className="text-theme-text-muted hover:text-theme-text-primary ml-auto text-xs underline"
                       >
-                        <option value="">Select a member</option>
-                        {filteredMembers.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
+                        Reopen
+                      </button>
+                    )}
+                  </div>
+                  {showReopenConfirm && (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={reopenReason}
+                        onChange={(e) => setReopenReason(e.target.value)}
+                        placeholder="Reason for reopening (logged)"
+                        className={inputCls}
+                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setShowReopenConfirm(false);
+                            setReopenReason('');
+                          }}
+                          className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            void handleReopen();
+                          }}
+                          disabled={pending.finalizing}
+                          className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                        >
+                          Reopen shift
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Edit Form */}
+              {isEditing && (
+                <div className="space-y-3 rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
+                  <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
+                    <Pencil className="h-3.5 w-3.5" /> Edit Shift
+                  </h4>
+                  <div>
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Shift Date</label>
+                    <input
+                      type="date"
+                      value={editForm.shift_date}
+                      onChange={(e) => setEditForm((p) => ({ ...p, shift_date: e.target.value }))}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Start Time</label>
+                      <TimeQuarterHour
+                        value={editForm.start_time}
+                        onChange={(e) => setEditForm((p) => ({ ...p, start_time: e.target.value }))}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">End Time</label>
+                      <TimeQuarterHour
+                        value={editForm.end_time}
+                        onChange={(e) => setEditForm((p) => ({ ...p, end_time: e.target.value }))}
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+                  {apparatusList.length > 0 && (
+                    <div>
+                      <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                        <span className="flex items-center gap-1">
+                          <Truck className="h-3 w-3" /> Apparatus
+                        </span>
+                      </label>
+                      <select
+                        value={editForm.apparatus_id}
+                        onChange={(e) => setEditForm((p) => ({ ...p, apparatus_id: e.target.value }))}
+                        className={inputCls}
+                      >
+                        <option value="">No specific apparatus</option>
+                        {apparatusList.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.unit_number} — {a.name}
                           </option>
                         ))}
                       </select>
+                    </div>
+                  )}
+                  <div>
+                    <label
+                      htmlFor="edit-min-staffing"
+                      className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                    >
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3 w-3" /> Minimum staffing
+                      </span>
+                    </label>
+                    <input
+                      id="edit-min-staffing"
+                      type="number"
+                      min="0"
+                      max="99"
+                      value={editForm.min_staffing}
+                      onChange={(e) => setEditForm((p) => ({ ...p, min_staffing: e.target.value }))}
+                      placeholder="Target crew size"
+                      className={inputCls}
+                    />
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Overrides the template/apparatus target for this shift.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                      <span className="flex items-center gap-1">
+                        <Palette className="h-3 w-3" /> Color
+                      </span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={editForm.color || '#8b5cf6'}
+                        onChange={(e) => setEditForm((p) => ({ ...p, color: e.target.value }))}
+                        className="border-theme-input-border h-8 w-8 cursor-pointer rounded-sm border bg-transparent p-0"
+                      />
+                      <span className="text-theme-text-muted text-xs">{editForm.color || 'Default'}</span>
+                      {editForm.color && (
+                        <button
+                          type="button"
+                          onClick={() => setEditForm((p) => ({ ...p, color: '' }))}
+                          className="text-theme-text-muted hover:text-theme-text-primary text-xs"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Notes</label>
+                    <textarea
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))}
+                      rows={2}
+                      placeholder="Shift notes"
+                      className={inputCls + ' resize-none'}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Shift Officer</label>
+                    <select
+                      value={editForm.shift_officer_id}
+                      onChange={(e) => setEditForm((p) => ({ ...p, shift_officer_id: e.target.value }))}
+                      className={inputCls}
+                    >
+                      <option value="">No shift officer</option>
+                      {memberOptions.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    {memberOptions.length === 0 && pending.loadingMembers && (
+                      <p className="text-theme-text-muted mt-1 text-xs">Loading members...</p>
                     )}
                   </div>
-                  {/* Step 3: Training slot (optional) */}
-                  <div className="border-theme-surface-border/60 border-t pt-1">
-                    <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-xs font-medium">
-                      <input
-                        type="checkbox"
-                        checked={assignForm.is_training}
-                        onChange={(e) => setAssignForm((p) => ({ ...p, is_training: e.target.checked }))}
-                        className="border-theme-surface-border rounded"
+                  <PositionListEditor
+                    structured
+                    positions={editForm.positions}
+                    onChangeStructured={(positions) => setEditForm((p) => ({ ...p, positions }))}
+                    availablePositions={BUILTIN_POSITIONS}
+                    label="Positions"
+                    addButtonLabel="Add position"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        void handleSaveEdit();
+                      }}
+                      disabled={pending.saving}
+                      className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
+                    >
+                      {pending.saving ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Save className="h-3.5 w-3.5" />
+                      )}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Time & Info */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div className="bg-theme-surface-hover/50 flex items-center gap-3 rounded-lg p-3">
+                  <Clock className="h-5 w-5 text-violet-500" />
+                  <div>
+                    <p className="text-theme-text-muted text-xs">Time</p>
+                    <p className="text-theme-text-primary text-sm font-medium">
+                      {formatTime(shift.start_time, tz)}
+                      {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
+                    </p>
+                  </div>
+                </div>
+                {(() => {
+                  const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
+                  const filled = activeAssignments.length;
+                  const isFull = target > 0 && filled >= target;
+                  const isShort = target > 0 && filled < target;
+                  return (
+                    <div
+                      className={`flex items-center gap-3 rounded-lg p-3 ${
+                        isFull ? 'bg-green-500/10' : isShort ? 'bg-amber-500/10' : 'bg-theme-surface-hover/50'
+                      }`}
+                    >
+                      {isFull ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      ) : isShort ? (
+                        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      ) : (
+                        <Users className="h-5 w-5 text-blue-500" />
+                      )}
+                      <div>
+                        <p className="text-theme-text-muted text-xs">Crew</p>
+                        <p className="text-theme-text-primary text-sm font-medium">
+                          {filled} assigned
+                          {target > 0 && <span className="text-theme-text-muted"> / {target} positions</span>}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {(shift.apparatus_name || shift.apparatus_unit_number) && (
+                  <div className="bg-theme-surface-hover/50 flex items-center gap-3 rounded-lg p-3">
+                    <Truck className="h-5 w-5 text-red-500" />
+                    <div>
+                      <p className="text-theme-text-muted text-xs">Apparatus</p>
+                      <p className="text-theme-text-primary text-sm font-medium">
+                        {shift.apparatus_unit_number}
+                        {shift.apparatus_name ? ` — ${shift.apparatus_name}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {shift.shift_officer_name && (
+                  <div className="bg-theme-surface-hover/50 flex items-center gap-3 rounded-lg p-3">
+                    <MapPin className="h-5 w-5 text-green-500" />
+                    <div>
+                      <p className="text-theme-text-muted text-xs">Shift Officer</p>
+                      <p className="text-theme-text-primary text-sm font-medium">{shift.shift_officer_name}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {shift.notes && !isEditing && (
+                <div className="bg-theme-surface-hover/50 rounded-lg p-3">
+                  <p className="text-theme-text-muted mb-1 text-xs">Notes</p>
+                  <p className="text-theme-text-primary text-sm">{shift.notes}</p>
+                </div>
+              )}
+
+              {/* Crew Board (when apparatus has positions) */}
+              {hasApparatusPositions && !loading && (
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
+                      <Truck className="h-4 w-4" /> Crew Board — {shift.apparatus_unit_number}
+                    </h3>
+                    {openPositions.length > 0 && (
+                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                        {openPositions.length} open
+                      </span>
+                    )}
+                  </div>
+                  {/* "Positions from B-5 + shift customizations" described how the
+                  list was computed, which is not a fact the crew needs. Name the
+                  rig, and say plainly when this shift departs from it. */}
+                  {shift.apparatus_id && (
+                    <p className="text-theme-text-muted mb-2 text-[10px]">
+                      Crew positions for {shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
+                      {shift.positions && shift.positions.length > 0 ? ', adjusted for this shift' : ''}
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    {crewBoard?.map(({ position, required, assignment }, i) => (
+                      <CrewBoardSlot
+                        key={i}
+                        position={position}
+                        required={required}
+                        assignment={assignment}
+                        currentUserId={user?.id}
+                        canAssign={canAssign}
+                        isPast={isPast}
+                        rosterLocked={isRosterLocked}
+                        isUserAssigned={isUserAssigned}
+                        canSignUp={canSignUpFor(position)}
+                        positionOptions={positionOptions}
+                        attendanceRecord={assignment ? attendanceByUser.get(assignment.user_id) : undefined}
+                        tz={tz}
+                        pendingStates={{
+                          confirming: pending.confirming,
+                          declining: pending.declining,
+                          removing: pending.removing,
+                          updatingPosition: pending.updatingPosition,
+                          signingUp: pending.signingUp,
+                        }}
+                        onConfirm={(id) => {
+                          void handleConfirm(id);
+                        }}
+                        onDecline={(id) => {
+                          void handleDecline(id);
+                        }}
+                        onRemove={(id) => {
+                          void handleRemove(id);
+                        }}
+                        onPositionChange={(id, newPos, curPos) => {
+                          void handlePositionChange(id, newPos, curPos);
+                        }}
+                        onAssignToPosition={openAssignFormForPosition}
+                        onSignup={(pos) => {
+                          void handleSignup(pos);
+                        }}
                       />
-                      Training position (supervised rider)
-                    </label>
-                    {assignForm.is_training && (
-                      <div className="mt-2 space-y-2 pl-6">
-                        <div>
-                          <label htmlFor="assign-training-program" className="text-theme-text-muted mb-1 block text-xs">
-                            Program (optional)
-                          </label>
-                          <select
-                            id="assign-training-program"
-                            value={assignForm.training_program_id}
-                            onChange={(e) => setAssignForm((p) => ({ ...p, training_program_id: e.target.value }))}
-                            className={inputCls}
-                          >
-                            <option value="">— No program link —</option>
-                            {trainingPrograms.map((prog) => (
-                              <option key={prog.id} value={prog.id}>
-                                {prog.name}
+                    ))}
+                  </div>
+
+                  {showNoClaimableSeatNote && (
+                    <p className="text-theme-text-muted mt-2 text-xs">
+                      None of the open seats on this shift match your rank, the positions you hold, or your completed
+                      training, so there is nothing here for you to claim. A scheduling admin can review your rank and
+                      positions, or the positions on this shift.
+                    </p>
+                  )}
+
+                  {/* Extra assignments (not matching apparatus positions) */}
+                  {extraAssignments.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-theme-text-secondary mb-2 text-sm font-medium">Additional Crew</h4>
+                      <div className="space-y-2">{extraAssignments.map(renderAssignmentRow)}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Standard Crew Roster (no apparatus positions) */}
+              {!hasApparatusPositions && (
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
+                      <Users className="h-4 w-4" /> Crew Roster
+                    </h3>
+                    {canAssignNow && !isPast && (
+                      <button
+                        onClick={() => setShowAssignForm(!showAssignForm)}
+                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Assign someone
+                      </button>
+                    )}
+                  </div>
+
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
+                      <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+                    </div>
+                  ) : activeAssignments.length === 0 ? (
+                    <div className="border-theme-surface-border rounded-lg border border-dashed py-6 text-center">
+                      <Users className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
+                      <p className="text-theme-text-muted text-sm">No crew assigned yet</p>
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        {canAssign
+                          ? 'Use "Assign someone" above to add another member, or sign yourself up below.'
+                          : 'Sign yourself up below to join this shift.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">{activeAssignments.map(renderAssignmentRow)}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Admin Assign Form — with member search dropdown */}
+              {canAssignNow && (showAssignForm || showBulkAssign || (hasApparatusPositions && !isPast)) && (
+                <>
+                  {!showAssignForm && !showBulkAssign && hasApparatusPositions && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowAssignForm(true)}
+                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" aria-hidden="true" /> Assign someone
+                      </button>
+                      {openPositions.length > 1 && (
+                        <button
+                          onClick={openBulkAssign}
+                          className="flex items-center gap-1 rounded-lg border border-violet-500/20 px-2.5 py-1.5 text-xs text-violet-600 transition-colors hover:bg-violet-500/10 dark:text-violet-400"
+                        >
+                          <Users className="h-3.5 w-3.5" /> Fill All Open ({openPositions.length})
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {showAssignForm && (
+                    <div
+                      ref={assignFormRef}
+                      className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4"
+                    >
+                      <h4 className="text-theme-text-primary text-sm font-medium">Assign someone to this shift</h4>
+                      {/* Step 1: Position selection */}
+                      <div>
+                        <label
+                          htmlFor="assign-position"
+                          className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                        >
+                          Position
+                        </label>
+                        <select
+                          id="assign-position"
+                          value={assignForm.position}
+                          onChange={(e) => setAssignForm((p) => ({ ...p, position: e.target.value }))}
+                          className={inputCls}
+                        >
+                          {positionOptions.map(([val, label]) => {
+                            const isOpen = openPositions.includes(val);
+                            return (
+                              <option key={val} value={val}>
+                                {label}
+                                {isOpen ? ' (open)' : ''}
                               </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label
-                            htmlFor="assign-training-evaluator"
-                            className="text-theme-text-muted mb-1 block text-xs"
+                            );
+                          })}
+                        </select>
+                      </div>
+                      {/* Step 2: Member search + select */}
+                      <div>
+                        <label
+                          htmlFor="assign-member-search"
+                          className="text-theme-text-secondary mb-1 block text-xs font-medium"
+                        >
+                          Member
+                        </label>
+                        <input
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          id="assign-member-search"
+                          type="text"
+                          aria-label="Search members"
+                          placeholder="Search members..."
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                          className={inputCls}
+                        />
+                        {pending.loadingMembers ? (
+                          <div
+                            className="text-theme-text-muted mt-2 flex items-center gap-2 text-xs"
+                            role="status"
+                            aria-live="polite"
                           >
-                            Evaluating officer (optional)
-                          </label>
+                            <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> Loading members...
+                          </div>
+                        ) : (
                           <select
-                            id="assign-training-evaluator"
-                            value={assignForm.training_evaluator_id}
-                            onChange={(e) => setAssignForm((p) => ({ ...p, training_evaluator_id: e.target.value }))}
-                            className={inputCls}
+                            aria-label="Select a member"
+                            value={assignForm.user_id}
+                            onChange={(e) => setAssignForm((p) => ({ ...p, user_id: e.target.value }))}
+                            className={inputCls + ' mt-2'}
+                            size={Math.min(filteredMembers.length + 1, 6)}
                           >
-                            <option value="">— Finalizing officer —</option>
-                            {memberOptions.map((m) => (
+                            <option value="">Select a member</option>
+                            {filteredMembers.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.label}
                               </option>
                             ))}
                           </select>
-                        </div>
-                        <p className="text-theme-text-muted text-xs">
-                          A draft training report is created for this member when the shift is finalized.
-                        </p>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setShowAssignForm(false);
-                        setMemberSearch('');
-                      }}
-                      className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
+                      {/* Step 3: Training slot (optional) */}
+                      <div className="border-theme-surface-border/60 border-t pt-1">
+                        <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-xs font-medium">
+                          <input
+                            type="checkbox"
+                            checked={assignForm.is_training}
+                            onChange={(e) => setAssignForm((p) => ({ ...p, is_training: e.target.checked }))}
+                            className="border-theme-surface-border rounded"
+                          />
+                          Training position (supervised rider)
+                        </label>
+                        {assignForm.is_training && (
+                          <div className="mt-2 space-y-2 pl-6">
+                            <div>
+                              <label
+                                htmlFor="assign-training-program"
+                                className="text-theme-text-muted mb-1 block text-xs"
+                              >
+                                Program (optional)
+                              </label>
+                              <select
+                                id="assign-training-program"
+                                value={assignForm.training_program_id}
+                                onChange={(e) => setAssignForm((p) => ({ ...p, training_program_id: e.target.value }))}
+                                className={inputCls}
+                              >
+                                <option value="">— No program link —</option>
+                                {trainingPrograms.map((prog) => (
+                                  <option key={prog.id} value={prog.id}>
+                                    {prog.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label
+                                htmlFor="assign-training-evaluator"
+                                className="text-theme-text-muted mb-1 block text-xs"
+                              >
+                                Evaluating officer (optional)
+                              </label>
+                              <select
+                                id="assign-training-evaluator"
+                                value={assignForm.training_evaluator_id}
+                                onChange={(e) =>
+                                  setAssignForm((p) => ({ ...p, training_evaluator_id: e.target.value }))
+                                }
+                                className={inputCls}
+                              >
+                                <option value="">— Finalizing officer —</option>
+                                {memberOptions.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <p className="text-theme-text-muted text-xs">
+                              A draft training report is created for this member when the shift is finalized.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setShowAssignForm(false);
+                            setMemberSearch('');
+                          }}
+                          className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            void handleAssign();
+                          }}
+                          disabled={pending.assigning || !assignForm.user_id}
+                          className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
+                        >
+                          {pending.assigning ? 'Assigning...' : 'Assign'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Bulk Assignment Panel */}
+                  {showBulkAssign && (
+                    <div
+                      ref={assignFormRef}
+                      className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4"
                     >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleAssign();
-                      }}
-                      disabled={pending.assigning || !assignForm.user_id}
-                      className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
-                    >
-                      {pending.assigning ? 'Assigning...' : 'Assign'}
-                    </button>
-                  </div>
-                </div>
+                      <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
+                        <Users className="h-4 w-4" aria-hidden="true" /> Fill Open Positions
+                      </h4>
+                      <p className="text-theme-text-muted text-xs">Select a member for each open position.</p>
+                      <div className="space-y-2">
+                        {openPositions.map((pos) => {
+                          const label = positionLabel(pos);
+                          return (
+                            <div key={pos} className="flex items-center gap-2">
+                              <span className="text-theme-text-secondary w-24 shrink-0 text-xs font-medium capitalize">
+                                {label}
+                              </span>
+                              <select
+                                aria-label={`Member for ${label}`}
+                                value={bulkAssignments[pos] ?? ''}
+                                onChange={(e) => setBulkAssignments((prev) => ({ ...prev, [pos]: e.target.value }))}
+                                className={inputCls + ' py-1.5 text-xs'}
+                              >
+                                <option value="">— skip —</option>
+                                {memberOptions
+                                  .filter((m) => !unavailableIds.has(m.id))
+                                  .map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.label}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setShowBulkAssign(false)}
+                          className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            void handleBulkAssign();
+                          }}
+                          disabled={pending.bulkAssigning || Object.values(bulkAssignments).every((v) => !v)}
+                          className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
+                        >
+                          {pending.bulkAssigning
+                            ? 'Assigning...'
+                            : `Assign ${Object.values(bulkAssignments).filter(Boolean).length} Members`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
-              {/* Bulk Assignment Panel */}
-              {showBulkAssign && (
-                <div
-                  ref={assignFormRef}
-                  className="border-theme-surface-border bg-theme-surface-hover/30 space-y-3 rounded-lg border p-4"
-                >
-                  <h4 className="text-theme-text-primary flex items-center gap-2 text-sm font-medium">
-                    <Users className="h-4 w-4" aria-hidden="true" /> Fill Open Positions
-                  </h4>
-                  <p className="text-theme-text-muted text-xs">Select a member for each open position.</p>
-                  <div className="space-y-2">
-                    {openPositions.map((pos) => {
-                      const label = positionLabel(pos);
-                      return (
-                        <div key={pos} className="flex items-center gap-2">
-                          <span className="text-theme-text-secondary w-24 shrink-0 text-xs font-medium capitalize">
-                            {label}
-                          </span>
-                          <select
-                            aria-label={`Member for ${label}`}
-                            value={bulkAssignments[pos] ?? ''}
-                            onChange={(e) => setBulkAssignments((prev) => ({ ...prev, [pos]: e.target.value }))}
-                            className={inputCls + ' py-1.5 text-xs'}
-                          >
-                            <option value="">— skip —</option>
-                            {memberOptions
-                              .filter((m) => !unavailableIds.has(m.id))
-                              .map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.label}
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setShowBulkAssign(false)}
-                      className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleBulkAssign();
-                      }}
-                      disabled={pending.bulkAssigning || Object.values(bulkAssignments).every((v) => !v)}
-                      className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50"
-                    >
-                      {pending.bulkAssigning
-                        ? 'Assigning...'
-                        : `Assign ${Object.values(bulkAssignments).filter(Boolean).length} Members`}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
 
-          {/* Leadership's escape hatch once the department's cutoff has passed.
+              {/* Leadership's escape hatch once the department's cutoff has passed.
               Offered only to somebody who can seat crew, and only when there
               is something to reopen — a scheduling admin is never bound by the
               window, so they have nothing to open. That exemption has to be
@@ -2321,503 +2461,510 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
               shift under way; on one that ran three weeks ago it offered to
               admit a member to a crew that has long since gone home, and the
               server used to let it. */}
-          {canAssign &&
-            !canManage &&
-            !isCancelled &&
-            !shift.is_finalized &&
-            !isRosterLocked &&
-            (lateSignupOpen || viewerSignupClosed || memberSignupClosed) && (
-              <div className={lateSignupOpen ? 'alert-warning' : 'alert-info'}>
-                {lateSignupOpen ? (
-                  <>
-                    <p className="text-theme-text-primary text-sm font-bold">
-                      Late signup is open until{' '}
-                      {formatTime(lateSignupUntil === null ? undefined : new Date(lateSignupUntil).toISOString(), tz)}
-                    </p>
-                    <p className="text-theme-text-secondary mt-0.5 text-xs">
-                      Members can claim a seat on this shift until then, and so can you.
-                    </p>
-                    <button
-                      type="button"
-                      disabled={pending.lateSignup}
-                      onClick={() => {
-                        void handleCloseLateSignup();
-                      }}
-                      className="btn-secondary btn-sm mt-2.5 rounded-lg px-3 font-semibold"
-                    >
-                      Close it now
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-theme-text-primary text-sm font-bold">Signup is closed for this shift</p>
-                    <p className="text-theme-text-secondary mt-0.5 text-xs">
-                      {viewerSignupClosed ?? memberSignupClosed} Reopen it if you are a body short and somebody can
-                      still get here.
-                    </p>
-                    <div className="mt-2.5 flex flex-wrap gap-2">
-                      {LATE_SIGNUP_MINUTES.map((minutes) => (
+              {canAssign &&
+                !canManage &&
+                !isCancelled &&
+                !shift.is_finalized &&
+                !isRosterLocked &&
+                (lateSignupOpen || viewerSignupClosed || memberSignupClosed) && (
+                  <div className={lateSignupOpen ? 'alert-warning' : 'alert-info'}>
+                    {lateSignupOpen ? (
+                      <>
+                        <p className="text-theme-text-primary text-sm font-bold">
+                          Late signup is open until{' '}
+                          {formatTime(
+                            lateSignupUntil === null ? undefined : new Date(lateSignupUntil).toISOString(),
+                            tz
+                          )}
+                        </p>
+                        <p className="text-theme-text-secondary mt-0.5 text-xs">
+                          Members can claim a seat on this shift until then, and so can you.
+                        </p>
                         <button
-                          key={minutes}
                           type="button"
                           disabled={pending.lateSignup}
                           onClick={() => {
-                            void handleOpenLateSignup(minutes);
+                            void handleCloseLateSignup();
                           }}
-                          className="btn-secondary btn-sm rounded-lg px-3 font-semibold"
+                          className="btn-secondary btn-sm mt-2.5 rounded-lg px-3 font-semibold"
                         >
-                          Reopen for {minutes} min
+                          Close it now
                         </button>
-                      ))}
-                    </div>
-                  </>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-theme-text-primary text-sm font-bold">Signup is closed for this shift</p>
+                        <p className="text-theme-text-secondary mt-0.5 text-xs">
+                          {viewerSignupClosed ?? memberSignupClosed} Reopen it if you are a body short and somebody can
+                          still get here.
+                        </p>
+                        <div className="mt-2.5 flex flex-wrap gap-2">
+                          {LATE_SIGNUP_MINUTES.map((minutes) => (
+                            <button
+                              key={minutes}
+                              type="button"
+                              disabled={pending.lateSignup}
+                              onClick={() => {
+                                void handleOpenLateSignup(minutes);
+                              }}
+                              className="btn-secondary btn-sm rounded-lg px-3 font-semibold"
+                            >
+                              Reopen for {minutes} min
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
 
-          {/* Signup closed and nothing this member can do about it. Named
+              {/* Signup closed and nothing this member can do about it. Named
               rather than left as a missing block — a panel that silently drops
               its only action reads as a broken page. */}
-          {!canAssign && !hasApparatusPositions && !isPast && !isUserAssigned && memberSignupClosed && (
-            <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
-              {memberSignupClosed} Ask a duty officer to add you.
-            </p>
-          )}
-
-          {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
-          {!hasApparatusPositions && !isPast && !isUserAssigned && !eligibilityLoading && !memberSignupClosed && (
-            <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
-              <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
-                <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this shift
-              </h3>
-              {signupOptions.length === 0 ? (
-                <p className="text-theme-text-muted text-xs">
-                  No position on this shift matches your rank, the positions you hold, or your completed training. A
-                  scheduling admin can review your rank and positions, or the positions on this shift.
+              {!canAssign && !hasApparatusPositions && !isPast && !isUserAssigned && memberSignupClosed && (
+                <p className="text-theme-text-muted border-theme-surface-border rounded-lg border border-dashed px-3 py-3 text-center text-[13px]">
+                  {memberSignupClosed} Ask a duty officer to add you.
                 </p>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={signupPosition}
-                    onChange={(e) => setSignupPosition(e.target.value)}
-                    className={'flex-1 ' + inputCls}
-                  >
-                    {signupOptions.map(([val, label]) => (
-                      <option key={val} value={val}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => {
-                      void handleSignup();
-                    }}
-                    disabled={pending.signingUp}
-                    className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-                  >
-                    {pending.signingUp ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <UserPlus className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    Sign myself up
-                  </button>
-                </div>
               )}
-            </div>
-          )}
 
-          {/* Sign Up confirmation for already-assigned members */}
-          {isUserAssigned && (
-            <div className="space-y-2 rounded-lg border border-green-500/20 bg-green-500/5 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                  <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
-                </div>
-                {/* `isPast` alone is day-granular, so on a shift that ended at
-                    seven this stayed offered until midnight — beside the very
-                    line reporting the hours it would have deleted. */}
-                {!isPast && !isRosterLocked && !shift.is_finalized && (
-                  <button
-                    onClick={() => {
-                      void handleWithdraw();
-                    }}
-                    disabled={pending.withdrawing}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
-                    title="Withdraw from this shift"
-                    aria-label="Withdraw from this shift"
-                  >
-                    {pending.withdrawing ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <UserMinus className="h-3.5 w-3.5" />
-                    )}
-                    Withdraw
-                  </button>
-                )}
-              </div>
-
-              {/* Check-in / Check-out buttons */}
-              {!shift.is_finalized && (
-                <div className="flex items-center gap-2 pt-1">
-                  {!myAttendance?.checked_in_at ? (
-                    <button
-                      onClick={() => {
-                        void (async () => {
-                          setCheckingIn(true);
-                          try {
-                            const result = await schedulingService.checkIn(shift.id);
-                            setMyAttendance(result);
-                            toast.success('Checked in');
-                          } catch {
-                            toast.error('Failed to check in');
-                          } finally {
-                            setCheckingIn(false);
-                          }
-                        })();
-                      }}
-                      disabled={checkingIn}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {checkingIn ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <LogIn className="h-3.5 w-3.5" />
-                      )}
-                      Check In
-                    </button>
-                  ) : !myAttendance?.checked_out_at ? (
-                    <>
-                      <span className="text-xs text-green-700 dark:text-green-400">
-                        Checked in at {formatTime(myAttendance.checked_in_at, tz)}
-                      </span>
+              {/* Sign Up (for members not yet assigned — non-apparatus mode) */}
+              {!hasApparatusPositions && !isPast && !isUserAssigned && !eligibilityLoading && !memberSignupClosed && (
+                <div className="rounded-lg border border-dashed border-violet-500/30 bg-violet-500/5 p-4">
+                  <h3 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
+                    <UserPlus className="h-4 w-4 text-violet-500" aria-hidden="true" /> Sign yourself up for this shift
+                  </h3>
+                  {signupOptions.length === 0 ? (
+                    <p className="text-theme-text-muted text-xs">
+                      No position on this shift matches your rank, the positions you hold, or your completed training. A
+                      scheduling admin can review your rank and positions, or the positions on this shift.
+                    </p>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={signupPosition}
+                        onChange={(e) => setSignupPosition(e.target.value)}
+                        className={'flex-1 ' + inputCls}
+                      >
+                        {signupOptions.map(([val, label]) => (
+                          <option key={val} value={val}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         onClick={() => {
-                          void (async () => {
-                            setCheckingOut(true);
-                            try {
-                              const result = await schedulingService.checkOut(shift.id);
-                              setMyAttendance(result);
-                              toast.success(`Checked out (${formatHours((result.duration_minutes ?? 0) / 60)} hrs)`);
-                            } catch {
-                              toast.error('Failed to check out');
-                            } finally {
-                              setCheckingOut(false);
-                            }
-                          })();
+                          void handleSignup();
                         }}
-                        disabled={checkingOut}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+                        disabled={pending.signingUp}
+                        className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
                       >
-                        {checkingOut ? (
+                        {pending.signingUp ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <UserPlus className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        Sign myself up
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sign Up confirmation for already-assigned members */}
+              {isUserAssigned && (
+                <div className="space-y-2 rounded-lg border border-green-500/20 bg-green-500/5 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
+                    </div>
+                    {/* `isPast` alone is day-granular, so on a shift that ended at
+                    seven this stayed offered until midnight — beside the very
+                    line reporting the hours it would have deleted. */}
+                    {!isPast && !isRosterLocked && !shift.is_finalized && (
+                      <button
+                        onClick={() => {
+                          void handleWithdraw();
+                        }}
+                        disabled={pending.withdrawing}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+                        title="Withdraw from this shift"
+                        aria-label="Withdraw from this shift"
+                      >
+                        {pending.withdrawing ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <LogOut className="h-3.5 w-3.5" />
+                          <UserMinus className="h-3.5 w-3.5" />
                         )}
-                        Check Out
+                        Withdraw
                       </button>
-                    </>
-                  ) : (
-                    <span className="text-theme-text-muted text-xs">
-                      {formatHours((myAttendance.duration_minutes ?? 0) / 60)} hrs recorded
-                    </span>
+                    )}
+                  </div>
+
+                  {/* Check-in / Check-out buttons */}
+                  {!shift.is_finalized && (
+                    <div className="flex items-center gap-2 pt-1">
+                      {!myAttendance?.checked_in_at ? (
+                        <button
+                          onClick={() => {
+                            void (async () => {
+                              setCheckingIn(true);
+                              try {
+                                const result = await schedulingService.checkIn(shift.id);
+                                setMyAttendance(result);
+                                toast.success('Checked in');
+                              } catch {
+                                toast.error('Failed to check in');
+                              } finally {
+                                setCheckingIn(false);
+                              }
+                            })();
+                          }}
+                          disabled={checkingIn}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {checkingIn ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <LogIn className="h-3.5 w-3.5" />
+                          )}
+                          Check In
+                        </button>
+                      ) : !myAttendance?.checked_out_at ? (
+                        <>
+                          <span className="text-xs text-green-700 dark:text-green-400">
+                            Checked in at {formatTime(myAttendance.checked_in_at, tz)}
+                          </span>
+                          <button
+                            onClick={() => {
+                              void (async () => {
+                                setCheckingOut(true);
+                                try {
+                                  const result = await schedulingService.checkOut(shift.id);
+                                  setMyAttendance(result);
+                                  toast.success(
+                                    `Checked out (${formatHours((result.duration_minutes ?? 0) / 60)} hrs)`
+                                  );
+                                } catch {
+                                  toast.error('Failed to check out');
+                                } finally {
+                                  setCheckingOut(false);
+                                }
+                              })();
+                            }}
+                            disabled={checkingOut}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
+                          >
+                            {checkingOut ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <LogOut className="h-3.5 w-3.5" />
+                            )}
+                            Check Out
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-theme-text-muted text-xs">
+                          {formatHours((myAttendance.duration_minutes ?? 0) / 60)} hrs recorded
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Platoon roster: who's on, on leave, or available to fill in */}
+              {platoonsEnabled && shift.platoon && platoonRoster.length > 0 && (
+                <div>
+                  <h3 className="text-theme-text-primary mb-2 text-sm font-semibold">Platoon {shift.platoon} Roster</h3>
+                  <div className="space-y-1.5">
+                    {platoonRoster.map((entry) => {
+                      const badge =
+                        entry.status === 'assigned'
+                          ? {
+                              label: 'On shift',
+                              cls: 'bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20',
+                            }
+                          : entry.status === 'on_leave'
+                            ? {
+                                label: 'On leave',
+                                cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+                              }
+                            : {
+                                label: 'Available',
+                                cls: 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border',
+                              };
+                      const canFillIn = entry.status === 'available' && canAssignNow && !shift.is_finalized;
+                      return (
+                        <div
+                          key={entry.user_id}
+                          className="border-theme-surface-border flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5"
+                        >
+                          <span className="text-theme-text-primary truncate text-sm">{entry.user_name}</span>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>
+                              {badge.label}
+                            </span>
+                            {canFillIn && (
+                              <button
+                                onClick={() => {
+                                  void handleAssignFromRoster(entry.user_id);
+                                }}
+                                disabled={pending.assigningRoster}
+                                className="rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                              >
+                                Assign
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-theme-text-muted mt-1.5 text-[11px]">
+                    Members on leave free up a spot — assign an available member or hold someone over to cover.
+                  </p>
+                </div>
+              )}
+
+              {/* Calls logged during this shift */}
+              <div className="pt-1">
+                <ShiftCallsSection
+                  shiftId={shift.id}
+                  canManage={canManageShift && !shift.is_finalized}
+                  tz={tz}
+                  onChange={() => {
+                    void refreshAssignments();
+                    onRefresh?.();
+                  }}
+                />
+              </div>
+
+              {/* QR Code for apparatus check-in (officers) */}
+              {canAssign && shift.apparatus_id && (
+                <div>
+                  <button
+                    onClick={() => setShowQR(!showQR)}
+                    className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 text-xs transition-colors"
+                  >
+                    <QrCode className="h-3.5 w-3.5" />
+                    {showQR ? 'Hide' : 'Show'} Check-In QR Code
+                  </button>
+                  {showQR && (
+                    <div className="border-theme-surface-border mt-2 inline-block rounded-lg border bg-white p-4">
+                      <QRCodeSVG
+                        value={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
+                        size={200}
+                        level="M"
+                        includeMargin
+                      />
+                      <p className="mt-2 text-center text-xs text-gray-500">
+                        {shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus'} &mdash; permanent code
+                      </p>
+                      <button
+                        onClick={() => {
+                          window.open(
+                            `/scheduling/checkin/print?apparatus=${shift.apparatus_id}&name=${encodeURIComponent(shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus')}&autoprint=1`,
+                            '_blank'
+                          );
+                        }}
+                        className="mt-2 w-full text-xs text-violet-600 hover:underline dark:text-violet-400"
+                      >
+                        Print QR Card
+                      </button>
+                    </div>
+                  )}
+                  {showQR && (
+                    <NfcTagWriter
+                      url={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
+                      targetLabel={shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
+                      actionNoun="shift check-in"
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Declined / Removed Members (admin visibility) */}
+              {canAssign && inactiveAssignments.length > 0 && (
+                <div className="opacity-60">
+                  <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
+                    Declined / Removed ({inactiveAssignments.length})
+                  </h3>
+                  <div className="space-y-1.5">
+                    {inactiveAssignments.map((a) => (
+                      <div
+                        key={a.id}
+                        className="border-theme-surface-border bg-theme-surface-hover/20 flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-sm"
+                      >
+                        <span className="text-theme-text-muted line-through">{a.user_name || 'Unknown'}</span>
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ${ASSIGNMENT_STATUS_COLORS[a.status || 'declined'] || ASSIGNMENT_STATUS_COLORS.declined}`}
+                        >
+                          {a.status || 'declined'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Actions — checklists and shift report */}
+              {(() => {
+                const shiftEnded = shift.end_time && new Date(shift.end_time).getTime() <= Date.now();
+                const isOfficer = user?.id === shift.shift_officer_id;
+                const showReportBtn = shiftEnded && (isOfficer || canManage);
+                const showChecklistLink = equipmentCheckSummaries.some((s) => !isShiftCheckCompleted(s));
+
+                if (!showReportBtn && !showChecklistLink) return null;
+
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    {showChecklistLink && (
+                      <button
+                        onClick={() => {
+                          onClose();
+                          void navigate(`/inventory/checklists/my?shift=${shift.id}`);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-400"
+                      >
+                        <ClipboardCheck className="h-3.5 w-3.5" />
+                        Complete Checklists
+                      </button>
+                    )}
+                    {showReportBtn && (
+                      <button
+                        onClick={() => {
+                          onClose();
+                          void navigate(`/scheduling?tab=shift-reports&shift=${shift.id}`);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-500/20 dark:text-blue-400"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        File Shift Report
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Equipment Checks */}
+              {equipmentCheckSummaries.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setShowEquipmentChecks(!showEquipmentChecks)}
+                    className="flex w-full items-center justify-between py-2 text-left"
+                  >
+                    <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
+                      <ClipboardCheck className="h-4 w-4" /> Equipment Checks
+                      {/* Inline status summary — always visible */}
+                      {(() => {
+                        const passed = equipmentCheckSummaries.filter(
+                          (s) => isShiftCheckCompleted(s) && s.overallStatus === 'pass'
+                        ).length;
+                        const failed = equipmentCheckSummaries.filter(
+                          (s) => isShiftCheckCompleted(s) && s.overallStatus !== 'pass'
+                        ).length;
+                        const inProgress = equipmentCheckSummaries.filter(
+                          (s) => !isShiftCheckCompleted(s) && s.completedItems > 0
+                        ).length;
+                        const notStarted = equipmentCheckSummaries.filter(
+                          (s) => !isShiftCheckCompleted(s) && s.completedItems === 0
+                        ).length;
+                        return (
+                          <span className="ml-1 flex items-center gap-1.5">
+                            {passed > 0 && (
+                              <span className="inline-flex items-center gap-0.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                {passed} pass
+                              </span>
+                            )}
+                            {failed > 0 && (
+                              <span className="inline-flex items-center gap-0.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                                {failed} fail
+                              </span>
+                            )}
+                            {inProgress > 0 && (
+                              <span className="inline-flex items-center gap-0.5 rounded-full bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                {inProgress} in progress
+                              </span>
+                            )}
+                            {notStarted > 0 && (
+                              <span className="bg-theme-surface-secondary text-theme-text-muted inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                                {notStarted} pending
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
+                    </h3>
+                    {showEquipmentChecks ? (
+                      <ChevronUp className="text-theme-text-muted h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="text-theme-text-muted h-4 w-4" />
+                    )}
+                  </button>
+                  {showEquipmentChecks && (
+                    <div className="mt-2 space-y-2">
+                      {(['start_of_shift', 'end_of_shift'] as const).map((timing) => {
+                        const checksForTiming = equipmentCheckSummaries.filter((s) => s.checkTiming === timing);
+                        if (checksForTiming.length === 0) return null;
+                        return (
+                          <div key={timing}>
+                            <p className="text-theme-text-muted mb-1 text-xs font-medium tracking-wide uppercase">
+                              {timing === 'start_of_shift' ? 'Start of Shift' : 'End of Shift'}
+                            </p>
+                            {checksForTiming.map((summary) => (
+                              <div
+                                key={summary.templateId}
+                                className="bg-theme-surface-hover/30 border-theme-surface-border mb-2 rounded-lg border p-3"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <p className="text-theme-text-primary text-sm font-medium">{summary.templateName}</p>
+                                  {isShiftCheckCompleted(summary) ? (
+                                    summary.overallStatus === 'pass' ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                        <Check className="h-3 w-3" /> Pass
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                                        <XCircle className="h-3 w-3" /> Fail ({summary.failedItems})
+                                      </span>
+                                    )
+                                  ) : summary.completedItems > 0 ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                      In Progress {summary.completedItems}/{summary.totalItems}
+                                    </span>
+                                  ) : (
+                                    <span className="bg-theme-surface-secondary text-theme-text-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
+                                      Not Started
+                                    </span>
+                                  )}
+                                </div>
+                                {summary.checkedByName && (
+                                  <p className="text-theme-text-muted mt-1 text-xs">
+                                    Checked by {summary.checkedByName}
+                                    {summary.checkedAt ? ` at ${formatTime(summary.checkedAt, tz)}` : ''}
+                                  </p>
+                                )}
+                                {!summary.isCompleted && (
+                                  <p className="mt-1.5 text-xs font-medium text-violet-600 dark:text-violet-400">
+                                    {summary.completedItems > 0
+                                      ? `Continue check \u2192 ${summary.totalItems - summary.completedItems} items remaining`
+                                      : 'Start check \u2192 Go to Checklists tab'}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               )}
             </div>
-          )}
-
-          {/* Platoon roster: who's on, on leave, or available to fill in */}
-          {platoonsEnabled && shift.platoon && platoonRoster.length > 0 && (
-            <div>
-              <h3 className="text-theme-text-primary mb-2 text-sm font-semibold">Platoon {shift.platoon} Roster</h3>
-              <div className="space-y-1.5">
-                {platoonRoster.map((entry) => {
-                  const badge =
-                    entry.status === 'assigned'
-                      ? {
-                          label: 'On shift',
-                          cls: 'bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20',
-                        }
-                      : entry.status === 'on_leave'
-                        ? {
-                            label: 'On leave',
-                            cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
-                          }
-                        : {
-                            label: 'Available',
-                            cls: 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border',
-                          };
-                  const canFillIn = entry.status === 'available' && canAssignNow && !shift.is_finalized;
-                  return (
-                    <div
-                      key={entry.user_id}
-                      className="border-theme-surface-border flex items-center justify-between gap-2 rounded-lg border px-3 py-1.5"
-                    >
-                      <span className="text-theme-text-primary truncate text-sm">{entry.user_name}</span>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>
-                          {badge.label}
-                        </span>
-                        {canFillIn && (
-                          <button
-                            onClick={() => {
-                              void handleAssignFromRoster(entry.user_id);
-                            }}
-                            disabled={pending.assigningRoster}
-                            className="rounded-md bg-violet-600 px-2 py-0.5 text-[11px] font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
-                          >
-                            Assign
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-theme-text-muted mt-1.5 text-[11px]">
-                Members on leave free up a spot — assign an available member or hold someone over to cover.
-              </p>
-            </div>
-          )}
-
-          {/* Calls logged during this shift */}
-          <div className="pt-1">
-            <ShiftCallsSection
-              shiftId={shift.id}
-              canManage={canManageShift && !shift.is_finalized}
-              tz={tz}
-              onChange={() => {
-                void refreshAssignments();
-                onRefresh?.();
-              }}
-            />
-          </div>
-
-          {/* QR Code for apparatus check-in (officers) */}
-          {canAssign && shift.apparatus_id && (
-            <div>
-              <button
-                onClick={() => setShowQR(!showQR)}
-                className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 text-xs transition-colors"
-              >
-                <QrCode className="h-3.5 w-3.5" />
-                {showQR ? 'Hide' : 'Show'} Check-In QR Code
-              </button>
-              {showQR && (
-                <div className="border-theme-surface-border mt-2 inline-block rounded-lg border bg-white p-4">
-                  <QRCodeSVG
-                    value={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
-                    size={200}
-                    level="M"
-                    includeMargin
-                  />
-                  <p className="mt-2 text-center text-xs text-gray-500">
-                    {shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus'} &mdash; permanent code
-                  </p>
-                  <button
-                    onClick={() => {
-                      window.open(
-                        `/scheduling/checkin/print?apparatus=${shift.apparatus_id}&name=${encodeURIComponent(shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus')}&autoprint=1`,
-                        '_blank'
-                      );
-                    }}
-                    className="mt-2 w-full text-xs text-violet-600 hover:underline dark:text-violet-400"
-                  >
-                    Print QR Card
-                  </button>
-                </div>
-              )}
-              {showQR && (
-                <NfcTagWriter
-                  url={buildShiftCheckInUrl({ apparatusId: shift.apparatus_id })}
-                  targetLabel={shift.apparatus_name || shift.apparatus_unit_number || 'this apparatus'}
-                  actionNoun="shift check-in"
-                />
-              )}
-            </div>
-          )}
-
-          {/* Declined / Removed Members (admin visibility) */}
-          {canAssign && inactiveAssignments.length > 0 && (
-            <div className="opacity-60">
-              <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
-                Declined / Removed ({inactiveAssignments.length})
-              </h3>
-              <div className="space-y-1.5">
-                {inactiveAssignments.map((a) => (
-                  <div
-                    key={a.id}
-                    className="border-theme-surface-border bg-theme-surface-hover/20 flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-sm"
-                  >
-                    <span className="text-theme-text-muted line-through">{a.user_name || 'Unknown'}</span>
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ${ASSIGNMENT_STATUS_COLORS[a.status || 'declined'] || ASSIGNMENT_STATUS_COLORS.declined}`}
-                    >
-                      {a.status || 'declined'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Quick Actions — checklists and shift report */}
-          {(() => {
-            const shiftEnded = shift.end_time && new Date(shift.end_time).getTime() <= Date.now();
-            const isOfficer = user?.id === shift.shift_officer_id;
-            const showReportBtn = shiftEnded && (isOfficer || canManage);
-            const showChecklistLink = equipmentCheckSummaries.some((s) => !isShiftCheckCompleted(s));
-
-            if (!showReportBtn && !showChecklistLink) return null;
-
-            return (
-              <div className="flex flex-wrap gap-2">
-                {showChecklistLink && (
-                  <button
-                    onClick={() => {
-                      onClose();
-                      void navigate(`/inventory/checklists/my?shift=${shift.id}`);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-400"
-                  >
-                    <ClipboardCheck className="h-3.5 w-3.5" />
-                    Complete Checklists
-                  </button>
-                )}
-                {showReportBtn && (
-                  <button
-                    onClick={() => {
-                      onClose();
-                      void navigate(`/scheduling?tab=shift-reports&shift=${shift.id}`);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-500/20 dark:text-blue-400"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    File Shift Report
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Equipment Checks */}
-          {equipmentCheckSummaries.length > 0 && (
-            <div>
-              <button
-                onClick={() => setShowEquipmentChecks(!showEquipmentChecks)}
-                className="flex w-full items-center justify-between py-2 text-left"
-              >
-                <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
-                  <ClipboardCheck className="h-4 w-4" /> Equipment Checks
-                  {/* Inline status summary — always visible */}
-                  {(() => {
-                    const passed = equipmentCheckSummaries.filter(
-                      (s) => isShiftCheckCompleted(s) && s.overallStatus === 'pass'
-                    ).length;
-                    const failed = equipmentCheckSummaries.filter(
-                      (s) => isShiftCheckCompleted(s) && s.overallStatus !== 'pass'
-                    ).length;
-                    const inProgress = equipmentCheckSummaries.filter(
-                      (s) => !isShiftCheckCompleted(s) && s.completedItems > 0
-                    ).length;
-                    const notStarted = equipmentCheckSummaries.filter(
-                      (s) => !isShiftCheckCompleted(s) && s.completedItems === 0
-                    ).length;
-                    return (
-                      <span className="ml-1 flex items-center gap-1.5">
-                        {passed > 0 && (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                            {passed} pass
-                          </span>
-                        )}
-                        {failed > 0 && (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                            {failed} fail
-                          </span>
-                        )}
-                        {inProgress > 0 && (
-                          <span className="inline-flex items-center gap-0.5 rounded-full bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                            {inProgress} in progress
-                          </span>
-                        )}
-                        {notStarted > 0 && (
-                          <span className="bg-theme-surface-secondary text-theme-text-muted inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-                            {notStarted} pending
-                          </span>
-                        )}
-                      </span>
-                    );
-                  })()}
-                </h3>
-                {showEquipmentChecks ? (
-                  <ChevronUp className="text-theme-text-muted h-4 w-4" />
-                ) : (
-                  <ChevronDown className="text-theme-text-muted h-4 w-4" />
-                )}
-              </button>
-              {showEquipmentChecks && (
-                <div className="mt-2 space-y-2">
-                  {(['start_of_shift', 'end_of_shift'] as const).map((timing) => {
-                    const checksForTiming = equipmentCheckSummaries.filter((s) => s.checkTiming === timing);
-                    if (checksForTiming.length === 0) return null;
-                    return (
-                      <div key={timing}>
-                        <p className="text-theme-text-muted mb-1 text-xs font-medium tracking-wide uppercase">
-                          {timing === 'start_of_shift' ? 'Start of Shift' : 'End of Shift'}
-                        </p>
-                        {checksForTiming.map((summary) => (
-                          <div
-                            key={summary.templateId}
-                            className="bg-theme-surface-hover/30 border-theme-surface-border mb-2 rounded-lg border p-3"
-                          >
-                            <div className="flex items-center justify-between">
-                              <p className="text-theme-text-primary text-sm font-medium">{summary.templateName}</p>
-                              {isShiftCheckCompleted(summary) ? (
-                                summary.overallStatus === 'pass' ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                                    <Check className="h-3 w-3" /> Pass
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                                    <XCircle className="h-3 w-3" /> Fail ({summary.failedItems})
-                                  </span>
-                                )
-                              ) : summary.completedItems > 0 ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                                  In Progress {summary.completedItems}/{summary.totalItems}
-                                </span>
-                              ) : (
-                                <span className="bg-theme-surface-secondary text-theme-text-muted inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
-                                  Not Started
-                                </span>
-                              )}
-                            </div>
-                            {summary.checkedByName && (
-                              <p className="text-theme-text-muted mt-1 text-xs">
-                                Checked by {summary.checkedByName}
-                                {summary.checkedAt ? ` at ${formatTime(summary.checkedAt, tz)}` : ''}
-                              </p>
-                            )}
-                            {!summary.isCompleted && (
-                              <p className="mt-1.5 text-xs font-medium text-violet-600 dark:text-violet-400">
-                                {summary.completedItems > 0
-                                  ? `Continue check \u2192 ${summary.totalItems - summary.completedItems} items remaining`
-                                  : 'Start check \u2192 Go to Checklists tab'}
-                              </p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          </DialogPanel>
         </div>
-      </div>
+      </DialogPortal>
 
       {driverBlock && (
         <DriverBlockedDialog

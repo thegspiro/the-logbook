@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { ShiftDetailPanel } from './ShiftDetailPanel';
@@ -27,6 +28,7 @@ vi.mock('../../modules/scheduling/services/api', () => ({
     getShiftHandoff: vi.fn().mockResolvedValue(null),
     getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'], is_excluded: false }),
     getUnavailableMembers: vi.fn().mockResolvedValue([]),
+    signupForShift: vi.fn().mockResolvedValue({}),
     openLateSignup: vi.fn().mockResolvedValue({}),
     closeLateSignup: vi.fn().mockResolvedValue({}),
   },
@@ -89,9 +91,24 @@ vi.mock('../../stores/authStore', () => {
     checkPermission: (permission: string) =>
       grantedPermissions.current === null || grantedPermissions.current.includes(permission),
   });
-  return { useAuthStore: Object.assign(() => state(), { getState: state }) };
+  // Selector-aware, as the real store is: DriverBlockedDialog reads a single
+  // action (`useAuthStore((s) => s.checkPermission)`), and a mock that ignored
+  // the selector handed it the whole state object instead.
+  return {
+    useAuthStore: Object.assign(
+      (selector?: (s: ReturnType<typeof state>) => unknown) => (selector ? selector(state()) : state()),
+      { getState: state }
+    ),
+  };
 });
 
+vi.mock('../../modules/apparatus/services/api', () => ({
+  driverExceptionService: {
+    approvers: vi.fn().mockResolvedValue([]),
+    request: vi.fn().mockResolvedValue({}),
+  },
+}));
+vi.mock('../../hooks/useRanks', () => ({ useRanks: () => ({ ranks: [], loading: false }) }));
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../hooks/useOverlaySurface', () => ({ useOverlaySurface: vi.fn() }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -377,5 +394,224 @@ describe('ShiftDetailPanel once the roster locks', () => {
     renderWithRouter(<ShiftDetailPanel shift={endedHoursAgo(-1) as never} onClose={vi.fn()} />);
 
     expect(await screen.findByRole('button', { name: /Withdraw from this shift/ })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The dialog shell.
+ *
+ * This surface was a right-edge `drawer-panel` until it became a centred
+ * modal, and the conversion moved three behaviours it had hand-rolled (or
+ * lacked) onto the shared dialog stack via `DialogPanel`. Each is asserted
+ * here because none of them is visible in the markup of the sections above.
+ */
+const VIEWPORT_WIDTHS = { phone: 390, laptop: 1440 } as const;
+
+/**
+ * `src/test/setup.ts` answers every media query `false` — phone — before any
+ * test runs, so a case asserting the wide-header arrangement has to say so
+ * (pitfall #28a). Resolved against a real pixel width rather than one
+ * hard-coded query, so it keeps working if the header gains another breakpoint.
+ */
+const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
+  vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+    matches: (() => {
+      const minWidth = /min-width:\s*(\d+)px/.exec(query);
+      return minWidth ? VIEWPORT_WIDTHS[width] >= Number(minWidth[1]) : false;
+    })(),
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+};
+
+describe('ShiftDetailPanel dialog shell', () => {
+  const mockEligibility = vi.mocked(schedulingService.getEligiblePositions);
+  const mockAssignments = vi.mocked(schedulingService.getShiftAssignments);
+  const mockSignup = vi.mocked(schedulingService.signupForShift);
+
+  // Not past: the notes control, and every other live affordance, is withdrawn
+  // once the roster locks.
+  const openShift = {
+    ...shift,
+    shift_date: '2099-01-01',
+    start_time: '2099-01-01T08:00:00Z',
+    end_time: '2099-01-01T16:00:00Z',
+  };
+
+  // Apparatus seats, so the crew board offers a self-signup button to click.
+  const crewSignupShift = {
+    ...openShift,
+    apparatus_positions: [{ position: 'driver', required: true }],
+  };
+
+  beforeEach(() => {
+    // Reset and re-install this block's own defaults rather than inheriting
+    // whatever a neighbouring block left behind (pitfall #28).
+    mockEligibility.mockReset();
+    mockEligibility.mockResolvedValue({ positions: ['firefighter'], is_excluded: false });
+    mockAssignments.mockReset();
+    mockAssignments.mockResolvedValue([]);
+    // Reset too: one case below queues a mockRejectedValueOnce, and an
+    // unconsumed one-shot survives vi.clearAllMocks() to be handed to whichever
+    // test calls signup next (pitfall #28).
+    mockSignup.mockReset();
+    mockSignup.mockResolvedValue({} as never);
+    mockViewport('phone');
+  });
+
+  afterEach(() => {
+    mockAssignments.mockResolvedValue([]);
+  });
+
+  it('exposes itself as a modal dialog named by its heading', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('closes on Escape', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    await screen.findByRole('dialog', { name: 'Shift Details' });
+    await user.keyboard('{Escape}');
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels an open notes editor on Escape instead of closing the dialog', async () => {
+    // The whole reason the close handler is not just `onClose`: a half-typed
+    // note must not take the dialog down with it.
+    mockAssignments.mockResolvedValue([
+      { id: 'a-1', user_id: 'user-2', user_name: 'A Member', position: 'firefighter', status: 'assigned' },
+    ] as never);
+
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit notes' }));
+    expect(screen.getByRole('textbox', { name: 'Assignment notes' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('textbox', { name: 'Assignment notes' })).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close when a selection drag starts inside the panel and ends on the backdrop', async () => {
+    // The browser resolves such a click to the common ancestor — the backdrop
+    // container — so `target === currentTarget` is true and the click alone
+    // cannot tell it from a deliberate backdrop click. Losing the dialog here
+    // would discard a half-typed cancellation reason or close-out hours.
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    fireEvent.mouseDown(screen.getByRole('heading', { name: 'Shift Details' }));
+    fireEvent.click(dialog);
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close when a press starts on the backdrop and is released inside the panel', async () => {
+    // The mirror of the case above, and it reaches the handler identically:
+    // the click still resolves to the container. mouseup is what distinguishes
+    // them, so it has to be able to invalidate a press that already qualified.
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    const heading = screen.getByRole('heading', { name: 'Shift Details' });
+
+    fireEvent.mouseDown(dialog);
+    fireEvent.mouseUp(heading);
+    fireEvent.click(dialog);
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('goes inert while the driver-qualification dialog is on top of it', async () => {
+    // Both dialogs portal to the body, so they are siblings rather than nested:
+    // two aria-modal surfaces at once leave assistive technology to guess which
+    // one is live.
+    mockSignup.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        statusText: 'Conflict',
+        data: { code: DRIVER_NOT_QUALIFIED_CODE, detail: 'Not signed off to drive' },
+      },
+    });
+    mockEligibility.mockResolvedValue({ positions: ['driver'], is_excluded: false });
+
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftDetailPanel shift={crewSignupShift as never} onClose={vi.fn()} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Shift Details' });
+    expect(dialog).not.toHaveAttribute('inert');
+
+    await user.click(await screen.findByRole('button', { name: 'Sign myself up as Driver/Operator' }));
+
+    await waitFor(() => expect(dialog).toHaveAttribute('inert'));
+  });
+
+  /**
+   * DOM order is focus order, and the header reads differently at each width:
+   * below 640px the close sits above the action row, above it the close comes
+   * last. Reordering with CSS would move it visually and leave it where it was
+   * in the tab sequence, which is what these pin.
+   */
+  /** Accessible names of every button, in the DOM order the Tab key follows. */
+  const buttonOrder = () =>
+    screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? (b.textContent ?? '').trim());
+
+  it('focuses the close before the actions on a phone, matching how they read', async () => {
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Shift Details' });
+
+    const order = buttonOrder();
+    expect(order).toContain('Close panel');
+    expect(order.indexOf('Close panel')).toBeLessThan(order.indexOf('Edit'));
+  });
+
+  it('focuses the close last on a laptop, where the header is one row', async () => {
+    mockViewport('laptop');
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Shift Details' });
+
+    const order = buttonOrder();
+    expect(order).toContain('Close panel');
+    expect(order.indexOf('Close panel')).toBeGreaterThan(order.indexOf('Cancel shift'));
+  });
+
+  it('renders exactly one close control at either width', async () => {
+    // A `hidden`-variant duplicate would put two in the accessibility tree, and
+    // jsdom applies no stylesheet to hide either.
+    mockViewport('laptop');
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={vi.fn()} />);
+    await screen.findByRole('dialog', { name: 'Shift Details' });
+
+    expect(screen.getAllByRole('button', { name: 'Close panel' })).toHaveLength(1);
+  });
+
+  it('closes on a backdrop click but not on a click inside the panel', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(<ShiftDetailPanel shift={openShift as never} onClose={onClose} />);
+
+    // Inside the panel first: the container's handler sees a click whose target
+    // is a descendant, not the backdrop itself.
+    await user.click(await screen.findByRole('heading', { name: 'Shift Details' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('dialog', { name: 'Shift Details' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
