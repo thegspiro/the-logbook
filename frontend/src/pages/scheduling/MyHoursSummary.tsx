@@ -264,19 +264,14 @@ export const MyHoursSummary: React.FC = () => {
               <th scope="col" className="w-[26%] px-4 py-3 font-medium">
                 Month
               </th>
-              {/* `th-numeric` is what actually right-aligns these: the global
-                  `thead th` rule in index.css is unlayered and beats a Tailwind
-                  `text-right`. `text-right` stays alongside it as the intent,
-                  and becomes the operative rule if that global rule is ever
-                  moved into a cascade layer. */}
-              <th scope="col" className="th-numeric w-[15%] px-4 py-3 text-right font-medium">
+              <th scope="col" className="w-[15%] px-4 py-3 text-right font-medium">
                 Shifts
               </th>
-              <th scope="col" className="th-numeric w-[22%] px-4 py-3 text-right font-medium">
+              <th scope="col" className="w-[22%] px-4 py-3 text-right font-medium">
                 Hours
               </th>
               {showCalls && (
-                <th scope="col" className="th-numeric w-[15%] px-4 py-3 text-right font-medium">
+                <th scope="col" className="w-[15%] px-4 py-3 text-right font-medium">
                   Calls
                 </th>
               )}
