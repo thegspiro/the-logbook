@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -143,32 +143,43 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
     expect(screen.queryByRole('button', { name: /load more/i })).toBeNull();
   });
 
-  it('marks the log cache read too, so its button does not re-offer the work', async () => {
+  it('re-reads the log after an inbox read-all so its button does not re-offer the work', async () => {
     // The Send Log holds an independently fetched copy of these in-app rows.
     // `/my/read-all` marked them in the database; leaving the cached copies
     // unread left the Send Log offering "Mark all as read" for work already
-    // done.
+    // done. It is re-read rather than patched, so the mock answers the way
+    // the endpoint would: unread first, marked read afterwards.
     const user = userEvent.setup();
+    const row = { ...unread, id: 'log-in-app', subject: 'Station meeting' };
     vi.mocked(notificationsService.getLogs).mockResolvedValue({
-      logs: [{ ...unread, id: 'log-in-app', subject: 'Station meeting' }],
+      logs: [row],
       total: 1,
       skip: 0,
       limit: 50,
     });
     renderPage('/notifications');
 
+    vi.mocked(notificationsService.getLogs).mockResolvedValue({
+      logs: [{ ...row, read: true }],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    });
     await user.click(await screen.findByRole('button', { name: /mark all as read/i }));
     await waitFor(() => expect(notificationsService.markAllMyNotificationsRead).toHaveBeenCalled());
+    // The write is followed by a re-read rather than a local patch.
+    await waitFor(() => expect(vi.mocked(notificationsService.getLogs).mock.calls.length).toBeGreaterThan(1));
 
     await switchTo(user, /send log/i);
     await screen.findByText('Station meeting');
     expect(screen.queryByRole('button', { name: /mark all as read/i })).toBeNull();
   });
 
-  it('does not let a log page in flight across a read-all append stale rows', async () => {
-    // The page was queried before the read-all POST, so it comes back with
-    // the old read state. Appending it verbatim put unread rows back and the
-    // Send Log offered "Mark all as read" for work the database had done.
+  it('does not let a log page in flight across a read-all put unread rows back', async () => {
+    // The page was queried before the read-all POST, so it carries the old
+    // read state. It is superseded rather than merged: the write is followed
+    // by a re-read, which bumps the request generation, so the late page is
+    // discarded instead of resurrecting rows the database has marked.
     const user = userEvent.setup();
     vi.mocked(notificationsService.getLogs).mockResolvedValueOnce({
       logs: [{ ...unread, id: 'log-1', subject: 'Station meeting' }],
@@ -187,20 +198,30 @@ describe('NotificationsPage mark-all-read against the unread filter', () => {
     );
     await user.click(await screen.findByRole('button', { name: /load more/i }));
 
-    // Mark everything read while that page is still in flight.
-    await user.click(screen.getByRole('button', { name: /mark all as read/i }));
-    await waitFor(() => expect(notificationsService.markAllLogsRead).toHaveBeenCalled());
-
-    releasePage({
-      logs: [{ ...unread, id: 'log-2', subject: 'Hose testing', read: false }],
-      total: 2,
-      skip: 1,
+    // The re-read that follows the write answers the way the endpoint would.
+    vi.mocked(notificationsService.getLogs).mockResolvedValue({
+      logs: [{ ...unread, id: 'log-1', subject: 'Station meeting', read: true }],
+      total: 1,
+      skip: 0,
       limit: 50,
     });
-
-    expect(await screen.findByText('Hose testing')).toBeInTheDocument();
-    // The late row arrives already reconciled, so nothing is left to mark.
+    await user.click(screen.getByRole('button', { name: /mark all as read/i }));
+    await waitFor(() => expect(notificationsService.markAllLogsRead).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByRole('button', { name: /mark all as read/i })).toBeNull());
+
+    // The stale page lands late and must change nothing. Flushed inside act,
+    // or the assertion runs on the tick before it could have landed.
+    await act(async () => {
+      releasePage({
+        logs: [{ ...unread, id: 'log-2', subject: 'Hose testing', read: false }],
+        total: 2,
+        skip: 1,
+        limit: 50,
+      });
+    });
+
+    expect(screen.queryByText('Hose testing')).toBeNull();
+    expect(screen.queryByRole('button', { name: /mark all as read/i })).toBeNull();
   });
 
   it('keeps the rows, marked read, when the inbox is showing read ones', async () => {

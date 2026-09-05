@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
@@ -143,11 +143,14 @@ const NotificationsPage: React.FC = () => {
   const [myNotifications, setMyNotifications] = useState<NotificationLogRecord[]>([]);
   const [inboxTotal, setInboxTotal] = useState(0);
   const markingReadIds = useRef(new Set<string>());
-  // A "mark all read" writes to the database; a log page already in flight was
-  // queried before that write and returns the old read state. Bumping a counter
-  // per read-all lets a late page tell that it is stale and normalize itself,
-  // rather than appending rows the database has already marked.
-  const logReadMarks = useRef({ allChannels: 0, inApp: 0 });
+  // Only the newest send-log request may commit its result. A channel change
+  // or a mark-all can leave an earlier fetch in flight, and letting it land
+  // put the previous channel's rows under the new pill, or pre-write read
+  // state back over rows the server had already marked.
+  const logsRequestRef = useRef(0);
+  // The channel a fetch should ask for, resolved when the request is made
+  // rather than when its caller was rendered.
+  const logChannelFilterRef = useRef<'all' | 'email' | 'in_app'>('all');
 
   // UI states
   const [loading, setLoading] = useState(true);
@@ -155,6 +158,12 @@ const NotificationsPage: React.FC = () => {
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [loadingMoreLogs, setLoadingMoreLogs] = useState(false);
   const [logsTotal, setLogsTotal] = useState(0);
+  // Rows the server has handed over, which is not `logs.length`: a
+  // notification arriving mid-paging shifts a loaded row into the next page's
+  // range, and that duplicate is dropped on append. Deriving the next `skip`
+  // from the retained length would re-request the same row forever and leave
+  // Load more permanently on screen.
+  const [logsOffset, setLogsOffset] = useState(0);
   // Kept apart from the page-wide `error`, which renders above every tab: the
   // send log is prefetched on mount for a tab the member may never open, and
   // its failure must not caption a working inbox with "Failed to load your
@@ -243,27 +252,61 @@ const NotificationsPage: React.FC = () => {
   // "No email notifications sent to you" whenever the newest page held none,
   // however many older ones the member had, and left `logsTotal` counting a
   // different set than the list it sat above.
-  useEffect(() => {
-    const fetchLogs = async () => {
-      setLoadingLogs(true);
-      setLogsError(null);
-      try {
-        const logsRes = await notificationsService.getLogs({
-          scope: NotificationLogScope.MINE,
-          ...(logChannelFilter === 'all' ? {} : { channel: logChannelFilter }),
-          limit: LOG_PAGE_SIZE,
-        });
-        setLogs(logsRes.logs);
-        setLogsTotal(logsRes.total);
-      } catch (err: unknown) {
-        setLogsError(getErrorMessage(err, 'Failed to load your send log'));
-      } finally {
-        setLoadingLogs(false);
+  const loadLogPage = useCallback(async ({ append, skip }: { append: boolean; skip: number }) => {
+    // Read from the ref, not a closure. A write handler awaits its POST and
+    // only then reloads; closing over the filter meant a channel changed
+    // during that POST reloaded the *previous* channel — and, since the
+    // reload is newer, that stale answer won.
+    const channel = logChannelFilterRef.current;
+    const requestId = ++logsRequestRef.current;
+    if (append) setLoadingMoreLogs(true);
+    else setLoadingLogs(true);
+    setLogsError(null);
+    try {
+      const data = await notificationsService.getLogs({
+        scope: NotificationLogScope.MINE,
+        ...(channel === 'all' ? {} : { channel }),
+        skip,
+        limit: LOG_PAGE_SIZE,
+      });
+      if (requestId !== logsRequestRef.current) return;
+      const page = data.logs || [];
+      setLogs((prev) => {
+        if (!append) return page;
+        const seen = new Set(prev.map((entry) => entry.id));
+        return [...prev, ...page.filter((entry) => !seen.has(entry.id))];
+      });
+      setLogsOffset((prev) => (append ? prev + page.length : page.length));
+      setLogsTotal(data.total);
+    } catch (err: unknown) {
+      if (requestId !== logsRequestRef.current) return;
+      setLogsError(
+        getErrorMessage(err, append ? 'Failed to load more of your send log' : 'Failed to load your send log')
+      );
+      // A failed fetch for a newly selected channel must not leave the
+      // previous channel's rows sitting under the new pill, nor its length
+      // feeding that channel's pagination.
+      if (!append) {
+        setLogs([]);
+        setLogsOffset(0);
+        setLogsTotal(0);
       }
-    };
+    } finally {
+      // The newest request clears *both* flags, not just the one it set. A
+      // superseded request must not clear anything (its winner is still
+      // running), which left a Load more that lost to a channel change
+      // stuck behind a spinner it could no longer switch off.
+      if (requestId === logsRequestRef.current) {
+        setLoadingLogs(false);
+        setLoadingMoreLogs(false);
+      }
+    }
+  }, []);
 
-    void fetchLogs();
-  }, [logChannelFilter]);
+  useEffect(() => {
+    logChannelFilterRef.current = logChannelFilter;
+    void loadLogPage({ append: false, skip: 0 });
+  }, [logChannelFilter, loadLogPage]);
 
   // Fetch admin data on mount (only if user has permission)
   useEffect(() => {
@@ -386,56 +429,23 @@ const NotificationsPage: React.FC = () => {
       setMyNotifications([]);
       setInboxTotal(0);
     }
-    // The Send Log holds its own independently fetched copy of these rows.
-    // `/my/read-all` is in-app only, so email rows keep whatever they had —
-    // but leaving the in-app ones unread here left the Send Log offering
-    // "Mark all as read" for rows the database had already marked.
-    setLogs((prev) => prev.map((l) => (l.channel === 'in_app' ? { ...l, read: true } : l)));
     clearGlobalUnread();
   };
 
   const handleLoadMoreLogs = async () => {
-    setLoadingMoreLogs(true);
-    setLogsError(null);
-    const marksAtRequest = { ...logReadMarks.current };
-    try {
-      const data = await notificationsService.getLogs({
-        scope: NotificationLogScope.MINE,
-        ...(logChannelFilter === 'all' ? {} : { channel: logChannelFilter }),
-        skip: logs.length,
-        limit: LOG_PAGE_SIZE,
-      });
-      const markedAllSince = logReadMarks.current.allChannels !== marksAtRequest.allChannels;
-      const markedInAppSince = logReadMarks.current.inApp !== marksAtRequest.inApp;
-      const incoming = (data.logs || []).map((entry) => {
-        if (markedAllSince) return { ...entry, read: true };
-        if (markedInAppSince && entry.channel === 'in_app') return { ...entry, read: true };
-        return entry;
-      });
-      // The list is newest-first and `skip` is an offset, so a notification
-      // arriving between the two requests shifts every later row down one and
-      // the next page re-serves one the list already holds. Keying on id makes
-      // that a no-op instead of a duplicate row. (A row can still be stepped
-      // over, which is inherent to offset paging and shared with the inbox's
-      // own Load more; only a cursor on the endpoint would close it.)
-      setLogs((prev) => {
-        const seen = new Set(prev.map((entry) => entry.id));
-        return [...prev, ...incoming.filter((entry) => !seen.has(entry.id))];
-      });
-      setLogsTotal(data.total);
-    } catch (err: unknown) {
-      setLogsError(getErrorMessage(err, 'Failed to load more of your send log'));
-    } finally {
-      setLoadingMoreLogs(false);
-    }
+    await loadLogPage({ append: true, skip: logsOffset });
   };
 
   const handleMarkAllRead = async () => {
     try {
       await notificationsService.markAllLogsRead({ scope: NotificationLogScope.MINE });
-      logReadMarks.current.allChannels += 1;
-      setLogs((prev) => prev.map((l) => ({ ...l, read: true })));
       reconcileInboxAllRead();
+      // Re-read rather than patching the cached rows. Inferring which of them
+      // the write covered meant guessing at a snapshot from the client's
+      // request timing, which cannot tell a row the write marked from one
+      // created after it — and would have shown that new notification as
+      // already read.
+      await loadLogPage({ append: false, skip: 0 });
     } catch {
       setError('Failed to mark all as read');
     }
@@ -460,8 +470,8 @@ const NotificationsPage: React.FC = () => {
   const handleMarkAllInboxRead = async () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
-      logReadMarks.current.inApp += 1;
       reconcileInboxAllRead();
+      await loadLogPage({ append: false, skip: 0 });
     } catch {
       setError('Failed to mark all as read');
     }
@@ -1010,7 +1020,7 @@ const NotificationsPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {!loadingLogs && logs.length < logsTotal && (
+            {!loadingLogs && logsOffset < logsTotal && (
               <div className="pt-4 text-center">
                 <button
                   onClick={() => {
@@ -1025,7 +1035,7 @@ const NotificationsPage: React.FC = () => {
                       Loading...
                     </>
                   ) : (
-                    `Load more (${logsTotal - logs.length} remaining)`
+                    `Load more (${logsTotal - logsOffset} remaining)`
                   )}
                 </button>
               </div>
