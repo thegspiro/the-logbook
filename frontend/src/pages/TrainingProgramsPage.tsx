@@ -44,6 +44,11 @@ const TrainingProgramsPage: React.FC = () => {
   const navigate = useNavigate();
   const canManage = useAuthStore((s) => s.checkPermission('training.manage'));
   const [activeTab, setActiveTab] = useState<TabView>('programs');
+  // Requirements and Templates are manager-only views, so their tabs are not
+  // rendered for a member. Deriving the shown tab rather than trusting the
+  // state keeps a member on Programs even if the permission is revoked while
+  // they sit on another tab — there would be no tab strip left to leave it.
+  const visibleTab: TabView = canManage ? activeTab : 'programs';
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
   const [registries, setRegistries] = useState<RegistryInfo[]>([]);
@@ -56,6 +61,7 @@ const TrainingProgramsPage: React.FC = () => {
   const [showRequirementModal, setShowRequirementModal] = useState(false);
   const [editingRequirement, setEditingRequirement] = useState<TrainingRequirementEnhanced | null>(null);
   const importFileRef = React.useRef<HTMLInputElement>(null);
+  const requestIdRef = React.useRef(0);
 
   const handleExportProgram = async (e: React.MouseEvent, programId: string, programName: string) => {
     e.stopPropagation();
@@ -91,29 +97,52 @@ const TrainingProgramsPage: React.FC = () => {
   };
 
   const loadData = useCallback(async () => {
+    // A tab switch — or a permission change, which moves visibleTab — re-fires
+    // this while the previous request is still in flight. Without a generation
+    // check the older response can land last and leave, say, the template list
+    // rendered under the Programs view. Only the newest request may write.
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestIdRef.current !== requestId;
+
     setLoading(true);
     try {
-      if (activeTab === 'programs' || activeTab === 'templates') {
+      if (visibleTab === 'programs' || visibleTab === 'templates') {
         const data = await trainingProgramService.getPrograms({
-          is_template: activeTab === 'templates',
+          is_template: visibleTab === 'templates',
         });
+        if (isStale()) return;
         setPrograms(data);
-        if (activeTab === 'templates') {
+        if (visibleTab === 'templates') {
           // Built-in starter templates for the gallery; failure is non-fatal.
-          try {
-            setSampleTemplates(await trainingProgramService.getSampleTemplates());
-          } catch {
+          // The gallery's only action is creating a program, and the endpoint
+          // behind it requires training.manage, so members never ask for it.
+          if (!canManage) {
             setSampleTemplates([]);
+          } else {
+            try {
+              const templates = await trainingProgramService.getSampleTemplates();
+              if (isStale()) return;
+              setSampleTemplates(templates);
+            } catch {
+              if (isStale()) return;
+              setSampleTemplates([]);
+            }
           }
         }
-      } else if (activeTab === 'requirements') {
+      } else if (visibleTab === 'requirements') {
+        // The registries endpoint requires training.manage, so requesting it as
+        // a member 403s and — inside this Promise.all — takes the requirements
+        // list down with it. Categories only feed the manager-only edit form.
         const [reqs, regs, cats] = await Promise.all([
           trainingProgramService.getRequirementsEnhanced(),
-          trainingProgramService.getRegistries(),
-          // Categories feed the edit form's category picker; a failure there
-          // must not blank the requirements list, so it degrades to empty.
-          trainingService.getCategories(false).catch(() => [] as TrainingCategory[]),
+          canManage ? trainingProgramService.getRegistries() : Promise.resolve<RegistryInfo[]>([]),
+          // A category failure must not blank the requirements list, so it
+          // degrades to empty.
+          canManage
+            ? trainingService.getCategories(false).catch(() => [] as TrainingCategory[])
+            : Promise.resolve<TrainingCategory[]>([]),
         ]);
+        if (isStale()) return;
         setRequirements(reqs);
         setRegistries(regs);
         setCategories(cats);
@@ -121,9 +150,10 @@ const TrainingProgramsPage: React.FC = () => {
     } catch (_error) {
       // Error silently handled - empty state shown
     } finally {
-      setLoading(false);
+      // A superseded request must not clear the spinner the newer one owns.
+      if (!isStale()) setLoading(false);
     }
-  }, [activeTab]);
+  }, [visibleTab, canManage]);
 
   useEffect(() => {
     void loadData();
@@ -176,6 +206,16 @@ const TrainingProgramsPage: React.FC = () => {
       r.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Both empty-state cards exist to offer the create action, so a member with
+  // nothing to see gets a blank panel rather than a prompt to build something
+  // they cannot. A search that matched nothing still reports back to everyone —
+  // that is feedback on the term they typed, not an invitation.
+  const showEmptyState = searchTerm !== '' || canManage;
+
+  // A tabpanel must be owned by a tab. With the strip hidden the panel is just
+  // the page body, so the role goes with the tabs rather than being orphaned.
+  const panelRole = canManage ? 'tabpanel' : undefined;
+
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -198,7 +238,10 @@ const TrainingProgramsPage: React.FC = () => {
             <p className="text-theme-text-muted mt-2">Manage training programs, requirements, and member progress</p>
           </div>
 
-          {activeTab === 'programs' && (
+          {/* Every action in this header creates a program or a requirement,
+              and each one is training.manage-gated on the backend. Members get
+              the read-only view rather than affordances that 403 on use. */}
+          {canManage && visibleTab === 'programs' && (
             <div className="flex flex-wrap items-center gap-2">
               <input
                 ref={importFileRef}
@@ -227,7 +270,7 @@ const TrainingProgramsPage: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'requirements' && (
+          {canManage && visibleTab === 'requirements' && (
             <button
               onClick={() => {
                 setEditingRequirement(null);
@@ -241,55 +284,58 @@ const TrainingProgramsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Tabs */}
-        <div
-          className="bg-theme-surface-secondary hscroll mb-6 flex space-x-1 rounded-lg p-1"
-          role="tablist"
-          aria-label="Training program views"
-        >
-          <button
-            onClick={() => setActiveTab('programs')}
-            role="tab"
-            aria-selected={activeTab === 'programs'}
-            aria-controls="tab-panel-programs"
-            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
-              activeTab === 'programs'
-                ? 'bg-red-800 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
-            }`}
+        {/* Tabs. Requirements and Templates are manager-only views, so a member
+            sees the Programs list on its own with no strip above it. */}
+        {canManage && (
+          <div
+            className="bg-theme-surface-secondary hscroll mb-6 flex space-x-1 rounded-lg p-1"
+            role="tablist"
+            aria-label="Training program views"
           >
-            <Target className="mr-2 inline h-4 w-4" aria-hidden="true" />
-            Programs
-          </button>
-          <button
-            onClick={() => setActiveTab('requirements')}
-            role="tab"
-            aria-selected={activeTab === 'requirements'}
-            aria-controls="tab-panel-requirements"
-            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
-              activeTab === 'requirements'
-                ? 'bg-red-800 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
-            }`}
-          >
-            <ListChecks className="mr-2 inline h-4 w-4" aria-hidden="true" />
-            Requirements
-          </button>
-          <button
-            onClick={() => setActiveTab('templates')}
-            role="tab"
-            aria-selected={activeTab === 'templates'}
-            aria-controls="tab-panel-templates"
-            className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
-              activeTab === 'templates'
-                ? 'bg-red-800 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
-            }`}
-          >
-            <Award className="mr-2 inline h-4 w-4" aria-hidden="true" />
-            Templates
-          </button>
-        </div>
+            <button
+              onClick={() => setActiveTab('programs')}
+              role="tab"
+              aria-selected={visibleTab === 'programs'}
+              aria-controls="tab-panel-programs"
+              className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+                visibleTab === 'programs'
+                  ? 'bg-red-800 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+              }`}
+            >
+              <Target className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              Programs
+            </button>
+            <button
+              onClick={() => setActiveTab('requirements')}
+              role="tab"
+              aria-selected={visibleTab === 'requirements'}
+              aria-controls="tab-panel-requirements"
+              className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+                visibleTab === 'requirements'
+                  ? 'bg-red-800 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+              }`}
+            >
+              <ListChecks className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              Requirements
+            </button>
+            <button
+              onClick={() => setActiveTab('templates')}
+              role="tab"
+              aria-selected={visibleTab === 'templates'}
+              aria-controls="tab-panel-templates"
+              className={`flex-1 rounded-md px-4 py-2 font-medium transition-colors ${
+                visibleTab === 'templates'
+                  ? 'bg-red-800 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+              }`}
+            >
+              <Award className="mr-2 inline h-4 w-4" aria-hidden="true" />
+              Templates
+            </button>
+          </div>
+        )}
 
         {/* Search Bar */}
         <div className="mb-6">
@@ -299,7 +345,7 @@ const TrainingProgramsPage: React.FC = () => {
               aria-hidden="true"
             />
             <label htmlFor="programs-search" className="sr-only">
-              Search {activeTab}
+              Search {visibleTab}
             </label>
             <input
               autoCapitalize="none"
@@ -309,7 +355,7 @@ const TrainingProgramsPage: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={`Search ${activeTab}...`}
+              placeholder={`Search ${visibleTab}...`}
               className="form-input pr-4 pl-10"
             />
           </div>
@@ -322,13 +368,13 @@ const TrainingProgramsPage: React.FC = () => {
               className="inline-block h-8 w-8 animate-spin rounded-full border-b-2 border-red-500"
               aria-hidden="true"
             ></div>
-            <p className="text-theme-text-muted mt-4">Loading {activeTab}...</p>
+            <p className="text-theme-text-muted mt-4">Loading {visibleTab}...</p>
           </div>
         ) : (
           <>
-            {activeTab === 'programs' || activeTab === 'templates' ? (
-              <div id="tab-panel-programs" role="tabpanel">
-                {activeTab === 'templates' && !searchTerm && sampleTemplates.length > 0 && (
+            {visibleTab === 'programs' || visibleTab === 'templates' ? (
+              <div id="tab-panel-programs" role={panelRole}>
+                {canManage && visibleTab === 'templates' && !searchTerm && sampleTemplates.length > 0 && (
                   <section className="mb-8" aria-label="Sample templates">
                     <div className="mb-1 flex items-center space-x-2">
                       <Sparkles className="h-5 w-5 text-red-700 dark:text-red-500" aria-hidden="true" />
@@ -382,209 +428,230 @@ const TrainingProgramsPage: React.FC = () => {
                 )}
 
                 <div className="grid gap-4">
-                  {filteredPrograms.length === 0 ? (
-                    <div className="bg-theme-surface-secondary rounded-lg py-12 text-center">
-                      <GraduationCap className="text-theme-text-secondary mx-auto mb-4 h-16 w-16" aria-hidden="true" />
-                      <p className="text-theme-text-muted">
-                        {searchTerm ? 'No programs found' : `No ${activeTab} yet`}
-                      </p>
-                      {!searchTerm && activeTab === 'programs' && (
-                        <button onClick={() => void navigate('/training/programs/new')} className="btn-primary mt-4">
-                          Create Your First Pipeline
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    filteredPrograms.map((program) => (
-                      <div
-                        key={program.id}
-                        className="bg-theme-surface-secondary hover:bg-theme-surface-hover cursor-pointer rounded-lg p-6 transition-colors"
-                        onClick={() => void navigate(`/training/programs/${program.id}`)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            void navigate(`/training/programs/${program.id}`);
-                          }
-                        }}
-                        tabIndex={0}
-                        role="link"
-                        aria-label={`${program.name}${program.target_position ? ` - ${program.target_position}` : ''} - ${program.structure_type}`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <h3 className="text-theme-text-primary text-xl font-semibold">{program.name}</h3>
-                              {program.target_position && (
-                                <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 dark:text-red-400">
-                                  {program.target_position}
-                                </span>
-                              )}
-                              <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs text-blue-700 dark:text-blue-400">
-                                {enumLabel(program.structure_type)}
-                              </span>
-                            </div>
-                            {program.description && <p className="text-theme-text-muted mb-3">{program.description}</p>}
-                            <div className="text-theme-text-muted flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-                              {program.time_limit_days && (
-                                <div className="flex items-center space-x-1">
-                                  <Calendar className="h-4 w-4" aria-hidden="true" />
-                                  <span>{program.time_limit_days} days</span>
-                                </div>
-                              )}
-                              <div className="flex items-center space-x-1">
-                                <Users className="h-4 w-4" aria-hidden="true" />
-                                <span>{program.enrolled_count} enrolled</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
+                  {filteredPrograms.length === 0
+                    ? showEmptyState && (
+                        <div className="bg-theme-surface-secondary rounded-lg py-12 text-center">
+                          <GraduationCap
+                            className="text-theme-text-secondary mx-auto mb-4 h-16 w-16"
+                            aria-hidden="true"
+                          />
+                          <p className="text-theme-text-muted">
+                            {searchTerm ? 'No programs found' : `No ${visibleTab} yet`}
+                          </p>
+                          {!searchTerm && visibleTab === 'programs' && (
                             <button
-                              onClick={(e) => {
-                                void handleExportProgram(e, program.id, program.name);
-                              }}
-                              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2 transition-colors"
-                              title="Export as JSON"
-                              aria-label={`Export ${program.name}`}
+                              onClick={() => void navigate('/training/programs/new')}
+                              className="btn-primary mt-4"
                             >
-                              <Download className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                            <ChevronRight className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div id="tab-panel-requirements" role="tabpanel">
-                {/* Registry Import Section */}
-                <div className="bg-theme-surface-secondary mb-6 rounded-lg p-6">
-                  <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Import from Registry</h3>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    {(registries.length > 0
-                      ? registries
-                      : [
-                          { key: 'nfpa', name: 'NFPA', description: '', requirement_count: 0 },
-                          { key: 'proboard', name: 'Pro Board', description: '', requirement_count: 0 },
-                          { key: 'emr', name: 'NREMT — EMR', description: '', requirement_count: 0 },
-                          { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 0 },
-                          { key: 'aemt', name: 'NREMT — Advanced EMT (AEMT)', description: '', requirement_count: 0 },
-                          { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 0 },
-                        ]
-                    ).map((registry) => (
-                      <button
-                        key={registry.key}
-                        onClick={() => setRegistryModal({ key: registry.key, name: registry.name })}
-                        className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex flex-col items-center rounded-lg px-4 py-3"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <Download className="h-5 w-5" aria-hidden="true" />
-                          <span>Import {registry.name}</span>
-                        </div>
-                        {registry.last_updated && (
-                          <span className="text-theme-text-muted mt-1 text-xs">Updated {registry.last_updated}</span>
-                        )}
-                        {registry.requirement_count > 0 && (
-                          <span className="text-theme-text-muted text-xs">
-                            {registry.requirement_count} requirements
-                          </span>
-                        )}
-                        {registry.source_url && isSafeExternalUrl(registry.source_url) && (
-                          <a
-                            href={registry.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="mt-1 flex items-center space-x-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
-                          >
-                            <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                            <span>Source</span>
-                          </a>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Requirements List */}
-                <div className="grid gap-4">
-                  {filteredRequirements.length === 0 ? (
-                    <div className="bg-theme-surface-secondary rounded-lg py-12 text-center">
-                      <ListChecks className="text-theme-text-secondary mx-auto mb-4 h-16 w-16" aria-hidden="true" />
-                      <p className="text-theme-text-muted">
-                        {searchTerm ? 'No requirements found' : 'No requirements yet'}
-                      </p>
-                      <p className="text-theme-text-muted mt-2 text-sm">
-                        Import from a registry or create custom requirements
-                      </p>
-                    </div>
-                  ) : (
-                    filteredRequirements.map((req) => (
-                      <div
-                        key={req.id}
-                        className="bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg p-6 transition-colors"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <h3 className="text-theme-text-primary text-lg font-semibold">{req.name}</h3>
-                              <span
-                                className={`rounded px-2 py-1 text-xs ${
-                                  req.source === 'national'
-                                    ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
-                                    : req.source === 'state'
-                                      ? 'bg-green-500/20 text-green-700 dark:text-green-400'
-                                      : 'bg-theme-surface-secondary text-theme-text-muted'
-                                }`}
-                              >
-                                {req.source}
-                              </span>
-                              {req.registry_name && (
-                                <span className="rounded-sm bg-purple-500/20 px-2 py-1 text-xs text-purple-700 dark:text-purple-400">
-                                  {req.registry_name}
-                                </span>
-                              )}
-                              <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-700 dark:text-orange-400">
-                                {req.requirement_type}
-                              </span>
-                            </div>
-                            {req.description && <p className="text-theme-text-muted mb-2 text-sm">{req.description}</p>}
-                            <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                              {req.required_hours && <span>{req.required_hours} hours</span>}
-                              {req.required_shifts && <span>{req.required_shifts} shifts</span>}
-                              {req.required_calls && <span>{req.required_calls} calls</span>}
-                              <span>{req.frequency}</span>
-                            </div>
-                          </div>
-                          {/* Registry-imported requirements are locked upstream
-                              (the backend refuses to update them), so the edit
-                              affordance is replaced by the read-only marker
-                              rather than shown and failing on save. */}
-                          {req.is_editable === false ? (
-                            <div aria-label="Registry requirement (read-only)">
-                              <AlertCircle
-                                className="h-5 w-5 text-yellow-700 dark:text-yellow-500"
-                                aria-hidden="true"
-                              />
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setEditingRequirement(req);
-                                setShowRequirementModal(true);
-                              }}
-                              className="ml-4 rounded-lg bg-blue-600/20 p-2 text-blue-700 transition-colors hover:bg-blue-600/30 dark:text-blue-400"
-                              title="Edit"
-                              aria-label={`Edit ${req.name}`}
-                            >
-                              <Edit className="h-5 w-5" aria-hidden="true" />
+                              Create Your First Pipeline
                             </button>
                           )}
                         </div>
-                      </div>
-                    ))
-                  )}
+                      )
+                    : filteredPrograms.map((program) => (
+                        <div
+                          key={program.id}
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover cursor-pointer rounded-lg p-6 transition-colors"
+                          onClick={() => void navigate(`/training/programs/${program.id}`)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              void navigate(`/training/programs/${program.id}`);
+                            }
+                          }}
+                          tabIndex={0}
+                          role="link"
+                          aria-label={`${program.name}${program.target_position ? ` - ${program.target_position}` : ''} - ${program.structure_type}`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <h3 className="text-theme-text-primary text-xl font-semibold">{program.name}</h3>
+                                {program.target_position && (
+                                  <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 dark:text-red-400">
+                                    {program.target_position}
+                                  </span>
+                                )}
+                                <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs text-blue-700 dark:text-blue-400">
+                                  {enumLabel(program.structure_type)}
+                                </span>
+                              </div>
+                              {program.description && (
+                                <p className="text-theme-text-muted mb-3">{program.description}</p>
+                              )}
+                              <div className="text-theme-text-muted flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+                                {program.time_limit_days && (
+                                  <div className="flex items-center space-x-1">
+                                    <Calendar className="h-4 w-4" aria-hidden="true" />
+                                    <span>{program.time_limit_days} days</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center space-x-1">
+                                  <Users className="h-4 w-4" aria-hidden="true" />
+                                  <span>{program.enrolled_count} enrolled</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              {canManage && (
+                                <button
+                                  onClick={(e) => {
+                                    void handleExportProgram(e, program.id, program.name);
+                                  }}
+                                  className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2 transition-colors"
+                                  title="Export as JSON"
+                                  aria-label={`Export ${program.name}`}
+                                >
+                                  <Download className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                              )}
+                              <ChevronRight className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                </div>
+              </div>
+            ) : (
+              <div id="tab-panel-requirements" role={panelRole}>
+                {/* Registry Import Section. Listing and importing a registry are
+                    both training.manage-gated, so members never see the panel —
+                    and loadData skips the listing call that would 403. */}
+                {canManage && (
+                  <div className="bg-theme-surface-secondary mb-6 rounded-lg p-6">
+                    <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Import from Registry</h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      {(registries.length > 0
+                        ? registries
+                        : [
+                            { key: 'nfpa', name: 'NFPA', description: '', requirement_count: 0 },
+                            { key: 'proboard', name: 'Pro Board', description: '', requirement_count: 0 },
+                            { key: 'emr', name: 'NREMT — EMR', description: '', requirement_count: 0 },
+                            { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 0 },
+                            { key: 'aemt', name: 'NREMT — Advanced EMT (AEMT)', description: '', requirement_count: 0 },
+                            { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 0 },
+                          ]
+                      ).map((registry) => (
+                        <button
+                          key={registry.key}
+                          onClick={() => setRegistryModal({ key: registry.key, name: registry.name })}
+                          className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex flex-col items-center rounded-lg px-4 py-3"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <Download className="h-5 w-5" aria-hidden="true" />
+                            <span>Import {registry.name}</span>
+                          </div>
+                          {registry.last_updated && (
+                            <span className="text-theme-text-muted mt-1 text-xs">Updated {registry.last_updated}</span>
+                          )}
+                          {registry.requirement_count > 0 && (
+                            <span className="text-theme-text-muted text-xs">
+                              {registry.requirement_count} requirements
+                            </span>
+                          )}
+                          {registry.source_url && isSafeExternalUrl(registry.source_url) && (
+                            <a
+                              href={registry.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-1 flex items-center space-x-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
+                            >
+                              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                              <span>Source</span>
+                            </a>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Requirements List */}
+                <div className="grid gap-4">
+                  {filteredRequirements.length === 0
+                    ? showEmptyState && (
+                        <div className="bg-theme-surface-secondary rounded-lg py-12 text-center">
+                          <ListChecks className="text-theme-text-secondary mx-auto mb-4 h-16 w-16" aria-hidden="true" />
+                          <p className="text-theme-text-muted">
+                            {searchTerm ? 'No requirements found' : 'No requirements yet'}
+                          </p>
+                          {canManage && (
+                            <p className="text-theme-text-muted mt-2 text-sm">
+                              Import from a registry or create custom requirements
+                            </p>
+                          )}
+                        </div>
+                      )
+                    : filteredRequirements.map((req) => (
+                        <div
+                          key={req.id}
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg p-6 transition-colors"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <h3 className="text-theme-text-primary text-lg font-semibold">{req.name}</h3>
+                                <span
+                                  className={`rounded px-2 py-1 text-xs ${
+                                    req.source === 'national'
+                                      ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                                      : req.source === 'state'
+                                        ? 'bg-green-500/20 text-green-700 dark:text-green-400'
+                                        : 'bg-theme-surface-secondary text-theme-text-muted'
+                                  }`}
+                                >
+                                  {req.source}
+                                </span>
+                                {req.registry_name && (
+                                  <span className="rounded-sm bg-purple-500/20 px-2 py-1 text-xs text-purple-700 dark:text-purple-400">
+                                    {req.registry_name}
+                                  </span>
+                                )}
+                                <span className="rounded-sm bg-orange-500/20 px-2 py-1 text-xs text-orange-700 dark:text-orange-400">
+                                  {req.requirement_type}
+                                </span>
+                              </div>
+                              {req.description && (
+                                <p className="text-theme-text-muted mb-2 text-sm">{req.description}</p>
+                              )}
+                              <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                                {req.required_hours && <span>{req.required_hours} hours</span>}
+                                {req.required_shifts && <span>{req.required_shifts} shifts</span>}
+                                {req.required_calls && <span>{req.required_calls} calls</span>}
+                                <span>{req.frequency}</span>
+                              </div>
+                            </div>
+                            {/* Registry-imported requirements are locked upstream
+                              (the backend refuses to update them), so the edit
+                              affordance is replaced by the read-only marker
+                              rather than shown and failing on save. Both are
+                              manager-facing: the marker exists to explain the
+                              missing button, so a member gets neither. */}
+                            {canManage &&
+                              (req.is_editable === false ? (
+                                <div aria-label="Registry requirement (read-only)">
+                                  <AlertCircle
+                                    className="h-5 w-5 text-yellow-700 dark:text-yellow-500"
+                                    aria-hidden="true"
+                                  />
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setEditingRequirement(req);
+                                    setShowRequirementModal(true);
+                                  }}
+                                  className="ml-4 rounded-lg bg-blue-600/20 p-2 text-blue-700 transition-colors hover:bg-blue-600/30 dark:text-blue-400"
+                                  title="Edit"
+                                  aria-label={`Edit ${req.name}`}
+                                >
+                                  <Edit className="h-5 w-5" aria-hidden="true" />
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      ))}
                 </div>
               </div>
             )}
@@ -592,7 +659,10 @@ const TrainingProgramsPage: React.FC = () => {
         )}
       </main>
 
-      {registryModal && (
+      {/* Both dialogs only ever perform training.manage actions, so losing the
+          permission with one open closes it rather than leaving Import or Save
+          on screen to fail with a 403. */}
+      {canManage && registryModal && (
         <RegistryImportModal
           registryKey={registryModal.key}
           registryName={registryModal.name}
@@ -603,7 +673,7 @@ const TrainingProgramsPage: React.FC = () => {
         />
       )}
 
-      {showRequirementModal && (
+      {canManage && showRequirementModal && (
         <RequirementModal
           requirement={editingRequirement}
           categories={categories}

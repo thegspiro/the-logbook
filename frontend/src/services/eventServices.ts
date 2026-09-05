@@ -1017,6 +1017,8 @@ export interface EquipmentRequestItem {
   quantity: number;
   request_type: RequestTypeLiteral;
   requested_duration: 'temporary' | 'ongoing';
+  /** Size the member asked for. Present even when no catalog item matched it. */
+  requested_size?: string | null;
   priority: RequestPriorityLiteral;
   reason?: string;
   status: string;
@@ -1035,6 +1037,51 @@ export interface EquipmentRequestItem {
   fulfillment_reference_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+/** One size/colour/style of a requestable product. */
+export interface RequestableVariant {
+  /** Null when the member's own size is offered but the department stocks none. */
+  item_id?: string | null;
+  size?: string | null;
+  size_label?: string | null;
+  color?: string | null;
+  style?: string | null;
+  available: number;
+}
+
+/**
+ * A product a member may request, with its size variants collapsed into it.
+ *
+ * The quartermaster's flat catalog (`InventoryItem[]`) is a different shape on
+ * purpose: a shirt stocked in seven sizes is seven rows there and one row here.
+ */
+export interface RequestableProduct {
+  key: string;
+  name: string;
+  description?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  tracking_type: string;
+  has_sizes: boolean;
+  /** Which stored member size this product defaults from, e.g. `shirt`. */
+  size_field?: string | null;
+  /** The member's own size on file, shown even when nothing in stock matches. */
+  member_size?: string | null;
+  /** The stocked variant size matching `member_size`, when there is one. */
+  suggested_size?: string | null;
+  total_available: number;
+  variants: RequestableVariant[];
+}
+
+export interface RequestableCategory {
+  id: string;
+  name: string;
+}
+
+export interface RequestableCatalogResponse {
+  products: RequestableProduct[];
+  categories: RequestableCategory[];
 }
 
 export interface WriteOffRequestItem {
