@@ -2199,13 +2199,18 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             APPARATUS_VIEW.name,
             LOCATIONS_VIEW.name,
-            # notifications.view is deliberately absent. A member's own
-            # inbox (`GET /notifications/my`) is gated on authentication
-            # alone, so withholding this costs them nothing they can act
-            # on — while holding it opens `GET /notifications/logs`, which
-            # is scoped to the organization and not to the recipient: every
-            # subject and body the department has sent anyone, readable by
-            # anyone.
+            # notifications.view is deliberately absent. It gates the
+            # department's notification *rules* — org-level configuration a
+            # member has no call to read — and the organization-wide scope
+            # of `GET /notifications/logs`, which returns every subject and
+            # body the department has sent anyone.
+            #
+            # Withholding it costs a member nothing they can act on: their
+            # inbox (`GET /notifications/my`) and their own send log
+            # (`GET /notifications/logs`, whose default `scope=mine`
+            # filters to the caller) are both gated on authentication
+            # alone. Granting it to fix "my notifications do not load" is
+            # the wrong lever, and hands over the rules as well.
         ],
     },
 }
