@@ -58,8 +58,39 @@ class CallTrackingService:
         return eligibility.get_call_tracking_settings(org)
 
     async def _valid_type_slugs(self, organization_id: str) -> set:
+        """Slugs a submitted breakdown may name — **retired ones included**.
+
+        Deliberately not filtered to active types. Retirement stops a type
+        being *offered*; it is not a reason to reject a shift that is being
+        re-finalized with the counts it has always had, and an admin
+        retiring a type mid-tour would otherwise turn the officer's close-out
+        into a hard "Unknown call type" failure they cannot clear. What a
+        close-out offers is decided where the wizard's row list is built, not
+        here.
+        """
         settings = await self.get_settings(str(organization_id))
         return {t["slug"] for t in settings.get("call_types", [])}
+
+    async def type_usage_counts(self, organization_id: str) -> Dict[str, int]:
+        """Calls on record per type slug, across all dates.
+
+        Unlike ``calls_by_type`` this is deliberately unwindowed and omits the
+        untyped remainder: its one consumer is the settings screen, which asks
+        "is anything filed under this type?" before offering to delete it.
+        Windowing that question would report a type used only last year as
+        unused and invite its deletion.
+        """
+        rows = (
+            await self.db.execute(
+                select(OrgCall.call_type, func.count(OrgCall.id))
+                .where(
+                    OrgCall.organization_id == str(organization_id),
+                    OrgCall.call_type.isnot(None),
+                )
+                .group_by(OrgCall.call_type)
+            )
+        ).all()
+        return {slug: int(n) for slug, n in rows}
 
     # ------------------------------------------------------------------
     # Recording

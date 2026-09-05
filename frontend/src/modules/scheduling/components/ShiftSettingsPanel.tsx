@@ -26,6 +26,7 @@ import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
 import { ResourceTypeDefaultsCard } from './ResourceTypeDefaultsCard';
 import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
 import { PositionNamesCard } from './PositionNamesCard';
+import { CallTypesCard } from './CallTypesCard';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
@@ -467,6 +468,19 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
                 </button>
               </div>
             </div>
+          )}
+          {feature && (
+            <CallTypesCard
+              types={feature.call_tracking?.call_types ?? []}
+              usage={feature.call_type_usage ?? {}}
+              mode={feature.call_tracking?.mode ?? 'detailed'}
+              saving={savingFeature}
+              onSave={(call_types) =>
+                saveFeature({
+                  call_tracking: { mode: feature.call_tracking?.mode ?? 'detailed', call_types },
+                })
+              }
+            />
           )}
           <TemplatesOverviewCard templates={templates} onNavigateToTemplates={onNavigateToTemplates} />
           <DepartmentDefaultsCard settings={settings} onSettingsChange={setSettings} />

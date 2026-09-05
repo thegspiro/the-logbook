@@ -157,7 +157,9 @@ class TestCallTrackingSettingsResolution:
         )
         resolved = svc.get_call_tracking_settings(org)
         assert resolved["mode"] == CallTrackingMode.COUNT_ONLY
-        assert resolved["call_types"] == [{"slug": "fire", "label": "Fire"}]
+        assert resolved["call_types"] == [
+            {"slug": "fire", "label": "Fire", "active": True}
+        ]
 
     def test_all_types_malformed_falls_back_to_defaults(self):
         svc, org = self._svc_with_settings(
@@ -172,7 +174,7 @@ class TestCallTrackingSettingsResolution:
             {"call_tracking": {"call_types": [{"slug": "brush"}]}}
         )
         assert svc.get_call_tracking_settings(org)["call_types"] == [
-            {"slug": "brush", "label": "brush"}
+            {"slug": "brush", "label": "brush", "active": True}
         ]
 
     def test_none_settings_object(self):
@@ -545,21 +547,22 @@ class TestCallTypeSanitising:
     def test_drops_a_slug_the_schema_would_reject(self):
         assert self._resolve(
             [{"slug": "EMS", "label": "Upper"}, {"slug": "ems", "label": "EMS"}]
-        ) == [{"slug": "ems", "label": "EMS"}]
+        ) == [{"slug": "ems", "label": "EMS", "active": True}]
 
     def test_drops_duplicate_slugs(self):
         assert self._resolve(
             [{"slug": "ems", "label": "First"}, {"slug": "ems", "label": "Second"}]
-        ) == [{"slug": "ems", "label": "First"}]
+        ) == [{"slug": "ems", "label": "First", "active": True}]
 
     def test_drops_an_overlong_slug(self):
         assert self._resolve([{"slug": "x" * 51, "label": "Long"}]) == [
-            dict(t) for t in DEFAULT_CALL_TYPES
+            {"slug": t["slug"], "label": t["label"], "active": True}
+            for t in DEFAULT_CALL_TYPES
         ]
 
     def test_blank_label_falls_back_to_the_slug(self):
         assert self._resolve([{"slug": "fire", "label": "   "}]) == [
-            {"slug": "fire", "label": "fire"}
+            {"slug": "fire", "label": "fire", "active": True}
         ]
 
     def test_everything_it_returns_satisfies_the_schema(self):
@@ -574,6 +577,88 @@ class TestCallTypeSanitising:
         )
         # Constructing this is what used to blow up.
         assert CallTrackingSettings(call_types=resolved).call_types
+
+
+# ======================================================================
+# Retirement — a type stops being offered without orphaning its history
+# ======================================================================
+
+
+class TestCallTypeRetirement:
+    """``active`` decides what close-out offers, never what it can resolve.
+
+    Deleting a type an org has filed calls under leaves those rows pointing at
+    a slug nothing can label, so the editor retires instead. Every read path
+    therefore has to keep returning the retired entry.
+    """
+
+    def _resolve(self, call_types):
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={"scheduling": {"call_tracking": {"call_types": call_types}}}
+        )
+        return svc.get_call_tracking_settings(org)["call_types"]
+
+    def test_retired_entry_is_returned_not_dropped(self):
+        assert self._resolve(
+            [{"slug": "brush", "label": "Brush", "active": False}]
+        ) == [{"slug": "brush", "label": "Brush", "active": False}]
+
+    def test_absent_active_reads_as_active(self):
+        """Every entry stored before this field existed lacks the key. Reading
+        that absence as "retired" would empty every department's close-out
+        list on upgrade (pitfall #19)."""
+        assert self._resolve([{"slug": "fire", "label": "Fire"}])[0]["active"] is True
+
+    @pytest.mark.parametrize("value", [None, "", 0])
+    def test_only_an_explicit_false_retires(self, value):
+        """Hand-edited JSON fails toward offering the type: an unusable
+        close-out list is louder than one row too many."""
+        resolved = self._resolve([{"slug": "fire", "label": "Fire", "active": value}])
+        assert resolved[0]["active"] is True
+
+    def test_retiring_every_type_does_not_resurrect_the_defaults(self):
+        """Retiring all of them is how a department asks for a bare total. The
+        empty-list fallback must not read that as "never configured" and put
+        nine rows back."""
+        resolved = self._resolve(
+            [
+                {"slug": "fire", "label": "Fire", "active": False},
+                {"slug": "ems", "label": "EMS", "active": False},
+            ]
+        )
+        assert [t["slug"] for t in resolved] == ["fire", "ems"]
+        assert not any(t["active"] for t in resolved)
+
+    def test_schema_round_trips_active(self):
+        s = CallTrackingSettings(
+            call_types=[
+                {"slug": "fire", "label": "Fire"},
+                {"slug": "brush", "label": "Brush", "active": False},
+            ]
+        )
+        assert [t.active for t in s.call_types] == [True, False]
+
+    def test_schema_bounds_the_list(self):
+        """It lands in an unvalidated JSON column every close-out reads."""
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[{"slug": f"t{i}", "label": f"T{i}"} for i in range(51)]
+            )
+
+    async def test_submitting_a_retired_slug_is_still_accepted(self):
+        """Retirement stops a type being *offered*; it is not grounds to
+        reject a re-finalize of a shift that has always carried those counts,
+        and an admin retiring a type mid-tour must not turn an officer's
+        close-out into a failure they have no way to clear."""
+        svc = CallTrackingService(MagicMock())
+        svc.get_settings = AsyncMock(
+            return_value={
+                "mode": CallTrackingMode.COUNT_ONLY,
+                "call_types": [{"slug": "brush", "label": "Brush", "active": False}],
+            }
+        )
+        assert await svc._valid_type_slugs("org-1") == {"brush"}
 
 
 # ======================================================================
@@ -937,3 +1022,198 @@ class TestWindowing:
             await svc.department_call_count(org.id, date(2026, 8, 1), date(2026, 8, 1))
             == 1
         )
+
+
+# ======================================================================
+# Type usage — what the settings editor needs to offer a safe delete
+# ======================================================================
+
+
+@pytest.mark.integration
+class TestTypeUsageCounts:
+    """The settings screen deletes only what nothing is filed under.
+
+    Getting this wrong in either direction is bad: reporting a used type as
+    unused invites a delete that orphans its history, and reporting an unused
+    one as used leaves a typo'd type on the list forever.
+    """
+
+    async def _org_with_types(self, db_session):
+        org = await _make_org(db_session)
+        org.settings = {
+            "scheduling": {
+                "call_tracking": {
+                    "mode": CallTrackingMode.COUNT_ONLY,
+                    "call_types": [
+                        {"slug": "fire", "label": "Fire"},
+                        {"slug": "ems", "label": "EMS"},
+                        {"slug": "brush", "label": "Brush"},
+                    ],
+                }
+            }
+        }
+        await db_session.flush()
+        return org
+
+    async def test_counts_are_per_slug(self, db_session):
+        org = await self._org_with_types(db_session)
+        svc = CallTrackingService(db_session)
+        await svc.record_shift_calls(
+            await _make_shift(db_session, org, "e1"),
+            org.id,
+            total_calls=4,
+            type_counts={"fire": 3, "ems": 1},
+        )
+        assert await svc.type_usage_counts(org.id) == {"fire": 3, "ems": 1}
+
+    async def test_an_unused_type_is_absent_rather_than_zero(self, db_session):
+        """Absent and 0 mean the same thing to the caller, and building the
+        zeroes here would mean this method needing to know the type list."""
+        org = await self._org_with_types(db_session)
+        svc = CallTrackingService(db_session)
+        await svc.record_shift_calls(
+            await _make_shift(db_session, org, "e1"),
+            org.id,
+            total_calls=1,
+            type_counts={"fire": 1},
+        )
+        assert "brush" not in await svc.type_usage_counts(org.id)
+
+    async def test_untyped_calls_are_not_counted_under_any_slug(self, db_session):
+        org = await self._org_with_types(db_session)
+        svc = CallTrackingService(db_session)
+        await svc.record_shift_calls(
+            await _make_shift(db_session, org, "e1"), org.id, total_calls=3
+        )
+        assert await svc.type_usage_counts(org.id) == {}
+
+    async def test_is_unwindowed(self, db_session):
+        """A type used only last year is still used. Windowing this would
+        report it as unused and invite deleting its history away."""
+        org = await self._org_with_types(db_session)
+        svc = CallTrackingService(db_session)
+        await svc.record_shift_calls(
+            await _make_shift(db_session, org, "e1", date(2020, 1, 5)),
+            org.id,
+            total_calls=1,
+            type_counts={"fire": 1},
+        )
+        assert await svc.type_usage_counts(org.id) == {"fire": 1}
+
+    async def test_another_org_is_not_counted(self, db_session):
+        """Pitfall #14a — the count is read by an admin deciding what to
+        delete, so another department's history must not appear in it."""
+        mine = await self._org_with_types(db_session)
+        theirs = await _make_org(db_session, name="Other Dept")
+        svc = CallTrackingService(db_session)
+        await svc.record_shift_calls(
+            await _make_shift(db_session, theirs, "e9"),
+            theirs.id,
+            total_calls=2,
+            type_counts={"fire": 2},
+        )
+        assert await svc.type_usage_counts(mine.id) == {}
+
+
+# ======================================================================
+# What close-out offers once a type is retired
+# ======================================================================
+
+
+@pytest.mark.integration
+class TestRetiredTypesAtCloseout:
+    async def _org(self, db_session, call_types):
+        org = await _make_org(db_session)
+        org.settings = {
+            "scheduling": {
+                "call_tracking": {
+                    "mode": CallTrackingMode.COUNT_ONLY,
+                    "call_types": call_types,
+                }
+            }
+        }
+        await db_session.flush()
+        return org
+
+    async def test_a_retired_type_is_not_offered(self, db_session):
+        org = await self._org(
+            db_session,
+            [
+                {"slug": "fire", "label": "Fire"},
+                {"slug": "brush", "label": "Brush", "active": False},
+            ],
+        )
+        shift = await _make_shift(db_session, org, "e1")
+        state, err = await SchedulingService(db_session).get_closeout_state(
+            shift.id, org.id
+        )
+        assert err is None
+        assert [t["slug"] for t in state["call_types"]] == ["fire"]
+
+    async def test_a_retired_type_this_shift_already_used_keeps_its_row(
+        self, db_session
+    ):
+        """Dropping the row would take the count off the screen while leaving
+        it in the total the officer has to sign off, with no field to correct
+        it in."""
+        org = await self._org(
+            db_session,
+            [
+                {"slug": "fire", "label": "Fire"},
+                {"slug": "brush", "label": "Brush"},
+            ],
+        )
+        shift = await _make_shift(db_session, org, "e1")
+        await CallTrackingService(db_session).record_shift_calls(
+            shift, org.id, total_calls=2, type_counts={"brush": 2}
+        )
+
+        org.settings = {
+            "scheduling": {
+                "call_tracking": {
+                    "mode": CallTrackingMode.COUNT_ONLY,
+                    "call_types": [
+                        {"slug": "fire", "label": "Fire"},
+                        {"slug": "brush", "label": "Brush", "active": False},
+                    ],
+                }
+            }
+        }
+        await db_session.flush()
+
+        state, err = await SchedulingService(db_session).get_closeout_state(
+            shift.id, org.id
+        )
+        assert err is None
+        assert [t["slug"] for t in state["call_types"]] == ["fire", "brush"]
+        assert state["reported_call_types"] == {"brush": 2}
+
+    async def test_a_retired_type_another_shift_used_is_not_offered_here(
+        self, db_session
+    ):
+        org = await self._org(
+            db_session,
+            [{"slug": "fire", "label": "Fire"}, {"slug": "brush", "label": "Brush"}],
+        )
+        used = await _make_shift(db_session, org, "e1")
+        await CallTrackingService(db_session).record_shift_calls(
+            used, org.id, total_calls=1, type_counts={"brush": 1}
+        )
+        org.settings = {
+            "scheduling": {
+                "call_tracking": {
+                    "mode": CallTrackingMode.COUNT_ONLY,
+                    "call_types": [
+                        {"slug": "fire", "label": "Fire"},
+                        {"slug": "brush", "label": "Brush", "active": False},
+                    ],
+                }
+            }
+        }
+        await db_session.flush()
+
+        other = await _make_shift(db_session, org, "e2", date(2026, 8, 19))
+        state, _ = await SchedulingService(db_session).get_closeout_state(
+            other.id, org.id
+        )
+        assert [t["slug"] for t in state["call_types"]] == ["fire"]

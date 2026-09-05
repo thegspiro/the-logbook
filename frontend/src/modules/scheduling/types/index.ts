@@ -510,6 +510,12 @@ export interface ShiftCallRecord {
 export interface CallTypeOption {
   slug: string;
   label: string;
+  /**
+   * Retired types stay configured so their history keeps resolving to a
+   * label, but are no longer offered at close-out. The close-out endpoint
+   * already filters on this, so the wizard renders whatever it is served.
+   */
+  active: boolean;
 }
 
 export interface CloseoutMemberState {
