@@ -84,9 +84,10 @@ const SchedulingPlatoonsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <SchedulingHeader
+          title="Platoons"
           backTo="/scheduling/admin"
           backLabel="Back to scheduling administration"
-          description="Platoons · Assign and manage department rosters"
+          description="Assign and manage department rosters"
         />
 
         {loading ? (

@@ -17,6 +17,7 @@ import { Link } from 'react-router';
 import { BarChart3, Clock, SlidersHorizontal } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
 import { EquipmentCheckTemplateList } from '../components/EquipmentCheckTemplateList';
+import { Breadcrumbs } from '../../../components/ux';
 
 interface RelatedLink {
   label: string;
@@ -74,6 +75,12 @@ export const ChecklistsAdminPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      {/* This page carries no back link of its own, and it is reached from two
+          different hubs — Inventory Administration, and the Scheduling
+          Administration card for the checklists a crew runs on shift. The trail
+          is the only route back up either way. */}
+      <Breadcrumbs />
+
       <header className="mb-6">
         <h1 className="text-theme-text-primary text-2xl font-bold">Equipment Checklists</h1>
         <p className="text-theme-text-secondary mt-1 text-sm">

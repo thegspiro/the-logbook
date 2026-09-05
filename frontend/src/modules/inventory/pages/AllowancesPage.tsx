@@ -16,6 +16,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import toast from 'react-hot-toast';
+import { Breadcrumbs } from '../../../components/ux';
 
 const PERIOD_OPTIONS = [
   { value: 'annual', label: 'Per Year' },
@@ -133,6 +134,8 @@ const AllowancesPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
+        <Breadcrumbs />
+
         <Link
           to="/inventory/admin"
           className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"

@@ -162,6 +162,7 @@ const PositionRosterPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <SchedulingHeader
+        title="Who Can Fill What"
         backTo="/scheduling/admin"
         backLabel="Back to scheduling administration"
         description="Who is cleared for each shift position, and why"
