@@ -16,15 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 21 (Admin hours), pass 3** — branch
-`claude/security-review-admin-hours-pass3`,
-[PR #2247](https://github.com/thegspiro/the-logbook/pull/2247). Originally
-opened claiming 0 fixes/0 flagged; a Codex review round on the PR disputed
-that on all 6 points raised, all 6 verified real and fixed (unlocked
-overlap/entry-mutation races, a falsy-zero threshold-override bug, a
-quarterly-compliance year bug, and a DST fold duration bug in the pass's own
-new `entryTimes.ts`) — see `docs/security-review/AH-21-admin-hours.md` →
-Pass 3's correction notice.
+_None currently open._
+
+---
+
+### 2026-09-05 — Feature 21 (Admin hours) ✅ closed — PR #2247 merged
+
+**PR #2247 merged cleanly** (merge commit `4ba836420`, head `01e67afd`).
+Originally opened claiming 0 fixes/0 flagged; a Codex review round on the PR
+disputed that on all 6 points raised (plus 2 follow-up rounds on the fixes
+themselves), and all were verified real and fixed: unlocked
+overlap/entry-mutation races (Pitfall #27), a falsy-zero threshold-override
+bug, a quarterly-compliance year-filter bug (tightened twice — first to skip
+the mismatched year, then to reject the whole request rather than silently
+drop a quarterly item), a lock-order deadlock between `bulk_approve` and
+`edit_pending_entry`, and a DST fold duration bug in the pass's own new
+`entryTimes.ts`. All 8 review threads resolved, full CI green. See
+`docs/security-review/AH-21-admin-hours.md` → Pass 3 for the complete
+correction trail. Rotation row 21 → ✅. Next: 22 Grants & fundraising.
 
 ---
 
@@ -8694,8 +8703,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | 🔄     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
