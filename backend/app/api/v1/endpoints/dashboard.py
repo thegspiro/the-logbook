@@ -226,9 +226,12 @@ async def get_asset_widgets(
         )
 
     # Fleet readiness reporting, not the apparatus roster: every widget below
-    # links into a management view and `apparatus.view` is a baseline member
-    # grant, so viewing is not authority to see the department's deficiency
-    # and overdue-check tallies.  Mirrors the inventory gate above.
+    # links into a management view, so viewing is not authority to see the
+    # department's deficiency and overdue-check tallies. `apparatus.view` was a
+    # baseline member grant when this gate was written and was revoked on
+    # 2026-09-05, but the gate stands on what the widgets aggregate rather than
+    # on who happens to hold the view grant — a department can put it back on
+    # its Member position at any time.  Mirrors the inventory gate above.
     if "apparatus" in enabled and (
         user_has_permission(current_user, "apparatus.manage")
         or user_has_permission(current_user, "settings.manage")

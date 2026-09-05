@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { buildPositionTemplates } from './positionTemplates';
 import { MODULE_REGISTRY } from '../config/moduleRegistry';
@@ -91,11 +94,92 @@ describe('buildPositionTemplates — seeded positions start from what is seeded'
     expect(managed).toEqual(['reports']);
   });
 
-  it('leaves a position the backend does not seed on its role-type default', () => {
-    // `emt` has no DEFAULT_POSITIONS row, so there is nothing to disagree
-    // with and saving it creates the position rather than updating one.
+  it('does not tick Reports for an EMT', () => {
+    // This assertion used to read the other way round: `emt` had no
+    // DEFAULT_POSITIONS row, so the heuristic supplied its boxes and there was
+    // "nothing to disagree with". That was the bug. The wizard offers EMT to
+    // every agency type, and with nothing seeded behind the slug
+    // `save_session_roles` created the row from these very checkboxes — so a
+    // ticked Reports box became a department-wide reporting grant on every EMT
+    // in a newly onboarded department. EMT is registered now and starts from
+    // the same grants its rank carries.
     const emt = permissionsFor('emt');
 
+    expect(emt?.reports).toEqual({ view: false, manage: false });
     expect(emt?.events).toEqual({ view: true, manage: false });
+    expect(emt?.scheduling).toEqual({ view: true, manage: false });
+  });
+
+  it('gives an EMT the same boxes as a firefighter', () => {
+    // Their intended grants are the same list object in the rank registry —
+    // same standing, different discipline — so the two templates must agree.
+    expect(permissionsFor('emt')).toEqual(permissionsFor('firefighter'));
+  });
+});
+
+describe('RoleSetup restore — a resumed session does not carry stale grants', () => {
+  // The restore reads a config out of localStorage, so it can predate the
+  // grants this build presents. It already drops a retired standing and a
+  // discipline the agency does not have, for the same reason: handleContinue
+  // submits whatever is in there. Permissions needed the same treatment — an
+  // EMT saved on an earlier build carries the heuristic's ticks, Reports
+  // included, and would be written after every migration had already run.
+  //
+  // Walked as source rather than rendered, in the manner of
+  // RoleSetup.membership.test.ts: the guard is one clause in a useState
+  // initializer, and the failure to catch is a well-meant simplification of it.
+  const source = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'RoleSetup.tsx'), 'utf8');
+
+  it('refreshes permissions and priority from the template', () => {
+    // Priority as well as permissions: save_session_roles writes the submitted
+    // value over the seeded one, so a stale 10 would put EMT back on the
+    // baseline Member position's rung.
+    expect(source).toMatch(/permissions: template\.permissions/);
+    expect(source).toMatch(/priority: template\.priority/);
+  });
+
+  it('does it only for a slug whose seeded grants actually moved', () => {
+    // Not every seeded position. This reconciliation overwrites what was
+    // saved, and an administrator's own edits to a built-in position are saved
+    // the same way — resetting all of them would discard the customization
+    // they made before stepping away to the modules page.
+    //
+    // Asserted as membership rather than as the literal source text: the set
+    // grows by design each time a seeded grant moves, and pinning the exact
+    // string made that ordinary edit look like a regression.
+    const declared = source.match(/const STALE_SEEDED_SLUGS = new Set\(\[([^\]]*)\]\)/);
+    expect(declared, 'STALE_SEEDED_SLUGS is not a literal Set of slugs').not.toBeNull();
+    const slugs = [...(declared?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]);
+
+    // emt lost the heuristic's ticks; member/firefighter/emt lost apparatus.
+    expect(slugs).toEqual(expect.arrayContaining(['emt', 'member', 'firefighter']));
+    // engineer keeps apparatus.view — it is the driver/operator rank.
+    expect(slugs).not.toContain('engineer');
+    // Still narrow: nowhere near every seeded position.
+    expect(slugs.length).toBeLessThan(6);
+  });
+
+  it('does it once, not on every mount', () => {
+    // Narrowing to one slug is not enough on its own: repeating it for that
+    // slug discards the same edits, just only for EMT. The mount consults
+    // `reconciledSeededSlugs` before deciding.
+    expect(source).toMatch(/!reconciledSeededSlugs\.includes\(posId\)/);
+    expect(source).toMatch(/const stale = template && slugsToReconcile\.includes\(posId\)/);
+  });
+
+  it('records every stale slug, not only the ones it reconciled', () => {
+    // A session started on this build has no EMT in its config yet, so a mount
+    // that recorded only what it reconciled would record nothing — and the
+    // administrator selecting EMT, customizing it and stepping away would come
+    // back to find those current-build edits treated as legacy and reset.
+    // A slug selected after this screen is reached came from the current
+    // template by definition, so recording the whole set is what says so.
+    expect(source).toMatch(/markSeededSlugsReconciled\(\[\.\.\.STALE_SEEDED_SLUGS\]\)/);
+  });
+
+  it('latches the decision instead of recomputing it', () => {
+    // The effect adds to `reconciledSeededSlugs`; recomputing off that would
+    // decide mid-mount that a slug was already handled.
+    expect(source).toMatch(/slugsToReconcileRef\.current === null/);
   });
 });

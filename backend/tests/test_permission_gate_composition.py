@@ -79,6 +79,19 @@ ALLOWED: dict[tuple[str, str], str] = {
     ("equipment_check.py", "get_item_deployments"): (
         "unadjudicated: inventory.view here vs inventory.manage on its sibling"
     ),
+    # Surfaced by `apparatus.view` leaving the baseline set on 2026-09-05, not
+    # by any change to this gate: `("apparatus.view", "scheduling.view")` used
+    # to be two baseline grants, and `scheduling.view` is now the only one. Who
+    # can call it did not change.
+    #
+    # Decided, and it stays: "is this member EVOC-cleared to drive this rig" is
+    # crew information — it is what DriverBlockedDialog explains to the member
+    # it has just blocked — and the response is an eligibility flag and a level
+    # name, not a member record.
+    ("apparatus.py", "check_evoc_eligibility"): (
+        "crew-facing by design: scheduling.view is the shift-side grant, and "
+        "the response is a driver-eligibility flag, not member data"
+    ),
 }
 
 

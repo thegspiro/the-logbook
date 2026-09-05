@@ -31,6 +31,19 @@ import {
   clearCache,
 } from '../utils/apiCache';
 
+/**
+ * `_skipCache` is read by the request interceptor below to bypass the GET
+ * cache. Declared here, where it is consumed, so a caller can pass it in a
+ * request config without a cast — an undeclared flag has no properties in
+ * common with `AxiosRequestConfig` and is rejected outright by TypeScript.
+ * Mirrors the `_retry` augmentation in `utils/createApiClient.ts`.
+ */
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    _skipCache?: boolean;
+  }
+}
+
 export const API_BASE_URL = '/api/v1';
 
 const api = axios.create({

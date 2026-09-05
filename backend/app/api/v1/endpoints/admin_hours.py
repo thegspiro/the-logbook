@@ -1029,6 +1029,8 @@ async def get_user_hours_compliance(
             year=effective_year,
         )
         return results
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 

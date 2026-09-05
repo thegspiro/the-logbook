@@ -177,20 +177,47 @@ def _wizard_labels() -> dict:
 def test_the_wizard_never_offers_a_position_the_backend_declined_to_seed(org_type):
     """Scoped to the discipline codes, because the lists legitimately differ.
 
-    positionTemplates.ts deliberately offers ids the registry has no entry
-    for — `emt` and the six membership grades — so equality would red-light
-    on day one.
-    What must hold is narrower: for a code the agency vocabulary governs, the
-    wizard and the seed agree.
+    positionTemplates.ts offers ids the registry has no entry for — the six
+    membership grades — so equality across the whole list would red-light on
+    day one. What must hold is narrower: for a code the agency vocabulary
+    governs, the wizard and the seed agree.
+
+    **Every** offered discipline is checked, including one the registry has no
+    entry for at all. An earlier version intersected with ``DEFAULT_POSITIONS``
+    first, which excused exactly that case — and ``emt`` sat in it. The wizard
+    offered EMT to all three agency types, nothing seeded it, so ticking it
+    reached ``save_session_roles``'s create branch and stored the position
+    editor's checkbox expansion as an ``is_system`` row: grants from a
+    role-type heuristic rather than from the registry, ``reports.view``
+    included. Migration ``f3b8d0c26a17`` cleans the rows already written; this
+    assertion is what keeps a discipline from reaching that branch again.
     """
     offered = set(_wizard_disciplines()[org_type])
     seeded = set(default_positions_for(org_type))
-    stray = sorted(offered & ALL_DISCIPLINE_CODES & set(DEFAULT_POSITIONS) - seeded)
+    stray = sorted(offered & ALL_DISCIPLINE_CODES - seeded)
     assert not stray, (
         f"the wizard offers {stray} to a {org_type} organization, which the "
-        "backend does not seed. Ticking one re-creates the position the seed "
-        "left out — update DISCIPLINE_POSITIONS_BY_ORG_TYPE."
+        "backend does not seed. Ticking one creates the position from the "
+        "editor's checkboxes instead of from DEFAULT_POSITIONS — add a "
+        "DEFAULT_POSITIONS entry, or update DISCIPLINE_POSITIONS_BY_ORG_TYPE."
     )
+
+
+@pytest.mark.parametrize("org_type", _ORG_TYPES)
+def test_a_seeded_discipline_never_carries_a_reporting_grant(org_type):
+    """The grants that reach the row, for every discipline the wizard offers.
+
+    The check above proves the seed *has* an entry; this proves the entry is
+    the right one. ``reports.view`` aggregates across the whole department and
+    belongs to the officers who answer for it — it is the grant this whole line
+    of work exists to keep off a rank-and-file row, so assert it against the
+    seeded permissions rather than trusting the registry to stay correct.
+    """
+    seeded = default_positions_for(org_type)
+    for slug in set(_wizard_disciplines()[org_type]) & ALL_DISCIPLINE_CODES:
+        granted = set(seeded[slug]["permissions"])
+        assert "reports.view" not in granted, slug
+        assert not granted & {"reports.*", "reports.manage", "*"}, slug
 
 
 @pytest.mark.parametrize("org_type", _ORG_TYPES)

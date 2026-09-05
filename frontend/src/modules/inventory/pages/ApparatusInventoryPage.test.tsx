@@ -10,7 +10,7 @@ const mockSwapItemLot = vi.fn();
 const mockSetItemQuantity = vi.fn();
 const mockGetItemDeployedLots = vi.fn();
 const mockUpdateDeployedLot = vi.fn();
-const mockGetApparatusList = vi.fn();
+const mockGetApparatusOptions = vi.fn();
 
 // Equipment-check calls moved to modules/inventory when checklists
 // became an Inventory feature; the scheduling service re-exports it.
@@ -26,9 +26,12 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   },
 }));
 
-vi.mock('../../../modules/apparatus/services/api', () => ({
-  apparatusService: {
-    getApparatusList: (...a: unknown[]) => mockGetApparatusList(...a) as unknown,
+// The picker reads the auth-only scheduling endpoint, not the apparatus
+// module's roster: this page is crew-level and regular members do not hold
+// `apparatus.view`.
+vi.mock('../../../modules/scheduling/services/api', () => ({
+  schedulingService: {
+    getApparatusOptions: (...a: unknown[]) => mockGetApparatusOptions(...a) as unknown,
   },
 }));
 
@@ -94,9 +97,18 @@ describe('ApparatusInventoryPage', () => {
     // file. Re-establish the manager default every test so a single test's
     // override cannot outlive it (CLAUDE.md pitfall #28).
     mockCheckPermission.mockReturnValue(true);
-    mockGetApparatusList.mockResolvedValue({
-      items: [{ id: 'app-1', unitNumber: 'E-1', name: 'Engine 1' }],
-      total: 1,
+    mockGetApparatusOptions.mockReset();
+    mockGetApparatusOptions.mockResolvedValue({
+      options: [
+        {
+          id: 'app-1',
+          name: 'Engine 1',
+          unit_number: 'E-1',
+          apparatus_type: 'engine',
+          source: 'apparatus',
+        },
+      ],
+      source: 'apparatus',
     });
     mockGetApparatusInventory.mockResolvedValue(inventory([makeItem()]));
     mockReportItemUsed.mockResolvedValue({ templateItemId: 'ti-1', restockNeeded: true });
@@ -136,6 +148,50 @@ describe('ApparatusInventoryPage', () => {
     renderWithRouter(<ApparatusInventoryPage />);
     await screen.findByRole('option', { name: /E-1/ });
     expect(mockGetApparatusInventory).not.toHaveBeenCalled();
+  });
+
+  it('fills the picker without reading the apparatus module roster', async () => {
+    // This page is crew-level by its own route gate and by the backend gate on
+    // the inventory it loads, and regular members do not hold `apparatus.view`.
+    // Filling the picker from `GET /apparatus` 403'd them into an empty select
+    // on the one apparatus page they are sent to.
+    renderWithRouter(<ApparatusInventoryPage />);
+
+    await screen.findByRole('option', { name: /E-1/ });
+    expect(mockGetApparatusOptions).toHaveBeenCalled();
+  });
+
+  it('offers only apparatus the inventory endpoint can resolve', async () => {
+    // `/scheduling/apparatus-options` falls back to BasicApparatus records and
+    // then to hardcoded defaults when the module is off or empty. Neither has a
+    // row behind `/equipment-checks/apparatus/{id}/inventory`, so offering one
+    // would put an id in the picker that cannot load.
+    mockGetApparatusOptions.mockResolvedValue({
+      options: [
+        {
+          id: 'app-1',
+          name: 'Engine 1',
+          unit_number: 'E-1',
+          apparatus_type: 'engine',
+          source: 'apparatus',
+        },
+        {
+          id: 'basic-9',
+          name: 'Rescue 9',
+          unit_number: 'R-9',
+          apparatus_type: 'rescue',
+          source: 'basic',
+        },
+        { name: 'Ladder 1', apparatus_type: 'ladder', source: 'default' },
+      ],
+      source: 'apparatus',
+    });
+
+    renderWithRouter(<ApparatusInventoryPage />);
+
+    await screen.findByRole('option', { name: /E-1/ });
+    expect(screen.queryByRole('option', { name: /R-9/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Ladder 1/ })).not.toBeInTheDocument();
   });
 
   it('shows the page navigation actions and confirms the auto-saved inventory', async () => {

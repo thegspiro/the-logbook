@@ -179,6 +179,20 @@ def _can_view_platoon_roster(shift, user: User) -> bool:
     )
 
 
+def _roster_actor(user: User) -> SignupActor:
+    """How the roster lock sees this caller.
+
+    Only ``scheduling.manage`` is exempt from it, so — unlike ``_signup_actor``
+    — this needs no shift to answer: an assigner and a member are bounded
+    alike. The signup window gives an officer a grace period to seat a late
+    arrival; changing a roster that has already become a record is the
+    administrator's path, not theirs.
+    """
+    if user_has_permission(user, "scheduling.manage"):
+        return SignupActor.MANAGER
+    return SignupActor.MEMBER
+
+
 def _signup_actor(shift, user: User) -> SignupActor:
     """How the signup window sees this caller on this shift.
 
@@ -2126,7 +2140,10 @@ async def update_assignment(
     update_data = assignment.model_dump(exclude_unset=True)
     try:
         result, error = await service.update_assignment(
-            assignment_id, current_user.organization_id, update_data
+            assignment_id,
+            current_user.organization_id,
+            update_data,
+            actor=_roster_actor(current_user),
         )
     except CodedValueError as e:
         raise _driver_block(e)
@@ -2159,7 +2176,7 @@ async def delete_assignment(
     service = SchedulingService(db)
     await _authorize_assignment_management(service, current_user, assignment_id)
     success, error = await service.delete_assignment(
-        assignment_id, current_user.organization_id
+        assignment_id, current_user.organization_id, actor=_roster_actor(current_user)
     )
     if not success:
         raise HTTPException(
@@ -2178,7 +2195,10 @@ async def confirm_assignment(
     """Confirm own shift assignment"""
     service = SchedulingService(db)
     result, error = await service.confirm_assignment(
-        assignment_id, current_user.id, current_user.organization_id
+        assignment_id,
+        current_user.id,
+        current_user.organization_id,
+        actor=_roster_actor(current_user),
     )
     if error:
         raise HTTPException(
@@ -2873,7 +2893,9 @@ async def withdraw_from_shift(
             status_code=404, detail="You are not assigned to this shift."
         )
     success, error = await service.delete_assignment(
-        UUID(user_assignment.id), current_user.organization_id
+        UUID(user_assignment.id),
+        current_user.organization_id,
+        actor=_roster_actor(current_user),
     )
     if not success:
         raise HTTPException(

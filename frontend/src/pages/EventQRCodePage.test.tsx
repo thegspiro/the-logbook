@@ -185,6 +185,7 @@ describe('EventQRCodePage', () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);
@@ -201,6 +202,7 @@ describe('EventQRCodePage', () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);
@@ -220,6 +222,7 @@ describe('EventQRCodePage', () => {
       const invalidQRData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
       };
 
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(invalidQRData);
@@ -231,10 +234,34 @@ describe('EventQRCodePage', () => {
       });
     });
 
+    it('should still show the QR code during the flexible early-arrival grace', async () => {
+      // is_valid is the strict on-time window; can_check_in is what a tap
+      // would actually be allowed to do. A Flexible/Window event admits a scan
+      // up to an hour early, and the two fields diverge only there. Gating the
+      // code on is_valid would withhold it while the backend accepted scans.
+      const earlyGraceData = {
+        ...mockQRCheckInData,
+        is_valid: false,
+        can_check_in: true,
+      };
+
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(earlyGraceData);
+
+      renderWithRouter(<EventQRCodePage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('qr-code')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('qr-code-placeholder')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /print qr code/i })).toBeInTheDocument();
+    });
+
     it('should show note when event was ended early', async () => {
       const earlyEndData = {
         ...mockQRCheckInData,
         is_valid: false,
+        can_check_in: false,
         actual_end_time: '2026-01-25T19:00:00Z',
       };
 
@@ -284,6 +311,7 @@ describe('EventQRCodePage', () => {
         return Promise.resolve({
           ...mockQRCheckInData,
           is_valid: callCount === 1, // Valid on first call, invalid after
+          can_check_in: callCount === 1,
         });
       });
 
@@ -308,6 +336,7 @@ describe('EventQRCodePage', () => {
         return Promise.resolve({
           ...mockQRCheckInData,
           is_valid: callCount > 1, // Window opens on the first refresh
+          can_check_in: callCount > 1,
         });
       });
 

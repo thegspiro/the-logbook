@@ -152,7 +152,13 @@ const EventQRCodePage: React.FC = () => {
 
       {/* QR Code Section */}
       <div className="bg-theme-surface rounded-lg p-8 shadow-md backdrop-blur-xs">
-        {qrData.is_valid ? (
+        {/* can_check_in, not is_valid: a Flexible/Window event admits a tap up
+            to an hour before its official window with a notice, so a code
+            withheld on is_valid alone would be withheld while the backend was
+            still accepting scans. is_valid remains the strict on-time window
+            used for the "Check-in Not Available" time range below.
+            EventSelfCheckInPage gates its Check In button on the same field. */}
+        {qrData.can_check_in ? (
           <div className="text-center">
             <div className="mb-6">
               <div className="inline-flex items-center rounded-full bg-green-100 px-4 py-2 text-green-800 dark:bg-green-500/20 dark:text-green-400">
@@ -251,7 +257,7 @@ const EventQRCodePage: React.FC = () => {
       </div>
 
       {/* Print Button */}
-      {qrData.is_valid && (
+      {qrData.can_check_in && (
         <div className="mt-6 text-center">
           <button onClick={() => window.print()} className="btn-info px-6 transition">
             Print QR Code

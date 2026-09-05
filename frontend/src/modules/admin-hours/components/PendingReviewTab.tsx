@@ -15,7 +15,7 @@ import { formatDate, formatForDateTimeInput, localToUTC } from '../../../utils/d
 import { useTimezone } from '../../../hooks/useTimezone';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
 import toast from 'react-hot-toast';
-import { addHours, syncEndToStart } from '../utils/entryTimes';
+import { addHoursExact, syncEndToStartExact, resolveEndUtc, type DerivedEndTime } from '../utils/entryTimes';
 import QuickDurationButtons from './QuickDurationButtons';
 
 const PendingReviewTab: React.FC = () => {
@@ -36,6 +36,10 @@ const PendingReviewTab: React.FC = () => {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editData, setEditData] = useState<AdminHoursEntryEdit>({});
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  // The exact UTC instant behind `editData.clock_out_at`, when it was derived
+  // by a duration preset or a start-date shift rather than typed directly —
+  // see the identical field in AdminHoursPage.tsx and `resolveEndUtc`.
+  const [editEndPin, setEditEndPin] = useState<DerivedEndTime | null>(null);
 
   // Fetch pending entries when page changes
   useEffect(() => {
@@ -99,18 +103,25 @@ const PendingReviewTab: React.FC = () => {
       description: entry.description ?? '',
       category_id: entry.categoryId,
     });
+    setEditEndPin(null);
   };
 
   const handleEditStartChange = (value: string) => {
-    setEditData({
-      ...editData,
-      clock_in_at: value,
-      clock_out_at: syncEndToStart(editData.clock_in_at ?? '', value, editData.clock_out_at ?? '', tz),
-    });
+    const { local, pin } = syncEndToStartExact(
+      editData.clock_in_at ?? '',
+      value,
+      editData.clock_out_at ?? '',
+      editEndPin,
+      tz
+    );
+    setEditData({ ...editData, clock_in_at: value, clock_out_at: local });
+    setEditEndPin(pin);
   };
 
   const handleEditDuration = (hours: number) => {
-    setEditData({ ...editData, clock_out_at: addHours(editData.clock_in_at ?? '', hours, tz) });
+    const derived = addHoursExact(editData.clock_in_at ?? '', hours, tz);
+    setEditData({ ...editData, clock_out_at: derived?.local ?? '' });
+    setEditEndPin(derived);
   };
 
   const handleSaveEdit = async () => {
@@ -120,14 +131,18 @@ const PendingReviewTab: React.FC = () => {
       // The edit fields hold local wall-clock strings (from
       // formatForDateTimeInput); the API stores UTC instants, so convert on
       // save or the edited times land shifted by the org's UTC offset.
+      // `resolveEndUtc` prefers `editEndPin`'s exact instant over re-parsing
+      // the string, so a duration selected across a DST fall-back fold
+      // submits at its real length instead of being silently shortened.
       await editEntry(editingEntryId, {
         ...editData,
         clock_in_at: editData.clock_in_at ? localToUTC(editData.clock_in_at, tz) : undefined,
-        clock_out_at: editData.clock_out_at ? localToUTC(editData.clock_out_at, tz) : undefined,
+        clock_out_at: editData.clock_out_at ? resolveEndUtc(editData.clock_out_at, editEndPin, tz) : undefined,
       });
       toast.success('Entry updated');
       setEditingEntryId(null);
       setEditData({});
+      setEditEndPin(null);
     } catch {
       // error handled by store
     } finally {
@@ -138,7 +153,7 @@ const PendingReviewTab: React.FC = () => {
   const editDurationMinutes = (() => {
     if (!editData.clock_in_at || !editData.clock_out_at) return null;
     const start = new Date(localToUTC(editData.clock_in_at, tz)).getTime();
-    const end = new Date(localToUTC(editData.clock_out_at, tz)).getTime();
+    const end = new Date(resolveEndUtc(editData.clock_out_at, editEndPin, tz)).getTime();
     if (isNaN(start) || isNaN(end) || end <= start) return null;
     return Math.floor((end - start) / 60000);
   })();
@@ -258,7 +273,10 @@ const PendingReviewTab: React.FC = () => {
                         <DateTimeQuarterHour
                           id={`edit-clock-out-${entry.id}`}
                           value={editData.clock_out_at ?? ''}
-                          onChange={(val) => setEditData({ ...editData, clock_out_at: val })}
+                          onChange={(val) => {
+                            setEditData({ ...editData, clock_out_at: val });
+                            setEditEndPin(null);
+                          }}
                           className="form-input-sm"
                           timezone={tz}
                         />
@@ -297,6 +315,7 @@ const PendingReviewTab: React.FC = () => {
                         onClick={() => {
                           setEditingEntryId(null);
                           setEditData({});
+                          setEditEndPin(null);
                         }}
                         className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-sm transition"
                       >
