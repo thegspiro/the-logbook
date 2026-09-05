@@ -106,12 +106,26 @@ def _granted_later() -> set[str]:
     return set(_load_module(_LATER_CORPORATE_GRANT, "_corp_storefront")._PRIOR_DEFAULTS)
 
 
+#: Registered after this migration was written, and with nothing for it to
+#: repair. The rule this module enforces — a seeded position holding the
+#: storefront grants must be backfilled, or existing departments are left
+#: without what fresh installs get — rests on the row having come from the
+#: seed. ``emt`` never did: until 2026-09-05 the registry had no EMT position,
+#: so every stored EMT row was written by the onboarding editor's create
+#: branch, and ``expand_module_checkboxes`` emits ``storefront.order``
+#: alongside ``storefront.view`` for a ticked View box
+#: (``_VIEW_IMPLIED_PERMISSIONS``). Those rows already hold both grants. A
+#: position registered later that *would* be seeded belongs in a backfill of
+#: its own, not in this frozen one (CLAUDE.md pitfall #20).
+_REGISTERED_AFTER_THIS_MIGRATION = frozenset({"emt"})
+
+
 def _seeded_slugs_with_storefront() -> set[str]:
     later = _granted_later()
     return {
         slug
         for slug, entry in DEFAULT_POSITIONS.items()
-        if slug not in later
+        if slug not in later and slug not in _REGISTERED_AFTER_THIS_MIGRATION
         # A wildcard position already covers every storefront grant, so the
         # migration deliberately leaves it out rather than cluttering it.
         and "*" not in (entry.get("permissions") or []) and _registry_grants(slug)

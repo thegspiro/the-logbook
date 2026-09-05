@@ -55,6 +55,14 @@ def test_backfill_covers_every_seeded_position_holding_the_grants():
     A position added to ``DEFAULT_POSITIONS`` with the storefront grants but
     missing from the backfill repeats the original bug for that position:
     fresh installs get it, every existing department does not.
+
+    ``emt`` is the exception, and only because that premise does not hold for
+    it. The registry had no EMT position until 2026-09-05, so every stored EMT
+    row was written by the onboarding editor's create branch rather than by the
+    seed — and ``expand_module_checkboxes`` emits ``storefront.order`` beside
+    ``storefront.view`` for a ticked View box, so those rows already carry both
+    grants. There is nothing for this frozen migration to repair, and it could
+    not be widened to cover it anyway (CLAUDE.md pitfall #20).
     """
     # Thirteen corporate positions gained the grants in a later revision, which
     # carries its own backfill — they are not this migration's to cover.
@@ -72,7 +80,9 @@ def test_backfill_covers_every_seeded_position_holding_the_grants():
     expected = {
         slug
         for slug, definition in DEFAULT_POSITIONS.items()
-        if slug not in later and "storefront.view" in definition["permissions"]
+        if slug not in later
+        and slug != "emt"  # registered after this migration — see the docstring
+        and "storefront.view" in definition["permissions"]
         # A wildcard row already covers the grants and the backfill skips it.
         and "*" not in definition["permissions"]
     }
