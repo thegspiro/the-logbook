@@ -18,7 +18,11 @@ from app.models.admin_hours import (
     AdminHoursEntry,
     AdminHoursEntryStatus,
 )
-from app.models.call_tracking import CallTrackingMode, OrgCall
+from app.models.call_tracking import (
+    UNCLASSIFIED_CALL_TYPE,
+    CallTrackingMode,
+    OrgCall,
+)
 from app.models.event import Event, EventRSVP
 from app.models.operational_rank import OperationalRank
 from app.models.training import (
@@ -1324,6 +1328,11 @@ class ReportsService:
                 "busiest_day_count": (busiest["total_calls"] if busiest else 0),
                 "by_type_totals": type_totals,
             },
+            # Keyed by the same values as the breakdowns above. Served on this
+            # branch too because an org that ran count-only tracking in the
+            # past has slugs in its older reports, and a period spanning the
+            # switch mixes both shapes in one table.
+            "call_type_labels": await call_service.type_labels(str(organization_id)),
             "entries": report_entries,
         }
 
@@ -1357,7 +1366,7 @@ class ReportsService:
                 day, {"date": day, "total_calls": 0, "by_type": {}}
             )
             entry["total_calls"] += 1
-            slug = call.call_type or "unclassified"
+            slug = call.call_type or UNCLASSIFIED_CALL_TYPE
             entry["by_type"][slug] = entry["by_type"].get(slug, 0) + 1
             type_totals[slug] = type_totals.get(slug, 0) + 1
 
@@ -1401,6 +1410,15 @@ class ReportsService:
                 # sum to more than the department ran whenever two units share
                 # a call, which is normal and not an error to reconcile away.
                 "by_apparatus_runs": unit_runs,
+            },
+            # A slug is a storage key, not something to show an officer.
+            # Retired types are in here too, so a report covering last year
+            # still labels a type the department has since stopped offering.
+            "call_type_labels": {
+                **await call_service.type_labels(str(organization_id)),
+                # Matches what the close-out wizard calls the remainder, so
+                # the same quantity does not have two names.
+                UNCLASSIFIED_CALL_TYPE: "Not categorised",
             },
             "entries": report_entries,
         }

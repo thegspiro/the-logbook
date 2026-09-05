@@ -15,6 +15,7 @@ review fixes were implemented:
     / improvement-text alert; verifies the configurable threshold.
 """
 
+import json
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
@@ -25,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.constants import ROLE_TRAINING_OFFICER
 from app.models.notification import NotificationLog
 from app.models.training import Shift, ShiftCompletionReport
+from app.services.call_tracking_service import CallTrackingService
 from app.services.scheduled_tasks import (
     run_end_of_shift_summary,
     run_shift_reminders,
@@ -163,19 +165,21 @@ async def _insert_attendance(
     shift_id: str,
     user_id: str,
     duration_minutes: int | None = 720,
+    call_count: int | None = None,
 ) -> str:
     aid = _uid()
     await db.execute(
         text(
             "INSERT INTO shift_attendance "
-            "(id, shift_id, user_id, duration_minutes) "
-            "VALUES (:id, :sid, :uid, :dur)"
+            "(id, shift_id, user_id, duration_minutes, call_count) "
+            "VALUES (:id, :sid, :uid, :dur, :calls)"
         ),
         {
             "id": aid,
             "sid": shift_id,
             "uid": user_id,
             "dur": duration_minutes,
+            "calls": call_count,
         },
     )
     return aid
@@ -1215,3 +1219,110 @@ class TestShiftReminderSubject:
         assert "Shift Report" not in notif.subject
         # The destination is check-in, which is what makes "report" misleading.
         assert "/scheduling/checkin" in (notif.action_url or "")
+
+
+class TestEndOfShiftSummaryCallTypeLabels:
+    """A call type is stored as a permanent slug so it can be renamed without
+    orphaning last year's calls. The summary a member reads is one of the
+    places that has to turn it back into the department's own words."""
+
+    @staticmethod
+    def _settings(call_types: list[dict]) -> str:
+        return json.dumps(
+            {
+                "scheduling": {
+                    "call_tracking": {"mode": "count_only", "call_types": call_types}
+                }
+            }
+        )
+
+    async def _run(
+        self,
+        db_session: AsyncSession,
+        call_types: list[dict],
+        types_after: list[dict] | None = None,
+    ) -> dict:
+        """Record two mutual-aid calls, optionally rewrite the type list the
+        way an admin would afterwards, then send the summary."""
+        org_id = await _insert_org(db_session, settings_json=self._settings(call_types))
+        user_id = await _insert_user(db_session, org_id=org_id)
+        shift_id, _, _ = await _insert_shift(
+            db_session,
+            org_id=org_id,
+            start_offset_minutes=-13 * 60,
+            is_finalized=True,
+        )
+        await _insert_attendance(
+            db_session,
+            shift_id=shift_id,
+            user_id=user_id,
+            duration_minutes=720,
+            call_count=2,
+        )
+        await db_session.flush()
+
+        shift = (
+            await db_session.execute(select(Shift).where(Shift.id == shift_id))
+        ).scalar_one()
+        _, err = await CallTrackingService(db_session).record_shift_calls(
+            shift, org_id, total_calls=2, type_counts={"mutual_aid": 2}
+        )
+        assert err is None
+        await db_session.flush()
+
+        if types_after is not None:
+            await db_session.execute(
+                text("UPDATE organizations SET settings = :s WHERE id = :id"),
+                {"s": self._settings(types_after), "id": org_id},
+            )
+            await db_session.flush()
+
+        await run_end_of_shift_summary(db_session)
+
+        notif = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.recipient_id == user_id,
+                        NotificationLog.category == "shift_summary",
+                    )
+                )
+            )
+            .scalars()
+            .one()
+        )
+        return {
+            "metadata": notif.notification_metadata or {},
+            "message": notif.message or "",
+        }
+
+    async def test_the_department_s_label_reaches_the_member(
+        self, db_session: AsyncSession
+    ):
+        out = await self._run(
+            db_session, [{"slug": "mutual_aid", "label": "Mutual Aid"}]
+        )
+        assert out["metadata"].get("call_types") == ["Mutual Aid", "Mutual Aid"]
+        assert "Mutual Aid" in out["message"]
+        assert "mutual_aid" not in out["message"]
+
+    async def test_a_retired_type_is_still_named(self, db_session: AsyncSession):
+        """The shift ran before the type was retired. Dropping retired entries
+        from the label map would put the raw slug in the member's inbox."""
+        out = await self._run(
+            db_session,
+            [{"slug": "mutual_aid", "label": "Mutual Aid", "active": False}],
+        )
+        assert out["metadata"].get("call_types") == ["Mutual Aid", "Mutual Aid"]
+
+    async def test_an_unknown_slug_falls_back_to_itself(self, db_session: AsyncSession):
+        """A type deleted outright has no label left. Showing the stored value
+        is worse than a label and far better than an empty field — which is
+        the other thing a `[slug]` lookup could have produced."""
+        out = await self._run(
+            db_session,
+            [{"slug": "mutual_aid", "label": "Mutual Aid"}],
+            types_after=[{"slug": "fire", "label": "Fire"}],
+        )
+        assert out["metadata"].get("call_types") == ["mutual_aid", "mutual_aid"]
