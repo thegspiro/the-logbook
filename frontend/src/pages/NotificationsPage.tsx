@@ -337,12 +337,35 @@ const NotificationsPage: React.FC = () => {
   // so the inbox and the global unread badge are reconciled here too — leaving
   // them alone showed the same notification read on one tab and unread on the
   // next.
+  /**
+   * Reconcile the inbox tab after every one of the caller's notifications has
+   * been marked read.
+   *
+   * The inbox is a *filtered* list, so "mark them all read" is not a
+   * field update — under `showRead === false` the rows stop belonging to it.
+   * Mapping them to `read: true` in place left the unread-only view showing
+   * read notifications, and `inboxTotal` is the count of that same filtered
+   * set, so the Load more control went on advertising rows that were no
+   * longer in it.
+   *
+   * With `showRead` on, the list is unfiltered: the map is right and the
+   * total still counts every row.
+   */
+  const reconcileInboxAllRead = () => {
+    if (showRead) {
+      setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } else {
+      setMyNotifications([]);
+      setInboxTotal(0);
+    }
+    clearGlobalUnread();
+  };
+
   const handleMarkAllRead = async () => {
     try {
       await notificationsService.markAllLogsRead({ scope: NotificationLogScope.MINE });
       setLogs((prev) => prev.map((l) => ({ ...l, read: true })));
-      setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      clearGlobalUnread();
+      reconcileInboxAllRead();
     } catch {
       setError('Failed to mark all as read');
     }
@@ -367,8 +390,7 @@ const NotificationsPage: React.FC = () => {
   const handleMarkAllInboxRead = async () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
-      setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      clearGlobalUnread();
+      reconcileInboxAllRead();
     } catch {
       setError('Failed to mark all as read');
     }
