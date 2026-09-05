@@ -16,12 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 20 (Compliance), pass 3** — branch
-`claude/security-review-compliance`, PR
-[#2245](https://github.com/thegspiro/the-logbook/pull/2245). 0 fixes, 0
-flagged (one already-fixed-elsewhere Pitfall #19 instance re-verified, no
-new gap). See the log entry below and
-`docs/security-review/CMP-20-compliance.md` → **Pass 3** for detail.
+**Feature 21 (Admin hours), pass 3** — branch
+`claude/security-review-admin-hours`, PR (opened alongside this commit). 0
+fixes, 0 flagged. See the log entry below and
+`docs/security-review/AH-21-admin-hours.md` → **Pass 3** for detail.
+
+---
+
+### 2026-09-05 — Feature 21 (Admin hours), pass 3 — 0 fixes, 0 flagged
+
+Picked up immediately after Feature 20 (Compliance) pass 3 merged (PR #2245,
+watchdog-driven — see the entry below). Diff-scoped against pass 2's merge
+(`991c04d2b`, PR #2065): the only backend change is an already-landed,
+unrelated `Decimal`/`float` `TypeError` fix in the compliance-percentage
+calculation (`eb9c2f957`), verified complete and correct. Three genuinely
+new frontend pieces — a date-math utility and a quick-duration-buttons
+component, wired into the manual-entry and pending-review edit forms — are
+all client-side form UX with no new network call; the existing server-side
+guards (AH-1, AH-12) apply unchanged regardless of how the client arrives at
+a value. Swept the full changed/new file set for the standing pitfalls
+(`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`/`date-fns`, direct `fetch(`/raw `axios`) — zero hits. Re-verified
+AH-1 through AH-14 and AH21-1 through AH21-4 all hold at their current lines;
+route inventory re-enumerated fresh at 27/27, all `require_permission`- or
+`get_current_user`-gated. Both open product-decision items unchanged. Full
+local completion gate green: flake8/black/isort clean, migrations validated
+(422 revisions, single head, no admin-hours migration), 72/72 admin-hours-
+scoped and 10876/10876 full backend suite pass, `tsc --noEmit` 0 errors,
+`eslint .` 0 errors/0 warnings, 88 admin-hours-module + 138 adjacent-consumer
+frontend tests pass. Findings doc: `docs/security-review/AH-21-admin-hours.md`
+→ **Pass 3**. Next: 22 Grants & fundraising, once this PR merges.
+
+---
+
+### 2026-09-05 — Feature 20 (Compliance) ✅ closed — PR #2245 merged
+
+**PR #2245 merged cleanly** (merge commit `062464ab3`), CI green on the
+first push (17/17 checks), no review threads requiring action (Codex posted
+only a usage-limit notice, no findings). Rotation row 20 → ✅. Next: 21
+Admin hours.
 
 ---
 
@@ -8632,8 +8665,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |

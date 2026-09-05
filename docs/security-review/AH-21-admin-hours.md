@@ -1,6 +1,94 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), pass 3 (this PR)
+
+## Pass 3 (2026-09-05)
+
+Diff-scoped against pass 2's merge commit (`991c04d2b`, PR #2065) rather than
+re-reading the whole surface. Of the four backend files, only
+`admin_hours_service.py` changed (+20/-6), and it is an already-landed,
+unrelated bug fix (`eb9c2f957`, 2026-08-31): `get_user_hours_compliance`'s
+compliance-percentage calculation divided a MySQL `Decimal` (from
+`func.sum`) by a JSON-derived `float` (`required_hours`), raising `TypeError`
+for any member who had logged approved hours against the category — the `or
+0` fallback on an empty sum coincidentally produced an `int`, so the endpoint
+only worked for members it had nothing to report about. Fixed by using the
+same `hours_from_minutes` helper the module's five other call sites already
+use, and computing the compliance percentage from the un-rounded
+`total_minutes / 60.0` rather than the rounded display value (rounding first
+could turn a real shortfall under 7.5 minutes into a false "compliant").
+Verified the fix is complete and correct by reading the current diff
+directly, not the commit message alone; no residual risk — this is a
+correctness fix with no tenant-isolation, auth, or injection dimension.
+
+**Frontend: three genuinely new pieces, all client-side form UX, no new
+server surface.** `utils/entryTimes.ts` (new — `addHours`/`syncEndToStart`,
+pure date-math helpers for the manual-entry and pending-review edit forms),
+`components/QuickDurationButtons.tsx` (new — 1/2/4/8-hour preset buttons,
+mirroring the Create Events form's equivalent control), and their wiring into
+`AdminHoursPage.tsx` (+60/-12: quick-duration buttons and start→end syncing
+on the manual-entry form, a default reporting-period change from "All time"
+to "This month", and a post-clock-out refetch of the member's own filtered
+list/summary instead of relying on the store's unfiltered refetch) and
+`PendingReviewTab.tsx` (+35/-4: the same two controls on the reviewer's edit
+form). None of these touch a network call — they only pre-fill the
+`clock_in_at`/`clock_out_at` fields that flow into the existing, already-
+reviewed `create_manual_entry`/`edit_pending_entry` submit paths, whose
+server-side guards (AH-1's future-time rejection and 24h cap, AH-12's parity
+guards including the overlap re-check) apply identically regardless of how
+the client arrived at the value. Swept both new files and both changed files
+for the standing pitfalls: zero hits for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`/`date-fns`, and direct
+`fetch(`/raw `axios` (the existing `moduleFetchIntegrity.test.ts` guard from
+AH21-1/AH21-4 already covers this file set and stayed green).
+
+**Re-verified, all still hold, no code change needed:**
+
+- AH-1 through AH-14 (pass 1 + pass 2) — read the current
+  `admin_hours_service.py` and `admin_hours.py` directly (not re-cited from
+  prior passes): the `clock_out`/`credit_event_attendance`/
+  `delete_event_attendance_entries`/`get_user_hours_compliance` org filters,
+  `update_category`'s `apply_updates` routing, `clock_in`'s row-lock +
+  locking active-session read, both event-hour-mapping percentage locks
+  (including the Codex-caught complete-locked-set fix), `edit_pending_entry`'s
+  parity guards, and `_parse_optional_date` on all four date-accepting
+  endpoints are all unchanged at their pass-2 lines (only the compliance
+  percentage calculation itself changed, per above).
+- AH21-1 through AH21-4 (pass 2, frontend) — `exportCsv` still routes
+  through the shared `createApiClient()` with `responseType: 'blob'` and
+  `timeout: 0`; the blob-error-decoding fix in `createApiClient.ts` is
+  unchanged; `moduleFetchIntegrity.test.ts`'s two scans (bare/`window`/
+  `globalThis`/`self` `fetch(`, and direct `axios` imports) still pass
+  against the module's now-larger file set.
+- Route inventory — AST-enumerated fresh (not diffed): 27/27 routes,
+  matching pass 1/2 exactly, every route carrying `Depends(get_current_user)`
+  or `Depends(require_permission("admin_hours.manage"))`.
+- Both open product-decision items (per-org SoD toggle; `credit_event_attendance`'s
+  resync-can-grow-a-decided-entry gap) — re-read against the current code,
+  both still present, both still deliberate per the code's own docstrings,
+  neither touched by anything that changed since pass 2.
+- No migration touches an admin-hours table since pass 2 (confirmed via
+  `validate_migrations.py --strict` and a content grep of migrations added
+  since, not by filename alone).
+
+**No new findings, no code changes this pass.**
+
+## Completion gate (pass 3)
+
+| Check                                                                                                 | Result                              |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                         | clean (0 violations)                |
+| `black --check app/ tests/ alembic/`                                                                  | clean (1477 files unchanged)        |
+| `isort --check-only app/ tests/ alembic/`                                                             | clean                               |
+| `python3 scripts/validate_migrations.py --strict`                                                     | PASSED — 422 revisions, single head |
+| backend tests, scope (`-k "admin_hours"`)                                                             | 72 passed, 1 pre-existing skip      |
+| backend tests, full suite                                                                             | 10876 passed, 21 pre-existing skips |
+| `npx tsc --noEmit` (frontend)                                                                         | 0 errors                            |
+| `npx eslint .` (frontend)                                                                             | 0 errors, 0 warnings                |
+| `npx vitest run` (admin-hours module, 7 files)                                                        | 88 passed                           |
+| `npx vitest run` (adjacent consumers: member-profile, compliance config, dashboard, check-in station) | 138 passed                          |
+
+---
 
 ## Pass 1 (2026-08-26/27)
 
