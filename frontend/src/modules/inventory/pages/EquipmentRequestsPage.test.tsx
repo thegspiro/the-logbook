@@ -382,6 +382,44 @@ describe('EquipmentRequestsPage', () => {
     expect(await screen.findByText(/Nothing on hand is size/)).toBeInTheDocument();
   });
 
+  it('never preselects a plain size for a request that carries a qualifier', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ requested_size: '10 (wide)' })] });
+    mockGetItems.mockResolvedValue({
+      items: [variant('boot-10', '10', { name: 'Polo — 10', standard_size: '', size: '10' })],
+      total: 1,
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    // A plain 10 is not a 10 wide. `_apply_member_size` refuses to suggest it
+    // to the member for that reason; picking it here would issue the exact row
+    // the member-facing flow rejected.
+    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('');
+  });
+
+  it('leaves the choice manual when two products share a name and size', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest()] });
+    // Nothing stops two variant groups in one category sharing a display
+    // name, and the request preserves only the name.
+    mockGetItems.mockResolvedValue({
+      items: [
+        variant('polo-a-l', 'l', { variant_group_id: 'group-a' }),
+        variant('polo-b-l', 'l', { variant_group_id: 'group-b' }),
+      ],
+      total: 2,
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+    expect(await screen.findByText('Polo')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Fulfill'));
+
+    expect(await screen.findByLabelText('Item to fulfill with')).toHaveValue('');
+  });
+
   it('does not warn about the size before availability has been queried', async () => {
     const user = userEvent.setup();
     mockGetEquipmentRequests.mockResolvedValue({ requests: [poloRequest({ requested_size: 'xxl' })] });

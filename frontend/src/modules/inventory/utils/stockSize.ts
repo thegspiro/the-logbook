@@ -65,6 +65,20 @@ export function normalizeSizeKey(value: string | null | undefined): string {
 }
 
 /**
+ * The parenthetical qualifier on a size — "" when there is none.
+ *
+ * Mirrors `_size_qualifier`. Deliberately separate from `normalizeSizeKey`,
+ * which discards it: bucketing demand against stock wants "10 (wide)" and "10"
+ * together, while deciding whether a stocked row *is* the size somebody asked
+ * for must not treat them as the same boot.
+ */
+export function sizeQualifier(value: string | null | undefined): string {
+  if (!value || !value.includes('(')) return '';
+  const inner = value.split('(')[1]?.split(')')[0] ?? '';
+  return inner.toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+}
+
+/**
  * The product a variant row belongs to.
  *
  * Mirrors `_product_base_name`: the variant generator names its output

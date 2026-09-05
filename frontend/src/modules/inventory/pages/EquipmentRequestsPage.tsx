@@ -23,7 +23,7 @@ import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem, InventoryItem } from '../types';
 import { REQUEST_STATUS_BADGES, sizeLabel } from '../types';
 import { issuableQuantity } from '../utils/issuable';
-import { normalizeSizeKey, productBaseName, stockSizeValue } from '../utils/stockSize';
+import { normalizeSizeKey, productBaseName, sizeQualifier, stockSizeValue } from '../utils/stockSize';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
@@ -182,11 +182,21 @@ const EquipmentRequestsPage: React.FC = () => {
     }
   };
 
-  /** Does this catalog row carry the size the member asked for? */
+  /**
+   * Does this catalog row carry the size the member asked for?
+   *
+   * The qualifier is compared as well as the size, because
+   * `normalizeSizeKey` drops it: without that second check a request for boot
+   * "10 (wide)" matches a plain "10", and the picker would automatically
+   * select the very row `_apply_member_size` refused to suggest to the member
+   * for not being the right fit.
+   */
   const matchesRequestedSize = (req: EquipmentRequestItem | null, item: InventoryItem): boolean => {
     const wanted = normalizeSizeKey(req?.requested_size);
     if (!wanted) return false;
-    return normalizeSizeKey(stockSizeValue(item)) === wanted;
+    const stocked = stockSizeValue(item);
+    if (normalizeSizeKey(stocked) !== wanted) return false;
+    return sizeQualifier(stocked) === sizeQualifier(req?.requested_size);
   };
 
   /**
@@ -232,13 +242,22 @@ const EquipmentRequestsPage: React.FC = () => {
     const preselectRequestedSize = (available: InventoryItem[]) => {
       if (req.item_id || !req.requested_size) return;
       const wantedQuantity = req.quantity || 1;
-      const match = available.find(
+      const candidates = available.filter(
         (item) =>
           isCompatible(req, item) &&
           matchesRequestedProduct(req, item) &&
           matchesRequestedSize(req, item) &&
           availableQuantity(item) >= wantedQuantity
       );
+      // Nothing stops two variant groups in one category carrying the same
+      // display name, and the name is all the request preserves — so when the
+      // candidates span more than one product identity there is no way to tell
+      // which the member meant. Ambiguity goes back to the quartermaster
+      // rather than being resolved by list order; the backend would accept the
+      // wrong group without asking for a substitution reason.
+      const identities = new Set(candidates.map((item) => item.variant_group_id ?? `item:${item.id}`));
+      if (identities.size !== 1) return;
+      const match = candidates[0];
       if (!match) return;
       setFulfillItemId(match.id);
       // Pool stock is rejected outright unless the method is `issuance`, so
@@ -247,6 +266,13 @@ const EquipmentRequestsPage: React.FC = () => {
       // have no reason to re-check after an automatic selection.
       if (match.tracking_type === 'pool') setFulfillmentType('issuance');
     };
+
+    // Advanced on every launch, cached path included: a load still in flight
+    // from a *review* dialog can populate `items` on its own, so a cached
+    // fast-path return that skipped the increment would leave an older
+    // fulfil load's callback still passing the sequence check — and
+    // overwriting this dialog's selection.
+    const load = ++fulfillLoadSeq.current;
 
     if (items.length > 0) {
       preselectRequestedSize(items);
@@ -259,7 +285,6 @@ const EquipmentRequestsPage: React.FC = () => {
     // quartermaster who opens request A, closes it and opens B before A's
     // query lands would otherwise have A's callback preselect A's item while
     // B is on screen, and the backend accepts it as category-compatible.
-    const load = ++fulfillLoadSeq.current;
     setItemsLoading(true);
     void inventoryService
       .getItems({ active_only: true, limit: 500 })

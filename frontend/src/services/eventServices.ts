@@ -1011,6 +1011,8 @@ export interface EquipmentRequestItem {
     tracking_type: string;
     status: string;
     available_quantity: number;
+    /** The referenced item's own size, so the reviewer can compare it with `requested_size`. */
+    size?: string | null;
     min_rank_order?: number | null;
     restricted_to_positions?: string[] | null;
   };
