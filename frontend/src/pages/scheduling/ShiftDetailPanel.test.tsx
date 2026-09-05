@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
@@ -192,6 +192,29 @@ describe('ShiftDetailPanel signup window', () => {
     mockOpen.mockResolvedValue({} as never);
     mockClose.mockReset();
     mockClose.mockResolvedValue({} as never);
+    // An officer, deliberately without scheduling.manage. The blanket-true
+    // default makes the viewer a manager, and a manager is never bounded by
+    // the window, so the reopen banner is not offered to them at all — these
+    // cases would have been exercising the one actor the feature is not for.
+    grantedPermissions.current = ['scheduling.assign'];
+  });
+
+  afterEach(() => {
+    grantedPermissions.current = null;
+  });
+
+  it('does not offer a scheduling admin a window to reopen', async () => {
+    // `rosterLocked` exempts a manager and `signupClosedReason` returns null
+    // for one, so the banner's own conditions cannot withhold it — leaving
+    // `memberSignupClosed` to render it, and the bounded endpoint to refuse
+    // the click. `!canManage` has to be its own gate, as the endpoint's
+    // contract ("not offered to scheduling.manage") already said.
+    grantedPermissions.current = ['scheduling.assign', 'scheduling.manage'];
+    renderWithRouter(<ShiftDetailPanel shift={startedShift() as never} onClose={vi.fn()} />);
+
+    await screen.findByText('Crew Roster');
+    expect(screen.queryByText('Signup is closed for this shift')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Reopen for/ })).not.toBeInTheDocument();
   });
 
   it('offers leadership a way to reopen a shift that has started', async () => {

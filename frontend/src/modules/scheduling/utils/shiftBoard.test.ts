@@ -15,6 +15,7 @@ import {
   DEFAULT_SIGNUP_WINDOW,
   isShiftClaimable,
   memberSignupClosedReason,
+  rosterLocked,
   signupClosedReason,
   shiftCrewName,
   shiftPeriodLetter,
@@ -641,5 +642,85 @@ describe('an overnight shift after its date has rolled over', () => {
   it('still falls back to the day rule when the start cannot be read', () => {
     const unreadable = overnight({ start_time: '18:00' });
     expect(isShiftClaimable(unreadable)).toBe(false);
+  });
+});
+
+describe('rosterLocked', () => {
+  const MEMBER = { canAssign: false, canManage: false };
+  const OFFICER = { canAssign: true, canManage: false };
+  const ADMIN = { canAssign: false, canManage: true };
+
+  // Minutes from now, as an instant pair. `ran` is the shift the bug was
+  // reported on: over, days ago, still offering every live control it had.
+  const window = (startMinutes: number, endMinutes: number) =>
+    shift({
+      shift_date: toDateKey(new Date(Date.now() + startMinutes * 60_000)),
+      start_time: new Date(Date.now() + startMinutes * 60_000).toISOString(),
+      end_time: new Date(Date.now() + endMinutes * 60_000).toISOString(),
+    });
+  const ran = window(-20 * 24 * 60 - 720, -20 * 24 * 60);
+
+  it('locks a shift that ran weeks ago', () => {
+    expect(rosterLocked(ran, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(true);
+    expect(rosterLocked(ran, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(true);
+  });
+
+  it('leaves an upcoming shift alone', () => {
+    expect(rosterLocked(shift(), DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+  });
+
+  it('keeps an overnight crew’s controls through the shift', () => {
+    // Six hours in, six to go. `isPast` is already true — the date rolled at
+    // midnight — which is exactly why this rule cannot be day-granular.
+    const overnight = window(-6 * 60, 6 * 60);
+    expect(rosterLocked(overnight, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(overnight, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
+  });
+
+  it('holds the roster open through the grace period after the end', () => {
+    // Signup closed for the officer long ago — the officer bound counts from
+    // the *start* — but the crew has only just come in, so the roster is still
+    // being settled.
+    const justEnded = window(-12 * 60 - 30, -30);
+    expect(signupClosedReason(justEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).not.toBeNull();
+    expect(rosterLocked(justEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+  });
+
+  it('locks once the grace period past the end has run out', () => {
+    const window90 = { closesMinutesBefore: 0, graceMinutes: 60 };
+    expect(rosterLocked(window(-12 * 60 - 90, -90), window90, OFFICER)).toBe(true);
+    expect(rosterLocked(window(-12 * 60 - 30, -30), window90, OFFICER)).toBe(false);
+  });
+
+  it('never locks a scheduling admin out', () => {
+    // The records path. Correcting a roster from last month is the whole job.
+    expect(rosterLocked(ran, DEFAULT_SIGNUP_WINDOW, ADMIN)).toBe(false);
+  });
+
+  it('stays open while a late-signup window an officer opened is live', () => {
+    const reopened = { ...ran, late_signup_until: new Date(Date.now() + 15 * 60_000).toISOString() };
+    expect(rosterLocked(reopened, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+  });
+
+  it('leaves an open-ended shift unlocked however long ago it began', () => {
+    // `end_time` is optional on a shift, and an open-ended one is real rather
+    // than malformed. Standing the start in for the missing end would lock it
+    // one grace period after it began, with the crew still working — a false
+    // lock on a live shift, which is worse than no lock on one nothing can
+    // bound.
+    const openEnded = { ...ran, end_time: undefined };
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+    expect(rosterLocked(openEnded, DEFAULT_SIGNUP_WINDOW, MEMBER)).toBe(false);
+  });
+
+  it('leaves an end it cannot read unlocked', () => {
+    // A bare "HH:MM" end still reaches the client from some responses. It is
+    // the same unjudgeable case, and takes the same permissive answer.
+    const unreadable = { ...ran, end_time: '19:00' };
+    expect(rosterLocked(unreadable, DEFAULT_SIGNUP_WINDOW, OFFICER)).toBe(false);
+  });
+
+  it('defaults to the member view when no viewer is given', () => {
+    expect(rosterLocked(ran)).toBe(true);
   });
 });
