@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Programs offered members buttons they could not use (2026-09-05)
+
+**Fixed**
+
+- **Every management action on /training/programs was shown to every member.**
+  Creating, importing and exporting a pipeline, adding a sample template, and
+  creating, importing or editing a requirement all require `training.manage` on
+  the server, but the page rendered the controls for all three tabs to everyone.
+  Tapping "New Pipeline" or "Create Your First Pipeline" landed a member on the
+  access-denied page; a registry import returned 403. Those controls now render
+  only for training managers. The lists themselves stay readable — it is the
+  write affordances that are withheld.
+
+- **The Requirements tab was blank for anyone without `training.manage`.** It
+  loaded the registry list alongside the requirements in one batch, and that
+  endpoint is manager-only, so its 403 rejected the batch and the requirements
+  never rendered. Members no longer request it.
+
+**Changed**
+
+- **With no programs, requirements or templates to show, a member now sees an
+  empty panel** rather than a card whose only content is a prompt to create the
+  thing they cannot create. A search that matched nothing still reports "No
+  programs found" to everyone, since that is feedback on the term they typed.
+
 ### Long notification lists could skip a notification while you paged (2026-09-05)
 
 **Fixed**
