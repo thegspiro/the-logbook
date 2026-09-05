@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Shift Details becomes a modal (2026-09-05)
+
+**Changed**
+
+- **The Shift Details surface is now a centred dialog rather than a right-edge
+  drawer.** It rendered through `drawer-panel` — pinned full-height to the
+  right of the screen, full-bleed on phones and capped at 32rem above 640px.
+  It is now centred and height-capped: 56rem on a laptop, a 1rem-inset box on a
+  phone, scrolling within itself. The wider desktop box gives the crew board and
+  the close-out checklist's per-member hours inputs room they did not have at
+  512px.
+
+**Fixed**
+
+- **Escape inside the driver-blocked dialog no longer closes the shift behind
+  it.** Shift Details hand-rolled Escape on a `document` listener that could not
+  see the dialog stack, so one key dismissed both. It now routes through the
+  shared dialog stack (`DialogPanel` / `useDialog`), which also gives it the
+  focus trap, body scroll lock and `role="dialog"` it never had. Escape still
+  cancels an open inline notes editor before it closes anything.
+
 ### Compliance Matrix: a grid you could read becomes a queue you can work (2026-09-05)
 
 **Changed**
