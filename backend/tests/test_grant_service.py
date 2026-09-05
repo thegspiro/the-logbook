@@ -355,5 +355,99 @@ class TestUpdateComplianceTaskHardening:
         assert notes[0].note_metadata["task_type"] == "audit"
 
 
+class TestListPagination:
+    """GF-35: every list_* method applies skip/limit in SQL rather than
+    fetching the whole org-wide table and slicing in Python (Checklist #6 —
+    an unbounded list endpoint). A mocked session can't prove the *row
+    count* is bounded, but it can prove the LIMIT/OFFSET clause the
+    endpoint's `pagination.skip`/`pagination.limit` feed actually reaches
+    the compiled statement, which is the part a regression would silently
+    drop (e.g. reverting to `results[skip:skip+limit]` in Python)."""
+
+    @staticmethod
+    def _scalars(items):
+        r = MagicMock()
+        r.scalars.return_value.all.return_value = items
+        r.scalars.return_value.unique.return_value.all.return_value = items
+        return r
+
+    @classmethod
+    async def _compiled_sql(cls, coro):
+        from sqlalchemy.dialects import mysql
+
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            return cls._scalars([])
+
+        db = MagicMock()
+        db.execute = execute
+        await coro(db)
+        assert captured, "list method never executed a query"
+        return str(
+            captured[-1].compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+
+    # MySQL's dialect renders LIMIT/OFFSET as a single clause,
+    # `LIMIT <offset>, <count>` — there is no separate "offset" keyword to
+    # assert on.
+
+    async def test_list_opportunities_applies_skip_and_limit(self):
+        sql = await self._compiled_sql(
+            lambda db: GrantService(db).list_opportunities("org-1", skip=10, limit=5)
+        )
+        assert "limit 10, 5" in sql
+
+    async def test_list_applications_applies_skip_and_limit(self):
+        sql = await self._compiled_sql(
+            lambda db: GrantService(db).list_applications("org-1", skip=20, limit=7)
+        )
+        assert "limit 20, 7" in sql
+
+    async def test_list_compliance_tasks_applies_skip_and_limit(self):
+        sql = await self._compiled_sql(
+            lambda db: GrantService(db).list_compliance_tasks("org-1", skip=3, limit=6)
+        )
+        assert "limit 3, 6" in sql
+
+    async def test_list_opportunities_defaults_are_bounded(self):
+        # No caller passes skip/limit explicitly except the endpoint layer —
+        # the defaults themselves must still bound the query, not fetch
+        # everything (an unbounded query would compile with no LIMIT clause
+        # at all).
+        sql = await self._compiled_sql(
+            lambda db: GrantService(db).list_opportunities("org-1")
+        )
+        assert "limit 0, 100" in sql
+
+    async def test_list_budget_items_applies_skip_and_limit(self):
+        app = SimpleNamespace(id="app-1", organization_id="org-1")
+
+        async def execute(stmt, *_a, **_kw):
+            if not hasattr(execute, "calls"):
+                execute.calls = 0
+            execute.calls += 1
+            if execute.calls == 1:
+                # get_application, resolving the parent application in-org.
+                return _one(app)
+            execute.captured = stmt
+            return self._scalars([])
+
+        db = MagicMock()
+        db.execute = execute
+        await GrantService(db).list_budget_items("app-1", "org-1", skip=2, limit=4)
+        from sqlalchemy.dialects import mysql
+
+        sql = str(
+            execute.captured.compile(
+                dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+        assert "limit 2, 4" in sql
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

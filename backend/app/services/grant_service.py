@@ -90,6 +90,8 @@ class GrantService:
         category: Optional[str] = None,
         active_only: bool = True,
         search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[GrantOpportunity]:
         query = select(GrantOpportunity).where(
             GrantOpportunity.organization_id == organization_id
@@ -106,6 +108,11 @@ class GrantService:
                 | (GrantOpportunity.description.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
         query = query.order_by(*nulls_last_asc(GrantOpportunity.deadline_date))
+        # GF-35: apply skip/limit in SQL rather than fetching the whole
+        # org-wide table and slicing in Python (Pitfall/Checklist #6 — an
+        # unbounded list endpoint). Ordering already happens above, so this
+        # is a behavior-preserving optimization, not a semantic change.
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -175,6 +182,8 @@ class GrantService:
         status: Optional[str] = None,
         priority: Optional[str] = None,
         assigned_to: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[GrantApplication]:
         query = (
             select(GrantApplication)
@@ -191,6 +200,10 @@ class GrantService:
         if assigned_to:
             query = query.where(GrantApplication.assigned_to == assigned_to)
         query = query.order_by(GrantApplication.created_at.desc())
+        # GF-35: same offset/limit fix as list_opportunities. selectinload
+        # issues its own follow-up query for the page's rows (not a JOIN), so
+        # LIMIT/OFFSET on this query cannot fan out or under-count the page.
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().unique().all())
 
@@ -519,7 +532,11 @@ class GrantService:
     # ------------------------------------------------------------------
 
     async def list_budget_items(
-        self, application_id: str, organization_id: str
+        self,
+        application_id: str,
+        organization_id: str,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[GrantBudgetItem]:
         # Verify application belongs to org
         app = await self.get_application(application_id, organization_id)
@@ -529,6 +546,8 @@ class GrantService:
             select(GrantBudgetItem)
             .where(GrantBudgetItem.application_id == application_id)
             .order_by(GrantBudgetItem.sort_order.asc())
+            .offset(skip)
+            .limit(limit)
         )
         return list(result.scalars().all())
 
@@ -601,6 +620,8 @@ class GrantService:
         application_id: str,
         organization_id: str,
         budget_item_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[GrantExpenditure]:
         app = await self.get_application(application_id, organization_id)
         if not app:
@@ -611,6 +632,7 @@ class GrantService:
         if budget_item_id:
             query = query.where(GrantExpenditure.budget_item_id == budget_item_id)
         query = query.order_by(GrantExpenditure.expenditure_date.desc())
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -823,6 +845,8 @@ class GrantService:
         application_id: Optional[str] = None,
         status: Optional[str] = None,
         due_before: Optional[date] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[GrantComplianceTask]:
         query = select(GrantComplianceTask).join(GrantApplication)
         query = query.where(GrantApplication.organization_id == organization_id)
@@ -833,6 +857,7 @@ class GrantService:
         if due_before:
             query = query.where(GrantComplianceTask.due_date <= due_before)
         query = query.order_by(GrantComplianceTask.due_date.asc())
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -949,7 +974,11 @@ class GrantService:
     # ------------------------------------------------------------------
 
     async def list_notes(
-        self, application_id: str, organization_id: str
+        self,
+        application_id: str,
+        organization_id: str,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[GrantNote]:
         # Scope through the parent application so notes from another org's
         # application can't be read by guessing its id.
@@ -960,6 +989,8 @@ class GrantService:
             select(GrantNote)
             .where(GrantNote.application_id == application_id)
             .order_by(GrantNote.created_at.desc())
+            .offset(skip)
+            .limit(limit)
         )
         return list(result.scalars().all())
 

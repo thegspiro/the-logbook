@@ -16,7 +16,70 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_None currently open._
+**Feature 22 (Grants & fundraising), pass 3** — branch
+`claude/security-review-grants-fundraising`, PR pending (opened immediately
+after this commit; see the next `docs(security-review): record PR #NNNN`
+commit for the link).
+
+---
+
+### 2026-09-05 — Feature 22 (Grants & fundraising), pass 3 — 1 fixed, 0 flagged
+
+Diff-scoped against pass 2's merge commit (`d7a0c456`, PR #2073) after
+verifying it reachable from `HEAD` first — the repo arrived shallow-cloned,
+so `git fetch --unshallow` was run before trusting
+`git merge-base --is-ancestor` (Feature 21's pass 3 got burned once already
+for skipping this check). All six declared/adjacent backend files
+(`grants.py`, `grant_service.py`, `fundraising_service.py`, `grant.py`,
+`schemas/grant.py`, `dashboard_widget_service.py`) and the entire
+`frontend/src/modules/grants-fundraising/` module came back **byte-identical**
+to pass 2's merged state — zero code drift. The 1,348-file repo-wide diff
+since pass 2 was also grepped for grant/fundraising-shaped keywords to catch
+drift outside the declared file list: the only hits were unrelated seeded
+_permission_-grant migrations (Pitfall #23's meaning of "grant") and training
+docs/screenshots; independently re-confirmed neither `fundraising.view` nor
+`fundraising.manage` reaches the `member`/`firefighter` baseline.
+
+Re-verified GF-13 through GF-34 all still hold by reading the current code
+(not re-cited from the doc), and re-ran the endpoint enumeration from
+scratch: 45/45 routes in `grants.py` still carry
+`require_permission("fundraising.view"/"fundraising.manage")`, every `GET`
+gated `.view` and every mutating verb gated `.manage`, no exceptions.
+
+**GF-35 (LOW-MED, fixed)** — all 11 `list_*` service methods across both
+services built their query with every filter and an `ORDER BY` but no
+`LIMIT`/`OFFSET`; the endpoint layer then sliced the client's
+`skip`/`limit` in **Python** _after_ fetching the entire org-wide table from
+MySQL — `PaginationParams` existed precisely to be threaded into the query
+and never was. Not a tenant-isolation gap (`organization_id` was still
+filtered correctly throughout) but a Checklist §6 resource-exhaustion
+concern: a long-running department's full donation/donor/application
+history gets fetched and materialized on every list page view regardless of
+page size. Fixed by adding `skip`/`limit` parameters to all 11 methods and
+applying `.offset(skip).limit(limit)` in SQL (behavior-preserving — same
+`ORDER BY`, same rows returned for any request within the row count),
+threaded through from `PaginationParams` at all 11 corresponding endpoints.
+New guard tests (`TestListPagination`, 11 cases across
+`test_grant_service.py`/`test_fundraising_service.py`) assert the compiled
+SQL carries MySQL's `LIMIT <offset>, <count>` clause; verified to fail
+before the fix (temporarily reverted one method, confirmed the guard catches
+it) and pass after.
+
+Re-confirmed still open, unchanged from every prior pass, no new findings:
+GF-7 (state-machine/overspend, product decision), GF-8 (`is_anonymous` not
+enforced, product decision), GF-9 (float money math, deliberate-refactor
+decision), GF-27a (KPI multi-status link mismatch, filter-UI decision), GF-33
+(applications page still caps at 1,000, no real pagination UI — GF-35 makes
+that cap efficient to compute, not higher). All already in
+`KNOWN_LIMITATIONS.md`; no changes needed there this pass.
+
+Full local completion gate green: flake8/black/isort clean, migrations
+validated (422 revisions, single head, no schema change), 495/495
+grant+fundraising-scoped and 10,903/10,903 full backend suite pass,
+`tsc --noEmit` 0 errors, `eslint .` 0 errors/0 warnings. No frontend files
+touched (zero drift, no new frontend finding). Findings doc:
+`docs/security-review/GF-22-grants-fundraising.md` → Pass 3. PR opened and
+subscribed. Next: 23 medical supplies, once this PR merges.
 
 ---
 
@@ -8704,7 +8767,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | 🔄     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |

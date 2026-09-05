@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Grants & Fundraising: list endpoints now page at the database (2026-09-05)
+
+**Fixed**
+
+- Every grants/fundraising list endpoint (opportunities, applications,
+  budget items, expenditures, compliance tasks, notes, campaigns, donors,
+  donations, pledges, fundraising events) previously fetched an org's
+  **entire** matching table from the database before selecting the
+  requested page in application memory. For a department with years of
+  donation, donor, or grant-application history, this meant every list page
+  view scanned and loaded the complete history regardless of how small the
+  requested page was. Pagination (`skip`/`limit`) is now applied in the SQL
+  query itself, so a page load only reads the rows it actually displays.
+  No response shape or ordering changed for any request within the
+  documented row limits.
+
 ### Admin Hours: compliance threshold and duration fixes (2026-09-05)
 
 **Fixed**

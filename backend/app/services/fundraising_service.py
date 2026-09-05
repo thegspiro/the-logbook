@@ -62,6 +62,8 @@ class FundraisingService:
         organization_id: str,
         status: Optional[str] = None,
         campaign_type: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[FundraisingCampaign]:
         query = select(FundraisingCampaign).where(
             FundraisingCampaign.organization_id == organization_id,
@@ -72,6 +74,11 @@ class FundraisingService:
         if campaign_type:
             query = query.where(FundraisingCampaign.campaign_type == campaign_type)
         query = query.order_by(FundraisingCampaign.created_at.desc())
+        # GF-35: apply skip/limit in SQL rather than fetching the whole
+        # org-wide table and slicing in Python (Checklist #6 — an unbounded
+        # list endpoint). Ordering already happens above, so this is a
+        # behavior-preserving optimization, not a semantic change.
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -145,6 +152,8 @@ class FundraisingService:
         organization_id: str,
         donor_type: Optional[str] = None,
         search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[Donor]:
         query = select(Donor).where(
             Donor.organization_id == organization_id,
@@ -161,6 +170,7 @@ class FundraisingService:
                 | (Donor.company_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
         query = query.order_by(Donor.last_name.asc(), Donor.first_name.asc())
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -205,6 +215,8 @@ class FundraisingService:
         donor_id: Optional[str] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[Donation]:
         query = select(Donation).where(Donation.organization_id == organization_id)
         if campaign_id:
@@ -227,6 +239,7 @@ class FundraisingService:
                 <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
             )
         query = query.order_by(Donation.donation_date.desc())
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -474,6 +487,8 @@ class FundraisingService:
         organization_id: str,
         status: Optional[str] = None,
         campaign_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[Pledge]:
         query = select(Pledge).where(Pledge.organization_id == organization_id)
         if status:
@@ -481,6 +496,7 @@ class FundraisingService:
         if campaign_id:
             query = query.where(Pledge.campaign_id == campaign_id)
         query = query.order_by(*nulls_last_asc(Pledge.due_date))
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -541,6 +557,8 @@ class FundraisingService:
         organization_id: str,
         campaign_id: Optional[str] = None,
         status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
     ) -> List[FundraisingEvent]:
         query = select(FundraisingEvent).where(
             FundraisingEvent.organization_id == organization_id
@@ -550,6 +568,7 @@ class FundraisingService:
         if status:
             query = query.where(FundraisingEvent.status == status)
         query = query.order_by(FundraisingEvent.event_date.desc())
+        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
