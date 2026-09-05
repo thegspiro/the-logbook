@@ -292,6 +292,40 @@ describe('schedulingStore', () => {
     });
   });
 
+  describe('resetSettings', () => {
+    beforeEach(() => {
+      mockGetFeatureSettings.mockReset();
+      mockGetFeatureSettings.mockResolvedValue({ platoons_enabled: false });
+    });
+
+    it('lets the next sign-in re-fetch rather than reusing the cache', async () => {
+      // On a shared station computer the tab outlives the member. Without the
+      // reset, `settingsLoaded` short-circuits the fetch and the next member
+      // reads the previous department's settings.
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: true,
+        call_tracking: { mode: 'count_only', call_types: [{ slug: 'fire', label: 'Fire' }] },
+      });
+      await useSchedulingStore.getState().loadSettings();
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(true);
+
+      useSchedulingStore.getState().resetSettings();
+
+      expect(useSchedulingStore.getState().settingsLoaded).toBe(false);
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({});
+      expect(useSchedulingStore.getState().platoonsEnabled).toBe(false);
+      expect(useSchedulingStore.getState().callTrackingMode).toBe('detailed');
+
+      mockGetFeatureSettings.mockResolvedValue({
+        platoons_enabled: false,
+        call_tracking: { mode: 'count_only', call_types: [{ slug: 'brush', label: 'Brush' }] },
+      });
+      await useSchedulingStore.getState().loadSettings();
+
+      expect(useSchedulingStore.getState().callTypeLabels).toEqual({ brush: 'Brush' });
+    });
+  });
+
   describe('loadSettings request sharing', () => {
     beforeEach(() => {
       mockGetFeatureSettings.mockReset();

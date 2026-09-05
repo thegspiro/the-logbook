@@ -68,6 +68,17 @@ interface SchedulingState {
   loadApparatus: () => Promise<void>;
   loadSummary: () => Promise<void>;
   loadSettings: () => Promise<void>;
+  /**
+   * Drop the department-wide settings so the next sign-in re-fetches them.
+   *
+   * `settingsLoaded` is a once-per-session cache, and on a shared station
+   * computer the session outlives the member: without this, signing out and
+   * signing in as somebody from another department left every screen reading
+   * the previous department's call types, signup window and toggles, because
+   * `loadSettings` short-circuits on the flag. Called from the logout purge
+   * beside the other caches keyed by nothing user-specific.
+   */
+  resetSettings: () => void;
   setPlatoonsEnabled: (enabled: boolean) => void;
   loadInitialData: () => Promise<void>;
 }
@@ -107,6 +118,19 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   settingsLoaded: false,
 
   // ─── Actions ────────────────────────────────────────────────────────────
+
+  resetSettings: () => {
+    settingsRequest = null;
+    set({
+      settingsLoaded: false,
+      platoonsEnabled: false,
+      requireEndOfShiftChecks: false,
+      callTrackingMode: 'detailed',
+      callTypeLabels: {},
+      signupClosesMinutesBefore: DEFAULT_SIGNUP_WINDOW.closesMinutesBefore,
+      lateSignupGraceMinutes: DEFAULT_SIGNUP_WINDOW.graceMinutes,
+    });
+  },
 
   loadSettings: async () => {
     if (get().settingsLoaded) return;

@@ -32,4 +32,14 @@ export const useCallTypeLabels = (): ((value: string) => string) => {
   return useCallback((value: string) => labels[value] ?? value, [labels]);
 };
 
+/**
+ * Whether the label map has actually arrived.
+ *
+ * Only the print view needs this. It fires `window.print()` on a timer once
+ * the report loads, and the settings request races that timer — a print
+ * snapshot taken first shows raw slugs, and no later state update can repair
+ * a page that has already gone to the printer.
+ */
+export const useCallTypeLabelsReady = (): boolean => useSchedulingStore((s) => s.settingsLoaded);
+
 export default useCallTypeLabels;

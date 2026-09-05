@@ -25,6 +25,12 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 
 // Matches CallTypeOption.slug on the backend: `^[a-z0-9_]+$`, max 50.
 const SLUG_MAX = 50;
+/**
+ * The synthetic bucket a call with no type falls into. The backend refuses it
+ * as a configured slug, so a type named "Unclassified" has to be suffixed
+ * here or the save comes back 400 with nothing on screen explaining why.
+ */
+const RESERVED_SLUG = 'unclassified';
 // Mirrors the schema's cap on the stored list.
 const MAX_TYPES = 50;
 
@@ -113,7 +119,7 @@ export const CallTypesCard: React.FC<CallTypesCardProps> = ({ types, usage, mode
       setError('Give the call type a name containing letters or numbers.');
       return;
     }
-    const slug = uniqueSlug(base, new Set(draft.map((t) => t.slug)));
+    const slug = uniqueSlug(base, new Set([...draft.map((t) => t.slug), RESERVED_SLUG]));
     if (!slug) {
       setError('Could not derive a unique identifier for that name. Try a different one.');
       return;

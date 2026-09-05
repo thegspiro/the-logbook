@@ -3472,6 +3472,63 @@ async def update_eligibility_settings(
     )
 
 
+async def _reject_deleting_a_used_call_type(
+    db: AsyncSession,
+    organization_id: str,
+    incoming: CallTrackingSettings,
+) -> None:
+    """Refuse a save that drops a type calls are filed under.
+
+    The editor already hides delete for a type with anything on record, but
+    that decision is made against a settings snapshot the browser may have
+    held for an hour, and a direct API client never saw it at all. Either way
+    the write replaces the whole list, so a slug dropped from it leaves every
+    call filed under it with nothing to resolve its label — exactly what
+    retirement exists to prevent. Retiring on the caller's behalf would be
+    worse than refusing: it silently does something other than what they
+    asked for.
+
+    Not atomic, and does not need to be. A call recorded between this check
+    and the commit keeps its type — the type is still in the list — so the
+    failure this rules out cannot happen in the gap.
+    """
+    service = CallTrackingService(db)
+    kept = {t.slug for t in incoming.call_types}
+    stored = await service.get_settings(organization_id)
+    removed = {t["slug"] for t in stored.get("call_types", [])} - kept
+    if not removed:
+        return
+
+    usage = await service.type_usage_counts(organization_id)
+    blocked = sorted(s for s in removed if usage.get(s))
+    if blocked:
+        raise ValueError(
+            "Cannot delete a call type that calls are recorded under: "
+            + ", ".join(f"{s} ({usage[s]} call(s))" for s in blocked)
+            + ". Turn it off instead to stop offering it."
+        )
+
+
+async def _call_type_usage_for(db: AsyncSession, user: User) -> dict[str, int]:
+    """Per-type call counts, for callers allowed to see call volume.
+
+    This endpoint is readable by every member so the UI can gate platoon
+    features, but an all-time call tally broken down by type is the same
+    operational picture ``/scheduling/reports/call-volume`` gates behind
+    ``scheduling.report`` — served here it would be a coarse call-volume
+    report with no permission on it at all. Only the settings screen needs
+    it, and that screen already requires ``scheduling.manage`` to save, so
+    everyone else gets an empty map and an editor that offers retirement
+    rather than deletion.
+    """
+    if not (
+        user_has_permission(user, "scheduling.manage")
+        or user_has_permission(user, "scheduling.report")
+    ):
+        return {}
+    return await CallTrackingService(db).type_usage_counts(user.organization_id)
+
+
 @router.get("/settings", response_model=SchedulingFeatureSettings)
 async def get_scheduling_feature_settings(
     db: AsyncSession = Depends(get_db),
@@ -3503,9 +3560,7 @@ async def get_scheduling_feature_settings(
         late_signup_grace_minutes=window["late_signup_grace_minutes"],
         enforce_evoc=service.get_evoc_enforcement(org),
         call_tracking=CallTrackingSettings(**service.get_call_tracking_settings(org)),
-        call_type_usage=await CallTrackingService(db).type_usage_counts(
-            current_user.organization_id
-        ),
+        call_type_usage=await _call_type_usage_for(db, current_user),
     )
 
 
@@ -3521,6 +3576,10 @@ async def update_scheduling_feature_settings(
         # Only touch the overtime fields when the caller actually sent them,
         # so a partial save (e.g. the platoon toggle) can't wipe the cap.
         fields_set = data.model_fields_set
+        if "call_tracking" in fields_set and data.call_tracking is not None:
+            await _reject_deleting_a_used_call_type(
+                db, current_user.organization_id, data.call_tracking
+            )
         result = await service.update_scheduling_settings(
             organization_id=current_user.organization_id,
             # Guarded like every sibling field. Passed unconditionally, a
@@ -3610,9 +3669,7 @@ async def update_scheduling_feature_settings(
         call_tracking=CallTrackingSettings(
             **service.get_call_tracking_settings(saved_org)
         ),
-        call_type_usage=await CallTrackingService(db).type_usage_counts(
-            current_user.organization_id
-        ),
+        call_type_usage=await _call_type_usage_for(db, current_user),
     )
 
 

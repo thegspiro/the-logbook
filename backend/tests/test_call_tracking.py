@@ -11,14 +11,16 @@ fails loudly — which is why they are asserted here rather than left to review.
 
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
 
 from app.models.call_tracking import (
     DEFAULT_CALL_TYPES,
+    MAX_CALL_TYPES,
     MAX_CALLS_PER_SHIFT,
+    UNCLASSIFIED_CALL_TYPE,
     CallTrackingMode,
 )
 from app.schemas.scheduling import (
@@ -659,6 +661,58 @@ class TestCallTypeRetirement:
             }
         )
         assert await svc._valid_type_slugs("org-1") == {"brush"}
+
+
+# ======================================================================
+# The reserved bucket slug, and the cap that must not break a read
+# ======================================================================
+
+
+class TestReservedAndBoundedTypeList:
+    def _resolve(self, call_types):
+        svc = ShiftEligibilityService(MagicMock())
+        org = SimpleNamespace(
+            settings={"scheduling": {"call_tracking": {"call_types": call_types}}}
+        )
+        return svc.get_call_tracking_settings(org)["call_types"]
+
+    def test_schema_refuses_the_unclassified_slug(self):
+        """It is the synthetic bucket for calls with no type. A configured
+        type sharing it merges real calls with the remainder, and the report's
+        label map overwrites whatever the department named it."""
+        with pytest.raises(ValidationError):
+            CallTrackingSettings(
+                call_types=[{"slug": UNCLASSIFIED_CALL_TYPE, "label": "Unclassified"}]
+            )
+
+    def test_a_stored_reserved_slug_is_dropped_rather_than_fatal(self):
+        """Hand-edited JSON can already hold one. Returning it would fail the
+        schema construction this reader exists to make safe."""
+        resolved = self._resolve(
+            [
+                {"slug": "fire", "label": "Fire"},
+                {"slug": UNCLASSIFIED_CALL_TYPE, "label": "Unclassified"},
+            ]
+        )
+        assert [t["slug"] for t in resolved] == ["fire"]
+
+    def test_an_oversized_legacy_list_is_truncated_not_rejected(self):
+        """The write cap is new; the column is older and hand-editable. An
+        org holding 51 valid entries must not get a 500 from the one endpoint
+        that could shorten the list."""
+        resolved = self._resolve(
+            [{"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 5)]
+        )
+        assert len(resolved) == MAX_CALL_TYPES
+        # The whole point: this is what the settings endpoint then builds.
+        assert CallTrackingSettings(call_types=resolved).call_types
+
+    def test_everything_it_returns_still_satisfies_the_schema(self):
+        resolved = self._resolve(
+            [{"slug": UNCLASSIFIED_CALL_TYPE, "label": "x"}]
+            + [{"slug": f"t{i}", "label": f"T{i}"} for i in range(MAX_CALL_TYPES + 2)]
+        )
+        assert CallTrackingSettings(call_types=resolved).call_types
 
 
 # ======================================================================
@@ -1351,3 +1405,132 @@ class TestCallVolumeReportLabels:
             org.id, date(2026, 8, 1), date(2026, 8, 31)
         )
         assert report["call_type_labels"]["mva"] == "Motor Vehicle Accident"
+
+
+# ======================================================================
+# Endpoint guards — what the settings screen can and cannot do
+# ======================================================================
+
+
+class TestCallTypeUsageIsGated:
+    """All-time call totals by type are the same operational picture
+    ``/scheduling/reports/call-volume`` gates behind ``scheduling.report``.
+    The settings endpoint is readable by every member so the UI can gate
+    platoon features, so the field has to carry its own check or it becomes a
+    coarse call-volume report with no permission on it."""
+
+    async def _usage_for(self, permissions):
+        from app.api.v1.endpoints.scheduling import _call_type_usage_for
+
+        user = SimpleNamespace(id="u1", organization_id="org-1")
+        with patch(
+            "app.api.v1.endpoints.scheduling.user_has_permission",
+            lambda _u, perm: perm in permissions,
+        ):
+            with patch.object(
+                CallTrackingService,
+                "type_usage_counts",
+                AsyncMock(return_value={"fire": 12}),
+            ):
+                return await _call_type_usage_for(MagicMock(), user)
+
+    async def test_a_plain_member_gets_nothing(self):
+        assert await self._usage_for(set()) == {}
+
+    @pytest.mark.parametrize("perm", ["scheduling.manage", "scheduling.report"])
+    async def test_a_manager_or_reporter_gets_the_counts(self, perm):
+        assert await self._usage_for({perm}) == {"fire": 12}
+
+
+class TestDeletingAUsedTypeIsRefusedServerSide:
+    """The editor hides delete for a type with calls on record, but it decides
+    that against a settings snapshot the browser may have held for an hour —
+    and a direct API client never saw it. The write replaces the whole list,
+    so the check has to exist on this side too."""
+
+    async def _save(self, incoming_slugs, stored_slugs, usage):
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[{"slug": s, "label": s} for s in incoming_slugs],
+        )
+        with patch.object(
+            CallTrackingService,
+            "get_settings",
+            AsyncMock(
+                return_value={
+                    "mode": CallTrackingMode.COUNT_ONLY,
+                    "call_types": [
+                        {"slug": s, "label": s, "active": True} for s in stored_slugs
+                    ],
+                }
+            ),
+        ):
+            with patch.object(
+                CallTrackingService, "type_usage_counts", AsyncMock(return_value=usage)
+            ):
+                await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_dropping_a_used_type_is_refused(self):
+        with pytest.raises(ValueError, match="fire"):
+            await self._save(["ems"], ["fire", "ems"], {"fire": 3})
+
+    async def test_dropping_an_unused_type_is_allowed(self):
+        await self._save(["ems"], ["fire", "ems"], {"ems": 3})
+
+    async def test_retiring_a_used_type_is_allowed(self):
+        """Retirement keeps the slug in the list, which is the whole point —
+        the guard is about deletion, and must not block the sanctioned path."""
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[{"slug": "fire", "label": "Fire", "active": False}],
+        )
+        with patch.object(
+            CallTrackingService,
+            "get_settings",
+            AsyncMock(
+                return_value={
+                    "mode": CallTrackingMode.COUNT_ONLY,
+                    "call_types": [{"slug": "fire", "label": "Fire", "active": True}],
+                }
+            ),
+        ):
+            with patch.object(
+                CallTrackingService,
+                "type_usage_counts",
+                AsyncMock(return_value={"fire": 9}),
+            ):
+                await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+
+    async def test_an_unchanged_list_costs_no_usage_query(self):
+        """The guard runs on every settings save, including the ones that only
+        flip an unrelated toggle."""
+        from app.api.v1.endpoints.scheduling import (
+            _reject_deleting_a_used_call_type,
+        )
+
+        incoming = CallTrackingSettings(
+            mode=CallTrackingMode.COUNT_ONLY,
+            call_types=[{"slug": "fire", "label": "Fire"}],
+        )
+        usage = AsyncMock(return_value={})
+        with patch.object(
+            CallTrackingService,
+            "get_settings",
+            AsyncMock(
+                return_value={
+                    "mode": CallTrackingMode.COUNT_ONLY,
+                    "call_types": [{"slug": "fire", "label": "Fire", "active": True}],
+                }
+            ),
+        ):
+            with patch.object(CallTrackingService, "type_usage_counts", usage):
+                await _reject_deleting_a_used_call_type(MagicMock(), "org-1", incoming)
+        usage.assert_not_called()
