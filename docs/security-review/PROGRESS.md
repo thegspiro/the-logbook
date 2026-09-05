@@ -16,17 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 21 (Admin hours), pass 3** — branch
-`claude/security-review-admin-hours-pass3`,
-[PR #2247](https://github.com/thegspiro/the-logbook/pull/2247). Originally
-opened claiming 0 fixes/0 flagged; a Codex review round on the PR disputed
-that on all 6 points raised, all 6 verified real and fixed (unlocked
-overlap/entry-mutation races, a falsy-zero threshold-override bug, a
-quarterly-compliance year bug, and a DST fold duration bug in the pass's own
-new `entryTimes.ts`) — see `docs/security-review/AH-21-admin-hours.md` →
-Pass 3's correction notice.
+**Feature 22 (Grants & fundraising), pass 3** — branch
+`claude/security-review-grants-fundraising`,
+[PR #2251](https://github.com/thegspiro/the-logbook/pull/2251). One finding
+this pass (GF-35, all 11 `list_*` methods fetched the whole org table into
+memory before slicing in Python instead of pushing `LIMIT`/`OFFSET` into
+SQL) fixed; a Codex review round raised 3 more findings against that same
+fix (missing id tie-breaker on the modified `ORDER BY`s, and two
+list-endpoints still eager-loading full child collections before applying
+the page limit), all independently verified real and fixed. GF-7/8/9/27a/33
+re-confirmed open as unchanged product/design decisions. This watchdog
+check (2026-09-05, ~16:50 UTC) found the row still pointing at #2247 after
+it had already merged: CI is green on all 17 checks at head `5ab2ad4`, all
+3 review threads are resolved, and `git merge-tree` against current `main`
+found zero conflict markers — GitHub's `mergeable_state` just hadn't been
+recomputed yet. Nothing to push; awaiting owner merge. Full write-up is
+[PR #2251](https://github.com/thegspiro/the-logbook/pull/2251)'s own
+`docs/security-review/GF-22-grants-fundraising.md` → Pass 3 section — not
+yet on `main`, since that content lives only on the PR's branch until it
+merges.
 
 ---
+
+### 2026-09-05 — Feature 21 (Admin hours) ✅ merged — PR #2247
+
+PR #2247 merged 2026-09-05 ~12:04 UTC (the pass's Codex-disputed 0/0 claim
+corrected to 8 real fixes across two follow-up commits — 6 in the first,
+plus 2 more Codex caught on that fix commit itself — see
+`docs/security-review/AH-21-admin-hours.md` → Pass 3, and the prior Open PR
+entry this replaces). Next: 22 Grants & fundraising.
 
 ### 2026-09-05 — Feature 21 (Admin hours), pass 3 — 0 fixes, 0 flagged
 
@@ -8694,8 +8712,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
