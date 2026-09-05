@@ -23,6 +23,7 @@ import { useRanks } from '../hooks/useRanks';
 import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
 import { blankToNull } from '../utils/formValues';
 import { getErrorMessage } from '../utils/errorHandling';
+import { Breadcrumbs } from '../components/ux';
 
 const MEMBERSHIP_TYPE_OPTIONS = [
   { value: 'prospective', label: 'Prospective' },
@@ -395,6 +396,8 @@ export const MemberAdminEditPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs />
+
         {/* Header */}
         <div className="mb-6">
           <Link

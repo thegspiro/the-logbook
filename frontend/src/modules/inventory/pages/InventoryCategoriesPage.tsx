@@ -17,6 +17,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
+import { Breadcrumbs } from '../../../components/ux';
 
 const ITEM_TYPE_COLORS: Record<string, string> = {
   uniform: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
@@ -178,6 +179,8 @@ const InventoryCategoriesPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+      <Breadcrumbs />
+
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"

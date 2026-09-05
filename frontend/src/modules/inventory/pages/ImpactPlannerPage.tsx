@@ -47,6 +47,7 @@ import type {
   ImpactPlan,
 } from '../types';
 import { csvEscape } from '../utils/csv';
+import { Breadcrumbs } from '../../../components/ux';
 
 const URGENCY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -414,6 +415,8 @@ const ImpactPlannerPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
+        <Breadcrumbs />
+
         <Link
           to="/inventory/admin"
           className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center gap-1.5 text-sm"

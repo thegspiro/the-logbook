@@ -30,6 +30,7 @@ import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
+import { Breadcrumbs } from '../../../components/ux';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -638,6 +639,8 @@ const StorageAreasPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       {/* Header */}
+      <Breadcrumbs />
+
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"

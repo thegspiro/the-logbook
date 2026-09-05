@@ -39,6 +39,7 @@ import type { InventoryItem } from '../types';
 import { ReturnItemsModal } from '../../../components/ReturnItemsModal';
 import { MemberIdScannerModal } from '../../../components/MemberIdScannerModal';
 import { SizePreferencesModal } from '../components/SizePreferencesModal';
+import { Breadcrumbs } from '../../../components/ux';
 
 type SortOption = 'name' | 'total_items' | 'overdue' | 'assigned';
 
@@ -235,6 +236,8 @@ const InventoryMembersPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
+      <Breadcrumbs />
+
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"

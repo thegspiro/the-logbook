@@ -48,6 +48,7 @@ import { ItemFormModal } from '../components/ItemFormModal';
 import type { CategoryPreset, InventoryCategory, InventorySetupStatus, Location, StorageAreaResponse } from '../types';
 import { STORAGE_TYPES, ITEM_TYPES } from '../types';
 import { INVENTORY_TERMS } from '../terminology';
+import { Breadcrumbs } from '../../../components/ux';
 
 const STEPS = [
   { label: 'Rooms', description: 'Where equipment lives' },
@@ -333,6 +334,8 @@ const InventorySetupPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+      <Breadcrumbs />
+
       <Link
         to="/inventory/admin"
         className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"

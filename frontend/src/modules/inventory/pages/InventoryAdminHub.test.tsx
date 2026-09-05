@@ -144,7 +144,11 @@ describe('InventoryAdminHub', () => {
 
   it('renders the page title and subtitle', async () => {
     renderWithRouter(<InventoryAdminHub />);
-    expect(screen.getByText('Inventory Administration')).toBeInTheDocument();
+    // By role, not by text: "the page rendered" means its heading is there, and
+    // the frame's breadcrumb trail also carries this module's name. The trail
+    // now stops at the parent so the two no longer collide, but a role query
+    // says what these assertions mean regardless of what the chrome renders.
+    expect(screen.getByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
     expect(
       screen.getByText('Gear, uniforms and EMS supplies — stock, issuance, and what needs a decision today')
     ).toBeInTheDocument();
@@ -645,7 +649,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
 
       renderWithRouter(<InventoryAdminHub />);
-      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
       expect(mockGetSummary).not.toHaveBeenCalled();
       expect(mockGetLowStockItems).not.toHaveBeenCalled();
@@ -671,7 +675,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
 
       renderWithRouter(<InventoryAdminHub />);
-      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
       expect(mockGetAdminHubSummary).not.toHaveBeenCalled();
     });
@@ -684,7 +688,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.check_manage');
 
       renderWithRouter(<InventoryAdminHub />);
-      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
       expect(screen.queryByText('Nothing needs attention. All inventory work is up to date.')).not.toBeInTheDocument();
     });
@@ -697,7 +701,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       window.history.pushState({}, '', '/inventory/admin?tab=settings');
 
       renderWithRouter(<InventoryAdminHub />);
-      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
       expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
       expect(screen.queryByText('Headline metrics')).not.toBeInTheDocument();
@@ -708,7 +712,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       mockCheckPermission.mockReturnValue(true);
 
       renderWithRouter(<InventoryAdminHub />);
-      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
       expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
     });
@@ -737,7 +741,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       );
 
       renderWithRouter(<InventoryAdminHub />);
-      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
       expect(screen.queryByText(/Some figures on this page did not load/)).not.toBeInTheDocument();
     });
@@ -751,7 +755,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       mockModulesLoading.mockReturnValue(true);
 
       renderWithRouter(<InventoryAdminHub />);
-      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
       expect(screen.queryByText('Department Store')).not.toBeInTheDocument();
       expect(screen.queryByText('Nothing here for your role')).not.toBeInTheDocument();
@@ -778,7 +782,7 @@ describe('InventoryAdminHub — supply lines and per-area gates', () => {
       mockModulesLoading.mockReturnValue(false);
 
       renderWithRouter(<InventoryAdminHub />);
-      expect(await screen.findByText('Inventory Administration')).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inventory Administration' })).toBeInTheDocument();
 
       expect(screen.queryByText('Nothing here for your role')).not.toBeInTheDocument();
     });
