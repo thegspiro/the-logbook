@@ -56,6 +56,7 @@ import { schedulingService } from '../modules/scheduling/services/api';
 import { memberSignupClosedReason } from '../modules/scheduling/utils/shiftBoard';
 import { useSignupWindow } from '../modules/scheduling/hooks/useSignupWindow';
 import { adminHoursEntryService } from '../modules/admin-hours/services/api';
+import { endOfReportingDayUTC, startOfReportingDayUTC } from '../modules/admin-hours/utils/reportingRange';
 import { getErrorMessage } from '../utils/errorHandling';
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from '../utils/eventHelpers';
 import { requirementTarget } from '../utils/pipelineProgress';
@@ -945,14 +946,14 @@ const Dashboard: React.FC = () => {
       const canLoadTraining = isModuleOn('training') && checkPermission('training.view');
       // Admin Hours has no ModuleSettings flag and no member-facing permission
       // gate: /admin-hours, the sidebar entry that opens it and
-      // GET /admin-hours/summary are all open to any authenticated member, and
-      // the endpoint scopes anyone without admin_hours.manage to their own
-      // entries. Gating this read on admin_hours.view -- a permission no
-      // default position or rank grants -- therefore left every ordinary
-      // member's Administrative row reading "Unavailable" forever, beside a
-      // row that navigates to a page they can open, while their own figure was
-      // one ungated request away. It is unconditional now, so there is no
-      // canLoadAdminHours to consult below.
+      // GET /admin-hours/summary are all open to any authenticated member.
+      // Gating this read on admin_hours.view -- a permission no default
+      // position or rank grants -- therefore left every ordinary member's
+      // Administrative row reading "Unavailable" forever, beside a row that
+      // navigates to a page they can open, while their own figure was one
+      // ungated request away. The only condition left is having an id to scope
+      // it to, because an unscoped summary is not this member's hours.
+      const canLoadAdminHours = Boolean(currentUser?.id);
 
       // Only a source that was actually attempted can fail. A member without
       // training.view is not looking at a broken card, so a gated-off source
@@ -976,11 +977,28 @@ const Dashboard: React.FC = () => {
               return null;
             })
           : Promise.resolve(null),
-        adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
-          console.error('Failed to load admin hours summary:', err);
-          adminHoursFailed = true;
-          return null;
-        }),
+        canLoadAdminHours
+          ? adminHoursEntryService
+              .getSummary({
+                // Explicitly the member's own id. The endpoint only falls back
+                // to the caller for someone *without* admin_hours.manage; a
+                // manage holder who omits it gets the whole department's
+                // totals, which this card would then head "My Hours".
+                userId: currentUser?.id,
+                // As UTC instants, not bare dates: the endpoint parses a bare
+                // "YYYY-MM-DD" as midnight and filters `clock_in_at <= end`,
+                // so an unconverted end date drops every entry logged today,
+                // and an unconverted start date cuts the month at UTC midnight
+                // rather than the department's.
+                startDate: startOfReportingDayUTC(monthStart, tz),
+                endDate: endOfReportingDayUTC(monthEnd, tz),
+              })
+              .catch((err) => {
+                console.error('Failed to load admin hours summary:', err);
+                adminHoursFailed = true;
+                return null;
+              })
+          : Promise.resolve(null),
       ]);
       // Assigned from the settled result rather than only ever set to true:
       // a flag that a failure raises and only the eager pre-await reset clears
@@ -1006,7 +1024,8 @@ const Dashboard: React.FC = () => {
           schedulingFailed || !canLoadScheduling
             ? previous.standby
             : (schedulingSummary?.hours_worked_this_month ?? null),
-        administrative: adminHoursFailed ? previous.administrative : (adminHoursSummary?.totalHours ?? null),
+        administrative:
+          adminHoursFailed || !canLoadAdminHours ? previous.administrative : (adminHoursSummary?.totalHours ?? null),
       }));
       // Certifications are not a figure, they are an input to the readiness
       // verdict -- the thing that renders "Clear to respond". Preserving the

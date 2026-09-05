@@ -7,6 +7,159 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Apparatus: the fleet record becomes officer-only (2026-09-05)
+
+**Changed**
+
+- **Regular members no longer see the Apparatus pages.** `apparatus.view` was
+  seeded to every rank-and-file position, so any member could open the fleet
+  maintenance and compliance record — inspection expirations, out-of-service
+  status, deficiency flags and driver qualifications. The grant is removed from
+  the `member` position and from the shared line-member list behind the
+  Firefighter and EMT ranks and positions. Migration `b6e4a0d17c93` takes it off
+  the rows already stored, including the `apparatus.manage` and `apparatus.*`
+  forms the setup screen's Manage checkbox could have written.
+- Officers, chiefs, administrators and the **Engineer** rank keep it —
+  Engineer is the driver/operator and holds `apparatus.maintenance` beside it.
+  A department that wants members to see the fleet can re-add the grant to its
+  Member position on the positions screen.
+- The Apparatus navigation entry is now gated on the same permissions as the
+  route, so it disappears rather than leading to Access Denied. The lightweight
+  `/apparatus-basic` page, shown when the Apparatus module is off, is
+  unaffected and stays open to everyone.
+
+**Fixed**
+
+- The crew-level **Apparatus Inventory** page (`/inventory/checklists/apparatus-inventory`)
+  filled its apparatus picker from the Apparatus module's roster, which the
+  same members are no longer permitted to read. It now reads the
+  authentication-only scheduling endpoint that already backs the shift board,
+  so recording a used item keeps working.
+
+### Admin Hours: compliance threshold and duration fixes (2026-09-05)
+
+**Fixed**
+
+- **A profile's at-risk-threshold override of `0` was silently discarded.**
+  Compliance grading fell back to the organization's default threshold
+  instead — a profile configured to grade any shortfall `non_compliant`
+  with no at-risk buffer had that choice ignored.
+- **A DST fall-back could silently shorten a logged shift by up to an
+  hour.** Picking a quick-duration preset (or letting the end time follow a
+  moved start) across the one hour per year that repeats when clocks fall
+  back could submit a shorter entry than the one selected and previewed —
+  e.g. a 2-hour entry recorded as 1 hour.
+- Admin Hours compliance for a quarterly requirement ignored a requested
+  historical year and graded the live quarter instead; it is now skipped
+  for any year other than the current one rather than silently mis-dated.
+  (Superseded the same day — see "lock-order and quarterly-compliance
+  follow-up fixes" below: skipping was itself replaced with an explicit
+  error.)
+
+### Admin Hours: lock-order and quarterly-compliance follow-up fixes (2026-09-05)
+
+**Fixed**
+
+- **API behavior change:** `GET /admin-hours/compliance/{user_id}?year=...`
+  now returns `400 Bad Request` when the requested year is not the current
+  year and the resolved compliance profile has a quarterly requirement,
+  instead of `200 OK` with the quarterly item silently missing from the
+  list. The endpoint's only shipped caller always uses the default (current)
+  year, so this is not expected to affect any in-app flow — but any external
+  caller passing an explicit `year` against a quarterly-graded profile will
+  now get an error instead of a response that looked complete while quietly
+  omitting an item. Passing the current year, or omitting `year` entirely,
+  is unaffected.
+- **Bulk-approving admin hours entries could still deadlock against a
+  concurrent single-entry edit.** The previous fix had `bulk_approve` lock
+  its own batch of entries in sorted order, and had `edit_pending_entry`
+  lock the owning member's `User` row before the entry row — but the two
+  methods didn't share one global lock order. A batch containing two
+  entries for the same member, racing an edit whose locking overlap check
+  reached into the other entry in that batch, could still deadlock (InnoDB
+  aborting one side as a `500`). `bulk_approve` now also locks every
+  affected member's `User` row, in sorted order, before locking any entry
+  row — the same "member rows first, then entry rows, both in a stable
+  order" protocol `edit_pending_entry` already followed.
+
+### My Hours: a career total, and figures under their own headings (2026-09-05)
+
+**Fixed**
+
+- **Every number in the monthly table sat about 170px right of the heading it
+  belonged to.** `frontend/src/styles/index.css` carries a global
+  `thead th { text-align: left }` written outside any cascade layer, and
+  unlayered CSS outranks every layer — so the `text-right` on each `<th>`,
+  which Tailwind emits inside `@layer utilities`, was discarded and the
+  headings stayed hard left over right-aligned figures. A `th-numeric` class in
+  the same unlayered tier now wins on specificity. Roughly 56 `<th>` elements
+  elsewhere in the app are overridden the same way and are deliberately left
+  alone: moving those base table rules into `@layer base` would shift every one
+  of them at once, which is its own reviewable change.
+- **The unlabelled bar column was also making the table wider than it needed
+  to be.** Its `w-1/3` claim inflated all four numeric columns under the
+  default auto layout, spreading four figures across the whole card. The table
+  is `table-fixed` with explicit column widths, and the bar takes what is left.
+
+**Changed**
+
+- **The three cards read this month, this year and all time**, each with
+  hours, shifts and calls, replacing last month / this month / year to date.
+  "Last month" answered a narrower question than the table beneath it already
+  answered month by month, while the one figure the table could never show —
+  what a member has done over their whole time with the department — was not
+  reported anywhere.
+- **The middle card follows the year picker.** Selecting an earlier year
+  retitles it to that year and "Full year", so it cannot claim "this year"
+  over a table showing a different one. The all-time card does not move.
+- **The bar column has a visible heading, "vs. busiest month."** It was an
+  `sr-only` heading over an `aria-hidden` bar, so on screen it read as
+  decoration with nothing saying what it measured. Each bar also carries the
+  hours it represents against the busiest month of the selected year.
+
+**Added**
+
+- **`GET /api/v1/scheduling/my-hours-history` returns `all_time`**, totalled
+  the same way the year is: over the already rounded monthly figures, never
+  over raw minutes, so the all-time card cannot read lower than the year total
+  printed beside it. Purely additive — `previous_month` and every other field
+  are unchanged.
+- Resolving it made the endpoint **cheaper, not dearer**: one unbounded
+  per-month aggregate now answers the selected year, the current and previous
+  month, the earliest year the picker offers and the career total, replacing
+  the year query plus a separate `MIN(shift_date)` scan (plus a third query
+  whenever the current or previous month fell outside the year being viewed).
+
+### The notification Send Log is your own send log (2026-09-05)
+
+**Fixed**
+
+- **The Send Log listed every notification the department had sent anyone.**
+  `GET /notifications/logs` filtered on the organization and nothing else, so
+  the tab showed the subject, body and recipient address of every colleague's
+  notifications to anyone who could open it — a grant that was seeded to the
+  whole department until it was revoked in August. The endpoint now defaults
+  to the caller's own deliveries, and the tab asks for nothing else.
+
+**Changed**
+
+- **The Send Log is offered to every member.** What it shows is now their own
+  delivery history — email as well as in-app, with delivered/failed status —
+  which is their own data on the same footing as their inbox, so it no longer
+  sits behind `notifications.view`.
+
+- **The organization-wide view survives for auditing deliverability**, as an
+  explicit `scope=organization` request on `GET /notifications/logs` and
+  `POST /notifications/logs/read-all`. It requires `notifications.manage`,
+  matching the org-wide "mark all read" it sits beside rather than the
+  read-only permission that let the leak happen. **API note:** `read-all`
+  previously always swept the whole organization and now defaults to the
+  caller; pass `scope=organization` for the old behaviour.
+
+- **"Mark all as read" clears exactly the rows the tab showed**, across both
+  channels, and reconciles the inbox tab and the unread badge with it — the
+  same notification no longer reads as read on one tab and unread on the next.
+
 ### The event check-in QR code was scannable before its window opened (2026-09-05)
 
 **Fixed**
@@ -16,8 +169,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "ready" when the window opened. A phone camera reads a code straight through
   that, so members scanned early, hit a check-in that refuses them, and had
   nothing on the page explaining why. The code is now withheld entirely until
-  `is_valid`, and a same-size placeholder holds the space so the layout does
-  not shift when the real code takes over on the next 30-second refresh.
+  `can_check_in`, and a same-size placeholder holds the space so the layout
+  does not shift when the real code takes over on the next 30-second refresh.
+  The gate is `can_check_in`, not the stricter `is_valid`, because a
+  Flexible/Window event admits a scan up to an hour before its official window
+  — withholding the code there would have blocked a check-in the backend was
+  ready to accept, and `EventSelfCheckInPage` already gates its button on the
+  same field.
+
+- **The check-in window could open without the page noticing for 90 seconds.**
+  `getQRCheckInData` is a cacheable GET, so the 30-second poll on both the QR
+  page and the self-check-in page was answered from the shared client's cache
+  — fresh for 30s, then served stale for a further 60s while revalidating in
+  the background. The whole point of that payload is reporting whether the
+  window is open right now, so it now sets `_skipCache`.
+
+### The dashboard's Administrative hours read "Unavailable", then read the whole department's (2026-09-05)
+
+**Fixed**
+
+- **Administrative hours said "Unavailable" to every ordinary member.**
+  "Unavailable" is a claim the figure is unknown; the figure was simply never
+  fetched. The dashboard gated the admin-hours read on `admin_hours.view`, a
+  permission that exists in the registry and that no default position or rank
+  grants — while every other gate on the same feature is open: `/admin-hours`
+  carries no `ProtectedRoute`, the member-facing sidebar entry carries no
+  permission, and `GET /admin-hours/summary` requires only authentication. So
+  the row sat at "Unavailable" beside a control that navigates to a page the
+  member can in fact open. The read is now unconditional, and a member who has
+  logged no administrative time this month reads `0`.
+
+- **An officer's "My Hours" card totalled the whole department.**
+  `GET /admin-hours/summary` only falls back to the caller's own id for someone
+  _without_ `admin_hours.manage`, and the service applies no user filter when
+  none is supplied — so a manage holder saw every member's administrative hours
+  summed under a card headed "My Hours". Removing the gate above widened this
+  from wildcard holders to every officer, so the request now passes the
+  member's own id explicitly, as the Admin Hours page already did.
+
+- **Everything logged today fell outside the month.** The month-to-date range
+  went as a bare `YYYY-MM-DD`; the endpoint parses that as midnight and filters
+  `clock_in_at <= end_date`, so the current day was excluded entirely, and the
+  start bound cut the month at UTC midnight rather than the department's —
+  pulling the tail of the previous month in for any department west of UTC.
+  Both bounds now go through the same `startOfReportingDayUTC` /
+  `endOfReportingDayUTC` helpers the Admin Hours screens use.
+
+**Changed**
+
+- **The month's hours are stated once.** The dashboard header carried a
+  "N hrs in Month" chip duplicating the total on the hours card directly below
+  it, with none of the per-source split behind it — so a member reading the
+  chip had no way to see which source the figure came from. The card, which
+  carries the same total plus the breakdown and its own failure state, is now
+  the single statement.
 
 ### A shift that ran weeks ago still offered its live controls (2026-09-04)
 
@@ -44,6 +249,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recorded against it — was still offered a button to decline the assignment
   those hours hang off, and an officer was still offered Remove beside every
   name. All three are withdrawn once the roster locks.
+
+- **The lock is now enforced, not just displayed.** Hiding a control is not
+  enforcing a rule: confirm, the assignment PATCH and DELETE, and self-withdraw
+  were all still reachable by a direct request, and withdraw deletes an
+  assignment that hours have already been recorded against. All four now carry
+  the same end-plus-grace bound the client does, with the same
+  `scheduling.manage` exemption, so the two agree. An assigner is bounded here
+  even though the signup window gives them a grace period to seat a late
+  arrival — repairing a roster that is already a record is the administrator's
+  path. Internal callers are unaffected: the bound is opt-in, and the
+  standing-shift release that shares the delete path only ever touches dates
+  still ahead.
+
+- **An empty seat still offered "Assign someone", and the button did
+  nothing.** The crew board's empty-slot branch gated on `isPast` alone, while
+  the form it opens is withdrawn by the officer's own signup deadline — which
+  has necessarily passed by then — so on a same-day shift the control sat there
+  all evening and swallowed every tap.
+
+- **The lock is no longer applied on a grace period nobody has fetched.** The
+  signup window falls back to a built-in sixty minutes until the department's
+  settings arrive, a default chosen to be permissive for a claim button; for a
+  lock it is the reverse, so a department running a longer grace watched
+  controls vanish on a shift the server still accepts, and a failed settings
+  fetch left them gone for the life of the panel. Unknown now means unlocked.
 
 - **Withdraw outlived the lock, beside the hours it would have deleted.** The
   "You are assigned to this shift" card gated its Withdraw button on `isPast`
@@ -135,6 +365,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   department that deliberately gave its members Reports will need to grant it
   again on the positions screen; a position the department created itself is
   not touched at all.
+
+- **New departments no longer create the grant in the first place.** The
+  setup wizard offers an EMT position to every agency type, but the permission
+  registry had no EMT entry, so ticking it built the position from the setup
+  screen's own guesses instead of from the registry — the same guesses that
+  caused all of the above, on a position created fresh today. EMT is now
+  registered alongside Firefighter and Engineer and is set up from the same
+  list its rank already uses. Departments that never had an EMT position are
+  unaffected until they add one.
+
+- **An existing EMT position regains what the setup screen could not say.**
+  The screen only has two checkboxes per module, so an EMT position created
+  through it never received four grants the EMT rank carries: seeing the
+  department's own information, its locations and its meetings, and asking to
+  swap a shift. They are restored on a position still holding exactly what the
+  setup screen wrote — a department that has since edited its EMT position
+  keeps whatever it chose, including a grant it removed on purpose.
+
+- **Setting up a position now starts from the registry on either path.** The
+  setup screen's save had two routes: updating a position the system had
+  already created, which filled in from the permission registry, and creating
+  one it had not, which stored only what the screen's own checkboxes could say.
+  The second route is what gave EMT its wrong permissions, and it also loses
+  every grant no checkbox can express. Both routes now start from the registry
+  for a position the system knows.
 
 - **The restored grants are handled the other way round.**
   `storefront.order` and `inventory.check_submit` are only added back to a row

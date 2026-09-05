@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { useNavigate } from 'react-router';
 import {
@@ -83,6 +83,30 @@ const generateDefaultPermissions = (
  * position picks to localStorage: without this, resuming a session started
  * before the change re-creates exactly what the migration just retired.
  */
+/**
+ * Positions whose seeded grants changed after a session could already have
+ * persisted them, so a restored config must take the template's answer rather
+ * than its own.
+ *
+ * `emt` had no DEFAULT_POSITIONS entry until 2026-09-05: the wizard offered it
+ * to every agency type with nothing seeded behind the slug, so the role-type
+ * heuristic supplied its boxes — Reports among them — and `save_session_roles`
+ * stored that as a permission-bearing `is_system` row.
+ *
+ * `member`, `firefighter` and `emt` lost `apparatus` on 2026-09-05: the fleet
+ * record is a maintenance and compliance workspace, not a member amenity. A
+ * config persisted before that deploy still has the box ticked, and
+ * `handleContinue` submits whatever is here — so without this the wizard would
+ * re-grant `apparatus.view` on the first Continue, after the migration that
+ * revoked it had already run. `engineer` is absent on purpose: it is the
+ * driver/operator rank and keeps the grant.
+ *
+ * Deliberately narrow. This reconciliation overwrites what was saved, and an
+ * administrator's own edits to a built-in position are saved the same way, so
+ * a slug belongs here only while its seeded grants have genuinely moved.
+ */
+const STALE_SEEDED_SLUGS = new Set(['emt', 'member', 'firefighter']);
+
 const RETIRED_STANDING_SLUGS = new Set([
   'probationary_member',
   'junior_member',
@@ -138,6 +162,21 @@ const PositionSetup: React.FC = () => {
   const savedPositionsConfig = useOnboardingStore((state) => state.positionsConfig);
   const setPositionsConfig = useOnboardingStore((state) => state.setPositionsConfig);
   const organizationType = useOnboardingStore((state) => state.organizationType);
+  const reconciledSeededSlugs = useOnboardingStore((state) => state.reconciledSeededSlugs);
+  const markSeededSlugsReconciled = useOnboardingStore((state) => state.markSeededSlugsReconciled);
+
+  // Which stale slugs this mount reconciles: present in the saved config and
+  // not recorded as done. Latched on first render rather than recomputed,
+  // because the effect below adds to `reconciledSeededSlugs` — recomputing
+  // would decide a slug was already handled while this mount is still using
+  // the answer it started with.
+  const slugsToReconcileRef = useRef<string[] | null>(null);
+  if (slugsToReconcileRef.current === null) {
+    slugsToReconcileRef.current = Object.keys(savedPositionsConfig ?? {}).filter(
+      (posId) => STALE_SEEDED_SLUGS.has(posId) && !reconciledSeededSlugs.includes(posId)
+    );
+  }
+  const slugsToReconcile = slugsToReconcileRef.current;
 
   // Build permission categories and position templates from the module registry
   // This ensures new modules automatically appear in position configuration
@@ -191,9 +230,33 @@ const PositionSetup: React.FC = () => {
         //    service resuming an older session still has `firefighter` ticked.
         const template = templatesById.get(posId);
         if (!template && isAgencyFilteredOut(posId, organizationType)) continue;
+        // 3. A slug whose seeded grants changed under a saved config. Same
+        //    mechanism again — handleContinue submits whatever is here — but
+        //    the entry is reconciled rather than dropped, because the position
+        //    is still offered. A config read from localStorage can predate the
+        //    grants this build presents, and an EMT saved on an earlier build
+        //    carries the ticks a role-type heuristic chose, `reports` among
+        //    them, which would be written after every migration had run.
+        //    Priority comes along for the same reason: save_session_roles
+        //    writes the submitted value over the seeded one, so a stale 10
+        //    would put EMT back on the baseline Member position's rung.
+        //
+        //    Named slugs, not every seeded position, and **once** rather than
+        //    on every mount. Either alone is not enough: replacing the saved
+        //    map wholesale would discard edits to any built-in position, and
+        //    doing it repeatedly would discard them for this slug — an
+        //    administrator customizes EMT, walks to the modules step, comes
+        //    back, and finds the boxes reset, with the persistence effect then
+        //    writing the defaults back over their work. `reconciledSeededSlugs`
+        //    records that the upgrade has happened, so a session created by
+        //    this build reconciles a no-op on first mount and is then left
+        //    alone. Only a slug whose seeded grants actually moved needs this,
+        //    and a later change adds its own.
+        const stale = template && slugsToReconcile.includes(posId);
         restored[posId] = {
           ...saved,
           ...(template ? { name: template.name } : {}),
+          ...(stale ? { permissions: template.permissions, priority: template.priority } : {}),
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
         };
       }
@@ -217,6 +280,23 @@ const PositionSetup: React.FC = () => {
     });
     return initial;
   });
+
+  // Record **every** stale slug once this screen has been reached, not only the
+  // ones the saved config happened to contain.
+  //
+  // Recording just the reconciled ones leaves a hole for a session started on
+  // this build: EMT is not among the preselected positions, so the first mount
+  // finds nothing to reconcile and records nothing. The administrator then
+  // selects EMT, customizes it, walks to the modules step and comes back — and
+  // the next mount, seeing EMT in the config but not in the record, treats
+  // those current-build edits as legacy state and replaces them.
+  //
+  // A slug selected after this point was built from the current template by
+  // definition, so there is nothing to reconcile in it, and recording the whole
+  // set here says exactly that.
+  useEffect(() => {
+    markSeededSlugsReconciled([...STALE_SEEDED_SLUGS]);
+  }, [markSeededSlugsReconciled]);
 
   // Expanded categories
   const [expandedCategories, setExpandedCategories] = useState<string[]>([

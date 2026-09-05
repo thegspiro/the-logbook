@@ -15,12 +15,22 @@ carrying a copy of it, and the ``member`` position holds its own copy.
 permissions, so both keep the grant live on every existing installation until
 this rewrites them.
 
-**``emt`` is covered.** It has no ``DEFAULT_POSITIONS`` entry, so
-``save_session_roles`` takes its create branch and stores
+**``emt`` is covered, and for two overlapping reasons.** It gained a
+``DEFAULT_POSITIONS`` entry on 2026-09-05 (``a2e9f6b04c71``'s PR), whose
+``permissions`` is ``OPERATIONAL_RANKS["emt"]["default_permissions"]`` — itself
+``_LINE_MEMBER_PERMISSIONS``, the same list object Firefighter holds. So a
+freshly seeded EMT position carries whatever that list carries, and the registry
+edit above already settles those. But every EMT row written *before* that entry
+existed came from ``save_session_roles``'s create branch, which stored
 ``expand_module_checkboxes`` output verbatim with ``is_system=True`` — the
-reasoning ``f3b8d0c26a17`` sets out at length. An EMT's intended grants are the
-line-member set (``OPERATIONAL_RANKS["emt"]["default_permissions"]`` is the same
-list object Firefighter holds), so it takes the same revocation.
+reasoning ``f3b8d0c26a17`` and ``a2e9f6b04c71`` set out at length. Those rows are
+still in the database and still hold the grant, so the slug is listed here.
+
+**This must run after ``b4d1c8e37f52``, not merely after ``a2e9f6b04c71``.**
+That migration restores four grants to an EMT row only when the row matches its
+frozen ``_UNEDITED_SHAPE`` fingerprint exactly, and that fingerprint **contains
+``apparatus.view``**. Revoking first would make every EMT row fail the match, and
+its restore would skip in silence. The chain order is the safeguard.
 
 **``engineer`` is deliberately absent from the slug list.** Engineer is the
 driver/operator rank, seeded ``apparatus.view`` beside ``apparatus.maintenance``;
@@ -56,7 +66,7 @@ creates — it appears when ``main.py`` calls ``create_all()``, and CI runs
 would fail the whole upgrade rather than this one step (pitfall #26).
 
 Revision ID: b6e4a0d17c93
-Revises: f3b8d0c26a17
+Revises: b4d1c8e37f52
 Create Date: 2026-09-05 14:20:00.000000
 """
 
@@ -66,7 +76,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b6e4a0d17c93"
-down_revision = "f3b8d0c26a17"
+down_revision = "b4d1c8e37f52"
 branch_labels = None
 depends_on = None
 

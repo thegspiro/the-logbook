@@ -1,0 +1,316 @@
+"""What the setup screen's checkboxes could never say, for an EMT row.
+
+``expand_module_checkboxes`` emits ``{module}.view``, ``{module}.manage``,
+``{module}.*`` and one implied grant. The registry had no ``emt`` entry, so
+``save_session_roles`` took its create branch and stored exactly that — and four
+of the grants the EMT rank carries have no checkbox to come from.
+
+``b4d1c8e37f52`` supplies them. The set is asserted against the registry rather
+than restated, so the migration's frozen tuple cannot drift from what
+``DEFAULT_POSITIONS["emt"]`` means (CLAUDE.md pitfall #20 keeps the tuple frozen;
+this keeps it honest).
+"""
+
+import importlib.util
+import json
+import re
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+import sqlalchemy as sa
+
+from app.api.v1.onboarding import expand_module_checkboxes
+from app.core.permissions import DEFAULT_POSITIONS
+
+_VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+_PATH = _VERSIONS / "20260905_0130_b4d1c8e37f52_restore_emt_seeded_grants.py"
+
+_SEEDED_GRANTS_TS = (
+    Path(__file__).resolve().parents[2]
+    / "frontend"
+    / "src"
+    / "modules"
+    / "onboarding"
+    / "config"
+    / "seededPositionGrants.ts"
+)
+
+
+#: Modules whose EMT checkbox was ticked when ``b4d1c8e37f52`` ran, and which a
+#: LATER revision has since taken off the seeded set. ``b6e4a0d17c93`` revoked
+#: ``apparatus`` from the rank-and-file slugs on 2026-09-05.
+#:
+#: They are added back below rather than trimmed out of the migration's frozen
+#: ``_UNEDITED_SHAPE``, and the direction matters: the shape is matched against
+#: real stored rows, and a row untouched since the create branch wrote it still
+#: holds these. Trimming the shape to a registry that moved on afterwards is
+#: what would stop it matching and turn the restore into a silent no-op —
+#: precisely the failure its fingerprint gate exists to avoid (pitfall #20).
+_REVOKED_SINCE_MODULES = ("apparatus",)
+
+#: The same revocations expressed as the permissions a pristine row held.
+_REVOKED_SINCE_PERMISSIONS = ("apparatus.view",)
+
+
+def _emt_modules():
+    """The modules EMT had a checkbox for when this migration ran.
+
+    Read from the generated map as text, in the manner of
+    ``test_onboarding_position_template_parity.py``, rather than derived from
+    the registry's permissions. The two differ, and the difference is the whole
+    point: the editor only knows the modules in its own registry, so
+    ``locations``, ``meetings`` and ``organization`` have no box to tick even
+    though the rank grants a view on each.
+
+    Modules revoked by a later revision are added back — see
+    ``_REVOKED_SINCE_MODULES``.
+    """
+    source = _SEEDED_GRANTS_TS.read_text()
+    block = re.search(r"\n  emt: \{\s*view: \[(.*?)\],", source, re.S)
+    assert block, f"no emt entry in {_SEEDED_GRANTS_TS.name}"
+    modules = set(re.findall(r"'([^']+)'", block.group(1)))
+    return sorted(modules | set(_REVOKED_SINCE_MODULES))
+
+
+def _registry_at_this_point():
+    """``DEFAULT_POSITIONS["emt"]`` as it stood when this migration ran.
+
+    The migration brings a row up to the registry *of its own moment*, not to
+    today's. A later revocation leaves today's registry one grant shorter than
+    the row this one legitimately produces.
+    """
+    return set(DEFAULT_POSITIONS["emt"]["permissions"]) | set(
+        _REVOKED_SINCE_PERMISSIONS
+    )
+
+
+def _editor_output():
+    """Everything the position editor could have stored for an EMT row."""
+    submitted = {
+        module: SimpleNamespace(view=True, manage=False) for module in _emt_modules()
+    }
+    return set(expand_module_checkboxes(submitted))
+
+
+def _load(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _migration():
+    return _load(_PATH, "_restore_emt")
+
+
+class _Op:
+    """Stands in for ``alembic.op``, which only exists inside a real upgrade.
+
+    The module is loaded by path and never registered in ``sys.modules``, so
+    replacing its ``op`` cannot leak into another test (CLAUDE.md pitfall #22).
+    """
+
+    def __init__(self, bind):
+        self._bind = bind
+
+    def get_bind(self):
+        return self._bind
+
+
+@pytest.fixture
+def engine():
+    engine = sa.create_engine("sqlite://")
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture
+def positions_table(engine):
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "CREATE TABLE positions ("
+                "  id VARCHAR(36) PRIMARY KEY,"
+                "  slug VARCHAR(100),"
+                "  is_system BOOLEAN,"
+                "  permissions TEXT"
+                ")"
+            )
+        )
+    return engine
+
+
+def _run_upgrade(engine):
+    module = _migration()
+    with engine.begin() as conn:
+        module.op = _Op(conn)
+        module.upgrade()
+
+
+def _restore_row(engine, slug, permissions, is_system=True):
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO positions (id, slug, is_system, permissions) "
+                "VALUES ('row', :slug, :is_system, :permissions)"
+            ),
+            {
+                "slug": slug,
+                "is_system": is_system,
+                "permissions": json.dumps(list(permissions)),
+            },
+        )
+    _run_upgrade(engine)
+    with engine.connect() as conn:
+        raw = conn.execute(
+            sa.text("SELECT permissions FROM positions WHERE id = 'row'")
+        ).scalar_one()
+    return json.loads(raw)
+
+
+class TestTheUneditedShape:
+    """The gate: only a row that still looks like the editor's output is added to.
+
+    An addition needs positive evidence the row is an unrepaired seed
+    (CLAUDE.md pitfall #23). Knowing a row *came from* the create branch is not
+    that evidence — ``RoleService.update_role`` edits a system position in place
+    — so the row must still match what an untouched one holds at this point in
+    the chain.
+    """
+
+    def test_it_is_the_editor_output_less_what_the_revocations_take(self):
+        prior = _load(
+            _VERSIONS
+            / "20260904_2050_f3b8d0c26a17_revoke_wizard_over_grants_unconditionally.py",
+            "_f3b8",
+        )
+        window = _load(
+            _VERSIONS
+            / "20260905_0110_a2e9f6b04c71_revoke_emt_heuristic_over_grants.py",
+            "_a2e9",
+        )
+        revoked = set(prior._REVOKE["emt"]) | set(window._REVOKE)
+
+        assert _migration()._UNEDITED_SHAPE == _editor_output() - revoked
+
+    def test_the_shape_plus_the_restored_set_is_the_registry(self):
+        module = _migration()
+
+        assert set(module._UNEDITED_SHAPE) | set(module._RESTORE) == (
+            _registry_at_this_point()
+        )
+
+    @pytest.mark.parametrize("edit", ["added", "removed"])
+    def test_an_edited_row_is_left_alone(self, positions_table, edit):
+        """A department may have removed one of these four on purpose, and the
+        row cannot say which. Missing a benign grant discloses nothing; putting
+        one back over a deliberate removal is silent."""
+        stored = sorted(_migration()._UNEDITED_SHAPE)
+        if edit == "added":
+            stored = stored + ["compliance.view"]
+        else:
+            stored = stored[:-1]
+
+        assert _restore_row(positions_table, "emt", stored) == stored
+
+
+class TestTheRestoredSet:
+    def test_it_is_exactly_what_the_editor_could_not_express(self):
+        """Derived here, frozen there — a drift in either is a failure.
+
+        If a grant becomes reachable through a checkbox, or the rank's list
+        changes, this catches it rather than letting the migration quietly
+        restore the wrong thing.
+        """
+        seeded = set(DEFAULT_POSITIONS["emt"]["permissions"])
+
+        assert set(_migration()._RESTORE) == seeded - _editor_output()
+
+    def test_none_of_it_is_something_the_editor_emits(self):
+        assert not set(_migration()._RESTORE) & _editor_output()
+
+
+class TestARowFromTheCreateBranch:
+    def test_it_gains_the_four_grants(self, positions_table):
+        wizard = sorted(_editor_output())
+
+        result = _restore_row(positions_table, "emt", wizard)
+
+        assert set(result) == set(wizard) | set(_migration()._RESTORE)
+
+    def test_it_ends_equal_to_the_registry(self, positions_table):
+        """The point of the whole exercise: a wizard row, once the over-grants
+        are gone, becomes exactly what the rank carries."""
+        wizard = sorted(_editor_output())
+
+        result = _restore_row(positions_table, "emt", wizard)
+
+        assert sorted(result) == sorted(_registry_at_this_point())
+
+    def test_what_was_already_there_keeps_its_order(self, positions_table):
+        wizard = sorted(_editor_output())
+
+        result = _restore_row(positions_table, "emt", wizard)
+
+        assert result[: len(wizard)] == wizard
+
+    def test_a_complete_row_is_byte_identical(self, positions_table):
+        seeded = sorted(_registry_at_this_point())
+
+        assert _restore_row(positions_table, "emt", seeded) == seeded
+
+    def test_each_grant_appears_once(self, positions_table):
+        result = _restore_row(positions_table, "emt", sorted(_editor_output()))
+
+        assert len(result) == len(set(result))
+
+    def test_it_is_idempotent(self, positions_table):
+        with positions_table.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO positions (id, slug, is_system, permissions) "
+                    "VALUES ('row', 'emt', 1, :p)"
+                ),
+                {"p": json.dumps(sorted(_editor_output()))},
+            )
+        _run_upgrade(positions_table)
+        with positions_table.connect() as conn:
+            once = conn.execute(
+                sa.text("SELECT permissions FROM positions WHERE id = 'row'")
+            ).scalar_one()
+        _run_upgrade(positions_table)
+        with positions_table.connect() as conn:
+            assert (
+                conn.execute(
+                    sa.text("SELECT permissions FROM positions WHERE id = 'row'")
+                ).scalar_one()
+                == once
+            )
+
+
+class TestWhatItMustNotTouch:
+    def test_a_department_created_position_is_left_alone(self, positions_table):
+        stored = sorted(_editor_output())
+
+        assert _restore_row(positions_table, "emt", stored, is_system=False) == stored
+
+    @pytest.mark.parametrize("slug", ["member", "firefighter", "engineer", "captain"])
+    def test_other_slugs_are_left_alone(self, positions_table, slug):
+        """They were seeded throughout, so their saves went through the update
+        branch and ``_merge_default_permissions`` kept these grants."""
+        stored = sorted(_editor_output())
+
+        assert _restore_row(positions_table, slug, stored) == stored
+
+    def test_it_no_ops_when_the_table_does_not_exist(self, engine):
+        _run_upgrade(engine)
+
+
+class TestItIsWiredIn:
+    def test_the_chain(self):
+        module = _migration()
+        assert module.revision == "b4d1c8e37f52"
+        assert module.down_revision == "a2e9f6b04c71"

@@ -262,19 +262,31 @@ class TestItAgreesWithTheRegistry:
         assert _intended_grants("emt") == _intended_grants("firefighter")
 
     def test_it_covers_the_slugs_the_baseline_set_is_stored_under(self):
-        """``DEFAULT_POSITIONS["firefighter"]["permissions"]`` *is* the rank's
-        list object, so onboarding writes a system position under that slug too
-        (CLAUDE.md pitfall #23). ``emt`` has no seeded entry, so
-        ``save_session_roles`` takes its create branch with ``is_system=True``.
+        """Each seeded slug reaches the database as a stored ``positions`` row.
+
+        ``DEFAULT_POSITIONS["firefighter"]["permissions"]`` *is* the rank's list
+        object, so onboarding writes a system position under that slug too
+        (CLAUDE.md pitfall #23), and ``emt`` aliases the same list twice over —
+        through ``OPERATIONAL_RANKS["emt"]``. Its registry entry arrived only on
+        2026-09-05; every EMT row written before that came from
+        ``save_session_roles``'s create branch, which is why the slug is covered
+        whether or not it is seeded today.
         """
         assert set(_migration()._SLUGS) == set(SLUGS)
-        assert (
-            DEFAULT_POSITIONS["firefighter"]["permissions"]
-            is OPERATIONAL_RANKS["firefighter"]["default_permissions"]
-        )
-        assert "emt" not in DEFAULT_POSITIONS
+        for slug in ("firefighter", "emt"):
+            assert (
+                DEFAULT_POSITIONS[slug]["permissions"]
+                is OPERATIONAL_RANKS[slug]["default_permissions"]
+            ), slug
 
     def test_it_is_wired_into_the_migration_chain(self):
+        """Parented on ``b4d1c8e37f52``, and that ordering is load-bearing.
+
+        That migration restores four grants to an EMT row only when the row
+        matches its frozen ``_UNEDITED_SHAPE``, which contains
+        ``apparatus.view``. Revoking first would make every EMT row miss the
+        match and skip the restore in silence.
+        """
         module = _migration()
         assert module.revision == "b6e4a0d17c93"
-        assert module.down_revision == "f3b8d0c26a17"
+        assert module.down_revision == "b4d1c8e37f52"

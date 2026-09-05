@@ -3,6 +3,7 @@
  */
 
 import api from './apiClient';
+import type { NotificationLogScope } from '../constants/enums';
 import type {
   NotificationRuleRecord,
   NotificationLogRecord,
@@ -60,8 +61,15 @@ export const notificationsService = {
     return response.data;
   },
 
+  /**
+   * Notification send log. `scope` defaults to `'mine'` server-side — the log
+   * stores the subject, body and recipient address of every notification the
+   * department has sent, so the org-wide view is an explicit request and
+   * requires `notifications.manage`.
+   */
   async getLogs(params?: {
     channel?: string;
+    scope?: NotificationLogScope;
     skip?: number;
     limit?: number;
   }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
@@ -77,8 +85,8 @@ export const notificationsService = {
     return response.data;
   },
 
-  async markAllLogsRead(): Promise<{ marked_read: number }> {
-    const response = await api.post<{ marked_read: number }>('/notifications/logs/read-all');
+  async markAllLogsRead(params?: { scope?: NotificationLogScope }): Promise<{ marked_read: number }> {
+    const response = await api.post<{ marked_read: number }>('/notifications/logs/read-all', null, { params });
     return response.data;
   },
 

@@ -157,7 +157,12 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
             />
           </>
         ) : (
-          !isPast && (
+          /* `rosterLocked` as well as `isPast`: past the shift's end plus the
+             grace, `canAssignNow` in the parent has already withdrawn the form
+             this button opens, so "Assign someone" stayed visible on a
+             same-day shift all evening and did nothing when tapped. */
+          !isPast &&
+          !rosterLocked && (
             /* "Assign" and "Sign Up" side by side never said which was which —
                and on a phone the first collapsed to a bare icon. The labels
                carry the difference: one puts somebody else in the seat, the
