@@ -519,10 +519,12 @@ describe('apiCache', () => {
     });
 
     it('returns false for /admin-hours/ endpoints', () => {
-      // The GET paths the admin-hours client actually issues. This block
-      // previously asserted only '/admin-hours/report', which is not a route
-      // anywhere in the app -- it proved the prefix blocks *a* path without
-      // covering one that carries hours.
+      // Every GET path the admin-hours client issues -- all eleven, so that
+      // narrowing the prefix to the paths named here cannot leave one of them
+      // cacheable while this block still passes. This previously asserted only
+      // '/admin-hours/report', which is not a route anywhere in the app: it
+      // proved the prefix blocks *a* path without covering one that carries
+      // hours.
       //
       // /summary is the one the dashboard's "My Hours" card reads, and it is
       // scoped to a single member (userId) over a date range, so a cached
@@ -544,6 +546,12 @@ describe('apiCache', () => {
       expect(isCacheable('/admin-hours/pending-count')).toBe(false);
       expect(isCacheable('/admin-hours/compliance/u1')).toBe(false);
       expect(isCacheable('/admin-hours/categories')).toBe(false);
+      // The clock-in QR payload for a category, and the event->category hour
+      // mappings. Both are GETs the client issues and neither is reachable
+      // from the paths above, so pinning only those would leave a narrowed
+      // prefix passing this block while these two turned cacheable.
+      expect(isCacheable('/admin-hours/categories/c1/qr-data')).toBe(false);
+      expect(isCacheable('/admin-hours/event-mappings')).toBe(false);
     });
 
     it('returns false for /errors/ endpoints', () => {
