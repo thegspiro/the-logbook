@@ -4002,9 +4002,7 @@ class SchedulingService:
             # still ahead — behaves exactly as before and only the HTTP paths
             # opt in.
             if actor != SignupActor.MANAGER:
-                shift = await self.get_shift_by_id(
-                    assignment.shift_id, organization_id
-                )
+                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
                 locked = shift is not None and await self._roster_locked_error(
                     shift, organization_id, actor
                 )
@@ -4118,9 +4116,7 @@ class SchedulingService:
             # still ahead — behaves exactly as before and only the HTTP paths
             # opt in.
             if actor != SignupActor.MANAGER:
-                shift = await self.get_shift_by_id(
-                    assignment.shift_id, organization_id
-                )
+                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
                 locked = shift is not None and await self._roster_locked_error(
                     shift, organization_id, actor
                 )
@@ -4179,9 +4175,7 @@ class SchedulingService:
             # still ahead — behaves exactly as before and only the HTTP paths
             # opt in.
             if actor != SignupActor.MANAGER:
-                shift = await self.get_shift_by_id(
-                    assignment.shift_id, organization_id
-                )
+                shift = await self.get_shift_by_id(assignment.shift_id, organization_id)
                 locked = shift is not None and await self._roster_locked_error(
                     shift, organization_id, actor
                 )
