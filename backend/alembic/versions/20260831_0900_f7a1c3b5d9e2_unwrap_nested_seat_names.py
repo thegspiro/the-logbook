@@ -30,8 +30,15 @@ depends_on = None
 
 # ``shifts`` is where pattern generation writes; the other two are covered
 # because the same nested entry can reach them through a copied template.
-# None of the three is created by a migration — they come into being when the
-# app calls create_all — so every step is guarded on the table existing.
+#
+# All three ARE created by the migration chain — ``shifts`` by 20260122_0015,
+# ``shift_templates`` by 20260214_2200, ``basic_apparatus`` by 20260218_0200,
+# every one of them an ancestor of this revision — so the guards below are
+# defensive rather than load-bearing. An earlier version of this comment
+# claimed none of them was, which is the false positive CLAUDE.md pitfall #26
+# records being reverted. They are kept because a reflection costs nothing and
+# cannot be wrong, but this is not the pattern to copy for a genuinely
+# create_all-only table.
 _TABLES = ("shifts", "shift_templates", "basic_apparatus")
 
 

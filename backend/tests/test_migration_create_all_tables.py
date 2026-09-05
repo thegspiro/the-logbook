@@ -797,23 +797,36 @@ class TestTheDetectionItself:
 # a sibling's correct claim an offender -- which is how you end up deleting a
 # guard that is doing real work.
 
-#: Every phrasing the repository actually uses to assert create_all-only, so
-#: copying an existing comment cannot evade the check. Whitespace-tolerant: the
-#: claim wraps across a newline in real files, and a pattern that misses that
-#: silently matches nothing, which reads exactly like a clean run.
-#: ``[\s#]`` rather than ``\s`` between words: the claim wraps mid-sentence, and
-#: in a comment block the next line starts with a ``#``, which plain whitespace
-#: will not cross.
-_GAP = r"[\s#]+"
-_CLAIM_FORMS = (
-    rf"no{_GAP}migration{_GAP}creates",
-    r"model-only\s+table",
-    rf"nothing{_GAP}in{_GAP}the{_GAP}migration{_GAP}chain{_GAP}creates",
-    rf"no{_GAP}migration{_GAP}in{_GAP}this{_GAP}chain",
-    rf"not{_GAP}created{_GAP}by{_GAP}any{_GAP}migration",
-    rf"never{_GAP}created{_GAP}by{_GAP}a{_GAP}migration",
+#: A claim is recognized by its *shape*, not from a list of phrasings.
+#:
+#: An enumerated allowlist does not converge: two consecutive reviews each found
+#: a wording it did not cover ("nothing in the migration chain creates", then
+#: "None of the three is created by a migration"), and each time the check
+#: passed while the misinformation stood. Every one of these claims is the same
+#: sentence though — a negation, near the word "migration", near a creation
+#: verb — so anchoring on that catches the variant nobody has written yet.
+#:
+#: ``_GAP`` crosses a ``#`` continuation and light markup as well as whitespace:
+#: the claim wraps mid-sentence in real files, and a pattern that cannot cross
+#: the wrap silently matches nothing, which reads exactly like a clean run.
+#:
+#: The span limits are what keep it from joining two unrelated sentences. They
+#: were set by measurement: this pattern reports exactly one offender across the
+#: whole corpus, where anchoring on the ``create_all`` token instead — the
+#: obvious generalization — flagged 50 files, because the phrasing is what makes
+#: attribution to a particular table precise.
+_GAP = r"[\s#*_`\-]"
+_NEGATION = r"\b(?:no|none|nothing|never|not)\b"
+#: Irregular past tenses are spelled out: "built" does not contain "build",
+#: nor "made" "make", and a claim is as likely to be written in the past.
+_CREATES = r"(?:creat|build|built|mak|made)"
+_FILL = rf"(?:{_GAP}|\w|\(|\)|,)"
+_CLAIM = re.compile(
+    rf"{_NEGATION}{_FILL}{{0,90}}?"
+    rf"(?:migration{_FILL}{{0,60}}?{_CREATES}|{_CREATES}{_FILL}{{0,60}}?migration)"
+    rf"|model-only{_GAP}table",
+    re.I | re.S,
 )
-_CLAIM = re.compile("|".join(_CLAIM_FORMS), re.S)
 
 
 def _revision_of(text: str) -> str | None:
@@ -937,12 +950,14 @@ class TestTheClaimDetection:
     @pytest.mark.parametrize(
         "claim",
         [
+            # Every wording found in the repository across three reviews.
             "positions -- no migration creates it.",
             "positions is a model-only table.",
             "nothing in the migration chain creates positions.",
             "no migration in this chain builds positions.",
             "positions is not created by any migration.",
             "positions is never created by a migration.",
+            "None of the three is created by a migration; positions included.",
         ],
     )
     def test_every_recognized_form_is_caught(self, claim):
@@ -953,6 +968,41 @@ class TestTheClaimDetection:
 
     def test_the_claim_survives_wrapping_across_a_newline(self):
         assert self._plant("positions -- no migration\n# creates it.")
+
+    @pytest.mark.parametrize(
+        "claim",
+        [
+            "positions? nothing whatsoever in any migration makes that table.",
+            "not one migration in the whole chain has ever built positions.",
+            "positions is never something a migration would create.",
+            "no such migration creates positions.",
+        ],
+    )
+    def test_a_wording_nobody_has_written_is_still_caught(self, claim):
+        """The point of the change, and the assertion that would have failed
+        before it.
+
+        None of these appears anywhere in the repository -- they were invented
+        here. An allowlist of phrasings passes this file's other tests and fails
+        these, which is exactly how the check came to need widening twice in two
+        reviews. Recognition is by shape now: a negation, near "migration", near
+        a creation verb.
+        """
+        assert self._plant(claim), f"a novel phrasing evaded the check: {claim!r}"
+
+    @pytest.mark.parametrize(
+        "innocuous",
+        [
+            "This migration creates the positions index in one statement.",
+            "positions is created by a migration, so no guard is needed.",
+            "Nothing here needs a guard; positions has existed since the rename.",
+        ],
+    )
+    def test_prose_that_is_not_a_claim_is_left_alone(self, innocuous):
+        """The other half of a generalization: widening the anchor must not
+        start reporting sentences that assert the opposite, or say nothing about
+        creation at all. A check that flags correct prose gets deleted."""
+        assert not self._plant(innocuous), f"false positive on: {innocuous!r}"
 
     def test_a_sibling_is_not_an_ancestor(self):
         """The bug this replaced: a linear walk gives siblings adjacent
