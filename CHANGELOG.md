@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fix for that is to state one, and each side is right about the question it is
   answering.
 - **Openness is judged differently from the board, on purpose.**
-  `shiftStatusInfo` zeroes a shift's open seats once the *member* signup window
+  `shiftStatusInfo` zeroes a shift's open seats once the _member_ signup window
   closes, which is right for a board offering a claim button. An officer can
   still seat somebody after that, so the gaps list uses `capacity - filled`
   behind the lifecycle check instead — inheriting the member's answer would hide
@@ -239,6 +239,16 @@ which merged before a review of it came back.
   browser after the fact. The old form listed restricted items and let the
   member submit a request the API then refused, and the item's existence was
   disclosed to everyone regardless.
+- **"Nothing on hand is size L" now means it.** The warning was suppressed by
+  any item in the requested size, so a rack of size-L trousers silenced the
+  notice on a request for a size-L shirt — and the prompt to order the shirt
+  was lost. It is scoped to the product the member actually asked for.
+- **The fulfil picker no longer answers from one page of the catalog.** It
+  judged availability from the first 500 rows it had loaded, so on a larger
+  catalog "nothing on hand is that size" could mean "not on this page". The
+  eligible rows, their issuable counts and the size verdicts are now decided by
+  the server, which can see all of them; when the list is capped for display it
+  says so instead of reading as the whole shelf.
 
 ### Scheduling administration moved into the Administration section (2026-09-05)
 
