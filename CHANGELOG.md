@@ -511,6 +511,17 @@ which merged before a review of it came back.
   there, not a slug. Calls whose type had already been deleted from settings
   stay in the remainder — there is no label left to restore, and renaming them
   would replace "Not categorised" with a raw slug.
+- **A renamed call type could rewrite an officer's own words in an old report.**
+  A shift report records whether its call types are the department's slugs or
+  the incident text an officer typed; only the first may be relabelled when a
+  type is renamed. That marker was backfilled onto older reports from the
+  shift's current call records, which can be recreated after the fact — delete a
+  detailed shift's incident rows, switch the department to count-only and
+  re-finalize it, and an officer's "MVA w/ entrapment" was marked as a
+  department slug, to be relabelled by a later rename. The marker is now kept
+  only where every stored value really is a type that department has
+  configured, checked against the report itself rather than against records
+  that can change underneath it.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 
