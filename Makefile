@@ -193,8 +193,7 @@ deploy:
 	@echo "${YELLOW}The backend runs 'alembic upgrade head' on startup, so no${NC}"
 	@echo "${YELLOW}separate migrate step is needed. Watch it with 'make docker-logs'.${NC}"
 
-## verify-integrity: Verify audit log integrity
+## verify-integrity: Verify the audit log hash chain (read-only)
 verify-integrity:
 	@echo "${BLUE}Verifying audit log integrity...${NC}"
-	@./scripts/maintenance/verify-integrity.sh
-	@echo "${GREEN}✓ Integrity verification complete${NC}"
+	@cd backend && python scripts/verify_audit_integrity.py
