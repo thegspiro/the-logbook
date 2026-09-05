@@ -5,7 +5,7 @@
  * out-of-stock size that still submits.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { RequestableProduct } from '../types';
@@ -213,6 +213,58 @@ describe('RequestEquipmentModal', () => {
       reason: undefined,
     });
     expect(onSubmitted).toHaveBeenCalled();
+  });
+
+  it('lets a free-text request state an ongoing need', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByRole('button', { name: /Long Sleeve/ });
+
+    await user.type(screen.getByLabelText(/Describe what you need/), 'Wildland gloves');
+    // The duration control used to render only alongside a chosen product, so
+    // gear the department does not carry — the case most likely to be an
+    // ongoing need — could only ever be filed as temporary.
+    await user.selectOptions(screen.getByLabelText('How long do you need it?'), 'ongoing');
+    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+
+    await waitFor(() => expect(mockCreateEquipmentRequest).toHaveBeenCalledTimes(1));
+    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ item_name: 'Wildland gloves', requested_duration: 'ongoing' })
+    );
+  });
+
+  it('ignores a superseded catalog response', async () => {
+    // The unfiltered browse load fires on open and is not debounced. If it is
+    // slow, the newer filtered response can land first and then be overwritten
+    // by the older one, leaving a list that contradicts the search box.
+    let releaseFirst: (value: unknown) => void = () => {};
+    const first = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    mockGetRequestableCatalog.mockReset();
+    mockGetRequestableCatalog
+      .mockImplementationOnce(async () => {
+        await first;
+        return { products: [shirt, radio], categories: [] };
+      })
+      .mockResolvedValue({ products: [radio], categories: [] });
+
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByLabelText('What do you need?'), 'radio');
+    await waitFor(() => expect(mockGetRequestableCatalog).toHaveBeenCalledTimes(2));
+    await screen.findByRole('button', { name: /Portable Radio/ });
+
+    // Release the stale browse response and let it settle before asserting.
+    // Checking immediately proves nothing: the stale write has not landed yet,
+    // so the assertion passes whether or not the guard exists.
+    releaseFirst(null);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(screen.queryByRole('button', { name: /Long Sleeve/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Portable Radio/ })).toBeInTheDocument();
   });
 
   it('sends the duration intent the member chose', async () => {

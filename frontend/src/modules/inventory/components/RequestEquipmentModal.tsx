@@ -66,6 +66,16 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
   const [submitting, setSubmitting] = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Sequence number of the newest catalog request.
+   *
+   * The browse load fires the moment the modal opens and is not debounced, so
+   * a member who types before it lands can have the newer filtered response
+   * arrive first and then be overwritten by the older unfiltered one — a list
+   * that no longer matches the box above it. The same crossing happens across
+   * a close and reopen. Only the newest request is allowed to write state.
+   */
+  const loadSeq = useRef(0);
 
   const resetForm = useCallback(() => {
     setSearch('');
@@ -79,19 +89,24 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
   }, []);
 
   const loadCatalog = useCallback(async (term: string, category: string) => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const data = await inventoryService.getRequestableCatalog({
         search: term.trim() || undefined,
         category_id: category || undefined,
       });
+      if (seq !== loadSeq.current) return;
       setProducts(data.products);
       setCategories(data.categories);
     } catch (err: unknown) {
+      if (seq !== loadSeq.current) return;
       setProducts([]);
       toast.error(getErrorMessage(err, 'Failed to load the equipment catalog'));
     } finally {
-      setLoading(false);
+      // Only the newest request owns the spinner; a superseded one clearing it
+      // would report "done" while the current load is still in flight.
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, []);
 
@@ -219,6 +234,46 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
         : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
     }`;
 
+  /* Duration and reason belong to the request, not to the catalog branch of
+     the form. Rendering them only alongside a chosen product meant a free-text
+     request — gear the department does not carry, the case most likely to be
+     an ongoing need — could only ever be submitted as "temporary". */
+  const durationField = (
+    <div>
+      <label className="form-label" htmlFor="requested-duration">
+        How long do you need it?
+      </label>
+      <select
+        id="requested-duration"
+        value={duration}
+        onChange={(e) => setDuration(e.target.value as 'temporary' | 'ongoing')}
+        className="form-input"
+      >
+        <option value="temporary">Temporary — I expect to return it</option>
+        <option value="ongoing">Ongoing — I need it as regular assigned gear</option>
+      </select>
+      <p className="text-theme-text-muted mt-1 text-xs">
+        The quartermaster decides the final issue method based on availability and department policy.
+      </p>
+    </div>
+  );
+
+  const reasonField = (
+    <div>
+      <label className="form-label" htmlFor="request-reason">
+        Reason (optional)
+      </label>
+      <textarea
+        id="request-reason"
+        rows={3}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        className="form-input"
+        placeholder="Why do you need this item?"
+      />
+    </div>
+  );
+
   return (
     <Modal
       isOpen={isOpen}
@@ -329,6 +384,12 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
             <p className="text-theme-text-muted text-xs">
               The quartermaster sees these too — it is how the department finds out what it is missing.
             </p>
+            {freeText.trim() !== '' && (
+              <div className="space-y-4 pt-2">
+                {durationField}
+                {reasonField}
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -391,23 +452,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
             </div>
           )}
 
-          <div>
-            <label className="form-label" htmlFor="requested-duration">
-              How long do you need it?
-            </label>
-            <select
-              id="requested-duration"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value as 'temporary' | 'ongoing')}
-              className="form-input"
-            >
-              <option value="temporary">Temporary — I expect to return it</option>
-              <option value="ongoing">Ongoing — I need it as regular assigned gear</option>
-            </select>
-            <p className="text-theme-text-muted mt-1 text-xs">
-              The quartermaster decides the final issue method based on availability and department policy.
-            </p>
-          </div>
+          {durationField}
 
           {isPool && (
             <div>
@@ -431,19 +476,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
             </div>
           )}
 
-          <div>
-            <label className="form-label" htmlFor="request-reason">
-              Reason (optional)
-            </label>
-            <textarea
-              id="request-reason"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="form-input"
-              placeholder="Why do you need this item?"
-            />
-          </div>
+          {reasonField}
         </div>
       )}
     </Modal>
