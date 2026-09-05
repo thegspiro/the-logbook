@@ -191,13 +191,15 @@ class GrantService:
         skip: int = 0,
         limit: int = 100,
     ) -> List[GrantApplication]:
-        query = (
-            select(GrantApplication)
-            .where(GrantApplication.organization_id == organization_id)
-            .options(
-                selectinload(GrantApplication.budget_items),
-                selectinload(GrantApplication.compliance_tasks),
-            )
+        # No eager loads here: GrantApplicationListResponse (the response
+        # model for this route) serializes none of the child collections —
+        # a selectinload would still issue its own follow-up query fetching
+        # every budget item / compliance task for every application on the
+        # page, scaling page memory with child history for data the
+        # response never uses. get_application() (a single-record fetch)
+        # is the one that needs them, for GrantApplicationResponse.
+        query = select(GrantApplication).where(
+            GrantApplication.organization_id == organization_id
         )
         if status:
             query = query.where(GrantApplication.application_status == status)
@@ -212,9 +214,7 @@ class GrantService:
         query = query.order_by(
             GrantApplication.created_at.desc(), GrantApplication.id.asc()
         )
-        # GF-35: same offset/limit fix as list_opportunities. selectinload
-        # issues its own follow-up query for the page's rows (not a JOIN), so
-        # LIMIT/OFFSET on this query cannot fan out or under-count the page.
+        # GF-35: same offset/limit fix as list_opportunities.
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().unique().all())

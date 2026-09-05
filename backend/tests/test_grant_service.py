@@ -642,5 +642,34 @@ class TestListDoesNotEagerLoadParent:
             assert child_table not in sql
 
 
+class TestListApplicationsDoesNotEagerLoadChildren:
+    """Codex finding 3 (GF-35 follow-up): list_applications() must not carry
+    selectinload options for budget_items/compliance_tasks. Those loaders
+    each issue their own follow-up query fetching every child row for every
+    application on the page — unbounded by the page's LIMIT — and
+    GrantApplicationListResponse (the response model for this route)
+    serializes neither collection, so the extra queries buy nothing but
+    memory that scales with child history."""
+
+    async def test_query_carries_no_child_loader_options(self):
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            r = MagicMock()
+            r.scalars.return_value.unique.return_value.all.return_value = []
+            return r
+
+        db = MagicMock()
+        db.execute = execute
+        await GrantService(db).list_applications("org-1")
+
+        assert captured, "list_applications never executed a query"
+        stmt = captured[-1]
+        loaded_paths = " ".join(str(opt.path) for opt in stmt._with_options)
+        for child_relationship in ("budget_items", "compliance_tasks"):
+            assert child_relationship not in loaded_paths
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
