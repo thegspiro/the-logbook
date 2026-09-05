@@ -75,6 +75,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   those hours hang off, and an officer was still offered Remove beside every
   name. All three are withdrawn once the roster locks.
 
+- **The lock is now enforced, not just displayed.** Hiding a control is not
+  enforcing a rule: confirm, the assignment PATCH and DELETE, and self-withdraw
+  were all still reachable by a direct request, and withdraw deletes an
+  assignment that hours have already been recorded against. All four now carry
+  the same end-plus-grace bound the client does, with the same
+  `scheduling.manage` exemption, so the two agree. An assigner is bounded here
+  even though the signup window gives them a grace period to seat a late
+  arrival — repairing a roster that is already a record is the administrator's
+  path. Internal callers are unaffected: the bound is opt-in, and the
+  standing-shift release that shares the delete path only ever touches dates
+  still ahead.
+
+- **An empty seat still offered "Assign someone", and the button did
+  nothing.** The crew board's empty-slot branch gated on `isPast` alone, while
+  the form it opens is withdrawn by the officer's own signup deadline — which
+  has necessarily passed by then — so on a same-day shift the control sat there
+  all evening and swallowed every tap.
+
+- **The lock is no longer applied on a grace period nobody has fetched.** The
+  signup window falls back to a built-in sixty minutes until the department's
+  settings arrive, a default chosen to be permissive for a claim button; for a
+  lock it is the reverse, so a department running a longer grace watched
+  controls vanish on a shift the server still accepts, and a failed settings
+  fetch left them gone for the life of the panel. Unknown now means unlocked.
+
 - **Withdraw outlived the lock, beside the hours it would have deleted.** The
   "You are assigned to this shift" card gated its Withdraw button on `isPast`
   alone, which is day-granular, so on a shift that ended at seven it stayed
