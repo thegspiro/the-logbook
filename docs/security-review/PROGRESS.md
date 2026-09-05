@@ -17,9 +17,12 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 22 (Grants & fundraising), pass 3** — branch
-`claude/security-review-grants-fundraising`, PR pending (opened immediately
-after this commit; see the next `docs(security-review): record PR #NNNN`
-commit for the link).
+`claude/security-review-grants-fundraising`,
+[PR #2251](https://github.com/thegspiro/the-logbook/pull/2251). Diff-scoped
+against pass 2's merge (`d7a0c456`, verified reachable after an unshallow
+fetch): zero code drift. One new finding — GF-35 (LOW-MED, fixed): all 11
+`list_*` methods across both services fetched an org's entire table before
+slicing `skip`/`limit` in Python; now paginated in SQL.
 
 ---
 
