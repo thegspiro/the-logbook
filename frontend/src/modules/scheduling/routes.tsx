@@ -31,6 +31,10 @@ const SchedulingAdminReportsPage = lazyWithRetry(() => import('../../pages/sched
 
 const SchedulingSettingsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingSettingsPage'));
 
+const SchedulingSettingsRedirect = lazyWithRetry(
+  () => import('../../pages/scheduling/admin/SchedulingSettingsRedirect')
+);
+
 const SchedulingPlatoonsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingPlatoonsPage'));
 
 const PositionRosterPage = lazyWithRetry(() => import('../../pages/scheduling/PositionRosterPage'));
@@ -53,19 +57,15 @@ export const getSchedulingRoutes = () => {
           </ProtectedRoute>
         }
       />
-      {/* The hub admits the position roster's audience as well as scheduling
-          managers — a training officer holds no scheduling grant and the roster
-          is a training-compliance view. The hub's own body shows each of them
-          only the cards their permissions open. */}
+      {/* One grant runs this whole area. The hub admitted the training grants
+          for a while, because the position roster inside it did — but a hub
+          gate wider than every card behind it only ever opens an empty page,
+          and administering the schedule is what `scheduling.manage` is for. */}
       <Route
         path="/scheduling/admin"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute
-              requiredModule="scheduling"
-              moduleLabel="Scheduling"
-              requiredAnyPermission={['scheduling.manage', 'training.view_all', 'training.manage']}
-            >
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingAdminHub />
             </ProtectedRoute>
           </Suspense>
@@ -111,20 +111,32 @@ export const getSchedulingRoutes = () => {
           </Suspense>
         }
       />
-      {/* Training permissions open this one, not just scheduling ones: it is a
-          training-compliance view as much as a scheduling one, and a training
-          officer holding neither scheduling grant has always been able to read
-          it. Moving the page must not narrow who it admits. */}
+      {/* This page used to accept `training.view_all` / `training.manage` as
+          well, on the grounds that it reads as a training-compliance view. It
+          no longer does: nothing in the app ever linked a training officer to
+          it, so the wider gate bought a page reachable only by typing its URL
+          while making every gate above it wider to match. Scheduling
+          administration is one grant. */}
       <Route
         path="/scheduling/admin/positions"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute
-              requiredModule="scheduling"
-              moduleLabel="Scheduling"
-              requiredAnyPermission={['scheduling.manage', 'training.view_all', 'training.manage']}
-            >
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <PositionRosterPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      {/* Sections are routes, so the bare path names none. It forwards to the
+          one its `?tab=` names, which is what keeps every link written against
+          the older query-parameter contract landing somewhere real instead of
+          on the catch-all's redirect to the dashboard. */}
+      <Route
+        path="/scheduling/admin/settings"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
+              <SchedulingSettingsRedirect />
             </ProtectedRoute>
           </Suspense>
         }
