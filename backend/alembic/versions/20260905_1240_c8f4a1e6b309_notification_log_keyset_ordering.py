@@ -20,17 +20,19 @@ Reversible: the downgrade drops the index and restores nullability. It does not
 put the NULLs back — they were unreachable rows, and there is nothing to
 identify which had been NULL.
 
-Sequenced after ``c7a4e91d3b68`` only to keep the chain linear: both were
-written against ``b4d1c8e37f52`` and forked it. Nothing here depends on that
-migration — it repairs seeded permission rows — so the order between them is
-arbitrary.
+Sequenced after ``b6e4a0d17c93`` only to keep the chain linear. This has been
+re-parented twice as permission-repair migrations landed on main ahead of it
+(``c7a4e91d3b68``, then ``b6e4a0d17c93``); nothing here depends on either of
+them — they rewrite seeded ``positions`` rows, this one alters
+``notification_logs`` — so the order between them is arbitrary and only the
+single head matters.
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "c8f4a1e6b309"
-down_revision = "c7a4e91d3b68"
+down_revision = "b6e4a0d17c93"
 branch_labels = None
 depends_on = None
 

@@ -11,6 +11,9 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
+/** Permissions that may enter the Apparatus module from any discovery surface. */
+export const APPARATUS_ENTRY_PERMISSIONS = ['apparatus.view', 'apparatus.manage'] as const;
+
 const ApparatusListPage = lazyWithRetry(() => import('./pages/ApparatusListPage'));
 const ApparatusDetailPage = lazyWithRetry(() => import('./pages/ApparatusDetailPage'));
 const ApparatusFormPage = lazyWithRetry(() => import('./pages/ApparatusFormPage'));
@@ -26,7 +29,7 @@ export const getApparatusRoutes = () => {
             <ProtectedRoute
               requiredModule="apparatus"
               moduleLabel="Apparatus"
-              requiredAnyPermission={['apparatus.view', 'apparatus.manage']}
+              requiredAnyPermission={[...APPARATUS_ENTRY_PERMISSIONS]}
             >
               <ApparatusLabelPrintPage />
             </ProtectedRoute>
@@ -41,7 +44,7 @@ export const getApparatusRoutes = () => {
             <ProtectedRoute
               requiredModule="apparatus"
               moduleLabel="Apparatus"
-              requiredAnyPermission={['apparatus.view', 'apparatus.manage']}
+              requiredAnyPermission={[...APPARATUS_ENTRY_PERMISSIONS]}
             >
               <ApparatusListPage />
             </ProtectedRoute>
@@ -73,7 +76,7 @@ export const getApparatusRoutes = () => {
             <ProtectedRoute
               requiredModule="apparatus"
               moduleLabel="Apparatus"
-              requiredAnyPermission={['apparatus.view', 'apparatus.manage']}
+              requiredAnyPermission={[...APPARATUS_ENTRY_PERMISSIONS]}
             >
               <ApparatusDetailPage />
             </ProtectedRoute>

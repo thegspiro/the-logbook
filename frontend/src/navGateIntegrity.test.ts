@@ -34,6 +34,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MEDICAL_VIEW_PERMISSIONS } from './modules/medical-supplies/routes';
+import { APPARATUS_ENTRY_PERMISSIONS } from './modules/apparatus/routes';
 import { FACILITY_ENTRY_PERMISSIONS } from './modules/facilities/routes';
 import { QUICK_ADD_ACTIONS } from './components/layout/quickAddActions';
 import { barePath, routeGate, routeSources } from './test/routeGates';
@@ -101,6 +102,56 @@ describe('navigation gates match the routes they target', () => {
     }
 
     expect(FACILITY_ENTRY_PERMISSIONS).toEqual(['facilities.view', 'facilities.manage']);
+  });
+
+  it('shares the Apparatus route gate with every discovery surface', () => {
+    // The module's pages are `apparatus.view` OR `apparatus.manage`. Regular
+    // members hold neither as of 2026-09-05, and this row carried no gate at
+    // all until then — which, with ProtectedRoute answering a permission
+    // failure with a full-page Access Denied rather than a redirect, would
+    // have made it a link to a dead end for most of the department.
+    for (const surface of NAV_SURFACES) {
+      const source = read(surface);
+      const entry = navEntry(source, 'Apparatus');
+      expect(entry, `${surface}: Apparatus does not use the shared route gate`).toContain(
+        'APPARATUS_ENTRY_PERMISSIONS'
+      );
+      expect(source, `${surface}: Apparatus gate is not imported`).toContain(
+        "import { APPARATUS_ENTRY_PERMISSIONS } from '../../modules/apparatus/routes'"
+      );
+    }
+
+    expect(APPARATUS_ENTRY_PERMISSIONS).toEqual(['apparatus.view', 'apparatus.manage']);
+  });
+
+  it('gates the /apparatus route on that same constant', () => {
+    // The other half of the check above. `routeGate` reads quoted literals and
+    // so cannot see through the shared constant — which is the whole point of
+    // using one — so assert the route block references it by name. Nav and
+    // route then hold one definition between them and cannot drift.
+    const sources = routeSources();
+    const start = sources.indexOf('path="/apparatus"');
+    expect(start, '/apparatus route not found').toBeGreaterThan(-1);
+    const block = sources.slice(start, sources.indexOf('<Route', start));
+
+    expect(block, '/apparatus route does not use the shared gate').toContain('APPARATUS_ENTRY_PERMISSIONS');
+    expect(routeGate(sources, '/apparatus').module).toBe('apparatus');
+  });
+
+  it('leaves the lightweight apparatus page open to everyone', () => {
+    // `/apparatus-basic` is the module-off fallback: a different page, with no
+    // ProtectedRoute of its own, reading the auth-only scheduling endpoints
+    // that departments without the apparatus module still need for shift
+    // staffing. Gating it on `apparatus.view` would take unit definitions away
+    // from exactly the departments that have nothing else.
+    for (const surface of NAV_SURFACES) {
+      const source = read(surface);
+      const at = source.indexOf("path: '/apparatus-basic'");
+      expect(at, `${surface}: no /apparatus-basic entry`).toBeGreaterThan(-1);
+      const entry = source.slice(source.lastIndexOf('{', at), source.indexOf('}', at));
+
+      expect(entry, `${surface}: /apparatus-basic should carry no gate`).not.toMatch(/\b(anyPermission|permission):/);
+    }
   });
 
   it('offers /medical-supplies only on permissions its route accepts', () => {
