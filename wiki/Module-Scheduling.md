@@ -587,7 +587,7 @@ assignments, check-in state) remains visible to any member.
 | URL                                         | Page                                    | Permission                                                                |
 | ------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
 | `/scheduling`                               | Scheduling Hub (members)                | Authenticated                                                             |
-| `/scheduling/admin`                         | Scheduling Administration               | any of `scheduling.manage`, `training.view_all`, `training.manage`        |
+| `/scheduling/admin`                         | Scheduling Administration               | `scheduling.manage`                                                       |
 | `/inventory/admin/checklists/supply`        | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`    |
 | `/inventory/checklists/apparatus-inventory` | Apparatus Inventory _(2026-08-10)_      | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
@@ -611,14 +611,22 @@ Training Admin and Inventory Admin. It replaces the strip of officer tools that
 used to sit on the member-facing page, where an administrator had to open the
 schedule to find the settings.
 
-| Page                    | URL                                    | Permission                                                         |
-| ----------------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| Shift Templates         | `/scheduling/admin/templates`          | `scheduling.manage`                                                |
-| Shift Patterns          | `/scheduling/admin/patterns`           | `scheduling.manage`                                                |
-| Scheduling Reports      | `/scheduling/admin/reports`            | `scheduling.manage`                                                |
-| Platoons                | `/scheduling/admin/platoons`           | `scheduling.manage`                                                |
-| Who Can Fill What       | `/scheduling/admin/positions`          | any of `scheduling.manage`, `training.view_all`, `training.manage` |
-| Settings (six sections) | `/scheduling/admin/settings/<section>` | `scheduling.manage`                                                |
+| Page                    | URL                                    | Permission          |
+| ----------------------- | -------------------------------------- | ------------------- |
+| Shift Planning          | `/scheduling/admin/planning`           | `scheduling.manage` |
+| Shift Templates         | `/scheduling/admin/planning/templates` | `scheduling.manage` |
+| Shift Patterns          | `/scheduling/admin/planning/patterns`  | `scheduling.manage` |
+| Scheduling Reports      | `/scheduling/admin/reports`            | `scheduling.manage` |
+| Platoons                | `/scheduling/admin/platoons`           | `scheduling.manage` |
+| Who Can Fill What       | `/scheduling/admin/positions`          | `scheduling.manage` |
+| Settings (six sections) | `/scheduling/admin/settings/<section>` | `scheduling.manage` |
+
+**Shift Planning** _(2026-09-05)_ is one screen with three routed sections —
+staffing gaps, templates, patterns — in the order the work happens. The gaps view
+lists every short shift over a date range with the assignment on the row. What
+counts as short comes from `shiftBoard.ts`, so it cannot disagree with the
+calendar; openness alone is judged for an officer rather than a member, because
+an officer can still seat somebody after member signup closes.
 
 Settings sections: `general`, `apparatus`, `platoons`, `eligibility`,
 `notifications`, `shift-reports` — each its own route, so a section can be
@@ -629,10 +637,12 @@ into Inventory are cards on the hub, gated on Inventory's own grants.
 > `/scheduling/templates`, `/scheduling/patterns`, `/scheduling/reports`,
 > `/scheduling/platoons`, `/scheduling/qualifications`, `/scheduling/settings`.
 
-> **`scheduling.manage` and `training.view_all` are both in
-> `ADMIN_NAVIGATION_PERMISSIONS`.** Without them the Administration section
-> never opens for the two officers whose only administrative page is in here,
-> and a child gate cannot admit anyone its parent has already turned away.
+> **One grant runs the whole area** _(2026-09-05)_: `scheduling.manage`, on the
+> hub, every page behind it, and the nav rows. The hub and the roster briefly
+> accepted the training grants; nothing ever linked a training officer to the
+> roster, so that bought a URL-only page and forced every gate above it to widen.
+> `scheduling.manage` is in `ADMIN_NAVIGATION_PERMISSIONS` — a child gate cannot
+> admit anyone its parent has already turned away.
 
 ---
 

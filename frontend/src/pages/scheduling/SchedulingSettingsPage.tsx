@@ -77,6 +77,11 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
         subtitle="Department-wide scheduling defaults"
         onBack={() => void navigate('/scheduling/admin')}
         backLabel="Back to scheduling administration"
+        // Six section routes sit three levels down, so the trail is the only
+        // thing on the page that says so. The "Settings" crumb between the hub
+        // and the section is a link: `/scheduling/admin/settings` redirects to
+        // the General section rather than falling through to the dashboard.
+        showBreadcrumbs
       >
         {!templatesLoaded ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
@@ -86,7 +91,7 @@ const SchedulingSettingsPage: React.FC<SchedulingSettingsPageProps> = ({ section
           <ShiftSettingsPanel
             templates={backendTemplates}
             apparatusList={apparatusList}
-            onNavigateToTemplates={() => void navigate('/scheduling/admin/templates')}
+            onNavigateToTemplates={() => void navigate('/scheduling/admin/planning/templates')}
             activeTab={visibleSection}
             onTabChange={handleSectionChange}
           />

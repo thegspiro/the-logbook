@@ -86,6 +86,7 @@ from app.schemas.inventory import (
     EquipmentRequestFulfill,
     EquipmentRequestReview,
     ExpiringLotResponse,
+    FulfillmentOptionsResponse,
     ImpactPlanCreate,
     ImpactPlannerIssueRequest,
     ImpactPlannerIssueResponse,
@@ -3592,7 +3593,9 @@ async def get_requestable_catalog(
         category_id=category_id,
         limit=limit,
     )
-    categories = await service.get_requestable_categories(current_user.organization_id)
+    categories = await service.get_requestable_categories(
+        current_user.organization_id, current_user
+    )
     return RequestableCatalogResponse(products=products, categories=categories)
 
 
@@ -3762,6 +3765,16 @@ async def list_equipment_requests(
     result = await db.execute(query)
     requests = result.scalars().all()
 
+    # Hang the ready-lot figures on the referenced items before reading their
+    # availability. `quantity` and stock lots are separate ledgers and only one
+    # is live for a given item, so without this a consumable held as dated
+    # stock reports the stale column -- and the quartermaster's number would
+    # disagree with the member's for exactly the items where it matters.
+    await InventoryService(db)._attach_lot_stock(
+        str(current_user.organization_id),
+        list({r.item.id: r.item for r in requests if r.item}.values()),
+    )
+
     return {
         "requests": [
             {
@@ -3788,25 +3801,16 @@ async def list_equipment_requests(
                             if hasattr(r.item.status, "value")
                             else r.item.status
                         ),
-                        "available_quantity": (
-                            r.item.quantity
-                            if (
-                                r.item.tracking_type.value
-                                if hasattr(r.item.tracking_type, "value")
-                                else r.item.tracking_type
-                            )
-                            == "pool"
-                            else (
-                                1
-                                if (
-                                    r.item.status.value
-                                    if hasattr(r.item.status, "value")
-                                    else r.item.status
-                                )
-                                == "available"
-                                else 0
-                            )
+                        # The same count the member's request form shows, from
+                        # the same method: this figure decides whether the
+                        # review screen offers "Approve & fulfill now", and
+                        # the ledger quantity alone counts stock that
+                        # `issue_from_pool` refuses -- offering a fulfilment
+                        # that then fails.
+                        "available_quantity": InventoryService._requestable_available(
+                            r.item
                         ),
+                        "size": InventoryService._item_stock_size_value(r.item),
                         "min_rank_order": r.item.min_rank_order,
                         "restricted_to_positions": r.item.restricted_to_positions,
                     }
@@ -3847,6 +3851,50 @@ async def list_equipment_requests(
         "skip": skip,
         "limit": limit,
     }
+
+
+@router.get(
+    "/requests/{request_id}/fulfillment-options",
+    response_model=FulfillmentOptionsResponse,
+)
+async def get_request_fulfillment_options(
+    request_id: UUID,
+    search: str | None = Query(
+        None, description="Filter by name, serial, tag, barcode"
+    ),
+    include_incompatible: bool = Query(
+        False,
+        description="Browse the whole gear catalog for a deliberate substitution",
+    ),
+    limit: int = Query(200, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    The rows this request may be fulfilled with, judged server-side.
+
+    Distinct from ``GET /items``: the picker needs each row's issuable count
+    and stock size decided by the same code that will accept or reject the
+    fulfilment, plus the three answers about the request itself — which row to
+    preselect, whether the requested size is on the shelf, and whether it can
+    be fulfilled at all. Deriving those in the browser needs a copy of the
+    size-alias table and the unissuable status/condition sets, and both copies
+    drifted from this service before the endpoint existed.
+
+    **Requires permission: inventory.manage**
+    """
+    result = await InventoryService(db).get_fulfillment_options(
+        request_id=request_id,
+        organization_id=current_user.organization_id,
+        search=search,
+        include_incompatible=include_incompatible,
+        limit=limit,
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
+        )
+    return FulfillmentOptionsResponse(**result)
 
 
 @router.put("/requests/{request_id}/review")

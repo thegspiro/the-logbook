@@ -129,24 +129,23 @@ describe('the scheduling officer can find the schedule they administer', () => {
   });
 });
 
-describe('the training officer reaches the section holding the roster they read', () => {
+describe('a training officer is not an administrator of the schedule', () => {
   beforeEach(() => {
     mockCheckPermission.mockReset();
-    // `training.view_all` opens the position roster and nothing else here. It
-    // is in ADMIN_NAVIGATION_PERMISSIONS for that page alone — without it the
-    // section stays shut and the one card they can use is never built.
+    // `training.view_all` reads training records. It briefly appeared in
+    // ADMIN_NAVIGATION_PERMISSIONS, for a position roster that accepted it —
+    // and opened the Administration section for a viewer no row inside it
+    // admitted, which is an empty section rather than an extra page. Scheduling
+    // administration is `scheduling.manage`, and this grant is not it.
     mockCheckPermission.mockImplementation((permission: string) => permission === 'training.view_all');
   });
 
-  it('opens the Administration section', () => {
+  it('does not open the Administration section', () => {
     renderWithRouter(<SideNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
 
-    expect(screen.getByText('Administration')).toBeInTheDocument();
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument();
   });
 
-  // The row promises the whole of Scheduling Administration, and this viewer
-  // can open exactly one card inside it. They reach the roster from Training,
-  // or from the hub itself; a row that over-promises is a worse offer than none.
   it('is not offered the Scheduling Admin row', () => {
     renderWithRouter(<SideNavigation departmentName="Test FD" logoPreview={null} onLogout={vi.fn()} />);
 

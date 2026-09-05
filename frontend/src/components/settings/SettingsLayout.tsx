@@ -22,6 +22,7 @@
 import React from 'react';
 import { Settings as SettingsIcon, ArrowLeft } from 'lucide-react';
 import SaveStatusPill, { type SaveState } from './SaveStatusPill';
+import { Breadcrumbs } from '../ux/Breadcrumbs';
 
 export interface SettingsSubPage<K extends string = string> {
   key: K;
@@ -79,6 +80,16 @@ interface SettingsLayoutProps<K extends string, S extends string> {
   onBack?: (() => void) | undefined;
   backLabel?: string;
   /**
+   * Renders the URL-derived breadcrumb trail above the header.
+   *
+   * Opt-in rather than automatic: several settings screens are reached at a
+   * path that does not describe where they sit (Organization Settings is
+   * `/settings`, a top-level route), and a one-crumb trail there restates the
+   * `<h1>` and nothing else. A screen nested under an administration hub —
+   * Scheduling Settings under `/scheduling/admin` — has a real trail to show.
+   */
+  showBreadcrumbs?: boolean;
+  /**
    * Content column width. `standard` is the 960px every settings screen reads
    * at and is what a new screen should want.
    *
@@ -112,6 +123,7 @@ export function SettingsLayout<K extends string, S extends string = string>({
   headerAside,
   onBack,
   backLabel = 'Go back',
+  showBreadcrumbs = false,
   width = 'standard',
   children,
 }: SettingsLayoutProps<K, S>) {
@@ -127,6 +139,10 @@ export function SettingsLayout<K extends string, S extends string = string>({
           here and on the outer container, because max-w-6xl (1152px) would
           otherwise clamp the wide column back down without anything saying so. */}
       <div className={`mx-auto flex w-full flex-col gap-5 ${width === 'wide' ? 'max-w-[1600px]' : 'max-w-[960px]'}`}>
+        {/* `mb-0` because this column's own flex gap already spaces the trail
+            from the header below it. */}
+        {showBreadcrumbs ? <Breadcrumbs className="mb-0" /> : null}
+
         {/* Wraps rather than squeezing: a title, a subtitle and a status pill
             (or a breadcrumb trail, on Email Templates) do not fit one row on a
             small phone, and a non-shrinking aside beside a shrinking title

@@ -2265,7 +2265,7 @@ export const SHOTS = [
     // Patterns rather than Templates: the guide already pictures Templates
     // 460 lines above, and the point here is the header the four sub-pages
     // share, not that particular page.
-    route: "/scheduling/patterns",
+    route: "/scheduling/admin/planning/patterns",
     fullPage: false,
   },
   {
@@ -2447,7 +2447,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Crew Positions block with Officer and Driver/Operator",
     alt: "Template crew positions, each with a button reading Required or Optional",
-    route: "/scheduling/templates",
+    route: "/scheduling/admin/planning/templates",
     prepare: async (page) => {
       await page
         .getByRole("button", { name: /New Template/i })
@@ -3957,7 +3957,7 @@ export const SHOTS = [
     line: 562,
     anchor: "The rebuilt Scheduling Settings screen on a desktop",
     alt: "Scheduling settings on desktop, with the section list beside the selected section's card",
-    route: "/scheduling/settings",
+    route: "/scheduling/admin/settings/general",
     fullPage: true,
   },
   {
@@ -3966,7 +3966,7 @@ export const SHOTS = [
     line: 567,
     anchor: "The same screen at phone width, showing the",
     alt: "Scheduling settings at phone width, the section list replaced by a scrollable tab strip",
-    route: "/scheduling/settings",
+    route: "/scheduling/admin/settings/general",
     viewport: "mobile",
     // Viewport, not full page: the phone layout pins a bottom tab bar, and a
     // full-page capture paints it across the middle of the settings card. The
@@ -3980,7 +3980,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Form Sections panel listing the seven optional report",
     alt: "The shift report form's optional sections, each with its own toggle",
-    route: "/scheduling/settings?tab=shift-reports",
+    route: "/scheduling/admin/settings/shift-reports",
     // The section list renders twice — a bare-label strip for phones and a
     // sidebar whose accessible name carries the description too. Anchoring
     // the regex at the start matches both; `$` matched only the hidden
@@ -3995,7 +3995,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Apparatus Skills panel with one apparatus type selected",
     alt: "Per-apparatus-type skills and tasks, with one type expanded",
-    route: "/scheduling/settings?tab=shift-reports",
+    route: "/scheduling/admin/settings/shift-reports",
     // The panel opens on the first apparatus type alphabetically (Ambulance),
     // which is as good an illustration as any — every type carries its own
     // skills and tasks.
@@ -4046,7 +4046,7 @@ export const SHOTS = [
     // A delete that names both the consequence and the two choices — the
     // pattern the section is about. Equipment-check templates are the clearest
     // instance in the app.
-    route: "/scheduling/settings?tab=equipment",
+    route: "/inventory/admin/checklists/settings",
     prepare: async (page) => {
       await page
         .getByRole("button", { name: /^Delete/ })
@@ -5268,7 +5268,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Shift Templates tab showing a list of templates with",
     alt: "Shift Templates tab listing templates with start and end times",
-    route: "/scheduling/templates",
+    route: "/scheduling/admin/planning/templates",
   },
   {
     id: "03-13-shift-patterns",
@@ -5277,7 +5277,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the pattern creation form showing the pattern type selector (Daily,",
     alt: "The shift patterns page — each pattern with its type badge, rotation settings and Generate Shifts action",
-    route: "/scheduling/patterns",
+    route: "/scheduling/admin/planning/patterns",
     fullPage: true,
   },
   {
@@ -5287,7 +5287,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Platoon Management page showing three platoon columns (A, B,",
     alt: "Platoon Management page showing platoon columns and their members",
-    route: "/scheduling/platoons",
+    route: "/scheduling/admin/platoons",
   },
   {
     id: "03-24-equipment-check-reports",
@@ -6858,7 +6858,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of the compliance report showing a requirement (e.g., 'Monthly Minimum Shifts:",
     alt: "Scheduling compliance report with per-member shift totals",
-    route: "/scheduling/reports",
+    route: "/scheduling/admin/reports",
     // The page opens on Member Hours with an empty picker and "Select a Date
     // Range" where the report goes, so a plain route visit captured a
     // placeholder rather than the compliance report the placeholder asks for.
@@ -7387,7 +7387,7 @@ export const SHOTS = [
     anchor:
       "Screenshot of Scheduling Settings showing the 'Platoons' toggle enabled, with a note",
     alt: "Scheduling settings with the platoons toggle and related options",
-    route: "/scheduling/settings",
+    route: "/scheduling/admin/settings/general",
     fullPage: true,
   },
   // Scheduling settings deep-links by `?tab=`, and the shift-reports tab is
@@ -7400,7 +7400,7 @@ export const SHOTS = [
     line: 1728,
     anchor: "showing the Close-out",
     alt: "Scheduling settings General tab with the close-out rules, overtime cap and shift generation options",
-    route: "/scheduling/settings?tab=general",
+    route: "/scheduling/admin/settings/general",
     // Pins the end-of-shift-check rule off. 03-81 turns it on to photograph
     // the override it gates, and either may run first -- this shot's committed
     // image shows the department's default, so it sets that rather than
@@ -7430,7 +7430,7 @@ export const SHOTS = [
     line: 627,
     anchor: "which membership types may sign themselves up",
     alt: "Scheduling settings Eligibility tab, excluding membership types from self-signup and listing open positions",
-    route: "/scheduling/settings?tab=eligibility",
+    route: "/scheduling/admin/settings/eligibility",
     fullPage: true,
   },
   {
@@ -7439,7 +7439,7 @@ export const SHOTS = [
     line: 802,
     anchor: "Checklist Timing",
     alt: "Shift Reports settings with the Checklist Timing section selected",
-    route: "/scheduling/settings?tab=shift-reports",
+    route: "/scheduling/admin/settings/shift-reports",
     prepare: clickSettingsSection("Checklist Timing"),
     fullPage: true,
   },
@@ -7449,7 +7449,7 @@ export const SHOTS = [
     line: 836,
     anchor: "choosing which optional sections appear on the report form",
     alt: "Shift Reports settings Form Sections, toggling which parts of the report form appear",
-    route: "/scheduling/settings?tab=shift-reports",
+    route: "/scheduling/admin/settings/shift-reports",
     prepare: clickSettingsSection("Form Sections"),
     fullPage: true,
   },
@@ -7459,7 +7459,7 @@ export const SHOTS = [
     line: 859,
     anchor: "per-apparatus skills/tasks selector",
     alt: "Shift Reports settings Apparatus Skills, showing the skills and tasks tracked for Engine",
-    route: "/scheduling/settings?tab=shift-reports",
+    route: "/scheduling/admin/settings/shift-reports",
     prepare: async (page) => {
       await clickSettingsSection("Apparatus Skills")(page);
       // The section opens on the first apparatus type alphabetically
@@ -7480,7 +7480,7 @@ export const SHOTS = [
     line: 882,
     anchor: "rating scale section with Labeled Bubbles selected",
     alt: "Shift Reports settings Rating Scale, choosing the scale style and its per-level labels",
-    route: "/scheduling/settings?tab=shift-reports",
+    route: "/scheduling/admin/settings/shift-reports",
     // **This shot changes the setting it pictures.** The display-style buttons
     // save on click — there is no separate confirm — so capturing the per-level
     // labels leaves the demo department on Labeled Bubbles rather than the
@@ -7512,7 +7512,7 @@ export const SHOTS = [
     line: 1289,
     anchor: "notification settings showing the Shift Assignment Alerts section",
     alt: "Scheduling notification settings showing the shift assignment alert options",
-    route: "/scheduling/settings?tab=notifications",
+    route: "/scheduling/admin/settings/notifications",
     fullPage: true,
   },
   {
@@ -7521,7 +7521,7 @@ export const SHOTS = [
     line: 1302,
     anchor: "Start-of-Shift Reminders section with its enable toggle",
     alt: "Scheduling notification settings showing the start-of-shift reminder options",
-    route: "/scheduling/settings?tab=notifications",
+    route: "/scheduling/admin/settings/notifications",
     // Same page as 03-38; this clips to the reminders block so the two shots
     // are not the same image under two placeholders. The heading sits in its
     // own flex row inside the section, so `:has(> h4)` selects that row and
@@ -8301,7 +8301,7 @@ export const SHOTS = [
     line: 272,
     anchor: "Scheduling → Settings → General, scrolled to the",
     alt: "Scheduling Settings, General section — the Shift close-out rules block with 'Record a call count at close-out' switched on",
-    route: "/scheduling/settings?tab=general",
+    route: "/scheduling/admin/settings/general",
     prepare: async (page) => {
       // Set through the API rather than by clicking the toggle: the shot is of
       // the settled on-state, and a click leaves the control mid-transition and
@@ -10996,7 +10996,7 @@ export const SHOTS = [
     line: 635,
     anchor: "This removed access somebody already had",
     alt: "Platoon Management refusing a member who does not hold scheduling.manage",
-    route: "/scheduling/platoons",
+    route: "/scheduling/admin/platoons",
     auth: "member",
     fullPage: false,
   },

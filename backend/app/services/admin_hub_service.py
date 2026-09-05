@@ -61,11 +61,9 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.models.training import (
-    AssignmentStatus,
     EnrollmentStatus,
     ProgramEnrollment,
     Shift,
-    ShiftAssignment,
     ShiftAttendance,
     ShiftStatus,
     ShiftSwapRequest,
@@ -89,6 +87,10 @@ from app.schemas.admin_hub import (
     AdminMetricSettingsUpdate,
 )
 from app.services.organization_service import OrganizationService
+from app.services.scheduling_service import (
+    SchedulingService,
+    open_ended_cushion_hours,
+)
 from app.services.training_compliance import compute_org_compliance_pct
 
 #: The always-on fourth slot. Reported by every module, chosen by none.
@@ -1282,84 +1284,104 @@ SCHEDULING_STAFFING_HORIZON_DAYS = 7
 #: is a problem to solve today rather than one to watch.
 SCHEDULING_URGENT_HOURS = 48
 
-#: Assignment states that hold a seat. DECLINED, CANCELLED and NO_SHOW do not —
-#: counting them would report a shift as staffed by the people who told us they
-#: are not coming.
-_SEATED_STATUSES = (
-    AssignmentStatus.ASSIGNED,
-    AssignmentStatus.CONFIRMED,
-    AssignmentStatus.PENDING,
-)
-
-#: When a shift stopped being one somebody could still be on.
-#:
-#: ``end_time`` is genuinely optional — an open-ended shift records only when it
-#: began — so a bare ``Shift.end_time < now`` silently skips exactly the shifts
-#: nobody ever closed. Falling back to ``start_time`` counts an open-ended shift
-#: from the moment it started, which is early rather than wrong: it is already
-#: a shift with no recorded end.
-_shift_ended_at = func.coalesce(Shift.end_time, Shift.start_time)
-
 
 def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
     """Attach UTC to a timestamp MySQL handed back without one.
 
     The columns declare ``DateTime(timezone=True)``, but MySQL has no
-    ``timestamptz`` and the driver returns a naive ``datetime``. Subtracting
-    that from an aware ``now`` raises, which on this page is a 500 for any
-    department that happens to have a row in the window — so the naive value is
-    read as UTC, which is what was written.
+    ``timestamptz`` and the driver returns a naive ``datetime``. Subtracting that
+    from an aware ``now`` raises, which on this page is a 500 for any department
+    that happens to have a row in the window.
     """
     if value is None or value.tzinfo is not None:
         return value
     return value.replace(tzinfo=timezone.utc)
 
 
-def _seated_headcount():
-    """Seats held on the correlated ``Shift`` row."""
-    return (
-        select(func.count(ShiftAssignment.id))
-        .where(
-            ShiftAssignment.shift_id == Shift.id,
-            ShiftAssignment.assignment_status.in_(_SEATED_STATUSES),
-        )
-        .correlate(Shift)
-        .scalar_subquery()
-    )
+async def _open_ended_cushion(ctx: MetricContext) -> int:
+    """The department's open-ended cushion, or the built-in floor."""
+    org = await ctx.db.get(Organization, ctx.organization_id)
+    return open_ended_cushion_hours((org.settings if org else None) or {})
 
 
-def _understaffed_criteria(organization_id: str, start: datetime, end: datetime):
-    """Shifts between ``start`` and ``end`` carrying fewer people than they ask for.
+async def _short_staffed_shifts(
+    ctx: MetricContext, start: datetime, end: datetime
+) -> list[Shift]:
+    """Shifts starting in the window that still have an open position.
 
-    Only shifts that state a ``min_staffing`` are counted. A shift naming neither
-    positions nor a minimum has never said how big its crew is, and the front end
-    treats that as "crew size not set" rather than as a staffing level — inventing
-    a number here would report an emergency the department never declared.
+    Delegates to ``SchedulingService.filter_shifts_with_open_positions``, which
+    is what the open-shifts list and the staffing report already read, rather
+    than comparing a headcount against a seat count here.
+
+    That distinction is the whole point. Counting bodies says a two-seat
+    Officer/Driver shift carrying two firefighters is covered; the shared
+    implementation matches each *required* slot against a held position and
+    consumes it, so it reports the empty Officer seat that a headcount hides. It
+    also drops slots marked ``required: false``, which a seat count includes, and
+    normalizes the legacy list-of-strings form of the column.
+
+    The window is a week at most, so the rows are loaded and matched in Python.
     """
-    return (
-        Shift.organization_id == organization_id,
-        Shift.status != ShiftStatus.CANCELLED,
-        Shift.start_time >= start,
-        Shift.start_time < end,
-        Shift.min_staffing.isnot(None),
-        Shift.min_staffing > 0,
-        _seated_headcount() < Shift.min_staffing,
+    result = await ctx.db.execute(
+        select(Shift).where(
+            Shift.organization_id == ctx.organization_id,
+            Shift.status != ShiftStatus.CANCELLED,
+            Shift.is_finalized.is_(False),
+            Shift.start_time >= start,
+            Shift.start_time < end,
+        )
+    )
+    shifts = list(result.scalars().all())
+    if not shifts:
+        return []
+    return await SchedulingService(ctx.db).filter_shifts_with_open_positions(
+        ctx.organization_id, shifts
     )
 
 
 async def _scheduling_closeout_backlog(ctx: MetricContext) -> tuple[int, Optional[int]]:
-    """Shifts that have ended and were never closed out, and the oldest one's age."""
+    """Shifts that have ended and were never closed out, and the oldest one's age.
+
+    Counted in two halves because the two kinds of shift end at different
+    instants, and the age has to be measured from the same instant that made the
+    shift eligible. An open-ended shift becomes eligible at ``start + cushion``,
+    so dating it from ``start`` would announce a shift as three days overdue the
+    moment it appeared, in a department running a seventy-two hour cushion.
+    """
     now = datetime.now(timezone.utc)
-    count, oldest = await _count_and_oldest(
-        ctx.db,
-        Shift,
+    cushion = timedelta(hours=await _open_ended_cushion(ctx))
+    scoped = (
         Shift.organization_id == ctx.organization_id,
         Shift.status != ShiftStatus.CANCELLED,
         Shift.is_finalized.is_(False),
-        _shift_ended_at < now,
-        date_column=_shift_ended_at,
     )
-    return count, _age_days(oldest, ctx.today)
+
+    ended_count, oldest_ended = await _count_and_oldest(
+        ctx.db,
+        Shift,
+        *scoped,
+        Shift.end_time.isnot(None),
+        Shift.end_time < now,
+        date_column=Shift.end_time,
+    )
+    open_count, oldest_open = await _count_and_oldest(
+        ctx.db,
+        Shift,
+        *scoped,
+        Shift.end_time.is_(None),
+        Shift.start_time < now - cushion,
+        date_column=Shift.start_time,
+    )
+
+    ages = [
+        age
+        for age in (
+            _age_days(oldest_ended, ctx.today),
+            _age_days(oldest_open + cushion if oldest_open else None, ctx.today),
+        )
+        if age is not None
+    ]
+    return ended_count + open_count, max(ages) if ages else None
 
 
 async def _scheduling_needs_closeout(ctx: MetricContext) -> tuple[str, str]:
@@ -1372,17 +1394,21 @@ async def _scheduling_needs_closeout(ctx: MetricContext) -> tuple[str, str]:
 async def _scheduling_understaffed(ctx: MetricContext) -> tuple[str, str]:
     now = datetime.now(timezone.utc)
     horizon = now + timedelta(days=SCHEDULING_STAFFING_HORIZON_DAYS)
-    count = await _scalar(
-        ctx.db,
-        select(func.count(Shift.id)).where(
-            *_understaffed_criteria(ctx.organization_id, now, horizon)
-        ),
-    )
-    return _fmt_int(count), f"in the next {SCHEDULING_STAFFING_HORIZON_DAYS} days"
+    short = await _short_staffed_shifts(ctx, now, horizon)
+    return _fmt_int(len(short)), f"in the next {SCHEDULING_STAFFING_HORIZON_DAYS} days"
 
 
 async def _scheduling_hours_this_month(ctx: MetricContext) -> tuple[str, str]:
     month_start = ctx.today.replace(day=1)
+    # Bounded at both ends, as the canonical scheduling summary is. With only a
+    # lower bound, attendance recorded against a shift dated next month counts
+    # towards "hours this month" — a figure that goes up when somebody plans
+    # ahead.
+    next_month = (
+        month_start.replace(year=month_start.year + 1, month=1)
+        if month_start.month == 12
+        else month_start.replace(month=month_start.month + 1)
+    )
     minutes = (
         await ctx.db.execute(
             select(func.sum(ShiftAttendance.duration_minutes))
@@ -1391,6 +1417,7 @@ async def _scheduling_hours_this_month(ctx: MetricContext) -> tuple[str, str]:
             .where(
                 Shift.organization_id == ctx.organization_id,
                 Shift.shift_date >= month_start,
+                Shift.shift_date < next_month,
             )
         )
     ).scalar()
@@ -1456,14 +1483,10 @@ async def _scheduling_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
     now = datetime.now(timezone.utc)
 
     urgent = now + timedelta(hours=SCHEDULING_URGENT_HOURS)
-    short_count, soonest = await _count_and_oldest(
-        ctx.db,
-        Shift,
-        *_understaffed_criteria(ctx.organization_id, now, urgent),
-        date_column=Shift.start_time,
-    )
+    short = await _short_staffed_shifts(ctx, now, urgent)
+    short_count = len(short)
     if short_count:
-        soonest_utc = _as_utc(soonest) if isinstance(soonest, datetime) else None
+        soonest_utc = _as_utc(min(shift.start_time for shift in short))
         hours_out = (
             max(0, int((soonest_utc - now).total_seconds() // 3600))
             if soonest_utc is not None
@@ -1507,7 +1530,7 @@ async def _scheduling_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
                 ),
                 detail=_waiting_phrase(age),
                 action_label="Review requests",
-                href="/scheduling?tab=requests",
+                href="/scheduling?tab=requests&requestView=swaps",
                 severity="warning",
                 count=swap_count,
                 oldest_age_days=age,
@@ -1532,7 +1555,12 @@ async def _scheduling_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
                 ),
                 detail=_waiting_phrase(age),
                 action_label="Review requests",
-                href="/scheduling?tab=requests",
+                # Names the view, not just the tab: RequestsTab opens on
+                # swaps, so a time-off warning landed an officer on "No swap
+                # requests" and left them to find the other view themselves.
+                # `requestView` rather than `view`, which SchedulingPage owns
+                # for the calendar mode and rewrites out from under this one.
+                href="/scheduling?tab=requests&requestView=timeoff",
                 severity="warning",
                 count=time_off_count,
                 oldest_age_days=age,

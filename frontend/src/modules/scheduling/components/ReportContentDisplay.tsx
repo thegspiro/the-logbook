@@ -2,7 +2,7 @@ import React from 'react';
 import { MessageSquare } from 'lucide-react';
 import { StarRating } from './StarRating';
 import { SKILL_SCORE_LABELS } from '../constants/shiftReportConstants';
-import { useCallTypeLabels } from '../hooks/useCallTypeLabels';
+import { callTypesAreOrgSlugs, useCallTypeLabels } from '../hooks/useCallTypeLabels';
 import type { ShiftCompletionReport } from '../../../types/training';
 
 interface ReportContentDisplayProps {
@@ -20,8 +20,9 @@ interface ReportContentDisplayProps {
 
 export const ReportContentDisplay: React.FC<ReportContentDisplayProps> = ({ report, scoreLabels }) => {
   const labelFor = (score: number): string => scoreLabels?.[String(score)] ?? SKILL_SCORE_LABELS[score] ?? '';
-  // On count-only tracking these are slugs, filled in from the shift's own
-  // tally rather than typed by an officer. Rendered raw they read `mutual_aid`.
+  // Only a count-only report holds slugs — filled in from the shift's own
+  // tally rather than typed by an officer, and unreadable as `mutual_aid`. A
+  // detailed report holds the officer's own wording and is shown as written.
   const callTypeLabel = useCallTypeLabels();
   return (
     <div className="space-y-3">
@@ -43,7 +44,7 @@ export const ReportContentDisplay: React.FC<ReportContentDisplayProps> = ({ repo
                 key={type}
                 className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-400"
               >
-                {callTypeLabel(type)}
+                {callTypesAreOrgSlugs(report) ? callTypeLabel(type) : type}
               </span>
             ))}
           </div>

@@ -121,6 +121,10 @@ const UNCACHEABLE_SUBSTRINGS = [
   '/eligible-members', // returns member first/last name + email (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)
+  '/fulfillment-options', // not PII: the picker reports what is issuable *right now*, and
+  // a 30s-stale count is how a quartermaster is offered stock another one just issued.
+  // Nothing in the cache's URL-prefix invalidation connects an issuance recorded under
+  // /inventory/checkout to this request's option list.
 ] as const;
 
 interface CacheEntry {

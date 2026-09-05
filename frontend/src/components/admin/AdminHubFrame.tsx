@@ -5,6 +5,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import type { AdminHubSummary } from '../../types/adminHub';
 import AdminAttentionQueue from './AdminAttentionQueue';
 import AdminMetricsRow from './AdminMetricsRow';
+import { Breadcrumbs, type BreadcrumbItem } from '../ux/Breadcrumbs';
 
 /**
  * The shared administration-page frame.
@@ -55,6 +56,16 @@ interface AdminHubFrameProps<K extends string> {
   description: string;
   /** Small caps line above the title. */
   eyebrow?: string;
+  /**
+   * Overrides the trail above the eyebrow. Omit and it is generated from the
+   * URL, which is what every hub wants: a hub's own path names its module and
+   * itself, and `breadcrumbRoutes.ts` supplies the labels and decides which
+   * crumbs this viewer may follow.
+   *
+   * Pass items only where the URL does not describe the hierarchy — a hub whose
+   * route is a redirect target under another module's tree, say.
+   */
+  breadcrumbs?: BreadcrumbItem[] | undefined;
   /** Icon-only secondary actions, rendered before the primary. */
   actions?: AdminHubAction[];
   /** The single red action. */
@@ -89,6 +100,7 @@ export function AdminHubFrame<K extends string>({
   title,
   description,
   eyebrow = 'Administration',
+  breadcrumbs,
   actions = [],
   primaryAction,
   headerAside,
@@ -151,6 +163,19 @@ export function AdminHubFrame<K extends string>({
   return (
     <div>
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+        {/* 0 — Trail. Above the eyebrow, because it says where the page sits
+            rather than what kind of page it is. Rendered by the frame so all
+            six hubs carry one without each remembering to; `mb-0` because the
+            frame's own flex gap already spaces it.
+
+            It ends at the PARENT. This header already names the page twice —
+            eyebrow "Administration", then an <h1> of "Inventory
+            Administration" — and a crumb repeating the <h1> verbatim
+            immediately above it is a third near-identical line to a reader and
+            a name announced twice to a screen reader. What the trail is here
+            for is the step up, which nothing else on a hub offers. */}
+        <Breadcrumbs items={breadcrumbs} className="mb-0" omitCurrentPage />
+
         {/* 1 — Header. Icon actions and a single red primary; never two reds. */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">

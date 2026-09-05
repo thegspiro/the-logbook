@@ -26,6 +26,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import toast from 'react-hot-toast';
+import { Breadcrumbs } from '../components/ux';
 
 type WaiverTab = 'active' | 'create' | 'history';
 
@@ -359,6 +360,8 @@ export const WaiverManagementPage: React.FC = () => {
     <div>
       {/* Header + Tab Bar */}
       <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+        <Breadcrumbs />
+
         <div className="mb-6">
           <h1 className="text-theme-text-primary text-2xl font-bold">Waiver Management</h1>
           <p className="text-theme-text-muted mt-1 text-sm">

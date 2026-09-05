@@ -57,6 +57,10 @@ function makeDocument(overrides: Partial<DocumentRecord> = {}): DocumentRecord {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // vi.clearAllMocks() clears call history, not implementations, so a test that
+  // makes this return false would otherwise leak into every test after it
+  // (CLAUDE.md pitfall #28). Most of this file assumes documents.manage.
+  mockAuthState.checkPermission = vi.fn().mockReturnValue(true);
   mockGetFolders.mockReset();
   mockGetDocuments.mockReset();
   mockGetSummary.mockReset();
@@ -360,6 +364,52 @@ describe('DocumentsPage', () => {
 
     expect(await screen.findByText(/unable to load documents/i)).toBeInTheDocument();
     expect(screen.getByText('SOPs', { selector: '[aria-current="page"]' })).toBeInTheDocument();
+  });
+
+  describe('without documents.manage', () => {
+    beforeEach(() => {
+      mockAuthState.checkPermission = vi.fn().mockReturnValue(false);
+    });
+
+    it('offers no upload or folder controls', async () => {
+      renderWithRouter(<DocumentsPage />);
+
+      await screen.findByRole('button', { name: /sops/i });
+      expect(screen.queryByRole('button', { name: /Upload Document/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /New Folder/i })).not.toBeInTheDocument();
+    });
+
+    it('leaves the page blank when the library is empty', async () => {
+      mockGetFolders.mockResolvedValue({ folders: [], total: 0, skip: 0, limit: 12 });
+      renderWithRouter(<DocumentsPage />);
+
+      // The card's copy and its action are both invitations to start
+      // uploading, so a member gets neither.
+      await waitFor(() => expect(mockGetFolders).toHaveBeenCalled());
+      await waitFor(() => expect(screen.queryByText('No Documents Yet')).not.toBeInTheDocument());
+      expect(screen.queryByText(/Start building your document library/i)).not.toBeInTheDocument();
+    });
+
+    it('still reports an empty folder, without telling them to upload', async () => {
+      const user = userEvent.setup();
+      mockGetDocuments.mockResolvedValue({ documents: [], total: 0, skip: 0, limit: 50 });
+      renderWithRouter(<DocumentsPage />);
+
+      await user.click(await screen.findByRole('button', { name: /sops/i }));
+
+      // They opened the folder deliberately, so the emptiness is reported;
+      // only the upload instruction is withheld.
+      expect(await screen.findByText('No Documents in This Folder')).toBeInTheDocument();
+      expect(screen.queryByText('Upload documents to this folder to get started.')).not.toBeInTheDocument();
+    });
+  });
+
+  it('offers the upload prompt to a manager with an empty library', async () => {
+    mockGetFolders.mockResolvedValue({ folders: [], total: 0, skip: 0, limit: 12 });
+    renderWithRouter(<DocumentsPage />);
+
+    expect(await screen.findByText('No Documents Yet')).toBeInTheDocument();
+    expect(screen.getByText(/Start building your document library/i)).toBeInTheDocument();
   });
 
   describe('folder pagination', () => {

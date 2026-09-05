@@ -28,6 +28,236 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   focus trap, body scroll lock and `role="dialog"` it never had. Escape still
   cancels an open inline notes editor before it closes anything.
 
+### Administration pages say where you are (2026-09-05)
+
+**Added**
+
+- **A breadcrumb trail on every administration hub and the pages beneath it.**
+  Nothing under `/scheduling/admin` had one: its sub-pages offered a single
+  unlabelled back arrow whose destination was only in its `aria-label`, and each
+  one was headed "Shift Scheduling" with its real name demoted to a prefix on
+  the description. Templates, Patterns, Reports, Platoons, Who Can Fill What and
+  the six Settings sections now name themselves and show the path back up. On a
+  hub the trail stops at the parent rather than repeating the page's own
+  heading, which the header already states twice.
+
+**Fixed**
+
+- **A crumb no longer offers a page it cannot open.** A generated trail is built
+  from URL prefixes, and a prefix is often either not a route at all
+  (`/inventory/admin/checklists/templates`, which declares only `/new` and one
+  per template) or a route the viewer lacks the grant for — a checklist manager
+  holds `inventory.check_manage`, which opens `/inventory/admin/checklists` but
+  not its parent `/inventory`. Both used to render as working links, landing on
+  the dashboard and on Access Denied respectively. Such a crumb is now plain
+  text.
+- **A detail page keeps its link back to the list.** Where a URL ends in a
+  record id the id is not shown, so the crumb before it names the collection the
+  record came from — `Applications` on a grant application — not the record. It
+  stays a link, and nothing in the trail claims to be a page the viewer is not
+  on. Member edit and audit history separately used to end in a link to
+  `/members/admin/edit`, which is not a route.
+- **Equipment Checklists is no longer a dead end.** It carried no back link of
+  its own, and is reached from Scheduling Administration as well as Inventory
+  Administration.
+
+### The Documents page invited members to upload files (2026-09-05)
+
+**Fixed**
+
+- **Both empty states told every member to upload.** "Start building your
+  document library by uploading SOPs, policies, and department files" and
+  "Upload documents to this folder to get started" rendered for everyone, while
+  the Upload buttons beside them were already gated on `documents.manage`. The
+  copy was an instruction with nothing behind it.
+
+- **The upload, new-folder and delete dialogs outlived the permission that
+  opened them.** Each rendered on its own open state, so losing
+  `documents.manage` with one open left its action on screen. All three are now
+  gated like the controls that open them.
+
+**Changed**
+
+- **With no folders and no documents, a member now sees a blank page** rather
+  than a card whose copy and action are both invitations to start uploading. An
+  empty folder they opened is still reported as empty — that is feedback on
+  their own navigation — with only the upload instruction withheld.
+
+### Shift planning is one screen instead of three places (2026-09-05)
+
+**Added**
+
+- **`/scheduling/admin/planning` — staffing gaps.** Every upcoming shift
+  carrying fewer people than it asks for, over a date range, with the assignment
+  on the row. Filling ten gaps was ten trips through the month grid, the day, the
+  shift drawer and back; it is ten selections now. The assignment goes through
+  the drawer's own call, surfaces the same EVOC and overtime advisories from the
+  same response fields, and opens the same driver-exception dialog on
+  `LB-SCHED-001` — a refusal with no route forward is where a safety control
+  turns into a workaround.
+- **Templates and patterns are sections of that screen**, not screens beside it:
+  the reason to open a template is a shift that keeps coming up short, and that
+  is one tab away. Each section is its own route, so it can still be linked to
+  and bookmarked.
+
+**Changed**
+
+- **`/scheduling/admin/templates` → `/scheduling/admin/planning/templates`** and
+  **`/scheduling/admin/patterns` → `/scheduling/admin/planning/patterns`**. Both
+  URLs were introduced in the previous change and have not shipped; nothing
+  outside this repository can be pointing at them.
+- **The planning settings are shown on the gaps view and edited in Scheduling
+  settings.** The officer working the gaps is who notices the default crew is
+  wrong, so the values belong on that screen — but General and Apparatus are
+  written by one footer Save that PUTs the whole settings object, and a second
+  screen writing them means whichever saved last silently reverts the other. Same
+  trap that moved checklist timing to a single home in Inventory.
+
+**Known, and deliberate**
+
+- **What counts as short is the board's rule, taken whole.** The list is built
+  from `shiftCapacity`, `shiftStatusInfo` and `buildSeats` in `shiftBoard.ts`, so
+  this screen cannot answer differently about a shift than the calendar does. One
+  consequence: a shift naming neither positions nor a `min_staffing` has never
+  said how big its crew is, reads as "crew size not set" on the board, and is not
+  listed here — while the hub's Short-staffed metric, which goes through the
+  server's `filter_shifts_with_open_positions` and its fallback to a minimum of
+  one, does count it while nobody is on it. The hub number can therefore exceed
+  the rows on this screen for a department that states no crew size anywhere; the
+  fix for that is to state one, and each side is right about the question it is
+  answering.
+- **Openness is judged differently from the board, on purpose.**
+  `shiftStatusInfo` zeroes a shift's open seats once the _member_ signup window
+  closes, which is right for a board offering a claim button. An officer can
+  still seat somebody after that, so the gaps list uses `capacity - filled`
+  behind the lifecycle check instead — inheriting the member's answer would hide
+  the shifts most urgently in need of one, the ones starting today.
+
+### Scheduling administration is one grant, and the review findings on it (2026-09-05)
+
+Follow-up to "Scheduling administration moved into the Administration section",
+which merged before a review of it came back.
+
+**Breaking**
+
+- **Every scheduling administration page now requires `scheduling.manage`** —
+  the hub, the settings sections, and the position roster. The roster accepted
+  `training.view_all` / `training.manage` as well, because it reads as a
+  training-compliance view. **A training officer holding neither scheduling
+  grant can no longer open it.** No navigation path is lost: nothing in the app
+  has ever linked them to that page, so the wider gate bought a screen reachable
+  only by typing its URL — while forcing every gate above it, including the one
+  that decides whether the Administration section opens at all, to widen to
+  match. A hub gate wider than every card behind it only opens an empty page.
+  `training.view_all` leaves `ADMIN_NAVIGATION_PERMISSIONS` with it.
+
+  **`GET /scheduling/eligibility/roster` is narrowed to match.** It accepted the
+  training grants too, so narrowing only the page would have revoked nothing: a
+  client gate is not a gate, and a training officer refused by the screen could
+  still pull the whole roster — member eligibility and EVOC standing — straight
+  from the API. The endpoint's documented permission was also wrong, claiming
+  `scheduling.view`, which it never accepted.
+
+**Fixed**
+
+- **A shift with a pending assignment was counted as staffed.** The Short-staffed
+  metric counted PENDING as a held seat; every staffing calculation in
+  `scheduling_service` — open shifts, the coverage report, the overtime window,
+  trade candidates — counts only ASSIGNED and CONFIRMED. PENDING appears in "My
+  Upcoming Shifts", which answers "what am I on", not "is this shift covered", so
+  the metric reported a shift as staffed while the coverage report beside it
+  still showed the seat open.
+- **A crew still working read as a close-out backlog.** A shift with no recorded
+  end was treated as having ended the instant it started, so an open-ended shift
+  sat in "To close out" from the moment it began and nothing could clear it until
+  somebody finalized a shift they were still on. It now uses the department's own
+  `open_ended_cushion_hours` — the same number the roster lock reads, so the two
+  cannot say different things about one shift. Its **age** is measured from the end of
+  that cushion too: dated from the shift's start, a department running a
+  seventy-two hour cushion saw a shift announced as three days overdue the moment
+  it first appeared in the backlog.
+- **Short-staffing counted bodies rather than filled seats.** It compared a
+  headcount against `min_staffing`, so a three-seat brush truck carrying one
+  person read as fully staffed — and, worse, a two-seat Officer/Driver shift
+  carrying two firefighters read as covered while both named seats sat empty.
+  The seat that matters is always the empty one. It now reads through
+  `SchedulingService.filter_shifts_with_open_positions`, the method already
+  behind the open-shifts list and the staffing report, which matches each
+  **required** slot against a held position and consumes it — so it also stops
+  counting slots the department marked optional, and understands the legacy
+  list-of-strings form of the column.
+
+  One consequence worth stating: that method falls back to a minimum of one, so
+  a shift stating neither seats nor a minimum now counts while nobody is on it,
+  and stops the moment somebody is. The shift board presents such a shift as
+  "crew size not set" and shows no shortage; that difference is the board's and
+  predates this change.
+
+- **"Hours this month" counted next month.** The query had only a lower bound, so
+  attendance recorded against a later-dated shift inflated it — a figure that
+  went up when somebody planned ahead. Bounded at both ends, as the canonical
+  scheduling summary is.
+- **A time-off alert opened the swaps view.** The Requests tab opens on swaps, so
+  clicking a time-off warning landed on "No swap requests" whenever there were
+  none. The alert names the view, and the tab honours it — as `requestView`,
+  not `view`, which the scheduling page owns for the calendar's month/week mode
+  and rewrites on mount. Named `view`, it was read correctly once and then
+  overwritten in the URL, which reads as working right up until somebody
+  refreshes or shares the link.
+- **The documentation screenshot workflow was capturing the home page.**
+  `scripts/screenshots/manifest.mjs` still visited the moved scheduling routes;
+  they hit the catch-all redirect to the dashboard, which fails silently because
+  the page it lands on looks fine. 22 entries repointed.
+- **`/scheduling/admin/settings?tab=…` resolves again.** The sections are routes,
+  so the bare path names none of them; it now forwards to the section its
+  parameter names, and an unknown or absent one to General.
+- New tests reset each mock before installing its default rather than relying on
+  `vi.clearAllMocks()`, which keeps implementations and queued one-shot results
+  (CLAUDE.md pitfall #28).
+
+**Changed**
+
+- **`CLAUDE.md`'s settings-screen rule now records that Scheduling differs.** It
+  required the selected section mirrored into `?tab=` and named all three
+  screens; Scheduling's sections became routes when it moved into the
+  administration hub, where a section is a destination — a hub card, a link from
+  Inventory, a bookmark — and a `?tab=` only client state reads cannot be linked
+  to, refreshed into, or reached with the back button. The rule now says which
+  screens use which, and why, so the next author does not "fix" it back.
+
+**Known, not fixed here**
+
+- Attention-queue ages compare a UTC timestamp against the organization's local
+  date, so around midnight an age can be off by a day. `_age_days` is shared and
+  every module in `MODULE_REGISTRY` does this; scheduling did not introduce it,
+  and correcting only scheduling would make it the one module that disagrees with
+  the rest. Worth its own change.
+
+### The Members roster invited members to add a member (2026-09-05)
+
+**Fixed**
+
+- **An empty roster told every member to "Get started by adding your first
+  member or importing from CSV."** The Add Member and Import CSV buttons were
+  already officer-only — including the empty card's own actions — so the copy
+  was an instruction with nothing behind it for anyone without `members.manage`.
+  The prompt is now shown only to someone who can act on it.
+
+- **The delete dialog outlived the permission that opened it.** It rendered on
+  its own open state, so losing `members.manage` with it open left a Deactivate
+  and a Permanently delete button on screen. It is now gated like the controls
+  that open it.
+
+**Changed**
+
+- **With an empty roster, a member now sees a blank list** rather than a card
+  whose copy and both actions are invitations to add or import. An empty result
+  that follows from a search or a status filter is still reported to everyone.
+
+- The status filter has an accessible name ("Filter by status"). It was the
+  only unlabelled control in the toolbar; the search box beside it already had
+  one.
+
 ### The Events page invited members to create an event (2026-09-05)
 
 **Fixed**
@@ -85,6 +315,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   browser after the fact. The old form listed restricted items and let the
   member submit a request the API then refused, and the item's existence was
   disclosed to everyone regardless.
+- **"Nothing on hand is size L" now means it.** The warning was suppressed by
+  any item in the requested size, so a rack of size-L trousers silenced the
+  notice on a request for a size-L shirt — and the prompt to order the shirt
+  was lost. It is scoped to the product the member actually asked for.
+- **The fulfil picker no longer answers from one page of the catalog.** It
+  judged availability from the first 500 rows it had loaded, so on a larger
+  catalog "nothing on hand is that size" could mean "not on this page". The
+  eligible rows, their issuable counts and the size verdicts are now decided by
+  the server, which can see all of them; when the list is capped for display it
+  says so instead of reading as the whole shelf.
 
 ### Scheduling administration moved into the Administration section (2026-09-05)
 
@@ -282,6 +522,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   supersedes it. **Schema:** `notification_logs.sent_at` is
   now `NOT NULL` (it always had a default, and a NULL would have been
   unreachable by any cursor), with a new index behind the paged query.
+
+### Departments can name their own call types (2026-09-05)
+
+**Added**
+
+- **The nine call types on the shift close-out screen are now editable.** They
+  have been per-department data since call tracking shipped, stored in the
+  organization's settings and writable through the API — but nothing in the UI
+  could reach them, so a department that does not run EMS, or one that calls
+  them "Alarm Activation" rather than "Alarm / Good Intent", had no way to say
+  so. **Administration → Scheduling Admin → General → Call types** renames, reorders,
+  adds, retires and deletes them.
+- **Retiring, rather than deleting.** The stored value on every call ever filed
+  is the type's permanent slug, so deleting a type in use would leave that
+  history pointing at something nothing can label. A type with calls or a filed
+  shift report behind it can only be turned off — which takes it off the
+  close-out screen and leaves every report that names it intact. Delete stays
+  available for a type nothing refers to. Retiring every type is how a
+  department asks close-out for a bare total with no breakdown.
+- **Reports and the end-of-shift email now use the department's own names.**
+  The call-volume report, its CSV export, the shift-report call-type badges,
+  the printable report and the summary email all showed the stored slug —
+  `mutual_aid`, or `alarm` for a type the department had renamed. Retired types
+  are named too, so a report covering last year still reads properly. A report
+  written under per-incident tracking keeps the officer's own wording, which is
+  never rewritten to match a type whose slug happens to look the same.
+
+**Fixed**
+
+- **A department that had named a type "unclassified" could not report on it,
+  or repair it.** `unclassified` is the bucket a call with _no_ type falls into
+  on a breakdown, so a configured type sharing that slug was indistinguishable
+  from the remainder: the call-volume report merged the department's calls with
+  the untyped ones and labelled the total "Not categorised", a figure that
+  reconciles to neither quantity, while the type's own name vanished from every
+  screen. The settings editor could not fix it either — the slug is refused on
+  write, so no payload it can produce even mentions the type. A migration
+  renames the slug, deriving the new one from the department's own label, and
+  moves the calls and the filed shift reports that point at it. Reports written
+  under per-incident tracking are left alone: the word is an officer's prose
+  there, not a slug. Calls whose type had already been deleted from settings
+  stay in the remainder — there is no label left to restore, and renaming them
+  would replace "Not categorised" with a raw slug.
 
 ### The dashboard and the gear page disagreed about how much gear you hold (2026-09-05)
 

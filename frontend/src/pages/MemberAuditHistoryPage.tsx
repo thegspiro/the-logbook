@@ -20,6 +20,7 @@ import { toDisplayString } from '../utils/displayValue';
 import { useTimezone } from '../hooks/useTimezone';
 import type { MemberAuditLogEntry } from '../types/user';
 import type { UserWithRoles } from '../types/role';
+import { Breadcrumbs } from '../components/ux';
 
 type EventTypeFilter =
   'all' | 'profile_update' | 'status_change' | 'role_change' | 'password_reset' | 'membership_change';
@@ -203,6 +204,8 @@ export const MemberAuditHistoryPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs />
+
         {/* Header */}
         <div className="mb-6">
           <button

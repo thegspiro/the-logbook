@@ -366,17 +366,23 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/scheduling/admin',
         label: 'Scheduling administration',
-        anyPermission: ['scheduling.manage', 'training.view_all', 'training.manage'],
+        permission: 'scheduling.manage',
         module: 'scheduling',
       },
       {
-        path: '/scheduling/admin/templates',
+        path: '/scheduling/admin/planning',
+        label: 'Shift planning — staffing gaps',
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/admin/planning/templates',
         label: 'Shift templates',
         permission: 'scheduling.manage',
         module: 'scheduling',
       },
       {
-        path: '/scheduling/admin/patterns',
+        path: '/scheduling/admin/planning/patterns',
         label: 'Shift patterns',
         permission: 'scheduling.manage',
         module: 'scheduling',
@@ -391,7 +397,13 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/scheduling/admin/positions',
         label: 'Position roster / qualifications',
-        anyPermission: ['scheduling.manage', 'training.view_all', 'training.manage'],
+        permission: 'scheduling.manage',
+        module: 'scheduling',
+      },
+      {
+        path: '/scheduling/admin/settings',
+        label: 'Scheduling settings — ?tab= redirect',
+        permission: 'scheduling.manage',
         module: 'scheduling',
       },
       {

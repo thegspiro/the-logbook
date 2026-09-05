@@ -17,9 +17,10 @@ const SchedulingAdminReportsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <SchedulingHeader
+          title="Scheduling Reports"
           backTo="/scheduling/admin"
           backLabel="Back to scheduling administration"
-          description="Reports · Review staffing, coverage, and member hours"
+          description="Review staffing, coverage, and member hours"
         />
         <Suspense
           fallback={

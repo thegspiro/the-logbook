@@ -24,11 +24,12 @@ module, behind its own consent and access-control story.
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
 from app.models.call_tracking import (
+    CALL_TYPES_FROM_ORG_CALLS,
     MAX_CALLS_PER_SHIFT,
     UNCLASSIFIED_CALL_TYPE,
     CallSource,
@@ -36,8 +37,9 @@ from app.models.call_tracking import (
     OrgCall,
     OrgCallResponse,
 )
-from app.models.training import Shift
+from app.models.training import Shift, ShiftCompletionReport
 from app.services.shift_eligibility_service import ShiftEligibilityService
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class CallTrackingService:
@@ -84,6 +86,79 @@ class CallTrackingService:
         """
         settings = await self.get_settings(str(organization_id))
         return {t["slug"]: t["label"] for t in settings.get("call_types", [])}
+
+    async def slugs_locked_by_history(
+        self, organization_id: str, candidates: Optional[set] = None
+    ) -> set:
+        """Slugs that cannot be deleted without orphaning something.
+
+        The union of what ``org_calls`` holds and what persisted shift reports
+        hold, because a report snapshot outlives the calls it was built from:
+        a finalized shift can be reopened and corrected until no ``OrgCall``
+        carries the slug any more, while the report already filed from it
+        still lists it. Deleting on the call count alone would leave that
+        report showing a raw slug — the exact orphaning retirement exists to
+        prevent.
+
+        Only reports that recorded their types as org slugs are considered.
+        The rest hold the incident text an officer typed, which is nobody's
+        slug and must not lock a type of the same name.
+
+        ``candidates`` narrows the report scan to the slugs the caller
+        actually needs an answer about, which is how the deletion guard asks.
+        Without it every settings read would materialize the JSON of every
+        shift report the department has ever filed, so the cost of opening the
+        settings screen grew with the org's whole history for an answer that
+        can only ever contain configured slugs. The database does the matching
+        and stops at the first hit per slug.
+        """
+        locked = set(await self.type_usage_counts(organization_id))
+        if candidates is not None:
+            candidates = {s for s in candidates if s not in locked}
+            if not candidates:
+                return locked
+
+        conditions = [
+            ShiftCompletionReport.organization_id == str(organization_id),
+            ShiftCompletionReport.call_types.isnot(None),
+            # Provenance filtered in SQL, not in Python. A detailed-tracking
+            # department whose officers typed a common word — "fire" — matches
+            # the text prefilter on every report it has ever filed, and
+            # discarding those rows after loading them is what made this grow
+            # with history. Excluded here, such an organization returns none.
+            ShiftCompletionReport.data_sources.isnot(None),
+            func.json_unquote(
+                func.json_extract(ShiftCompletionReport.data_sources, "$.call_types")
+            )
+            == CALL_TYPES_FROM_ORG_CALLS,
+        ]
+        if candidates is not None:
+            conditions.append(
+                or_(
+                    *[
+                        ShiftCompletionReport.call_types.like(
+                            like_pattern(slug), escape=LIKE_ESCAPE_CHAR
+                        )
+                        for slug in sorted(candidates)
+                    ]
+                )
+            )
+
+        rows = (
+            await self.db.execute(
+                select(
+                    ShiftCompletionReport.call_types,
+                    ShiftCompletionReport.data_sources,
+                ).where(*conditions)
+            )
+        ).all()
+        for call_types, data_sources in rows:
+            if (data_sources or {}).get("call_types") != CALL_TYPES_FROM_ORG_CALLS:
+                continue
+            for value in call_types or []:
+                if isinstance(value, str):
+                    locked.add(value)
+        return locked
 
     async def type_usage_counts(self, organization_id: str) -> Dict[str, int]:
         """Calls on record per type slug, across all dates.

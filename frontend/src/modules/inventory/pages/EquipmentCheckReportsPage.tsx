@@ -69,8 +69,10 @@ const EquipmentCheckReportsPage: React.FC = () => {
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         <SchedulingHeader
+          title="Equipment Check Reports"
           backTo="/inventory/admin/checklists"
-          description="Check reports · Review compliance and deficiencies"
+          backLabel="Back to equipment checklists"
+          description="Review compliance and deficiencies"
         />
 
         {/* Tabs */}

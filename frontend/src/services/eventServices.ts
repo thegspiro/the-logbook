@@ -1011,6 +1011,8 @@ export interface EquipmentRequestItem {
     tracking_type: string;
     status: string;
     available_quantity: number;
+    /** The referenced item's own size, so the reviewer can compare it with `requested_size`. */
+    size?: string | null;
     min_rank_order?: number | null;
     restricted_to_positions?: string[] | null;
   };
@@ -1082,6 +1084,45 @@ export interface RequestableCategory {
 export interface RequestableCatalogResponse {
   products: RequestableProduct[];
   categories: RequestableCategory[];
+}
+
+/**
+ * One catalog row the fulfil picker may offer, already judged by the backend.
+ *
+ * `available`, `size` and `matches_requested_size` are decided by
+ * `InventoryService` rather than re-derived here: the browser previously kept
+ * its own copy of the size-alias table and the unissuable status/condition
+ * sets, and both drifted from the service that accepts or rejects the
+ * fulfilment.
+ */
+export interface FulfillmentOption {
+  item_id: string;
+  name: string;
+  /** Serial number, asset tag or barcode — whichever the row carries. */
+  identifier?: string | null;
+  size?: string | null;
+  size_label?: string | null;
+  status?: string | null;
+  tracking_type?: string | null;
+  /** Units `issue_from_pool` would actually accept, not the shelf count. */
+  available: number;
+  /** False only under the substitution override, which browses wider. */
+  compatible: boolean;
+  matches_requested_size: boolean;
+}
+
+export interface FulfillmentOptionsResponse {
+  request_id: string;
+  requested_size?: string | null;
+  quantity: number;
+  /** The row to preselect, or null when the choice is genuinely ambiguous. */
+  suggested_item_id?: string | null;
+  /** Whether the requested size is on hand in the requested product. */
+  requested_size_available: boolean;
+  can_fulfill_now: boolean;
+  /** More rows matched than `limit`; the least useful were dropped. */
+  truncated: boolean;
+  options: FulfillmentOption[];
 }
 
 export interface WriteOffRequestItem {

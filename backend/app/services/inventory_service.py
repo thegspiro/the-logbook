@@ -7665,11 +7665,14 @@ class InventoryService:
         ("glove", ("glove", "gauntlet", "mitt")),
         ("hat", ("hat", "cap", "helmet", "beanie", "headwear")),
         ("jacket", ("jacket", "coat", "parka", "vest", "hoodie", "sweatshirt")),
-        ("pant", ("pant", "trouser", "short")),
-        # "sleeve" is here because the variant generator names a garment from
-        # its style ("Long Sleeve — L — Navy"), so the word "shirt" never
-        # appears in the name a member sees.
+        # Shirts are matched before trousers, and the order is load-bearing:
+        # "short" is a substring of "Short Sleeve", so with pants first the
+        # commonest summer uniform shirt in the catalog was classified as
+        # trousers and offered the member's waist and inseam. Nothing in the
+        # shirt list is a substring of a trouser name ("Shorts" contains
+        # neither "shirt" nor "sleeve"), so shorts still reach the pant rule.
         ("shirt", ("shirt", "polo", "tee", "t-shirt", "sleeve", "blouse")),
+        ("pant", ("pant", "trouser", "short")),
     )
 
     # Canonical display order for alpha sizes. Numeric sizes sort numerically
@@ -7735,10 +7738,21 @@ class InventoryService:
     def _requestable_available(cls, item: InventoryItem) -> int:
         """Units of *item* a member could actually be handed today.
 
-        Pool stock reads from whichever ledger is live for the item (see
-        ``_attach_lot_stock``); a serialized unit is one unit and only while
-        nobody else holds it.
+        Gated on the same status and condition sets ``issue_from_pool``
+        enforces, not merely on the row being active. A pool item in
+        maintenance, lost, stolen or in an unserviceable condition still
+        carries its ledger quantity, so counting that quantity advertises stock
+        the issuance path then refuses — a false "12 on hand" that a member
+        requests against and a quartermaster cannot fill.
+
+        Pool stock otherwise reads from whichever ledger is live for the item
+        (see ``_attach_lot_stock``); a serialized unit is one unit, and only
+        while nobody else holds it.
         """
+        if item.status in _UNISSUABLE_STATUSES or item.condition in (
+            _UNISSUABLE_CONDITIONS
+        ):
+            return 0
         if getattr(item, "is_lot_stocked", False):
             return int(getattr(item, "lot_stock", 0) or 0)
         if cls._enum_value(item.tracking_type) == TrackingType.POOL.value:
@@ -7835,8 +7849,213 @@ class InventoryService:
         products.sort(key=lambda product: product["name"].casefold())
         return products[:limit]
 
+    # ============================================
+    # Fulfillment Options
+    # ============================================
+
+    def _fulfillment_option(self, item: InventoryItem) -> Dict[str, Any]:
+        """One catalog row as the review screen needs to see it."""
+        stock_size = self._item_stock_size_value(item)
+        return {
+            "item_id": item.id,
+            "name": item.name,
+            "identifier": item.serial_number or item.asset_tag or item.barcode,
+            "size": stock_size,
+            "size_label": _size_label(stock_size) if stock_size else None,
+            "status": self._enum_value(item.status),
+            "tracking_type": self._enum_value(item.tracking_type),
+            "available": self._requestable_available(item),
+            "product_key": self._product_base_name(item).casefold(),
+            "identity_key": item.variant_group_id or f"item:{item.id}",
+        }
+
+    def _fulfillment_base_query(self, organization_id: UUID, search: Optional[str]):
+        """Rows a fulfilment may draw on, before the request narrows them."""
+        query = (
+            select(InventoryItem)
+            .where(
+                InventoryItem.organization_id == str(organization_id),
+                InventoryItem.active.is_(True),
+                InventoryItem.status != ItemStatus.RETIRED,
+                self._outside_domains(organization_id, MEDICAL_ITEM_TYPES),
+            )
+            .options(selectinload(InventoryItem.category))
+        )
+        if search and search.strip():
+            term = like_pattern(search.strip())
+            query = query.where(
+                or_(
+                    InventoryItem.name.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.serial_number.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.asset_tag.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                    InventoryItem.barcode.ilike(term, escape=LIKE_ESCAPE_CHAR),
+                )
+            )
+        return query.order_by(InventoryItem.name.asc(), InventoryItem.id.asc())
+
+    async def get_fulfillment_options(
+        self,
+        request_id: UUID,
+        organization_id: UUID,
+        search: Optional[str] = None,
+        include_incompatible: bool = False,
+        limit: int = 200,
+    ) -> Optional[Dict[str, Any]]:
+        """The rows a quartermaster may fulfil this request with, already judged.
+
+        Every decision the review screen needs is made here rather than in the
+        browser: which rows are eligible, what each one's size and issuable
+        count actually are, which row should be preselected, whether the size
+        the member asked for is on the shelf at all, and whether the request
+        can be fulfilled right now.
+
+        That split is deliberate and was earned. The client previously
+        re-derived these rules from copies of ``_SIZE_ALIASES``,
+        ``_UNISSUABLE_STATUSES`` and ``_item_stock_size_value``, and the copies
+        drifted twice: a size qualifier was dropped, so a plain "10" matched a
+        request for "10 (wide)", and the shortage warning forgot the
+        product-identity check the preselection had. A copied rule that only
+        *usually* agrees is worse than no rule, because nothing fails when it
+        stops agreeing. It is also the only way to answer honestly over a
+        catalog larger than one page: a client that had fetched 500 of 900
+        rows could not tell "nothing is on hand" from "not on this page".
+
+        ``include_incompatible`` serves the substitution override, where the
+        quartermaster deliberately browses outside the request. The judgements
+        below are always computed over the *narrowed* set even then, so a
+        widened browse cannot flip a shortage warning or a suggestion — those
+        answer a question about the request, not about what is on screen.
+        """
+        req = (
+            await self.db.execute(
+                select(EquipmentRequest).where(
+                    EquipmentRequest.id == str(request_id),
+                    EquipmentRequest.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        if req is None:
+            return None
+
+        # Narrowed the way the fulfil dialog narrows: the referenced item when
+        # the request names one, otherwise its category. A free-text request
+        # names neither, and leaves the whole gear catalog eligible.
+        narrowed = self._fulfillment_base_query(organization_id, search)
+        if req.item_id:
+            narrowed = narrowed.where(InventoryItem.id == req.item_id)
+        elif req.category_id:
+            narrowed = narrowed.where(InventoryItem.category_id == req.category_id)
+
+        compatible_items = list(
+            (await self.db.execute(narrowed)).scalars().unique().all()
+        )
+        await self._attach_lot_stock(str(organization_id), compatible_items)
+        compatible = [self._fulfillment_option(item) for item in compatible_items]
+
+        wanted_quantity = max(int(req.quantity or 1), 1)
+        wanted_size = self._normalize_size_key(req.requested_size)
+        wanted_qualifier = self._size_qualifier(req.requested_size)
+        wanted_product = (req.item_name or "").strip().casefold()
+
+        def matches_size(option: Dict[str, Any]) -> bool:
+            if not wanted_size:
+                return False
+            stocked = option["size"]
+            return (
+                self._normalize_size_key(stocked) == wanted_size
+                and self._size_qualifier(stocked) == wanted_qualifier
+            )
+
+        for option in compatible:
+            option["compatible"] = True
+            option["matches_requested_size"] = matches_size(option)
+
+        # Candidates for the automatic choice: the same product, the same size
+        # (qualifier included), and enough of it to cover the quantity the
+        # dialog pre-fills. Anything short of that produces a form that submits
+        # and fails.
+        candidates = [
+            option
+            for option in compatible
+            if option["matches_requested_size"]
+            and bool(wanted_product)
+            and option["product_key"] == wanted_product
+            and option["available"] >= wanted_quantity
+        ]
+        # Two variant groups in one category may share a display name, and the
+        # request preserves only the name. Spanning identities means the
+        # member's intent is genuinely unknown, so the choice stays with the
+        # quartermaster rather than being settled by row order.
+        identities = {option["identity_key"] for option in candidates}
+        suggested = candidates[0]["item_id"] if len(identities) == 1 else None
+
+        # Scoped to the requested product, like the preselection: available
+        # trousers do not answer a request for a shirt, and a warning
+        # suppressed by the wrong garment is how the prompt to order the right
+        # one is lost.
+        requested_size_available = any(
+            option["matches_requested_size"]
+            and bool(wanted_product)
+            and option["product_key"] == wanted_product
+            and option["available"] > 0
+            for option in compatible
+        )
+        can_fulfill_now = any(
+            option["available"] >= wanted_quantity for option in compatible
+        )
+
+        if include_incompatible:
+            everything = list(
+                (
+                    await self.db.execute(
+                        self._fulfillment_base_query(organization_id, search)
+                    )
+                )
+                .scalars()
+                .unique()
+                .all()
+            )
+            await self._attach_lot_stock(str(organization_id), everything)
+            eligible_ids = {option["item_id"] for option in compatible}
+            listed = []
+            for item in everything:
+                option = self._fulfillment_option(item)
+                option["compatible"] = option["item_id"] in eligible_ids
+                option["matches_requested_size"] = matches_size(option)
+                listed.append(option)
+        else:
+            listed = compatible
+
+        # Ordered before the cap, so truncation drops the rows least likely to
+        # be chosen rather than whatever sorts last by name: the requested size
+        # first, then anything issuable, then alphabetically.
+        listed.sort(
+            key=lambda option: (
+                not option["matches_requested_size"],
+                option["available"] <= 0,
+                (option["name"] or "").casefold(),
+                option["item_id"],
+            )
+        )
+        truncated = len(listed) > limit
+        listed = listed[:limit]
+        for option in listed:
+            option.pop("product_key", None)
+            option.pop("identity_key", None)
+
+        return {
+            "request_id": req.id,
+            "requested_size": req.requested_size,
+            "quantity": wanted_quantity,
+            "suggested_item_id": suggested,
+            "requested_size_available": requested_size_available,
+            "can_fulfill_now": can_fulfill_now,
+            "truncated": truncated,
+            "options": listed,
+        }
+
     async def get_requestable_categories(
-        self, organization_id: UUID
+        self, organization_id: UUID, user: User
     ) -> List[Dict[str, str]]:
         """Categories that actually hold requestable gear.
 
@@ -7846,7 +8065,12 @@ class InventoryService:
         """
         rows = (
             await self.db.execute(
-                select(InventoryCategory.id, InventoryCategory.name)
+                select(
+                    InventoryCategory.id,
+                    InventoryCategory.name,
+                    InventoryItem.min_rank_order,
+                    InventoryItem.restricted_to_positions,
+                )
                 .join(InventoryItem, InventoryItem.category_id == InventoryCategory.id)
                 .where(
                     InventoryCategory.organization_id == str(organization_id),
@@ -7855,11 +8079,24 @@ class InventoryService:
                     InventoryItem.active.is_(True),
                     InventoryItem.status != ItemStatus.RETIRED,
                 )
-                .group_by(InventoryCategory.id, InventoryCategory.name)
                 .order_by(InventoryCategory.name.asc())
             )
         ).all()
-        return [{"id": row[0], "name": row[1]} for row in rows]
+
+        # Eligibility-filtered, for the same reason the product list is: a
+        # category holding nothing but rank- or position-restricted gear would
+        # otherwise appear as a chip that discloses the restricted stock exists
+        # and then filters to an empty list. The restriction columns are
+        # carried on the row so the check runs without a second query.
+        offered: Dict[str, str] = {}
+        for category_id, name, min_rank_order, restricted_positions in rows:
+            if category_id in offered:
+                continue
+            if await self._passes_restrictions(
+                min_rank_order, restricted_positions, organization_id, user
+            ):
+                offered[category_id] = name
+        return [{"id": cid, "name": name} for cid, name in offered.items()]
 
     async def _member_may_request(
         self, item: InventoryItem, organization_id: UUID, user: User
@@ -7871,18 +8108,36 @@ class InventoryService:
         braces: without it the modal lists gear the member is then refused at
         submit, and the restricted item's existence leaks to everyone.
         """
-        restricted_positions = item.restricted_to_positions or []
-        if item.min_rank_order is None and not restricted_positions:
+        return await self._passes_restrictions(
+            item.min_rank_order, item.restricted_to_positions, organization_id, user
+        )
+
+    async def _passes_restrictions(
+        self,
+        min_rank_order: Optional[int],
+        restricted_positions: Optional[List[str]],
+        organization_id: UUID,
+        user: User,
+    ) -> bool:
+        """The restriction rule itself, over the two columns that carry it.
+
+        Taken as loose values rather than an item so the category chips can
+        apply exactly the same rule from a projected row -- one implementation,
+        because two would drift and the disclosure this closes is the kind that
+        reopens silently.
+        """
+        positions = restricted_positions or []
+        if min_rank_order is None and not positions:
             return True
 
-        if item.min_rank_order is not None:
+        if min_rank_order is not None:
             rank_order = await self._member_rank_order(organization_id, user)
-            if rank_order is not None and rank_order <= item.min_rank_order:
+            if rank_order is not None and rank_order <= min_rank_order:
                 return True
 
-        if restricted_positions:
+        if positions:
             slugs = await self._member_position_slugs(organization_id, user)
-            if slugs & set(restricted_positions):
+            if slugs & set(positions):
                 return True
 
         return False
@@ -8021,6 +8276,19 @@ class InventoryService:
             ordered.append(product)
         return ordered
 
+    @staticmethod
+    def _size_qualifier(value: Optional[str]) -> str:
+        """The parenthetical part of a size, normalised — "" when there is none.
+
+        Separate from :meth:`_normalize_size_key`, which deliberately discards
+        it: matching demand to stock wants "10 (wide)" and "10" in the same
+        bucket, while *suggesting* one to a member must not treat them as the
+        same thing.
+        """
+        if not value or "(" not in value:
+            return ""
+        return " ".join(value.split("(", 1)[1].split(")", 1)[0].lower().split())
+
     @classmethod
     def _member_size_label(cls, value: str) -> str:
         """A member's stored size, written the way the rest of the app writes it.
@@ -8053,11 +8321,24 @@ class InventoryService:
         if not member_size:
             return
         product["member_size"] = cls._member_size_label(member_size)
+        # A qualifier the member carries and the stock does not is a real
+        # difference, not noise. `_normalize_size_key` drops the parenthetical
+        # so demand can be bucketed against stock, which is right for the
+        # planner and wrong here: boot "10 (wide)" would match a plain "10",
+        # preselect it, suppress the unstocked option, and submit a request
+        # that has silently lost the width — the one thing the quartermaster
+        # cannot reconstruct.
         wanted = cls._normalize_size_key(member_size)
+        member_qualifier = cls._size_qualifier(member_size)
         for variant in product["variants"]:
-            if variant["size"] and cls._normalize_size_key(variant["size"]) == wanted:
-                product["suggested_size"] = variant["size"]
-                return
+            if not variant["size"]:
+                continue
+            if cls._normalize_size_key(variant["size"]) != wanted:
+                continue
+            if cls._size_qualifier(variant["size"]) != member_qualifier:
+                continue
+            product["suggested_size"] = variant["size"]
+            return
 
     # ============================================
     # Equipment Request Fulfillment
