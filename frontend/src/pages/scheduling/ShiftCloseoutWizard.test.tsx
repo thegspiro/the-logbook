@@ -43,8 +43,8 @@ const baseState = (over: Record<string, unknown> = {}) => ({
   closeout_step: 0,
   call_tracking_mode: 'count_only',
   call_types: [
-    { slug: 'ems', label: 'EMS' },
-    { slug: 'fire', label: 'Fire' },
+    { slug: 'ems', label: 'EMS', active: true },
+    { slug: 'fire', label: 'Fire', active: true },
   ],
   members: [
     {

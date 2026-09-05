@@ -15,12 +15,14 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
+import { useCallTypeLabels } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import PrintPageStyles from '../../components/print/PrintPageStyles';
 
 const ShiftReportPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const reportId = searchParams.get('id') || '';
   const tz = useTimezone();
+  const callTypeLabel = useCallTypeLabels();
   const [report, setReport] = useState<ShiftCompletionReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -120,7 +122,7 @@ const ShiftReportPrintPage: React.FC = () => {
             {report.call_types && report.call_types.length > 0 && (
               <div className="shift-report-print__fact-wide">
                 <dt>Call Types</dt>
-                <dd>{report.call_types.join(', ')}</dd>
+                <dd>{report.call_types.map(callTypeLabel).join(', ')}</dd>
               </div>
             )}
           </dl>

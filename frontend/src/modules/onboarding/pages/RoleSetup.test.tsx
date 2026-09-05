@@ -147,23 +147,62 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     // Asserted as membership rather than as the literal source text: the set
     // grows by design each time a seeded grant moves, and pinning the exact
     // string made that ordinary edit look like a regression.
-    const declared = source.match(/const STALE_SEEDED_SLUGS = new Set\(\[([^\]]*)\]\)/);
-    expect(declared, 'STALE_SEEDED_SLUGS is not a literal Set of slugs').not.toBeNull();
-    const slugs = [...(declared?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]);
+    const declared = source.match(/const STALE_SEEDED_MARKERS: Readonly<Record<string, string>> = \{([\s\S]*?)\n\};/);
+    expect(declared, 'STALE_SEEDED_MARKERS is not a literal map').not.toBeNull();
+    const slugs = [...(declared?.[1] ?? '').matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]);
 
     // emt lost the heuristic's ticks; member/firefighter/emt lost apparatus.
-    expect(slugs).toEqual(expect.arrayContaining(['emt', 'member', 'firefighter']));
+    expect(new Set(slugs)).toEqual(new Set(['emt', 'member', 'firefighter']));
     // engineer keeps apparatus.view — it is the driver/operator rank.
     expect(slugs).not.toContain('engineer');
-    // Still narrow: nowhere near every seeded position.
-    expect(slugs.length).toBeLessThan(6);
+  });
+
+  it('credits the markers the previous build wrote for the same change', () => {
+    // #2248 reconciled emt/member/firefighter for apparatus but recorded them
+    // as bare slugs. Read literally, none satisfies a `@apparatus-view` marker,
+    // so a draft from that build would be reconciled a second time and lose any
+    // permissions or priority an administrator edited since — the exact harm
+    // the once-only design exists to prevent.
+    //
+    // A bare `member`/`firefighter` can only have come from that build. A bare
+    // `emt` is ambiguous: the build before it recorded `emt` alone for the
+    // heuristic-grants change, so it carries the apparatus work only alongside
+    // one of the other two.
+    expect(source).toMatch(/const satisfiedMarkers = \(recorded: readonly string\[\]\)/);
+    expect(source).toMatch(/satisfied\.add\(`\$\{slug\}@apparatus-view`\)/);
+    expect(source).toMatch(
+      /satisfied\.has\('emt'\) && \(satisfied\.has\('member'\) \|\| satisfied\.has\('firefighter'\)\)/
+    );
+    // The filter consults the translated set, not the raw recorded list.
+    expect(source).toMatch(/const done = satisfiedMarkers\(reconciledSeededSlugs\)/);
+    expect(source).toMatch(/!done\.has\(marker\)/);
+  });
+
+  it('gives each grant change its own marker rather than reusing a slug', () => {
+    // `reconciledSeededSlugs` records what a draft has been through. A draft
+    // that reconciled under the EMT repair recorded the bare `emt`; listing
+    // `emt` again for the apparatus change would be filtered out as done, and
+    // that draft would write `apparatus.view` back after the migration revoked
+    // it. One marker per (slug, change), and the original bare marker is kept
+    // so an already-reconciled draft is not reset a second time.
+    const declared = source.match(/const STALE_SEEDED_MARKERS: Readonly<Record<string, string>> = \{([\s\S]*?)\n\};/);
+    const markers = [...(declared?.[1] ?? '').matchAll(/(?:^|\n)\s*'?([\w@-]+)'?\s*:/g)].map((m) => m[1]);
+
+    expect(markers).toContain('emt');
+    expect(markers).toContain('emt@apparatus-view');
+    expect(new Set(markers).size).toBe(markers.length);
+    // The filter and the recorded value must both be the marker, not the slug.
+    expect(source).toMatch(/!done\.has\(marker\)/);
+    expect(source).toMatch(/markSeededSlugsReconciled\(Object\.keys\(STALE_SEEDED_MARKERS\)\)/);
   });
 
   it('does it once, not on every mount', () => {
     // Narrowing to one slug is not enough on its own: repeating it for that
     // slug discards the same edits, just only for EMT. The mount consults
-    // `reconciledSeededSlugs` before deciding.
-    expect(source).toMatch(/!reconciledSeededSlugs\.includes\(posId\)/);
+    // `reconciledSeededSlugs` before deciding — by marker now, so a slug can
+    // appear again for a later grant change without being filtered out as
+    // already done.
+    expect(source).toMatch(/!done\.has\(marker\)/);
     expect(source).toMatch(/const stale = template && slugsToReconcile\.includes\(posId\)/);
   });
 
@@ -174,7 +213,7 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     // back to find those current-build edits treated as legacy and reset.
     // A slug selected after this screen is reached came from the current
     // template by definition, so recording the whole set is what says so.
-    expect(source).toMatch(/markSeededSlugsReconciled\(\[\.\.\.STALE_SEEDED_SLUGS\]\)/);
+    expect(source).toMatch(/markSeededSlugsReconciled\(Object\.keys\(STALE_SEEDED_MARKERS\)\)/);
   });
 
   it('latches the decision instead of recomputing it', () => {
