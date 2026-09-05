@@ -26,11 +26,18 @@ existed came from ``save_session_roles``'s create branch, which stored
 reasoning ``f3b8d0c26a17`` and ``a2e9f6b04c71`` set out at length. Those rows are
 still in the database and still hold the grant, so the slug is listed here.
 
-**This must run after ``b4d1c8e37f52``, not merely after ``a2e9f6b04c71``.**
-That migration restores four grants to an EMT row only when the row matches its
-frozen ``_UNEDITED_SHAPE`` fingerprint exactly, and that fingerprint **contains
-``apparatus.view``**. Revoking first would make every EMT row fail the match, and
-its restore would skip in silence. The chain order is the safeguard.
+**This must run after ``b4d1c8e37f52``.** That migration restores four grants
+to an EMT row only when the row matches its frozen ``_UNEDITED_SHAPE``
+fingerprint exactly, and that fingerprint **contains ``apparatus.view``**.
+Revoking first would make every EMT row fail the match, and its restore would
+skip in silence. The chain order is the safeguard.
+
+Its successor ``c7a4e91d3b68`` — this revision's parent — is indifferent to the
+order: it replaced that whole-shape snapshot with a gate on the *absence* of
+``locations.view``, ``meetings.view``, ``organization.view`` and
+``scheduling.swap``, none of which this touches. Sitting after both is
+nevertheless the only correct placement, because ``b4d1c8e37f52`` still runs on
+any database upgrading through the chain.
 
 **``engineer`` is deliberately absent from the slug list.** Engineer is the
 driver/operator rank, seeded ``apparatus.view`` beside ``apparatus.maintenance``;
@@ -66,7 +73,7 @@ creates — it appears when ``main.py`` calls ``create_all()``, and CI runs
 would fail the whole upgrade rather than this one step (pitfall #26).
 
 Revision ID: b6e4a0d17c93
-Revises: b4d1c8e37f52
+Revises: c7a4e91d3b68
 Create Date: 2026-09-05 14:20:00.000000
 """
 
@@ -76,7 +83,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b6e4a0d17c93"
-down_revision = "b4d1c8e37f52"
+down_revision = "c7a4e91d3b68"
 branch_labels = None
 depends_on = None
 

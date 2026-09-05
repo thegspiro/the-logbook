@@ -28,9 +28,10 @@ from app.core.permissions import DEFAULT_POSITIONS, OPERATIONAL_RANKS
 def _intended_grants(slug):
     """What the registry means this slug's holders to have.
 
-    ``emt`` has no ``DEFAULT_POSITIONS`` entry — which is precisely why
-    onboarding stored the wizard's output verbatim under that slug — so its
-    intent lives in the rank registry instead.
+    The position registry is the authority where it has an entry. ``emt``
+    gained one only on 2026-09-05 — its absence is precisely why onboarding
+    stored the wizard's output verbatim under that slug — so the rank registry
+    remains the fallback for any slug seeded as a rank alone.
     """
     if slug in DEFAULT_POSITIONS:
         return set(DEFAULT_POSITIONS[slug]["permissions"])
@@ -280,13 +281,17 @@ class TestItAgreesWithTheRegistry:
             ), slug
 
     def test_it_is_wired_into_the_migration_chain(self):
-        """Parented on ``b4d1c8e37f52``, and that ordering is load-bearing.
+        """Ordered after the EMT restore, and that is load-bearing.
 
-        That migration restores four grants to an EMT row only when the row
+        ``b4d1c8e37f52`` restores four grants to an EMT row only when the row
         matches its frozen ``_UNEDITED_SHAPE``, which contains
         ``apparatus.view``. Revoking first would make every EMT row miss the
-        match and skip the restore in silence.
+        match and skip the restore in silence. Its successor ``c7a4e91d3b68``,
+        this revision's parent, gates on the absence of four unrelated grants
+        and is indifferent — but sitting after both is what keeps the
+        constraint against ``b4d1c8e37f52`` satisfied on any database that
+        upgrades through the chain.
         """
         module = _migration()
         assert module.revision == "b6e4a0d17c93"
-        assert module.down_revision == "b4d1c8e37f52"
+        assert module.down_revision == "c7a4e91d3b68"
