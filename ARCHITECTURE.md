@@ -631,12 +631,13 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | URL                                                 | Component                     | Permission                                                                |
 | --------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
 | `/scheduling`                                       | SchedulingPage                | auth only                                                                 |
-| `/scheduling/admin`                                 | SchedulingAdminHub            | any of `scheduling.manage`, `training.view_all`, `training.manage`        |
+| `/scheduling/admin`                                 | SchedulingAdminHub            | `scheduling.manage`                                                       |
 | `/scheduling/admin/templates`                       | SchedulingTemplatesPage       | `scheduling.manage`                                                       |
 | `/scheduling/admin/patterns`                        | SchedulingPatternsPage        | `scheduling.manage`                                                       |
 | `/scheduling/admin/reports`                         | SchedulingAdminReportsPage    | `scheduling.manage`                                                       |
 | `/scheduling/admin/platoons`                        | SchedulingPlatoonsPage        | `scheduling.manage`                                                       |
-| `/scheduling/admin/positions`                       | PositionRosterPage            | any of `scheduling.manage`, `training.view_all`, `training.manage`        |
+| `/scheduling/admin/positions`                       | PositionRosterPage            | `scheduling.manage`                                                       |
+| `/scheduling/admin/settings`                        | SchedulingSettingsRedirect    | `scheduling.manage`                                                       |
 | `/scheduling/admin/settings/:section`               | SchedulingSettingsPage        | `scheduling.manage`                                                       |
 | `/inventory/checklists/my`                          | MyChecklistsPage              | Authenticated (module only)                                               |
 | `/inventory/admin/checklists`                       | ChecklistsAdminPage           | `inventory.check_manage`                                                  |

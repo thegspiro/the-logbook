@@ -2,10 +2,9 @@
  * The hub shows each administrator the cards their permissions open, and no
  * others.
  *
- * Its route admits two different people — a scheduling officer and a training
- * officer, who holds no scheduling grant at all and is here for the position
- * roster — so "gated by the page" is not a gate. Every assertion below is about
- * a viewer seeing exactly what they can use.
+ * Two of its cards point into Inventory, whose grants `scheduling.manage` does
+ * not imply, so "gated by the page" is not a gate. Every assertion below is
+ * about a viewer seeing exactly what they can use.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -44,7 +43,16 @@ const hrefs = () => screen.queryAllByRole('link').map((link) => link.getAttribut
 
 describe('SchedulingAdminHub', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Reset, not clear: `vi.clearAllMocks()` drops recorded calls but keeps
+    // implementations and any unconsumed `mockResolvedValueOnce`, so a default
+    // installed here would not survive a neighbour's leftover config — and the
+    // borrowed value is usually the one the test wanted, so it passes for the
+    // wrong reason and only goes red when run alone (CLAUDE.md pitfall #28).
+    mockCheckPermission.mockReset();
+    mockIsModuleOn.mockReset();
+    mockModulesLoading.mockReset();
+    mockGetAdminHubSummary.mockReset();
+
     mockModulesLoading.mockReturnValue(false);
     mockIsModuleOn.mockReturnValue(true);
     mockGetAdminHubSummary.mockResolvedValue({
@@ -101,29 +109,30 @@ describe('SchedulingAdminHub', () => {
     expect(hrefs()).not.toContain('/inventory/admin/checklists');
   });
 
-  // The one page a training officer can open here. Everything else on the hub
-  // requires a scheduling grant they do not hold.
-  it('shows a training officer the position roster and nothing else', () => {
-    grant('training.view_all');
+  // The roster accepted the training grants for a while, which forced every
+  // gate above it to widen to match. It is scheduling administration.
+  it('offers a training officer nothing, the roster included', () => {
+    grant('training.view_all', 'training.manage');
     renderWithRouter(<SchedulingAdminHub />);
 
-    expect(hrefs()).toEqual(['/scheduling/admin/positions']);
+    expect(hrefs()).toEqual([]);
+    expect(screen.getByText('Nothing here for your role')).toBeInTheDocument();
   });
 
   // `?tab=settings` reaches the metrics panel whether or not the tab is drawn,
   // and that panel reads and writes on scheduling.manage — so the URL is
   // refused, not merely the control hidden.
   it('refuses the metrics settings tab to a viewer who could never save it', () => {
-    grant('training.view_all');
+    grant('inventory.check_manage');
     window.history.replaceState({}, '', '/scheduling/admin?tab=settings');
     renderWithRouter(<SchedulingAdminHub />);
 
     expect(screen.queryByRole('tab', { name: 'Settings' })).not.toBeInTheDocument();
-    expect(hrefs()).toEqual(['/scheduling/admin/positions']);
+    expect(hrefs()).toEqual(['/inventory/admin/checklists']);
   });
 
-  it('says so plainly when a viewer’s permissions open nothing here', () => {
-    grant('training.view_all');
+  it('says so plainly when the department has the module switched off', () => {
+    grant('scheduling.manage');
     mockIsModuleOn.mockReturnValue(false);
     renderWithRouter(<SchedulingAdminHub />);
 

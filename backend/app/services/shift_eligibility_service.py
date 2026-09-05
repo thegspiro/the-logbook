@@ -978,6 +978,29 @@ class ShiftEligibilityService:
             ),
         }
 
+    def stored_call_type_slugs(self, org: Organization) -> set:
+        """Only the slugs actually persisted in the org's settings.
+
+        Kept separate from :meth:`effective_call_type_slugs` because the two
+        answer different questions. This one measures the list a save is
+        replacing, which is what the ``MAX_CALL_TYPES`` ratchet compares
+        against; the defaults the reader falls back to are not entries in that
+        list, and counting them would raise the ceiling an already-over-cap
+        organization is allowed to hold — 49 legacy slugs the reader rejects
+        plus the nine built-in defaults would let a save of 51 through as
+        though the list had shrunk.
+        """
+        sched = self._get_scheduling_settings(org)
+        raw = sched.get("call_tracking")
+        types = raw.get("call_types") if isinstance(raw, dict) else None
+        if not isinstance(types, list):
+            return set()
+        return {
+            str(entry.get("slug") or "").strip()
+            for entry in types
+            if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
+        }
+
     def effective_call_type_slugs(self, org: Organization) -> set:
         """Every slug currently in force, before any normalization.
 
@@ -993,20 +1016,18 @@ class ShiftEligibilityService:
           made the guard skip its check entirely and the editor offer to
           delete a default type with a decade of calls behind it, which is
           the normal state of every existing installation.
+
+        So this is the union of the two: the stored slugs, and whatever the
+        reader resolved. Taking the stored set alone was wrong for the same
+        reason again one level down — a list whose every entry the reader
+        rejects (an uppercase or over-long legacy slug) is nonempty here but
+        falls back to the defaults there, so the defaults are what is in
+        force and a save omitting one of them is a deletion.
         """
-        sched = self._get_scheduling_settings(org)
-        raw = sched.get("call_tracking")
-        types = raw.get("call_types") if isinstance(raw, dict) else None
-        stored = (
-            {
-                str(entry.get("slug") or "").strip()
-                for entry in types
-                if isinstance(entry, dict) and str(entry.get("slug") or "").strip()
-            }
-            if isinstance(types, list)
-            else set()
-        )
-        return stored or {t["slug"] for t in DEFAULT_CALL_TYPES}
+        resolved = {
+            t["slug"] for t in self.get_call_tracking_settings(org)["call_types"]
+        }
+        return self.stored_call_type_slugs(org) | resolved
 
     def get_call_tracking_settings(self, org: Organization) -> Dict[str, Any]:
         """Return the org's call-volume tracking config.
