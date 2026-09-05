@@ -154,7 +154,7 @@ describe('evaluateCell', () => {
       requirement(),
       AS_OF
     );
-    expect(result.waiverNote).toBe('Target reduced 24 → 20 hours for 2 waived months on leave');
+    expect(result.waiverNote).toBe('Target reduced 24 → 20 hours for 2 waived months');
   });
 
   it('adds no waiver note when no months were waived', () => {
@@ -305,6 +305,72 @@ describe('a certification expiring soon', () => {
     const [rollup] = rollUpRequirements([soon], [requirement()]);
     expect(rollup?.met).toBe(1);
     expect(rollup?.behind).toEqual([]);
+  });
+});
+
+describe('labels that must not contradict the row beside them', () => {
+  it('names the record behind an in-progress pass/fail cell', () => {
+    // The tone is amber "Short" because a matching record exists but is
+    // unfinished; saying "Nothing recorded" denied that record.
+    const result = evaluateCell(
+      cell({ status: 'in_progress' }),
+      requirement({ requirement_type: 'skills_evaluation', target: null, target_unit: null }),
+      AS_OF
+    );
+    expect(result.tone).toBe(CellTone.SHORT);
+    expect(result.progressLabel).toBe('Started, not yet complete');
+  });
+
+  it('dates a completed certification by its completion, not the frequency window', () => {
+    // Certification matching is not restricted to the frequency window, so
+    // showing the window implied the credential was earned inside it.
+    const result = evaluateCell(
+      cell({
+        status: 'completed',
+        completion_date: '2024-03-15',
+        window_start: '2026-01-01',
+        window_end: '2026-12-31',
+      }),
+      requirement({ requirement_type: 'certification', target: null, target_unit: null }),
+      AS_OF
+    );
+    expect(result.dateLabel).toBe('Completed Mar 15, 2024');
+  });
+
+  it('still shows the window for a countable requirement', () => {
+    const result = evaluateCell(
+      cell({
+        status: 'in_progress',
+        progress_current: 6,
+        progress_required: 24,
+        progress_unit: 'hours',
+        window_start: '2026-01-01',
+        window_end: '2026-12-31',
+      }),
+      requirement(),
+      AS_OF
+    );
+    expect(result.dateLabel).toBe('Window Jan 1 – Dec 31, 2026');
+  });
+
+  it('does not claim a waiver was leave', () => {
+    // fetch_org_waivers merges leave with new_member / administrative / other
+    // waivers, and the cell reports only a month count — the source is not
+    // knowable here, so the note must not assert one.
+    const result = evaluateCell(
+      cell({
+        status: 'in_progress',
+        progress_current: 18,
+        progress_required: 20,
+        base_required: 24,
+        progress_unit: 'hours',
+        waived_months: 2,
+      }),
+      requirement(),
+      AS_OF
+    );
+    expect(result.waiverNote).toBe('Target reduced 24 → 20 hours for 2 waived months');
+    expect(result.waiverNote).not.toContain('leave');
   });
 });
 

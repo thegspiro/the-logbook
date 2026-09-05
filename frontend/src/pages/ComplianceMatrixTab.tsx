@@ -200,7 +200,14 @@ const ComplianceMatrixTab: React.FC = () => {
   const groups = useMemo<QueueGroup[]>(() => {
     const q = query.trim().toLowerCase();
     if (axis === 'members') {
-      let people = onlyBehind ? evaluated.filter((m) => m.standing !== Standing.COMPLIANT) : evaluated;
+      // Filter on open items, not standing. The dashboard's Members Needing
+      // Intervention list — which is what links here with status=noncompliant —
+      // is built from a non-empty unmet list with no threshold applied. Where
+      // an org sets a compliant threshold below 100%, a member can hold unmet
+      // requirements and still be labelled compliant, so filtering by standing
+      // hid the very member the coordinator was sent to look at, and could
+      // report that nobody is behind.
+      let people = onlyBehind ? evaluated.filter((m) => m.open > 0) : evaluated;
       if (q) people = people.filter((m) => m.member.member_name.toLowerCase().includes(q));
       const ordered =
         sort === 'az'

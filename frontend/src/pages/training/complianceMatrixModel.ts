@@ -161,6 +161,11 @@ const progressLabelOf = (cell: ComplianceMatrixCell, tone: CellTone, asOf: strin
     return days <= COMPLIANCE_EXPIRING_SOON_DAYS ? `Expires in ${num(days)} days` : `Valid for ${num(days)} more days`;
   }
   if (MET_STATUSES.has(cell.status)) return 'On file · no expiry';
+  // A pass/fail requirement (skills evaluation, checklist, knowledge test)
+  // reports in_progress with no target and no expiry when a matching record
+  // exists but is unfinished. Falling through to "Nothing recorded" denied the
+  // very record the amber tone beside it was derived from.
+  if (cell.status === 'in_progress') return 'Started, not yet complete';
   return 'Nothing recorded';
 };
 
@@ -168,6 +173,15 @@ const dateLabelOf = (cell: ComplianceMatrixCell, tone: CellTone): string => {
   if (cell.expiry_date) {
     const formatted = formatCalendarDate(cell.expiry_date);
     return tone === CellTone.LAPSED ? `Lapsed ${formatted}` : `Expires ${formatted}`;
+  }
+  // A met pass/fail requirement is described by when it was completed, not by
+  // the frequency window. Showing the window read as a claim that the
+  // credential was earned inside it — and certification matching does not
+  // restrict records to that window at all, so an older credential would be
+  // described by a period it has nothing to do with.
+  const countable = (cell.progress_required ?? 0) > 0;
+  if (!countable && MET_STATUSES.has(cell.status) && cell.completion_date) {
+    return `Completed ${formatCalendarDate(cell.completion_date)}`;
   }
   if (cell.window_start && cell.window_end) {
     // Print the year once when both ends share it. "Jan 1, 2026 - Dec 31,
@@ -196,11 +210,15 @@ const waiverNoteOf = (cell: ComplianceMatrixCell): string | null => {
   if (waived <= 0) return null;
   const base = cell.base_required;
   const adjusted = cell.progress_required;
+  // Not "on leave": fetch_org_waivers merges leave-of-absence periods with
+  // training waivers (new_member, administrative, other) and the cell reports
+  // only a count of waived months, so the source is not knowable here. Saying
+  // "on leave" put a reason on the record that may be untrue of the member.
   const months = `${waived} waived month${waived === 1 ? '' : 's'}`;
   if (base != null && adjusted != null && base !== adjusted) {
-    return `Target reduced ${num(base)} → ${num(adjusted)} ${unitLabel(cell.progress_unit, adjusted)} for ${months} on leave`;
+    return `Target reduced ${num(base)} → ${num(adjusted)} ${unitLabel(cell.progress_unit, adjusted)} for ${months}`;
   }
-  return `Adjusted for ${months} on leave`;
+  return `Adjusted for ${months}`;
 };
 
 export const evaluateCell = (

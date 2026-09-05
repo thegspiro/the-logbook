@@ -217,7 +217,7 @@ describe('ComplianceMatrixTab', () => {
     await screen.findByRole('heading', { name: 'Doherty, Sean' });
 
     await user.click(await screen.findByRole('button', { name: /Halloran, Britt/ }));
-    expect(await screen.findByText('Target reduced 24 → 20 hours for 2 waived months on leave')).toBeInTheDocument();
+    expect(await screen.findByText('Target reduced 24 → 20 hours for 2 waived months')).toBeInTheDocument();
     expect(screen.getByText('18 of 20 hours')).toBeInTheDocument();
   });
 
@@ -242,6 +242,27 @@ describe('ComplianceMatrixTab', () => {
       const rail = within(screen.getByRole('navigation', { name: 'Compliance queue' }));
       expect(rail.queryByText('Compliant')).not.toBeInTheDocument();
       expect(rail.queryByText('Alvarez, Marisol')).not.toBeInTheDocument();
+    });
+
+    it('keeps a member the dashboard flagged but the backend calls compliant', async () => {
+      // Where an org sets a compliant threshold below 100%, a member can hold
+      // unmet requirements and still be labelled compliant. The dashboard's
+      // intervention list has no threshold — it is built from a non-empty
+      // unmet list — so filtering by standing hid the very member the
+      // coordinator was sent here to look at.
+      const m = matrix();
+      m.members
+        .filter((x) => x.member_name === 'Halloran, Britt')
+        .forEach((x) => {
+          x.standing = 'compliant';
+        });
+      getComplianceMatrix.mockReset();
+      getComplianceMatrix.mockResolvedValue(m);
+
+      renderWithRouter(<ComplianceMatrixTab />);
+
+      const rail = within(await screen.findByRole('navigation', { name: 'Compliance queue' }));
+      expect(rail.getByRole('button', { name: /Halloran, Britt/ })).toBeInTheDocument();
     });
 
     it('narrows the requirement axis to requirements someone is behind on', async () => {
