@@ -593,11 +593,19 @@ export interface NotificationLogRecord {
 /**
  * One page of a notification list.
  *
- * `next_cursor` is the authoritative "there is more" signal: absent means the
- * end of the list. Prefer it over comparing loaded rows against `total`, which
- * a notification arriving mid-paging makes disagree with the server — the case
- * cursor pagination exists to handle. `total` still describes the whole
- * filtered list, so it remains right for a "N remaining" label.
+ * `next_cursor` is the authoritative "there is more" signal, and it is `null`
+ * — not omitted — at the end of the list. Both routes always send the key.
+ * Prefer it over comparing loaded rows against `total`, which a notification
+ * arriving mid-paging makes disagree with the server: the case cursor
+ * pagination exists to handle.
+ *
+ * `total` is the size of the current filtered list and **nothing more**. It is
+ * not a remaining-count for the tail, because it includes rows *ahead* of your
+ * cursor that a continuation can never return — so `total - loaded` overstates
+ * what is left by however many notifications arrived since paging began, and
+ * overstates it during a fan-out, when a member is most likely to be paging.
+ * Do not label a "Load more" control from it; that arithmetic was removed from
+ * NotificationsPage for exactly this reason.
  */
 export interface NotificationLogPage {
   logs: NotificationLogRecord[];
