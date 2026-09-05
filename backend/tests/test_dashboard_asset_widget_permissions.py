@@ -10,15 +10,19 @@ from app.api.v1.endpoints.dashboard import get_asset_widgets
 # Every asset module switched on, so these tests isolate the permission gate.
 ALL_ASSET_MODULES = ["inventory", "apparatus", "facilities"]
 
-# Every one of these is granted to DEFAULT_POSITIONS["member"], so a widget
-# gated on one is a widget every firefighter in the department receives.
-BASELINE_MEMBER_GRANTS = ["inventory.view", "apparatus.view", "facilities.view"]
+# View-level grants that must not open an organization-wide asset count.
+# `inventory.view` is seeded to every member today; `facilities.view` and
+# `apparatus.view` were, and were revoked (2026-08-26 and 2026-09-05). All
+# three are kept here deliberately — a widget gated on a module's plain view
+# grant is a widget any department could re-open to its whole roster by adding
+# that grant back to its Member position on the positions screen.
+VIEW_LEVEL_GRANTS = ["inventory.view", "apparatus.view", "facilities.view"]
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("granted", BASELINE_MEMBER_GRANTS)
-async def test_baseline_view_grants_receive_no_asset_widgets(granted: str):
-    """A baseline member must not receive organization-wide asset counts."""
+@pytest.mark.parametrize("granted", VIEW_LEVEL_GRANTS)
+async def test_view_level_grants_receive_no_asset_widgets(granted: str):
+    """A module's plain view grant must not open organization-wide counts."""
     user = SimpleNamespace(organization_id="org-1")
 
     with (

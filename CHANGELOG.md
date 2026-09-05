@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Apparatus: the fleet record becomes officer-only (2026-09-05)
+
+**Changed**
+
+- **Regular members no longer see the Apparatus pages.** `apparatus.view` was
+  seeded to every rank-and-file position, so any member could open the fleet
+  maintenance and compliance record — inspection expirations, out-of-service
+  status, deficiency flags and driver qualifications. The grant is removed from
+  the `member` position and from the shared line-member list behind the
+  Firefighter and EMT ranks and positions. Migration `b6e4a0d17c93` takes it off
+  the rows already stored, including the `apparatus.manage` and `apparatus.*`
+  forms the setup screen's Manage checkbox could have written.
+- Officers, chiefs, administrators and the **Engineer** rank keep it —
+  Engineer is the driver/operator and holds `apparatus.maintenance` beside it.
+  A department that wants members to see the fleet can re-add the grant to its
+  Member position on the positions screen.
+- The Apparatus navigation entry is now gated on the same permissions as the
+  route, so it disappears rather than leading to Access Denied. The lightweight
+  `/apparatus-basic` page, shown when the Apparatus module is off, is
+  unaffected and stays open to everyone.
+
+**Fixed**
+
+- The crew-level **Apparatus Inventory** page (`/inventory/checklists/apparatus-inventory`)
+  filled its apparatus picker from the Apparatus module's roster, which the
+  same members are no longer permitted to read. It now reads the
+  authentication-only scheduling endpoint that already backs the shift board,
+  so recording a used item keeps working.
+
 ### `text-right` on a table header did nothing, everywhere (2026-09-05)
 
 **Fixed**

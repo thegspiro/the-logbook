@@ -143,7 +143,20 @@ describe('RoleSetup restore — a resumed session does not carry stale grants', 
     // saved, and an administrator's own edits to a built-in position are saved
     // the same way — resetting all of them would discard the customization
     // they made before stepping away to the modules page.
-    expect(source).toMatch(/const STALE_SEEDED_SLUGS = new Set\(\['emt'\]\)/);
+    //
+    // Asserted as membership rather than as the literal source text: the set
+    // grows by design each time a seeded grant moves, and pinning the exact
+    // string made that ordinary edit look like a regression.
+    const declared = source.match(/const STALE_SEEDED_SLUGS = new Set\(\[([^\]]*)\]\)/);
+    expect(declared, 'STALE_SEEDED_SLUGS is not a literal Set of slugs').not.toBeNull();
+    const slugs = [...(declared?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]);
+
+    // emt lost the heuristic's ticks; member/firefighter/emt lost apparatus.
+    expect(slugs).toEqual(expect.arrayContaining(['emt', 'member', 'firefighter']));
+    // engineer keeps apparatus.view — it is the driver/operator rank.
+    expect(slugs).not.toContain('engineer');
+    // Still narrow: nowhere near every seeded position.
+    expect(slugs.length).toBeLessThan(6);
   });
 
   it('does it once, not on every mount', () => {
