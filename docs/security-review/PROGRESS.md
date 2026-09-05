@@ -16,7 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-_None currently open._
+**Feature 20 (Compliance), pass 3** — branch
+`claude/security-review-compliance`, PR TBD. 0 fixes, 0 flagged (one
+already-fixed-elsewhere Pitfall #19 instance re-verified, no new gap). See
+the log entry below and `docs/security-review/CMP-20-compliance.md` →
+**Pass 3** for detail.
+
+---
+
+### 2026-09-05 — Feature 20 (Compliance), pass 3 — 0 fixes, 0 flagged
+
+Picked up after a watchdog check found the rotation's bookkeeping commit
+("start Feature 20 pass 3") sitting idle for ~5 hours with no findings work
+and no PR. Diff-scoped against pass 2's merge (`4931fbb5`, PR #2059): all
+four declared backend files and all three declared frontend files are
+**byte-identical** to pass 2. The only compliance-adjacent file that changed
+(`ComplianceRequirementsConfigPage.tsx`, +19/-3) was fixed correctly by an
+unrelated change outside this rotation — a "Not yet active" notice on the
+`grace_period_days` field plus a new backend guard test
+(`test_compliance_grace_period_is_unwired.py`), the same CLAUDE.md Pitfall
+#19 shape CMP2-1 already flagged for this page's two notification settings.
+Re-verified it does what it claims (no reader exists, notice is present) —
+no finding, just confirmation. Re-verified all of CMP-1..7, CMP2-1..4, and
+CS-8/CS-9 still hold (file unchanged, so nothing to re-derive). Route
+inventory unchanged (20/20, all `require_permission`-gated).
+`scheduled_tasks.py` grew substantially this cycle but entirely in
+unrelated scheduled-task logic (feature 31's scope); its one compliance
+touch-point (`ComplianceReportService`) is unchanged. Full local completion
+gate green: flake8/black/isort clean at CI's pinned versions
+(`isort==9.0.1`), `validate_migrations.py --strict` 422 revisions/single
+head, 321/321 compliance+attestation-scoped and 10876/10876 full backend
+suite pass, `tsc --noEmit` 0 errors, `eslint .` 0 errors/0 warnings. Findings
+doc: `docs/security-review/CMP-20-compliance.md` → **Pass 3**. Next: 21
+Admin hours, once this PR merges.
 
 ---
 
@@ -8599,7 +8631,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | 🔄     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |

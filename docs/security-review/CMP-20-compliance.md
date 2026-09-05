@@ -1,7 +1,65 @@
 # Security Review — Compliance
 
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-30 (pass 2) · **PR:** #1902 (pass 1, merged), [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2)
+2026-08-30 (pass 2), 2026-09-05 (pass 3) · **PR:** #1902 (pass 1, merged),
+[#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2, merged),
+pass 3 (this PR)
+
+## Pass 3 (2026-09-05)
+
+Diff-scoped against pass 2's merge commit (`4931fbb54cb85fa30f0108cbe16f659ed47a6155`,
+PR #2059) rather than re-reading the whole surface. All four declared backend
+files (`compliance_config.py`, `compliance_officer.py`,
+`compliance_config_service.py`, `compliance_officer_service.py`) and all three
+declared frontend files (`ComplianceOfficerDashboard.tsx`, the
+compliance-related exports of `trainingServices.ts`, and their test files) are
+**byte-identical** to pass 2's merge. `training_compliance.py` (CMP2-3's own
+fix site) is also unchanged.
+
+**One file did change: `ComplianceRequirementsConfigPage.tsx` (+19/-3),
+already fixed correctly, not by this rotation.** The diff adds an explicit
+"Not yet active" notice under the Grace Period (days) field
+(`grace_period_days`), plus a matching backend guard test
+(`backend/tests/test_compliance_grace_period_is_unwired.py`, new). This is the
+exact CLAUDE.md Pitfall #19 shape CMP2-1 already flagged for the two
+notification settings on the same page — `grace_period_days` is stored
+(`compliance_configs.grace_period_days`) and read by nothing in the backend,
+unlike its sibling fields on the same screen. The fix was made outside this
+rotation (git blame: not part of any `security-review-compliance*` branch) and
+does exactly what Pitfall #19 prescribes: labels the field as not yet in
+effect rather than silently shipping a dead setting, with a guard test that
+fails in either direction (a reader appearing, or the notice being removed
+while the gap remains). Re-verified both halves hold: `grep`/AST-walked
+`grace_period_days` outside `schemas/`/`models/` — zero reader sites; the
+notice text is present in the component. No finding — this is a correctly
+applied instance of an already-established pattern, not a new gap.
+
+**Re-verified, all still hold, no code change needed:**
+
+- CMP-1 through CMP-7 (pass 1) — `apply_updates`/`exclude_unset` on both
+  update endpoints (`compliance_config.py:69,162`), still routed correctly.
+- CMP2-2/CMP2-3/CMP2-4/CMP2-2-A/CMP2-B (pass 2) — the frontend clear-to-null
+  fix, the `required_requirement_ids is not None` / threshold-override fix in
+  `compute_org_compliance_pct` (`training_compliance.py:752,764-767`, exact
+  code shown above still present), the `loadConfig` null-fallback fix, and the
+  behavioral (not source-scanning) guard test are all unchanged.
+- CMP2-1 (notification settings unwired) — still open by design, still
+  correctly labeled "Not yet active" in the UI. No reader has appeared;
+  re-confirmed via the same `grep -rn "notify_days_before_deadline\|notify_non_compliant_members" backend/app`
+  sweep pass 2 used — hits only in `schemas/`/`models/`, same as before.
+- CS-8 (attestation dual-control) / CS-9 (monthly-report windowing) — still
+  open by design; the file is unchanged so there is nothing new to
+  re-verify beyond confirming that.
+- Route inventory — `compliance_config.py` (12 routes) +
+  `compliance_officer.py` (8 routes) = 20/20, unchanged from pass 1/2's
+  count; all still gated by `require_permission(...)`.
+- `scheduled_tasks.py`'s only compliance touch-point
+  (`ComplianceReportService` for `auto_report_frequency`/
+  `report_email_recipients`) is unchanged — the file grew substantially this
+  cycle but entirely in unrelated scheduled-task logic (feature 31's scope,
+  not this feature's).
+
+**No new findings, no code changes this pass.**
 
 ## Pass 1 (2026-08-26)
 
