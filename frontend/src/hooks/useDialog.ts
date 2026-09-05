@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useFocusTrap } from './useFocusTrap';
 import { useOverlaySurface } from './useOverlaySurface';
 
@@ -24,6 +24,37 @@ interface OpenDialog {
 
 const openDialogs: OpenDialog[] = [];
 let overflowBeforeFirstLock: string | null = null;
+
+const depthSubscribers = new Set<() => void>();
+const emitDepth = (): void => {
+  for (const notify of depthSubscribers) notify();
+};
+const subscribeDepth = (onStoreChange: () => void): (() => void) => {
+  depthSubscribers.add(onStoreChange);
+  return () => {
+    depthSubscribers.delete(onStoreChange);
+  };
+};
+const getDepth = (): number => openDialogs.length;
+
+/**
+ * How many dialogs are currently open.
+ *
+ * For a dialog that carries `aria-modal` on a surface of its own and can open
+ * another dialog on top of itself. Both are portalled to the body, so they are
+ * DOM *siblings*: two aria-modal surfaces at once, each asserting that
+ * everything outside itself is inert, and assistive technology is left to guess
+ * which one is live. The lower surface must therefore go `inert` for as long as
+ * one sits above it.
+ *
+ * A caller's own dialog is counted here, so the test is `depth > 1`, and the
+ * caller does not need to know which nested dialog opened — which is the point:
+ * a component like PrintDocumentButton owns its open state privately and cannot
+ * report it upwards.
+ */
+export function useOpenDialogDepth(): number {
+  return useSyncExternalStore(subscribeDepth, getDepth, getDepth);
+}
 
 /**
  * Derive the body lock from the complete dialog stack rather than whichever
@@ -76,6 +107,7 @@ export function useDialog<T extends HTMLElement>({
     const id = Symbol('dialog');
     openDialogs.push({ id, lockScroll });
     syncBodyScrollLock();
+    emitDepth();
 
     const handleEscape = (event: KeyboardEvent) => {
       if (!closeOnEscape || event.key !== 'Escape') return;
@@ -90,6 +122,7 @@ export function useDialog<T extends HTMLElement>({
       const index = openDialogs.findIndex((dialog) => dialog.id === id);
       if (index !== -1) openDialogs.splice(index, 1);
       syncBodyScrollLock();
+      emitDepth();
     };
   }, [isOpen, closeOnEscape, lockScroll]);
 
